@@ -88,6 +88,10 @@ def _compact_env(monkeypatch, borg_version):
     monkeypatch.setattr(
         "agent.borg_ui_agent.repository_ops.subprocess.Popen", _FakePopen
     )
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.compact_stats_supported",
+        lambda binary: True,
+    )
     job = {
         "id": 7,
         "payload": {

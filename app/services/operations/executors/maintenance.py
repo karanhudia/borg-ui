@@ -100,7 +100,13 @@ async def _run(
             if repository is not None:
                 setattr(repository, column, utc_now())
                 ctx.db.commit()
-        return Outcome(status=status, result={"logs": bool(job.log_file_path)})
+        result = {"logs": bool(job.log_file_path)}
+        if job.stats is not None:
+            # A compact's `--stats` output, filed by the service under
+            # `result["stats"]` (spec 6.1); the runner writes the row's
+            # result from this outcome, so it has to travel through it.
+            result["stats"] = job.stats
+        return Outcome(status=status, result=result)
     if status == "cancelled":
         # `Outcome` has no cancelled status (spec 6.3 gives that to the row,
         # not to the executor's verdict), and the runner rewrites the row to

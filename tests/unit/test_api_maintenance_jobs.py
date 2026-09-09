@@ -7,7 +7,8 @@ from app.api.maintenance_jobs import (
     serialize_job_status,
     serialize_job_summary,
 )
-from app.database.models import CheckJob, Repository
+from app.database.models import CheckJob, Operation, Repository
+from app.services.operations.job_facade import MaintenanceJobFacade
 
 
 def _create_repo(test_db, name="Repo", path="/repos/main"):
@@ -116,3 +117,33 @@ class TestMaintenanceJobsHelpers:
 
         assert status_payload["logs"] == "live check output"
         assert status_payload["has_logs"] is True
+
+
+@pytest.mark.unit
+def test_status_serializes_stats_for_compact_only(test_db):
+    """`result["stats"]` is a compact's `--stats` output; the facade would
+    hand back a `stats` key of any kind's result, the payload does not."""
+    repo = _create_repo(test_db)
+    payloads = {}
+    for kind in ("compact", "check"):
+        operation = Operation(
+            repository_id=repo.id,
+            kind=kind,
+            category="maintenance",
+            status="completed",
+            trigger="manual",
+            priority=10,
+            run_id=f"run-{kind}",
+            result={"stats": {"repository_size": 5}},
+        )
+        test_db.add(operation)
+        test_db.commit()
+        payloads[kind] = serialize_job_status(
+            MaintenanceJobFacade(test_db, operation),
+            include_progress=True,
+            include_logs=False,
+            include_has_logs=False,
+            log_save_policy="all_jobs",
+        )
+    assert payloads["compact"]["stats"] == {"repository_size": 5}
+    assert "stats" not in payloads["check"]
