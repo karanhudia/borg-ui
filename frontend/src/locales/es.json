@@ -414,7 +414,7 @@
         "bannerManual": "Reinstale cada uno desde su tarjeta para actualizarlo.",
         "bannerMixedTargets": "Cada uno apunta a su propia versión configurada.",
         "manualOnly": "Solo actualizaciones manuales",
-        "manualOnlyTooltip": "Este endpoint no tiene el asistente de autoactualizacion, asi que se actualiza ejecutando el comando de reinstalacion en la maquina. Una reinstalacion habilita las actualizaciones desde el servidor."
+        "manualOnlyTooltip": "Este endpoint no tiene el asistente de autoactualización, así que se actualiza ejecutando el comando de reinstalación en la máquina. Una reinstalación lo prepara para las actualizaciones desde el servidor."
       }
     },
     "installCommand": {

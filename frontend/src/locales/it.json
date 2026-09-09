@@ -414,7 +414,7 @@
         "bannerManual": "Reinstalla ciascuno dalla sua scheda per aggiornarlo.",
         "bannerMixedTargets": "Ognuno punta alla propria versione configurata.",
         "manualOnly": "Solo aggiornamenti manuali",
-        "manualOnlyTooltip": "Questo endpoint non ha l'helper di autoaggiornamento, quindi si aggiorna eseguendo il comando di reinstallazione sulla macchina. Una reinstallazione abilita gli aggiornamenti dal server."
+        "manualOnlyTooltip": "Questo endpoint non ha l'helper di autoaggiornamento, quindi si aggiorna eseguendo il comando di reinstallazione sulla macchina. Una reinstallazione lo prepara agli aggiornamenti dal server."
       }
     },
     "installCommand": {

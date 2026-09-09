@@ -53,9 +53,11 @@ SERVICE_USER_MODE="current"
 SERVICE_USER_MODE_SET="0"
 REMOTE_UPGRADE="1"
 REMOTE_UPGRADE_SET="0"
-NO_REMOTE_UPGRADE_MARKER="/etc/borg-ui-agent/no-remote-upgrade"
-UPGRADE_CONF="/etc/borg-ui-agent/upgrade.conf"
-UPGRADE_HELPER="${AGENT_ROOT}/bin/borg-ui-agent-upgrade"
+NO_REMOTE_UPGRADE_MARKER="/etc/borg-ui-agent-no-remote-upgrade"
+# Deliberately not under /etc/borg-ui-agent: that directory is owned by the
+# service user, so the agent could replace any file in it, and root sources
+# this one.
+UPGRADE_CONF="/etc/borg-ui-agent-upgrade.conf"
 UPGRADE_UNIT="/etc/systemd/system/borg-ui-agent-upgrade.service"
 UPGRADE_SUDOERS="/etc/sudoers.d/borg-ui-agent-upgrade"
 SYSTEMCTL_PATH=""
@@ -65,6 +67,7 @@ SERVICE_HOME=""
 SERVICE_READ_WRITE_PATHS="/etc/borg-ui-agent /tmp"
 AGENT_ROOT="/opt/borg-ui-agent"
 BORG_FORWARDER_DIR="${AGENT_ROOT}/bin"
+UPGRADE_HELPER="${AGENT_ROOT}/bin/borg-ui-agent-upgrade"
 BORG1_LINK="/usr/local/bin/borg"
 BORG2_LINK="/usr/local/bin/borg2"
 
@@ -793,17 +796,36 @@ write_upgrade_conf() {
 
   agent_id="$(sed -nE 's/^agent_id[[:space:]]*=[[:space:]]*"(.*)"[[:space:]]*$/\1/p' \
     /etc/borg-ui-agent/config.toml | head -n 1)"
-  if [[ -z "${agent_id}" ]]; then
-    echo "Could not read agent_id from /etc/borg-ui-agent/config.toml;" >&2
-    echo "skipping remote upgrade setup. This endpoint stays on the manual" >&2
-    echo "reinstall path." >&2
+  # config.toml belongs to the service user, and root sources what we write
+  # below, so anything but a plain identifier here would be a root shell for a
+  # compromised agent.
+  if [[ ! "${agent_id}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    echo "Could not read a usable agent_id from" >&2
+    echo "/etc/borg-ui-agent/config.toml; skipping remote upgrade setup. This" >&2
+    echo "endpoint stays on the manual reinstall path." >&2
     return 1
   fi
 
-  if [[ "${SKIP_BORG_INSTALL}" == "1" ]]; then
-    borg_install_mode="skip"
-  else
-    borg_install_mode="${BORG_VERSION}"
+  if [[ "${BORG_VERSION_SET}" == "0" && "${SKIP_BORG_INSTALL}" == "1" ]] &&
+    [[ -r "${UPGRADE_CONF}" ]]; then
+    # A bare --reinstall skips Borg by default. That is a choice about this run,
+    # not about the endpoint, so keep whatever mode was recorded rather than
+    # pinning every future remote upgrade to "skip".
+    borg_install_mode="$(sed -nE 's/^BORG_INSTALL_MODE="(.*)"$/\1/p' \
+      "${UPGRADE_CONF}" | head -n 1)"
+  fi
+  if [[ -z "${borg_install_mode:-}" ]]; then
+    if [[ "${SKIP_BORG_INSTALL}" == "1" ]]; then
+      borg_install_mode="skip"
+    else
+      borg_install_mode="${BORG_VERSION}"
+    fi
+  fi
+
+  if [[ ! "${SERVER%/}" =~ ^https?://[A-Za-z0-9._:/-]+$ ]]; then
+    echo "Server URL '${SERVER}' is not a plain URL; skipping remote upgrade" >&2
+    echo "setup. This endpoint stays on the manual reinstall path." >&2
+    return 1
   fi
 
   install -o root -g root -m 0644 /dev/null "${UPGRADE_CONF}"
@@ -813,6 +835,7 @@ write_upgrade_conf() {
 SERVER="${SERVER%/}"
 AGENT_ID="${agent_id}"
 BORG_INSTALL_MODE="${borg_install_mode}"
+BORG_SOURCE="${BORG_SOURCE}"
 SERVICE_USER_MODE="${SERVICE_USER_MODE}"
 SERVICE_USER="${SERVICE_USER}"
 SERVICE_GROUP="${SERVICE_GROUP}"
@@ -829,14 +852,17 @@ write_upgrade_helper() {
 # borg-ui-agent-upgrade.service, which the agent may start through one narrow
 # sudoers rule.
 #
-# It takes NO ARGUMENTS on purpose. Every parameter comes from upgrade.conf,
-# which only root can write, so a compromised agent cannot change the install
-# source, the service user, or the installer flags. Adding an argument here
-# would undo that.
+# It takes NO ARGUMENTS on purpose. Every parameter comes from
+# /etc/borg-ui-agent-upgrade.conf, which sits outside the agent-owned config
+# directory and only root can write, so a compromised agent cannot change the
+# install source, the service user, or the installer flags. Adding an argument
+# here would undo that.
 set -euo pipefail
 
+# The two overrides are test seams. systemd passes no environment from whoever
+# starts the unit, so the only way to use them is to already be root.
 etc="${BORG_UI_UPGRADE_ETC:-/etc/borg-ui-agent}"
-conf="${etc}/upgrade.conf"
+conf="${BORG_UI_UPGRADE_CONF:-/etc/borg-ui-agent-upgrade.conf}"
 agent_config="${etc}/config.toml"
 
 if [[ ! -r "${conf}" ]]; then
@@ -881,12 +907,12 @@ trap 'rm -rf "${workdir}"' EXIT
 # none to hold across: any redirect is an error rather than a hop to somewhere
 # this script would then execute as root.
 fetch() {
-  curl -fsS --proto '=https' --max-redirs 0 -o "$2" "$1"
+  curl -fsS --proto '=https' --tlsv1.2 --max-redirs 0 -o "$2" "$1"
 }
 
-script_url="${SERVER%/}/agent/install.sh?agent_id=${AGENT_ID}"
-fetch "${script_url}" "${workdir}/install.sh"
-fetch "${script_url/install.sh?/install.sh.sha256?}" "${workdir}/install.sh.sha256"
+query="?agent_id=${AGENT_ID}"
+fetch "${SERVER%/}/agent/install.sh${query}" "${workdir}/install.sh"
+fetch "${SERVER%/}/agent/install.sh.sha256${query}" "${workdir}/install.sh.sha256"
 
 expected="$(tr -d '[:space:]' <"${workdir}/install.sh.sha256")"
 actual="$(sha256sum "${workdir}/install.sh" | awk '{print $1}')"
@@ -901,6 +927,9 @@ if [[ "${BORG_INSTALL_MODE}" == "skip" ]]; then
   args+=(--skip-borg-install)
 else
   args+=(--borg-version "${BORG_INSTALL_MODE}")
+  # Without this an endpoint installed from distribution packages would be
+  # repointed at the server's static binaries by its first upgrade.
+  args+=(--borg-source "${BORG_SOURCE:-server}")
 fi
 
 echo "Reinstalling the Borg UI agent from ${SERVER}."
@@ -1093,7 +1122,10 @@ async def get_agent_installer_checksum() -> Response:
 
     The self-upgrade helper runs the downloaded script as root, so it verifies
     the download against this before executing anything. Rendered through the
-    same function as the script itself, so the two cannot drift.
+    same function as the script itself, so the two agree for as long as the
+    server's pinned versions do not change between the helper's two requests.
+    A server restarted into a new release in that window makes the helper refuse
+    and retry later, which is the direction to fail in.
     """
     script = await asyncio.to_thread(render_installer_script)
     digest = hashlib.sha256(script.encode("utf-8")).hexdigest()

@@ -414,7 +414,7 @@
         "bannerManual": "Reinstall each one from its card to bring it up to date.",
         "bannerMixedTargets": "Each one targets its own configured version.",
         "manualOnly": "Manual upgrades only",
-        "manualOnlyTooltip": "This endpoint has no self-upgrade helper, so it is updated by running the reinstall command on the machine. One reinstall gives it server-driven upgrades."
+        "manualOnlyTooltip": "This endpoint has no self-upgrade helper, so it is updated by running the reinstall command on the machine. One reinstall prepares it for server-driven upgrades."
       }
     },
     "installCommand": {

@@ -516,6 +516,25 @@ def test_agent_installer_script_is_valid_bash(test_client: TestClient):
     assert result.returncode == 0, result.stderr
 
 
+def test_agent_installer_script_runs_far_enough_to_print_usage(
+    test_client: TestClient, tmp_path: Path
+):
+    # bash -n only parses. Actually running --help catches the runtime aborts
+    # set -u produces when a variable is used before it is assigned.
+    script = tmp_path / "install.sh"
+    script.write_text(test_client.get("/agent/install.sh").text)
+
+    result = subprocess.run(
+        ["bash", str(script), "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Usage:" in result.stdout
+
+
 @pytest.mark.skipif(
     shutil.which("shellcheck") is None, reason="shellcheck is not installed"
 )
@@ -552,7 +571,9 @@ def test_agent_installer_supports_declining_remote_upgrade(test_client: TestClie
 
     assert "--no-remote-upgrade" in script
     assert 'REMOTE_UPGRADE="1"' in script
-    assert "/etc/borg-ui-agent/no-remote-upgrade" in script
+    # Outside the agent-owned config directory: a compromised agent must not
+    # be able to pin itself onto the manual path and block its own remediation.
+    assert 'NO_REMOTE_UPGRADE_MARKER="/etc/borg-ui-agent-no-remote-upgrade"' in (script)
 
 
 def test_agent_installer_reinstall_preserves_a_declined_remote_upgrade(
@@ -576,9 +597,12 @@ def test_agent_installer_records_the_upgrade_parameters_as_root(
 ):
     script = test_client.get("/agent/install.sh").text
 
-    assert "/etc/borg-ui-agent/upgrade.conf" in script
-    # Root-owned and not writable by the service user: the agent must not be
-    # able to repoint its own upgrade at another host (spec section 11.2).
+    # Not under /etc/borg-ui-agent: that directory is owned by the service
+    # user, which could then replace a file root sources. Root-owned and out of
+    # the agent's reach, so the agent cannot repoint its own upgrade at another
+    # host (spec section 11.2).
+    assert 'UPGRADE_CONF="/etc/borg-ui-agent-upgrade.conf"' in script
+    assert "/etc/borg-ui-agent/upgrade.conf" not in script
     assert "install -o root -g root -m 0644 " in script
     for key in (
         "SERVER",
@@ -591,6 +615,16 @@ def test_agent_installer_records_the_upgrade_parameters_as_root(
         "SYSTEMCTL",
     ):
         assert f'{key}="' in script
+
+
+def test_agent_installer_rejects_an_agent_id_that_is_not_an_identifier(
+    test_client: TestClient,
+):
+    script = test_client.get("/agent/install.sh").text
+
+    # agent_id is read from the service-user-owned config.toml and written into
+    # a file root sources, so anything but a plain identifier has to be refused.
+    assert '[[ ! "${agent_id}" =~ ^[A-Za-z0-9._-]+$ ]]' in script
 
 
 def test_agent_installer_resolves_systemctl_by_absolute_path(

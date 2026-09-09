@@ -414,7 +414,7 @@
         "bannerManual": "Installieren Sie jeden Endpunkt über seine Karte neu, um ihn zu aktualisieren.",
         "bannerMixedTargets": "Jeder Endpunkt zielt auf seine eigene konfigurierte Version.",
         "manualOnly": "Nur manuelle Updates",
-        "manualOnlyTooltip": "Dieser Endpunkt hat kein Self-Upgrade-Hilfsprogramm und wird daher mit dem Reinstall-Befehl auf der Maschine aktualisiert. Eine Neuinstallation aktiviert servergesteuerte Upgrades."
+        "manualOnlyTooltip": "Dieser Endpunkt hat kein Self-Upgrade-Hilfsprogramm und wird daher mit dem Reinstall-Befehl auf der Maschine aktualisiert. Eine Neuinstallation bereitet es auf servergesteuerte Upgrades vor."
       }
     },
     "installCommand": {

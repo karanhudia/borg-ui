@@ -91,7 +91,7 @@ machine:
 
 | File | Purpose |
 | --- | --- |
-| `/etc/borg-ui-agent/upgrade.conf` | The reinstall parameters. Root-owned, not writable by the agent. |
+| `/etc/borg-ui-agent-upgrade.conf` | The reinstall parameters. Root-owned, and outside the agent-owned config directory so the agent cannot replace it. |
 | `/opt/borg-ui-agent/bin/borg-ui-agent-upgrade` | The helper. Takes no arguments and reads only `upgrade.conf`. |
 | `/etc/systemd/system/borg-ui-agent-upgrade.service` | A oneshot unit that runs the helper. Never enabled. |
 | `/etc/sudoers.d/borg-ui-agent-upgrade` | Lets the agent's service user start that one unit, and nothing else. Not written when the agent runs as root. |
@@ -123,7 +123,12 @@ support. A later reinstall remembers the choice; pass `--remote-upgrade` to
 undo it.
 
 Endpoints enrolled before this release have none of these files and are shown
-as manual only. One reinstall with the command above gives them remote upgrade.
+as manual only. One reinstall gives them remote upgrade:
+
+```bash
+curl -fsSL https://borg-ui-host:8083/agent/install.sh | sudo bash -s -- \
+  --server https://borg-ui-host:8083 --reinstall
+```
 
 ## Knowing Which Agents Are Out of Date
 
@@ -134,7 +139,7 @@ a chip on the agent card:
 | Chip | Meaning |
 | --- | --- |
 | No chip | The agent runs the version this server serves. Nothing to do. |
-| **Update available** | The agent is older than the version this server serves. Reinstall it using the command above. |
+| **Update available** | The agent is older than the version this server serves. Reinstall it with the plain `--reinstall` command above, not the `--no-remote-upgrade` one. |
 | **Ahead of server** | The agent is newer than the version this server serves, which happens after a server rollback. Upgrade the server rather than downgrading the agent. |
 | **Pinned** | The agent is held at a specific version and will not follow the server. |
 | **Version unknown** | The agent has not reported a version yet, or the version cannot be compared. A freshly enrolled agent shows this until its first check-in. |

@@ -200,7 +200,9 @@ nothing to trigger and therefore no upgrade path at all: strictly worse than
 the unprivileged case the escalation exists to serve. The escalation is what
 root does not need; the mechanism it escalates to is needed either way.
 
-**`/etc/borg-ui-agent/upgrade.conf`** — mode `0644`, owned `root:root`. Records
+**`/etc/borg-ui-agent-upgrade.conf`** — mode `0644`, owned `root:root`, and
+deliberately outside `/etc/borg-ui-agent`, which the service user owns and could
+otherwise replace a file in. Records
 the parameters a reinstall needs: server URL, borg install mode, service user
 mode, service user and group, agent root. Written at install time from the
 values the operator gave the installer.

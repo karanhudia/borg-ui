@@ -16,17 +16,18 @@ from agent.borg_ui_agent.self_upgrade import check_self_upgrade
 @pytest.fixture
 def ready(tmp_path: Path):
     """A complete, correct install. Each test breaks exactly one thing."""
-    etc = tmp_path / "etc"
-    etc.mkdir()
+    conf_path = tmp_path / "borg-ui-agent-upgrade.conf"
     helper = tmp_path / "opt" / "bin" / "borg-ui-agent-upgrade"
     helper.parent.mkdir(parents=True)
     helper.write_text("#!/bin/sh\n", encoding="utf-8")
     helper.chmod(0o755)
-    (etc / "upgrade.conf").write_text(
+    conf_path.write_text(
         "\n".join(
             [
                 'SERVER="https://borg.example"',
                 'AGENT_ID="agent-1"',
+                'BORG_INSTALL_MODE="1"',
+                'SERVICE_USER="borg"',
                 f'AGENT_ROOT="{helper.parent.parent}"',
                 'SYSTEMCTL="/usr/bin/systemctl"',
                 "",
@@ -38,7 +39,7 @@ def ready(tmp_path: Path):
     unit.write_text(f"[Service]\nExecStart={helper}\n", encoding="utf-8")
 
     return {
-        "etc_dir": etc,
+        "conf_path": conf_path,
         "unit_path": unit,
         "is_root": lambda: False,
         "sudo_lists": lambda systemctl: True,
@@ -75,14 +76,24 @@ def test_a_helper_that_is_not_executable_is_reported_as_missing(ready):
 
 
 def test_a_missing_upgrade_conf_is_reported_as_such(ready):
-    (ready["etc_dir"] / "upgrade.conf").unlink()
+    ready["conf_path"].unlink()
 
     assert check_self_upgrade(**ready).reason == "conf_missing"
 
 
-@pytest.mark.parametrize("dropped", ["SERVER", "AGENT_ID", "SYSTEMCTL"])
+@pytest.mark.parametrize(
+    "dropped",
+    [
+        "SERVER",
+        "AGENT_ID",
+        "BORG_INSTALL_MODE",
+        "SERVICE_USER",
+        "AGENT_ROOT",
+        "SYSTEMCTL",
+    ],
+)
 def test_an_upgrade_conf_short_a_required_field_is_reported_as_missing(ready, dropped):
-    conf = ready["etc_dir"] / "upgrade.conf"
+    conf = ready["conf_path"]
     kept = [
         line
         for line in conf.read_text().splitlines()
@@ -94,7 +105,7 @@ def test_an_upgrade_conf_short_a_required_field_is_reported_as_missing(ready, dr
 
 
 def test_an_http_endpoint_cannot_upgrade_itself(ready):
-    conf = ready["etc_dir"] / "upgrade.conf"
+    conf = ready["conf_path"]
     conf.write_text(
         conf.read_text().replace("https://borg.example", "http://borg.example"),
         encoding="utf-8",

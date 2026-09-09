@@ -36,7 +36,7 @@ def helper_env(tmp_path: Path, test_client: TestClient):
     bin_dir.mkdir()
 
     def write_conf(server: str = "https://borg.example:8083") -> None:
-        (etc / "upgrade.conf").write_text(
+        (tmp_path / "upgrade.conf").write_text(
             "\n".join(
                 [
                     f'SERVER="{server}"',
@@ -68,6 +68,7 @@ def helper_env(tmp_path: Path, test_client: TestClient):
         env = dict(os.environ)
         env["PATH"] = f"{bin_dir}:{env['PATH']}"
         env["BORG_UI_UPGRADE_ETC"] = str(etc)
+        env["BORG_UI_UPGRADE_CONF"] = str(tmp_path / "upgrade.conf")
         # /bin/bash, not "bash": one test stubs bash on PATH to capture the
         # reinstall argv, and resolving the interpreter through PATH would run
         # that stub instead of the helper.
@@ -161,6 +162,25 @@ def test_the_helper_reinstalls_with_the_recorded_parameters(helper_env):
     assert "--reinstall" in argv
     assert "--skip-borg-install" in argv
     assert "--service-user borg" in argv
+
+
+def test_the_helper_keeps_the_recorded_borg_source(helper_env):
+    conf = helper_env["tmp_path"] / "upgrade.conf"
+    conf.write_text(
+        conf.read_text().replace('BORG_INSTALL_MODE="skip"', 'BORG_INSTALL_MODE="1"')
+        + 'BORG_SOURCE="distro"\n',
+        encoding="utf-8",
+    )
+    helper_env["stub"]("bash", f'echo "$@" >>"{helper_env["tmp_path"]}/reinstall.log"')
+
+    result = helper_env["run"]()
+
+    assert result.returncode == 0, result.stderr
+    # An endpoint on distribution packages must not be repointed at the
+    # server's static binaries by its own upgrade.
+    argv = (helper_env["tmp_path"] / "reinstall.log").read_text()
+    assert "--borg-version 1" in argv
+    assert "--borg-source distro" in argv
 
 
 @pytest.mark.skipif(

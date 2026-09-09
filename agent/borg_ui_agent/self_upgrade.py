@@ -19,9 +19,18 @@ from pathlib import Path
 from typing import Optional
 
 UPGRADE_UNIT_NAME = "borg-ui-agent-upgrade.service"
-DEFAULT_ETC_DIR = Path("/etc/borg-ui-agent")
+# Outside /etc/borg-ui-agent on purpose: that directory belongs to the service
+# user, and root sources this file.
+DEFAULT_CONF_PATH = Path("/etc/borg-ui-agent-upgrade.conf")
 DEFAULT_UNIT_PATH = Path("/etc/systemd/system") / UPGRADE_UNIT_NAME
-REQUIRED_CONF_KEYS = ("SERVER", "AGENT_ID", "SYSTEMCTL")
+REQUIRED_CONF_KEYS = (
+    "SERVER",
+    "AGENT_ID",
+    "BORG_INSTALL_MODE",
+    "SERVICE_USER",
+    "AGENT_ROOT",
+    "SYSTEMCTL",
+)
 
 _CONF_LINE = re.compile(r'^\s*([A-Z_]+)\s*=\s*"(.*)"\s*$')
 
@@ -60,18 +69,24 @@ def _sudo_lists_upgrade_command(systemctl: str) -> bool:
     sudo = shutil.which("sudo")
     if sudo is None:
         return False
-    result = subprocess.run(
-        [sudo, "-n", "-l", systemctl, "start", "--no-block", UPGRADE_UNIT_NAME],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            [sudo, "-n", "-l", systemctl, "start", "--no-block", UPGRADE_UNIT_NAME],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired:
+        # sudo can block on a network directory. The heartbeat this runs on
+        # must not block with it.
+        return False
     return result.returncode == 0
 
 
 def check_self_upgrade(
     *,
-    etc_dir: Path = DEFAULT_ETC_DIR,
+    conf_path: Path = DEFAULT_CONF_PATH,
     unit_path: Path = DEFAULT_UNIT_PATH,
     is_root: Callable[[], bool] = lambda: os.geteuid() == 0,
     sudo_lists: Callable[[str], bool] = _sudo_lists_upgrade_command,
@@ -83,7 +98,6 @@ def check_self_upgrade(
     if helper is None or not helper.is_file() or not os.access(helper, os.X_OK):
         return UpgradeReadiness(supported=False, reason="helper_missing")
 
-    conf_path = etc_dir / "upgrade.conf"
     if not conf_path.is_file():
         return UpgradeReadiness(supported=False, reason="conf_missing")
 
