@@ -235,3 +235,28 @@ async def test_run_backup_without_a_repository_is_skipped(db):
     outcome = await get_executor("backup")(FakeContext(db, op))
     assert outcome.status == "skipped"
     assert outcome.skip_reason == "repository_missing"
+
+
+@pytest.mark.asyncio
+async def test_run_backup_reports_a_graceful_skip_as_skipped(
+    db, repository, monkeypatch
+):
+    """A pre-backup script standing the backup down writes `skipped`; the
+    runner must record that, not a failure."""
+    load_default_executors()
+    op = _operation(db, repository)
+
+    async def _execute_backup(job_id, repository_path, session, **kw):
+        job = BackupJobFacade(db, db.get(Operation, job_id))
+        job.status = "skipped"
+        job.error_message = "Skipped by 'leader-check'"
+        db.commit()
+
+    monkeypatch.setattr(
+        "app.services.backup_service.backup_service.execute_backup", _execute_backup
+    )
+    outcome = await get_executor("backup")(FakeContext(db, op))
+
+    assert outcome.status == "skipped"
+    assert outcome.skip_reason == "Skipped by 'leader-check'"
+    assert outcome.error_message is None

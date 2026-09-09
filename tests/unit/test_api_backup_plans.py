@@ -2824,6 +2824,70 @@ class TestBackupPlanRoutes:
         assert body["run"]["repositories"][0]["backup_job"]["status"] == "cancelled"
         assert body["processes_terminated"] == 1
 
+    def test_cancel_backup_plan_run_cancels_an_operation_backed_child(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Phase 8 children are operations, so the cancel has to reach the
+        runner rather than the legacy backup_jobs row."""
+        from app.database.models import Operation, OperationBackupDetails
+
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        create_response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload([repo.id]),
+            headers=admin_headers,
+        )
+        plan_id = create_response.json()["id"]
+        run = BackupPlanRun(
+            backup_plan_id=plan_id,
+            trigger="manual",
+            status="running",
+            created_at=datetime.utcnow(),
+        )
+        test_db.add(run)
+        test_db.flush()
+        operation = Operation(
+            repository_id=repo.id,
+            kind="backup",
+            category="backup",
+            status="running",
+            trigger="plan",
+            priority=0,
+            run_id="plan-run-1",
+            backup_plan_run_id=run.id,
+            params={"executor": "server"},
+            started_at=datetime.utcnow(),
+            created_at=datetime.utcnow(),
+        )
+        test_db.add(operation)
+        test_db.flush()
+        test_db.add(OperationBackupDetails(operation_id=operation.id))
+        test_db.add(
+            BackupPlanRunRepository(
+                backup_plan_run_id=run.id,
+                repository_id=repo.id,
+                backup_operation_id=operation.id,
+                status="running",
+            )
+        )
+        test_db.commit()
+
+        with patch(
+            "app.services.backup_plan_execution_service.operation_runner.request_cancel",
+            new=AsyncMock(return_value=True),
+        ) as request_cancel:
+            response = test_client.post(
+                f"/api/backup-plans/runs/{run.id}/cancel", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        request_cancel.assert_awaited_once_with(operation.id)
+        body = response.json()
+        assert body["run"]["status"] == "cancelled"
+        assert body["run"]["repositories"][0]["status"] == "cancelled"
+        assert body["cancelled_backup_jobs"] == 1
+        assert body["processes_terminated"] == 1
+
     def test_cancel_backup_plan_run_preserves_completed_children(
         self, test_client: TestClient, admin_headers, test_db
     ):

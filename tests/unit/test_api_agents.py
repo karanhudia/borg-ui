@@ -1741,13 +1741,13 @@ class TestAgentJobNotifications:
         job.updated_at = stale_at
         test_db.commit()
 
-        failed_backup_job_ids: list[int] = []
+        failed_backup_job_ids: list[tuple[str, int]] = []
         reaped = reap_stale_agent_jobs(
             test_db, failed_backup_job_ids=failed_backup_job_ids
         )
 
         assert reaped == 1
-        assert failed_backup_job_ids == [backup_job.id]
+        assert failed_backup_job_ids == [("backup_jobs", backup_job.id)]
 
     def test_reaper_does_not_collect_terminal_backup_jobs(
         self, test_client, test_db, admin_headers
@@ -1766,7 +1766,7 @@ class TestAgentJobNotifications:
         job.updated_at = stale_at
         test_db.commit()
 
-        failed_backup_job_ids: list[int] = []
+        failed_backup_job_ids: list[tuple[str, int]] = []
         reap_stale_agent_jobs(test_db, failed_backup_job_ids=failed_backup_job_ids)
 
         assert failed_backup_job_ids == []

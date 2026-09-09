@@ -25,7 +25,10 @@ from app.database.models import (
 )
 from app.core.security import get_current_user
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
-from app.services.operations.backup_facade import backup_jobs_started_since
+from app.services.operations.backup_facade import (
+    backup_jobs_started_since,
+    recent_backup_jobs,
+)
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
@@ -548,7 +551,7 @@ def get_recent_jobs(db: Session, limit: int = 10) -> List[Dict[str, Any]]:
     """Get recent backup jobs"""
     try:
         log_save_policy = get_log_save_policy(db)
-        jobs = backup_jobs_started_since(db, datetime.min, limit=limit)
+        jobs = recent_backup_jobs(db, limit)
         job_list = []
 
         for job in jobs:

@@ -27,7 +27,6 @@ from sqlalchemy.orm import Session
 
 from app.database.database import SessionLocal
 from app.database.models import AgentJob, BackupJob, Operation
-from app.services.operations.backup_facade import resolve_backup_job
 
 logger = structlog.get_logger()
 
@@ -70,7 +69,7 @@ def reap_stale_agent_jobs(
     *,
     now: Optional[datetime] = None,
     reap_after: timedelta = AGENT_JOB_REAP_AFTER,
-    failed_backup_job_ids: Optional[list[int]] = None,
+    failed_backup_job_ids: Optional[list[tuple[str, int]]] = None,
 ) -> int:
     """Fail in-flight agent jobs with no activity for `reap_after`.
 
@@ -138,7 +137,9 @@ def reap_stale_agent_jobs(
                 )
             )
             if backup_job_failed and failed_backup_job_ids is not None:
-                failed_backup_job_ids.append(job.backup_job_id)
+                failed_backup_job_ids.append(
+                    (BackupJob.__tablename__, job.backup_job_id)
+                )
 
         if job.operation_id:
             operation_failed = (
@@ -158,7 +159,9 @@ def reap_stale_agent_jobs(
                 )
             )
             if operation_failed and failed_backup_job_ids is not None:
-                failed_backup_job_ids.append(job.operation_id)
+                failed_backup_job_ids.append(
+                    (Operation.__tablename__, job.operation_id)
+                )
 
     if reaped:
         db.commit()
@@ -169,7 +172,9 @@ def reap_stale_agent_jobs(
     return reaped
 
 
-def _reap_once(failed_backup_job_ids: Optional[list[int]] = None) -> int:
+def _reap_once(
+    failed_backup_job_ids: Optional[list[tuple[str, int]]] = None,
+) -> int:
     """One reap pass with its own session (runs in a worker thread)."""
     from app.utils.process_utils import (
         reconcile_orphaned_maintenance_jobs,
@@ -192,14 +197,26 @@ def _reap_once(failed_backup_job_ids: Optional[list[int]] = None) -> int:
         db.close()
 
 
-async def _notify_reaped_backup_jobs(backup_job_ids: list[int]) -> None:
-    """Send failure notifications for backup jobs the reaper just failed."""
+async def _notify_reaped_backup_jobs(backup_jobs: list[tuple[str, int]]) -> None:
+    """Send failure notifications for backup rows the reaper just failed.
+
+    Each entry names its table, because the two id spaces are independent and
+    `resolve_backup_job` gives operations precedence: a bare id from
+    `backup_jobs` could otherwise pick an unrelated operation.
+    """
     from app.services.agent_job_notifications import notify_backup_job_finished
+    from app.services.operations.backup_facade import BackupJobFacade
 
     db = SessionLocal()
     try:
-        for backup_job_id in backup_job_ids:
-            backup_job = resolve_backup_job(db, backup_job_id)
+        for table, row_id in backup_jobs:
+            if table == Operation.__tablename__:
+                operation = db.get(Operation, row_id)
+                backup_job = (
+                    BackupJobFacade(db, operation) if operation is not None else None
+                )
+            else:
+                backup_job = db.query(BackupJob).filter(BackupJob.id == row_id).first()
             if backup_job is not None:
                 await notify_backup_job_finished(db, backup_job)
     finally:
@@ -221,7 +238,7 @@ async def start_agent_job_reaper(
             # Offload the synchronous DB work to a thread so a slow query never
             # blocks the event loop. The session is created and used inside the
             # thread (SQLite connections are thread-affine).
-            failed_backup_job_ids: list[int] = []
+            failed_backup_job_ids: list[tuple[str, int]] = []
             await asyncio.to_thread(_reap_once, failed_backup_job_ids)
             if failed_backup_job_ids:
                 await _notify_reaped_backup_jobs(failed_backup_job_ids)

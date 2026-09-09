@@ -35,6 +35,7 @@ from app.services.operations.backup_facade import (
 )
 from app.services.operations.executors.maintenance import cancel_watcher
 from app.services.operations.runner import Outcome
+from app.services.operations.vocab import TERMINAL_STATUSES
 from app.services.repository_executor import (
     cancel_agent_backup_job,
     get_agent_job_for_backup,
@@ -44,7 +45,10 @@ from app.services.repository_executor import (
 
 logger = structlog.get_logger()
 
-_TERMINAL = ("completed", "completed_with_warnings", "failed", "cancelled")
+# The operations vocabulary, which includes `skipped`: a pre-backup script can
+# stand the backup down gracefully, and `backup_service` writes that word and
+# returns. Reading it as unfinished would record a failure instead.
+_TERMINAL = TERMINAL_STATUSES
 
 
 def _error_key(message: Optional[str]) -> Optional[str]:
@@ -185,6 +189,8 @@ async def run_backup(ctx) -> Outcome:
             status="failed",
             error_message=job.error_message or "backup returned no result",
         )
+    if status == "skipped":
+        return Outcome(status="skipped", skip_reason=job.error_message)
     if status in ("completed", "completed_with_warnings"):
         return Outcome(
             status=status,

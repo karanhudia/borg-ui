@@ -30,7 +30,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 
-from sqlalchemy import func, or_
+from sqlalchemy import func, nullslast, or_
 from sqlalchemy.orm import Session
 
 from app.database.models import (
@@ -517,6 +517,33 @@ def backup_jobs_started_since(
     jobs = _facades(db, ops.all()) + list(legacy.all())
     jobs.sort(key=_sort_key("started_at"), reverse=True)
     return jobs[:limit] if limit is not None else jobs
+
+
+def recent_backup_jobs(db: Session, limit: int) -> list:
+    """The newest backups by start time, both tables, with queued rows kept.
+
+    A queued backup has no `started_at`; it sorts last here rather than being
+    filtered out, which is what the single unfiltered legacy query did.
+    """
+
+    def key(job):
+        return (getattr(job, "started_at", None) or datetime.min, job.id)
+
+    ops = (
+        _operations_query(db)
+        .order_by(nullslast(Operation.started_at.desc()), Operation.id.desc())
+        .limit(limit)
+        .all()
+    )
+    legacy = (
+        db.query(BackupJob)
+        .order_by(nullslast(BackupJob.started_at.desc()), BackupJob.id.desc())
+        .limit(limit)
+        .all()
+    )
+    jobs = _facades(db, ops) + list(legacy)
+    jobs.sort(key=key, reverse=True)
+    return jobs[:limit]
 
 
 def latest_backup_job_for_repository(

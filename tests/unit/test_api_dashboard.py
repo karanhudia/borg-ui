@@ -501,7 +501,7 @@ class TestDashboardHelpers:
 
         # Phase 8: the recent list is the union of both backup tables, read
         # through the facade helper; this test covers the item shape.
-        with patch("app.api.dashboard.backup_jobs_started_since", return_value=jobs):
+        with patch("app.api.dashboard.recent_backup_jobs", return_value=jobs):
             result = get_recent_jobs(db, limit=2)
 
         assert [job["id"] for job in result] == [1, 2]

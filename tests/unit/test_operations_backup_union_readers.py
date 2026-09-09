@@ -294,3 +294,62 @@ def test_mqtt_last_backup_ignores_a_skipped_operation(db, repository):
     assert latest_terminal.id == operation.id
     # The unnarrowed call is the one that would surface the skipped run.
     assert newest_backup_job(db, terminal=True).id == skipped.id
+
+
+def test_recent_backup_jobs_keeps_a_queued_backup(db, repository):
+    """A queued backup has no `started_at`; the dashboard's recent list still
+    shows it, below the runs that have started."""
+    from app.services.operations.backup_facade import recent_backup_jobs
+
+    _legacy, operation = _pair(db, repository)
+    queued = Operation(
+        repository_id=repository.id,
+        kind="backup",
+        category="backup",
+        status="queued",
+        trigger="manual",
+        priority=0,
+        run_id="run-queued",
+        params={"executor": "server"},
+        created_at=datetime.utcnow(),
+    )
+    db.add(queued)
+    db.commit()
+
+    jobs = recent_backup_jobs(db, 10)
+    ids = [job.id for job in jobs]
+    assert queued.id in ids
+    # Started runs rank above the one that has not started.
+    assert ids.index(operation.id) < ids.index(queued.id)
+
+
+@pytest.mark.asyncio
+async def test_reaped_notifications_resolve_the_table_they_came_from(db, repository):
+    """The two tables number rows independently and `resolve_backup_job` gives
+    operations precedence, so a reaped legacy row must not notify about an
+    operation that happens to share its id."""
+    from app.services.agent_job_reaper import _notify_reaped_backup_jobs
+
+    legacy, operation = _pair(db, repository)
+    # On a fresh database the two sequences both start at 1, which is the
+    # collision this test is about.
+    assert legacy.id == operation.id
+
+    seen = []
+
+    async def _notify(session, job):
+        seen.append(job.archive_name)
+
+    import app.services.agent_job_reaper as reaper
+    import app.services.agent_job_notifications as notifications
+
+    original = notifications.notify_backup_job_finished
+    notifications.notify_backup_job_finished = _notify
+    reaper.SessionLocal = lambda: db
+    try:
+        await _notify_reaped_backup_jobs([("backup_jobs", legacy.id)])
+        await _notify_reaped_backup_jobs([("operations", operation.id)])
+    finally:
+        notifications.notify_backup_job_finished = original
+
+    assert seen == ["nas-old", "nas-new"]

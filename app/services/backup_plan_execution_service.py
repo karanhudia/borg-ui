@@ -58,9 +58,12 @@ from app.services.template_service import get_system_variables
 from app.services.operations.backup_facade import (
     create_backup_operation,
     refresh_backup_job,
+    resolve_backup_job,
     wait_for_backup_operation,
 )
 from app.services.operations.enqueue import wake_runner
+from app.services.operations.runner import operation_runner
+from app.services.operations.vocab import TERMINAL_STATUSES
 from app.utils.archive_names import build_archive_name
 from app.utils.script_params import SYSTEM_VARIABLE_PREFIX
 from app.utils.ssh_host_keys import host_key_ssh_opts
@@ -789,6 +792,26 @@ class BackupPlanExecutionService:
                 "failed",
                 "cancelled",
             }:
+                continue
+
+            if child.backup_operation_id:
+                # Phase 8 children are operations. The runner owns the kill, so
+                # raise its flag and let the executor's watcher do the rest
+                # (spec 7.7); the plan's own waiter would only get there on its
+                # next poll, and not at all if this backend restarted.
+                job = resolve_backup_job(db, child.backup_operation_id)
+                if job is not None and job.status not in TERMINAL_STATUSES:
+                    was_running = job.status == "running"
+                    if (
+                        await operation_runner.request_cancel(child.backup_operation_id)
+                        and was_running
+                    ):
+                        processes_terminated += 1
+                    cancelled_backup_jobs += 1
+                child.status = "cancelled"
+                child.completed_at = now
+                child.error_message = CANCELLED_MESSAGE
+                cancelled_repositories += 1
                 continue
 
             job = child.backup_job
