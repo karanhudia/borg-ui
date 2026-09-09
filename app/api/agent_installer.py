@@ -244,7 +244,13 @@ if [[ "${REINSTALL}" == "1" ]]; then
     echo "Skipping Borg installation by default for reinstall mode."
   fi
   # Reinstall takes no --server, but the agent package still comes from the
-  # server this machine is enrolled against.
+  # server this machine is enrolled against. Prefer the root-owned upgrade
+  # record: config.toml belongs to the service user, so an agent that rewrote
+  # its own server_url would otherwise have this reinstall fetch and run code
+  # from wherever it named, and record that server for every later upgrade.
+  if [[ -z "${SERVER}" && -r "${UPGRADE_CONF}" ]]; then
+    SERVER="$(sed -nE 's/^SERVER="(.*)"$/\1/p' "${UPGRADE_CONF}" | head -n 1)"
+  fi
   if [[ -z "${SERVER}" ]]; then
     SERVER="$(sed -nE 's/^server_url[[:space:]]*=[[:space:]]*"(.*)"[[:space:]]*$/\1/p' \
       /etc/borg-ui-agent/config.toml | head -n 1)"
@@ -975,6 +981,11 @@ UPGRADE_PATH_FILE
   chown root:root "${UPGRADE_PATH_UNIT}"
   chmod 0644 "${UPGRADE_PATH_UNIT}"
 
+  # A trigger left over from before, or created while the path unit was off,
+  # would fire the helper the moment the unit starts, running a second
+  # installer as root on top of this one.
+  rm -f "${UPGRADE_TRIGGER}"
+
   # The unit files are new, so systemd has to be told about them before the
   # path unit can be enabled. The reload at the end of the script is too late.
   systemctl daemon-reload
@@ -996,7 +1007,7 @@ if [[ "${REMOTE_UPGRADE}" == "1" ]] && write_upgrade_conf; then
   # An unwatched trigger makes the helper unreachable, so do not leave the unit
   # and helper behind pretending otherwise.
   if write_upgrade_path_unit; then
-    rm -f "${NO_REMOTE_UPGRADE_MARKER}" "${UPGRADE_TRIGGER}"
+    rm -f "${NO_REMOTE_UPGRADE_MARKER}"
     rm -f /etc/sudoers.d/borg-ui-agent-upgrade
     echo "Remote upgrade is available on this endpoint."
   else

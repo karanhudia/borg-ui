@@ -656,6 +656,33 @@ def test_agent_installer_triggers_the_upgrade_through_a_path_unit(
     assert "visudo" not in script
 
 
+def test_agent_installer_reinstall_prefers_the_root_owned_server(
+    test_client: TestClient,
+):
+    script = test_client.get("/agent/install.sh").text
+
+    # config.toml belongs to the service user. An agent that rewrote its own
+    # server_url must not get a bare --reinstall to fetch and run code from
+    # wherever it named, nor have that server recorded for later upgrades.
+    reinstall = script.split('if [[ "${REINSTALL}" == "1" ]]; then', 1)[1]
+    from_conf = reinstall.index('sed -nE \'s/^SERVER="(.*)"$/\\1/p\' "${UPGRADE_CONF}"')
+    from_toml = reinstall.index("/etc/borg-ui-agent/config.toml | head -n 1")
+    assert from_conf < from_toml
+
+
+def test_agent_installer_clears_the_trigger_before_arming_the_path_unit(
+    test_client: TestClient,
+):
+    script = test_client.get("/agent/install.sh").text
+
+    # Enabling the unit with a trigger already there starts the helper at once,
+    # running a second installer as root on top of the one still going.
+    block = script.split("write_upgrade_path_unit() {", 1)[1].split("\n}", 1)[0]
+    assert block.index('rm -f "${UPGRADE_TRIGGER}"') < block.index(
+        "systemctl enable --now borg-ui-agent-upgrade.path"
+    )
+
+
 def test_agent_installer_helper_clears_its_own_trigger(test_client: TestClient):
     script = test_client.get("/agent/install.sh").text
 

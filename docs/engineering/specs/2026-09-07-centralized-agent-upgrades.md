@@ -301,25 +301,19 @@ after the operator has already been told the endpoint can upgrade itself:
    is nothing to start.
 2. The helper its `ExecStart` names is present and executable. Without it the
    unit starts and fails at exec time.
-3. `/etc/borg-ui-agent/upgrade.conf` is readable and carries its required
+3. `/etc/borg-ui-agent-upgrade.conf` is readable and carries its required
    fields. The helper takes no arguments and reads every parameter from this
-   file, so without it the root helper runs and fails having done nothing. The
-   agent needs the file for the recorded `systemctl` path in any case.
+   file, so without it the root helper runs and fails having done nothing.
+4. `/etc/systemd/system/borg-ui-agent-upgrade.path` exists, and the agent can
+   create the trigger it watches. Without either, nothing starts the helper.
 
 Splitting the predicate between the probe and the command is what would let
 those diverge, so both call it and the failure is reported once, honestly, as
 "cannot upgrade itself" rather than as an upgrade that starts and dies.
 
-On top of the preconditions the probe branches on how the agent runs, because
-the escalation only exists for the unprivileged case:
-
-- **Running as root.** The preconditions are the whole probe. There is no
-  sudoers file to consult and the installer does not install `sudo`, so a probe
-  that shelled out to `sudo -l` would report no capability on exactly the
-  endpoints that need none.
-- **Running unprivileged.** Additionally,
-  `sudo -n <systemctl path> start --no-block borg-ui-agent-upgrade.service`
-  is listed by `sudo -l`.
+The preconditions are the whole probe, root or not. The trigger is a file the
+agent creates, so there is no sudoers file to consult and nothing that behaves
+differently for a root agent.
 
 ## 7. The upgrade command
 
