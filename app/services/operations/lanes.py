@@ -58,6 +58,58 @@ def legacy_running_exclusive(db: Session, repository_id: int) -> bool:
     return False
 
 
+# Kinds the job admission classes as repository writes: their agent and
+# server jobs are refused with 409 while one of them runs, so a listing
+# started under bypass_lock would fail instead of reading past a lock.
+_WRITE_MAINTENANCE_KINDS = ("prune", "compact", "delete_archive", "wipe")
+_WRITE_MAINTENANCE_MODELS = (PruneJob, CompactJob, DeleteArchiveJob, RepositoryWipeJob)
+_LEGACY_MAINTENANCE_BACKUP_STATUSES = ("running_prune", "running_compact")
+
+
+def write_maintenance_running(db: Session, repository_id: int) -> bool:
+    """True while prune, compact, delete or wipe is queued or running on
+    the repository, as an operation, a legacy job row, or a backup job in
+    its maintenance phase (`maintenance_status`, the scheduler's post-backup
+    prune and compact). Unlike a running backup, these are not something
+    a listing can bypass: admission refuses the listing outright."""
+    if (
+        db.query(Operation.id)
+        .filter(
+            Operation.repository_id == repository_id,
+            Operation.status.in_(("queued", "running")),
+            Operation.kind.in_(_WRITE_MAINTENANCE_KINDS),
+        )
+        .first()
+    ):
+        return True
+    if (
+        db.query(BackupJob.id)
+        .filter(
+            BackupJob.repository_id == repository_id,
+            BackupJob.maintenance_status.in_(_LEGACY_MAINTENANCE_BACKUP_STATUSES),
+        )
+        .first()
+    ):
+        return True
+    # Same statuses the admission treats as active: a maintenance job is
+    # created pending and refuses listings from that moment on, before it
+    # has started (seen live: 409 against a pending prune two seconds after
+    # the backup completed).
+    from app.services.job_admission import ACTIVE_MAINTENANCE_STATUSES
+
+    for model in _WRITE_MAINTENANCE_MODELS:
+        if (
+            db.query(model.id)
+            .filter(
+                model.repository_id == repository_id,
+                model.status.in_(tuple(ACTIVE_MAINTENANCE_STATUSES)),
+            )
+            .first()
+        ):
+            return True
+    return False
+
+
 def running_exclusive_operation(
     db: Session, repository_id: int, *, exclude_id: Optional[int] = None
 ) -> bool:
@@ -135,6 +187,14 @@ def can_start(db: Session, op: Operation, settings: Optional[SystemSettings]) ->
     if is_exclusive(op.kind):
         return lane_free(db, op.repository_id, exclude_id=op.id)
     if op.kind in INDEX_KINDS:
+        # Admission refuses a listing while prune, compact, delete or wipe
+        # is pending or running, whatever the lane says (a pending job holds
+        # no lane yet) and whatever bypass_lock says (that reads past a
+        # running backup's lock, not past admission). Checked first: the
+        # backup follow-up chain otherwise fails with 409 against the plan's
+        # own post-backup prune.
+        if write_maintenance_running(db, op.repository_id):
+            return False
         if lane_free(db, op.repository_id, exclude_id=op.id):
             return True
         repository = db.get(Repository, op.repository_id)

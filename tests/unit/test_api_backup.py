@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 from app.core.agent_auth import AGENT_AUTH_HEADER
 from app.core.security import get_password_hash
+from app.services.operations.executors import load_default_executors
 from app.database.models import (
     AgentJob,
     AgentJobLog,
@@ -17,6 +18,7 @@ from app.database.models import (
     CheckJob,
     PruneJob,
     CompactJob,
+    Operation,
     SSHConnection,
     SystemSettings,
     UserRepositoryPermission,
@@ -586,6 +588,7 @@ class TestBackupStart:
         self, test_client: TestClient, admin_headers, test_db
     ):
         _set_log_save_policy(test_db, "all_jobs")
+        load_default_executors()
         raw_token = "borgui_agent_secret"
         agent = AgentMachine(
             name="Laptop",
@@ -682,7 +685,16 @@ class TestBackupStart:
         assert backup_job.current_file == "/home/user/file"
         assert backup_job.archive_name == "agent-archive"
         assert backup_job.logs == "Creating archive"
-        assert repo.last_backup is not None
+        # last_backup now comes from the archive index: completion enqueues
+        # the backup follow-up chain instead of writing the column (#933).
+        assert repo.last_backup is None
+        followups = (
+            test_db.query(Operation)
+            .filter(Operation.repository_id == repo.id, Operation.trigger == "followup")
+            .order_by(Operation.id)
+            .all()
+        )
+        assert followups and followups[0].kind == "archive_sync"
 
         logs_response = test_client.get(
             f"/api/activity/backup/{backup_job_id}/logs", headers=admin_headers

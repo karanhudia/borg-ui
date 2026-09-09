@@ -275,7 +275,13 @@ Rules:
   doubling to 5 min).
   After 20 deferrals it fails with "repository still busy".
 - Follow-ups are created automatically when an operation succeeds. An
-  import enqueues stats and archive listing.
+  import enqueues stats and archive listing. A backup that completes through
+  the legacy backup paths (server or agent) enqueues the `backup` chain the
+  same way, so the archive index and `last_backup` follow within a runner
+  tick instead of waiting for the next reconcile run. Only a queued
+  `archive_sync` with no dependency or an already satisfied dependency
+  suppresses a duplicate listing. `history_merge` follows the listing on
+  every plan so removed archives leave the database as well.
 - `stats` measures the repository read-only through the best source Borg
   offers and records it in `repositories.total_size_source`: Borg 1
   `cache.stats.unique_csize` (`borg1_cache_stats`, deduplicated); Borg 2 the

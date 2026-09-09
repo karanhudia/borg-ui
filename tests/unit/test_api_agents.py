@@ -16,8 +16,10 @@ from app.database.models import (
     BackupPlan,
     CheckJob,
     LicensingState,
+    Operation,
     Repository,
 )
+from app.services.operations.executors import load_default_executors
 
 
 def _set_plan(test_db, plan: str) -> None:
@@ -810,6 +812,117 @@ class TestAgentJobTransport:
             headers=headers,
         )
         assert repeated.status_code == 200
+
+    def test_completed_backup_job_enqueues_index_followups(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        """A completed agent backup no longer writes last_backup itself; it
+        enqueues the backup follow-up chain, and archive_sync derives the
+        column from the listing (#933)."""
+        load_default_executors()
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        repo = Repository(name="linked", path="/repo", encryption="none")
+        test_db.add(repo)
+        test_db.commit()
+        job = _create_agent_job(test_db, agent, status="running")
+        backup_job = BackupJob(
+            repository="/repo", repository_id=repo.id, status="running"
+        )
+        test_db.add(backup_job)
+        test_db.commit()
+        job.backup_job_id = backup_job.id
+        test_db.commit()
+
+        complete = test_client.post(
+            f"/api/agents/jobs/{job.id}/complete",
+            json={"result": {"archive_name": "a1", "return_code": 0}},
+            headers=_agent_headers(registered["agent_token"]),
+        )
+        assert complete.status_code == 200
+
+        test_db.refresh(repo)
+        assert repo.last_backup is None
+        ops = (
+            test_db.query(Operation)
+            .filter(Operation.repository_id == repo.id)
+            .order_by(Operation.id)
+            .all()
+        )
+        assert [o.kind for o in ops][:1] == ["archive_sync"]
+        assert {o.trigger for o in ops} == {"followup"}
+
+    def test_failed_followup_enqueue_never_fails_the_backup(
+        self, test_client: TestClient, test_db, admin_headers, monkeypatch
+    ):
+        """A flush failure inside the follow-up enqueue (here a colliding
+        Operation id, the shape enqueue() produces) is undone in its own
+        savepoint: the completion still succeeds and the terminal state of
+        the agent job and the backup job is committed, with no chain rows."""
+        from sqlalchemy.exc import IntegrityError
+
+        load_default_executors()
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        repo = Repository(name="linked", path="/repo", encryption="none")
+        test_db.add(repo)
+        test_db.commit()
+        from app.services.operations.enqueue import enqueue
+
+        existing = enqueue(test_db, "stats", repository_id=repo.id)
+        job = _create_agent_job(test_db, agent, status="running")
+        backup_job = BackupJob(
+            repository="/repo", repository_id=repo.id, status="running"
+        )
+        test_db.add(backup_job)
+        test_db.commit()
+        job.backup_job_id = backup_job.id
+        test_db.commit()
+        seen = {}
+
+        def colliding_enqueue(db, repository_id, **kwargs):
+            db.add(
+                Operation(
+                    id=existing.id,
+                    run_id=existing.run_id,
+                    kind="archive_sync",
+                    category="index",
+                    status="queued",
+                    trigger="followup",
+                    repository_id=repository_id,
+                )
+            )
+            try:
+                db.flush()
+            except IntegrityError as exc:
+                seen["error"] = exc
+                raise
+            raise AssertionError("the colliding flush did not fail")
+
+        monkeypatch.setattr(
+            "app.api.agents.enqueue_backup_followups", colliding_enqueue
+        )
+        complete = test_client.post(
+            f"/api/agents/jobs/{job.id}/complete",
+            json={"result": {"archive_name": "a1", "return_code": 0}},
+            headers=_agent_headers(registered["agent_token"]),
+        )
+        assert complete.status_code == 200, complete.text
+        assert "error" in seen
+        test_db.expire_all()
+        assert test_db.get(AgentJob, job.id).status == "completed"
+        assert test_db.get(BackupJob, backup_job.id).status == "completed"
+        assert test_db.get(BackupJob, backup_job.id).archive_name == "a1"
+        assert (
+            test_db.query(Operation).filter(Operation.repository_id == repo.id).count()
+            == 1
+        )
 
     def test_modern_warning_range_counts_as_warning(
         self, test_client: TestClient, test_db, admin_headers
