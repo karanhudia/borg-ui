@@ -65,6 +65,7 @@ import ResponsiveDialog from '../components/shared/ResponsiveDialog'
 import DiagnosticsTcpTargetFields from '../components/shared/DiagnosticsTcpTargetFields'
 import AddAgentDialog from './managed-agents/AddAgentDialog'
 import AgentUpgradeBanner from './managed-agents/AgentUpgradeBanner'
+import AgentManualUpgradeChip from './managed-agents/AgentManualUpgradeChip'
 import AgentUpgradeChip from './managed-agents/AgentUpgradeChip'
 import BorgInstallModeRadioGroup from './managed-agents/BorgInstallModeRadioGroup'
 import { resolveAgentServerUrl } from './managed-agents/agentServerUrl'
@@ -1728,6 +1729,7 @@ export function AgentList({
                           pinnedVersion={agent.desired_agent_version}
                         />
                       )}
+                      {agent.self_upgrade_supported === false && <AgentManualUpgradeChip />}
                     </Box>
                   </Box>
 

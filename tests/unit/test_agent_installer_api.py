@@ -1,3 +1,4 @@
+import hashlib
 import re
 import shutil
 import subprocess
@@ -515,6 +516,25 @@ def test_agent_installer_script_is_valid_bash(test_client: TestClient):
     assert result.returncode == 0, result.stderr
 
 
+def test_agent_installer_script_runs_far_enough_to_print_usage(
+    test_client: TestClient, tmp_path: Path
+):
+    # bash -n only parses. Actually running --help catches the runtime aborts
+    # set -u produces when a variable is used before it is assigned.
+    script = tmp_path / "install.sh"
+    script.write_text(test_client.get("/agent/install.sh").text)
+
+    result = subprocess.run(
+        ["bash", str(script), "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Usage:" in result.stdout
+
+
 @pytest.mark.skipif(
     shutil.which("shellcheck") is None, reason="shellcheck is not installed"
 )
@@ -530,3 +550,177 @@ def test_agent_installer_script_passes_shellcheck(test_client: TestClient):
     )
 
     assert result.returncode == 0, result.stdout
+
+
+def test_the_served_installer_publishes_its_own_checksum(test_client: TestClient):
+    script = test_client.get("/agent/install.sh")
+    checksum = test_client.get("/agent/install.sh.sha256")
+
+    assert checksum.status_code == 200
+    assert checksum.headers["content-type"].startswith("text/plain")
+
+    expected = hashlib.sha256(script.content).hexdigest()
+    assert checksum.text.strip() == expected
+    # The helper compares against this after downloading, so a checksum that
+    # covered anything but the exact served bytes would abort every upgrade.
+    assert checksum.text.strip() == checksum.text.strip().lower()
+
+
+def test_agent_installer_supports_declining_remote_upgrade(test_client: TestClient):
+    script = test_client.get("/agent/install.sh").text
+
+    assert "--no-remote-upgrade" in script
+    assert 'REMOTE_UPGRADE="1"' in script
+    # Outside the agent-owned config directory: a compromised agent must not
+    # be able to pin itself onto the manual path and block its own remediation.
+    assert 'NO_REMOTE_UPGRADE_MARKER="/etc/borg-ui-agent-no-remote-upgrade"' in (script)
+
+
+def test_agent_installer_reinstall_preserves_a_declined_remote_upgrade(
+    test_client: TestClient,
+):
+    script = test_client.get("/agent/install.sh").text
+
+    # The marker is what separates "this operator declined" from "this endpoint
+    # was installed before remote upgrade existed". Absence must mean the
+    # second, so a pre-existing endpoint gains the helper on its next
+    # reinstall rather than being locked out of it forever.
+    assert (
+        'if [[ "${REMOTE_UPGRADE_SET}" == "0" && -e "${NO_REMOTE_UPGRADE_MARKER}" ]]'
+        in script
+    )
+    assert 'REMOTE_UPGRADE="0"' in script
+
+
+def test_agent_installer_records_the_upgrade_parameters_as_root(
+    test_client: TestClient,
+):
+    script = test_client.get("/agent/install.sh").text
+
+    # Not under /etc/borg-ui-agent: that directory is owned by the service
+    # user, which could then replace a file root sources. Root-owned and out of
+    # the agent's reach, so the agent cannot repoint its own upgrade at another
+    # host (spec section 11.2).
+    assert 'UPGRADE_CONF="/etc/borg-ui-agent-upgrade.conf"' in script
+    assert "/etc/borg-ui-agent/upgrade.conf" not in script
+    assert "install -o root -g root -m 0644 " in script
+    for key in (
+        "SERVER",
+        "AGENT_ID",
+        "BORG_INSTALL_MODE",
+        "SERVICE_USER_MODE",
+        "SERVICE_USER",
+        "SERVICE_GROUP",
+        "AGENT_ROOT",
+    ):
+        assert f'{key}="' in script
+
+
+def test_agent_installer_rejects_an_agent_id_that_is_not_an_identifier(
+    test_client: TestClient,
+):
+    script = test_client.get("/agent/install.sh").text
+
+    # agent_id is read from the service-user-owned config.toml and written into
+    # a file root sources, so anything but a plain identifier has to be refused.
+    assert '[[ ! "${agent_id}" =~ ^[A-Za-z0-9._-]+$ ]]' in script
+
+
+def test_agent_installer_writes_a_oneshot_unit_for_the_upgrade(
+    test_client: TestClient,
+):
+    script = test_client.get("/agent/install.sh").text
+
+    assert "/etc/systemd/system/borg-ui-agent-upgrade.service" in script
+    assert "Type=oneshot" in script
+    assert "ExecStart=${AGENT_ROOT}/bin/borg-ui-agent-upgrade" in script
+    # Never enabled: it runs only when something starts it. And the reinstall
+    # restarts borg-ui-agent, so it has to live outside that unit's process
+    # tree or systemd would kill the upgrade halfway through.
+    assert "systemctl enable borg-ui-agent-upgrade" not in script
+
+
+def test_agent_installer_triggers_the_upgrade_through_a_path_unit(
+    test_client: TestClient,
+):
+    script = test_client.get("/agent/install.sh").text
+
+    # The agent unit runs with NoNewPrivileges=true, which makes sudo refuse to
+    # run at all, so the trigger cannot go through sudo. Creating one file the
+    # agent already has write access to is the whole escalation.
+    assert "/etc/systemd/system/borg-ui-agent-upgrade.path" in script
+    assert "PathExists=/etc/borg-ui-agent/upgrade-requested" in script
+    assert "Unit=borg-ui-agent-upgrade.service" in script
+    assert "systemctl enable --now borg-ui-agent-upgrade.path" in script
+    assert 'sudoers.d/borg-ui-agent-upgrade"' not in script
+    assert "visudo" not in script
+
+
+def test_agent_installer_reinstall_prefers_the_root_owned_server(
+    test_client: TestClient,
+):
+    script = test_client.get("/agent/install.sh").text
+
+    # config.toml belongs to the service user. An agent that rewrote its own
+    # server_url must not get a bare --reinstall to fetch and run code from
+    # wherever it named, nor have that server recorded for later upgrades.
+    reinstall = script.split('if [[ "${REINSTALL}" == "1" ]]; then', 1)[1]
+    from_conf = reinstall.index('sed -nE \'s/^SERVER="(.*)"$/\\1/p\' "${UPGRADE_CONF}"')
+    from_toml = reinstall.index("/etc/borg-ui-agent/config.toml | head -n 1")
+    assert from_conf < from_toml
+
+
+def test_agent_installer_clears_the_trigger_before_arming_the_path_unit(
+    test_client: TestClient,
+):
+    script = test_client.get("/agent/install.sh").text
+
+    # Enabling the unit with a trigger already there starts the helper at once,
+    # running a second installer as root on top of the one still going.
+    block = script.split("write_upgrade_path_unit() {", 1)[1].split("\n}", 1)[0]
+    assert block.index('rm -f "${UPGRADE_TRIGGER}"') < block.index(
+        "systemctl enable --now borg-ui-agent-upgrade.path"
+    )
+
+
+def test_agent_installer_helper_clears_its_own_trigger(test_client: TestClient):
+    script = test_client.get("/agent/install.sh").text
+
+    # A .path unit re-runs for as long as the trigger exists, so the helper has
+    # to remove it before anything that can fail.
+    helper = script.split("<<'UPGRADE_HELPER'", 1)[1]
+    body = helper.split('if [[ ! -r "${conf}" ]]', 1)[0]
+    assert (
+        'rm -f "${BORG_UI_UPGRADE_TRIGGER:-/etc/borg-ui-agent/upgrade-requested}"'
+        in (body)
+    )
+
+
+def test_agent_installer_takes_away_a_sudoers_rule_from_an_older_install(
+    test_client: TestClient,
+):
+    script = test_client.get("/agent/install.sh").text
+
+    # Endpoints installed before the path unit carry a live sudoers rule. A
+    # reinstall must remove it rather than leave both paths open.
+    assert script.count("rm -f /etc/sudoers.d/borg-ui-agent-upgrade") == 2
+
+
+def test_agent_installer_removes_the_upgrade_artifacts_when_declined(
+    test_client: TestClient,
+):
+    script = test_client.get("/agent/install.sh").text
+
+    # A reinstall with --no-remote-upgrade on an endpoint that has the helper
+    # must take it away, not leave a live escalation behind.
+    removal = script.split("remove_upgrade_artifacts() {", 1)[1].split("\n}", 1)[0]
+    assert "systemctl disable --now borg-ui-agent-upgrade.path" in removal
+    for path in (
+        "UPGRADE_PATH_UNIT",
+        "UPGRADE_UNIT",
+        "UPGRADE_HELPER",
+        "UPGRADE_CONF",
+        "UPGRADE_TRIGGER",
+    ):
+        assert f'"${{{path}}}"' in removal
+    assert "NO_REMOTE_UPGRADE_MARKER" in script

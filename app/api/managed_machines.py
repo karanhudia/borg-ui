@@ -111,7 +111,10 @@ class AgentMachineResponse(BaseModel):
     desired_borg_version: Optional[str] = None
     available_agent_version: Optional[str] = None
     upgrade_status: str = "unknown"
-    self_upgrade_supported: bool = False
+    # None until the agent has reported its capabilities at least once. An
+    # endpoint that has never checked in has not said it cannot upgrade
+    # itself, and must not be labelled manual-only for it.
+    self_upgrade_supported: Optional[bool] = None
     upgrade_state: Optional[str] = None
     upgrade_requested_at: Optional[datetime] = None
     upgrade_error: Optional[str] = None
@@ -499,7 +502,9 @@ def _agent_machine_response(
         desired=agent.desired_agent_version,
         available=available,
     )
-    response.self_upgrade_supported = "self_upgrade" in (agent.capabilities or [])
+    response.self_upgrade_supported = (
+        None if agent.capabilities is None else "self_upgrade" in agent.capabilities
+    )
     return response
 
 

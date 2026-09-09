@@ -83,6 +83,56 @@ the registration step, refreshes the installed package and systemd unit, and
 restarts `borg-ui-agent`. You do not need a new enrollment token unless you are
 enrolling a different machine or recreating a missing local agent config.
 
+## Remote Upgrade and What It Grants
+
+New installs place four root-owned files on the endpoint so a future Borg UI
+release can reinstall the agent from the server instead of you visiting the
+machine. The agent asks for an upgrade by creating one empty file, which is the
+entire privilege it is given. It passes no arguments and runs no privileged
+command itself, so nothing here needs `sudo`, which the agent's own unit would
+refuse anyway under `NoNewPrivileges=true`.
+
+| File | Purpose |
+| --- | --- |
+| `/etc/borg-ui-agent-upgrade.conf` | The reinstall parameters. Root-owned, and outside the agent-owned config directory so the agent cannot replace it. |
+| `/opt/borg-ui-agent/bin/borg-ui-agent-upgrade` | The helper. Takes no arguments and reads only `upgrade.conf`. |
+| `/etc/systemd/system/borg-ui-agent-upgrade.service` | A oneshot unit that runs the helper. Never enabled. |
+| `/etc/systemd/system/borg-ui-agent-upgrade.path` | Watches for `/etc/borg-ui-agent/upgrade-requested` and starts that one unit when it appears. |
+
+Be clear about the trade. Before this, a compromised Borg UI server could
+already run code as the agent's service user on every endpoint and read any
+file on it, and it already decided which agent code the endpoint runs. With the
+helper it can additionally obtain root on that endpoint: write access and
+persistence. That is a real escalation, not a repackaging of existing trust. It
+is bounded to the server that already controls the endpoint's agent code, and
+it is what makes upgrades possible on the installer's default service user mode
+rather than only on root installs.
+
+Remote upgrade needs an `https` server URL, because the helper runs what it
+downloads as root and will not fetch it over cleartext. An endpoint enrolled
+against an `http` server reports no remote upgrade support and stays on the
+manual path.
+
+To decline it on a sensitive host:
+
+```bash
+curl -fsSL https://borg-ui-host:8083/agent/install.sh | sudo bash -s -- \
+  --server https://borg-ui-host:8083 --token TOKEN --name NAME \
+  --no-remote-upgrade
+```
+
+That endpoint keeps the manual reinstall path and reports no remote upgrade
+support. A later reinstall remembers the choice; pass `--remote-upgrade` to
+undo it.
+
+Endpoints enrolled before this release have none of these files and are shown
+as manual only. One reinstall gives them remote upgrade:
+
+```bash
+curl -fsSL https://borg-ui-host:8083/agent/install.sh | sudo bash -s -- \
+  --server https://borg-ui-host:8083 --reinstall
+```
+
 ## Knowing Which Agents Are Out of Date
 
 Every agent reports the version it runs each time it checks in. Borg UI compares
@@ -92,7 +142,7 @@ a chip on the agent card:
 | Chip | Meaning |
 | --- | --- |
 | No chip | The agent runs the version this server serves. Nothing to do. |
-| **Update available** | The agent is older than the version this server serves. Reinstall it using the command above. |
+| **Update available** | The agent is older than the version this server serves. Reinstall it with the plain `--reinstall` command above, not the `--no-remote-upgrade` one. |
 | **Ahead of server** | The agent is newer than the version this server serves, which happens after a server rollback. Upgrade the server rather than downgrading the agent. |
 | **Pinned** | The agent is held at a specific version and will not follow the server. |
 | **Version unknown** | The agent has not reported a version yet, or the version cannot be compared. A freshly enrolled agent shows this until its first check-in. |
@@ -101,7 +151,8 @@ A banner above the fleet counts how many endpoints are running an older agent.
 
 Upgrading is still a manual reinstall on each machine in this release. The
 comparison tells you which machines need it, so you are not reinstalling
-everything to be sure.
+everything to be sure. New installs now carry the machinery for
+server-driven upgrades, described above, and a later release turns it on.
 
 ### Pinning an Agent Version
 

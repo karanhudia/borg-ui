@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import os
 import re
 from pathlib import Path
@@ -50,12 +51,26 @@ BORG_SOURCE="server"
 SKIP_BORG_INSTALL="0"
 SERVICE_USER_MODE="current"
 SERVICE_USER_MODE_SET="0"
+REMOTE_UPGRADE="1"
+REMOTE_UPGRADE_SET="0"
+NO_REMOTE_UPGRADE_MARKER="/etc/borg-ui-agent-no-remote-upgrade"
+# Deliberately not under /etc/borg-ui-agent: that directory is owned by the
+# service user, so the agent could replace any file in it, and root sources
+# this one.
+UPGRADE_CONF="/etc/borg-ui-agent-upgrade.conf"
+UPGRADE_UNIT="/etc/systemd/system/borg-ui-agent-upgrade.service"
+UPGRADE_PATH_UNIT="/etc/systemd/system/borg-ui-agent-upgrade.path"
+# The agent asks for an upgrade by creating this. It is in the agent-owned
+# config directory on purpose: creating it is the whole privilege being
+# granted, and nothing ever reads it, only its existence.
+UPGRADE_TRIGGER="/etc/borg-ui-agent/upgrade-requested"
 SERVICE_USER=""
 SERVICE_GROUP=""
 SERVICE_HOME=""
 SERVICE_READ_WRITE_PATHS="/etc/borg-ui-agent /tmp"
 AGENT_ROOT="/opt/borg-ui-agent"
 BORG_FORWARDER_DIR="${AGENT_ROOT}/bin"
+UPGRADE_HELPER="${AGENT_ROOT}/bin/borg-ui-agent-upgrade"
 BORG1_LINK="/usr/local/bin/borg"
 BORG2_LINK="/usr/local/bin/borg2"
 
@@ -84,6 +99,12 @@ Borg install options:
   --borg-version 2      Install/verify Borg 2 as 'borg2' (advanced beta).
   --borg-version both   Install/verify Borg 1 and Borg 2.
   --skip-borg-install   Do not install Borg; register/reinstall with detected binaries only.
+
+Remote upgrade options:
+  --no-remote-upgrade   Do not install the privileged self-upgrade helper. The
+                        endpoint can then only be updated by running this
+                        installer on the machine with --reinstall. A reinstall
+                        remembers this choice; pass --remote-upgrade to undo it.
 
   --borg-source server  Install the exact Borg versions this Borg UI server runs,
                         from the static binaries published with those releases
@@ -152,6 +173,16 @@ while [[ $# -gt 0 ]]; do
       SKIP_BORG_INSTALL="1"
       shift
       ;;
+    --no-remote-upgrade)
+      REMOTE_UPGRADE="0"
+      REMOTE_UPGRADE_SET="1"
+      shift
+      ;;
+    --remote-upgrade)
+      REMOTE_UPGRADE="1"
+      REMOTE_UPGRADE_SET="1"
+      shift
+      ;;
     --borg-source)
       BORG_SOURCE="${2:-server}"
       case "${BORG_SOURCE}" in
@@ -213,7 +244,13 @@ if [[ "${REINSTALL}" == "1" ]]; then
     echo "Skipping Borg installation by default for reinstall mode."
   fi
   # Reinstall takes no --server, but the agent package still comes from the
-  # server this machine is enrolled against.
+  # server this machine is enrolled against. Prefer the root-owned upgrade
+  # record: config.toml belongs to the service user, so an agent that rewrote
+  # its own server_url would otherwise have this reinstall fetch and run code
+  # from wherever it named, and record that server for every later upgrade.
+  if [[ -z "${SERVER}" && -r "${UPGRADE_CONF}" ]]; then
+    SERVER="$(sed -nE 's/^SERVER="(.*)"$/\1/p' "${UPGRADE_CONF}" | head -n 1)"
+  fi
   if [[ -z "${SERVER}" ]]; then
     SERVER="$(sed -nE 's/^server_url[[:space:]]*=[[:space:]]*"(.*)"[[:space:]]*$/\1/p' \
       /etc/borg-ui-agent/config.toml | head -n 1)"
@@ -286,6 +323,15 @@ if [[ "${REINSTALL}" == "1" && "${SERVICE_USER_MODE_SET}" == "0" ]]; then
     SERVICE_USER_MODE="${existing_unit_user}"
     echo "Reinstall: preserving existing service user '${existing_unit_user}'."
   fi
+fi
+
+# A reinstall keeps the operator's earlier answer about remote upgrade unless
+# this run gives one explicitly. The marker records a decline; its absence
+# means "never asked", which is also what an endpoint installed before remote
+# upgrade existed looks like, and that endpoint should gain the helper here.
+if [[ "${REMOTE_UPGRADE_SET}" == "0" && -e "${NO_REMOTE_UPGRADE_MARKER}" ]]; then
+  REMOTE_UPGRADE="0"
+  echo "Reinstall: remote upgrade stays declined (${NO_REMOTE_UPGRADE_MARKER} exists)."
 fi
 
 if [[ ! -r /etc/os-release ]]; then
@@ -746,6 +792,235 @@ ${SERVICE_CAPABILITIES}
 WantedBy=multi-user.target
 SERVICE
 
+# Everything the self-upgrade helper needs, in a file only root can write. The
+# helper takes no arguments and reads only this, so a compromised agent cannot
+# redirect the install source, change the service user, or inject installer
+# flags. That is what makes the sudoers rule safe to grant.
+write_upgrade_conf() {
+  local agent_id borg_install_mode
+
+  agent_id="$(sed -nE 's/^agent_id[[:space:]]*=[[:space:]]*"(.*)"[[:space:]]*$/\1/p' \
+    /etc/borg-ui-agent/config.toml | head -n 1)"
+  # config.toml belongs to the service user, and root sources what we write
+  # below, so anything but a plain identifier here would be a root shell for a
+  # compromised agent.
+  if [[ ! "${agent_id}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    echo "Could not read a usable agent_id from" >&2
+    echo "/etc/borg-ui-agent/config.toml; skipping remote upgrade setup. This" >&2
+    echo "endpoint stays on the manual reinstall path." >&2
+    return 1
+  fi
+
+  if [[ "${BORG_VERSION_SET}" == "0" && "${SKIP_BORG_INSTALL}" == "1" ]] &&
+    [[ -r "${UPGRADE_CONF}" ]]; then
+    # A bare --reinstall skips Borg by default. That is a choice about this run,
+    # not about the endpoint, so keep whatever mode was recorded rather than
+    # pinning every future remote upgrade to "skip".
+    borg_install_mode="$(sed -nE 's/^BORG_INSTALL_MODE="(.*)"$/\1/p' \
+      "${UPGRADE_CONF}" | head -n 1)"
+  fi
+  if [[ -z "${borg_install_mode:-}" ]]; then
+    if [[ "${SKIP_BORG_INSTALL}" == "1" ]]; then
+      borg_install_mode="skip"
+    else
+      borg_install_mode="${BORG_VERSION}"
+    fi
+  fi
+
+  if [[ ! "${SERVER%/}" =~ ^https?://[A-Za-z0-9._:/-]+$ ]]; then
+    echo "Server URL '${SERVER}' is not a plain URL; skipping remote upgrade" >&2
+    echo "setup. This endpoint stays on the manual reinstall path." >&2
+    return 1
+  fi
+
+  install -o root -g root -m 0644 /dev/null "${UPGRADE_CONF}"
+  cat >"${UPGRADE_CONF}" <<CONF
+# Written by the Borg UI agent installer. Read by
+# ${AGENT_ROOT}/bin/borg-ui-agent-upgrade, which takes no arguments.
+SERVER="${SERVER%/}"
+AGENT_ID="${agent_id}"
+BORG_INSTALL_MODE="${borg_install_mode}"
+BORG_SOURCE="${BORG_SOURCE}"
+SERVICE_USER_MODE="${SERVICE_USER_MODE}"
+SERVICE_USER="${SERVICE_USER}"
+SERVICE_GROUP="${SERVICE_GROUP}"
+AGENT_ROOT="${AGENT_ROOT}"
+CONF
+}
+
+write_upgrade_helper() {
+  install -d -o root -g root -m 0755 "${AGENT_ROOT}/bin"
+  cat >"${UPGRADE_HELPER}" <<'UPGRADE_HELPER'
+#!/usr/bin/env bash
+# Installed by the Borg UI agent installer. Started as root by
+# borg-ui-agent-upgrade.service, which the agent may start through one narrow
+# sudoers rule.
+#
+# It takes NO ARGUMENTS on purpose. Every parameter comes from
+# /etc/borg-ui-agent-upgrade.conf, which sits outside the agent-owned config
+# directory and only root can write, so a compromised agent cannot change the
+# install source, the service user, or the installer flags. Adding an argument
+# here would undo that.
+set -euo pipefail
+
+# The two overrides are test seams. systemd passes no environment from whoever
+# starts the unit, so the only way to use them is to already be root.
+etc="${BORG_UI_UPGRADE_ETC:-/etc/borg-ui-agent}"
+conf="${BORG_UI_UPGRADE_CONF:-/etc/borg-ui-agent-upgrade.conf}"
+agent_config="${etc}/config.toml"
+
+# systemd re-runs a .path unit for as long as the trigger is there, so clear it
+# before doing anything that can fail.
+rm -f "${BORG_UI_UPGRADE_TRIGGER:-/etc/borg-ui-agent/upgrade-requested}"
+
+if [[ ! -r "${conf}" ]]; then
+  echo "Missing ${conf}; nothing to upgrade from." >&2
+  exit 1
+fi
+
+# shellcheck source=/dev/null
+. "${conf}"
+
+for required in SERVER AGENT_ID BORG_INSTALL_MODE SERVICE_USER AGENT_ROOT; do
+  if [[ -z "${!required:-}" ]]; then
+    echo "${conf} is missing ${required}." >&2
+    exit 1
+  fi
+done
+
+# This script runs what it downloads, as root. An http URL is refused rather
+# than downgraded to a warning.
+if [[ "${SERVER}" != https://* ]]; then
+  echo "Remote upgrade requires an https server URL; ${conf} names ${SERVER}." >&2
+  exit 1
+fi
+
+# A config left behind by an earlier enrollment must not be able to point a
+# live agent's upgrade at a host it no longer talks to.
+enrolled_server=""
+if [[ -r "${agent_config}" ]]; then
+  enrolled_server="$(sed -nE 's/^server_url[[:space:]]*=[[:space:]]*"(.*)"[[:space:]]*$/\1/p' \
+    "${agent_config}" | head -n 1)"
+fi
+if [[ "${enrolled_server%/}" != "${SERVER%/}" ]]; then
+  echo "${conf} names ${SERVER}, but this agent is enrolled against" >&2
+  echo "'${enrolled_server}'. Refusing to upgrade." >&2
+  exit 1
+fi
+
+workdir="$(mktemp -d)"
+trap 'rm -rf "${workdir}"' EXIT
+
+# --proto '=https' holds across redirects, and --max-redirs 0 means there are
+# none to hold across: any redirect is an error rather than a hop to somewhere
+# this script would then execute as root.
+fetch() {
+  curl -fsS --proto '=https' --tlsv1.2 --max-redirs 0 -o "$2" "$1"
+}
+
+query="?agent_id=${AGENT_ID}"
+fetch "${SERVER%/}/agent/install.sh${query}" "${workdir}/install.sh"
+fetch "${SERVER%/}/agent/install.sh.sha256${query}" "${workdir}/install.sh.sha256"
+
+expected="$(tr -d '[:space:]' <"${workdir}/install.sh.sha256")"
+actual="$(sha256sum "${workdir}/install.sh" | awk '{print $1}')"
+if [[ -z "${expected}" || "${expected}" != "${actual}" ]]; then
+  echo "Installer checksum mismatch; expected '${expected}', got '${actual}'." >&2
+  echo "Nothing was executed." >&2
+  exit 1
+fi
+
+args=(--reinstall --service-user "${SERVICE_USER}")
+if [[ "${BORG_INSTALL_MODE}" == "skip" ]]; then
+  args+=(--skip-borg-install)
+else
+  args+=(--borg-version "${BORG_INSTALL_MODE}")
+  # Without this an endpoint installed from distribution packages would be
+  # repointed at the server's static binaries by its first upgrade.
+  args+=(--borg-source "${BORG_SOURCE:-server}")
+fi
+
+echo "Reinstalling the Borg UI agent from ${SERVER}."
+bash "${workdir}/install.sh" "${args[@]}"
+UPGRADE_HELPER
+  chown root:root "${UPGRADE_HELPER}"
+  chmod 0755 "${UPGRADE_HELPER}"
+}
+
+write_upgrade_unit() {
+  cat >"${UPGRADE_UNIT}" <<UPGRADE_UNIT_FILE
+[Unit]
+Description=Borg UI agent self-upgrade
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=${AGENT_ROOT}/bin/borg-ui-agent-upgrade
+UPGRADE_UNIT_FILE
+  chown root:root "${UPGRADE_UNIT}"
+  chmod 0644 "${UPGRADE_UNIT}"
+}
+
+# The escalation, and the whole of it: the agent creates one file, systemd
+# notices and runs the helper as root. There is no sudo, no setuid binary and
+# no argument the agent can pass, so nothing here has to survive the agent unit
+# being run with NoNewPrivileges=true, which is what defeats sudo.
+write_upgrade_path_unit() {
+  cat >"${UPGRADE_PATH_UNIT}" <<'UPGRADE_PATH_FILE'
+[Unit]
+Description=Borg UI agent self-upgrade request
+
+[Path]
+PathExists=/etc/borg-ui-agent/upgrade-requested
+Unit=borg-ui-agent-upgrade.service
+
+[Install]
+WantedBy=multi-user.target
+UPGRADE_PATH_FILE
+  chown root:root "${UPGRADE_PATH_UNIT}"
+  chmod 0644 "${UPGRADE_PATH_UNIT}"
+
+  # A trigger left over from before, or created while the path unit was off,
+  # would fire the helper the moment the unit starts, running a second
+  # installer as root on top of this one.
+  rm -f "${UPGRADE_TRIGGER}"
+
+  # The unit files are new, so systemd has to be told about them before the
+  # path unit can be enabled. The reload at the end of the script is too late.
+  systemctl daemon-reload
+  systemctl enable --now borg-ui-agent-upgrade.path
+}
+
+remove_upgrade_artifacts() {
+  systemctl disable --now borg-ui-agent-upgrade.path >/dev/null 2>&1 || true
+  rm -f "${UPGRADE_PATH_UNIT}" "${UPGRADE_UNIT}" "${UPGRADE_HELPER}" \
+    "${UPGRADE_CONF}" "${UPGRADE_TRIGGER}"
+  # An install that predates the path unit granted the agent a sudoers rule.
+  # Take it away rather than leaving a live escalation behind.
+  rm -f /etc/sudoers.d/borg-ui-agent-upgrade
+}
+
+if [[ "${REMOTE_UPGRADE}" == "1" ]] && write_upgrade_conf; then
+  write_upgrade_helper
+  write_upgrade_unit
+  # An unwatched trigger makes the helper unreachable, so do not leave the unit
+  # and helper behind pretending otherwise.
+  if write_upgrade_path_unit; then
+    rm -f "${NO_REMOTE_UPGRADE_MARKER}"
+    rm -f /etc/sudoers.d/borg-ui-agent-upgrade
+    echo "Remote upgrade is available on this endpoint."
+  else
+    remove_upgrade_artifacts
+  fi
+else
+  remove_upgrade_artifacts
+  if [[ "${REMOTE_UPGRADE}" == "0" ]]; then
+    install -o root -g root -m 0644 /dev/null "${NO_REMOTE_UPGRADE_MARKER}"
+    echo "Remote upgrade declined. Update this endpoint with --reinstall."
+  fi
+fi
+
 /opt/borg-ui-agent/.venv/bin/borg-ui-agent service-check \
   --user "${SERVICE_USER}" \
   --group "${SERVICE_GROUP}" \
@@ -843,6 +1118,22 @@ async def get_agent_installer() -> Response:
     # on the event loop of this public endpoint.
     script = await asyncio.to_thread(render_installer_script)
     return Response(content=script, media_type="text/x-shellscript")
+
+
+@router.get("/agent/install.sh.sha256")
+async def get_agent_installer_checksum() -> Response:
+    """The SHA256 of the script this server serves at /agent/install.sh.
+
+    The self-upgrade helper runs the downloaded script as root, so it verifies
+    the download against this before executing anything. Rendered through the
+    same function as the script itself, so the two agree for as long as the
+    server's pinned versions do not change between the helper's two requests.
+    A server restarted into a new release in that window makes the helper refuse
+    and retry later, which is the direction to fail in.
+    """
+    script = await asyncio.to_thread(render_installer_script)
+    digest = hashlib.sha256(script.encode("utf-8")).hexdigest()
+    return Response(content=f"{digest}\n", media_type="text/plain")
 
 
 @router.get("/agent/dist/")

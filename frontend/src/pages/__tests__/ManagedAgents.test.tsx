@@ -1205,6 +1205,45 @@ describe('ManagedAgents', () => {
     expect(screen.getByText(/1 endpoint is running an older agent/i)).toBeInTheDocument()
   })
 
+  it('marks an endpoint that cannot be upgraded from the server', () => {
+    const manual = {
+      id: 21,
+      agent_id: 'agent-manual-21',
+      name: 'old-box',
+      hostname: 'old-box-01',
+      status: 'online',
+      agent_version: '0.1.3',
+      available_agent_version: '0.1.3',
+      upgrade_status: 'up_to_date',
+      self_upgrade_supported: false,
+      created_at: '2026-05-18T09:00:00.000Z',
+      updated_at: '2026-05-18T10:00:00.000Z',
+    } as AgentMachineResponse
+    const remote = {
+      ...manual,
+      id: 22,
+      agent_id: 'agent-remote-22',
+      name: 'new-box',
+      hostname: 'new-box-01',
+      self_upgrade_supported: true,
+    } as AgentMachineResponse
+
+    renderWithProviders(
+      <AgentList
+        agents={[manual, remote]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+
+    expect(screen.getAllByText('Manual upgrades only')).toHaveLength(1)
+  })
+
   it('stays quiet for an agent running the served version', () => {
     const agent = {
       id: 12,

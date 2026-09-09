@@ -16,6 +16,7 @@ from agent.borg_ui_agent.repository_ops import (
     execute_storage_usage_job,
 )
 from agent.borg_ui_agent.scripts import execute_script_run_job
+from agent.borg_ui_agent.self_upgrade import can_self_upgrade
 
 DEFAULT_REPOSITORY_OPERATION_HANDLER = execute_repository_operation_job
 
@@ -81,7 +82,12 @@ class RunOnceResult:
 
 
 def get_capabilities() -> list[str]:
-    return list(DEFAULT_CAPABILITIES)
+    # Detected, not assumed: an agent upgraded from an install that predates
+    # the helper has to report honestly so the UI routes it to the manual path.
+    capabilities = list(DEFAULT_CAPABILITIES)
+    if can_self_upgrade():
+        capabilities.append("self_upgrade")
+    return capabilities
 
 
 def get_job_handler(job_kind: str):
