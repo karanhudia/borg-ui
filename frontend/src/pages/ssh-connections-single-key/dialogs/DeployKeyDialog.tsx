@@ -105,6 +105,11 @@ export function DeployKeyDialog({
       description: t('sshConnections.deployDialog.presetHetznerDescription'),
       defaults: t('sshConnections.deployDialog.presetHetznerDefaults'),
     },
+    rsyncnet: {
+      title: t('sshConnections.deployDialog.presetRsyncNet'),
+      description: t('sshConnections.deployDialog.presetRsyncNetDescription'),
+      defaults: t('sshConnections.deployDialog.presetRsyncNetDefaults'),
+    },
     nas: {
       title: t('sshConnections.deployDialog.presetNas'),
       description: t('sshConnections.deployDialog.presetNasDescription'),
