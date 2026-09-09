@@ -19,6 +19,7 @@ from agent.borg_ui_agent.config import AgentConfig
 from agent.borg_ui_agent.filesystem import FilesystemBrowseError, browse_filesystem
 from agent.borg_ui_agent.runtime import get_capabilities, get_job_handler
 from agent.borg_ui_agent.scripts import list_allowed_scripts
+from agent.borg_ui_agent.self_upgrade import check_self_upgrade
 
 logger = logging.getLogger(__name__)
 
@@ -530,6 +531,7 @@ class AgentSessionRuntime:
             "diagnostics.run",
             "agent.repository_defaults",
             "agent.list_scripts",
+            "agent.upgrade",
             "cancel",
         ):
             return None
@@ -600,6 +602,10 @@ class AgentSessionRuntime:
 
         if command == "agent.list_scripts":
             self._handle_list_scripts(client, payload)
+            return
+
+        if command == "agent.upgrade":
+            self._handle_upgrade(client)
             return
 
         if command == "cancel":
@@ -734,6 +740,43 @@ class AgentSessionRuntime:
             client.send_error(f"Listing agent scripts failed: {exc}")
             return
         client.send_result({"scripts": scripts})
+
+    def _handle_upgrade(self, client: SessionCommandClient) -> None:
+        """Ask this endpoint to reinstall itself.
+
+        The whole action is creating one empty file that nothing reads: a
+        systemd .path unit watches it and starts the root helper, which takes
+        no arguments and reads every parameter from a root-owned config. The
+        agent therefore names no version and passes no argv.
+
+        Readiness is re-checked rather than trusted. The capability was
+        reported at connect time and the endpoint may have been changed since.
+        """
+        running = self._running_job_ids()
+        if running:
+            # An upgrade restarts this process, which would orphan whatever
+            # job is running under it.
+            client.send_error(f"Agent is running jobs {running}", code="upgrade_busy")
+            return
+
+        readiness = check_self_upgrade()
+        if not readiness.supported or readiness.trigger is None:
+            client.send_error(
+                f"Endpoint cannot upgrade itself: {readiness.reason}",
+                code="upgrade_unsupported",
+            )
+            return
+
+        try:
+            readiness.trigger.touch()
+        except OSError as exc:
+            client.send_error(
+                f"Could not request upgrade: {exc}", code="upgrade_failed"
+            )
+            return
+
+        logger.info("Upgrade requested via %s", readiness.trigger)
+        client.send_result({"success": True, "trigger": str(readiness.trigger)})
 
     def _handle_diagnostics(
         self, client: SessionCommandClient, payload: dict[str, Any]
