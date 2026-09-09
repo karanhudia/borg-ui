@@ -1569,6 +1569,40 @@ class OperationRcloneDetails(Base):
     error_text = Column(Text, nullable=True)
 
 
+class OperationRestoreDetails(Base):
+    """Restore-specific columns for an `operations` row. Spec section 6.2.
+
+    `original_size` is not in the spec's list. The legacy row kept it (the
+    byte total borg reports, from which the percentage and the ETA are
+    computed) and it cannot ride in `operations.progress_total`, an Integer
+    column that overflows at 2 GiB on PostgreSQL. `estimated_time_remaining`
+    and `progress` are not here either: the first is arithmetic over the
+    sizes and the speed, the second is `operations.progress_percent`.
+    """
+
+    __tablename__ = "operation_restore_details"
+
+    operation_id = Column(
+        Integer,
+        ForeignKey("operations.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    archive = Column(String, nullable=True)
+    destination = Column(String, nullable=True)
+    destination_type = Column(String(50), default="local")
+    destination_connection_id = Column(
+        Integer, ForeignKey("ssh_connections.id", ondelete="SET NULL"), nullable=True
+    )
+    temp_extraction_path = Column(String(255), nullable=True)
+    destination_hostname = Column(String(255), nullable=True)
+    repository_type = Column(String(50), default="local")
+    original_size = Column(BigInteger, default=0)
+    restored_size = Column(BigInteger, default=0)
+    restore_speed = Column(Float, default=0.0)
+    nfiles = Column(Integer, default=0)
+    current_file = Column(Text, nullable=True)
+
+
 class Archive(Base):
     """Persisted archive list per repository. Spec section 6.4."""
 

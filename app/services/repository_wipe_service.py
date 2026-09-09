@@ -235,6 +235,8 @@ class RepositoryWipeService:
                     detail={"key": "backend.errors.repo.operationAlreadyRunning"},
                 )
 
+        # Pre-phase-7 restore rows; new restores are `restore` operations and
+        # already counted in CONFLICTING_KINDS above.
         if (
             db.query(RestoreJob.id)
             .filter(

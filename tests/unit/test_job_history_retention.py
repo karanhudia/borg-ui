@@ -978,7 +978,7 @@ def _phase6_operation(db, kind, *, age_days, status="completed"):
     op = Operation(
         repository_id=None,
         kind=kind,
-        category="maintenance" if kind == "wipe" else "mirror",
+        category={"wipe": "maintenance", "restore": "restore"}.get(kind, "mirror"),
         status=status,
         trigger="manual",
         priority=0,
@@ -1000,15 +1000,22 @@ def test_deleting_an_operation_takes_its_extension_rows(db):
     from app.database.models import (
         Operation,
         OperationRcloneDetails,
+        OperationRestoreDetails,
         OperationWipeDetails,
     )
-    from app.services.operations.details import rclone_details, wipe_details
+    from app.services.operations.details import (
+        rclone_details,
+        restore_details,
+        wipe_details,
+    )
 
     settings = _settings(db)
     wipe_op = _phase6_operation(db, "wipe", age_days=400)
     rclone_op = _phase6_operation(db, "rclone_sync", age_days=400)
+    restore_op = _phase6_operation(db, "restore", age_days=400)
     wipe_details(db, wipe_op).archive_count = 2
     rclone_details(db, rclone_op).operation = "sync"
+    restore_details(db, restore_op).archive = "a"
     db.commit()
 
     run_retention(db, settings)
@@ -1017,6 +1024,7 @@ def test_deleting_an_operation_takes_its_extension_rows(db):
     assert db.query(Operation).count() == 0
     assert db.query(OperationWipeDetails).count() == 0
     assert db.query(OperationRcloneDetails).count() == 0
+    assert db.query(OperationRestoreDetails).count() == 0
 
 
 @pytest.mark.unit

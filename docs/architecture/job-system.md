@@ -58,12 +58,34 @@ Typical flow:
 
 ## Restore Jobs
 
-Restore jobs extract archive contents to a destination path visible inside the container.
+As of section 13 phase 7 of the operations spec, a restore is a row in the
+`operations` table (kind `restore`, category `restore`) with its restore
+columns on `operation_restore_details`: archive, destination, destination
+type and SSH connection, repository type, and the live byte and file counts.
+`POST /api/restore/start` enqueues the row; the operations runner dispatches
+it. Restore is not exclusive (Borg allows concurrent reads), so it runs
+beside a backup or check on the same repository rather than waiting for the
+lane, exactly as it did before the migration.
 
-Restores can target:
+The restore service keeps its three execution paths and drives the row
+through a facade that presents the legacy attribute surface:
 
-- local mounted paths
-- remote destinations supported by the restore flow
+- local destination: `borg extract` in the container, progress parsed from
+  `--log-json`
+- SSH destination: the destination is mounted over SSHFS and extracted into
+  directly
+- managed-agent repository: a `repository.restore` agent job is queued and
+  its progress mirrored onto the operation
+
+Cancelling a running restore (`POST /api/restore/cancel/{id}`) raises the
+runner's cancel flag, terminates the extract process (or asks the agent to
+cancel), and marks the row `cancelled`; the executor keeps that verdict even
+when the service records the killed process's exit afterwards.
+
+Restore logs are the operation's log file, written once at the end from the
+captured output. Rows written before phase 7 stay in `restore_jobs` and are
+served by the same routes until retention drops them; the table is deleted
+in phase 9.
 
 Notifications can be sent for restore success or failure.
 
@@ -148,11 +170,12 @@ On application startup, Borg UI checks for jobs that were left in `running` stat
 Startup cleanup currently covers:
 
 - backup jobs
-- restore jobs
+- restore rows in their legacy table, written by an install that has not
+  restarted since upgrading to phase 7
 - check, restore-check, prune, and compact rows in their legacy tables,
   written by an install that has not restarted since upgrading to phase 5
 
-Check, prune, compact, and restore-check now run as operations, and new
+Check, prune, compact, restore-check, and restore now run as operations, and new
 work in that shape is recovered by the operations runner on startup
 (requeue index rows, fail the rest unless their process is still alive; see
 "Operations runner"), including a local lock-break attempt equivalent to
@@ -164,7 +187,7 @@ are deleted with the tables in a later phase.
 What happens:
 
 - running backup jobs are marked `failed`
-- running restore jobs are marked `failed`
+- running legacy restore rows are marked `failed`
 - running legacy prune rows are marked `failed`
 - running legacy check, restore-check, and compact rows are marked `failed` when their recorded process is no longer alive
 - backup rows left in `running_prune` or `running_compact` maintenance states are marked `failed`, with maintenance state changed to `prune_failed` or `compact_failed`

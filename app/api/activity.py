@@ -197,8 +197,8 @@ def _get_operation_or_404(
         # and log-path attributes every branch below reads.
         from app.services.operations.job_facade import LEGACY_MODELS
 
-        # Phase 6 kinds keep their own legacy tables until phase 9 too.
-        legacy_model = LEGACY_MODELS.get(job_type) or _PHASE6_LEGACY_MODELS.get(
+        # Phase 6 and 7 kinds keep their own legacy tables until phase 9 too.
+        legacy_model = LEGACY_MODELS.get(job_type) or _MIGRATED_LEGACY_MODELS.get(
             job_type
         )
         if legacy_model is not None:
@@ -221,11 +221,13 @@ def _get_operation_or_404(
 
 
 def _read_operation_log(op: Operation) -> str:
-    if not op.log_file_path:
-        # Pre-phase-5 rows kept a text mirror of the log on the row itself.
+    # A legacy fallback row kept a text mirror of the log on the row itself,
+    # and a pre-phase-7 restore row has no log_file_path column at all.
+    log_file_path = getattr(op, "log_file_path", None)
+    if not log_file_path:
         return getattr(op, "logs", "") or ""
     try:
-        with open(op.log_file_path, "r", encoding="utf-8", errors="replace") as fh:
+        with open(log_file_path, "r", encoding="utf-8", errors="replace") as fh:
             return fh.read()
     except OSError:
         return ""
@@ -310,11 +312,13 @@ RCLONE_ACTIVITY_OPERATIONS = {
     "rclone_hydrate": "hydrate",
 }
 
-# Legacy tables for the kinds phase 6 migrated, keyed by Activity type name.
-# `app.services.operations.job_facade.LEGACY_MODELS` covers the phase 5 kinds.
-_PHASE6_LEGACY_MODELS = {
+# Legacy tables for the kinds phases 6 and 7 migrated, keyed by Activity type
+# name. `app.services.operations.job_facade.LEGACY_MODELS` covers the phase 5
+# kinds.
+_MIGRATED_LEGACY_MODELS = {
     "wipe": RepositoryWipeJob,
     "package": PackageInstallJob,
+    "restore": RestoreJob,
 }
 
 
@@ -825,7 +829,10 @@ async def list_recent_activity(
                 }
             )
 
-    # Fetch restore jobs
+    # Restore rows written before phase 7 moved restore to `operations`. New
+    # restores come through _operation_activity_items; this query is empty
+    # once retention has dropped the last legacy row and goes away with the
+    # table in phase 9.
     if not job_type or job_type == "restore":
         restore_query = db.query(RestoreJob)
         if scoped_repository is not None:
@@ -1278,7 +1285,6 @@ async def get_job_logs(
     # Map job type to model
     job_models = {
         "backup": BackupJob,
-        "restore": RestoreJob,
         "script_execution": ScriptExecution,
     }
 
@@ -1603,7 +1609,6 @@ async def download_job_logs(
     # Map job type to model
     job_models = {
         "backup": BackupJob,
-        "restore": RestoreJob,
         "script_execution": ScriptExecution,
     }
 
@@ -1817,7 +1822,6 @@ async def delete_job(
     # Map job type to model
     job_models = {
         "backup": BackupJob,
-        "restore": RestoreJob,
         "script_execution": ScriptExecution,
     }
 

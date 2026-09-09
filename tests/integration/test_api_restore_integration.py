@@ -739,12 +739,14 @@ class TestRestoreSpeedETAIntegration:
             # Wait for job to start and check database
             time.sleep(1.0)
 
-            from app.database.models import RestoreJob
             from app.database.database import SessionLocal
+            from app.services.operations.restore_facade import resolve_restore_job
 
             db = SessionLocal()
             try:
-                job = db.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+                # Phase 7: the job is an operation; the facade carries the
+                # legacy attribute surface the assertions below read.
+                job = resolve_restore_job(db, job_id)
                 assert job is not None
 
                 # Check that size fields are being tracked
@@ -819,12 +821,14 @@ class TestRestoreLogsIntegration:
 
         assert job_data["status"] == "completed"
 
-        from app.database.models import RestoreJob
         from app.database.database import SessionLocal
+        from app.services.operations.restore_facade import resolve_restore_job
 
         db = SessionLocal()
         try:
-            job = db.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+            # Phase 7: the logs live in the operation's log file, read back
+            # through the facade rather than a column on the row.
+            job = resolve_restore_job(db, job_id)
             assert job is not None
             assert job.logs is not None
             assert len(job.logs) > 0

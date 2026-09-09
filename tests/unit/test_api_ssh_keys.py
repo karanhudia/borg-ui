@@ -1232,9 +1232,27 @@ class TestSSHConnectionDelete:
         test_db.add(scheduled_job)
         test_db.commit()
 
+        from app.database.models import Operation, OperationRestoreDetails
+        from app.services.operations.details import restore_details
+
+        restore_op = Operation(
+            repository_id=repo.id,
+            kind="restore",
+            category="restore",
+            status="completed",
+            trigger="manual",
+            priority=0,
+            run_id="run-ssh-delete",
+        )
+        test_db.add(restore_op)
+        test_db.flush()
+        restore_details(test_db, restore_op).destination_connection_id = conn_id
+        test_db.commit()
+
         repo_id = repo.id
         backup_job_id = backup_job.id
         restore_job_id = restore_job.id
+        restore_op_id = restore_op.id
         scheduled_job_id = scheduled_job.id
 
         response = test_client.delete(
@@ -1267,6 +1285,10 @@ class TestSSHConnectionDelete:
         )
         assert restore_after is not None
         assert restore_after.destination_connection_id is None
+
+        details_after = test_db.get(OperationRestoreDetails, restore_op_id)
+        assert details_after is not None
+        assert details_after.destination_connection_id is None
 
         scheduled_after = (
             test_db.query(ScheduledJob)
