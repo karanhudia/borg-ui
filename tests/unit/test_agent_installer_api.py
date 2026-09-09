@@ -1,3 +1,4 @@
+import hashlib
 import re
 import shutil
 import subprocess
@@ -530,3 +531,17 @@ def test_agent_installer_script_passes_shellcheck(test_client: TestClient):
     )
 
     assert result.returncode == 0, result.stdout
+
+
+def test_the_served_installer_publishes_its_own_checksum(test_client: TestClient):
+    script = test_client.get("/agent/install.sh")
+    checksum = test_client.get("/agent/install.sh.sha256")
+
+    assert checksum.status_code == 200
+    assert checksum.headers["content-type"].startswith("text/plain")
+
+    expected = hashlib.sha256(script.content).hexdigest()
+    assert checksum.text.strip() == expected
+    # The helper compares against this after downloading, so a checksum that
+    # covered anything but the exact served bytes would abort every upgrade.
+    assert checksum.text.strip() == checksum.text.strip().lower()

@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import os
 import re
 from pathlib import Path
@@ -843,6 +844,19 @@ async def get_agent_installer() -> Response:
     # on the event loop of this public endpoint.
     script = await asyncio.to_thread(render_installer_script)
     return Response(content=script, media_type="text/x-shellscript")
+
+
+@router.get("/agent/install.sh.sha256")
+async def get_agent_installer_checksum() -> Response:
+    """The SHA256 of the script this server serves at /agent/install.sh.
+
+    The self-upgrade helper runs the downloaded script as root, so it verifies
+    the download against this before executing anything. Rendered through the
+    same function as the script itself, so the two cannot drift.
+    """
+    script = await asyncio.to_thread(render_installer_script)
+    digest = hashlib.sha256(script.encode("utf-8")).hexdigest()
+    return Response(content=f"{digest}\n", media_type="text/plain")
 
 
 @router.get("/agent/dist/")
