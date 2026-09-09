@@ -2797,6 +2797,8 @@
     "edit": "Bearbeiten",
     "lastCheck": "Letzte Überprüfung",
     "lastCompact": "Letzte Komprimierung",
+    "lastPrune": "Letzte Bereinigung",
+    "lastIndex": "Letzte Indexierung",
     "tomorrow": "Morgen",
     "schedulePaused": "Zeitplan pausiert",
     "schedulePausedWithName": "{{name}} pausiert",
@@ -3479,8 +3481,6 @@
       "title": "Hintergrundarbeit",
       "pause": "Pausieren",
       "resume": "Fortsetzen",
-      "never": "Nie",
-      "syncing": "Synchronisiert",
       "pauseFailed": "Der Zustand der Hintergrundwarteschlange konnte nicht geändert werden.",
       "openTrack": "Ablaufverfolgung für {{repository}} öffnen",
       "rebuildFailed": "Der Neuaufbau konnte nicht gestartet werden.",
@@ -3636,14 +3636,6 @@
       "availability_check": "Verfügbarkeitsprüfung",
       "rclone_hydrate": "Spiegel-Hydrierung",
       "package": "Paketinstallation"
-    },
-    "strip": {
-      "backup": "Sicherung",
-      "check": "Prüfung",
-      "prune": "Bereinigung",
-      "compact": "Verdichtung",
-      "index": "Index",
-      "mirror": "Spiegelung"
     }
   },
   "notifications": {

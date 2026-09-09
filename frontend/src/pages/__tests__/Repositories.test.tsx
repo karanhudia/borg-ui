@@ -1,9 +1,10 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders } from '../../test/test-utils'
 import Repositories from '../Repositories'
 import { backupPlansAPI, repositoriesAPI } from '../../services/api'
+import type { OperationItem } from '../../types/operations'
 import { toast } from 'react-hot-toast'
 
 const { mockCheckRepository } = vi.hoisted(() => ({
@@ -121,6 +122,16 @@ vi.mock('../../services/api', () => ({
     list: vi.fn(),
     get: vi.fn(),
     createFromRepository: vi.fn(),
+  },
+}))
+
+const operationEventHandlers: { onUpdated: ((op: OperationItem) => void) | null } = {
+  onUpdated: null,
+}
+
+vi.mock('../../hooks/useOperationEvents', () => ({
+  useOperationEvents: (onUpdated: (op: OperationItem) => void) => {
+    operationEventHandlers.onUpdated = onUpdated
   },
 }))
 
@@ -286,6 +297,87 @@ describe('Repositories', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'complete check' }))
   }
+
+  describe('list refresh from operation events', () => {
+    const event = (overrides: Partial<OperationItem>) =>
+      ({
+        id: 1,
+        kind: 'stats',
+        category: 'index',
+        status: 'completed',
+        ...overrides,
+      }) as OperationItem
+
+    async function renderAndSettle() {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      renderWithProviders(<Repositories />)
+      await screen.findByText('Broken Repo')
+      await waitFor(() => expect(repositoriesAPI.getRepositories).toHaveBeenCalledTimes(1))
+    }
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it("ignores events that do not move the cards' last-run entries", async () => {
+      await renderAndSettle()
+
+      operationEventHandlers.onUpdated?.(event({ status: 'running' }))
+      operationEventHandlers.onUpdated?.(event({ status: 'failed' }))
+      operationEventHandlers.onUpdated?.(event({ kind: 'backup', category: 'backup' }))
+      operationEventHandlers.onUpdated?.(event({ kind: 'check', category: 'maintenance' }))
+      operationEventHandlers.onUpdated?.(
+        event({ kind: 'prune', category: 'maintenance', params: { dry_run: true } })
+      )
+      await vi.advanceTimersByTimeAsync(5000)
+
+      expect(repositoriesAPI.getRepositories).toHaveBeenCalledTimes(1)
+    })
+
+    it('refetches once per burst of finished index and prune operations', async () => {
+      await renderAndSettle()
+
+      operationEventHandlers.onUpdated?.(event({}))
+      await vi.advanceTimersByTimeAsync(500)
+      operationEventHandlers.onUpdated?.(event({ id: 2, kind: 'archive_sync' }))
+      await vi.advanceTimersByTimeAsync(500)
+      operationEventHandlers.onUpdated?.(event({ id: 3, kind: 'prune', category: 'maintenance' }))
+      await vi.advanceTimersByTimeAsync(1500)
+      expect(repositoriesAPI.getRepositories).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(1000)
+      await waitFor(() => expect(repositoriesAPI.getRepositories).toHaveBeenCalledTimes(2))
+    })
+
+    it('refetches at most once per minimum interval when completions are spaced out', async () => {
+      await renderAndSettle()
+
+      operationEventHandlers.onUpdated?.(event({ status: 'completed_with_warnings' }))
+      await vi.advanceTimersByTimeAsync(2100)
+      await waitFor(() => expect(repositoriesAPI.getRepositories).toHaveBeenCalledTimes(2))
+
+      // completions 3 s apart, each wider than the debounce
+      for (let i = 0; i < 3; i += 1) {
+        await vi.advanceTimersByTimeAsync(3000)
+        operationEventHandlers.onUpdated?.(event({ id: 10 + i }))
+      }
+      expect(repositoriesAPI.getRepositories).toHaveBeenCalledTimes(2)
+
+      await vi.advanceTimersByTimeAsync(3000)
+      await waitFor(() => expect(repositoriesAPI.getRepositories).toHaveBeenCalledTimes(3))
+    })
+
+    it('still refetches during a burst that never pauses', async () => {
+      await renderAndSettle()
+
+      for (let i = 0; i < 12; i += 1) {
+        operationEventHandlers.onUpdated?.(event({ id: i }))
+        await vi.advanceTimersByTimeAsync(1000)
+      }
+
+      await waitFor(() => expect(repositoriesAPI.getRepositories).toHaveBeenCalledTimes(2))
+    })
+  })
 
   it('announces stored error details when a manual check job fails after the spinner stops', async () => {
     await runManualCheckToCompletion()

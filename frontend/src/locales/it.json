@@ -2797,6 +2797,8 @@
     "edit": "Modifica",
     "lastCheck": "Ultimo Controllo",
     "lastCompact": "Ultima Compattazione",
+    "lastPrune": "Ultimo Sfoltimento",
+    "lastIndex": "Ultima Indicizzazione",
     "tomorrow": "Domani",
     "schedulePaused": "Pianificazione in pausa",
     "schedulePausedWithName": "{{name}} in pausa",
@@ -3479,8 +3481,6 @@
       "title": "Lavoro in background",
       "pause": "Pausa",
       "resume": "Riprendi",
-      "never": "Mai",
-      "syncing": "Sincronizzazione",
       "pauseFailed": "Impossibile modificare lo stato della coda in background.",
       "openTrack": "Apri la traccia di esecuzione di {{repository}}",
       "rebuildFailed": "Non è stato possibile avviare la ricostruzione.",
@@ -3636,14 +3636,6 @@
       "availability_check": "controllo disponibilità",
       "rclone_hydrate": "idratazione mirror",
       "package": "installazione pacchetto"
-    },
-    "strip": {
-      "backup": "Backup",
-      "check": "Verifica",
-      "prune": "Sfoltimento",
-      "compact": "Compattazione",
-      "index": "Indice",
-      "mirror": "Mirror"
     }
   },
   "notifications": {

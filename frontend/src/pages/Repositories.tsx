@@ -11,6 +11,7 @@ import { translateBackendKey } from '../utils/translateBackendKey'
 import { resyncStoredArchives } from '../utils/archiveResync'
 import { useAuth } from '../hooks/useAuth'
 import { useLockBreakPermissions } from '../hooks/useLockBreakPermissions'
+import { useOperationEvents } from '../hooks/useOperationEvents'
 import { usePlan } from '../hooks/usePlan'
 import { usePermissions } from '../hooks/usePermissions'
 import { useAppState } from '../context/AppContext'
@@ -38,9 +39,28 @@ import {
 } from './repositories-page/helpers'
 import type { PruneForm, Repository } from './repositories-page/types'
 import type { BackupPlan, RepositoryWipeExecuteRequest, RepositoryWipeJob } from '../types'
+import type { OperationItem } from '../types/operations'
 
 const EMPTY_REPOSITORIES: Repository[] = []
 const RUNNING_WIPE_STATUSES = new Set(['pending', 'running'])
+// Operations whose end changes the cards' "Last prune" / "Last index"
+// entries: any index kind, and prune (a deletion shows through its index
+// follow-up), completed successfully, since only successful runs move the
+// values. The list is refetched once per burst of such events, and at
+// least every LIST_REFRESH_MAX_WAIT_MS while a burst keeps going.
+const SUCCESS_OPERATION_STATUSES = new Set(['completed', 'completed_with_warnings'])
+const LIST_REFRESH_DEBOUNCE_MS = 2000
+const LIST_REFRESH_MAX_WAIT_MS = 10000
+// Completions spaced wider than the debounce (a reconcile sweep finishing
+// one repository every few seconds) must not each cost a full list load.
+const LIST_REFRESH_MIN_INTERVAL_MS = 10000
+
+function movesCardLastRuns(op: OperationItem): boolean {
+  if (!SUCCESS_OPERATION_STATUSES.has(op.status)) return false
+  if (op.category === 'index') return true
+  // a prune preview (dry run) removes nothing and moves no value
+  return op.kind === 'prune' && !op.params?.dry_run
+}
 const TERMINAL_WIPE_STATUSES = new Set([
   'completed',
   'completed_compaction_failed',
@@ -173,6 +193,49 @@ export default function Repositories() {
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.getRepositories,
   })
+
+  // The cards' "Last prune" and "Last index" ride in the list payload, so
+  // the list is refetched when such work ends, from the shared SSE stream
+  // instead of a timer. Index chains end in bursts (stats, archive sync,
+  // history merge within seconds), hence one debounced refetch per burst;
+  // a nightly window where chains end back to back must still refresh, so
+  // the debounce is capped at a maximum wait.
+  const listRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const listRefreshBurstStart = useRef<number | null>(null)
+  const listRefreshedAt = useRef<number>(0)
+  useOperationEvents(
+    (op: OperationItem) => {
+      if (!movesCardLastRuns(op)) return
+      const now = Date.now()
+      const refetch = () => {
+        listRefreshTimer.current = null
+        listRefreshBurstStart.current = null
+        listRefreshedAt.current = Date.now()
+        queryClient.invalidateQueries({ queryKey: ['repositories'] })
+      }
+      if (listRefreshTimer.current) clearTimeout(listRefreshTimer.current)
+      listRefreshBurstStart.current ??= now
+      const remainingBurstTime = LIST_REFRESH_MAX_WAIT_MS - (now - listRefreshBurstStart.current)
+      const remainingInterval = LIST_REFRESH_MIN_INTERVAL_MS - (now - listRefreshedAt.current)
+      const delay = Math.max(
+        Math.min(LIST_REFRESH_DEBOUNCE_MS, remainingBurstTime),
+        remainingInterval,
+        0
+      )
+      if (delay === 0) {
+        refetch()
+        return
+      }
+      listRefreshTimer.current = setTimeout(refetch, delay)
+    },
+    () => {}
+  )
+  React.useEffect(
+    () => () => {
+      if (listRefreshTimer.current) clearTimeout(listRefreshTimer.current)
+    },
+    []
+  )
 
   const { canBreakLock, lockBreakingEnabled } = useLockBreakPermissions()
 

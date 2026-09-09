@@ -11,6 +11,8 @@ export interface Repository extends RepositoryData {
   last_backup: string | null
   last_check: string | null
   last_compact: string | null
+  last_prune?: string | null
+  last_index?: string | null
   has_schedule?: boolean
   schedule_enabled?: boolean
   schedule_name?: string | null

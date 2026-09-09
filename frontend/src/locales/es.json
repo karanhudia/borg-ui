@@ -2797,6 +2797,8 @@
     "edit": "Editar",
     "lastCheck": "Última verificación",
     "lastCompact": "Última compactación",
+    "lastPrune": "Última poda",
+    "lastIndex": "Última indexación",
     "tomorrow": "Mañana",
     "schedulePaused": "Programación en pausa",
     "schedulePausedWithName": "{{name}} en pausa",
@@ -3479,8 +3481,6 @@
       "title": "Trabajo en segundo plano",
       "pause": "Pausar",
       "resume": "Reanudar",
-      "never": "Nunca",
-      "syncing": "Sincronizando",
       "pauseFailed": "No se pudo cambiar el estado de la cola en segundo plano.",
       "openTrack": "Abrir el seguimiento de ejecución de {{repository}}",
       "rebuildFailed": "No se pudo iniciar la reconstrucción.",
@@ -3636,14 +3636,6 @@
       "availability_check": "comprobación de disponibilidad",
       "rclone_hydrate": "hidratación de réplica",
       "package": "instalación de paquete"
-    },
-    "strip": {
-      "backup": "Copia de seguridad",
-      "check": "Verificación",
-      "prune": "Poda",
-      "compact": "Compactación",
-      "index": "Índice",
-      "mirror": "Espejo"
     }
   },
   "notifications": {

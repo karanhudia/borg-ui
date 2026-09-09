@@ -7241,11 +7241,11 @@
           }
         },
         {
-          "name": "Status strip",
+          "name": "Repository status",
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/api/repositories/1/status-strip",
+              "raw": "{{base_url}}/api/repositories/1/status",
               "host": [
                 "{{base_url}}"
               ],
@@ -7253,10 +7253,10 @@
                 "api",
                 "repositories",
                 "1",
-                "status-strip"
+                "status"
               ]
             },
-            "description": "Backend route: `GET /api/repositories/{repo_id}/status-strip`\n\nSource: `app/api/archive_index.py`"
+            "description": "Backend route: `GET /api/repositories/{repo_id}/status`\n\nSource: `app/api/archive_index.py`"
           }
         },
         {

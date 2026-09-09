@@ -50,6 +50,7 @@ from app.services.operations.maintenance_start import (
 from app.services.operations.job_facade import MaintenanceJobFacade
 from app.services.operations.enqueue import enqueue, wake_runner
 from app.services.operations.rclone_facade import RcloneSyncFacade
+from app.services.operations.repository_status import LastRuns, last_runs
 from app.core.authorization import authorize_request
 from app.core.security import get_current_user, check_repo_access, decrypt_secret
 from app.core.borg import BorgInterface
@@ -3104,6 +3105,26 @@ async def get_repositories(
         # Check for running maintenance jobs for each repository
         repo_list = []
         log_save_policy = get_log_save_policy(db)
+        # Last prune and last index for the card's metadata row, computed
+        # once for the whole page (spec 10.2) rather than polled per card.
+        # Two decorative fields must not take the whole list down; when they
+        # cannot be computed they are left out, and the card shows no
+        # entry rather than "Never".
+        runs: Optional[dict[int, LastRuns]]
+        repository_ids = [repo.id for repo in repositories]
+        try:
+            runs = last_runs(db, repositories)
+        except Exception as exc:
+            logger.warning("Failed to compute last runs", error=str(exc), exc_info=True)
+            # PostgreSQL aborts the transaction on a failed statement; the
+            # rest of the list must still be able to query. The rollback
+            # expires the loaded rows, so reload them in one query (by the
+            # ids captured above, which touches no expired attribute).
+            db.rollback()
+            runs = None
+            repositories = (
+                db.query(Repository).filter(Repository.id.in_(repository_ids)).all()
+            )
         for repo in repositories:
             # Running check, compact, or prune. Phase 5 moved these to
             # `operations`; the legacy tables are still consulted for work
@@ -3160,6 +3181,14 @@ async def get_repositories(
                 "last_backup": format_datetime(repo.last_backup),
                 "last_check": format_datetime(repo.last_check),
                 "last_compact": format_datetime(repo.last_compact),
+                **(
+                    {
+                        "last_prune": format_datetime(runs[repo.id].last_prune),
+                        "last_index": format_datetime(runs[repo.id].last_index),
+                    }
+                    if runs is not None
+                    else {}
+                ),
                 "total_size": repo.total_size,
                 "archive_count": repo.archive_count,
                 "created_at": format_datetime(repo.created_at),

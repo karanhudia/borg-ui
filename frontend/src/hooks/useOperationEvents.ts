@@ -19,10 +19,9 @@ type Handlers = {
 }
 
 /**
- * One connection is shared by every consumer. The repositories page mounts a
- * status strip per card, and browsers cap concurrent SSE connections per
- * origin at around six on HTTP/1.1, so a connection per consumer would leave
- * the later cards silently stale.
+ * One connection is shared by every consumer. Browsers cap concurrent SSE
+ * connections per origin at around six on HTTP/1.1, so a connection per
+ * consumer would leave later mounts silently stale.
  */
 const subscribers = new Set<{ current: Handlers }>()
 let source: EventSource | null = null
