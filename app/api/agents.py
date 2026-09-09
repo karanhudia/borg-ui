@@ -134,6 +134,30 @@ def _as_utc(dt: datetime) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
+def resolve_agent_upgrade(agent: AgentMachine) -> None:
+    """Clear a requested upgrade when the endpoint comes back on its target.
+
+    The agent is killed by the thing it is reporting on, so the server owns the
+    outcome. An endpoint that comes back on the old version is left in
+    `requested`: the reinstall may still be mid flight, and only the timeout
+    resolves it.
+
+    An endpoint already marked `failed` is cleared too when it turns up on the
+    target version. The agent can be killed before its acknowledgement reaches
+    the server, and the timeout is a guess by construction, so the version the
+    endpoint actually reports outranks either.
+    """
+    if agent.upgrade_state not in ("requested", "failed"):
+        return
+    if (
+        agent.upgrade_target_version
+        and agent.agent_version == agent.upgrade_target_version
+    ):
+        agent.upgrade_state = "idle"
+        agent.upgrade_error = None
+        agent.upgrade_requested_at = None
+
+
 def _validated_timezone(value: Optional[str]) -> Optional[str]:
     """The value if it names a real IANA zone, else None.
 
@@ -1347,6 +1371,7 @@ async def heartbeat(
     now = _now_utc()
     current_agent.hostname = payload.hostname or current_agent.hostname
     current_agent.agent_version = payload.agent_version or current_agent.agent_version
+    resolve_agent_upgrade(current_agent)
     current_agent.timezone = (
         _validated_timezone(payload.timezone) or current_agent.timezone
     )
@@ -1415,6 +1440,7 @@ async def session(websocket: WebSocket, db: Session = Depends(get_db)):
         now = _now_utc()
         current_agent.hostname = hello.hostname or current_agent.hostname
         current_agent.agent_version = hello.agent_version or current_agent.agent_version
+        resolve_agent_upgrade(current_agent)
         current_agent.timezone = (
             _validated_timezone(hello.timezone) or current_agent.timezone
         )

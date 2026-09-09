@@ -1345,4 +1345,85 @@ describe('ManagedAgents', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent(/Pinned to version 0\.1\.2/i)
     expect(screen.queryByText(/serves agent version 0\.1\.3/i)).not.toBeInTheDocument()
   })
+  it('offers the upgrade action to an outdated endpoint that can upgrade itself', async () => {
+    const user = userEvent.setup()
+    const onUpgrade = vi.fn()
+    const agent = buildAgent({
+      upgrade_status: 'outdated',
+      self_upgrade_supported: true,
+      available_agent_version: '0.1.3',
+    })
+
+    renderWithProviders(
+      <AgentList
+        agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        onUpgrade={onUpgrade}
+        onRunDiagnostics={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /upgrade this endpoint/i }))
+    await user.click(await screen.findByRole('button', { name: /^upgrade$/i }))
+    expect(onUpgrade).toHaveBeenCalledWith(agent)
+  })
+
+  it('leaves an endpoint without the helper on the manual reinstall path', () => {
+    const agent = buildAgent({
+      upgrade_status: 'outdated',
+      self_upgrade_supported: false,
+      available_agent_version: '0.1.3',
+    })
+
+    renderWithProviders(
+      <AgentList
+        agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        onUpgrade={vi.fn()}
+        onRunDiagnostics={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+
+    expect(screen.queryByRole('button', { name: /upgrade this endpoint/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /reinstall/i })).toBeInTheDocument()
+  })
+
+  it('shows an in-flight upgrade on the row', () => {
+    const agent = buildAgent({
+      upgrade_status: 'outdated',
+      self_upgrade_supported: true,
+      upgrade_state: 'requested',
+      available_agent_version: '0.1.3',
+    })
+
+    renderWithProviders(
+      <AgentList
+        agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        onUpgrade={vi.fn()}
+        onRunDiagnostics={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+
+    expect(screen.getByText(/Upgrading to 0\.1\.3/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /upgrade this endpoint/i })).toBeDisabled()
+  })
 })

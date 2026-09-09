@@ -8,3 +8,12 @@ can wait for the next poll to complete the job.
 DEFAULT_AGENT_POLL_INTERVAL_SECONDS = 15
 AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS = DEFAULT_AGENT_POLL_INTERVAL_SECONDS * 2
 AGENT_FILESYSTEM_BROWSE_MAX_ITEMS = 1000
+
+# How long the server waits for an endpoint to acknowledge agent.upgrade. The
+# agent only creates a file, so this bounds the round trip, not the reinstall.
+AGENT_UPGRADE_COMMAND_TIMEOUT_SECONDS = 15.0
+
+# How long an endpoint has to come back on its target version before the
+# upgrade is called failed. Generous on purpose: an endpoint that hits this is
+# far more likely broken than slow.
+AGENT_UPGRADE_TIMEOUT_SECONDS = 600

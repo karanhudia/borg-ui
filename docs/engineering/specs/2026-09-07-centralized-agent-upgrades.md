@@ -549,7 +549,7 @@ Agents update this table and nothing else as work advances. Statuses:
 | --- | --- | --- | --- | --- |
 | 1. Version model and visibility | done | `docs/engineering/plans/2026-09-07-agent-upgrades-phase-1.md` | `feat/agent-upgrades` | Pin UI moved to phase 3 |
 | 2. Privileged helper and capability | done | `docs/engineering/plans/2026-09-09-agent-upgrades-phase-2.md` | `feat/agent-upgrades-phase-2` | https is a precondition; opt-out uses a marker file; the trigger is a `.path` unit, not sudoers |
-| 3. Single-agent remote upgrade | not started | | | |
+| 3. Single-agent remote upgrade | in review | `docs/engineering/plans/2026-09-09-agent-upgrades-phase-3.md` | `feat/agent-upgrades-phase-3` | Trigger is the `.path` file, not section 7's sudoers argv; the pin control is a dialog off the row, the card has no detail area |
 | 4. Fleet upgrade | not started | | | |
 | 5. Per-endpoint Borg version | not started | | | |
 

@@ -32,11 +32,13 @@ import {
 import {
   Activity,
   AlertTriangle,
+  ArrowUpCircle,
   Ban,
   CheckCircle,
   Copy,
   Eye,
   Info,
+  Pin,
   Plus,
   RefreshCw,
   Terminal,
@@ -44,6 +46,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import {
+  AgentDesiredVersionRequest,
   AgentEnrollmentTokenSummary,
   AgentDiagnosticsRequest,
   AgentDiagnosticsResponse,
@@ -67,6 +70,9 @@ import AddAgentDialog from './managed-agents/AddAgentDialog'
 import AgentUpgradeBanner from './managed-agents/AgentUpgradeBanner'
 import AgentManualUpgradeChip from './managed-agents/AgentManualUpgradeChip'
 import AgentUpgradeChip from './managed-agents/AgentUpgradeChip'
+import AgentPinControl from './managed-agents/AgentPinControl'
+import AgentUpgradeDialog from './managed-agents/AgentUpgradeDialog'
+import AgentUpgradeStateChip from './managed-agents/AgentUpgradeStateChip'
 import BorgInstallModeRadioGroup from './managed-agents/BorgInstallModeRadioGroup'
 import { resolveAgentServerUrl } from './managed-agents/agentServerUrl'
 import {
@@ -496,6 +502,37 @@ export default function ManagedAgents() {
     },
   })
 
+  const upgradeAgentMutation = useMutation({
+    mutationFn: (agentId: number) => managedAgentsAPI.upgradeAgents([agentId]),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['managed-agents'] })
+      trackSystem(EventAction.START, {
+        section: MANAGED_AGENTS_ANALYTICS_SECTION,
+        operation: 'upgrade_agent',
+      })
+      trackFeatureUsed('managed_agents', {
+        surface: MANAGED_AGENTS_ANALYTICS_SECTION,
+        operation: 'upgrade_agent',
+      })
+      toast.success(t('managedAgents.page.toasts.agentUpgradeRequested'))
+    },
+    onError: (error: unknown) => {
+      toast.error(extractBackendMessage(error, t('managedAgents.page.errors.upgradeAgent')))
+    },
+  })
+
+  const pinAgentVersionMutation = useMutation({
+    mutationFn: ({ agentId, data }: { agentId: number; data: AgentDesiredVersionRequest }) =>
+      managedAgentsAPI.setDesiredVersion(agentId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['managed-agents'] })
+      toast.success(t('managedAgents.page.toasts.agentVersionPinned'))
+    },
+    onError: (error: unknown) => {
+      toast.error(extractBackendMessage(error, t('managedAgents.page.errors.pinAgentVersion')))
+    },
+  })
+
   const cancelJobMutation = useMutation({
     mutationFn: managedAgentsAPI.cancelJob,
     onSuccess: (_response, jobId) => {
@@ -633,6 +670,10 @@ export default function ManagedAgents() {
           onCopy={handleCopy}
           onRevoke={(agent) => revokeAgentMutation.mutate(agent.id)}
           onDelete={(agent) => deleteAgentMutation.mutate(agent.id)}
+          onUpgrade={(agent) => upgradeAgentMutation.mutate(agent.id)}
+          onPinVersion={(agent, data) =>
+            pinAgentVersionMutation.mutate({ agentId: agent.id, data })
+          }
           onViewLogs={(agent) => {
             trackSystem(EventAction.VIEW, {
               section: MANAGED_AGENTS_ANALYTICS_SECTION,
@@ -664,6 +705,8 @@ export default function ManagedAgents() {
           }}
           isRevoking={revokeAgentMutation.isPending}
           isDeleting={deleteAgentMutation.isPending}
+          isPinningVersion={pinAgentVersionMutation.isPending}
+          isUpgrading={upgradeAgentMutation.isPending}
         />
       ) : null}
 
@@ -1563,9 +1606,13 @@ export function AgentList({
   onRevoke,
   onDelete,
   onViewLogs,
+  onUpgrade,
+  onPinVersion,
   onRunDiagnostics,
   isRevoking,
   isDeleting,
+  isPinningVersion = false,
+  isUpgrading = false,
 }: {
   agents: AgentMachineResponse[]
   serverUrl: string
@@ -1573,12 +1620,16 @@ export function AgentList({
   onRevoke: (agent: AgentMachineResponse) => void
   onDelete: (agent: AgentMachineResponse) => void
   onViewLogs: (agent: AgentMachineResponse) => void
+  onUpgrade?: (agent: AgentMachineResponse) => void
+  onPinVersion?: (agent: AgentMachineResponse, data: AgentDesiredVersionRequest) => void
   onRunDiagnostics?: (
     agent: AgentMachineResponse,
     payload: AgentDiagnosticsRequest
   ) => Promise<AgentDiagnosticsResponse>
   isRevoking: boolean
   isDeleting: boolean
+  isPinningVersion?: boolean
+  isUpgrading?: boolean
 }) {
   const theme = useTheme()
   const { t } = useTranslation()
@@ -1586,6 +1637,8 @@ export function AgentList({
   const isDark = theme.palette.mode === 'dark'
   const [deleteTarget, setDeleteTarget] = useState<AgentMachineResponse | null>(null)
   const [reinstallTarget, setReinstallTarget] = useState<AgentMachineResponse | null>(null)
+  const [upgradeTarget, setUpgradeTarget] = useState<AgentMachineResponse | null>(null)
+  const [pinTarget, setPinTarget] = useState<AgentMachineResponse | null>(null)
   const [diagnosticsTarget, setDiagnosticsTarget] = useState<AgentMachineResponse | null>(null)
   const handleRunDiagnostics =
     onRunDiagnostics ??
@@ -1730,6 +1783,15 @@ export function AgentList({
                         />
                       )}
                       {agent.self_upgrade_supported === false && <AgentManualUpgradeChip />}
+                      {agent.upgrade_state ? (
+                        <AgentUpgradeStateChip
+                          state={agent.upgrade_state}
+                          targetVersion={
+                            agent.desired_agent_version || agent.available_agent_version
+                          }
+                          error={agent.upgrade_error}
+                        />
+                      ) : null}
                     </Box>
                   </Box>
 
@@ -1926,6 +1988,60 @@ export function AgentList({
                       <Eye size={16} />
                     </IconButton>
                   </Tooltip>
+                  {onPinVersion ? (
+                    <Tooltip title={t('managedAgents.page.actions.pinAgentVersion')} arrow>
+                      <IconButton
+                        size="small"
+                        aria-label={t('managedAgents.page.actions.pinAgentVersion')}
+                        onClick={() => setPinTarget(agent)}
+                        sx={{
+                          width: { xs: 40, sm: 34 },
+                          height: { xs: 40, sm: 34 },
+                          borderRadius: 1.5,
+                          color: alpha(theme.palette.text.secondary, 0.75),
+                          '&:hover': {
+                            color: theme.palette.text.primary,
+                            bgcolor: alpha(theme.palette.text.primary, isDark ? 0.15 : 0.08),
+                          },
+                        }}
+                      >
+                        <Pin size={16} />
+                      </IconButton>
+                    </Tooltip>
+                  ) : null}
+                  {onUpgrade &&
+                  agent.self_upgrade_supported === true &&
+                  agent.upgrade_status === 'outdated' ? (
+                    <Tooltip title={t('managedAgents.page.actions.upgradeAgent')} arrow>
+                      <span>
+                        <IconButton
+                          size="small"
+                          aria-label={t('managedAgents.page.actions.upgradeAgent')}
+                          disabled={agent.upgrade_state === 'requested'}
+                          onClick={() => {
+                            trackSystem(EventAction.VIEW, {
+                              section: MANAGED_AGENTS_ANALYTICS_SECTION,
+                              operation: 'upgrade_agent',
+                              status: agent.status,
+                            })
+                            setUpgradeTarget(agent)
+                          }}
+                          sx={{
+                            width: { xs: 40, sm: 34 },
+                            height: { xs: 40, sm: 34 },
+                            borderRadius: 1.5,
+                            color: alpha(theme.palette.success.main, 0.75),
+                            '&:hover': {
+                              color: theme.palette.success.main,
+                              bgcolor: alpha(theme.palette.success.main, isDark ? 0.15 : 0.1),
+                            },
+                          }}
+                        >
+                          <ArrowUpCircle size={16} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  ) : null}
                   <Tooltip title={t('managedAgents.page.actions.reinstallAgent')} arrow>
                     <IconButton
                       size="small"
@@ -2014,6 +2130,26 @@ export function AgentList({
           onDelete(agent)
           setDeleteTarget(null)
         }}
+      />
+      <AgentPinControl
+        open={!!pinTarget}
+        agent={pinTarget}
+        busy={isPinningVersion}
+        onSave={(agent, data) => {
+          onPinVersion?.(agent, data)
+          setPinTarget(null)
+        }}
+        onCancel={() => setPinTarget(null)}
+      />
+      <AgentUpgradeDialog
+        open={!!upgradeTarget}
+        agent={upgradeTarget}
+        busy={isUpgrading}
+        onConfirm={(agent) => {
+          onUpgrade?.(agent)
+          setUpgradeTarget(null)
+        }}
+        onCancel={() => setUpgradeTarget(null)}
       />
       <AgentReinstallDialog
         open={!!reinstallTarget}

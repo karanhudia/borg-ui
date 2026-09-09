@@ -303,14 +303,18 @@
         "agentRevoked": "Agente revocado",
         "agentDeleted": "Agente eliminado",
         "cancellationRequested": "Cancelación solicitada",
-        "copied": "Copiado"
+        "copied": "Copiado",
+        "agentUpgradeRequested": "Actualización solicitada",
+        "agentVersionPinned": "Versión fijada guardada"
       },
       "errors": {
         "revokeToken": "No se pudo revocar el token de registro",
         "revokeAgent": "No se pudo revocar el agente",
         "deleteAgent": "No se pudo eliminar el agente",
         "cancelJob": "No se pudo cancelar el trabajo",
-        "runDiagnostics": "No se pudieron ejecutar los diagnósticos"
+        "runDiagnostics": "No se pudieron ejecutar los diagnósticos",
+        "upgradeAgent": "No se pudo solicitar la actualización",
+        "pinAgentVersion": "No se pudo guardar la versión fijada"
       },
       "table": {
         "job": "Trabajo",
@@ -331,7 +335,9 @@
         "deleteAgent": "Eliminar agente",
         "viewLogs": "Ver registros",
         "cancelJob": "Cancelar trabajo",
-        "revokeToken": "Revocar token"
+        "revokeToken": "Revocar token",
+        "upgradeAgent": "Actualizar este endpoint",
+        "pinAgentVersion": "Fijar la versión de este endpoint"
       },
       "noBorg": {
         "title": "No se informó de un binario Borg utilizable",
@@ -415,6 +421,32 @@
         "bannerMixedTargets": "Cada uno apunta a su propia versión configurada.",
         "manualOnly": "Solo actualizaciones manuales",
         "manualOnlyTooltip": "Este endpoint no tiene el asistente de autoactualización, así que se actualiza ejecutando el comando de reinstalación en la máquina. Una reinstalación lo prepara para las actualizaciones desde el servidor."
+      },
+      "upgradeDialog": {
+        "title": "Actualizar este endpoint",
+        "description": "El endpoint se reinstala solo desde este servidor.",
+        "descriptionWithVersion": "El endpoint se reinstala solo desde este servidor y vuelve con la versión {{version}}.",
+        "disconnectWarning": "Se desconecta durante un breve periodo mientras lo hace.",
+        "busyWarning": "Un endpoint que está ejecutando una copia rechaza la actualización, así que inténtalo de nuevo cuando esté inactivo.",
+        "confirm": "Actualizar"
+      },
+      "upgradeState": {
+        "upgrading": "Actualizando",
+        "upgradingTo": "Actualizando a {{version}}",
+        "upgradingTooltip": "El endpoint se está reinstalando y volverá a conectarse solo.",
+        "failed": "Actualización fallida",
+        "failedHint": "El endpoint no volvió a tiempo. Reinstálalo manualmente."
+      },
+      "pinControl": {
+        "title": "Fijar versión",
+        "hint": "De forma predeterminada, un endpoint sigue la versión que distribuye este servidor. Fíjalo para mantenerlo en una versión concreta.",
+        "agentVersionLabel": "Versión del agente",
+        "trackServer": "Seguir al servidor",
+        "borgVersionLabel": "Versión de Borg",
+        "leaveAsInstalled": "Dejar como está instalada",
+        "borgHint": "La elección de Borg se guarda ahora y la aplicará una versión posterior, cuando las actualizaciones puedan cambiar la versión de Borg instalada.",
+        "save": "Guardar",
+        "unavailableVersion": "{{version}} (ya no se distribuye)"
       }
     },
     "installCommand": {
@@ -5539,7 +5571,9 @@
         "repositoryOperationFailed": "La operación de repositorio del agente falló",
         "repositoryOperationTimeout": "La operación de repositorio del agente agotó el tiempo de espera",
         "unsupportedJobKind": "Tipo de trabajo de agente no admitido",
-        "desiredVersionUnavailable": "Esa versión del agente no está disponible en este servidor."
+        "desiredVersionUnavailable": "Esa versión del agente no está disponible en este servidor.",
+        "upgradeUnsupported": "Este endpoint todavía no puede actualizarse solo. Reinstálalo una vez con el comando del diálogo de reinstalación.",
+        "upgradeTargetUnavailable": "Este servidor no distribuye ninguna versión del agente a la que actualizar."
       },
       "repo": {
         "repositoryNotFound": "Repositorio no encontrado",

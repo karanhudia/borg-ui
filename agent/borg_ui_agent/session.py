@@ -19,8 +19,15 @@ from agent.borg_ui_agent.config import AgentConfig
 from agent.borg_ui_agent.filesystem import FilesystemBrowseError, browse_filesystem
 from agent.borg_ui_agent.runtime import get_capabilities, get_job_handler
 from agent.borg_ui_agent.scripts import list_allowed_scripts
+from agent.borg_ui_agent.self_upgrade import check_self_upgrade
 
 logger = logging.getLogger(__name__)
+
+# How long an upgrade owns the session after it is requested. Matches
+# AGENT_UPGRADE_TIMEOUT_SECONDS on the server, so an endpoint whose reinstall
+# never happened starts taking jobs again no earlier than the moment the
+# server marks that upgrade failed.
+UPGRADE_CLAIM_SECONDS = 600
 
 try:
     from websocket import WebSocketTimeoutException
@@ -297,6 +304,12 @@ class AgentSessionRuntime:
         self._registry_lock = threading.Lock()
         self._cancel_events: dict[int, threading.Event] = {}
         self._pending_cancels: set[int] = set()
+        # Deadline (monotonic) while an upgrade is being requested, held
+        # through the restart it causes so a job dispatched after the busy
+        # check cannot start under an agent that is about to die. Guarded by
+        # _registry_lock, the same lock the cancel registry uses, so the check
+        # and the reservation are one atomic step.
+        self._upgrading_until: Optional[float] = None
 
     def run_forever(
         self,
@@ -530,6 +543,7 @@ class AgentSessionRuntime:
             "diagnostics.run",
             "agent.repository_defaults",
             "agent.list_scripts",
+            "agent.upgrade",
             "cancel",
         ):
             return None
@@ -602,6 +616,10 @@ class AgentSessionRuntime:
             self._handle_list_scripts(client, payload)
             return
 
+        if command == "agent.upgrade":
+            self._handle_upgrade(client)
+            return
+
         if command == "cancel":
             # Signal the worker running this job so it actually stops; it emits
             # its own job_canceled as it unwinds. Also record the cancel here via
@@ -620,6 +638,22 @@ class AgentSessionRuntime:
             client.send_error(
                 f"Unsupported agent session command: {command}",
                 code="unsupported_command",
+            )
+            return
+
+        if self._upgrade_claimed():
+            # Refusing is what makes the upgrade's busy check hold: this
+            # process is about to be restarted, so a job started here would be
+            # orphaned by it. Failing now lets the server retry the job against
+            # the upgraded agent instead of waiting for the reaper.
+            #
+            # The session loop registered this id before starting the worker,
+            # and the unregister below is in a finally this return skips, so
+            # drop it here or hello reports a job that is not running.
+            self._unregister_cancel(job_id)
+            client.send_error(
+                "Agent is upgrading and cannot start new jobs",
+                code="upgrade_in_progress",
             )
             return
 
@@ -656,6 +690,54 @@ class AgentSessionRuntime:
                 error_message=message_text,
                 return_code=return_code,
             )
+
+    def _upgrade_claimed(self) -> bool:
+        """Whether an upgrade currently owns this session."""
+        with self._registry_lock:
+            return (
+                self._upgrading_until is not None
+                and time.monotonic() < self._upgrading_until
+            )
+
+    def _reserve_for_upgrade(self) -> list[int]:
+        """Claim this session for an upgrade, or report what is running.
+
+        The check and the claim happen under one lock hold, so a job that
+        registers concurrently either lands before the claim (and is reported
+        here, refusing the upgrade) or after it (and is refused by the
+        dispatch guard in _handle_command). Nothing slips between them.
+
+        Returns the running job ids when the upgrade must be refused, and an
+        empty list when the claim succeeded. A second upgrade request arriving
+        while one is already claimed is refused too, with an empty id list.
+
+        The claim carries a deadline because the reinstall is not guaranteed
+        to happen: the root helper refuses a non-https server, a checksum that
+        does not match, or a config that names a different server, and in each
+        case it aborts with this process still running. A claim without an
+        expiry would leave such an endpoint refusing every job until someone
+        restarted it by hand, which is worse than the orphaned job the claim
+        exists to prevent. The deadline matches the server's own upgrade
+        timeout, so the agent starts accepting work again no earlier than the
+        moment the server gives up on the upgrade.
+        """
+        with self._registry_lock:
+            running = sorted(self._cancel_events.keys())
+            if running:
+                return running
+            if (
+                self._upgrading_until is not None
+                and time.monotonic() < self._upgrading_until
+            ):
+                return [-1]
+            self._upgrading_until = time.monotonic() + UPGRADE_CLAIM_SECONDS
+            return []
+
+    def _release_upgrade(self) -> None:
+        """Undo the claim when the upgrade never actually starts. On success it
+        is left to expire: the restart normally gets there first."""
+        with self._registry_lock:
+            self._upgrading_until = None
 
     def _register_cancel(self, job_id: int) -> threading.Event:
         """Register a cancel Event for ``job_id`` — already set if a cancel for it
@@ -734,6 +816,49 @@ class AgentSessionRuntime:
             client.send_error(f"Listing agent scripts failed: {exc}")
             return
         client.send_result({"scripts": scripts})
+
+    def _handle_upgrade(self, client: SessionCommandClient) -> None:
+        """Ask this endpoint to reinstall itself.
+
+        The whole action is creating one empty file that nothing reads: a
+        systemd .path unit watches it and starts the root helper, which takes
+        no arguments and reads every parameter from a root-owned config. The
+        agent therefore names no version and passes no argv.
+
+        Readiness is re-checked rather than trusted. The capability was
+        reported at connect time and the endpoint may have been changed since.
+        """
+        # Claiming rather than sampling: an upgrade restarts this process, and
+        # a job dispatched between a bare check and that restart would be
+        # orphaned by it. The claim closes the window, and is held through the
+        # restart on purpose.
+        running = self._reserve_for_upgrade()
+        if running:
+            # An upgrade restarts this process, which would orphan whatever
+            # job is running under it.
+            client.send_error(f"Agent is running jobs {running}", code="upgrade_busy")
+            return
+
+        readiness = check_self_upgrade()
+        if not readiness.supported or readiness.trigger is None:
+            self._release_upgrade()
+            client.send_error(
+                f"Endpoint cannot upgrade itself: {readiness.reason}",
+                code="upgrade_unsupported",
+            )
+            return
+
+        try:
+            readiness.trigger.touch()
+        except OSError as exc:
+            self._release_upgrade()
+            client.send_error(
+                f"Could not request upgrade: {exc}", code="upgrade_failed"
+            )
+            return
+
+        logger.info("Upgrade requested via %s", readiness.trigger)
+        client.send_result({"success": True, "trigger": str(readiness.trigger)})
 
     def _handle_diagnostics(
         self, client: SessionCommandClient, payload: dict[str, Any]

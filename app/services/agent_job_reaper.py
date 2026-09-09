@@ -26,7 +26,8 @@ import structlog
 from sqlalchemy.orm import Session
 
 from app.database.database import SessionLocal
-from app.database.models import AgentJob, BackupJob
+from app.core.agent_constants import AGENT_UPGRADE_TIMEOUT_SECONDS
+from app.database.models import AgentJob, AgentMachine, BackupJob
 
 logger = structlog.get_logger()
 
@@ -148,6 +149,66 @@ def reap_stale_agent_jobs(
     return reaped
 
 
+def reap_stale_agent_upgrades(
+    db: Session,
+    *,
+    now: Optional[datetime] = None,
+    timeout_seconds: int = AGENT_UPGRADE_TIMEOUT_SECONDS,
+) -> int:
+    """Mark upgrades whose endpoint never came back as failed.
+
+    The agent cannot report the outcome of the thing that kills it, so this is
+    the only path that resolves a failed upgrade. The cutoff is compared in
+    Python rather than in the WHERE clause because the column is stored naive
+    on SQLite, the same reason _job_activity_at exists.
+    """
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(seconds=timeout_seconds)
+    candidates = (
+        db.query(AgentMachine)
+        .filter(
+            AgentMachine.upgrade_state == "requested",
+            AgentMachine.upgrade_requested_at.isnot(None),
+        )
+        .all()
+    )
+    stale = [
+        agent for agent in candidates if _as_utc(agent.upgrade_requested_at) < cutoff
+    ]
+    reaped = 0
+    for agent in stale:
+        # Conditional write, matching reap_stale_agent_jobs: the endpoint may
+        # have re-registered on its target version between the read above and
+        # here, which clears the state to idle. The WHERE guard makes the
+        # reaper lose that race rather than overwrite a resolved upgrade with
+        # a failure. requested_at is matched too, so a second upgrade
+        # requested in that window is not failed on the first one's timeout.
+        reaped += (
+            db.query(AgentMachine)
+            .filter(
+                AgentMachine.id == agent.id,
+                AgentMachine.upgrade_state == "requested",
+                AgentMachine.upgrade_requested_at == agent.upgrade_requested_at,
+            )
+            .update(
+                {
+                    AgentMachine.upgrade_state: "failed",
+                    AgentMachine.upgrade_error: (
+                        "The endpoint did not come back on the target version "
+                        "in time. Reinstall it manually from the reinstall "
+                        "dialog."
+                    ),
+                    AgentMachine.updated_at: now,
+                },
+                synchronize_session=False,
+            )
+        )
+    if reaped:
+        db.commit()
+        logger.info("Reaped stale agent upgrades", count=reaped)
+    return reaped
+
+
 def _reap_once(failed_backup_job_ids: Optional[list[int]] = None) -> int:
     """One reap pass with its own session (runs in a worker thread)."""
     from app.utils.process_utils import (
@@ -166,6 +227,9 @@ def _reap_once(failed_backup_job_ids: Optional[list[int]] = None) -> int:
         # (e.g. the agent job could not be queued under a db-lock) -- otherwise
         # they block the repository via admission control forever.
         reaped += reconcile_orphaned_maintenance_jobs(db)
+        # The agent cannot report the outcome of its own restart, so a request
+        # nobody came back from is resolved here (spec section 7.1).
+        reaped += reap_stale_agent_upgrades(db)
         return reaped
     finally:
         db.close()
