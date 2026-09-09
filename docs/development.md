@@ -103,6 +103,14 @@ npm run format:check
 npm run build
 ```
 
+`npm ci` in a fresh checkout or worktree can fail on the platform-specific
+optional packages (`@rolldown/binding-*`, `@oxlint/binding-*`) because of a
+long-standing npm lockfile bug. `npm install` installs them, so prefer it
+locally. If a build still reports a missing binding, copy that package
+directory over from another checkout's `frontend/node_modules`. Do not delete
+`package-lock.json` to work around it: reinstalling from scratch rewrites the
+lockfile, which is a repository change, not a local fix.
+
 ## Backend Commands
 
 Run from the repository root:

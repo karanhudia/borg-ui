@@ -944,9 +944,12 @@ reload picks up both units at once:
 if [[ "${REMOTE_UPGRADE}" == "1" ]] && write_upgrade_conf; then
   write_upgrade_helper
   write_upgrade_unit
-  write_upgrade_sudoers || true
-  rm -f "${NO_REMOTE_UPGRADE_MARKER}"
-  echo "Remote upgrade is available on this endpoint."
+  if write_upgrade_sudoers; then
+    rm -f "${NO_REMOTE_UPGRADE_MARKER}"
+    echo "Remote upgrade is available on this endpoint."
+  else
+    remove_upgrade_artifacts
+  fi
 else
   remove_upgrade_artifacts
   if [[ "${REMOTE_UPGRADE}" == "0" ]]; then
@@ -956,9 +959,10 @@ else
 fi
 ```
 
-`write_upgrade_sudoers || true` keeps a `visudo` failure from aborting an
-otherwise good install; the endpoint then reports no `self_upgrade` because
-Task 6's predicate consults `sudo -l`, which is the honest outcome.
+A `visudo` failure does not abort an otherwise good install. It takes the
+unit, helper and `upgrade.conf` back out instead, because without the sudoers
+rule the agent cannot reach them, and the endpoint then reports no
+`self_upgrade` because Task 6's predicate consults `sudo -l`.
 
 - [ ] **Step 4: Run test to verify it passes**
 
