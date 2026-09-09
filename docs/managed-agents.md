@@ -142,22 +142,49 @@ a chip on the agent card:
 | Chip | Meaning |
 | --- | --- |
 | No chip | The agent runs the version this server serves. Nothing to do. |
-| **Update available** | The agent is older than the version this server serves. Reinstall it with the plain `--reinstall` command above, not the `--no-remote-upgrade` one. |
+| **Update available** | The agent is older than the version this server serves. Use the Upgrade action on the row, or reinstall it with the plain `--reinstall` command above. |
 | **Ahead of server** | The agent is newer than the version this server serves, which happens after a server rollback. Upgrade the server rather than downgrading the agent. |
 | **Pinned** | The agent is held at a specific version and will not follow the server. |
 | **Version unknown** | The agent has not reported a version yet, or the version cannot be compared. A freshly enrolled agent shows this until its first check-in. |
 
 A banner above the fleet counts how many endpoints are running an older agent.
 
-Upgrading is still a manual reinstall on each machine in this release. The
-comparison tells you which machines need it, so you are not reinstalling
-everything to be sure. New installs now carry the machinery for
-server-driven upgrades, described above, and a later release turns it on.
+## Upgrading an Endpoint from the UI
+
+An endpoint that carries the helper described above shows an Upgrade action on
+its row when it is out of date. Confirming it asks that endpoint to reinstall
+itself from this server.
+
+What to expect:
+
+- The endpoint disconnects for a short period while it reinstalls, and
+  reconnects on its own.
+- An endpoint that is running a backup refuses the upgrade, because the restart
+  would orphan that backup. Try again once it is idle.
+- The row shows **Upgrading** with the target version until the endpoint comes
+  back. Nothing to do while it does.
+- When the endpoint reconnects on the target version, the row clears itself.
+- If it does not come back within 10 minutes, the row shows **Upgrade failed**.
+  That endpoint needs the manual reinstall command above; nothing is retried
+  automatically.
+
+Upgrading several endpoints at once is a later release. Endpoints shown as
+manual only, and endpoints enrolled before the helper existed, keep the manual
+reinstall path.
 
 ### Pinning an Agent Version
 
 An endpoint can be held at a specific agent version so it stops tracking the
-server. Pinning is available through the API:
+server. The pin action on the agent row opens the version pin, with the agent
+version (default "Track server") and the Borg major version. You can only pin
+to a version this server can actually serve, because the installer installs
+from this server and nowhere else. A pinned endpoint upgrades to its pin rather
+than to the version the server serves.
+
+The Borg choice is recorded now and takes effect in a later release, once an
+upgrade can change the installed Borg version.
+
+The same pin is available through the API:
 
 ```bash
 curl -X PUT "$BASE_URL/api/managed-machines/agents/<id>/desired-version" \
