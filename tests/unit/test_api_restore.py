@@ -1183,17 +1183,41 @@ class TestRestoreRequestShape:
     def test_start_ignores_a_dry_run_field_a_client_still_sends(
         self, test_client: TestClient, admin_headers, test_db
     ):
-        """Pydantic ignores unknown fields, so an old client that still sends
-        dry_run gets exactly the behaviour it got before: a real restore."""
-        from app.api.restore import RestoreRequest
-
-        request = RestoreRequest(
-            repository="/test/repo",
-            archive="a",
-            paths=["etc"],
-            destination="/dest",
-            repository_id=1,
-            dry_run=True,
+        """Pydantic ignores unknown fields, so a client still sending dry_run
+        gets exactly the behaviour it got before the field was removed: a real
+        restore, enqueued the same way, with nothing recorded about dry run."""
+        repo = Repository(
+            name="Dry Run Repo",
+            path="/test/dry-run-repo",
+            encryption="none",
+            repository_type="local",
         )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
 
-        assert not hasattr(request, "dry_run")
+        with patch(
+            "app.services.restore_service.restore_service.execute_restore",
+            new=AsyncMock(return_value=None),
+        ):
+            response = test_client.post(
+                "/api/restore/start",
+                json={
+                    "repository": repo.path,
+                    "repository_id": repo.id,
+                    "archive": "test-archive",
+                    "paths": ["docs/"],
+                    "destination": "/restore/target",
+                    "dry_run": True,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "pending"
+
+        operation = test_db.get(Operation, body["job_id"])
+        assert operation.kind == "restore"
+        assert operation.repository_id == repo.id
+        assert "dry_run" not in operation.params
