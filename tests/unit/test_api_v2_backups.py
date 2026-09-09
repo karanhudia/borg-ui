@@ -6,7 +6,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.database.models import (
-    BackupJob,
     CheckJob,
     CompactJob,
     LicensingState,
@@ -14,6 +13,7 @@ from app.database.models import (
     PruneJob,
     Repository,
 )
+from app.services.operations.backup_facade import BackupJobFacade
 
 
 def _enable_borg_v2(test_db):
@@ -70,20 +70,20 @@ class TestV2BackupRoutes:
             test_db, source_directories=["/data/source-a", "/data/source-b"]
         )
 
-        async def mark_backup_complete(
-            job_id, repository_path, db=None, archive_name=None, skip_hooks=False
-        ):
-            job = test_db.query(BackupJob).filter(BackupJob.id == job_id).first()
+        async def mark_backup_complete(db, operation_id, **kwargs):
+            operation = db.get(Operation, operation_id)
+            job = BackupJobFacade(db, operation)
             job.status = "completed"
             job.original_size = 10
             job.compressed_size = 5
             job.deduplicated_size = 3
             job.nfiles = 2
-            test_db.commit()
+            db.commit()
+            return "completed"
 
         with patch(
-            "app.api.v2.backups.backup_service.execute_backup", new=mark_backup_complete
-        ) as mock_create:
+            "app.api.v2.backups.wait_for_backup_operation", new=mark_backup_complete
+        ):
             response = test_client.post(
                 "/api/v2/backup/run",
                 json={"repository_id": repo.id, "archive_name": "manual-archive"},
@@ -99,6 +99,9 @@ class TestV2BackupRoutes:
             "deduplicated_size": 3,
             "nfiles": 2,
         }
+        operation = test_db.get(Operation, response.json()["job_id"])
+        assert operation.kind == "backup"
+        assert operation.params["archive_name"] == "manual-archive"
 
     def test_backup_run_rejects_missing_source_directories(
         self, test_client: TestClient, admin_headers, test_db
@@ -107,7 +110,7 @@ class TestV2BackupRoutes:
         repo = _create_v2_repo(test_db)
 
         with patch(
-            "app.api.v2.backups.backup_service.execute_backup", new=AsyncMock()
+            "app.api.v2.backups.wait_for_backup_operation", new=AsyncMock()
         ) as mock_create:
             response = test_client.post(
                 "/api/v2/backup/run",
@@ -128,16 +131,16 @@ class TestV2BackupRoutes:
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, source_directories=["/data/source-a"])
 
-        async def mark_backup_failed(
-            job_id, repository_path, db=None, archive_name=None, skip_hooks=False
-        ):
-            job = test_db.query(BackupJob).filter(BackupJob.id == job_id).first()
+        async def mark_backup_failed(db, operation_id, **kwargs):
+            operation = db.get(Operation, operation_id)
+            job = BackupJobFacade(db, operation)
             job.status = "failed"
             job.error_message = "boom"
-            test_db.commit()
+            db.commit()
+            return "failed"
 
         with patch(
-            "app.api.v2.backups.backup_service.execute_backup", new=mark_backup_failed
+            "app.api.v2.backups.wait_for_backup_operation", new=mark_backup_failed
         ):
             response = test_client.post(
                 "/api/v2/backup/run",

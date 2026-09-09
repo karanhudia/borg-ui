@@ -127,11 +127,17 @@ def start_inline_maintenance(
     *,
     params: dict[str, Any],
     user_id: Optional[int],
+    run_id: Optional[str] = None,
+    depends_on_id: Optional[int] = None,
 ) -> Operation:
     """An operation the caller runs itself, right now, instead of leaving to
     the runner. Created `running` so the runner's queued-only sweep (spec 7.1)
     never picks it up a second time. The caller is responsible for the
-    terminal status."""
+    terminal status.
+
+    Post-backup maintenance passes the backup's `run_id` and id so the child
+    is the backup's child in the run (spec 6.3: `running_prune` is `running`
+    on the child prune operation while the backup itself is completed)."""
     from app.database.models import utc_now
 
     operation = enqueue(
@@ -141,6 +147,8 @@ def start_inline_maintenance(
         trigger="manual",
         params={key: value for key, value in params.items() if value is not None},
         triggered_by_user_id=user_id,
+        run_id=run_id,
+        depends_on_id=depends_on_id,
         commit=False,
     )
     operation.status = "running"

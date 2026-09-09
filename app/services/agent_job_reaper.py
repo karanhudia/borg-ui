@@ -26,7 +26,8 @@ import structlog
 from sqlalchemy.orm import Session
 
 from app.database.database import SessionLocal
-from app.database.models import AgentJob, BackupJob
+from app.database.models import AgentJob, BackupJob, Operation
+from app.services.operations.backup_facade import resolve_backup_job
 
 logger = structlog.get_logger()
 
@@ -139,6 +140,26 @@ def reap_stale_agent_jobs(
             if backup_job_failed and failed_backup_job_ids is not None:
                 failed_backup_job_ids.append(job.backup_job_id)
 
+        if job.operation_id:
+            operation_failed = (
+                db.query(Operation)
+                .filter(
+                    Operation.id == job.operation_id,
+                    Operation.kind == "backup",
+                    Operation.status.notin_(tuple(TERMINAL_BACKUP_STATUSES)),
+                )
+                .update(
+                    {
+                        Operation.status: "failed",
+                        Operation.completed_at: now,
+                        Operation.error_message: message,
+                    },
+                    synchronize_session=False,
+                )
+            )
+            if operation_failed and failed_backup_job_ids is not None:
+                failed_backup_job_ids.append(job.operation_id)
+
     if reaped:
         db.commit()
         logger.info(
@@ -178,9 +199,7 @@ async def _notify_reaped_backup_jobs(backup_job_ids: list[int]) -> None:
     db = SessionLocal()
     try:
         for backup_job_id in backup_job_ids:
-            backup_job = (
-                db.query(BackupJob).filter(BackupJob.id == backup_job_id).first()
-            )
+            backup_job = resolve_backup_job(db, backup_job_id)
             if backup_job is not None:
                 await notify_backup_job_finished(db, backup_job)
     finally:

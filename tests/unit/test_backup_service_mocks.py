@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch, AsyncMock, Mock
 from app.services.backup_service import BackupService
 from app.database.models import (
     BackupJob,
+    Operation,
     Repository,
     RepositoryStorage,
     SystemSettings,
@@ -197,7 +198,11 @@ async def test_execute_backup_command(
 
     def query_side_effect(model):
         m = MagicMock()
-        if model == BackupJob:
+        if model == Operation:
+            # These mock-session tests drive legacy BackupJob rows; phase 8's
+            # resolve_backup_job() asks for an operation of the same id first.
+            m.filter.return_value.first.return_value = None
+        elif model == BackupJob:
             m.filter.return_value.first.return_value = job
         elif model == Repository:
             m.filter.return_value.first.return_value = repo
@@ -298,7 +303,11 @@ async def test_execute_backup_passes_repository_stable_sshfs_root_to_source_prep
 
     def query_side_effect(model):
         m = MagicMock()
-        if model == BackupJob:
+        if model == Operation:
+            # These mock-session tests drive legacy BackupJob rows; phase 8's
+            # resolve_backup_job() asks for an operation of the same id first.
+            m.filter.return_value.first.return_value = None
+        elif model == BackupJob:
             m.filter.return_value.first.return_value = job
         elif model == Repository:
             m.filter.return_value.first.return_value = repo
@@ -377,7 +386,11 @@ async def test_execute_backup_hooks(backup_service_fixture, mock_db_session, tmp
     # More complex query mocking for repository lookup
     def query_side_effect(model):
         m = MagicMock()
-        if model == BackupJob:
+        if model == Operation:
+            # These mock-session tests drive legacy BackupJob rows; phase 8's
+            # resolve_backup_job() asks for an operation of the same id first.
+            m.filter.return_value.first.return_value = None
+        elif model == BackupJob:
             m.filter.return_value.first.return_value = job
         elif model == Repository:
             m.filter.return_value.first.return_value = repo
@@ -461,7 +474,11 @@ async def test_execute_backup_runs_post_hook_on_cancel_as_failure(
 
     def query_side_effect(model):
         m = MagicMock()
-        if model == BackupJob:
+        if model == Operation:
+            # These mock-session tests drive legacy BackupJob rows; phase 8's
+            # resolve_backup_job() asks for an operation of the same id first.
+            m.filter.return_value.first.return_value = None
+        elif model == BackupJob:
             m.filter.return_value.first.return_value = job
         elif model == Repository:
             m.filter.return_value.first.return_value = repo
@@ -845,7 +862,11 @@ def _make_skip_query_side_effect(job, repo):
 
     def query_side_effect(model):
         m = MagicMock()
-        if model == BackupJob:
+        if model == Operation:
+            # These mock-session tests drive legacy BackupJob rows; phase 8's
+            # resolve_backup_job() asks for an operation of the same id first.
+            m.filter.return_value.first.return_value = None
+        elif model == BackupJob:
             m.filter.return_value.first.return_value = job
         elif model == Repository:
             m.filter.return_value.first.return_value = repo
@@ -863,7 +884,11 @@ def _make_execute_query_side_effect(job, repo):
 
     def query_side_effect(model):
         m = MagicMock()
-        if model == BackupJob:
+        if model == Operation:
+            # These mock-session tests drive legacy BackupJob rows; phase 8's
+            # resolve_backup_job() asks for an operation of the same id first.
+            m.filter.return_value.first.return_value = None
+        elif model == BackupJob:
             m.filter.return_value.first.return_value = job
         elif model == Repository:
             m.filter.return_value.first.return_value = repo
@@ -981,7 +1006,6 @@ async def test_execute_backup_uses_rclone_sync_failure_for_hooks_and_notificatio
             new=AsyncMock(),
         ),
         patch.object(backup_service_fixture, "_update_archive_stats", new=AsyncMock()),
-        patch.object(backup_service_fixture, "_enqueue_index_followups"),
         patch.object(
             backup_service_fixture,
             "_sync_rclone_after_borg",
@@ -1064,7 +1088,6 @@ async def test_execute_backup_post_hook_failure_sends_single_failure_notificatio
             new=AsyncMock(),
         ),
         patch.object(backup_service_fixture, "_update_archive_stats", new=AsyncMock()),
-        patch.object(backup_service_fixture, "_enqueue_index_followups"),
         patch(
             "app.services.backup_service.asyncio.create_subprocess_exec",
             return_value=mock_process,
@@ -1356,7 +1379,11 @@ async def test_execute_backup_resolves_grouped_source_locations(
 
     def query_side_effect(model):
         m = MagicMock()
-        if model == BackupJob:
+        if model == Operation:
+            # These mock-session tests drive legacy BackupJob rows; phase 8's
+            # resolve_backup_job() asks for an operation of the same id first.
+            m.filter.return_value.first.return_value = None
+        elif model == BackupJob:
             m.filter.return_value.first.return_value = job
         elif model == Repository:
             m.filter.return_value.first.return_value = repo
@@ -1523,7 +1550,11 @@ async def test_empty_source_paths_failure_sends_notification(
 
     def query_side_effect(model):
         m = MagicMock()
-        if model == BackupJob:
+        if model == Operation:
+            # These mock-session tests drive legacy BackupJob rows; phase 8's
+            # resolve_backup_job() asks for an operation of the same id first.
+            m.filter.return_value.first.return_value = None
+        elif model == BackupJob:
             m.filter.return_value.first.return_value = job
         elif model == Repository:
             m.filter.return_value.first.return_value = repo

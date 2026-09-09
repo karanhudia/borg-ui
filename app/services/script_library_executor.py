@@ -25,7 +25,6 @@ from app.database.models import (
     RepositoryScript,
     ScriptExecution,
     Repository,
-    BackupJob,
     SSHConnection,
 )
 
@@ -46,7 +45,7 @@ def _resolve_source_connection(
 
     # For remote SSH push mode the connection is on the job, not the repository
     if not conn_id and backup_job_id:
-        job = db.query(BackupJob).filter(BackupJob.id == backup_job_id).first()
+        job = resolve_backup_job(db, backup_job_id)
         if job:
             conn_id = job.source_ssh_connection_id
 
@@ -56,6 +55,10 @@ def _resolve_source_connection(
     return db.query(SSHConnection).filter(SSHConnection.id == conn_id).first()
 
 
+from app.services.operations.backup_facade import (
+    backup_job_link_columns,
+    resolve_backup_job,
+)
 from app.services.script_executor import execute_script
 from app.services.template_service import get_system_variables
 from app.utils.script_params import SYSTEM_VARIABLE_PREFIX
@@ -331,7 +334,7 @@ class ScriptLibraryExecutor:
         execution = ScriptExecution(
             script_id=script.id,
             repository_id=repository.id,
-            backup_job_id=backup_job_id,
+            **backup_job_link_columns(self.db, backup_job_id),
             hook_type=hook_type,
             status="running",
             started_at=datetime.utcnow(),

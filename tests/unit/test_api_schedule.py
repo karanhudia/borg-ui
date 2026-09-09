@@ -7,7 +7,14 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 
-from app.database.models import BackupJob, Repository, ScheduledJob, SSHConnection
+from app.database.models import (
+    BackupJob,
+    Operation,
+    OperationBackupDetails,
+    Repository,
+    ScheduledJob,
+    SSHConnection,
+)
 from tests.unit.helpers import assert_auth_required
 
 
@@ -454,14 +461,19 @@ class TestScheduleRunNow:
             )
 
         assert response.status_code == 200
-        backup_job = (
-            test_db.query(BackupJob)
-            .filter(BackupJob.scheduled_job_id == schedule.id)
+        operation = (
+            test_db.query(Operation)
+            .filter(
+                Operation.kind == "backup",
+                Operation.scheduled_job_id == schedule.id,
+            )
             .one()
         )
-        assert backup_job.route_strategy == "remote_direct"
-        assert backup_job.execution_mode == "remote_ssh"
-        assert backup_job.source_ssh_connection_id == connection.id
+        details = test_db.get(OperationBackupDetails, operation.id)
+        assert details.route_strategy == "remote_direct"
+        assert operation.execution_mode == "remote_ssh"
+        assert details.source_ssh_connection_id == connection.id
+        assert test_db.query(BackupJob).count() == 0
 
 
 @pytest.mark.unit

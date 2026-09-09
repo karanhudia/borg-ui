@@ -496,18 +496,13 @@ class TestDashboardHelpers:
             ),
         ]
 
-        all_query = MagicMock()
-        all_query.return_value = jobs
-        limit_query = MagicMock()
-        limit_query.all = all_query
-        order_query = MagicMock()
-        order_query.limit.return_value = limit_query
-        query = MagicMock()
-        query.order_by.return_value = order_query
         db = MagicMock()
-        db.query.side_effect = [settings_query, query]
+        db.query.side_effect = [settings_query]
 
-        result = get_recent_jobs(db, limit=2)
+        # Phase 8: the recent list is the union of both backup tables, read
+        # through the facade helper; this test covers the item shape.
+        with patch("app.api.dashboard.backup_jobs_started_since", return_value=jobs):
+            result = get_recent_jobs(db, limit=2)
 
         assert [job["id"] for job in result] == [1, 2]
         assert result[0]["triggered_by"] == "schedule"

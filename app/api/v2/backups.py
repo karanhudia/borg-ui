@@ -17,15 +17,22 @@ from app.database.database import get_db
 from app.database.models import (
     User,
     Repository,
-    BackupJob,
 )
 from app.api.maintenance_jobs import get_repository_with_access
 from app.core.security import get_current_user
 from app.core.features import require_feature
-from app.services.backup_service import backup_service
 from app.services.check_flag_validation import (
     CheckFlagConflictError,
     validate_check_flags_for_max_duration,
+)
+from app.services.job_admission import (
+    OPERATION_BACKUP,
+    ensure_repository_admission,
+)
+from app.services.operations.backup_facade import (
+    create_backup_operation,
+    refresh_backup_job,
+    wait_for_backup_operation,
 )
 from app.services.operations.maintenance_start import start_maintenance
 from app.services.v2.prune_service import prune_v2_service
@@ -123,24 +130,21 @@ async def run_backup(
             detail={"key": "backend.errors.backup.noSourceDirectories"},
         )
 
-    backup_job = BackupJob(
-        repository=repo.path,
-        status="pending",
-        source_ssh_connection_id=repo.source_ssh_connection_id,
+    # The row now waits on the repository lane, so a request blocked behind a
+    # wipe would hang until the wipe ends; admission answers 409 instead.
+    ensure_repository_admission(db, repo, OPERATION_BACKUP)
+    backup_job = create_backup_operation(
+        db,
+        repo,
+        trigger="manual",
+        executor="server",
+        user_id=current_user.id,
+        params={"archive_name": data.archive_name},
     )
-    db.add(backup_job)
-    db.commit()
-    db.refresh(backup_job)
+    final_status = await wait_for_backup_operation(db, backup_job.id)
+    refresh_backup_job(db, backup_job)
 
-    await backup_service.execute_backup(
-        backup_job.id,
-        repo.path,
-        db=db,
-        archive_name=data.archive_name,
-    )
-    db.refresh(backup_job)
-
-    if backup_job.status not in {"completed", "completed_with_warnings"}:
+    if final_status not in {"completed", "completed_with_warnings"}:
         raise HTTPException(
             status_code=500,
             detail={

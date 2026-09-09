@@ -71,7 +71,10 @@ def enqueue_backup_followups(
     history: Optional[bool] = None,
 ) -> list:
     """Enqueue the `backup` chain for a backup that completed outside the
-    runner (the legacy backup paths, until phase 8 moves them in).
+    runner: an agent completion report for a row written before phase 8, or
+    for an operation the runner is no longer running (failed by restart
+    recovery and finished by the agent afterwards). Every other backup gets
+    its chain from the runner (spec 7.4).
 
     `history` is the plan gate; left None it is read here, which goes
     through the licensing service and commits the session. A caller that

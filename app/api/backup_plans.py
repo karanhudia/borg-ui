@@ -49,6 +49,7 @@ from app.services.log_policy import (
     get_log_save_policy,
     job_has_logs_by_policy,
 )
+from app.services.operations.backup_facade import BackupJobFacade
 from app.services.repository_executor import repository_executor_type
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
@@ -707,6 +708,18 @@ def _serialize_backup_job(
     }
 
 
+def _plan_run_backup_job(link: BackupPlanRunRepository) -> Optional[Any]:
+    """The backup this plan-run row points at, in whichever shape it has: an
+    operation for work created from phase 8 on, the legacy row before it. The
+    session comes off the loaded row, as `_latest_agent_script_line` does."""
+    if link.backup_operation is None:
+        return link.backup_job
+    session = object_session(link.backup_operation)
+    if session is None:
+        return link.backup_job
+    return BackupJobFacade(session, link.backup_operation)
+
+
 def _serialize_plan_run_repository(
     link: BackupPlanRunRepository, *, log_save_policy: str = DEFAULT_LOG_SAVE_POLICY
 ) -> dict[str, Any]:
@@ -733,7 +746,7 @@ def _serialize_plan_run_repository(
         if repo
         else None,
         "backup_job": _serialize_backup_job(
-            link.backup_job,
+            _plan_run_backup_job(link),
             repo,
             log_save_policy=log_save_policy,
         ),
@@ -897,6 +910,9 @@ def _load_run_or_404(db: Session, run_id: int) -> BackupPlanRun:
             ),
             joinedload(BackupPlanRun.repositories).joinedload(
                 BackupPlanRunRepository.backup_job
+            ),
+            joinedload(BackupPlanRun.repositories).joinedload(
+                BackupPlanRunRepository.backup_operation
             ),
             joinedload(BackupPlanRun.script_executions).joinedload(
                 ScriptExecution.script
@@ -1448,6 +1464,9 @@ async def list_backup_plan_runs(
             joinedload(BackupPlanRun.repositories).joinedload(
                 BackupPlanRunRepository.backup_job
             ),
+            joinedload(BackupPlanRun.repositories).joinedload(
+                BackupPlanRunRepository.backup_operation
+            ),
             joinedload(BackupPlanRun.script_executions).joinedload(
                 ScriptExecution.script
             ),
@@ -1737,6 +1756,9 @@ async def list_backup_plan_runs_for_plan(
             ),
             joinedload(BackupPlanRun.repositories).joinedload(
                 BackupPlanRunRepository.backup_job
+            ),
+            joinedload(BackupPlanRun.repositories).joinedload(
+                BackupPlanRunRepository.backup_operation
             ),
             joinedload(BackupPlanRun.script_executions).joinedload(
                 ScriptExecution.script

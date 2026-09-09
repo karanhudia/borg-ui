@@ -13,6 +13,7 @@ from app.database.models import (
     RepositoryStorage,
     RcloneRemote,
     Operation,
+    OperationBackupDetails,
     OperationRcloneDetails,
     RcloneSyncJob,
     ScheduledJob,
@@ -447,11 +448,16 @@ class TestScheduleRouteContracts:
             test_db, schedule, datetime.now(timezone.utc)
         )
 
-        assert run_key == f"backup:{test_db.query(BackupJob).one().id}"
-        backup_job = test_db.query(BackupJob).one()
-        assert backup_job.route_strategy == "remote_direct"
-        assert backup_job.execution_mode == "remote_ssh"
-        assert backup_job.source_ssh_connection_id == connection.id
+        operation = test_db.query(Operation).filter(Operation.kind == "backup").one()
+        details = test_db.get(OperationBackupDetails, operation.id)
+        assert run_key == f"backup:{operation.id}"
+        assert operation.trigger == "schedule"
+        assert operation.scheduled_job_id == schedule.id
+        assert operation.params["archive_name"]
+        assert details.route_strategy == "remote_direct"
+        assert operation.execution_mode == "remote_ssh"
+        assert details.source_ssh_connection_id == connection.id
+        assert test_db.query(BackupJob).count() == 0
 
     @pytest.mark.asyncio
     async def test_multi_repo_schedule_applies_backup_route_metadata(
@@ -487,17 +493,25 @@ class TestScheduleRouteContracts:
         )
         test_db.commit()
 
-        monkeypatch.setattr(
-            "app.services.backup_service.backup_service.execute_backup",
-            AsyncMock(),
-        )
+        # No runner runs in this unit test, so stand in for the verdict it
+        # would write on the row the schedule enqueued.
+        async def _complete(db, operation_id, **kwargs):
+            operation = db.get(Operation, operation_id)
+            operation.status = "completed"
+            db.commit()
+            return "completed"
+
+        monkeypatch.setattr("app.api.schedule.wait_for_backup_operation", _complete)
 
         await schedule_api.execute_multi_repo_schedule(schedule, test_db)
 
-        backup_job = test_db.query(BackupJob).one()
-        assert backup_job.route_strategy == "remote_direct"
-        assert backup_job.execution_mode == "remote_ssh"
-        assert backup_job.source_ssh_connection_id == connection.id
+        operation = test_db.query(Operation).filter(Operation.kind == "backup").one()
+        details = test_db.get(OperationBackupDetails, operation.id)
+        assert operation.scheduled_job_id == schedule.id
+        assert details.route_strategy == "remote_direct"
+        assert operation.execution_mode == "remote_ssh"
+        assert details.source_ssh_connection_id == connection.id
+        assert test_db.query(BackupJob).count() == 0
 
     def test_dispatch_due_multi_repo_schedule_defers_for_active_repository_work(
         self, test_db, monkeypatch

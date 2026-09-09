@@ -35,7 +35,12 @@ from app.database.models import (
     AgentJobLog,
     AgentMachine,
     BackupJob,
+    Operation,
     Repository,
+)
+from app.services.operations.backup_facade import (
+    BackupJobFacade,
+    is_backup_operation,
 )
 from app.services.operations.job_facade import (
     LEGACY_MODELS,
@@ -421,7 +426,10 @@ def _normalize_agent_timestamp(value: Optional[datetime]) -> datetime:
     return _as_utc(value)
 
 
-def _get_linked_backup_job(job: AgentJob, db: Session) -> Optional[BackupJob]:
+def _get_linked_backup_job(job: AgentJob, db: Session) -> Any:
+    if job.operation_id:
+        operation = db.get(Operation, job.operation_id)
+        return BackupJobFacade(db, operation) if operation is not None else None
     if not job.backup_job_id:
         return None
     return db.query(BackupJob).filter(BackupJob.id == job.backup_job_id).first()
@@ -488,6 +496,15 @@ def _finish_linked_backup_job(
             )
         if repository:
             repository.updated_at = _now_utc()
+            from app.services.operations.runner import operation_runner
+
+            if (
+                is_backup_operation(backup_job)
+                and backup_job.id in operation_runner.running_tasks
+            ):
+                # The executor is waiting on this agent job and the runner
+                # enqueues the chain when it returns (spec 7.4).
+                return
             repository_name = repository.name
             # archive_sync derives last_backup from the listing; the caller
             # commits, and the runner polls for the new rows. The attempt
@@ -647,31 +664,28 @@ def _mark_agent_job_started(
     now = _now_utc()
     if job.claimed_at is None:
         job.claimed_at = now
-    if job.started_at is None:
-        job.started_at = _normalize_agent_timestamp(started_at)
+    started = _normalize_agent_timestamp(started_at)
+    # Guarded write: the first start report claims started_at even against a
+    # concurrent report on the other transport, so exactly one report triggers
+    # the backup-start notification. A requeued job keeps its original
+    # started_at and does not notify again. The guard lives on the agent job
+    # because a backup operation already has started_at, written by the runner
+    # at dispatch, so a NULL test on the backup row could never fire.
+    first_start = (
+        db.query(AgentJob)
+        .filter(AgentJob.id == job.id, AgentJob.started_at.is_(None))
+        .update({AgentJob.started_at: started}, synchronize_session=False)
+    )
+    db.expire(job, ["started_at"])
     if job.status != "cancel_requested":
         job.status = "running"
     newly_started_backup_job = None
     backup_job = _get_linked_backup_job(job, db)
     if backup_job:
-        # Guarded write: the first start report claims started_at even against
-        # a concurrent report on the other transport, so exactly one report
-        # triggers the backup-start notification.
-        first_start = (
-            db.query(BackupJob)
-            .filter(
-                BackupJob.id == backup_job.id,
-                BackupJob.started_at.is_(None),
-            )
-            .update(
-                {BackupJob.started_at: job.started_at},
-                synchronize_session=False,
-            )
-        )
-        backup_job.status = "running"
-        db.expire(backup_job, ["started_at"])
         if first_start:
+            backup_job.started_at = job.started_at
             newly_started_backup_job = backup_job
+        backup_job.status = "running"
     else:
         _sync_repository_operation_progress(job, db)
     job.updated_at = now

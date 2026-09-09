@@ -60,6 +60,9 @@ from app.database.models import (
     AgentJobLog,
     BackupJob,
     BackupJobRetryLineage,
+    Operation,
+    OperationBackupDetails,
+    OperationBackupRetryLineage,
     BackupPlanRun,
     AvailabilityScheduleSkip,
     CheckJob,
@@ -366,6 +369,11 @@ def purge_job_rows(db: Session, cutoff) -> int:
         BackupJobRetryLineage,
         (BackupJobRetryLineage.requested_at < cutoff,),
     )
+    total += _delete_chunked(
+        db,
+        OperationBackupRetryLineage,
+        (OperationBackupRetryLineage.requested_at < cutoff,),
+    )
     return total
 
 
@@ -444,13 +452,41 @@ def mark_jobs_of_pruned_archives(
     marked = 0
     # one transaction per chunk, like the module's deletes
     for start in range(0, len(names), CHUNK_SIZE):
+        chunk = names[start : start + CHUNK_SIZE]
         marked += (
             db.query(BackupJob)
-            .filter(
-                *filters, BackupJob.archive_name.in_(names[start : start + CHUNK_SIZE])
-            )
+            .filter(*filters, BackupJob.archive_name.in_(chunk))
             .update({BackupJob.archive_pruned_at: pruned_at}, synchronize_session=False)
         )
+        # The same stamp on the operations side (phase 8). An operation always
+        # carries repository_id, so the path fallback the legacy rows need
+        # does not apply.
+        operation_ids = [
+            row.operation_id
+            for row in db.query(OperationBackupDetails.operation_id)
+            .join(Operation, Operation.id == OperationBackupDetails.operation_id)
+            .filter(
+                Operation.repository_id == repository_id,
+                Operation.kind == "backup",
+                OperationBackupDetails.archive_pruned_at.is_(None),
+                OperationBackupDetails.archive_name.in_(chunk),
+                *(
+                    [Operation.created_at <= created_before]
+                    if created_before is not None
+                    else []
+                ),
+            )
+            .all()
+        ]
+        if operation_ids:
+            marked += (
+                db.query(OperationBackupDetails)
+                .filter(OperationBackupDetails.operation_id.in_(operation_ids))
+                .update(
+                    {OperationBackupDetails.archive_pruned_at: pruned_at},
+                    synchronize_session=False,
+                )
+            )
         db.commit()
     if marked:
         logger.info(

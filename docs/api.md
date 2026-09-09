@@ -73,6 +73,12 @@ Successful responses use this shape:
 }
 ```
 
+The `job_id` is an operations id. The same number addresses `GET
+/api/operations/{id}` and the Activity log routes with job type `backup`. A
+job stays `pending` while another exclusive operation holds the repository,
+and `POST /api/backup/cancel/{id}` cancels a pending job as well as a
+running one.
+
 The JSON body uses the `repository` string accepted by Borg UI's manual backup
 flow. For the current `/api/backup/start` and `/api/backup/run` endpoints, pass
 the repository path shown in Borg UI. Older clients may still submit requests

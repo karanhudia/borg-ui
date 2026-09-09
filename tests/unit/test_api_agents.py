@@ -855,6 +855,54 @@ class TestAgentJobTransport:
         assert [o.kind for o in ops][:1] == ["archive_sync"]
         assert {o.trigger for o in ops} == {"followup"}
 
+    def test_agent_job_links_a_backup_operation_and_cancels_it(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        """An AgentJob transporting a backup operation is found through
+        `operation_id`, and cancelling it while it is still queued writes
+        `cancelled` on the operation."""
+        from app.database.models import Operation
+        from app.services.operations.backup_facade import BackupJobFacade
+        from app.services.repository_executor import (
+            cancel_agent_backup_job,
+            get_agent_job_for_backup,
+        )
+
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        repo = Repository(name="linked", path="/repo", encryption="none")
+        test_db.add(repo)
+        test_db.commit()
+        operation = Operation(
+            repository_id=repo.id,
+            kind="backup",
+            category="backup",
+            status="running",
+            trigger="manual",
+            priority=0,
+            run_id="run-1",
+            params={"executor": "agent"},
+        )
+        test_db.add(operation)
+        test_db.commit()
+        agent_job = _create_agent_job(test_db, agent, status="queued")
+        agent_job.operation_id = operation.id
+        test_db.commit()
+
+        facade = BackupJobFacade(test_db, operation)
+        assert get_agent_job_for_backup(test_db, facade).id == agent_job.id
+
+        cancelled_job, _ = cancel_agent_backup_job(test_db, facade)
+        test_db.commit()
+        test_db.refresh(agent_job)
+        test_db.refresh(operation)
+        assert cancelled_job.id == agent_job.id
+        assert agent_job.status == "canceled"
+        assert operation.status == "cancelled"
+
     def test_failed_followup_enqueue_never_fails_the_backup(
         self, test_client: TestClient, test_db, admin_headers, monkeypatch
     ):

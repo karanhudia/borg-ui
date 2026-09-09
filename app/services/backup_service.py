@@ -22,7 +22,10 @@ from app.services.notification_service import notification_service
 from app.services.script_executor import execute_script
 from app.services.script_library_executor import ScriptLibraryExecutor
 from app.services.mqtt_service import mqtt_service
-from app.services.operations.followups import enqueue_backup_followups
+from app.services.operations.backup_facade import (
+    refresh_backup_job,
+    resolve_backup_job,
+)
 from app.services.rclone_repository_service import rclone_repository_service
 from app.services.restore_check_canary import (
     ensure_restore_canary,
@@ -483,7 +486,7 @@ class BackupService:
     ):
         """Update backup job with final archive statistics"""
         try:
-            job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+            job = resolve_backup_job(db, job_id)
             if not job:
                 logger.warning("Job not found for stats update", job_id=job_id)
                 return
@@ -566,29 +569,6 @@ class BackupService:
             logger.warning("Timeout while updating archive stats", job_id=job_id)
         except Exception as e:
             logger.error("Failed to update archive stats", job_id=job_id, error=str(e))
-
-    def _enqueue_index_followups(self, db: Session, repo_record, job) -> None:
-        """Refresh the archive index through the operations runner after a
-        backup (spec 7.4): archive_sync derives archive_count and last_backup
-        from the listing, stats refreshes the size. Never fails the backup."""
-        if repo_record is None:
-            return
-        try:
-            enqueue_backup_followups(
-                db,
-                repo_record.id,
-                scheduled_job_id=getattr(job, "scheduled_job_id", None),
-                backup_plan_run_id=getattr(job, "backup_plan_run_id", None),
-            )
-        except Exception as e:
-            # enqueue_chain commits; a failed commit leaves the session in
-            # need of a rollback before the finalization below commits again
-            db.rollback()
-            logger.warning(
-                "Failed to enqueue index follow-ups",
-                repository=repo_record.name,
-                error=str(e),
-            )
 
     def _format_bytes(self, bytes_value: int) -> str:
         """Format bytes to human readable string"""
@@ -756,7 +736,7 @@ class BackupService:
                 # Update the job record with the calculated size
                 db = SessionLocal()
                 try:
-                    job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+                    job = resolve_backup_job(db, job_id)
                     if job and job.status == "running":
                         job.total_expected_size = total_expected_size
                         db.commit()
@@ -1373,7 +1353,7 @@ class BackupService:
 
         try:
             # Get job
-            job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+            job = resolve_backup_job(db, job_id)
             if not job:
                 logger.error("Job not found", job_id=job_id)
                 return
@@ -1491,7 +1471,7 @@ class BackupService:
 
             # Store archive name on the job for later reference
             try:
-                job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+                job = resolve_backup_job(db, job_id)
                 if job:
                     job.archive_name = archive_name
                     db.commit()
@@ -1882,7 +1862,7 @@ class BackupService:
                     job_id=job_id,
                     repository_id=repo_record.id,
                 )
-                db.refresh(job)
+                refresh_backup_job(db, job)
                 if job.status == "cancelled":
                     logger.info(
                         "Backup cancelled while waiting for repository SSHFS cache lock",
@@ -2029,7 +2009,7 @@ class BackupService:
                     job_id=job_id,
                     repository_id=repo_record.id,
                 )
-                db.refresh(job)
+                refresh_backup_job(db, job)
                 if job.status == "cancelled":
                     logger.info(
                         "Backup cancelled while waiting for repository command lock",
@@ -2120,7 +2100,7 @@ class BackupService:
                         break
                     except asyncio.TimeoutError:
                         pass
-                    db.refresh(job)
+                    refresh_backup_job(db, job)
                     if job.status == "cancelled":
                         logger.info(
                             "Backup job cancelled (heartbeat), terminating process",
@@ -2581,7 +2561,6 @@ class BackupService:
                 await self._update_archive_stats(
                     db, job_id, repository, archive_name, env
                 )
-                self._enqueue_index_followups(db, repo_record, job)
                 rclone_sync_ok = await self._sync_rclone_after_borg(
                     db, repo_record, job
                 )
@@ -2696,7 +2675,6 @@ class BackupService:
                 await self._update_archive_stats(
                     db, job_id, repository, archive_name, env
                 )
-                self._enqueue_index_followups(db, repo_record, job)
                 await self._sync_rclone_after_borg(db, repo_record, job)
 
                 # Run post-backup hooks even with warnings (script library or inline)
@@ -3100,9 +3078,7 @@ class BackupService:
                 db.rollback()
                 retry_db = SessionLocal()
                 try:
-                    retry_job = (
-                        retry_db.query(BackupJob).filter(BackupJob.id == job_id).first()
-                    )
+                    retry_job = resolve_backup_job(retry_db, job_id)
                     if retry_job:
                         retry_job.status = "failed"
                         try:

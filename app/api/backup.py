@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import structlog
-import asyncio
 import json
 from types import SimpleNamespace
 from typing import Any, Optional
@@ -13,8 +12,8 @@ from app.database.models import (
     AgentJobLog,
     User,
     BackupJob,
-    BackupJobRetryLineage,
     BackupPlan,
+    OperationBackupRetryLineage,
     Repository,
     CheckJob,
     PruneJob,
@@ -28,19 +27,27 @@ from app.core.security import (
 )
 from app.services.backup_service import backup_service
 from app.services.backup_progress_contract import serialize_backup_progress_details
-from app.services.backup_route_planner import apply_repository_route_to_backup_job
-from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
 from app.services.job_admission import (
     OPERATION_BACKUP,
     ensure_manual_backup_capacity,
     ensure_repository_admission,
 )
-from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
+from app.services.log_policy import get_log_save_policy
+from app.services.operations.backup_facade import (
+    CANCELLED_BY_USER,
+    CANCELLED_PROCESS_NOT_FOUND,
+    backup_job_has_logs,
+    create_backup_operation,
+    is_backup_operation,
+    list_backup_jobs,
+    resolve_backup_job,
+)
+from app.services.operations.enqueue import wake_runner
+from app.services.operations.runner import operation_runner
 from app.services.repository_executor import (
     cancel_agent_backup_job,
     get_agent_job_for_backup,
     is_agent_executor,
-    queue_agent_backup_job,
     validate_agent_backup_repository,
 )
 from app.utils.backup_maintenance import RUNNING_BACKUP_MAINTENANCE_FAILURES
@@ -50,18 +57,6 @@ logger = structlog.get_logger()
 router = APIRouter()
 
 RETRYABLE_BACKUP_STATUSES = {"failed", "cancelled"}
-
-# asyncio keeps only a weak reference to a bare create_task() result, so a
-# fire-and-forget backup task can be garbage-collected mid-execution — leaving
-# the job stuck in "pending". Hold a strong reference until the task finishes.
-_background_tasks: set[asyncio.Task] = set()
-
-
-def _run_in_background(coro) -> asyncio.Task:
-    task = asyncio.create_task(coro)
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-    return task
 
 
 def _get_job_repository(
@@ -135,7 +130,7 @@ def _decode_json_list(value) -> list:
 
 
 def _agent_job_logs_response(db: Session, backup_job: BackupJob, offset: int) -> dict:
-    agent_job = get_agent_job_for_backup(db, backup_job.id)
+    agent_job = get_agent_job_for_backup(db, backup_job)
     if not agent_job:
         return {
             "job_id": backup_job.id,
@@ -195,37 +190,9 @@ def _agent_log_rows_exist(db: Session, agent_job_id: int) -> bool:
 
 
 def _backup_job_has_logs(
-    db: Session, job: BackupJob, *, log_save_policy: str | None = None
+    db: Session, job: Any, *, log_save_policy: str | None = None
 ) -> bool:
-    policy = log_save_policy or get_log_save_policy(db)
-    output_text: list[Any] = [job.logs, job.error_message]
-    agent_job = None
-    if job.execution_mode == "agent":
-        agent_job = get_agent_job_for_backup(db, job.id)
-        if agent_job:
-            output_text.append(agent_job.error_message)
-
-    if job_has_logs_by_policy(
-        job,
-        policy,
-        output_text=output_text,
-        file_path=job.log_file_path,
-    ):
-        return True
-
-    if (
-        policy == "failed_and_warnings"
-        and agent_job is not None
-        and _agent_log_rows_exist(db, agent_job.id)
-    ):
-        return job_has_logs_by_policy(
-            job,
-            policy,
-            output_text=[*output_text, *_get_agent_log_messages(db, agent_job.id)],
-            file_path=job.log_file_path,
-        )
-
-    return False
+    return backup_job_has_logs(db, job, log_save_policy=log_save_policy)
 
 
 def _get_backup_plan_name(db: Session, backup_plan_id: Optional[int]) -> Optional[str]:
@@ -281,7 +248,6 @@ def _backup_retry_request_snapshot(
     source_job: BackupJob,
     retry_job: BackupJob,
     repo: Repository,
-    agent_payload: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     source_directories = _decode_json_list(repo.source_directories)
     source_locations = _decode_json_list(repo.source_locations)
@@ -318,8 +284,6 @@ def _backup_retry_request_snapshot(
             "source_ssh_connection_id": retry_job.source_ssh_connection_id,
         },
     }
-    if agent_payload is not None:
-        snapshot["agent_payload"] = agent_payload
     return snapshot
 
 
@@ -401,26 +365,19 @@ async def _start_backup_impl(
         if repo_record is not None:
             ensure_repository_admission(db, repo_record, OPERATION_BACKUP)
 
-        # Create backup job record
-        backup_job = BackupJob(
-            repository=backup_request.repository or "default",
-            repository_id=repo_record.id if repo_record else None,
-            status="pending",
-            source_ssh_connection_id=repo_record.source_ssh_connection_id
-            if repo_record
-            else None,
-        )
-        if repo_record is not None and not is_agent_executor(repo_record):
-            apply_repository_route_to_backup_job(backup_job, repo_record)
-        db.add(backup_job)
-        db.commit()
-        db.refresh(backup_job)
-
-        # Execute backup asynchronously (non-blocking). Unknown repository paths are
-        # still accepted for legacy compatibility, but are marked failed
-        # immediately after job creation so polling clients get a deterministic
-        # terminal state even in environments where background tasks may not run.
-        if backup_request.repository and repo_record is None:
+        if repo_record is None:
+            # Legacy contract: an unknown or empty path is accepted and fails
+            # at once, so polling clients get a terminal state. Created
+            # uncommitted so the runner never sees it queued.
+            backup_job = create_backup_operation(
+                db,
+                None,
+                trigger="manual",
+                executor="server",
+                user_id=current_user.id,
+                repository_path=backup_request.repository or "default",
+                commit=False,
+            )
             backup_job.status = "failed"
             backup_job.error_message = json.dumps(
                 {"key": "backend.errors.borg.unknownError"}
@@ -431,29 +388,14 @@ async def _start_backup_impl(
             backup_job.completed_at = datetime.utcnow()
             db.commit()
         else:
-            if repo_record and is_agent_executor(repo_record):
-                agent_job = queue_agent_backup_job(db, backup_job, repo_record)
-                await dispatch_agent_job_best_effort(
-                    db,
-                    agent_job,
-                    source="backup_api",
-                    backup_job_id=backup_job.id,
-                    repository_id=repo_record.id,
-                )
-                logger.info(
-                    "Agent backup job queued from backup API",
-                    backup_job_id=backup_job.id,
-                    agent_job_id=agent_job.id,
-                    repository_id=repo_record.id,
-                )
-            else:
-                _run_in_background(
-                    backup_service.execute_backup(
-                        backup_job.id,
-                        backup_request.repository,
-                        None,  # Create new session for background task
-                    )
-                )
+            backup_job = create_backup_operation(
+                db,
+                repo_record,
+                trigger="manual",
+                executor="agent" if is_agent_executor(repo_record) else "server",
+                user_id=current_user.id,
+                repository_path=backup_request.repository or "default",
+            )
 
         logger.info(
             "Backup job created", job_id=backup_job.id, user=current_user.username
@@ -499,7 +441,7 @@ async def retry_backup_job(
     db: Session = Depends(get_db),
 ):
     """Retry a terminal manual backup job by creating a new job row."""
-    source_job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+    source_job = resolve_backup_job(db, job_id)
     if not source_job:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -519,72 +461,35 @@ async def retry_backup_job(
     attempt_number = (source_job.retry_attempt or 1) + 1
     original_job_id = source_job.retry_original_job_id or source_job.id
     requested_at = datetime.utcnow()
-
-    retry_job = BackupJob(
-        repository=repo.path,
-        repository_id=repo.id,
-        status="pending",
-        source_ssh_connection_id=repo.source_ssh_connection_id,
-        retry_original_job_id=original_job_id,
-        retry_source_job_id=source_job.id,
-        retry_attempt=attempt_number,
-        retry_requested_by_user_id=current_user.id,
-        retry_requested_at=requested_at,
-        created_at=requested_at,
-    )
-
-    if is_agent_executor(repo):
+    agent = is_agent_executor(repo)
+    if agent:
         validate_agent_backup_repository(db, repo)
-        db.add(retry_job)
-        db.flush()
-        agent_job = queue_agent_backup_job(db, retry_job, repo)
-        db.add(
-            BackupJobRetryLineage(
-                original_job_id=original_job_id,
-                retry_source_job_id=source_job.id,
-                attempt_number=attempt_number,
-                requested_by_user_id=current_user.id,
-                requested_at=requested_at,
-                created_job_id=retry_job.id,
-                request_snapshot=_backup_retry_request_snapshot(
-                    source_job=source_job,
-                    retry_job=retry_job,
-                    repo=repo,
-                    agent_payload=agent_job.payload,
-                ),
-            )
-        )
-        db.commit()
-        db.refresh(retry_job)
-        await dispatch_agent_job_best_effort(
-            db,
-            agent_job,
-            source="backup_retry",
-            backup_job_id=retry_job.id,
-            repository_id=repo.id,
-            retry_source_job_id=source_job.id,
-        )
-        logger.info(
-            "Agent backup retry queued",
-            source_job_id=source_job.id,
-            retry_job_id=retry_job.id,
-            agent_job_id=agent_job.id,
-            user=current_user.username,
-        )
-        return _backup_retry_response(retry_job)
+    else:
+        ensure_repository_admission(db, repo, OPERATION_BACKUP)
 
-    ensure_repository_admission(db, repo, OPERATION_BACKUP)
-    apply_repository_route_to_backup_job(retry_job, repo)
-    db.add(retry_job)
-    db.flush()
+    retry_job = create_backup_operation(
+        db,
+        repo,
+        trigger="retry",
+        executor="agent" if agent else "server",
+        user_id=current_user.id,
+        retry={
+            "retry_original_job_id": original_job_id,
+            "retry_source_job_id": source_job.id,
+            "retry_attempt": attempt_number,
+            "retry_requested_by_user_id": current_user.id,
+            "retry_requested_at": requested_at,
+        },
+        commit=False,
+    )
     db.add(
-        BackupJobRetryLineage(
+        OperationBackupRetryLineage(
             original_job_id=original_job_id,
             retry_source_job_id=source_job.id,
             attempt_number=attempt_number,
             requested_by_user_id=current_user.id,
             requested_at=requested_at,
-            created_job_id=retry_job.id,
+            created_operation_id=retry_job.id,
             request_snapshot=_backup_retry_request_snapshot(
                 source_job=source_job,
                 retry_job=retry_job,
@@ -593,14 +498,7 @@ async def retry_backup_job(
         )
     )
     db.commit()
-    db.refresh(retry_job)
-    _run_in_background(
-        backup_service.execute_backup(
-            retry_job.id,
-            repo.path,
-            None,
-        )
-    )
+    wake_runner()
     logger.info(
         "Backup retry created",
         source_job_id=source_job.id,
@@ -626,23 +524,13 @@ async def get_all_backup_jobs(
         manual_only: If True, only return manual backup jobs (not scheduled)
     """
     try:
-        query = db.query(BackupJob)
-
-        if scheduled_only:
-            # Filter to only jobs with scheduled_job_id set
-            query = query.filter(BackupJob.scheduled_job_id.isnot(None))
-        elif manual_only:
-            # Filter to only legacy manual backups. Backup Plan runs are surfaced
-            # through the plan run APIs so the manual backup table stays scoped.
-            query = query.filter(
-                BackupJob.scheduled_job_id.is_(None),
-                BackupJob.backup_plan_id.is_(None),
-            )
-
-        if repository:
-            query = query.filter(BackupJob.repository == repository)
-
-        jobs = query.order_by(BackupJob.id.desc()).limit(limit).all()
+        jobs = list_backup_jobs(
+            db,
+            limit,
+            scheduled_only=scheduled_only,
+            manual_only=manual_only,
+            repository_path=repository,
+        )
         visible_jobs = []
         for job in jobs:
             repo = _get_job_repository(db, job.repository)
@@ -711,7 +599,7 @@ async def get_backup_status(
 ):
     """Get backup job status with detailed progress information"""
     try:
-        job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+        job = resolve_backup_job(db, job_id)
         if not job:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -763,7 +651,7 @@ async def cancel_backup(
 ):
     """Cancel a running backup job"""
     try:
-        job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+        job = resolve_backup_job(db, job_id)
         if not job:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -773,19 +661,29 @@ async def cancel_backup(
         if repo:
             check_repo_access(db, current_user, repo, "operator")
 
+        operation = is_backup_operation(job)
         if job.execution_mode == "agent":
+            if operation:
+                await operation_runner.request_cancel(job.id)
             cancel_agent_backup_job(db, job)
             process_killed = False
         elif job.status == "running":
+            if operation:
+                # Spec 7.7: the flag first, so the executor keeps `cancelled`
+                # over the service's later `failed` write for the killed
+                # process (the phase 7 restore pattern).
+                await operation_runner.request_cancel(job.id)
             process_killed = await backup_service.cancel_backup(job_id)
             job.status = "cancelled"
             job.completed_at = datetime.utcnow()
-            if process_killed:
-                job.error_message = '{"key": "backend.errors.backup.cancelledByUser"}'
-            else:
-                job.error_message = (
-                    '{"key": "backend.errors.backup.cancelledByUserProcessNotFound"}'
-                )
+            job.error_message = (
+                CANCELLED_BY_USER if process_killed else CANCELLED_PROCESS_NOT_FOUND
+            )
+        elif operation and job.status == "pending":
+            # A queued backup is new in this phase (it waits for the lane);
+            # the runner marks it cancelled directly.
+            await operation_runner.request_cancel(job.id)
+            process_killed = False
         elif job.maintenance_status in RUNNING_BACKUP_MAINTENANCE_FAILURES:
             maintenance_result = await _cancel_running_maintenance_job(db, job)
             if maintenance_result is None:
@@ -831,7 +729,7 @@ async def download_backup_logs(
     try:
         from fastapi.responses import FileResponse
 
-        job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+        job = resolve_backup_job(db, job_id)
         if not job:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -857,7 +755,7 @@ async def download_backup_logs(
             )
 
         if job.execution_mode == "agent":
-            agent_job = get_agent_job_for_backup(db, job.id)
+            agent_job = get_agent_job_for_backup(db, job)
             if not agent_job:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -950,7 +848,7 @@ async def stream_backup_logs(
 ):
     """Get incremental backup logs (for real-time streaming)"""
     try:
-        job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+        job = resolve_backup_job(db, job_id)
         if not job:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

@@ -12,12 +12,15 @@ import json
 from typing import Any, Dict, List, Optional, Set
 
 import structlog
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import get_runtime_app_version
 from app.database.database import SessionLocal
 from app.database.models import BackupJob, MQTTSyncState, Repository
+from app.services.operations.backup_facade import (
+    latest_backup_jobs_by_repository,
+    newest_backup_job,
+)
 from app.utils.datetime_utils import serialize_datetime
 
 import paho.mqtt.client as mqtt
@@ -186,28 +189,6 @@ class MQTTSyncStateStore:
 class BackupJobQueryService:
     """Read-model queries for per-repository backup jobs."""
 
-    @staticmethod
-    def _latest_jobs_subquery(
-        db: Session,
-        *,
-        status_filter: Optional[str] = None,
-        order_field: Any = BackupJob.created_at,
-    ):
-        query = db.query(
-            BackupJob.id.label("job_id"),
-            BackupJob.repository.label("repository"),
-            BackupJob.status.label("status"),
-            func.row_number()
-            .over(
-                partition_by=BackupJob.repository,
-                order_by=(order_field.desc(), BackupJob.id.desc()),
-            )
-            .label("row_num"),
-        ).filter(BackupJob.repository.isnot(None))
-        if status_filter:
-            query = query.filter(BackupJob.status == status_filter)
-        return query.subquery()
-
     def fetch_failed_repositories(
         self,
         db: Session,
@@ -217,63 +198,22 @@ class BackupJobQueryService:
         if not path_to_id:
             return set()
 
-        latest_jobs = self._latest_jobs_subquery(db)
-        latest_rows = (
-            db.query(
-                latest_jobs.c.repository,
-                latest_jobs.c.status,
-            )
-            .filter(
-                latest_jobs.c.row_num == 1,
-                latest_jobs.c.repository.in_(list(path_to_id.keys())),
-            )
-            .all()
-        )
-
         failed_ids: Set[int] = set()
-        for repository_path, status in latest_rows:
-            if status != "failed":
+        for repository_path, job in latest_backup_jobs_by_repository(db).items():
+            if job.status != "failed":
                 continue
             repo_id = path_to_id.get(repository_path)
             if repo_id:
                 failed_ids.add(repo_id)
         return failed_ids
 
-    def fetch_latest_backup_jobs_by_repository(
-        self,
-        db: Session,
-    ) -> Dict[str, BackupJob]:
-        """
-        Return latest backup job row per repository path.
+    def fetch_latest_backup_jobs_by_repository(self, db: Session) -> Dict[str, Any]:
+        """Latest backup per repository path, across both tables (phase 8)."""
+        return latest_backup_jobs_by_repository(db)
 
-        Uses a window function so only one row per repository is materialized.
-        """
-        latest_jobs = self._latest_jobs_subquery(db)
-        rows = (
-            db.query(BackupJob)
-            .join(latest_jobs, BackupJob.id == latest_jobs.c.job_id)
-            .filter(latest_jobs.c.row_num == 1)
-            .all()
-        )
-        return {job.repository: job for job in rows if job.repository}
-
-    def fetch_running_backup_jobs_by_repository(
-        self,
-        db: Session,
-    ) -> Dict[str, BackupJob]:
-        """Return latest running backup job row per repository path."""
-        latest_running_jobs = self._latest_jobs_subquery(
-            db,
-            status_filter="running",
-            order_field=func.coalesce(BackupJob.started_at, BackupJob.created_at),
-        )
-        rows = (
-            db.query(BackupJob)
-            .join(latest_running_jobs, BackupJob.id == latest_running_jobs.c.job_id)
-            .filter(latest_running_jobs.c.row_num == 1)
-            .all()
-        )
-        return {job.repository: job for job in rows if job.repository}
+    def fetch_running_backup_jobs_by_repository(self, db: Session) -> Dict[str, Any]:
+        """Latest running backup per repository path, across both tables."""
+        return latest_backup_jobs_by_repository(db, running=True)
 
 
 class HomeAssistantDiscoveryPublisher:
@@ -515,23 +455,9 @@ class ServerStatePublisher:
 
     def publish_server_state_from_db(self, db: Session) -> bool:
         """Publish server-level sensor topics from backup_jobs table."""
-        running_job = (
-            db.query(BackupJob)
-            .filter(BackupJob.status == "running")
-            .order_by(BackupJob.started_at.desc(), BackupJob.id.desc())
-            .first()
-        )
-        latest_job = (
-            db.query(BackupJob)
-            .order_by(BackupJob.created_at.desc(), BackupJob.id.desc())
-            .first()
-        )
-        latest_terminal_job = (
-            db.query(BackupJob)
-            .filter(BackupJob.status.in_(TERMINAL_JOB_STATUSES))
-            .order_by(BackupJob.completed_at.desc(), BackupJob.id.desc())
-            .first()
-        )
+        running_job = newest_backup_job(db, running=True)
+        latest_job = newest_backup_job(db)
+        latest_terminal_job = newest_backup_job(db, terminal=True)
 
         running_timestamp = (
             _serialize_first_datetime(

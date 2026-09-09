@@ -42,7 +42,9 @@ def _operation(db, repository, kind):
     op = Operation(
         repository_id=repository.id,
         kind=kind,
-        category={"wipe": "maintenance", "restore": "restore"}.get(kind, "mirror"),
+        category={"wipe": "maintenance", "restore": "restore", "backup": "backup"}.get(
+            kind, "mirror"
+        ),
         status="queued",
         trigger="manual",
         priority=0,
@@ -123,3 +125,76 @@ def test_restore_details_row_is_deleted_with_its_operation(db, repository):
     db.commit()
 
     assert db.query(OperationRestoreDetails).count() == 0
+
+
+def test_backup_details_is_created_once_per_operation(db, repository):
+    from app.database.models import OperationBackupDetails
+    from app.services.operations.details import backup_details
+
+    op = _operation(db, repository, "backup")
+
+    first = backup_details(db, op)
+    first.archive_name = "nas-2026-09-09"
+    first.original_size = 3 * 1024**3
+    first.maintenance_status = "running_prune"
+    second = backup_details(db, op)
+
+    assert first.operation_id == op.id
+    assert second is first
+    assert second.archive_name == "nas-2026-09-09"
+    assert second.original_size == 3 * 1024**3
+    assert second.retry_attempt == 1
+    assert db.query(OperationBackupDetails).count() == 1
+
+
+def test_backup_details_row_is_deleted_with_its_operation(db, repository):
+    from app.database.models import OperationBackupDetails
+    from app.services.operations.details import backup_details
+
+    op = _operation(db, repository, "backup")
+    backup_details(db, op)
+    db.commit()
+
+    db.delete(op)
+    db.commit()
+
+    assert db.query(OperationBackupDetails).count() == 0
+
+
+def test_agent_job_and_script_execution_link_to_an_operation(db, repository):
+    from app.database.models import AgentJob, AgentMachine, ScriptExecution
+
+    op = _operation(db, repository, "backup")
+    machine = AgentMachine(
+        agent_id="agent-1",
+        name="agent",
+        token_hash="hash",
+        token_prefix="prefix",
+        status="online",
+    )
+    db.add(machine)
+    db.flush()
+    db.add(
+        AgentJob(
+            agent_machine_id=machine.id,
+            operation_id=op.id,
+            job_type="backup",
+            status="queued",
+            payload={},
+        )
+    )
+    db.add(
+        ScriptExecution(
+            operation_id=op.id,
+            hook_type="pre-backup",
+            status="completed",
+            triggered_by="backup",
+        )
+    )
+    db.commit()
+
+    db.delete(op)
+    db.commit()
+
+    assert db.query(ScriptExecution).count() == 0
+    assert db.query(AgentJob).one().operation_id is None

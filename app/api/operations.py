@@ -78,6 +78,7 @@ class OperationItem(BaseModel):
     backup_plan_run_id: Optional[int] = None
     backup_plan_name: Optional[str] = None
     archive_name: Optional[str] = None
+    archive_pruned_at: Optional[datetime] = None
     package_name: Optional[str] = None
     has_logs: bool = False
     progress_percent: Optional[float] = None

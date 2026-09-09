@@ -31,7 +31,6 @@ from app.services.notification_service import notification_service
 from app.services.check_scheduler import run_due_scheduled_checks
 from app.services.restore_check_scheduler import run_due_scheduled_restore_checks
 from app.services.rclone_mirror_scheduler import dispatch_due_scheduled_rclone_mirrors
-from app.services.backup_route_planner import apply_repository_route_to_backup_job
 from app.services.job_admission import (
     OPERATION_BACKUP,
     count_active_scheduled_backup_jobs,
@@ -40,6 +39,12 @@ from app.services.job_admission import (
     lock_backup_capacity_scope,
 )
 from app.utils.datetime_utils import serialize_datetime
+from app.services.operations.backup_facade import (
+    create_backup_operation,
+    refresh_backup_job,
+    resolve_backup_job,
+    wait_for_backup_operation,
+)
 from app.utils.archive_names import build_archive_name
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
@@ -1433,9 +1438,12 @@ async def delete_scheduled_job(
 
         # Step 1: Set scheduled_job_id to NULL for all backup jobs linked to this schedule
         # This preserves backup history while breaking the link
-        from app.database.models import BackupJob
+        from app.database.models import BackupJob, Operation
 
         db.query(BackupJob).filter_by(scheduled_job_id=job_id).update(
+            {"scheduled_job_id": None}, synchronize_session=False
+        )
+        db.query(Operation).filter_by(scheduled_job_id=job_id).update(
             {"scheduled_job_id": None}, synchronize_session=False
         )
 
@@ -1708,7 +1716,7 @@ async def run_scheduled_job_now(
 ):
     """Run a scheduled job immediately"""
     try:
-        from app.database.models import BackupJob, Repository
+        from app.database.models import Repository
 
         job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
         if not job:
@@ -1764,21 +1772,6 @@ async def run_scheduled_job_now(
 
             ensure_repository_admission(db, repo, OPERATION_BACKUP)
 
-            # Create backup job record with scheduled_job_id
-            backup_job = BackupJob(
-                repository=repo.path,
-                repository_id=repo.id,
-                status="pending",
-                scheduled_job_id=job.id,  # Link to scheduled job
-                created_at=datetime.now(
-                    timezone.utc
-                ),  # Explicit timestamp to prevent NULL
-            )
-            apply_repository_route_to_backup_job(backup_job, repo)
-            db.add(backup_job)
-            db.commit()
-            db.refresh(backup_job)
-
             # Generate archive name
             _now = datetime.now()
             archive_name = build_archive_name(
@@ -1790,6 +1783,15 @@ async def run_scheduled_job_now(
                 time_str=_now.strftime("%H:%M:%S"),
                 unix_timestamp=str(int(_now.timestamp())),
                 stable_series=getattr(repo, "borg_version", 1) == 2,
+            )
+
+            backup_job = create_backup_operation(
+                db,
+                repo,
+                trigger="schedule",
+                executor="server",
+                params={"archive_name": archive_name},
+                scheduled_job_id=job.id,
             )
 
             # Execute backup with optional prune/compact asynchronously (non-blocking)
@@ -2046,8 +2048,7 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
         scheduled_job: The ScheduledJob object
         db: Database session
     """
-    from app.database.models import Repository, BackupJob
-    from app.services.backup_service import backup_service
+    from app.database.models import Repository
 
     logger.info(
         "Executing multi-repo schedule",
@@ -2138,22 +2139,6 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
 
             ensure_repository_admission(db, repo, OPERATION_BACKUP)
 
-            # Create backup job record
-            backup_job = BackupJob(
-                repository=repo.path,
-                repository_id=repo.id,
-                status="pending",
-                scheduled_job_id=scheduled_job.id,
-                created_at=datetime.now(
-                    timezone.utc
-                ),  # Explicit timestamp to prevent NULL
-            )
-            apply_repository_route_to_backup_job(backup_job, repo)
-            db.add(backup_job)
-            db.commit()
-            db.refresh(backup_job)
-            backup_jobs.append(backup_job)
-
             # Generate archive name
             archive_name = build_archive_name(
                 job_name=scheduled_job.name,
@@ -2165,6 +2150,19 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                 unix_timestamp=timestamp_unix,
                 stable_series=getattr(repo, "borg_version", 1) == 2,
             )
+
+            backup_job = create_backup_operation(
+                db,
+                repo,
+                trigger="schedule",
+                executor="server",
+                params={
+                    "archive_name": archive_name,
+                    "skip_hooks": scheduled_job.run_repository_scripts,
+                },
+                scheduled_job_id=scheduled_job.id,
+            )
+            backup_jobs.append(backup_job)
 
             # Run repository-level pre-scripts if enabled
             if scheduled_job.run_repository_scripts:
@@ -2251,13 +2249,7 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
             # When run_repository_scripts=True the schedule already ran pre-backup scripts
             # explicitly above, so tell execute_backup to skip its own hook execution to
             # avoid running the same scripts a second time.
-            await backup_service.execute_backup(
-                backup_job.id,
-                repo.path,
-                db,
-                archive_name=archive_name,
-                skip_hooks=scheduled_job.run_repository_scripts,
-            )
+            await wait_for_backup_operation(db, backup_job.id)
 
             # Run repository-level post-scripts if enabled
             if scheduled_job.run_repository_scripts:
@@ -2269,7 +2261,7 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                     # Get backup result for post-script context.
                     # Inline and library script executors expect the normalized
                     # status token, not a stats dict.
-                    db.refresh(backup_job)
+                    refresh_backup_job(db, backup_job)
                     if backup_job.status == "completed":
                         result_status = "success"
                     elif backup_job.status == "completed_with_warnings":
@@ -2354,7 +2346,7 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                     )
 
             # Run prune/compact if enabled and backup succeeded
-            db.refresh(backup_job)
+            refresh_backup_job(db, backup_job)
             if backup_job.status in ["completed", "completed_with_warnings"]:
                 # Run prune if enabled
                 if scheduled_job.run_prune_after:
@@ -2376,6 +2368,8 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                                 "scheduled_prune": True,
                             },
                             user_id=None,
+                            run_id=backup_job.operation.run_id,
+                            depends_on_id=backup_job.id,
                         )
 
                         # Update backup job status to show prune is running
@@ -2443,6 +2437,8 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                             "compact",
                             params={"scheduled_compact": True},
                             user_id=None,
+                            run_id=backup_job.operation.run_id,
+                            depends_on_id=backup_job.id,
                         )
 
                         # Update backup job status to show compact is running
@@ -2580,18 +2576,15 @@ async def execute_scheduled_backup_with_maintenance(
         scheduled_job_id: Scheduled job ID
         archive_name: Optional custom archive name
     """
-    from app.database.models import Repository, BackupJob
-    from app.services.backup_service import backup_service
+    from app.database.models import Repository
 
     db = next(get_db())
     try:
-        # Execute the backup with custom archive name if provided
-        await backup_service.execute_backup(
-            backup_job_id, repository_path, db, archive_name=archive_name
-        )
+        # The runner dispatches the row; wait for the verdict it writes.
+        await wait_for_backup_operation(db, backup_job_id)
 
         # Check if backup was successful (or completed with warnings)
-        backup_job = db.query(BackupJob).filter(BackupJob.id == backup_job_id).first()
+        backup_job = resolve_backup_job(db, backup_job_id)
         if not backup_job or backup_job.status not in [
             "completed",
             "completed_with_warnings",
@@ -2644,6 +2637,8 @@ async def execute_scheduled_backup_with_maintenance(
                         "scheduled_prune": True,
                     },
                     user_id=None,
+                    run_id=backup_job.operation.run_id,
+                    depends_on_id=backup_job.id,
                 )
 
                 # Update backup job status to show prune is running
@@ -2725,6 +2720,8 @@ async def execute_scheduled_backup_with_maintenance(
                     "compact",
                     params={"scheduled_compact": True},
                     user_id=None,
+                    run_id=backup_job.operation.run_id,
+                    depends_on_id=backup_job.id,
                 )
 
                 # Update backup job status to show compact is running
@@ -2876,18 +2873,6 @@ def _dispatch_due_scheduled_job(
                 return None
             raise
 
-        backup_job = BackupJob(
-            repository=repo.path,
-            repository_id=repo.id,
-            status="pending",
-            scheduled_job_id=job.id,
-            created_at=datetime.now(timezone.utc),
-        )
-        apply_repository_route_to_backup_job(backup_job, repo)
-        db.add(backup_job)
-        db.commit()
-        db.refresh(backup_job)
-
         _now = datetime.now()
         archive_name = build_archive_name(
             job_name=job.name,
@@ -2898,6 +2883,15 @@ def _dispatch_due_scheduled_job(
             time_str=_now.strftime("%H:%M:%S"),
             unix_timestamp=str(int(_now.timestamp())),
             stable_series=getattr(repo, "borg_version", 1) == 2,
+        )
+
+        backup_job = create_backup_operation(
+            db,
+            repo,
+            trigger="schedule",
+            executor="server",
+            params={"archive_name": archive_name},
+            scheduled_job_id=job.id,
         )
 
         run_key = f"backup:{backup_job.id}"

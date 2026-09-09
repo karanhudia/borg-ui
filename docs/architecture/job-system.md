@@ -43,11 +43,24 @@ back to its legacy table, so old links keep working.
 
 ## Backup Jobs
 
-Backup jobs can be started manually or by schedule.
+As of section 13 phase 8 of the operations spec, a backup is a row in the
+`operations` table (kind `backup`, category `backup`, exclusive) with its
+backup columns on `operation_backup_details`: archive name and sizes, the
+live progress fields, the route strategy and source SSH connection, the
+remote host, the retry lineage columns, and the maintenance status.
+
+Every creation site enqueues through `create_backup_operation`: `POST
+/api/backup/start` and its `/run` alias, the retry route, the single and
+multi repository schedules, backup plan runs, and `POST /api/v2/backups/run`.
+The operations runner dispatches the row when the repository lane is free
+and the concurrency limits allow, and enqueues the index follow-up chain
+(`archive_sync`, `history_merge`, `history_index`, `stats`) when the backup
+succeeds.
 
 Typical flow:
 
-1. create job record
+0. enqueue the operation
+1. the runner dispatches it and marks it running
 2. run pre-backup scripts
 3. run Borg backup
 4. update progress and logs
@@ -55,6 +68,29 @@ Typical flow:
 6. run post-backup scripts
 7. send notifications
 8. update final status
+
+Steps 5 to 7 happen inside the executor or the calling scheduler exactly as
+they did before the migration.
+
+There are two execution paths. A server backup runs
+`backup_service.execute_backup`, which covers a local source, an SSHFS
+source, and a remote direct backup through `remote_backup_service`. An agent
+backup queues an `agent_jobs` row carrying `operation_id`; the agent's start,
+progress and completion reports write to the operation, and the executor
+waits on the transport job.
+
+Cancelling depends on the state. A running backup raises the runner's cancel
+flag first and then kills the process, so the cancelled verdict survives the
+service's later failure write. A queued backup is cancelled by the runner
+directly. An agent backup sends a cancel request to the agent.
+
+Post-backup prune, compact and check are child operations in the backup's
+run, and `maintenance_status` on the details row mirrors them
+(`running_prune` while the child prune runs, and so on).
+
+Backup rows written before phase 8 stay in `backup_jobs` and are served by
+the same routes, which resolve an id against `operations` first, until phase
+9 deletes the table.
 
 ## Restore Jobs
 
@@ -169,13 +205,15 @@ On application startup, Borg UI checks for jobs that were left in `running` stat
 
 Startup cleanup currently covers:
 
-- backup jobs
+- backup rows in their legacy table, written by an install that has not
+  restarted since upgrading to phase 8
 - restore rows in their legacy table, written by an install that has not
   restarted since upgrading to phase 7
 - check, restore-check, prune, and compact rows in their legacy tables,
   written by an install that has not restarted since upgrading to phase 5
 
-Check, prune, compact, restore-check, and restore now run as operations, and new
+Backup, check, prune, compact, restore-check, and restore now run as
+operations, and new
 work in that shape is recovered by the operations runner on startup
 (requeue index rows, fail the rest unless their process is still alive; see
 "Operations runner"), including a local lock-break attempt equivalent to
@@ -186,11 +224,11 @@ are deleted with the tables in a later phase.
 
 What happens:
 
-- running backup jobs are marked `failed`
+- running legacy backup rows are marked `failed`
 - running legacy restore rows are marked `failed`
 - running legacy prune rows are marked `failed`
 - running legacy check, restore-check, and compact rows are marked `failed` when their recorded process is no longer alive
-- backup rows left in `running_prune` or `running_compact` maintenance states are marked `failed`, with maintenance state changed to `prune_failed` or `compact_failed`
+- backups left in `running_prune` or `running_compact` maintenance states are marked `failed`, with maintenance state changed to `prune_failed` or `compact_failed`; the sweep covers both the legacy column and the details row
 - orphaned legacy prune and compact rows update the related backup maintenance state when possible
 
 For local check and compact jobs, Borg UI attempts to break the repository lock after detecting an orphaned process. For remote repositories, it does not automatically break the lock because the remote Borg process may still be running.

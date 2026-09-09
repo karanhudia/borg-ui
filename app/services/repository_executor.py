@@ -17,6 +17,12 @@ from app.services.job_admission import (
     ignore_active_job,
     operation_for_agent_job_kind,
 )
+from app.services.operations.backup_facade import (
+    admission_ignore_for,
+    backup_job_link_columns,
+    is_backup_operation,
+    resolve_backup_job,
+)
 
 EXECUTOR_SERVER = "server"
 EXECUTOR_AGENT = "agent"
@@ -450,7 +456,7 @@ def queue_agent_backup_job(
         db,
         repository,
         OPERATION_BACKUP,
-        ignore=ignore_active_job(BackupJob.__tablename__, backup_job.id),
+        ignore=admission_ignore_for(backup_job),
     )
 
     archive_name = archive_name or (
@@ -462,7 +468,6 @@ def queue_agent_backup_job(
     now = datetime.utcnow()
     agent_job = AgentJob(
         agent_machine_id=agent.id,
-        backup_job_id=backup_job.id,
         job_type="backup",
         status="queued",
         payload=build_agent_backup_payload(
@@ -476,6 +481,7 @@ def queue_agent_backup_job(
         ),
         created_at=now,
         updated_at=now,
+        **backup_job_link_columns(db, backup_job.id),
     )
     db.add(agent_job)
     db.commit()
@@ -617,10 +623,16 @@ async def wait_for_agent_script_job(
         await asyncio.sleep(poll_interval_seconds)
 
 
-def get_agent_job_for_backup(db: Session, backup_job_id: int) -> Optional[AgentJob]:
+def get_agent_job_for_backup(db: Session, backup_job: Any) -> Optional[AgentJob]:
+    """The transport job for a backup, whichever shape the backup has."""
+    column = (
+        AgentJob.operation_id
+        if is_backup_operation(backup_job)
+        else AgentJob.backup_job_id
+    )
     return (
         db.query(AgentJob)
-        .filter(AgentJob.backup_job_id == backup_job_id)
+        .filter(column == backup_job.id)
         .order_by(AgentJob.id.desc())
         .first()
     )
@@ -684,7 +696,7 @@ def abandon_agent_repository_operation_job(
 def cancel_agent_backup_job(
     db: Session, backup_job: BackupJob, *, now: Optional[datetime] = None
 ) -> tuple[AgentJob, bool]:
-    agent_job = get_agent_job_for_backup(db, backup_job.id)
+    agent_job = get_agent_job_for_backup(db, backup_job)
     if not agent_job:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -720,7 +732,7 @@ async def wait_for_agent_backup_job(
     while True:
         db.expire_all()
         agent_job = db.query(AgentJob).filter(AgentJob.id == agent_job_id).first()
-        backup_job = db.query(BackupJob).filter(BackupJob.id == backup_job_id).first()
+        backup_job = resolve_backup_job(db, backup_job_id)
         if not agent_job or not backup_job:
             return "failed"
 

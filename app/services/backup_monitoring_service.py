@@ -9,7 +9,8 @@ from zoneinfo import ZoneInfo
 from croniter import croniter
 from sqlalchemy.orm import Session
 
-from app.database.models import BackupJob, Repository, SystemSettings
+from app.database.models import Repository, SystemSettings
+from app.services.operations.backup_facade import backup_jobs_started_since
 from app.services.notification_service import NotificationService
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
@@ -332,17 +333,7 @@ def build_backup_report(
         include_observe_repos=settings.backup_monitoring_include_observe_repos,
     )
     period_start = _report_activity_period_start(settings, now_naive)
-    recent_jobs = (
-        db.query(BackupJob)
-        .filter(
-            BackupJob.started_at.isnot(None),
-            BackupJob.started_at >= period_start,
-            BackupJob.started_at <= now_naive,
-        )
-        .order_by(BackupJob.started_at.desc())
-        .limit(10)
-        .all()
-    )
+    recent_jobs = backup_jobs_started_since(db, period_start, until=now_naive, limit=10)
 
     lines = [f"Backup report generated {serialize_datetime(now_naive)}", ""]
     if settings.backup_reports_include_summary:

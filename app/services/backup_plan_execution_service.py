@@ -49,14 +49,18 @@ from app.services.job_admission import OPERATION_BACKUP, ensure_repository_admis
 from app.services.repository_executor import (
     cancel_agent_backup_job,
     is_agent_executor,
-    queue_agent_backup_job,
     queue_agent_script_job,
-    wait_for_agent_backup_job,
     wait_for_agent_script_job,
 )
 from app.services.upload_ratelimit_policies import resolve_scheduled_upload_ratelimit
 from app.services.script_executor import execute_script
 from app.services.template_service import get_system_variables
+from app.services.operations.backup_facade import (
+    create_backup_operation,
+    refresh_backup_job,
+    wait_for_backup_operation,
+)
+from app.services.operations.enqueue import wake_runner
 from app.utils.archive_names import build_archive_name
 from app.utils.script_params import SYSTEM_VARIABLE_PREFIX
 from app.utils.ssh_host_keys import host_key_ssh_opts
@@ -1979,28 +1983,6 @@ class BackupPlanExecutionService:
 
             ensure_repository_admission(db, repo, OPERATION_BACKUP)
 
-            backup_job = BackupJob(
-                repository=repo.path,
-                repository_id=repo.id,
-                backup_plan_id=context.plan_id,
-                backup_plan_run_id=run_id,
-                status="pending",
-                route_strategy=route.strategy,
-                source_ssh_connection_id=(
-                    context.source_ssh_connection_id
-                    if context.source_type == "remote"
-                    else None
-                ),
-                created_at=datetime.utcnow(),
-            )
-            db.add(backup_job)
-            db.flush()
-
-            child.backup_job_id = backup_job.id
-            child.status = "running"
-            child.started_at = datetime.utcnow()
-            db.commit()
-
             archive_name = build_archive_name(
                 job_name=context.plan_name,
                 repo_name=repository_context.repository_name,
@@ -2012,59 +1994,50 @@ class BackupPlanExecutionService:
                 stable_series=getattr(repo, "borg_version", 1) == 2,
             )
 
-            if is_agent_executor(repo):
-                agent_job = queue_agent_backup_job(
-                    db,
-                    backup_job,
-                    repo,
-                    archive_name=archive_name,
-                    source_directories=context.source_directories,
-                    source_locations=context.source_locations,
-                    exclude_patterns=context.exclude_patterns,
-                    compression=repository_context.compression,
-                    custom_flags=repository_context.custom_flags,
-                    upload_ratelimit_kib=repository_context.upload_ratelimit_kib,
-                )
-                await dispatch_agent_job_best_effort(
-                    db,
-                    agent_job,
-                    source="backup_plan_run",
-                    run_id=run_id,
-                    backup_job_id=backup_job.id,
-                    repository_id=repo.id,
-                )
-                final_status = await wait_for_agent_backup_job(
-                    db,
-                    agent_job.id,
-                    backup_job.id,
-                    lambda: self._is_run_cancelled(run_id),
-                )
-                backup_job.route_strategy = route.strategy
-                db.commit()
-            else:
-                backup_job.execution_mode = execution_mode_for_route(route)
-                db.commit()
-                await backup_service.execute_backup(
-                    backup_job.id,
-                    repo.path,
-                    db,
-                    archive_name=archive_name,
-                    skip_hooks=not context.run_repository_scripts,
-                    source_directories=context.source_directories,
-                    source_ssh_connection_id=(
+            backup_job = create_backup_operation(
+                db,
+                repo,
+                trigger="plan",
+                executor="agent" if is_agent_executor(repo) else "server",
+                backup_plan_run_id=run_id,
+                params={
+                    "archive_name": archive_name,
+                    "skip_hooks": not context.run_repository_scripts,
+                    "source_directories": context.source_directories,
+                    "source_ssh_connection_id": (
                         context.source_ssh_connection_id
                         if context.source_type == "remote"
                         else None
                     ),
-                    source_locations=context.source_locations,
-                    exclude_patterns_override=context.exclude_patterns,
-                    compression_override=repository_context.compression,
-                    custom_flags_override=repository_context.custom_flags,
-                    upload_ratelimit_kib=repository_context.upload_ratelimit_kib,
-                )
+                    "source_locations": context.source_locations,
+                    "exclude_patterns_override": context.exclude_patterns,
+                    "compression_override": repository_context.compression,
+                    "custom_flags_override": repository_context.custom_flags,
+                    "upload_ratelimit_kib": repository_context.upload_ratelimit_kib,
+                },
+                commit=False,
+            )
+            if not is_agent_executor(repo):
+                backup_job.execution_mode = execution_mode_for_route(route)
+            backup_job.route_strategy = route.strategy
+            # The plan's source connection, which need not be the repository's.
+            backup_job.source_ssh_connection_id = (
+                context.source_ssh_connection_id
+                if context.source_type == "remote"
+                else None
+            )
 
-                db.refresh(backup_job)
-                final_status = backup_job.status or "failed"
+            child.backup_operation_id = backup_job.id
+            child.status = "running"
+            child.started_at = datetime.utcnow()
+            db.commit()
+            wake_runner()
+
+            final_status = await wait_for_backup_operation(
+                db, backup_job.id, is_cancelled=lambda: self._is_run_cancelled(run_id)
+            )
+            refresh_backup_job(db, backup_job)
+
             if final_status in SUCCESS_BACKUP_STATUSES:
                 if self._is_run_cancelled(run_id):
                     child.status = "cancelled"
@@ -2107,7 +2080,7 @@ class BackupPlanExecutionService:
     async def _run_maintenance(
         self,
         db: Session,
-        backup_job: BackupJob,
+        backup_job: Any,
         repo: Repository,
         context: PlanRunContext,
         run_id: int,
@@ -2132,6 +2105,8 @@ class BackupPlanExecutionService:
                     "scheduled_prune": False,
                 },
                 user_id=None,
+                run_id=backup_job.operation.run_id,
+                depends_on_id=backup_job.id,
             )
             backup_job.maintenance_status = "running_prune"
             db.commit()
@@ -2166,6 +2141,8 @@ class BackupPlanExecutionService:
                 "compact",
                 params={"scheduled_compact": False},
                 user_id=None,
+                run_id=backup_job.operation.run_id,
+                depends_on_id=backup_job.id,
             )
             backup_job.maintenance_status = "running_compact"
             db.commit()
@@ -2194,6 +2171,8 @@ class BackupPlanExecutionService:
                     "extra_flags": context.check_extra_flags,
                 },
                 user_id=None,
+                run_id=backup_job.operation.run_id,
+                depends_on_id=backup_job.id,
             )
             backup_job.maintenance_status = "running_check"
             db.commit()
