@@ -87,14 +87,17 @@ enrolling a different machine or recreating a missing local agent config.
 
 New installs place four root-owned files on the endpoint so a future Borg UI
 release can reinstall the agent from the server instead of you visiting the
-machine:
+machine. The agent asks for an upgrade by creating one empty file, which is the
+entire privilege it is given. It passes no arguments and runs no privileged
+command itself, so nothing here needs `sudo`, which the agent's own unit would
+refuse anyway under `NoNewPrivileges=true`.
 
 | File | Purpose |
 | --- | --- |
 | `/etc/borg-ui-agent-upgrade.conf` | The reinstall parameters. Root-owned, and outside the agent-owned config directory so the agent cannot replace it. |
 | `/opt/borg-ui-agent/bin/borg-ui-agent-upgrade` | The helper. Takes no arguments and reads only `upgrade.conf`. |
 | `/etc/systemd/system/borg-ui-agent-upgrade.service` | A oneshot unit that runs the helper. Never enabled. |
-| `/etc/sudoers.d/borg-ui-agent-upgrade` | Lets the agent's service user start that one unit, and nothing else. Not written when the agent runs as root. |
+| `/etc/systemd/system/borg-ui-agent-upgrade.path` | Watches for `/etc/borg-ui-agent/upgrade-requested` and starts that one unit when it appears. |
 
 Be clear about the trade. Before this, a compromised Borg UI server could
 already run code as the agent's service user on every endpoint and read any

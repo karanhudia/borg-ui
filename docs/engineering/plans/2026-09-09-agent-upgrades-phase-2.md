@@ -1,5 +1,11 @@
 # Agent upgrades phase 2: privileged helper and capability
 
+> **Superseded in part.** Tasks below describe a sudoers rule as the trigger.
+> Review found that the agent unit sets `NoNewPrivileges=true`, under which
+> `sudo` refuses to run, so the rule could never have worked on a non-root
+> endpoint. The shipped trigger is a systemd `.path` unit watching
+> `/etc/borg-ui-agent/upgrade-requested`. Read the sudoers tasks as history.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > `superpowers:subagent-driven-development` (recommended) or
 > `superpowers:executing-plans` to implement this plan task-by-task. Steps use

@@ -612,7 +612,6 @@ def test_agent_installer_records_the_upgrade_parameters_as_root(
         "SERVICE_USER",
         "SERVICE_GROUP",
         "AGENT_ROOT",
-        "SYSTEMCTL",
     ):
         assert f'{key}="' in script
 
@@ -625,17 +624,6 @@ def test_agent_installer_rejects_an_agent_id_that_is_not_an_identifier(
     # agent_id is read from the service-user-owned config.toml and written into
     # a file root sources, so anything but a plain identifier has to be refused.
     assert '[[ ! "${agent_id}" =~ ^[A-Za-z0-9._-]+$ ]]' in script
-
-
-def test_agent_installer_resolves_systemctl_by_absolute_path(
-    test_client: TestClient,
-):
-    script = test_client.get("/agent/install.sh").text
-
-    # sudoers matches on the absolute path and it differs across
-    # distributions, so it is resolved once and reused in both the rule and
-    # upgrade.conf rather than hardcoded.
-    assert 'SYSTEMCTL_PATH="$(command -v systemctl' in script
 
 
 def test_agent_installer_writes_a_oneshot_unit_for_the_upgrade(
@@ -652,30 +640,43 @@ def test_agent_installer_writes_a_oneshot_unit_for_the_upgrade(
     assert "systemctl enable borg-ui-agent-upgrade" not in script
 
 
-def test_agent_installer_grants_one_validated_sudoers_command(
+def test_agent_installer_triggers_the_upgrade_through_a_path_unit(
     test_client: TestClient,
 ):
     script = test_client.get("/agent/install.sh").text
 
+    # The agent unit runs with NoNewPrivileges=true, which makes sudo refuse to
+    # run at all, so the trigger cannot go through sudo. Creating one file the
+    # agent already has write access to is the whole escalation.
+    assert "/etc/systemd/system/borg-ui-agent-upgrade.path" in script
+    assert "PathExists=/etc/borg-ui-agent/upgrade-requested" in script
+    assert "Unit=borg-ui-agent-upgrade.service" in script
+    assert "systemctl enable --now borg-ui-agent-upgrade.path" in script
+    assert 'sudoers.d/borg-ui-agent-upgrade"' not in script
+    assert "visudo" not in script
+
+
+def test_agent_installer_helper_clears_its_own_trigger(test_client: TestClient):
+    script = test_client.get("/agent/install.sh").text
+
+    # A .path unit re-runs for as long as the trigger exists, so the helper has
+    # to remove it before anything that can fail.
+    helper = script.split("<<'UPGRADE_HELPER'", 1)[1]
+    body = helper.split('if [[ ! -r "${conf}" ]]', 1)[0]
     assert (
-        "${SERVICE_USER} ALL=(root) NOPASSWD: "
-        "${SYSTEMCTL_PATH} start --no-block borg-ui-agent-upgrade.service"
-    ) in script
-    assert "visudo -cf" in script
-    assert "install -o root -g root -m 0440" in script
+        'rm -f "${BORG_UI_UPGRADE_TRIGGER:-/etc/borg-ui-agent/upgrade-requested}"'
+        in (body)
+    )
 
 
-def test_agent_installer_skips_the_sudoers_rule_for_a_root_agent(
+def test_agent_installer_takes_away_a_sudoers_rule_from_an_older_install(
     test_client: TestClient,
 ):
     script = test_client.get("/agent/install.sh").text
 
-    # A root agent can already start the unit, so it gets the unit, the helper
-    # and upgrade.conf but no escalation. Skipping the whole set for root would
-    # leave root endpoints with no upgrade path at all (spec D10).
-    sudoers_block = script.split("write_upgrade_sudoers() {", 1)[1].split("\n}", 1)[0]
-    assert 'if [[ "${SERVICE_USER}" == "root" ]]' in sudoers_block
-    assert "return 0" in sudoers_block
+    # Endpoints installed before the path unit carry a live sudoers rule. A
+    # reinstall must remove it rather than leave both paths open.
+    assert script.count("rm -f /etc/sudoers.d/borg-ui-agent-upgrade") == 2
 
 
 def test_agent_installer_removes_the_upgrade_artifacts_when_declined(
@@ -686,6 +687,13 @@ def test_agent_installer_removes_the_upgrade_artifacts_when_declined(
     # A reinstall with --no-remote-upgrade on an endpoint that has the helper
     # must take it away, not leave a live escalation behind.
     removal = script.split("remove_upgrade_artifacts() {", 1)[1].split("\n}", 1)[0]
-    for path in ("UPGRADE_SUDOERS", "UPGRADE_UNIT", "UPGRADE_HELPER", "UPGRADE_CONF"):
+    assert "systemctl disable --now borg-ui-agent-upgrade.path" in removal
+    for path in (
+        "UPGRADE_PATH_UNIT",
+        "UPGRADE_UNIT",
+        "UPGRADE_HELPER",
+        "UPGRADE_CONF",
+        "UPGRADE_TRIGGER",
+    ):
         assert f'"${{{path}}}"' in removal
     assert "NO_REMOTE_UPGRADE_MARKER" in script

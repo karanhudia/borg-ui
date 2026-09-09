@@ -11,25 +11,24 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
-import subprocess
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 UPGRADE_UNIT_NAME = "borg-ui-agent-upgrade.service"
+UPGRADE_PATH_UNIT_NAME = "borg-ui-agent-upgrade.path"
+DEFAULT_TRIGGER_PATH = Path("/etc/borg-ui-agent/upgrade-requested")
 # Outside /etc/borg-ui-agent on purpose: that directory belongs to the service
 # user, and root sources this file.
 DEFAULT_CONF_PATH = Path("/etc/borg-ui-agent-upgrade.conf")
 DEFAULT_UNIT_PATH = Path("/etc/systemd/system") / UPGRADE_UNIT_NAME
+DEFAULT_PATH_UNIT_PATH = Path("/etc/systemd/system") / UPGRADE_PATH_UNIT_NAME
 REQUIRED_CONF_KEYS = (
     "SERVER",
     "AGENT_ID",
     "BORG_INSTALL_MODE",
     "SERVICE_USER",
     "AGENT_ROOT",
-    "SYSTEMCTL",
 )
 
 _CONF_LINE = re.compile(r'^\s*([A-Z_]+)\s*=\s*"(.*)"\s*$')
@@ -39,8 +38,7 @@ _CONF_LINE = re.compile(r'^\s*([A-Z_]+)\s*=\s*"(.*)"\s*$')
 class UpgradeReadiness:
     supported: bool
     reason: str = ""
-    systemctl: str = ""
-    needs_sudo: bool = True
+    trigger: Optional[Path] = None
 
 
 def _parse_conf(path: Path) -> dict[str, str]:
@@ -60,36 +58,12 @@ def _exec_start(unit_path: Path) -> Optional[Path]:
     return None
 
 
-def _sudo_lists_upgrade_command(systemctl: str) -> bool:
-    """Whether sudo would let this user start the upgrade unit without a password.
-
-    `sudo -l` on the exact command, so the answer covers the whole argv the
-    handler will run rather than only the binary.
-    """
-    sudo = shutil.which("sudo")
-    if sudo is None:
-        return False
-    try:
-        result = subprocess.run(
-            [sudo, "-n", "-l", systemctl, "start", "--no-block", UPGRADE_UNIT_NAME],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=10,
-        )
-    except subprocess.TimeoutExpired:
-        # sudo can block on a network directory. The heartbeat this runs on
-        # must not block with it.
-        return False
-    return result.returncode == 0
-
-
 def check_self_upgrade(
     *,
     conf_path: Path = DEFAULT_CONF_PATH,
     unit_path: Path = DEFAULT_UNIT_PATH,
-    is_root: Callable[[], bool] = lambda: os.geteuid() == 0,
-    sudo_lists: Callable[[str], bool] = _sudo_lists_upgrade_command,
+    path_unit_path: Path = DEFAULT_PATH_UNIT_PATH,
+    trigger_path: Path = DEFAULT_TRIGGER_PATH,
 ) -> UpgradeReadiness:
     if not unit_path.is_file():
         return UpgradeReadiness(supported=False, reason="unit_missing")
@@ -110,18 +84,17 @@ def check_self_upgrade(
     if not conf["SERVER"].startswith("https://"):
         return UpgradeReadiness(supported=False, reason="server_not_https")
 
-    systemctl = conf["SYSTEMCTL"]
+    # Nothing starts the helper without the path unit watching for the trigger.
+    if not path_unit_path.is_file():
+        return UpgradeReadiness(supported=False, reason="path_unit_missing")
 
-    # A root agent starts the unit itself. The installer writes no sudoers file
-    # for it and does not install sudo, so asking sudo here would report no
-    # capability on exactly the endpoints that need no escalation.
-    if is_root():
-        return UpgradeReadiness(supported=True, systemctl=systemctl, needs_sudo=False)
+    # And an agent that cannot create the trigger cannot ask. This is the whole
+    # escalation, so it is also the whole check: no sudo, which the agent unit's
+    # NoNewPrivileges=true would refuse anyway.
+    if not os.access(trigger_path.parent, os.W_OK | os.X_OK):
+        return UpgradeReadiness(supported=False, reason="trigger_not_writable")
 
-    if not sudo_lists(systemctl):
-        return UpgradeReadiness(supported=False, reason="sudo_not_permitted")
-
-    return UpgradeReadiness(supported=True, systemctl=systemctl, needs_sudo=True)
+    return UpgradeReadiness(supported=True, trigger=trigger_path)
 
 
 def can_self_upgrade() -> bool:

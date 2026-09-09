@@ -69,6 +69,7 @@ def helper_env(tmp_path: Path, test_client: TestClient):
         env["PATH"] = f"{bin_dir}:{env['PATH']}"
         env["BORG_UI_UPGRADE_ETC"] = str(etc)
         env["BORG_UI_UPGRADE_CONF"] = str(tmp_path / "upgrade.conf")
+        env["BORG_UI_UPGRADE_TRIGGER"] = str(tmp_path / "upgrade-requested")
         # /bin/bash, not "bash": one test stubs bash on PATH to capture the
         # reinstall argv, and resolving the interpreter through PATH would run
         # that stub instead of the helper.
@@ -162,6 +163,17 @@ def test_the_helper_reinstalls_with_the_recorded_parameters(helper_env):
     assert "--reinstall" in argv
     assert "--skip-borg-install" in argv
     assert "--service-user borg" in argv
+
+
+def test_the_helper_clears_the_trigger_before_it_can_fail(helper_env):
+    trigger = helper_env["tmp_path"] / "upgrade-requested"
+    trigger.write_text("", encoding="utf-8")
+    helper_env["write_conf"](server="http://borg.example:8083")
+
+    # The run below aborts on the http server. The trigger still has to be
+    # gone, or the path unit would restart the helper forever.
+    assert helper_env["run"]().returncode == 1
+    assert not trigger.exists()
 
 
 def test_the_helper_keeps_the_recorded_borg_source(helper_env):

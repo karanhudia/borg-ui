@@ -200,6 +200,14 @@ nothing to trigger and therefore no upgrade path at all: strictly worse than
 the unprivileged case the escalation exists to serve. The escalation is what
 root does not need; the mechanism it escalates to is needed either way.
 
+> **Amended during phase 2 review.** The trigger is a systemd `.path` unit
+> watching `/etc/borg-ui-agent/upgrade-requested`, not a sudoers rule. The agent
+> unit runs with `NoNewPrivileges=true`, under which `sudo` refuses to run at
+> all, so `sudo -n` would have failed on every non-root endpoint, which is the
+> default install and the only case the rule existed for. The `.path` unit needs
+> no sudo, no setuid binary and no sudoers file, and the agent still passes no
+> arguments: it creates one empty file that nothing ever reads.
+
 **`/etc/borg-ui-agent-upgrade.conf`** — mode `0644`, owned `root:root`, and
 deliberately outside `/etc/borg-ui-agent`, which the service user owns and could
 otherwise replace a file in. Records

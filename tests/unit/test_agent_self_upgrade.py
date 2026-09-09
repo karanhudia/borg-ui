@@ -5,6 +5,7 @@ leave any one piece behind without the others, and each would otherwise fail at
 a different point after the operator was told the endpoint can upgrade itself.
 """
 
+import os
 from pathlib import Path
 
 import pytest
@@ -29,7 +30,6 @@ def ready(tmp_path: Path):
                 'BORG_INSTALL_MODE="1"',
                 'SERVICE_USER="borg"',
                 f'AGENT_ROOT="{helper.parent.parent}"',
-                'SYSTEMCTL="/usr/bin/systemctl"',
                 "",
             ]
         ),
@@ -37,12 +37,16 @@ def ready(tmp_path: Path):
     )
     unit = tmp_path / "borg-ui-agent-upgrade.service"
     unit.write_text(f"[Service]\nExecStart={helper}\n", encoding="utf-8")
+    path_unit = tmp_path / "borg-ui-agent-upgrade.path"
+    path_unit.write_text("[Path]\nPathExists=/etc/borg-ui-agent\n", encoding="utf-8")
+    trigger_dir = tmp_path / "etc"
+    trigger_dir.mkdir()
 
     return {
         "conf_path": conf_path,
         "unit_path": unit,
-        "is_root": lambda: False,
-        "sudo_lists": lambda systemctl: True,
+        "path_unit_path": path_unit,
+        "trigger_path": trigger_dir / "upgrade-requested",
     }
 
 
@@ -51,8 +55,7 @@ def test_a_complete_install_can_upgrade_itself(ready):
 
     assert readiness.supported is True
     assert readiness.reason == ""
-    assert readiness.systemctl == "/usr/bin/systemctl"
-    assert readiness.needs_sudo is True
+    assert readiness.trigger == ready["trigger_path"]
 
 
 def test_a_missing_unit_is_reported_as_such(ready):
@@ -89,7 +92,6 @@ def test_a_missing_upgrade_conf_is_reported_as_such(ready):
         "BORG_INSTALL_MODE",
         "SERVICE_USER",
         "AGENT_ROOT",
-        "SYSTEMCTL",
     ],
 )
 def test_an_upgrade_conf_short_a_required_field_is_reported_as_missing(ready, dropped):
@@ -116,23 +118,22 @@ def test_an_http_endpoint_cannot_upgrade_itself(ready):
     assert check_self_upgrade(**ready).reason == "server_not_https"
 
 
-def test_an_unprivileged_agent_without_the_sudoers_rule_reports_no_capability(ready):
-    ready["sudo_lists"] = lambda systemctl: False
+def test_an_unwatched_trigger_reports_no_capability(ready):
+    # Without the path unit nothing notices the trigger, so the helper is
+    # installed but unreachable.
+    ready["path_unit_path"].unlink()
 
-    assert check_self_upgrade(**ready).reason == "sudo_not_permitted"
+    assert check_self_upgrade(**ready).reason == "path_unit_missing"
 
 
-def test_a_root_agent_needs_no_sudoers_rule(ready):
-    # The installer writes no sudoers file for a root agent, and does not
-    # install sudo, so consulting sudo -l would report no capability on exactly
-    # the endpoints that need none.
-    ready["is_root"] = lambda: True
-    ready["sudo_lists"] = lambda systemctl: pytest.fail("sudo must not be consulted")
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores directory permissions")
+def test_an_agent_that_cannot_create_the_trigger_reports_no_capability(ready):
+    ready["trigger_path"].parent.chmod(0o500)
 
-    readiness = check_self_upgrade(**ready)
-
-    assert readiness.supported is True
-    assert readiness.needs_sudo is False
+    try:
+        assert check_self_upgrade(**ready).reason == "trigger_not_writable"
+    finally:
+        ready["trigger_path"].parent.chmod(0o700)
 
 
 def test_capabilities_include_self_upgrade_only_when_the_endpoint_is_ready(

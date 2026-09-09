@@ -59,8 +59,11 @@ NO_REMOTE_UPGRADE_MARKER="/etc/borg-ui-agent-no-remote-upgrade"
 # this one.
 UPGRADE_CONF="/etc/borg-ui-agent-upgrade.conf"
 UPGRADE_UNIT="/etc/systemd/system/borg-ui-agent-upgrade.service"
-UPGRADE_SUDOERS="/etc/sudoers.d/borg-ui-agent-upgrade"
-SYSTEMCTL_PATH=""
+UPGRADE_PATH_UNIT="/etc/systemd/system/borg-ui-agent-upgrade.path"
+# The agent asks for an upgrade by creating this. It is in the agent-owned
+# config directory on purpose: creating it is the whole privilege being
+# granted, and nothing ever reads it, only its existence.
+UPGRADE_TRIGGER="/etc/borg-ui-agent/upgrade-requested"
 SERVICE_USER=""
 SERVICE_GROUP=""
 SERVICE_HOME=""
@@ -783,10 +786,6 @@ ${SERVICE_CAPABILITIES}
 WantedBy=multi-user.target
 SERVICE
 
-# sudoers matches on an absolute path and it differs across distributions, so
-# it is resolved once here and reused by both the sudoers rule and upgrade.conf.
-SYSTEMCTL_PATH="$(command -v systemctl || true)"
-
 # Everything the self-upgrade helper needs, in a file only root can write. The
 # helper takes no arguments and reads only this, so a compromised agent cannot
 # redirect the install source, change the service user, or inject installer
@@ -840,7 +839,6 @@ SERVICE_USER_MODE="${SERVICE_USER_MODE}"
 SERVICE_USER="${SERVICE_USER}"
 SERVICE_GROUP="${SERVICE_GROUP}"
 AGENT_ROOT="${AGENT_ROOT}"
-SYSTEMCTL="${SYSTEMCTL_PATH}"
 CONF
 }
 
@@ -864,6 +862,10 @@ set -euo pipefail
 etc="${BORG_UI_UPGRADE_ETC:-/etc/borg-ui-agent}"
 conf="${BORG_UI_UPGRADE_CONF:-/etc/borg-ui-agent-upgrade.conf}"
 agent_config="${etc}/config.toml"
+
+# systemd re-runs a .path unit for as long as the trigger is there, so clear it
+# before doing anything that can fail.
+rm -f "${BORG_UI_UPGRADE_TRIGGER:-/etc/borg-ui-agent/upgrade-requested}"
 
 if [[ ! -r "${conf}" ]]; then
   echo "Missing ${conf}; nothing to upgrade from." >&2
@@ -954,57 +956,48 @@ UPGRADE_UNIT_FILE
   chmod 0644 "${UPGRADE_UNIT}"
 }
 
-# The escalation. It is one command with no caller-supplied input, which is the
-# only reason it is safe to grant: the helper it starts reads its parameters
-# from root-owned upgrade.conf, so the agent cannot influence what runs.
-#
-# A root agent already starts units, so it gets no rule at all.
-write_upgrade_sudoers() {
-  local staged
+# The escalation, and the whole of it: the agent creates one file, systemd
+# notices and runs the helper as root. There is no sudo, no setuid binary and
+# no argument the agent can pass, so nothing here has to survive the agent unit
+# being run with NoNewPrivileges=true, which is what defeats sudo.
+write_upgrade_path_unit() {
+  cat >"${UPGRADE_PATH_UNIT}" <<'UPGRADE_PATH_FILE'
+[Unit]
+Description=Borg UI agent self-upgrade request
 
-  if [[ "${SERVICE_USER}" == "root" ]]; then
-    rm -f "${UPGRADE_SUDOERS}"
-    return 0
-  fi
+[Path]
+PathExists=/etc/borg-ui-agent/upgrade-requested
+Unit=borg-ui-agent-upgrade.service
 
-  if [[ -z "${SYSTEMCTL_PATH}" ]]; then
-    echo "Could not resolve an absolute systemctl path; skipping the sudoers" >&2
-    echo "rule. This endpoint stays on the manual reinstall path." >&2
-    return 1
-  fi
+[Install]
+WantedBy=multi-user.target
+UPGRADE_PATH_FILE
+  chown root:root "${UPGRADE_PATH_UNIT}"
+  chmod 0644 "${UPGRADE_PATH_UNIT}"
 
-  staged="$(mktemp)"
-  cat >"${staged}" <<SUDOERS
-# Installed by the Borg UI agent installer. Lets the agent ask systemd to run
-# the root self-upgrade helper, and nothing else. The helper takes no
-# arguments, so this grants no input surface.
-${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_PATH} start --no-block borg-ui-agent-upgrade.service
-SUDOERS
-
-  # Never move an unvalidated file into sudoers.d: a broken one can lock every
-  # sudo user out of the machine.
-  if ! visudo -cf "${staged}" >/dev/null; then
-    rm -f "${staged}"
-    echo "Generated sudoers rule failed validation; not installing it." >&2
-    echo "This endpoint stays on the manual reinstall path." >&2
-    return 1
-  fi
-
-  install -o root -g root -m 0440 "${staged}" "${UPGRADE_SUDOERS}"
-  rm -f "${staged}"
+  # The unit files are new, so systemd has to be told about them before the
+  # path unit can be enabled. The reload at the end of the script is too late.
+  systemctl daemon-reload
+  systemctl enable --now borg-ui-agent-upgrade.path
 }
 
 remove_upgrade_artifacts() {
-  rm -f "${UPGRADE_SUDOERS}" "${UPGRADE_UNIT}" "${UPGRADE_HELPER}" "${UPGRADE_CONF}"
+  systemctl disable --now borg-ui-agent-upgrade.path >/dev/null 2>&1 || true
+  rm -f "${UPGRADE_PATH_UNIT}" "${UPGRADE_UNIT}" "${UPGRADE_HELPER}" \
+    "${UPGRADE_CONF}" "${UPGRADE_TRIGGER}"
+  # An install that predates the path unit granted the agent a sudoers rule.
+  # Take it away rather than leaving a live escalation behind.
+  rm -f /etc/sudoers.d/borg-ui-agent-upgrade
 }
 
 if [[ "${REMOTE_UPGRADE}" == "1" ]] && write_upgrade_conf; then
   write_upgrade_helper
   write_upgrade_unit
-  # A missing sudoers rule makes the helper unreachable, so do not leave the
-  # unit and helper behind pretending otherwise.
-  if write_upgrade_sudoers; then
-    rm -f "${NO_REMOTE_UPGRADE_MARKER}"
+  # An unwatched trigger makes the helper unreachable, so do not leave the unit
+  # and helper behind pretending otherwise.
+  if write_upgrade_path_unit; then
+    rm -f "${NO_REMOTE_UPGRADE_MARKER}" "${UPGRADE_TRIGGER}"
+    rm -f /etc/sudoers.d/borg-ui-agent-upgrade
     echo "Remote upgrade is available on this endpoint."
   else
     remove_upgrade_artifacts
