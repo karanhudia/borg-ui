@@ -10,24 +10,24 @@ Borg UI manages Borg repositories and backup workflows. It does not replace the
 storage provider. Use the path below that matches where your repository already
 lives or where you want new archives to be stored.
 
-| Setup | Use in Borg UI |
-| --- | --- |
-| Local disk or mounted share | Mount the host path into the Borg UI container and use the container path. |
-| NAS or Linux server over SSH | Add a Remote Machine, then create or import an SSH repository. See the NAS notes below when SSH and SFTP paths differ. |
-| Hosted Borg service | Add the provider as a Remote Machine and keep the provider's repository path exactly as given. BorgBase and Hetzner need the most care. |
-| Cloud or object storage through rclone | On Pro or Enterprise, add the provider in Cloud Storage, then select that reusable remote when configuring a cloud mirror. |
-| Existing Borg repository | Use Import Existing. Choose Full mode if Borg UI should run backups, or Observability-only if another tool already writes archives. |
+| Setup                                  | Use in Borg UI                                                                                                                          |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Local disk or mounted share            | Mount the host path into the Borg UI container and use the container path.                                                              |
+| NAS or Linux server over SSH           | Add a Remote Machine, then create or import an SSH repository. See the NAS notes below when SSH and SFTP paths differ.                  |
+| Hosted Borg service                    | Add the provider as a Remote Machine and keep the provider's repository path exactly as given. BorgBase and Hetzner need the most care. |
+| Cloud or object storage through rclone | On Pro or Enterprise, add the provider in Cloud Storage, then select that reusable remote when configuring a cloud mirror.              |
+| Existing Borg repository               | Use Import Existing. Choose Full mode if Borg UI should run backups, or Observability-only if another tool already writes archives.     |
 
 ## Which Setups Need Provider Guidance?
 
-| Environment | Guidance to use |
-| --- | --- |
-| BorgBase | Use the BorgBase mapping below because the `/./repo` path segment is part of the repository URL. |
-| Hetzner Storage Box | Use the Hetzner mapping below because Borg access uses port 23, relative `./` paths, and sometimes a named remote Borg binary. |
-| Synology DSM | Use the NAS mapping below when SFTP shows a share path but Borg needs the full `/volumeN/...` path. |
-| Unraid | Use the NAS mapping below with one consistent share path, usually under `/mnt/user/<share>/...`. |
-| Google Drive, OneDrive, Dropbox, Box, S3, B2, Azure Blob, WebDAV, SFTP | Use Cloud Storage and pick the matching rclone provider template. |
-| Other hosted Borg providers | Preserve the host, port, username, and path exactly as the provider gives them. |
+| Environment                                                            | Guidance to use                                                                                                                |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| BorgBase                                                               | Use the BorgBase mapping below because the `/./repo` path segment is part of the repository URL.                               |
+| Hetzner Storage Box                                                    | Use the Hetzner mapping below because Borg access uses port 23, relative `./` paths, and sometimes a named remote Borg binary. |
+| Synology DSM                                                           | Use the NAS mapping below when SFTP shows a share path but Borg needs the full `/volumeN/...` path.                            |
+| Unraid                                                                 | Use the NAS mapping below with one consistent share path, usually under `/mnt/user/<share>/...`.                               |
+| Google Drive, OneDrive, Dropbox, Box, S3, B2, Azure Blob, WebDAV, SFTP | Use Cloud Storage and pick the matching rclone provider template.                                                              |
+| Other hosted Borg providers                                            | Preserve the host, port, username, and path exactly as the provider gives them.                                                |
 
 ## Cloud Storage with rclone
 
@@ -82,6 +82,14 @@ Use **Custom rclone backend** when the provider is not listed. Keep the `type`
 field set to the exact rclone backend name and add any provider-specific keys
 from the rclone documentation.
 
+### Backblaze B2 troubleshooting
+
+| You see                                                 | Because                                                                                                                       | Fix                                                                                                   |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `Unauthorized, or the test fails after pasting the key` | The application key is restricted to a different bucket, or a master key was pasted into the wrong field.                     | Create a key scoped to this bucket and paste the key ID into Key ID and the key into Application key. |
+| `Bucket not found`                                      | Bucket names are global and case-sensitive; a typo points at nothing.                                                         | Copy the name from the Backblaze bucket page.                                                         |
+| `I cannot see my files in the B2 console`               | That is expected. A mirror uploads the repository as it is on disk: encrypted, deduplicated chunks. B2 never sees file names. | Restore through Borg UI or Borg: mount or pull the repository, then browse the archive.               |
+
 ## BorgBase
 
 BorgBase repositories are SSH repositories, but they are not normal servers with
@@ -122,6 +130,14 @@ Typical flow:
    choose the SSH connection, and enter the same repository path from the URL.
 6. Save, then verify that archives can be listed or that repository creation succeeds.
 
+### BorgBase troubleshooting
+
+| You see                         | Because                                                                                        | Fix                                                                                   |
+| ------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `Repository does not exist`     | The path was shortened to `/repo`. The `./` segment is part of the path Borg uses on BorgBase. | Use `/./repo`, exactly as printed in the BorgBase URL.                                |
+| `Permission denied (publickey)` | The key is not on the BorgBase account, or it has no access to this repository.                | Add the key under SSH Keys, then grant it Full access on the repository's Access tab. |
+| `Connection timed out`          | The host was entered as `borgbase.com` or the account name instead of the repository host.     | Use the per-repository host from the URL, for example `abcd.repo.borgbase.com`.       |
+
 ## Hetzner Storage Box
 
 Hetzner Storage Box repositories need explicit mapping because Borg access uses
@@ -153,6 +169,15 @@ If Borg UI needs to install the public key for a Storage Box, enable SFTP
 deployment mode on the Remote Machine. Hetzner's port 23 key format is the
 normal one-line OpenSSH public key format.
 
+### Hetzner Storage Box troubleshooting
+
+| You see                                                      | Because                                                                              | Fix                                                                                     |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| `Connection refused, or borg: command not found`             | Port 22 was used. Hetzner serves Borg on the extended SSH service on port 23.        | Set the Remote Machine port to 23. The Hetzner preset does this.                        |
+| `Repository does not exist`                                  | The path was entered absolute, or without the `./` segment.                          | Use `/./name`, relative to the account root.                                            |
+| `Unsupported repository version, or a Borg version mismatch` | The box's default borg is older than the client that created the repository.         | Set Remote Borg Path on the repository to `borg-1.4`.                                   |
+| `Permission denied (publickey)`                              | SSH support is off on the Storage Box, or the key never landed in `authorized_keys`. | Enable SSH support in Robot, then run Deploy key again or paste the key under SSH keys. |
+
 ## Other Hosted Borg Providers
 
 Hosted Borg providers often use SSH URLs with provider-specific path syntax, for
@@ -166,6 +191,17 @@ If verification fails:
 - preserve any `./` path segment from the provider URL
 - confirm the Borg UI public key is authorized by the provider
 - use Import Existing when the repository was created outside Borg UI
+
+### rsync.net troubleshooting
+
+rsync.net is a hosted Borg provider with no preset yet. The host and account
+id come from the welcome email; paths are relative to the account root.
+
+| You see                                                                  | Because                                                                                                   | Fix                                                                                          |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `Unsupported repository version, or borg refuses to open the repository` | Remote Borg Path was left blank, so rsync.net ran an older borg than the one that created the repository. | Set Remote Borg Path to `borg14` on the repository.                                          |
+| `Permission denied (publickey)`                                          | The key is not in the account's `authorized_keys`.                                                        | Paste it in the rsync.net web console or append it with scp, then test the connection again. |
+| `Repository path not found`                                              | An absolute path was used. rsync.net paths are relative to the account root.                              | Use `./name`.                                                                                |
 
 ## Synology, Unraid, and Other NAS Targets
 
