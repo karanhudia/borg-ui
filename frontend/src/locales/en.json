@@ -304,7 +304,8 @@
         "agentDeleted": "Agent deleted",
         "cancellationRequested": "Cancellation requested",
         "copied": "Copied",
-        "agentUpgradeRequested": "Upgrade requested"
+        "agentUpgradeRequested": "Upgrade requested",
+        "agentVersionPinned": "Version pin saved"
       },
       "errors": {
         "revokeToken": "Failed to revoke enrollment token",
@@ -312,7 +313,8 @@
         "deleteAgent": "Failed to delete agent",
         "cancelJob": "Failed to cancel job",
         "runDiagnostics": "Failed to run diagnostics",
-        "upgradeAgent": "Could not request the upgrade"
+        "upgradeAgent": "Could not request the upgrade",
+        "pinAgentVersion": "Could not save the version pin"
       },
       "table": {
         "job": "Job",
@@ -334,7 +336,8 @@
         "viewLogs": "View logs",
         "cancelJob": "Cancel job",
         "revokeToken": "Revoke token",
-        "upgradeAgent": "Upgrade this endpoint"
+        "upgradeAgent": "Upgrade this endpoint",
+        "pinAgentVersion": "Pin this endpoint's version"
       },
       "noBorg": {
         "title": "No usable Borg binary reported",
@@ -433,6 +436,16 @@
         "upgradingTooltip": "The endpoint is reinstalling itself and will reconnect on its own.",
         "failed": "Upgrade failed",
         "failedHint": "The endpoint did not come back in time. Reinstall it manually."
+      },
+      "pinControl": {
+        "title": "Version pin",
+        "hint": "By default an endpoint tracks the version this server serves. Pin it to hold it on a specific version instead.",
+        "agentVersionLabel": "Agent version",
+        "trackServer": "Track server",
+        "borgVersionLabel": "Borg version",
+        "leaveAsInstalled": "Leave as installed",
+        "borgHint": "The Borg choice is recorded now and applied by a later release, once upgrades can change the installed Borg version.",
+        "save": "Save"
       }
     },
     "installCommand": {

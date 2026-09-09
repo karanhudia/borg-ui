@@ -304,7 +304,8 @@
         "agentDeleted": "Agente eliminado",
         "cancellationRequested": "Cancelación solicitada",
         "copied": "Copiado",
-        "agentUpgradeRequested": "Actualización solicitada"
+        "agentUpgradeRequested": "Actualización solicitada",
+        "agentVersionPinned": "Versión fijada guardada"
       },
       "errors": {
         "revokeToken": "No se pudo revocar el token de registro",
@@ -312,7 +313,8 @@
         "deleteAgent": "No se pudo eliminar el agente",
         "cancelJob": "No se pudo cancelar el trabajo",
         "runDiagnostics": "No se pudieron ejecutar los diagnósticos",
-        "upgradeAgent": "No se pudo solicitar la actualización"
+        "upgradeAgent": "No se pudo solicitar la actualización",
+        "pinAgentVersion": "No se pudo guardar la versión fijada"
       },
       "table": {
         "job": "Trabajo",
@@ -334,7 +336,8 @@
         "viewLogs": "Ver registros",
         "cancelJob": "Cancelar trabajo",
         "revokeToken": "Revocar token",
-        "upgradeAgent": "Actualizar este endpoint"
+        "upgradeAgent": "Actualizar este endpoint",
+        "pinAgentVersion": "Fijar la versión de este endpoint"
       },
       "noBorg": {
         "title": "No se informó de un binario Borg utilizable",
@@ -433,6 +436,16 @@
         "upgradingTooltip": "El endpoint se está reinstalando y volverá a conectarse solo.",
         "failed": "Actualización fallida",
         "failedHint": "El endpoint no volvió a tiempo. Reinstálalo manualmente."
+      },
+      "pinControl": {
+        "title": "Fijar versión",
+        "hint": "De forma predeterminada, un endpoint sigue la versión que distribuye este servidor. Fíjalo para mantenerlo en una versión concreta.",
+        "agentVersionLabel": "Versión del agente",
+        "trackServer": "Seguir al servidor",
+        "borgVersionLabel": "Versión de Borg",
+        "leaveAsInstalled": "Dejar como está instalada",
+        "borgHint": "La elección de Borg se guarda ahora y la aplicará una versión posterior, cuando las actualizaciones puedan cambiar la versión de Borg instalada.",
+        "save": "Guardar"
       }
     },
     "installCommand": {

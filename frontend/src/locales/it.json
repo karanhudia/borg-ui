@@ -304,7 +304,8 @@
         "agentDeleted": "Agente eliminato",
         "cancellationRequested": "Annullamento richiesto",
         "copied": "Copiato",
-        "agentUpgradeRequested": "Aggiornamento richiesto"
+        "agentUpgradeRequested": "Aggiornamento richiesto",
+        "agentVersionPinned": "Blocco versione salvato"
       },
       "errors": {
         "revokeToken": "Impossibile revocare il token di registrazione",
@@ -312,7 +313,8 @@
         "deleteAgent": "Impossibile eliminare l'agente",
         "cancelJob": "Impossibile annullare il processo",
         "runDiagnostics": "Impossibile eseguire la diagnostica",
-        "upgradeAgent": "Non è stato possibile richiedere l'aggiornamento"
+        "upgradeAgent": "Non è stato possibile richiedere l'aggiornamento",
+        "pinAgentVersion": "Non è stato possibile salvare il blocco versione"
       },
       "table": {
         "job": "Processo",
@@ -334,7 +336,8 @@
         "viewLogs": "Visualizza registri",
         "cancelJob": "Annulla processo",
         "revokeToken": "Revoca token",
-        "upgradeAgent": "Aggiorna questo endpoint"
+        "upgradeAgent": "Aggiorna questo endpoint",
+        "pinAgentVersion": "Blocca la versione di questo endpoint"
       },
       "noBorg": {
         "title": "Nessun binario Borg utilizzabile segnalato",
@@ -433,6 +436,16 @@
         "upgradingTooltip": "L'endpoint si sta reinstallando e si riconnetterà da solo.",
         "failed": "Aggiornamento non riuscito",
         "failedHint": "L'endpoint non è tornato in tempo. Reinstallalo manualmente."
+      },
+      "pinControl": {
+        "title": "Blocco versione",
+        "hint": "Per impostazione predefinita un endpoint segue la versione distribuita da questo server. Bloccalo per tenerlo su una versione specifica.",
+        "agentVersionLabel": "Versione agente",
+        "trackServer": "Segui il server",
+        "borgVersionLabel": "Versione Borg",
+        "leaveAsInstalled": "Lascia come installata",
+        "borgHint": "La scelta di Borg viene registrata ora e applicata da una versione successiva, quando gli aggiornamenti potranno cambiare la versione di Borg installata.",
+        "save": "Salva"
       }
     },
     "installCommand": {
