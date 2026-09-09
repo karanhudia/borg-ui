@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-09-09T10:01:45.284Z",
+  "generatedAt": "2026-09-09T10:32:23.110Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #984 visual report",
-    "commitSha": "54643ce60f34",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34337226500"
+    "commitSha": "cc6bcbb70431",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34339996132"
   },
   "totals": {
     "baseline": 714,
-    "actual": 718,
+    "actual": 716,
     "compared": 714,
     "changed": 0,
-    "added": 4,
+    "added": 2,
     "removed": 0,
     "unchanged": 714
   },
@@ -24,14 +24,6 @@
     {
       "fileName": "managed-agents-agentmanualupgradechip--manual-only.png",
       "actualPath": "images/actual/managed-agents-agentmanualupgradechip--manual-only.png"
-    },
-    {
-      "fileName": "managed-agents-agentmanualupgradechip--mobile--mobile.png",
-      "actualPath": "images/actual/managed-agents-agentmanualupgradechip--mobile--mobile.png"
-    },
-    {
-      "fileName": "managed-agents-agentmanualupgradechip--mobile.png",
-      "actualPath": "images/actual/managed-agents-agentmanualupgradechip--mobile.png"
     }
   ],
   "removed": [],
