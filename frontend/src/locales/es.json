@@ -5539,7 +5539,9 @@
         "repositoryOperationFailed": "La operación de repositorio del agente falló",
         "repositoryOperationTimeout": "La operación de repositorio del agente agotó el tiempo de espera",
         "unsupportedJobKind": "Tipo de trabajo de agente no admitido",
-        "desiredVersionUnavailable": "Esa versión del agente no está disponible en este servidor."
+        "desiredVersionUnavailable": "Esa versión del agente no está disponible en este servidor.",
+        "upgradeUnsupported": "Este endpoint todavía no puede actualizarse solo. Reinstálalo una vez con el comando del diálogo de reinstalación.",
+        "upgradeTargetUnavailable": "Este servidor no distribuye ninguna versión del agente a la que actualizar."
       },
       "repo": {
         "repositoryNotFound": "Repositorio no encontrado",

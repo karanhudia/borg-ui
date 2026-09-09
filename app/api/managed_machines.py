@@ -12,7 +12,10 @@ import structlog
 from app.api.agent_installer import agent_package_version
 from app.core.agent_auth import AGENT_TOKEN_PREFIX_LENGTH
 from app.core.agent_versions import compute_agent_upgrade_status
-from app.core.agent_constants import AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS
+from app.core.agent_constants import (
+    AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS,
+    AGENT_UPGRADE_COMMAND_TIMEOUT_SECONDS,
+)
 from app.core.features import require_feature_access
 from app.core.security import get_current_admin_user, get_password_hash
 from app.database.database import get_db
@@ -487,6 +490,12 @@ class AgentDesiredVersionRequest(BaseModel):
     desired_borg_version: Optional[Literal["1", "2"]] = None
 
 
+class AgentUpgradeRequest(BaseModel):
+    """Ask each named endpoint to reinstall itself."""
+
+    agent_machine_ids: list[int]
+
+
 def _agent_machine_response(
     agent: AgentMachine, *, available: Optional[str]
 ) -> AgentMachineResponse:
@@ -579,6 +588,167 @@ async def set_agent_desired_version(
     db.commit()
     db.refresh(agent)
     return _agent_machine_response(agent, available=available)
+
+
+# An upgrade job is completed as soon as the endpoint acknowledges the request,
+# so a job still in one of these is one nothing has answered for yet.
+UPGRADE_IN_FLIGHT_STATUSES = ("queued", "claimed", "running", "cancel_requested")
+
+
+@router.post("/agents/upgrade")
+async def upgrade_agent_machines(
+    payload: AgentUpgradeRequest,
+    current_user: User = Depends(require_managed_agents_admin_user),
+    db: Session = Depends(get_db),
+):
+    """Ask each named endpoint to reinstall itself.
+
+    Validation runs over the whole request before anything is created: a
+    partial success that reports as a full one is the failure mode to avoid.
+    The agent is killed by the thing it is reporting on, so the job records
+    only that the upgrade was requested; the outcome is resolved by the
+    register path and the reaper (spec section 7.1).
+    """
+    # Deduplicated first: an upgrade restarts the endpoint, so two jobs for one
+    # machine could restart it twice or race two reinstalls against each other.
+    wanted = list(dict.fromkeys(payload.agent_machine_ids))
+    agents = (
+        db.query(AgentMachine)
+        .filter(AgentMachine.id.in_(wanted), AgentMachine.status != "deleted")
+        .all()
+        if wanted
+        else []
+    )
+    found = {agent.id: agent for agent in agents}
+    if len(found) != len(wanted):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"key": "backend.errors.agents.agentNotFound"},
+        )
+
+    available = agent_package_version()
+    for agent_id in wanted:
+        agent = found[agent_id]
+        if not (agent.capabilities and "self_upgrade" in agent.capabilities):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"key": "backend.errors.agents.upgradeUnsupported"},
+            )
+        if not (agent.desired_agent_version or available):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"key": "backend.errors.agents.upgradeTargetUnavailable"},
+            )
+
+    results = []
+    for agent_id in wanted:
+        agent = found[agent_id]
+        existing = (
+            db.query(AgentJob)
+            .filter(
+                AgentJob.agent_machine_id == agent.id,
+                AgentJob.job_type == "agent_upgrade",
+                AgentJob.status.in_(UPGRADE_IN_FLIGHT_STATUSES),
+            )
+            .first()
+        )
+        if existing is not None or agent.upgrade_state == "requested":
+            # Idempotent under a double click or a client retry: the endpoint
+            # is already restarting for a request nobody has answered for yet.
+            results.append(
+                {
+                    "agent_machine_id": agent.id,
+                    "job_id": existing.id
+                    if existing
+                    else _last_upgrade_job_id(db, agent),
+                    "state": agent.upgrade_state or "requested",
+                }
+            )
+            continue
+
+        results.append(
+            await _request_agent_upgrade(
+                db, agent, target=agent.desired_agent_version or available
+            )
+        )
+
+    logger.info(
+        "Agent upgrades requested",
+        user=current_user.username,
+        agent_machine_ids=wanted,
+    )
+    return {"results": results}
+
+
+def _last_upgrade_job_id(db: Session, agent: AgentMachine) -> Optional[int]:
+    """The job that requested the upgrade this agent is still waiting on."""
+    job = (
+        db.query(AgentJob)
+        .filter(
+            AgentJob.agent_machine_id == agent.id,
+            AgentJob.job_type == "agent_upgrade",
+        )
+        .order_by(AgentJob.id.desc())
+        .first()
+    )
+    return job.id if job else None
+
+
+async def _request_agent_upgrade(db: Session, agent: AgentMachine, *, target: str):
+    """Create the job, dispatch the command, and record the outcome for one
+    endpoint. The job is completed at "upgrade started": it records that the
+    upgrade was successfully requested, nothing more."""
+    now = _now_utc()
+    job = AgentJob(
+        agent_machine_id=agent.id,
+        job_type="agent_upgrade",
+        status="running",
+        payload={"target_version": target},
+        created_at=now,
+        updated_at=now,
+        started_at=now,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    try:
+        await agent_connection_manager.send_command(
+            agent.id,
+            command="agent.upgrade",
+            payload={},
+            timeout_seconds=AGENT_UPGRADE_COMMAND_TIMEOUT_SECONDS,
+            wait_for_result=True,
+        )
+    except (
+        AgentConnectionUnavailable,
+        AgentCommandTimeout,
+        AgentCommandError,
+    ) as exc:
+        finished = _now_utc()
+        job.status = "failed"
+        job.error_message = str(exc)
+        job.completed_at = finished
+        job.updated_at = finished
+        agent.upgrade_state = "failed"
+        agent.upgrade_error = str(exc)
+        agent.upgrade_target_version = target
+        agent.upgrade_requested_at = None
+        agent.updated_at = finished
+        db.commit()
+        return {"agent_machine_id": agent.id, "job_id": job.id, "state": "failed"}
+
+    finished = _now_utc()
+    job.status = "completed"
+    job.completed_at = finished
+    job.updated_at = finished
+    agent.upgrade_state = "requested"
+    agent.upgrade_requested_at = finished
+    agent.upgrade_target_version = target
+    agent.upgrade_error = None
+    agent.updated_at = finished
+    db.commit()
+    return {"agent_machine_id": agent.id, "job_id": job.id, "state": "requested"}
 
 
 @router.post(

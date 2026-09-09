@@ -5539,7 +5539,9 @@
         "repositoryOperationFailed": "Die Repository-Operation des Agenten ist fehlgeschlagen",
         "repositoryOperationTimeout": "Zeitüberschreitung bei der Repository-Operation des Agenten",
         "unsupportedJobKind": "Nicht unterstützter Agent-Auftragstyp",
-        "desiredVersionUnavailable": "Diese Agent-Version ist auf diesem Server nicht verfügbar."
+        "desiredVersionUnavailable": "Diese Agent-Version ist auf diesem Server nicht verfügbar.",
+        "upgradeUnsupported": "Dieser Endpunkt kann sich noch nicht selbst aktualisieren. Installieren Sie ihn einmal mit dem Befehl aus dem Neuinstallations-Dialog neu.",
+        "upgradeTargetUnavailable": "Dieser Server liefert keine Agent-Version aus, auf die aktualisiert werden könnte."
       },
       "repo": {
         "repositoryNotFound": "Repository nicht gefunden",

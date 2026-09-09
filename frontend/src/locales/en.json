@@ -5539,7 +5539,9 @@
         "repositoryOperationFailed": "The agent repository operation failed",
         "repositoryOperationTimeout": "The agent repository operation timed out",
         "unsupportedJobKind": "Unsupported agent job type",
-        "desiredVersionUnavailable": "That agent version is not available on this server."
+        "desiredVersionUnavailable": "That agent version is not available on this server.",
+        "upgradeUnsupported": "This endpoint cannot upgrade itself yet. Reinstall it once from the command in the reinstall dialog.",
+        "upgradeTargetUnavailable": "This server does not ship an agent version to upgrade to."
       },
       "repo": {
         "repositoryNotFound": "Repository not found",
