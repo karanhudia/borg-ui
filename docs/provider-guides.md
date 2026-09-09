@@ -197,11 +197,11 @@ If verification fails:
 rsync.net is a hosted Borg provider with no preset yet. The host and account
 id come from the welcome email; paths are relative to the account root.
 
-| You see                                                                  | Because                                                                                                   | Fix                                                                                          |
-| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `Unsupported repository version, or borg refuses to open the repository` | Remote Borg Path was left blank, so rsync.net ran an older borg than the one that created the repository. | Set Remote Borg Path to `borg14` on the repository.                                          |
-| `Permission denied (publickey)`                                          | The key is not in the account's `authorized_keys`.                                                        | Paste it in the rsync.net web console or append it with scp, then test the connection again. |
-| `Repository path not found`                                              | An absolute path was used. rsync.net paths are relative to the account root.                              | Use `./name`.                                                                                |
+| You see                                                                  | Because                                                                                                   | Fix                                                                                                                                                |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Unsupported repository version, or borg refuses to open the repository` | Remote Borg Path was left blank, so rsync.net ran an older borg than the one that created the repository. | Set Remote Borg Path to `borg14` on the repository.                                                                                                |
+| `Permission denied (publickey)`                                          | The key is not in the account's `authorized_keys`.                                                        | Paste it in the rsync.net web console (their SSH key guide shows how to append without overwriting existing keys), then test the connection again. |
+| `Repository path not found`                                              | An absolute path was used. rsync.net paths are relative to the account root.                              | Use `./name`.                                                                                                                                      |
 
 ## Synology, Unraid, and Other NAS Targets
 
