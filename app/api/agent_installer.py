@@ -55,6 +55,7 @@ REMOTE_UPGRADE="1"
 REMOTE_UPGRADE_SET="0"
 NO_REMOTE_UPGRADE_MARKER="/etc/borg-ui-agent/no-remote-upgrade"
 UPGRADE_CONF="/etc/borg-ui-agent/upgrade.conf"
+UPGRADE_HELPER="${AGENT_ROOT}/bin/borg-ui-agent-upgrade"
 SYSTEMCTL_PATH=""
 SERVICE_USER=""
 SERVICE_GROUP=""
@@ -818,8 +819,97 @@ SYSTEMCTL="${SYSTEMCTL_PATH}"
 CONF
 }
 
-if [[ "${REMOTE_UPGRADE}" == "1" ]]; then
-  write_upgrade_conf || true
+write_upgrade_helper() {
+  install -d -o root -g root -m 0755 "${AGENT_ROOT}/bin"
+  cat >"${UPGRADE_HELPER}" <<'UPGRADE_HELPER'
+#!/usr/bin/env bash
+# Installed by the Borg UI agent installer. Started as root by
+# borg-ui-agent-upgrade.service, which the agent may start through one narrow
+# sudoers rule.
+#
+# It takes NO ARGUMENTS on purpose. Every parameter comes from upgrade.conf,
+# which only root can write, so a compromised agent cannot change the install
+# source, the service user, or the installer flags. Adding an argument here
+# would undo that.
+set -euo pipefail
+
+etc="${BORG_UI_UPGRADE_ETC:-/etc/borg-ui-agent}"
+conf="${etc}/upgrade.conf"
+agent_config="${etc}/config.toml"
+
+if [[ ! -r "${conf}" ]]; then
+  echo "Missing ${conf}; nothing to upgrade from." >&2
+  exit 1
+fi
+
+# shellcheck source=/dev/null
+. "${conf}"
+
+for required in SERVER AGENT_ID BORG_INSTALL_MODE SERVICE_USER AGENT_ROOT; do
+  if [[ -z "${!required:-}" ]]; then
+    echo "${conf} is missing ${required}." >&2
+    exit 1
+  fi
+done
+
+# This script runs what it downloads, as root. An http URL is refused rather
+# than downgraded to a warning.
+if [[ "${SERVER}" != https://* ]]; then
+  echo "Remote upgrade requires an https server URL; ${conf} names ${SERVER}." >&2
+  exit 1
+fi
+
+# A config left behind by an earlier enrollment must not be able to point a
+# live agent's upgrade at a host it no longer talks to.
+enrolled_server=""
+if [[ -r "${agent_config}" ]]; then
+  enrolled_server="$(sed -nE 's/^server_url[[:space:]]*=[[:space:]]*"(.*)"[[:space:]]*$/\1/p' \
+    "${agent_config}" | head -n 1)"
+fi
+if [[ "${enrolled_server%/}" != "${SERVER%/}" ]]; then
+  echo "${conf} names ${SERVER}, but this agent is enrolled against" >&2
+  echo "'${enrolled_server}'. Refusing to upgrade." >&2
+  exit 1
+fi
+
+workdir="$(mktemp -d)"
+trap 'rm -rf "${workdir}"' EXIT
+
+# --proto '=https' holds across redirects, and --max-redirs 0 means there are
+# none to hold across: any redirect is an error rather than a hop to somewhere
+# this script would then execute as root.
+fetch() {
+  curl -fsS --proto '=https' --max-redirs 0 -o "$2" "$1"
+}
+
+script_url="${SERVER%/}/agent/install.sh?agent_id=${AGENT_ID}"
+fetch "${script_url}" "${workdir}/install.sh"
+fetch "${script_url/install.sh?/install.sh.sha256?}" "${workdir}/install.sh.sha256"
+
+expected="$(tr -d '[:space:]' <"${workdir}/install.sh.sha256")"
+actual="$(sha256sum "${workdir}/install.sh" | awk '{print $1}')"
+if [[ -z "${expected}" || "${expected}" != "${actual}" ]]; then
+  echo "Installer checksum mismatch; expected '${expected}', got '${actual}'." >&2
+  echo "Nothing was executed." >&2
+  exit 1
+fi
+
+args=(--reinstall --service-user "${SERVICE_USER}")
+if [[ "${BORG_INSTALL_MODE}" == "skip" ]]; then
+  args+=(--skip-borg-install)
+else
+  args+=(--borg-version "${BORG_INSTALL_MODE}")
+fi
+
+echo "Reinstalling the Borg UI agent from ${SERVER}."
+bash "${workdir}/install.sh" "${args[@]}"
+UPGRADE_HELPER
+  chown root:root "${UPGRADE_HELPER}"
+  chmod 0755 "${UPGRADE_HELPER}"
+}
+
+if [[ "${REMOTE_UPGRADE}" == "1" ]] && write_upgrade_conf; then
+  write_upgrade_helper
 fi
 
 /opt/borg-ui-agent/.venv/bin/borg-ui-agent service-check \
