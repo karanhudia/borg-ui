@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Borg-UI</Name>
+  <Repository>ainullcode/borg-ui:latest</Repository>
+  <Registry>https://hub.docker.com/r/ainullcode/borg-ui</Registry>
+  <Branch>
+    <Tag>latest</Tag>
+    <TagDescription>Latest stable release</TagDescription>
+  </Branch>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/karanhudia/borg-ui/issues</Support>
+  <Project>https://github.com/karanhudia/borg-ui</Project>
+  <ReadMe>https://docs.borgui.com/installation</ReadMe>
+  <Overview>
+    Borg UI is a web interface for BorgBackup. Run backups, browse and restore archives, manage local, SSH and SFTP repositories, schedule jobs, run pre/post hooks and receive notifications through 100+ Apprise services. Supports BorgBackup 1.x and Borg 2 beta.
+
+    Setup notes:
+    - Map the shares you want to back up into /local (or add more paths and list them in LOCAL_MOUNT_POINTS).
+    - Redis is optional. The default REDIS_HOST=disabled uses an in-memory archive cache. To use Redis, install any Redis/Valkey container from CA and set REDIS_URL, for example redis://[UNRAID-IP]:6379/0.
+    - The container runs non-privileged. Archive mounting (borg mount) and SSHFS pull backups need FUSE. Only if you use those, add "--cap-add=SYS_ADMIN --device=/dev/fuse --security-opt apparmor=unconfined" to Extra Parameters and set BORG_FUSE_IMPL=pyfuse3. Everything else works without it.
+    - Login: admin / the Initial Admin Password you set below. You are asked to change it at first login.
+  </Overview>
+  <Category>Backup: Tools:Utilities Status:Stable</Category>
+  <WebUI>http://[IP]:[PORT:8081]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/karanhudia/borg-ui/main/distribution/unraid/borg-ui.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/karanhudia/borg-ui/main/frontend/public/logo.png</Icon>
+  <ExtraParams>--health-cmd="curl -f http://localhost:8081/ || exit 1" --health-interval=30s --health-timeout=10s --health-retries=3 --health-start-period=40s</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires>
+    Optional: a Redis or Valkey container for a persistent archive-browsing cache (set REDIS_URL). Not required; the default in-memory cache works without it.
+    Optional: FUSE (SYS_ADMIN + /dev/fuse) only for archive mounting or SSHFS pull backups. See https://docs.borgui.com/installation#optional-fuse-access
+  </Requires>
+  <ExtraSearchTerms>borg borgbackup backup restore archive deduplication encrypted ssh sftp schedule vorta borgmatic backrest</ExtraSearchTerms>
+  <Changes>
+    ### 2026-09-04
+    - Initial official template. Non-privileged by default, Redis optional (REDIS_HOST=disabled).
+  </Changes>
+  <Config Name="WebUI Port" Target="8081" Default="8081" Mode="tcp" Description="Host port for the web interface. Change only the host side; the container listens on 8081." Type="Port" Display="always" Required="true" Mask="false">8081</Config>
+  <Config Name="App Data" Target="/data" Default="/mnt/user/appdata/borg-ui/data" Mode="rw" Description="Database, logs, SSH keys, secret key. Keep this on appdata." Type="Path" Display="advanced" Required="true" Mask="false">/mnt/user/appdata/borg-ui/data</Config>
+  <Config Name="Borg Cache" Target="/home/borg/.cache/borg" Default="/mnt/user/appdata/borg-ui/cache" Mode="rw" Description="Borg repository cache. Speeds up backups; safe to delete." Type="Path" Display="advanced" Required="true" Mask="false">/mnt/user/appdata/borg-ui/cache</Config>
+  <Config Name="Data to back up" Target="/local" Default="/mnt/user/" Mode="rw" Description="Host path that Borg UI can read for backups and write to for restores. Mount only what you need. Add more paths as extra Path mappings and list them in LOCAL_MOUNT_POINTS." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/</Config>
+  <Config Name="Local Mount Points" Target="LOCAL_MOUNT_POINTS" Default="/local" Mode="" Description="Comma-separated container paths that appear in the file browser. Must match the container side of your Path mappings." Type="Variable" Display="advanced" Required="true" Mask="false">/local</Config>
+  <Config Name="Initial Admin Password" Target="INITIAL_ADMIN_PASSWORD" Default="" Mode="" Description="Password for the admin user, used on first start only. Required. You are asked to change it at first login." Type="Variable" Display="always" Required="true" Mask="true"/>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID that owns backup files (Unraid nobody = 99)." Type="Variable" Display="advanced" Required="true" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID that owns backup files (Unraid users = 100)." Type="Variable" Display="advanced" Required="true" Mask="false">100</Config>
+  <Config Name="Timezone" Target="TZ" Default="" Mode="" Description="Timezone for schedules, for example Europe/Berlin. Leave empty to use the host clock." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Redis Host" Target="REDIS_HOST" Default="disabled" Mode="" Description="Leave as 'disabled' to run without Redis (in-memory cache). Set a hostname/IP, or use REDIS_URL below, to enable a persistent Redis cache." Type="Variable" Display="advanced" Required="true" Mask="false">disabled</Config>
+  <Config Name="Redis URL (optional)" Target="REDIS_URL" Default="" Mode="" Description="Full Redis URL, for example redis://192.168.1.10:6379/0. Takes precedence over REDIS_HOST. Requires a separate Redis/Valkey container." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Log Level" Target="LOG_LEVEL" Default="INFO|DEBUG|WARNING|ERROR" Mode="" Description="Application log level." Type="Variable" Display="advanced" Required="false" Mask="false">INFO</Config>
+  <Config Name="Base Path (optional)" Target="BASE_PATH" Default="" Mode="" Description="Sub-path when served behind a reverse proxy, for example /borg-ui. Leave empty for root." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Public Base URL (optional)" Target="PUBLIC_BASE_URL" Default="" Mode="" Description="Public HTTPS URL of this instance. Needed only for Google Drive / OneDrive OAuth callbacks." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Borg FUSE implementation" Target="BORG_FUSE_IMPL" Default="pyfuse3" Mode="" Description="Only used when FUSE access is added via Extra Parameters (see Overview)." Type="Variable" Display="advanced-hide" Required="false" Mask="false">pyfuse3</Config>
+  <Config Name="Docker socket (optional)" Target="/var/run/docker.sock" Default="" Mode="rw" Description="Optional. Mount /var/run/docker.sock only if your pre/post backup hook scripts stop/start other containers. Grants broad Docker control; consider a socket proxy instead (https://docs.borgui.com/docker-hooks)." Type="Path" Display="advanced" Required="false" Mask="false"/>
+</Container>
