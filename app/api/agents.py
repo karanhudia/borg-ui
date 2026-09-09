@@ -132,8 +132,13 @@ def resolve_agent_upgrade(agent: AgentMachine) -> None:
     outcome. An endpoint that comes back on the old version is left in
     `requested`: the reinstall may still be mid flight, and only the timeout
     resolves it.
+
+    An endpoint already marked `failed` is cleared too when it turns up on the
+    target version. The agent can be killed before its acknowledgement reaches
+    the server, and the timeout is a guess by construction, so the version the
+    endpoint actually reports outranks either.
     """
-    if agent.upgrade_state != "requested":
+    if agent.upgrade_state not in ("requested", "failed"):
         return
     if (
         agent.upgrade_target_version

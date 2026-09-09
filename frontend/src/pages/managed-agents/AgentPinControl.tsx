@@ -48,6 +48,15 @@ export default function AgentPinControl({
   }, [agent])
 
   const available = agent?.available_agent_version
+  // A pin outlives a server upgrade, so an endpoint can carry a version this
+  // server no longer serves. Show it, or the select renders blank and saving
+  // would silently move the pin. It cannot be re-selected: the server rejects
+  // a pin it cannot serve, so the only ways out are the served version or no
+  // pin at all.
+  const stalePin =
+    agent?.desired_agent_version && agent.desired_agent_version !== available
+      ? agent.desired_agent_version
+      : null
 
   return (
     <ResponsiveDialog
@@ -60,7 +69,7 @@ export default function AgentPinControl({
           <Button onClick={onCancel}>{t('common.buttons.cancel')}</Button>
           <Button
             variant="contained"
-            disabled={busy || !agent}
+            disabled={busy || !agent || agentVersion === stalePin}
             onClick={() =>
               agent &&
               onSave(agent, {
@@ -96,6 +105,13 @@ export default function AgentPinControl({
                 {t('managedAgents.page.pinControl.trackServer')}
               </MenuItem>
               {available ? <MenuItem value={available}>{available}</MenuItem> : null}
+              {stalePin ? (
+                <MenuItem value={stalePin} disabled>
+                  {t('managedAgents.page.pinControl.unavailableVersion', {
+                    version: stalePin,
+                  })}
+                </MenuItem>
+              ) : null}
             </Select>
           </FormControl>
           <FormControl fullWidth>

@@ -83,3 +83,30 @@ def test_the_reaper_leaves_a_fresh_upgrade_alone(test_db):
 
     test_db.refresh(agent)
     assert agent.upgrade_state == "requested"
+
+
+def test_re_registering_on_the_target_version_clears_a_failed_upgrade(test_db):
+    """The acknowledgement can be lost to the restart it announces, and the
+    timeout is a guess, so the version the endpoint reports outranks both."""
+    agent = _requested(
+        test_db, reported="0.1.2", requested_at=datetime.now(timezone.utc)
+    )
+    agent.upgrade_state = "failed"
+    agent.upgrade_error = "The endpoint did not come back in time."
+    agent.agent_version = "0.1.3"
+
+    resolve_agent_upgrade(agent)
+
+    assert agent.upgrade_state == "idle"
+    assert agent.upgrade_error is None
+
+
+def test_a_failed_upgrade_on_the_old_version_stays_failed(test_db):
+    agent = _requested(
+        test_db, reported="0.1.2", requested_at=datetime.now(timezone.utc)
+    )
+    agent.upgrade_state = "failed"
+
+    resolve_agent_upgrade(agent)
+
+    assert agent.upgrade_state == "failed"

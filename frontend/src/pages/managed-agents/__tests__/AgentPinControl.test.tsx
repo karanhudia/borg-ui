@@ -55,4 +55,17 @@ describe('AgentPinControl', () => {
       desired_borg_version: null,
     })
   })
+
+  it('shows a pin this server no longer serves and refuses to re-save it', () => {
+    renderWithProviders(
+      <AgentPinControl
+        open
+        agent={agent({ desired_agent_version: '0.1.1' })}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    )
+    expect(screen.getByText(/0\.1\.1 \(no longer served\)/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /save/i })).toBeDisabled()
+  })
 })

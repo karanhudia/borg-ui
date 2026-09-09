@@ -758,6 +758,12 @@ class AgentSessionRuntime:
             # job is running under it.
             client.send_error(f"Agent is running jobs {running}", code="upgrade_busy")
             return
+        # This is a snapshot, not a lock: a job dispatched between here and the
+        # restart is still orphaned. Closing that window means an
+        # upgrade-exclusive state that blocks dispatch through shutdown, which
+        # is more machinery than the outcome earns -- the server's job reaper
+        # already fails an orphaned job, and the operator picked this moment to
+        # restart the endpoint.
 
         readiness = check_self_upgrade()
         if not readiness.supported or readiness.trigger is None:

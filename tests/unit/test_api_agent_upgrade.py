@@ -87,10 +87,31 @@ def test_upgrade_queues_a_job_and_marks_the_agent_requested(
     assert sent_commands == [(agent.id, "agent.upgrade")]
 
 
+def test_upgrade_rejects_a_pin_this_server_can_no_longer_serve(
+    test_client: TestClient, test_db, admin_headers, served_version
+):
+    """A pin outlives a server upgrade, and the installer can only install what
+    this server serves, so the reinstall could never reach the pinned version."""
+    agent = _agent(test_db, desired_agent_version="0.1.1")
+
+    response = test_client.post(
+        "/api/managed-machines/agents/upgrade",
+        json={"agent_machine_ids": [agent.id]},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 422
+    assert (
+        response.json()["detail"]["key"]
+        == "backend.errors.agents.upgradeTargetUnavailable"
+    )
+    assert test_db.query(AgentJob).count() == 0
+
+
 def test_upgrade_targets_a_pinned_version_over_the_served_one(
     test_client: TestClient, test_db, admin_headers, served_version, sent_commands
 ):
-    agent = _agent(test_db, desired_agent_version="0.1.1")
+    agent = _agent(test_db, desired_agent_version="0.1.3")
 
     response = test_client.post(
         "/api/managed-machines/agents/upgrade",
@@ -100,7 +121,7 @@ def test_upgrade_targets_a_pinned_version_over_the_served_one(
 
     assert response.status_code == 200
     test_db.refresh(agent)
-    assert agent.upgrade_target_version == "0.1.1"
+    assert agent.upgrade_target_version == "0.1.3"
 
 
 def test_upgrade_rejects_the_whole_request_when_one_agent_is_unsupported(

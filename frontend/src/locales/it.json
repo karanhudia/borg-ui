@@ -445,7 +445,8 @@
         "borgVersionLabel": "Versione Borg",
         "leaveAsInstalled": "Lascia come installata",
         "borgHint": "La scelta di Borg viene registrata ora e applicata da una versione successiva, quando gli aggiornamenti potranno cambiare la versione di Borg installata.",
-        "save": "Salva"
+        "save": "Salva",
+        "unavailableVersion": "{{version}} (non più distribuita)"
       }
     },
     "installCommand": {

@@ -6,6 +6,7 @@ from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, defer
 import structlog
 
@@ -634,7 +635,13 @@ async def upgrade_agent_machines(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail={"key": "backend.errors.agents.upgradeUnsupported"},
             )
-        if not (agent.desired_agent_version or available):
+        # The installer installs from this server's wheelhouse and nowhere
+        # else, so an unpinned endpoint on a server with no wheel, and a pin
+        # this server can no longer serve (the pin outlived a server upgrade),
+        # are both unsatisfiable. Reject them here rather than restarting the
+        # endpoint into a reinstall that cannot produce the target.
+        target = agent.desired_agent_version or available
+        if not target or target != available:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail={"key": "backend.errors.agents.upgradeTargetUnavailable"},
@@ -652,7 +659,32 @@ async def upgrade_agent_machines(
             )
             .first()
         )
-        if existing is not None or agent.upgrade_state == "requested":
+        # Claim the agent with a conditional write before anything is created,
+        # so two concurrent requests cannot both dispatch a restart: the loser
+        # updates no row and reuses the in-flight request.
+        claimed = (
+            db.query(AgentMachine)
+            .filter(
+                AgentMachine.id == agent.id,
+                or_(
+                    AgentMachine.upgrade_state.is_(None),
+                    AgentMachine.upgrade_state != "requested",
+                ),
+            )
+            .update(
+                {
+                    AgentMachine.upgrade_state: "requested",
+                    # Stamped with the claim, not with the dispatch, so a
+                    # request the server dies in the middle of is still
+                    # resolvable by the reaper rather than stuck forever.
+                    AgentMachine.upgrade_requested_at: _now_utc(),
+                },
+                synchronize_session=False,
+            )
+        )
+        db.commit()
+        db.refresh(agent)
+        if existing is not None or not claimed:
             # Idempotent under a double click or a client retry: the endpoint
             # is already restarting for a request nobody has answered for yet.
             results.append(
@@ -661,7 +693,7 @@ async def upgrade_agent_machines(
                     "job_id": existing.id
                     if existing
                     else _last_upgrade_job_id(db, agent),
-                    "state": agent.upgrade_state or "requested",
+                    "state": "requested",
                 }
             )
             continue

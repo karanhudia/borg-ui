@@ -110,7 +110,8 @@ from pathlib import Path
 
 import pytest
 
-from agent.borg_ui_agent.session import AgentSession
+from agent.borg_ui_agent.config import AgentConfig
+from agent.borg_ui_agent.session import AgentSessionRuntime
 from agent.borg_ui_agent.self_upgrade import UpgradeReadiness
 
 
@@ -123,7 +124,11 @@ def _drain(outbox):
 
 @pytest.fixture
 def session(monkeypatch):
-    return AgentSession.__new__(AgentSession)
+    return AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: None,
+        http_client=_HttpClient(),
+    )
 
 
 def _run(session, outbox, monkeypatch, readiness, running_ids=()):
@@ -131,7 +136,7 @@ def _run(session, outbox, monkeypatch, readiness, running_ids=()):
         "agent.borg_ui_agent.session.check_self_upgrade", lambda: readiness
     )
     monkeypatch.setattr(
-        AgentSession, "_running_job_ids", lambda self: list(running_ids)
+        AgentSessionRuntime, "_running_job_ids", lambda self: list(running_ids)
     )
     session._handle_command(
         outbox, {"command_id": "c1", "command": "agent.upgrade", "payload": {}}
