@@ -56,6 +56,8 @@ REMOTE_UPGRADE_SET="0"
 NO_REMOTE_UPGRADE_MARKER="/etc/borg-ui-agent/no-remote-upgrade"
 UPGRADE_CONF="/etc/borg-ui-agent/upgrade.conf"
 UPGRADE_HELPER="${AGENT_ROOT}/bin/borg-ui-agent-upgrade"
+UPGRADE_UNIT="/etc/systemd/system/borg-ui-agent-upgrade.service"
+UPGRADE_SUDOERS="/etc/sudoers.d/borg-ui-agent-upgrade"
 SYSTEMCTL_PATH=""
 SERVICE_USER=""
 SERVICE_GROUP=""
@@ -908,8 +910,77 @@ UPGRADE_HELPER
   chmod 0755 "${UPGRADE_HELPER}"
 }
 
+write_upgrade_unit() {
+  cat >"${UPGRADE_UNIT}" <<UPGRADE_UNIT_FILE
+[Unit]
+Description=Borg UI agent self-upgrade
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=${AGENT_ROOT}/bin/borg-ui-agent-upgrade
+UPGRADE_UNIT_FILE
+  chown root:root "${UPGRADE_UNIT}"
+  chmod 0644 "${UPGRADE_UNIT}"
+}
+
+# The escalation. It is one command with no caller-supplied input, which is the
+# only reason it is safe to grant: the helper it starts reads its parameters
+# from root-owned upgrade.conf, so the agent cannot influence what runs.
+#
+# A root agent already starts units, so it gets no rule at all.
+write_upgrade_sudoers() {
+  local staged
+
+  if [[ "${SERVICE_USER}" == "root" ]]; then
+    rm -f "${UPGRADE_SUDOERS}"
+    return 0
+  fi
+
+  if [[ -z "${SYSTEMCTL_PATH}" ]]; then
+    echo "Could not resolve an absolute systemctl path; skipping the sudoers" >&2
+    echo "rule. This endpoint stays on the manual reinstall path." >&2
+    return 1
+  fi
+
+  staged="$(mktemp)"
+  cat >"${staged}" <<SUDOERS
+# Installed by the Borg UI agent installer. Lets the agent ask systemd to run
+# the root self-upgrade helper, and nothing else. The helper takes no
+# arguments, so this grants no input surface.
+${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_PATH} start --no-block borg-ui-agent-upgrade.service
+SUDOERS
+
+  # Never move an unvalidated file into sudoers.d: a broken one can lock every
+  # sudo user out of the machine.
+  if ! visudo -cf "${staged}" >/dev/null; then
+    rm -f "${staged}"
+    echo "Generated sudoers rule failed validation; not installing it." >&2
+    echo "This endpoint stays on the manual reinstall path." >&2
+    return 1
+  fi
+
+  install -o root -g root -m 0440 "${staged}" "${UPGRADE_SUDOERS}"
+  rm -f "${staged}"
+}
+
+remove_upgrade_artifacts() {
+  rm -f "${UPGRADE_SUDOERS}" "${UPGRADE_UNIT}" "${UPGRADE_HELPER}" "${UPGRADE_CONF}"
+}
+
 if [[ "${REMOTE_UPGRADE}" == "1" ]] && write_upgrade_conf; then
   write_upgrade_helper
+  write_upgrade_unit
+  write_upgrade_sudoers || true
+  rm -f "${NO_REMOTE_UPGRADE_MARKER}"
+  echo "Remote upgrade is available on this endpoint."
+else
+  remove_upgrade_artifacts
+  if [[ "${REMOTE_UPGRADE}" == "0" ]]; then
+    install -o root -g root -m 0644 /dev/null "${NO_REMOTE_UPGRADE_MARKER}"
+    echo "Remote upgrade declined. Update this endpoint with --reinstall."
+  fi
 fi
 
 /opt/borg-ui-agent/.venv/bin/borg-ui-agent service-check \

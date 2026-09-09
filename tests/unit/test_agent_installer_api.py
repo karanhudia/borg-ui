@@ -602,3 +602,56 @@ def test_agent_installer_resolves_systemctl_by_absolute_path(
     # distributions, so it is resolved once and reused in both the rule and
     # upgrade.conf rather than hardcoded.
     assert 'SYSTEMCTL_PATH="$(command -v systemctl' in script
+
+
+def test_agent_installer_writes_a_oneshot_unit_for_the_upgrade(
+    test_client: TestClient,
+):
+    script = test_client.get("/agent/install.sh").text
+
+    assert "/etc/systemd/system/borg-ui-agent-upgrade.service" in script
+    assert "Type=oneshot" in script
+    assert "ExecStart=${AGENT_ROOT}/bin/borg-ui-agent-upgrade" in script
+    # Never enabled: it runs only when something starts it. And the reinstall
+    # restarts borg-ui-agent, so it has to live outside that unit's process
+    # tree or systemd would kill the upgrade halfway through.
+    assert "systemctl enable borg-ui-agent-upgrade" not in script
+
+
+def test_agent_installer_grants_one_validated_sudoers_command(
+    test_client: TestClient,
+):
+    script = test_client.get("/agent/install.sh").text
+
+    assert (
+        "${SERVICE_USER} ALL=(root) NOPASSWD: "
+        "${SYSTEMCTL_PATH} start --no-block borg-ui-agent-upgrade.service"
+    ) in script
+    assert "visudo -cf" in script
+    assert "install -o root -g root -m 0440" in script
+
+
+def test_agent_installer_skips_the_sudoers_rule_for_a_root_agent(
+    test_client: TestClient,
+):
+    script = test_client.get("/agent/install.sh").text
+
+    # A root agent can already start the unit, so it gets the unit, the helper
+    # and upgrade.conf but no escalation. Skipping the whole set for root would
+    # leave root endpoints with no upgrade path at all (spec D10).
+    sudoers_block = script.split("write_upgrade_sudoers() {", 1)[1].split("\n}", 1)[0]
+    assert 'if [[ "${SERVICE_USER}" == "root" ]]' in sudoers_block
+    assert "return 0" in sudoers_block
+
+
+def test_agent_installer_removes_the_upgrade_artifacts_when_declined(
+    test_client: TestClient,
+):
+    script = test_client.get("/agent/install.sh").text
+
+    # A reinstall with --no-remote-upgrade on an endpoint that has the helper
+    # must take it away, not leave a live escalation behind.
+    removal = script.split("remove_upgrade_artifacts() {", 1)[1].split("\n}", 1)[0]
+    for path in ("UPGRADE_SUDOERS", "UPGRADE_UNIT", "UPGRADE_HELPER", "UPGRADE_CONF"):
+        assert f'"${{{path}}}"' in removal
+    assert "NO_REMOTE_UPGRADE_MARKER" in script
