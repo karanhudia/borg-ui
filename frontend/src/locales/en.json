@@ -303,14 +303,16 @@
         "agentRevoked": "Agent revoked",
         "agentDeleted": "Agent deleted",
         "cancellationRequested": "Cancellation requested",
-        "copied": "Copied"
+        "copied": "Copied",
+        "agentUpgradeRequested": "Upgrade requested"
       },
       "errors": {
         "revokeToken": "Failed to revoke enrollment token",
         "revokeAgent": "Failed to revoke agent",
         "deleteAgent": "Failed to delete agent",
         "cancelJob": "Failed to cancel job",
-        "runDiagnostics": "Failed to run diagnostics"
+        "runDiagnostics": "Failed to run diagnostics",
+        "upgradeAgent": "Could not request the upgrade"
       },
       "table": {
         "job": "Job",
@@ -331,7 +333,8 @@
         "deleteAgent": "Delete agent",
         "viewLogs": "View logs",
         "cancelJob": "Cancel job",
-        "revokeToken": "Revoke token"
+        "revokeToken": "Revoke token",
+        "upgradeAgent": "Upgrade this endpoint"
       },
       "noBorg": {
         "title": "No usable Borg binary reported",
@@ -415,6 +418,21 @@
         "bannerMixedTargets": "Each one targets its own configured version.",
         "manualOnly": "Manual upgrades only",
         "manualOnlyTooltip": "This endpoint has no self-upgrade helper, so it is updated by running the reinstall command on the machine. One reinstall prepares it for server-driven upgrades."
+      },
+      "upgradeDialog": {
+        "title": "Upgrade this endpoint",
+        "description": "The endpoint reinstalls itself from this server.",
+        "descriptionWithVersion": "The endpoint reinstalls itself from this server and comes back on version {{version}}.",
+        "disconnectWarning": "It disconnects for a short period while it does.",
+        "busyWarning": "An endpoint that is running a backup refuses the upgrade, so try again once it is idle.",
+        "confirm": "Upgrade"
+      },
+      "upgradeState": {
+        "upgrading": "Upgrading",
+        "upgradingTo": "Upgrading to {{version}}",
+        "upgradingTooltip": "The endpoint is reinstalling itself and will reconnect on its own.",
+        "failed": "Upgrade failed",
+        "failedHint": "The endpoint did not come back in time. Reinstall it manually."
       }
     },
     "installCommand": {

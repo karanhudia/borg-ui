@@ -1211,6 +1211,21 @@ export interface AgentMachineResponse {
   updated_at: string
 }
 
+export interface AgentUpgradeResult {
+  agent_machine_id: number
+  job_id: number | null
+  state: string
+}
+
+export interface AgentUpgradeResponse {
+  results: AgentUpgradeResult[]
+}
+
+export interface AgentDesiredVersionRequest {
+  desired_agent_version: string | null
+  desired_borg_version: '1' | '2' | null
+}
+
 export interface AgentEnrollmentTokenSummary {
   id: number
   name: string
@@ -1395,6 +1410,12 @@ export const managedAgentsAPI = {
     ),
   listAgentScripts: (agentId: number) =>
     api.get<AgentScriptsResponse>(`/managed-machines/agents/${agentId}/scripts`),
+  upgradeAgents: (agentIds: number[]) =>
+    api.post<AgentUpgradeResponse>('/managed-machines/agents/upgrade', {
+      agent_machine_ids: agentIds,
+    }),
+  setDesiredVersion: (agentId: number, data: AgentDesiredVersionRequest) =>
+    api.put<AgentMachineResponse>(`/managed-machines/agents/${agentId}/desired-version`, data),
 }
 
 // Schedule API

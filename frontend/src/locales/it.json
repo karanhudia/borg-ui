@@ -303,14 +303,16 @@
         "agentRevoked": "Agente revocato",
         "agentDeleted": "Agente eliminato",
         "cancellationRequested": "Annullamento richiesto",
-        "copied": "Copiato"
+        "copied": "Copiato",
+        "agentUpgradeRequested": "Aggiornamento richiesto"
       },
       "errors": {
         "revokeToken": "Impossibile revocare il token di registrazione",
         "revokeAgent": "Impossibile revocare l'agente",
         "deleteAgent": "Impossibile eliminare l'agente",
         "cancelJob": "Impossibile annullare il processo",
-        "runDiagnostics": "Impossibile eseguire la diagnostica"
+        "runDiagnostics": "Impossibile eseguire la diagnostica",
+        "upgradeAgent": "Non è stato possibile richiedere l'aggiornamento"
       },
       "table": {
         "job": "Processo",
@@ -331,7 +333,8 @@
         "deleteAgent": "Elimina agente",
         "viewLogs": "Visualizza registri",
         "cancelJob": "Annulla processo",
-        "revokeToken": "Revoca token"
+        "revokeToken": "Revoca token",
+        "upgradeAgent": "Aggiorna questo endpoint"
       },
       "noBorg": {
         "title": "Nessun binario Borg utilizzabile segnalato",
@@ -415,6 +418,21 @@
         "bannerMixedTargets": "Ognuno punta alla propria versione configurata.",
         "manualOnly": "Solo aggiornamenti manuali",
         "manualOnlyTooltip": "Questo endpoint non ha l'helper di autoaggiornamento, quindi si aggiorna eseguendo il comando di reinstallazione sulla macchina. Una reinstallazione lo prepara agli aggiornamenti dal server."
+      },
+      "upgradeDialog": {
+        "title": "Aggiorna questo endpoint",
+        "description": "L'endpoint si reinstalla da solo da questo server.",
+        "descriptionWithVersion": "L'endpoint si reinstalla da solo da questo server e torna con la versione {{version}}.",
+        "disconnectWarning": "Durante l'operazione resta disconnesso per un breve periodo.",
+        "busyWarning": "Un endpoint che sta eseguendo un backup rifiuta l'aggiornamento, quindi riprova quando è inattivo.",
+        "confirm": "Aggiorna"
+      },
+      "upgradeState": {
+        "upgrading": "Aggiornamento",
+        "upgradingTo": "Aggiornamento alla {{version}}",
+        "upgradingTooltip": "L'endpoint si sta reinstallando e si riconnetterà da solo.",
+        "failed": "Aggiornamento non riuscito",
+        "failedHint": "L'endpoint non è tornato in tempo. Reinstallalo manualmente."
       }
     },
     "installCommand": {

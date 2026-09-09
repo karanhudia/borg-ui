@@ -303,14 +303,16 @@
         "agentRevoked": "Agent widerrufen",
         "agentDeleted": "Agent gelöscht",
         "cancellationRequested": "Abbruch angefordert",
-        "copied": "Kopiert"
+        "copied": "Kopiert",
+        "agentUpgradeRequested": "Aktualisierung angefordert"
       },
       "errors": {
         "revokeToken": "Registrierungstoken konnte nicht widerrufen werden",
         "revokeAgent": "Agent konnte nicht widerrufen werden",
         "deleteAgent": "Agent konnte nicht gelöscht werden",
         "cancelJob": "Job konnte nicht abgebrochen werden",
-        "runDiagnostics": "Diagnose konnte nicht ausgeführt werden"
+        "runDiagnostics": "Diagnose konnte nicht ausgeführt werden",
+        "upgradeAgent": "Aktualisierung konnte nicht angefordert werden"
       },
       "table": {
         "job": "Job",
@@ -331,7 +333,8 @@
         "deleteAgent": "Agent löschen",
         "viewLogs": "Protokolle anzeigen",
         "cancelJob": "Job abbrechen",
-        "revokeToken": "Token widerrufen"
+        "revokeToken": "Token widerrufen",
+        "upgradeAgent": "Diesen Endpunkt aktualisieren"
       },
       "noBorg": {
         "title": "Keine verwendbare Borg-Binärdatei gemeldet",
@@ -415,6 +418,21 @@
         "bannerMixedTargets": "Jeder Endpunkt zielt auf seine eigene konfigurierte Version.",
         "manualOnly": "Nur manuelle Updates",
         "manualOnlyTooltip": "Dieser Endpunkt hat kein Self-Upgrade-Hilfsprogramm und wird daher mit dem Reinstall-Befehl auf der Maschine aktualisiert. Eine Neuinstallation bereitet es auf servergesteuerte Upgrades vor."
+      },
+      "upgradeDialog": {
+        "title": "Diesen Endpunkt aktualisieren",
+        "description": "Der Endpunkt installiert sich selbst von diesem Server neu.",
+        "descriptionWithVersion": "Der Endpunkt installiert sich selbst von diesem Server neu und kommt mit Version {{version}} zurück.",
+        "disconnectWarning": "Dabei ist er kurzzeitig getrennt.",
+        "busyWarning": "Ein Endpunkt, der gerade ein Backup ausführt, lehnt die Aktualisierung ab. Versuchen Sie es erneut, sobald er inaktiv ist.",
+        "confirm": "Aktualisieren"
+      },
+      "upgradeState": {
+        "upgrading": "Wird aktualisiert",
+        "upgradingTo": "Aktualisierung auf {{version}}",
+        "upgradingTooltip": "Der Endpunkt installiert sich neu und verbindet sich von selbst wieder.",
+        "failed": "Aktualisierung fehlgeschlagen",
+        "failedHint": "Der Endpunkt kam nicht rechtzeitig zurück. Installieren Sie ihn manuell neu."
       }
     },
     "installCommand": {
