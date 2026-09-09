@@ -78,3 +78,16 @@ export const PresetIconColors: Story = {
     },
   },
 }
+
+export const RsyncNetDefaults: Story = {
+  args: {
+    initialForm: {
+      ...createConnectionForm(),
+      port: 22,
+      use_sftp_mode: true,
+      default_path: '/',
+      ssh_path_prefix: '',
+      mount_point: 'rsync-net',
+    },
+  },
+}
