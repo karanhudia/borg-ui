@@ -11,9 +11,9 @@ from tests.utils.borg import create_registered_local_repository, run_borg
 from tests.utils.operations import operations_runner_for
 
 try:
-    from .test_helpers import make_borg_env
+    from .helpers import make_borg_env
 except ImportError:
-    from test_helpers import make_borg_env
+    from helpers import make_borg_env
 
 
 @pytest.mark.integration

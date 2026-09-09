@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from app.services.mount_service import MountService
+from tests.integration.helpers import fresh_mount_service, scratch_key_file
 from unittest.mock import Mock, AsyncMock, patch
 
 
@@ -125,7 +125,7 @@ class AggressiveTest:
             return False
 
 
-async def test_shadowing_causes_data_loss_WITHOUT_FIX():
+async def _shadowing_causes_data_loss_WITHOUT_FIX():
     """
     Demonstrate how the OLD code (without fix) causes data loss.
     This test intentionally bypasses the fix to show what would happen.
@@ -153,8 +153,10 @@ async def test_shadowing_causes_data_loss_WITHOUT_FIX():
             "\nStep 3: Try to unmount /etc/cron.d (FAILS - not a mount point anymore)"
         )
         unmount_success = test.simulate_unmount(cron_d_target)
-        if not unmount_success:
-            print("  ⚠️  Unmount failed! But code might proceed with cleanup anyway...")
+        assert unmount_success is False, (
+            "the child mount must be shadowed once its parent is mounted over it"
+        )
+        print("  ⚠️  Unmount failed! But code might proceed with cleanup anyway...")
 
         print("\nStep 4: Unmount /etc")
         test.simulate_unmount(etc_target)
@@ -163,7 +165,9 @@ async def test_shadowing_causes_data_loss_WITHOUT_FIX():
         print(f"  Would delete: {test.mount_root}")
         # DON'T actually delete to keep test safe, but show what would happen
 
-        test.verify_files_exist("Files before dangerous cleanup")
+        assert test.verify_files_exist("Files before dangerous cleanup"), (
+            "the simulated mounts and unmounts must not touch the source files"
+        )
 
         print("\n⚠️  WITHOUT FIX: If cleanup ran on mount_root with /etc still mounted,")
         print("   it would DELETE REAL REMOTE FILES through the SSHFS mount!")
@@ -171,13 +175,16 @@ async def test_shadowing_causes_data_loss_WITHOUT_FIX():
         test.teardown()
         return True
 
+    except AssertionError:
+        test.teardown()
+        raise
     except Exception as e:
         print(f"\n❌ TEST ERROR: {e}")
         test.teardown()
         return False
 
 
-async def test_fix_prevents_shadowing():
+async def _fix_prevents_shadowing():
     """
     Test that the FIX actually prevents mount shadowing.
     This uses the real mount_service.py code with the fix.
@@ -188,7 +195,7 @@ async def test_fix_prevents_shadowing():
 
     test = AggressiveTest()
     test.setup()
-    service = MountService()
+    service = fresh_mount_service()
 
     try:
         with patch("app.services.mount_service.SessionLocal") as mock_db:
@@ -230,7 +237,11 @@ async def test_fix_prevents_shadowing():
             mount_operations = []
 
             async def mock_execute_sshfs_mount(
-                connection, remote_path, mount_point, temp_key_file
+                connection,
+                remote_path,
+                mount_point,
+                temp_key_file,
+                preserve_symlinks=False,
             ):
                 mount_operations.append(
                     {
@@ -246,7 +257,7 @@ async def test_fix_prevents_shadowing():
 
             with patch.object(service, "_check_sshfs_available", return_value=True):
                 with patch.object(
-                    service, "_decrypt_and_write_key", return_value="/tmp/test_key"
+                    service, "_decrypt_and_write_key", return_value=scratch_key_file()
                 ):
                     with patch.object(
                         service, "_check_remote_is_file", side_effect=mock_check_file
@@ -377,7 +388,7 @@ async def test_fix_prevents_shadowing():
         return False
 
 
-async def test_deeply_nested_aggressive():
+async def _deeply_nested_aggressive():
     """
     Test deeply nested paths with aggressive verification.
     Scenario: /var, /var/log, /var/log/app, /var/log/app/debug.log
@@ -387,7 +398,7 @@ async def test_deeply_nested_aggressive():
     print("TEST: Deeply nested paths - aggressive verification")
     print("=" * 80)
 
-    service = MountService()
+    service = fresh_mount_service()
 
     with patch("app.services.mount_service.SessionLocal") as mock_db:
         mock_session = Mock()
@@ -419,13 +430,15 @@ async def test_deeply_nested_aggressive():
 
         mount_order = []
 
-        async def track_mount(connection, remote_path, mount_point, temp_key_file):
+        async def track_mount(
+            connection, remote_path, mount_point, temp_key_file, preserve_symlinks=False
+        ):
             mount_order.append(remote_path)
             print(f"  [MOUNT #{len(mount_order)}] {remote_path}")
 
         with patch.object(service, "_check_sshfs_available", return_value=True):
             with patch.object(
-                service, "_decrypt_and_write_key", return_value="/tmp/test_key"
+                service, "_decrypt_and_write_key", return_value=scratch_key_file()
             ):
                 with patch.object(
                     service, "_check_remote_is_file", side_effect=mock_check_file
@@ -497,6 +510,29 @@ async def test_deeply_nested_aggressive():
                             return True
 
 
+# pytest entry points. The runners above print their findings and answer
+# with True/False (they are also driven by main() below); a False or a
+# swallowed exception must fail the test, not pass it. The WITHOUT_FIX
+# demonstration never touches the service; its entry point only guards the
+# simulation harness the other two runners build on.
+async def test_shadowing_causes_data_loss_WITHOUT_FIX():
+    assert await _shadowing_causes_data_loss_WITHOUT_FIX(), (
+        "runner reported a failure, see the captured output"
+    )
+
+
+async def test_fix_prevents_shadowing():
+    assert await _fix_prevents_shadowing(), (
+        "runner reported a failure, see the captured output"
+    )
+
+
+async def test_deeply_nested_aggressive():
+    assert await _deeply_nested_aggressive(), (
+        "runner reported a failure, see the captured output"
+    )
+
+
 async def main():
     """Run all aggressive tests"""
     print("\n" + "█" * 80)
@@ -510,7 +546,7 @@ async def main():
         results.append(
             (
                 "Data loss without fix (demo)",
-                await test_shadowing_causes_data_loss_WITHOUT_FIX(),
+                await _shadowing_causes_data_loss_WITHOUT_FIX(),
             )
         )
     except Exception as e:
@@ -518,15 +554,13 @@ async def main():
         results.append(("Data loss without fix (demo)", False))
 
     try:
-        results.append(("Fix prevents shadowing", await test_fix_prevents_shadowing()))
+        results.append(("Fix prevents shadowing", await _fix_prevents_shadowing()))
     except Exception as e:
         print(f"\n❌ TEST FAILED: {e}")
         results.append(("Fix prevents shadowing", False))
 
     try:
-        results.append(
-            ("Deeply nested aggressive", await test_deeply_nested_aggressive())
-        )
+        results.append(("Deeply nested aggressive", await _deeply_nested_aggressive()))
     except Exception as e:
         print(f"\n❌ TEST FAILED: {e}")
         results.append(("Deeply nested aggressive", False))

@@ -13,6 +13,7 @@ Usage:
 """
 
 import subprocess
+from pathlib import Path
 import json
 import sys
 import os
@@ -20,11 +21,12 @@ import argparse
 from typing import List, Set
 import requests
 
-# Handle both pytest (relative import) and direct script execution (absolute import)
-try:
-    from .test_helpers import DockerPathHelper
-except ImportError:
-    from test_helpers import DockerPathHelper
+# Run as a script from anywhere: put the repository root on sys.path so the
+# shared helper resolves without installing the package.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from tests.integration.helpers import DockerPathHelper  # noqa: E402
 
 
 class Colors:

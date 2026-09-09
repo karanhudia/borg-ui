@@ -66,7 +66,7 @@ Creates a comprehensive test environment with:
 - Source data in `/tmp/borg-ui-tests/source_data/`
 - Test info file: `/tmp/borg-ui-tests/TEST_INFO.txt`
 
-### 2. Archive Contents Testing (`tests/integration/test_archive_contents.py`)
+### 2. Archive Contents Testing (`tests/manual/test_archive_contents.py`)
 
 Validates that Borg UI displays archive contents correctly by:
 
@@ -77,13 +77,13 @@ Validates that Borg UI displays archive contents correctly by:
 **Usage:**
 ```bash
 # Test with default settings
-python3 tests/integration/test_archive_contents.py
+python3 tests/manual/test_archive_contents.py
 
 # Specify custom test directory
-python3 tests/integration/test_archive_contents.py /custom/test/dir
+python3 tests/manual/test_archive_contents.py /custom/test/dir
 
 # Test against different Borg UI instance
-python3 tests/integration/test_archive_contents.py --url http://localhost:7879
+python3 tests/manual/test_archive_contents.py --url http://localhost:7879
 ```
 
 **Tests:**
@@ -155,7 +155,7 @@ python3 tests/manual/test_app.py --output results.json
 **Test:**
 ```bash
 ./tests/setup_test_env.sh
-python3 tests/integration/test_archive_contents.py
+python3 tests/manual/test_archive_contents.py
 ```
 
 **Expected Result:**
@@ -177,7 +177,7 @@ Testing Archive: test-full-backup
 
 **Test:**
 ```bash
-python3 tests/integration/test_archive_contents.py
+python3 tests/manual/test_archive_contents.py
 # Tests paths: "", "Documents", "Photos/2024", "Code"
 ```
 
@@ -192,7 +192,7 @@ python3 tests/integration/test_archive_contents.py
 **Test:**
 ```bash
 # Automatically tests repo2-encrypted with passphrase "test123"
-python3 tests/integration/test_archive_contents.py
+python3 tests/manual/test_archive_contents.py
 ```
 
 **What it tests:**
@@ -282,7 +282,7 @@ borg list --json-lines /tmp/borg-ui-tests/repositories/repo1-unencrypted::test-f
 ### 7. Run Automated Tests
 
 ```bash
-python3 tests/integration/test_archive_contents.py
+python3 tests/manual/test_archive_contents.py
 ```
 
 Expected output: All tests should PASS
@@ -341,7 +341,7 @@ docker logs borg-web-ui
 
 ### Adding Archive Content Tests
 
-Edit `tests/integration/test_archive_contents.py`:
+Edit `tests/manual/test_archive_contents.py`:
 
 ```python
 test_configs = [

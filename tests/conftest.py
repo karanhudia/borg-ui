@@ -55,6 +55,10 @@ os.environ["BORG_KEYS_DIR"] = _borg_keys_dir
 # Add parent directory to path so we can import from app/
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+# tests/manual holds live-server scripts driven by the smoke runners and by
+# hand; a bare `pytest` must not collect them. An explicit path still runs.
+collect_ignore = ["manual"]
+
 # Import fixtures from fixtures directory
 pytest_plugins = [
     "tests.fixtures.database",

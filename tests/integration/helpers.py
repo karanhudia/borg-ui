@@ -46,7 +46,10 @@ class DockerPathHelper:
         # Determine if backend server is running in Docker container
         # Port-based detection: 8081/8082 = Docker, 8000 = local dev
         # Can be overridden with container_mode parameter or BORG_UI_CONTAINER env var
-        is_container_port = base_url.endswith(":8081") or base_url.endswith(":8082")
+        normalized_base_url = base_url.rstrip("/")
+        is_container_port = normalized_base_url.endswith(
+            ":8081"
+        ) or normalized_base_url.endswith(":8082")
         env_container_mode = os.environ.get("BORG_UI_CONTAINER", "").lower() in (
             "true",
             "1",
@@ -67,7 +70,7 @@ class DockerPathHelper:
             )
         )
 
-        self.base_url = base_url
+        self.base_url = normalized_base_url
 
     def to_container_path(self, host_path: str) -> str:
         """
@@ -161,3 +164,61 @@ def parse_archives_payload(payload: dict) -> list:
     else:
         archives_data = archives_raw
     return archives_data.get("archives", [])
+
+
+# -- MountService test doubles --------------------------------------------------
+# Used by the script-style mount modules. The app imports stay inside the
+# functions: this module is also imported by the smoke helpers, which run on
+# a host where the application package is not importable.
+
+
+def fresh_mount_service():
+    """A MountService built against a scratch data directory.
+
+    The constructor reads and reconciles DATA_DIR/mount_state.json, which the
+    whole process shares, and every later persist writes it back. The mount
+    tests assert absolute mount counts, and a run via main() on a box with
+    live mounts must not read or truncate the real file. The constructor also
+    sweeps /tmp/sshfs_mount_* for orphans, which on such a box could remove
+    the directory of a live legacy mount; the tests do not need that sweep.
+    """
+    import shutil
+    import tempfile
+    import weakref
+    from unittest.mock import patch
+
+    from app.config import settings
+    from app.services.mount_service import MountService
+
+    scratch = tempfile.mkdtemp(prefix="mount-test-data-")
+    with (
+        patch.object(settings, "data_dir", scratch),
+        patch.object(MountService, "_cleanup_orphaned_temp_dirs"),
+    ):
+        service = MountService()
+    # The service has no teardown; drop the scratch tree once the service is
+    # collected, or at interpreter exit after a failing runner.
+    weakref.finalize(service, shutil.rmtree, scratch, ignore_errors=True)
+    return service
+
+
+def scratch_key_file() -> str:
+    """A key file the test owns.
+
+    unmount() unlinks the path it was given; a runner that stops before the
+    unmount leaves it to the exit hook.
+    """
+    import atexit
+    import contextlib
+    import os
+    import tempfile
+
+    handle, path = tempfile.mkstemp(prefix="mount-test-key-")
+    os.close(handle)
+
+    def _remove():
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(path)
+
+    atexit.register(_remove)
+    return path

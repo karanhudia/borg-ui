@@ -263,16 +263,7 @@ jobs:
 
       - name: Run backend integration suite
         run: |
-          pytest \
-            tests/integration/test_api_archives_integration.py \
-            tests/integration/test_api_backup_integration.py \
-            tests/integration/test_api_mounts_integration.py \
-            tests/integration/test_backup_workflows_integration.py \
-            tests/integration/test_api_repositories_integration.py \
-            tests/integration/test_api_restore_integration.py \
-            tests/integration/test_api_schedule_integration.py \
-            tests/integration/test_multi_repo_schedule.py \
-            -v
+          pytest tests/integration -v
         env:
           REDIS_HOST: localhost
           REDIS_PORT: 6379

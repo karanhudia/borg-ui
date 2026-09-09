@@ -22,7 +22,7 @@ from app.database.models import (
 )
 from datetime import datetime, timedelta
 
-from tests.integration.test_helpers import (
+from tests.integration.helpers import (
     parse_archives_payload,
     wait_for_job_terminal_status,
 )
