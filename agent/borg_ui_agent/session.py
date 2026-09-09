@@ -23,6 +23,12 @@ from agent.borg_ui_agent.self_upgrade import check_self_upgrade
 
 logger = logging.getLogger(__name__)
 
+# How long an upgrade owns the session after it is requested. Matches
+# AGENT_UPGRADE_TIMEOUT_SECONDS on the server, so an endpoint whose reinstall
+# never happened starts taking jobs again no earlier than the moment the
+# server marks that upgrade failed.
+UPGRADE_CLAIM_SECONDS = 600
+
 try:
     from websocket import WebSocketTimeoutException
 except Exception:  # pragma: no cover - only used when optional dep is unavailable.
@@ -298,12 +304,12 @@ class AgentSessionRuntime:
         self._registry_lock = threading.Lock()
         self._cancel_events: dict[int, threading.Event] = {}
         self._pending_cancels: set[int] = set()
-        # Set while an upgrade is being requested, and left set through the
-        # restart it causes, so a job dispatched after the busy check cannot
-        # start under an agent that is about to die. Guarded by _registry_lock,
-        # the same lock the cancel registry uses, so the check and the
-        # reservation are one atomic step.
-        self._upgrading = False
+        # Deadline (monotonic) while an upgrade is being requested, held
+        # through the restart it causes so a job dispatched after the busy
+        # check cannot start under an agent that is about to die. Guarded by
+        # _registry_lock, the same lock the cancel registry uses, so the check
+        # and the reservation are one atomic step.
+        self._upgrading_until: Optional[float] = None
 
     def run_forever(
         self,
@@ -635,13 +641,16 @@ class AgentSessionRuntime:
             )
             return
 
-        with self._registry_lock:
-            upgrading = self._upgrading
-        if upgrading:
+        if self._upgrade_claimed():
             # Refusing is what makes the upgrade's busy check hold: this
             # process is about to be restarted, so a job started here would be
             # orphaned by it. Failing now lets the server retry the job against
             # the upgraded agent instead of waiting for the reaper.
+            #
+            # The session loop registered this id before starting the worker,
+            # and the unregister below is in a finally this return skips, so
+            # drop it here or hello reports a job that is not running.
+            self._unregister_cancel(job_id)
             client.send_error(
                 "Agent is upgrading and cannot start new jobs",
                 code="upgrade_in_progress",
@@ -682,6 +691,14 @@ class AgentSessionRuntime:
                 return_code=return_code,
             )
 
+    def _upgrade_claimed(self) -> bool:
+        """Whether an upgrade currently owns this session."""
+        with self._registry_lock:
+            return (
+                self._upgrading_until is not None
+                and time.monotonic() < self._upgrading_until
+            )
+
     def _reserve_for_upgrade(self) -> list[int]:
         """Claim this session for an upgrade, or report what is running.
 
@@ -693,21 +710,34 @@ class AgentSessionRuntime:
         Returns the running job ids when the upgrade must be refused, and an
         empty list when the claim succeeded. A second upgrade request arriving
         while one is already claimed is refused too, with an empty id list.
+
+        The claim carries a deadline because the reinstall is not guaranteed
+        to happen: the root helper refuses a non-https server, a checksum that
+        does not match, or a config that names a different server, and in each
+        case it aborts with this process still running. A claim without an
+        expiry would leave such an endpoint refusing every job until someone
+        restarted it by hand, which is worse than the orphaned job the claim
+        exists to prevent. The deadline matches the server's own upgrade
+        timeout, so the agent starts accepting work again no earlier than the
+        moment the server gives up on the upgrade.
         """
         with self._registry_lock:
             running = sorted(self._cancel_events.keys())
             if running:
                 return running
-            if self._upgrading:
+            if (
+                self._upgrading_until is not None
+                and time.monotonic() < self._upgrading_until
+            ):
                 return [-1]
-            self._upgrading = True
+            self._upgrading_until = time.monotonic() + UPGRADE_CLAIM_SECONDS
             return []
 
     def _release_upgrade(self) -> None:
-        """Undo the claim when the upgrade never actually starts. It is never
-        released on success: the restart is the release."""
+        """Undo the claim when the upgrade never actually starts. On success it
+        is left to expire: the restart normally gets there first."""
         with self._registry_lock:
-            self._upgrading = False
+            self._upgrading_until = None
 
     def _register_cancel(self, job_id: int) -> threading.Event:
         """Register a cancel Event for ``job_id`` — already set if a cancel for it

@@ -7,13 +7,14 @@ reported, because the endpoint may have been changed since.
 
 import json
 import queue
+import time
 from pathlib import Path
 
 import pytest
 
 from agent.borg_ui_agent.config import AgentConfig
 from agent.borg_ui_agent.self_upgrade import UpgradeReadiness
-from agent.borg_ui_agent.session import AgentSessionRuntime
+from agent.borg_ui_agent.session import UPGRADE_CLAIM_SECONDS, AgentSessionRuntime
 
 
 class _HttpClient:
@@ -188,3 +189,46 @@ def test_a_second_upgrade_request_is_refused_while_one_is_claimed(
 
     errors = [f for f in frames if f["type"] == "command_error"]
     assert errors[0]["error"]["code"] == "upgrade_busy"
+
+
+def test_a_refused_job_is_not_left_in_the_cancel_registry(
+    runtime, http_client, tmp_path, monkeypatch
+):
+    """The session loop registers the id before the worker starts, and the
+    refusal returns before the unregister in the handler's finally. Leaking it
+    would make hello report a job that is not running, permanently."""
+    trigger = tmp_path / "upgrade-requested"
+    _run(runtime, monkeypatch, UpgradeReadiness(supported=True, trigger=trigger))
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.get_job_handler",
+        lambda command: lambda job, client, should_cancel=None: None,
+    )
+    cancel_event = runtime._register_cancel(42)
+
+    runtime._handle_command(
+        queue.Queue(),
+        {"command_id": "c2", "command": "backup.create", "job_id": 42, "payload": {}},
+        cancel_event=cancel_event,
+    )
+
+    assert runtime._running_job_ids() == []
+
+
+def test_the_claim_expires_so_an_aborted_helper_cannot_wedge_the_agent(
+    runtime, tmp_path, monkeypatch
+):
+    """The helper aborts on a bad checksum or a non-https server with this
+    process still running. A claim without an expiry would leave the endpoint
+    refusing every job until someone restarted it by hand."""
+    trigger = tmp_path / "upgrade-requested"
+    _run(runtime, monkeypatch, UpgradeReadiness(supported=True, trigger=trigger))
+    assert runtime._upgrade_claimed()
+
+    # Captured first: patching time.monotonic with a lambda that calls it
+    # would recurse, since session.py holds the module, not the function.
+    expired_at = time.monotonic() + UPGRADE_CLAIM_SECONDS + 1
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.time.monotonic", lambda: expired_at
+    )
+
+    assert not runtime._upgrade_claimed()
