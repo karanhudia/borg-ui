@@ -10,7 +10,7 @@
       "note": "Login as <b>admin</b> with the initial admin password you set; you are asked to change it at first login. Map the folders you want to back up to /local. Redis is optional: set REDIS_URL to an existing Redis to enable a persistent archive cache. Archive mounting and SSHFS pull backups need FUSE (SYS_ADMIN + /dev/fuse); use the stack template or docs for that. Docs: https://docs.borgui.com/installation",
       "categories": ["Backup", "Tools"],
       "platform": "linux",
-      "logo": "https://raw.githubusercontent.com/karanhudia/borg-ui/main/frontend/public/logo.png",
+      "logo": "https://raw.githubusercontent.com/karanhudia/borg-ui/main/frontend/public/logo-rounded.png",
       "image": "ainullcode/borg-ui:latest",
       "restart_policy": "unless-stopped",
       "ports": ["8081:8081/tcp"],
@@ -39,7 +39,7 @@
       "note": "Set LOCAL_STORAGE_PATH to the host folder to back up (mounted at /local). Login as <b>admin</b> with the INITIAL_ADMIN_PASSWORD you set; you are asked to change it at first login. To enable FUSE for archive mounting, uncomment the cap_add/devices/security_opt lines in the stack file, see https://docs.borgui.com/installation#optional-fuse-access",
       "categories": ["Backup", "Tools"],
       "platform": "linux",
-      "logo": "https://raw.githubusercontent.com/karanhudia/borg-ui/main/frontend/public/logo.png",
+      "logo": "https://raw.githubusercontent.com/karanhudia/borg-ui/main/frontend/public/logo-rounded.png",
       "repository": {
         "url": "https://github.com/karanhudia/borg-ui",
         "stackfile": "distribution/portainer/stacks/borg-ui/docker-compose.yml"

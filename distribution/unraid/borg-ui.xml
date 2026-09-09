@@ -26,7 +26,7 @@
   <Category>Backup: Tools:Utilities Status:Stable</Category>
   <WebUI>http://[IP]:[PORT:8081]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/karanhudia/borg-ui/main/distribution/unraid/borg-ui.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/karanhudia/borg-ui/main/frontend/public/logo.png</Icon>
+  <Icon>https://raw.githubusercontent.com/karanhudia/borg-ui/main/frontend/public/logo-rounded.png</Icon>
   <ExtraParams>--health-cmd="curl -f http://localhost:8081/ || exit 1" --health-interval=30s --health-timeout=10s --health-retries=3 --health-start-period=40s</ExtraParams>
   <PostArgs/>
   <CPUset/>
