@@ -7,7 +7,7 @@
       "title": "Borg UI",
       "name": "borg-ui",
       "description": "Web interface for BorgBackup. Run backups, browse and restore archives, manage local, SSH and SFTP repositories and automate schedules. Single container, no Redis (in-memory archive cache).",
-      "note": "Login as <b>admin</b> with the initial admin password you set; you are asked to change it at first login. Map the folders you want to back up to /local. Redis is optional: set REDIS_URL to an existing Redis to enable a persistent archive cache. Archive mounting and SSHFS pull backups need FUSE (SYS_ADMIN + /dev/fuse); use the stack template or docs for that. Docs: https://docs.borgui.com/installation",
+      "note": "Login as <b>admin</b> with the initial admin password you set; you are asked to change it at first login. Map the folders you want to back up to /local. Redis is optional: set Redis host to an existing Redis to enable a persistent archive cache. Archive mounting and SSHFS pull backups need FUSE (SYS_ADMIN + /dev/fuse); use the stack template or docs for that. Docs: https://docs.borgui.com/installation",
       "categories": ["Backup", "Tools"],
       "platform": "linux",
       "logo": "https://raw.githubusercontent.com/karanhudia/borg-ui/main/frontend/public/logo-rounded.png",
@@ -26,8 +26,7 @@
         { "name": "TZ", "label": "Timezone", "default": "Etc/UTC" },
         { "name": "LOCAL_MOUNT_POINTS", "label": "Local mount points", "default": "/local", "description": "Comma-separated container paths shown in the file browser." },
         { "name": "INITIAL_ADMIN_PASSWORD", "label": "Initial admin password", "description": "Password for the admin user, used on first start only. Required; you are asked to change it at first login." },
-        { "name": "REDIS_HOST", "label": "Redis host", "default": "disabled", "description": "Leave 'disabled' for the in-memory cache, or set a Redis hostname." },
-        { "name": "REDIS_URL", "label": "Redis URL (optional)", "default": "", "description": "Full Redis URL, e.g. redis://192.168.1.10:6379/0. Overrides REDIS_HOST." }
+        { "name": "REDIS_HOST", "label": "Redis host", "default": "disabled", "description": "Leave 'disabled' for the in-memory cache, or set the hostname or IP of an existing Redis (port 6379). For a URL with auth, add a REDIS_URL variable under advanced options." }
       ]
     },
     {
