@@ -30,7 +30,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.database.models import (
@@ -42,6 +42,7 @@ from app.database.models import (
 )
 from app.services.operations.details import backup_details
 from app.services.operations.vocab import TERMINAL_STATUSES
+from app.utils.backup_maintenance import RUNNING_BACKUP_MAINTENANCE_FAILURES
 
 CANCELLED_BY_USER = json.dumps({"key": "backend.errors.backup.cancelledByUser"})
 CANCELLED_PROCESS_NOT_FOUND = json.dumps(
@@ -83,7 +84,8 @@ AGENT_PARAMS = {
     "upload_ratelimit_kib": "upload_ratelimit_kib",
 }
 
-RUNNING_MAINTENANCE_WORDS = ("running_prune", "running_compact", "running_check")
+# The same three words the legacy readers match on, kept in one place.
+RUNNING_MAINTENANCE_WORDS = tuple(RUNNING_BACKUP_MAINTENANCE_FAILURES)
 
 _LEGACY_TO_OPERATION_MODE = {"local": "server"}
 _OPERATION_TO_LEGACY_MODE = {"server": "local", None: "local"}
@@ -579,16 +581,55 @@ def backup_jobs_for_archive_names(db: Session, repository: Repository, names) ->
     return jobs
 
 
+def _newest_per_group(db: Session, model, group_column, order_column, filters) -> list:
+    """The newest row of each group, ranked in SQL. Only the winners are
+    loaded, so a caller reading one row per repository does not materialize
+    every backup ever taken (the window query the legacy path used)."""
+    ranked = (
+        db.query(
+            model.id.label("row_id"),
+            func.row_number()
+            .over(
+                partition_by=group_column,
+                order_by=(order_column.desc(), model.id.desc()),
+            )
+            .label("rank"),
+        )
+        .filter(*filters)
+        .subquery()
+    )
+    return (
+        db.query(model)
+        .join(ranked, model.id == ranked.c.row_id)
+        .filter(ranked.c.rank == 1)
+        .all()
+    )
+
+
 def latest_backup_jobs_by_repository(db: Session, *, running: bool = False) -> dict:
     """Newest (or newest running) backup per repository path, both tables."""
-    ops = _operations_query(db).filter(Operation.repository_id.isnot(None))
-    legacy = db.query(BackupJob).filter(BackupJob.repository.isnot(None))
+    op_filters = [Operation.kind == "backup", Operation.repository_id.isnot(None)]
+    legacy_filters = [BackupJob.repository.isnot(None)]
     if running:
-        ops = ops.filter(Operation.status == "running")
-        legacy = legacy.filter(BackupJob.status == "running")
-    attr = "started_at" if running else "created_at"
+        op_filters.append(Operation.status == "running")
+        legacy_filters.append(BackupJob.status == "running")
+        op_order = func.coalesce(Operation.started_at, Operation.created_at)
+        legacy_order = func.coalesce(BackupJob.started_at, BackupJob.created_at)
+        attr = "started_at"
+    else:
+        op_order = Operation.created_at
+        legacy_order = BackupJob.created_at
+        attr = "created_at"
+    # Operations group by repository_id and legacy rows by path; a repository
+    # owns one path, so the two rankings meet on the same key below.
+    candidates = _facades(
+        db,
+        _newest_per_group(db, Operation, Operation.repository_id, op_order, op_filters),
+    ) + _newest_per_group(
+        db, BackupJob, BackupJob.repository, legacy_order, legacy_filters
+    )
     result: dict = {}
-    for job in _facades(db, ops.all()) + list(legacy.all()):
+    for job in candidates:
         path = job.repository
         if not path:
             continue
@@ -598,8 +639,16 @@ def latest_backup_jobs_by_repository(db: Session, *, running: bool = False) -> d
 
 
 def newest_backup_job(
-    db: Session, *, running: bool = False, terminal: bool = False
+    db: Session,
+    *,
+    running: bool = False,
+    terminal: bool = False,
+    terminal_statuses: Optional[Iterable[str]] = None,
 ) -> Any:
+    """`terminal_statuses` narrows what counts as finished. A caller that
+    reports the last backup outcome passes its own set, since the operations
+    vocabulary counts `skipped` as terminal and a skipped run is not an
+    outcome the legacy readers ever saw."""
     ops = _operations_query(db)
     legacy = db.query(BackupJob)
     attr = "created_at"
@@ -608,8 +657,9 @@ def newest_backup_job(
         legacy = legacy.filter(BackupJob.status == "running")
         attr = "started_at"
     elif terminal:
-        ops = ops.filter(Operation.status.in_(tuple(TERMINAL_STATUSES)))
-        legacy = legacy.filter(BackupJob.status.in_(tuple(TERMINAL_STATUSES)))
+        words = tuple(terminal_statuses or TERMINAL_STATUSES)
+        ops = ops.filter(Operation.status.in_(words))
+        legacy = legacy.filter(BackupJob.status.in_(words))
         attr = "completed_at"
     column = {
         "created_at": Operation.created_at,

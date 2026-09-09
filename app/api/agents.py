@@ -658,25 +658,28 @@ def _mark_agent_job_started(
 ) -> Optional[BackupJob]:
     """Returns the linked backup job when this start report is its first one,
     so the caller can send the backup-start notification exactly once (a
-    requeued job keeps its original started_at and does not notify again)."""
+    requeued job that reconnects does not notify again)."""
     if job.status in FINAL_AGENT_JOB_STATUSES:
         return None
     now = _now_utc()
     if job.claimed_at is None:
         job.claimed_at = now
     started = _normalize_agent_timestamp(started_at)
-    # Guarded write: the first start report claims started_at even against a
+    if job.started_at is None:
+        job.started_at = started
+    # Guarded write: the first start report claims the marker even against a
     # concurrent report on the other transport, so exactly one report triggers
-    # the backup-start notification. A requeued job keeps its original
-    # started_at and does not notify again. The guard lives on the agent job
-    # because a backup operation already has started_at, written by the runner
-    # at dispatch, so a NULL test on the backup row could never fire.
+    # the backup-start notification. The guard lives on the agent job because
+    # a backup operation already has started_at, written by the runner at
+    # dispatch, so a NULL test on the backup row could never fire; and it uses
+    # its own column rather than started_at because a requeue clears that one,
+    # which would let a reconnect notify a second time.
     first_start = (
         db.query(AgentJob)
-        .filter(AgentJob.id == job.id, AgentJob.started_at.is_(None))
-        .update({AgentJob.started_at: started}, synchronize_session=False)
+        .filter(AgentJob.id == job.id, AgentJob.start_notified_at.is_(None))
+        .update({AgentJob.start_notified_at: started}, synchronize_session=False)
     )
-    db.expire(job, ["started_at"])
+    db.expire(job, ["start_notified_at"])
     if job.status != "cancel_requested":
         job.status = "running"
     newly_started_backup_job = None

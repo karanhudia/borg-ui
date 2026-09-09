@@ -147,15 +147,18 @@ def test_logs_go_to_the_operation_log_file(db, repository, log_dir):
 
 
 def test_resolve_prefers_the_operation_and_falls_back_to_legacy(db, repository):
-    legacy = BackupJob(repository="/repo/nas", status="completed")
+    # The two tables number their rows independently, and an operation wins a
+    # shared id (Appendix B). The legacy row therefore takes an explicit id
+    # past the operation's, so the fallback branch is exercised every run
+    # rather than only when the two sequences happen to diverge.
+    op = _backup_operation(db, repository)
+    legacy = BackupJob(id=op.id + 500, repository="/repo/nas", status="completed")
     db.add(legacy)
     db.commit()
-    op = _backup_operation(db, repository)
 
     assert isinstance(resolve_backup_job(db, op.id), BackupJobFacade)
     assert resolve_backup_job(db, legacy.id + 1000) is None
-    if legacy.id != op.id:
-        assert resolve_backup_job(db, legacy.id) is legacy
+    assert resolve_backup_job(db, legacy.id) is legacy
 
 
 def test_create_backup_operation_records_route_and_params(db, repository):

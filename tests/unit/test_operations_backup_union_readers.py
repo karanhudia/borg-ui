@@ -212,3 +212,85 @@ def test_stale_maintenance_sweep_covers_details_rows(db, repository):
     assert db.get(OperationBackupDetails, operation.id).maintenance_status == (
         "compact_failed"
     )
+
+
+def test_latest_by_repository_loads_only_the_newest_row_per_table(db, repository):
+    """The newest row per repository is picked in SQL, so a long history is
+    not materialized on every MQTT sync."""
+    from app.services.operations.backup_facade import latest_backup_jobs_by_repository
+
+    now = datetime.utcnow()
+    for index in range(5):
+        db.add(
+            BackupJob(
+                repository=repository.path,
+                repository_id=repository.id,
+                status="completed",
+                archive_name=f"legacy-{index}",
+                created_at=now - timedelta(days=10 + index),
+            )
+        )
+        operation = Operation(
+            repository_id=repository.id,
+            kind="backup",
+            category="backup",
+            status="completed",
+            trigger="manual",
+            priority=0,
+            run_id=f"run-{index}",
+            params={"executor": "server"},
+            created_at=now - timedelta(days=index),
+        )
+        db.add(operation)
+        db.flush()
+        backup_details(db, operation).archive_name = f"op-{index}"
+    db.commit()
+
+    loaded: list[str] = []
+
+    @event.listens_for(db.get_bind(), "before_cursor_execute")
+    def _record(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            loaded.append(statement)
+
+    try:
+        latest = latest_backup_jobs_by_repository(db)
+    finally:
+        event.remove(db.get_bind(), "before_cursor_execute", _record)
+
+    assert latest[repository.path].archive_name == "op-0"
+    # Two ranked reads (one per table), neither a plain scan of the history.
+    ranked = [statement for statement in loaded if "row_number" in statement.lower()]
+    assert len(ranked) == 2
+
+
+def test_mqtt_last_backup_ignores_a_skipped_operation(db, repository):
+    """`skipped` is terminal in the operations vocabulary but was never a
+    backup outcome, so the Home Assistant sensor keeps reporting the real
+    last run."""
+    from app.services.mqtt_service import TERMINAL_JOB_STATUSES
+    from app.services.operations.backup_facade import newest_backup_job
+
+    _legacy, operation = _pair(db, repository)
+    now = datetime.utcnow()
+    skipped = Operation(
+        repository_id=repository.id,
+        kind="backup",
+        category="backup",
+        status="skipped",
+        trigger="manual",
+        priority=0,
+        run_id="run-skipped",
+        params={"executor": "server"},
+        created_at=now,
+        completed_at=now,
+    )
+    db.add(skipped)
+    db.commit()
+
+    latest_terminal = newest_backup_job(
+        db, terminal=True, terminal_statuses=TERMINAL_JOB_STATUSES
+    )
+    assert latest_terminal.id == operation.id
+    # The unnarrowed call is the one that would surface the skipped run.
+    assert newest_backup_job(db, terminal=True).id == skipped.id

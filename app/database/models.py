@@ -186,6 +186,10 @@ class AgentJob(Base):
         nullable=True,
         index=True,
     )
+    # Set once, by the first start report that wins the claim, and never
+    # cleared: a requeue resets `started_at`, so only this marker can tell a
+    # reconnect apart from a genuine first start.
+    start_notified_at = Column(DateTime, nullable=True)
     job_type = Column(String, nullable=False)
     status = Column(String, default="queued", index=True, nullable=False)
     payload = Column(JSON, nullable=False)

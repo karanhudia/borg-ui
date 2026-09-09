@@ -1381,7 +1381,13 @@ async def get_job_logs(
 
     if _is_operation_only_kind(job_type, job_models):
         op = _get_operation_or_404(db, job_type, job_id, current_user)
-        if job_type == "backup" and op.status == "running":
+        if (
+            job_type == "backup"
+            and op.status == "running"
+            and op.execution_mode != "agent"
+        ):
+            # An agent backup streams its `agent_job_logs` lines instead; the
+            # in-memory buffer below belongs to the server's own borg process.
             return _running_backup_log_response(job_id, offset, limit)
         sources = _operation_log_sources(db, job_type, op)
         # A backup answers for itself, since agent log lines count toward the

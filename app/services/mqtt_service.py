@@ -457,7 +457,9 @@ class ServerStatePublisher:
         """Publish server-level sensor topics from backup_jobs table."""
         running_job = newest_backup_job(db, running=True)
         latest_job = newest_backup_job(db)
-        latest_terminal_job = newest_backup_job(db, terminal=True)
+        latest_terminal_job = newest_backup_job(
+            db, terminal=True, terminal_statuses=TERMINAL_JOB_STATUSES
+        )
 
         running_timestamp = (
             _serialize_first_datetime(

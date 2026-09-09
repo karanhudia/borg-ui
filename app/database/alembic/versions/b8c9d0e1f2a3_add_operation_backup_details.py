@@ -95,6 +95,9 @@ def upgrade() -> None:
         )
     with op.batch_alter_table("agent_jobs") as batch_op:
         batch_op.add_column(sa.Column("operation_id", sa.Integer(), nullable=True))
+        batch_op.add_column(
+            sa.Column("start_notified_at", sa.DateTime(), nullable=True)
+        )
         batch_op.create_foreign_key(
             "fk_agent_jobs_operation_id_operations",
             "operations",
@@ -144,6 +147,7 @@ def downgrade() -> None:
         batch_op.drop_constraint(
             "fk_agent_jobs_operation_id_operations", type_="foreignkey"
         )
+        batch_op.drop_column("start_notified_at")
         batch_op.drop_column("operation_id")
     op.drop_table("operation_backup_retry_lineage")
     op.drop_table("operation_backup_details")

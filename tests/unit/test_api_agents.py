@@ -1845,6 +1845,38 @@ class TestAgentJobNotifications:
         finally:
             stale_db.close()
 
+    def test_requeued_job_does_not_claim_the_start_notification_twice(
+        self, test_client, test_db, admin_headers
+    ):
+        """A reconnect after a requeue must not notify a second time. The
+        requeue clears `started_at`, so the claim hangs off its own marker."""
+        from app.api.agents import _mark_agent_job_started, _requeue_stale_agent_jobs
+
+        agent, _headers = self._register(test_client, test_db, admin_headers)
+        job, _backup_job = self._linked_backup_job(
+            test_db, agent, agent_status="claimed"
+        )
+
+        assert _mark_agent_job_started(job, test_db) is not None
+        test_db.commit()
+
+        stale_at = datetime.now(timezone.utc) - timedelta(hours=2)
+        test_db.query(AgentJob).filter(AgentJob.id == job.id).update(
+            {AgentJob.updated_at: stale_at, AgentJob.started_at: stale_at},
+            synchronize_session=False,
+        )
+        test_db.commit()
+        test_db.expire_all()
+        job = test_db.query(AgentJob).filter(AgentJob.id == job.id).first()
+        _requeue_stale_agent_jobs(
+            test_db, agent, now=datetime.now(timezone.utc), running_job_ids=[]
+        )
+        test_db.commit()
+        assert job.status == "queued"
+        assert job.started_at is None
+
+        assert _mark_agent_job_started(job, test_db) is None
+
     async def test_expired_object_reads_stay_inside_notification_boundary(
         self, test_db
     ):
