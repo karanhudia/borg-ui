@@ -45,7 +45,9 @@ export default function AgentPinControl({
   useEffect(() => {
     setAgentVersion(agent?.desired_agent_version || TRACK_SERVER)
     setBorgVersion(agent?.desired_borg_version || LEAVE_INSTALLED)
-  }, [agent])
+    // `open` is a dependency so reopening for the same agent starts from the
+    // stored pin again, rather than from an edit that was cancelled.
+  }, [agent, open])
 
   const available = agent?.available_agent_version
   // A pin outlives a server upgrade, so an endpoint can carry a version this
