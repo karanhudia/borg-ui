@@ -175,17 +175,38 @@ def reap_stale_agent_upgrades(
     stale = [
         agent for agent in candidates if _as_utc(agent.upgrade_requested_at) < cutoff
     ]
+    reaped = 0
     for agent in stale:
-        agent.upgrade_state = "failed"
-        agent.upgrade_error = (
-            "The endpoint did not come back on the target version in time. "
-            "Reinstall it manually from the reinstall dialog."
+        # Conditional write, matching reap_stale_agent_jobs: the endpoint may
+        # have re-registered on its target version between the read above and
+        # here, which clears the state to idle. The WHERE guard makes the
+        # reaper lose that race rather than overwrite a resolved upgrade with
+        # a failure. requested_at is matched too, so a second upgrade
+        # requested in that window is not failed on the first one's timeout.
+        reaped += (
+            db.query(AgentMachine)
+            .filter(
+                AgentMachine.id == agent.id,
+                AgentMachine.upgrade_state == "requested",
+                AgentMachine.upgrade_requested_at == agent.upgrade_requested_at,
+            )
+            .update(
+                {
+                    AgentMachine.upgrade_state: "failed",
+                    AgentMachine.upgrade_error: (
+                        "The endpoint did not come back on the target version "
+                        "in time. Reinstall it manually from the reinstall "
+                        "dialog."
+                    ),
+                    AgentMachine.updated_at: now,
+                },
+                synchronize_session=False,
+            )
         )
-        agent.updated_at = now
-    if stale:
+    if reaped:
         db.commit()
-        logger.info("Reaped stale agent upgrades", count=len(stale))
-    return len(stale)
+        logger.info("Reaped stale agent upgrades", count=reaped)
+    return reaped
 
 
 def _reap_once(failed_backup_job_ids: Optional[list[int]] = None) -> int:

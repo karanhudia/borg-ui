@@ -298,6 +298,12 @@ class AgentSessionRuntime:
         self._registry_lock = threading.Lock()
         self._cancel_events: dict[int, threading.Event] = {}
         self._pending_cancels: set[int] = set()
+        # Set while an upgrade is being requested, and left set through the
+        # restart it causes, so a job dispatched after the busy check cannot
+        # start under an agent that is about to die. Guarded by _registry_lock,
+        # the same lock the cancel registry uses, so the check and the
+        # reservation are one atomic step.
+        self._upgrading = False
 
     def run_forever(
         self,
@@ -629,6 +635,19 @@ class AgentSessionRuntime:
             )
             return
 
+        with self._registry_lock:
+            upgrading = self._upgrading
+        if upgrading:
+            # Refusing is what makes the upgrade's busy check hold: this
+            # process is about to be restarted, so a job started here would be
+            # orphaned by it. Failing now lets the server retry the job against
+            # the upgraded agent instead of waiting for the reaper.
+            client.send_error(
+                "Agent is upgrading and cannot start new jobs",
+                code="upgrade_in_progress",
+            )
+            return
+
         # Normally already registered by the session loop before this thread
         # even started (see _job_id_for_dispatch); only register here when a
         # caller invoked this method directly without doing that (e.g. a test).
@@ -662,6 +681,33 @@ class AgentSessionRuntime:
                 error_message=message_text,
                 return_code=return_code,
             )
+
+    def _reserve_for_upgrade(self) -> list[int]:
+        """Claim this session for an upgrade, or report what is running.
+
+        The check and the claim happen under one lock hold, so a job that
+        registers concurrently either lands before the claim (and is reported
+        here, refusing the upgrade) or after it (and is refused by the
+        dispatch guard in _handle_command). Nothing slips between them.
+
+        Returns the running job ids when the upgrade must be refused, and an
+        empty list when the claim succeeded. A second upgrade request arriving
+        while one is already claimed is refused too, with an empty id list.
+        """
+        with self._registry_lock:
+            running = sorted(self._cancel_events.keys())
+            if running:
+                return running
+            if self._upgrading:
+                return [-1]
+            self._upgrading = True
+            return []
+
+    def _release_upgrade(self) -> None:
+        """Undo the claim when the upgrade never actually starts. It is never
+        released on success: the restart is the release."""
+        with self._registry_lock:
+            self._upgrading = False
 
     def _register_cancel(self, job_id: int) -> threading.Event:
         """Register a cancel Event for ``job_id`` — already set if a cancel for it
@@ -752,21 +798,20 @@ class AgentSessionRuntime:
         Readiness is re-checked rather than trusted. The capability was
         reported at connect time and the endpoint may have been changed since.
         """
-        running = self._running_job_ids()
+        # Claiming rather than sampling: an upgrade restarts this process, and
+        # a job dispatched between a bare check and that restart would be
+        # orphaned by it. The claim closes the window, and is held through the
+        # restart on purpose.
+        running = self._reserve_for_upgrade()
         if running:
             # An upgrade restarts this process, which would orphan whatever
             # job is running under it.
             client.send_error(f"Agent is running jobs {running}", code="upgrade_busy")
             return
-        # This is a snapshot, not a lock: a job dispatched between here and the
-        # restart is still orphaned. Closing that window means an
-        # upgrade-exclusive state that blocks dispatch through shutdown, which
-        # is more machinery than the outcome earns -- the server's job reaper
-        # already fails an orphaned job, and the operator picked this moment to
-        # restart the endpoint.
 
         readiness = check_self_upgrade()
         if not readiness.supported or readiness.trigger is None:
+            self._release_upgrade()
             client.send_error(
                 f"Endpoint cannot upgrade itself: {readiness.reason}",
                 code="upgrade_unsupported",
@@ -776,6 +821,7 @@ class AgentSessionRuntime:
         try:
             readiness.trigger.touch()
         except OSError as exc:
+            self._release_upgrade()
             client.send_error(
                 f"Could not request upgrade: {exc}", code="upgrade_failed"
             )

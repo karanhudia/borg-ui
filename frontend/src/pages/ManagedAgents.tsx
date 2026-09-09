@@ -705,6 +705,8 @@ export default function ManagedAgents() {
           }}
           isRevoking={revokeAgentMutation.isPending}
           isDeleting={deleteAgentMutation.isPending}
+          isPinningVersion={pinAgentVersionMutation.isPending}
+          isUpgrading={upgradeAgentMutation.isPending}
         />
       ) : null}
 
@@ -1609,6 +1611,8 @@ export function AgentList({
   onRunDiagnostics,
   isRevoking,
   isDeleting,
+  isPinningVersion = false,
+  isUpgrading = false,
 }: {
   agents: AgentMachineResponse[]
   serverUrl: string
@@ -1624,6 +1628,8 @@ export function AgentList({
   ) => Promise<AgentDiagnosticsResponse>
   isRevoking: boolean
   isDeleting: boolean
+  isPinningVersion?: boolean
+  isUpgrading?: boolean
 }) {
   const theme = useTheme()
   const { t } = useTranslation()
@@ -2128,6 +2134,7 @@ export function AgentList({
       <AgentPinControl
         open={!!pinTarget}
         agent={pinTarget}
+        busy={isPinningVersion}
         onSave={(agent, data) => {
           onPinVersion?.(agent, data)
           setPinTarget(null)
@@ -2137,6 +2144,7 @@ export function AgentList({
       <AgentUpgradeDialog
         open={!!upgradeTarget}
         agent={upgradeTarget}
+        busy={isUpgrading}
         onConfirm={(agent) => {
           onUpgrade?.(agent)
           setUpgradeTarget(null)

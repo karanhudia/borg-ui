@@ -17,13 +17,18 @@ from agent.borg_ui_agent.session import AgentSessionRuntime
 
 
 class _HttpClient:
-    """Terminal frames for a command with no job_id go over the socket, so this
-    only exists to satisfy the constructor."""
+    """Terminal frames for a command with no job_id go over the socket, so
+    agent.upgrade never reaches this. A persisted job does, which is how the
+    refusal of a job dispatched mid-upgrade is observed."""
+
+    def __init__(self):
+        self.failed = []
 
     def complete_job(self, job_id, *, result):
         return {"id": job_id, "status": "completed"}
 
     def fail_job(self, job_id, *, error_message, return_code=None):
+        self.failed.append((job_id, error_message))
         return {"id": job_id, "status": "failed"}
 
     def cancel_job(self, job_id):
@@ -38,11 +43,16 @@ def _drain(outbox):
 
 
 @pytest.fixture
-def runtime():
+def http_client():
+    return _HttpClient()
+
+
+@pytest.fixture
+def runtime(http_client):
     return AgentSessionRuntime(
         AgentConfig("https://borgui.example.com", "agt_123", "secret"),
         connect=lambda *args, **kwargs: None,
-        http_client=_HttpClient(),
+        http_client=http_client,
     )
 
 
@@ -50,9 +60,8 @@ def _run(runtime, monkeypatch, readiness, running_ids=()):
     monkeypatch.setattr(
         "agent.borg_ui_agent.session.check_self_upgrade", lambda: readiness
     )
-    monkeypatch.setattr(
-        AgentSessionRuntime, "_running_job_ids", lambda self: list(running_ids)
-    )
+    for job_id in running_ids:
+        runtime._register_cancel(job_id)
     outbox: "queue.Queue[str]" = queue.Queue()
     runtime._handle_command(
         outbox, {"command_id": "c1", "command": "agent.upgrade", "payload": {}}
@@ -122,3 +131,60 @@ def test_upgrade_is_not_registered_as_a_job_command():
         )
         is None
     )
+
+
+def test_a_job_dispatched_after_the_claim_is_refused(
+    runtime, http_client, tmp_path, monkeypatch
+):
+    """The busy check is a claim, not a sample. A job arriving between it and
+    the restart would be orphaned by the restart, so it is refused instead."""
+    trigger = tmp_path / "upgrade-requested"
+    frames = _run(
+        runtime, monkeypatch, UpgradeReadiness(supported=True, trigger=trigger)
+    )
+    assert [f for f in frames if f["type"] == "command_result"]
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.get_job_handler",
+        lambda command: lambda job, client, should_cancel=None: None,
+    )
+    outbox: "queue.Queue[str]" = queue.Queue()
+    runtime._handle_command(
+        outbox,
+        {
+            "command_id": "c2",
+            "command": "backup.create",
+            "job_id": 42,
+            "payload": {},
+        },
+    )
+
+    # A persisted job reports its outcome over the job API, not the socket.
+    assert [f for f in _drain(outbox) if f["type"] == "command_error"] == []
+    assert http_client.failed == [(42, "Agent is upgrading and cannot start new jobs")]
+
+
+def test_a_failed_upgrade_releases_the_claim(runtime, monkeypatch):
+    """A claim held after an upgrade that never started would lock the endpoint
+    out of running jobs until it was restarted by hand."""
+    _run(
+        runtime,
+        monkeypatch,
+        UpgradeReadiness(supported=False, reason="unit_missing"),
+    )
+
+    assert runtime._reserve_for_upgrade() == []
+
+
+def test_a_second_upgrade_request_is_refused_while_one_is_claimed(
+    runtime, tmp_path, monkeypatch
+):
+    trigger = tmp_path / "upgrade-requested"
+    _run(runtime, monkeypatch, UpgradeReadiness(supported=True, trigger=trigger))
+
+    frames = _run(
+        runtime, monkeypatch, UpgradeReadiness(supported=True, trigger=trigger)
+    )
+
+    errors = [f for f in frames if f["type"] == "command_error"]
+    assert errors[0]["error"]["code"] == "upgrade_busy"

@@ -110,3 +110,28 @@ def test_a_failed_upgrade_on_the_old_version_stays_failed(test_db):
     resolve_agent_upgrade(agent)
 
     assert agent.upgrade_state == "failed"
+
+
+def test_the_reaper_loses_the_race_to_a_concurrent_success(test_db):
+    """The endpoint can re-register between the reaper's read and its write.
+    The conditional update makes the reaper lose that race rather than
+    overwrite a resolved upgrade with a failure."""
+    agent = _requested(
+        test_db,
+        reported="0.1.2",
+        requested_at=datetime.now(timezone.utc) - timedelta(seconds=1200),
+    )
+
+    # Simulate the concurrent re-register landing after the reaper's read: the
+    # row is already idle by the time the conditional update runs.
+    test_db.query(AgentMachine).filter(AgentMachine.id == agent.id).update(
+        {AgentMachine.upgrade_state: "idle"}, synchronize_session=False
+    )
+    test_db.commit()
+
+    assert reap_stale_agent_upgrades(test_db) == 0
+
+    test_db.expire_all()
+    refreshed = test_db.query(AgentMachine).filter(AgentMachine.id == agent.id).one()
+    assert refreshed.upgrade_state == "idle"
+    assert refreshed.upgrade_error is None
