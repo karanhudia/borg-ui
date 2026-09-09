@@ -412,7 +412,9 @@
         "outdatedCount_other": "{{count}} endpoints ejecutan un agente antiguo",
         "bannerBody": "La versión actual del agente es {{version}}.",
         "bannerManual": "Reinstale cada uno desde su tarjeta para actualizarlo.",
-        "bannerMixedTargets": "Cada uno apunta a su propia versión configurada."
+        "bannerMixedTargets": "Cada uno apunta a su propia versión configurada.",
+        "manualOnly": "Solo actualizaciones manuales",
+        "manualOnlyTooltip": "Este endpoint no tiene el asistente de autoactualizacion, asi que se actualiza ejecutando el comando de reinstalacion en la maquina. Una reinstalacion habilita las actualizaciones desde el servidor."
       }
     },
     "installCommand": {
