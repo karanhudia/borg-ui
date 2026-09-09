@@ -545,3 +545,60 @@ def test_the_served_installer_publishes_its_own_checksum(test_client: TestClient
     # The helper compares against this after downloading, so a checksum that
     # covered anything but the exact served bytes would abort every upgrade.
     assert checksum.text.strip() == checksum.text.strip().lower()
+
+
+def test_agent_installer_supports_declining_remote_upgrade(test_client: TestClient):
+    script = test_client.get("/agent/install.sh").text
+
+    assert "--no-remote-upgrade" in script
+    assert 'REMOTE_UPGRADE="1"' in script
+    assert "/etc/borg-ui-agent/no-remote-upgrade" in script
+
+
+def test_agent_installer_reinstall_preserves_a_declined_remote_upgrade(
+    test_client: TestClient,
+):
+    script = test_client.get("/agent/install.sh").text
+
+    # The marker is what separates "this operator declined" from "this endpoint
+    # was installed before remote upgrade existed". Absence must mean the
+    # second, so a pre-existing endpoint gains the helper on its next
+    # reinstall rather than being locked out of it forever.
+    assert (
+        'if [[ "${REMOTE_UPGRADE_SET}" == "0" && -e "${NO_REMOTE_UPGRADE_MARKER}" ]]'
+        in script
+    )
+    assert 'REMOTE_UPGRADE="0"' in script
+
+
+def test_agent_installer_records_the_upgrade_parameters_as_root(
+    test_client: TestClient,
+):
+    script = test_client.get("/agent/install.sh").text
+
+    assert "/etc/borg-ui-agent/upgrade.conf" in script
+    # Root-owned and not writable by the service user: the agent must not be
+    # able to repoint its own upgrade at another host (spec section 11.2).
+    assert "install -o root -g root -m 0644 " in script
+    for key in (
+        "SERVER",
+        "AGENT_ID",
+        "BORG_INSTALL_MODE",
+        "SERVICE_USER_MODE",
+        "SERVICE_USER",
+        "SERVICE_GROUP",
+        "AGENT_ROOT",
+        "SYSTEMCTL",
+    ):
+        assert f'{key}="' in script
+
+
+def test_agent_installer_resolves_systemctl_by_absolute_path(
+    test_client: TestClient,
+):
+    script = test_client.get("/agent/install.sh").text
+
+    # sudoers matches on the absolute path and it differs across
+    # distributions, so it is resolved once and reused in both the rule and
+    # upgrade.conf rather than hardcoded.
+    assert 'SYSTEMCTL_PATH="$(command -v systemctl' in script

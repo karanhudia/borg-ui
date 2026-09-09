@@ -51,6 +51,11 @@ BORG_SOURCE="server"
 SKIP_BORG_INSTALL="0"
 SERVICE_USER_MODE="current"
 SERVICE_USER_MODE_SET="0"
+REMOTE_UPGRADE="1"
+REMOTE_UPGRADE_SET="0"
+NO_REMOTE_UPGRADE_MARKER="/etc/borg-ui-agent/no-remote-upgrade"
+UPGRADE_CONF="/etc/borg-ui-agent/upgrade.conf"
+SYSTEMCTL_PATH=""
 SERVICE_USER=""
 SERVICE_GROUP=""
 SERVICE_HOME=""
@@ -85,6 +90,12 @@ Borg install options:
   --borg-version 2      Install/verify Borg 2 as 'borg2' (advanced beta).
   --borg-version both   Install/verify Borg 1 and Borg 2.
   --skip-borg-install   Do not install Borg; register/reinstall with detected binaries only.
+
+Remote upgrade options:
+  --no-remote-upgrade   Do not install the privileged self-upgrade helper. The
+                        endpoint can then only be updated by running this
+                        installer on the machine with --reinstall. A reinstall
+                        remembers this choice; pass --remote-upgrade to undo it.
 
   --borg-source server  Install the exact Borg versions this Borg UI server runs,
                         from the static binaries published with those releases
@@ -151,6 +162,16 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-borg-install)
       SKIP_BORG_INSTALL="1"
+      shift
+      ;;
+    --no-remote-upgrade)
+      REMOTE_UPGRADE="0"
+      REMOTE_UPGRADE_SET="1"
+      shift
+      ;;
+    --remote-upgrade)
+      REMOTE_UPGRADE="1"
+      REMOTE_UPGRADE_SET="1"
       shift
       ;;
     --borg-source)
@@ -287,6 +308,15 @@ if [[ "${REINSTALL}" == "1" && "${SERVICE_USER_MODE_SET}" == "0" ]]; then
     SERVICE_USER_MODE="${existing_unit_user}"
     echo "Reinstall: preserving existing service user '${existing_unit_user}'."
   fi
+fi
+
+# A reinstall keeps the operator's earlier answer about remote upgrade unless
+# this run gives one explicitly. The marker records a decline; its absence
+# means "never asked", which is also what an endpoint installed before remote
+# upgrade existed looks like, and that endpoint should gain the helper here.
+if [[ "${REMOTE_UPGRADE_SET}" == "0" && -e "${NO_REMOTE_UPGRADE_MARKER}" ]]; then
+  REMOTE_UPGRADE="0"
+  echo "Reinstall: remote upgrade stays declined (${NO_REMOTE_UPGRADE_MARKER} exists)."
 fi
 
 if [[ ! -r /etc/os-release ]]; then
@@ -746,6 +776,51 @@ ${SERVICE_CAPABILITIES}
 [Install]
 WantedBy=multi-user.target
 SERVICE
+
+# sudoers matches on an absolute path and it differs across distributions, so
+# it is resolved once here and reused by both the sudoers rule and upgrade.conf.
+SYSTEMCTL_PATH="$(command -v systemctl || true)"
+
+# Everything the self-upgrade helper needs, in a file only root can write. The
+# helper takes no arguments and reads only this, so a compromised agent cannot
+# redirect the install source, change the service user, or inject installer
+# flags. That is what makes the sudoers rule safe to grant.
+write_upgrade_conf() {
+  local agent_id borg_install_mode
+
+  agent_id="$(sed -nE 's/^agent_id[[:space:]]*=[[:space:]]*"(.*)"[[:space:]]*$/\1/p' \
+    /etc/borg-ui-agent/config.toml | head -n 1)"
+  if [[ -z "${agent_id}" ]]; then
+    echo "Could not read agent_id from /etc/borg-ui-agent/config.toml;" >&2
+    echo "skipping remote upgrade setup. This endpoint stays on the manual" >&2
+    echo "reinstall path." >&2
+    return 1
+  fi
+
+  if [[ "${SKIP_BORG_INSTALL}" == "1" ]]; then
+    borg_install_mode="skip"
+  else
+    borg_install_mode="${BORG_VERSION}"
+  fi
+
+  install -o root -g root -m 0644 /dev/null "${UPGRADE_CONF}"
+  cat >"${UPGRADE_CONF}" <<CONF
+# Written by the Borg UI agent installer. Read by
+# ${AGENT_ROOT}/bin/borg-ui-agent-upgrade, which takes no arguments.
+SERVER="${SERVER%/}"
+AGENT_ID="${agent_id}"
+BORG_INSTALL_MODE="${borg_install_mode}"
+SERVICE_USER_MODE="${SERVICE_USER_MODE}"
+SERVICE_USER="${SERVICE_USER}"
+SERVICE_GROUP="${SERVICE_GROUP}"
+AGENT_ROOT="${AGENT_ROOT}"
+SYSTEMCTL="${SYSTEMCTL_PATH}"
+CONF
+}
+
+if [[ "${REMOTE_UPGRADE}" == "1" ]]; then
+  write_upgrade_conf || true
+fi
 
 /opt/borg-ui-agent/.venv/bin/borg-ui-agent service-check \
   --user "${SERVICE_USER}" \
