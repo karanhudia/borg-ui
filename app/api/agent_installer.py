@@ -972,9 +972,14 @@ remove_upgrade_artifacts() {
 if [[ "${REMOTE_UPGRADE}" == "1" ]] && write_upgrade_conf; then
   write_upgrade_helper
   write_upgrade_unit
-  write_upgrade_sudoers || true
-  rm -f "${NO_REMOTE_UPGRADE_MARKER}"
-  echo "Remote upgrade is available on this endpoint."
+  # A missing sudoers rule makes the helper unreachable, so do not leave the
+  # unit and helper behind pretending otherwise.
+  if write_upgrade_sudoers; then
+    rm -f "${NO_REMOTE_UPGRADE_MARKER}"
+    echo "Remote upgrade is available on this endpoint."
+  else
+    remove_upgrade_artifacts
+  fi
 else
   remove_upgrade_artifacts
   if [[ "${REMOTE_UPGRADE}" == "0" ]]; then
