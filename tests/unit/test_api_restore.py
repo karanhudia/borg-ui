@@ -1168,3 +1168,56 @@ Restore completed successfully"""
         # Verify line breaks are preserved
         assert "\n" in data["logs"]
         assert data["logs"].count("\n") == multiline_logs.count("\n")
+
+
+@pytest.mark.unit
+class TestRestoreRequestShape:
+    """The restore request model carries no dry-run switch. Dry-run restore is
+    the dedicated preview route, which runs borg extract with --dry-run."""
+
+    def test_restore_request_has_no_dry_run_field(self):
+        from app.api.restore import RestoreRequest
+
+        assert "dry_run" not in RestoreRequest.model_fields
+
+    def test_start_ignores_a_dry_run_field_a_client_still_sends(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Pydantic ignores unknown fields, so a client still sending dry_run
+        gets exactly the behaviour it got before the field was removed: a real
+        restore, enqueued the same way, with nothing recorded about dry run."""
+        repo = Repository(
+            name="Dry Run Repo",
+            path="/test/dry-run-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.services.restore_service.restore_service.execute_restore",
+            new=AsyncMock(return_value=None),
+        ):
+            response = test_client.post(
+                "/api/restore/start",
+                json={
+                    "repository": repo.path,
+                    "repository_id": repo.id,
+                    "archive": "test-archive",
+                    "paths": ["docs/"],
+                    "destination": "/restore/target",
+                    "dry_run": True,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "pending"
+
+        operation = test_db.get(Operation, body["job_id"])
+        assert operation.kind == "restore"
+        assert operation.repository_id == repo.id
+        assert "dry_run" not in operation.params
