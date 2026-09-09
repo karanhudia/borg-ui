@@ -83,6 +83,48 @@ the registration step, refreshes the installed package and systemd unit, and
 restarts `borg-ui-agent`. You do not need a new enrollment token unless you are
 enrolling a different machine or recreating a missing local agent config.
 
+## Remote Upgrade and What It Grants
+
+New installs place four root-owned files on the endpoint so a future Borg UI
+release can reinstall the agent from the server instead of you visiting the
+machine:
+
+| File | Purpose |
+| --- | --- |
+| `/etc/borg-ui-agent/upgrade.conf` | The reinstall parameters. Root-owned, not writable by the agent. |
+| `/opt/borg-ui-agent/bin/borg-ui-agent-upgrade` | The helper. Takes no arguments and reads only `upgrade.conf`. |
+| `/etc/systemd/system/borg-ui-agent-upgrade.service` | A oneshot unit that runs the helper. Never enabled. |
+| `/etc/sudoers.d/borg-ui-agent-upgrade` | Lets the agent's service user start that one unit, and nothing else. Not written when the agent runs as root. |
+
+Be clear about the trade. Before this, a compromised Borg UI server could
+already run code as the agent's service user on every endpoint and read any
+file on it, and it already decided which agent code the endpoint runs. With the
+helper it can additionally obtain root on that endpoint: write access and
+persistence. That is a real escalation, not a repackaging of existing trust. It
+is bounded to the server that already controls the endpoint's agent code, and
+it is what makes upgrades possible on the installer's default service user mode
+rather than only on root installs.
+
+Remote upgrade needs an `https` server URL, because the helper runs what it
+downloads as root and will not fetch it over cleartext. An endpoint enrolled
+against an `http` server reports no remote upgrade support and stays on the
+manual path.
+
+To decline it on a sensitive host:
+
+```bash
+curl -fsSL https://borg-ui-host:8083/agent/install.sh | sudo bash -s -- \
+  --server https://borg-ui-host:8083 --token TOKEN --name NAME \
+  --no-remote-upgrade
+```
+
+That endpoint keeps the manual reinstall path and reports no remote upgrade
+support. A later reinstall remembers the choice; pass `--remote-upgrade` to
+undo it.
+
+Endpoints enrolled before this release have none of these files and are shown
+as manual only. One reinstall with the command above gives them remote upgrade.
+
 ## Knowing Which Agents Are Out of Date
 
 Every agent reports the version it runs each time it checks in. Borg UI compares
@@ -101,7 +143,8 @@ A banner above the fleet counts how many endpoints are running an older agent.
 
 Upgrading is still a manual reinstall on each machine in this release. The
 comparison tells you which machines need it, so you are not reinstalling
-everything to be sure.
+everything to be sure. New installs now carry the machinery for
+server-driven upgrades, described above, and a later release turns it on.
 
 ### Pinning an Agent Version
 
