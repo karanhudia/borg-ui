@@ -324,7 +324,9 @@ def test_recent_backup_jobs_keeps_a_queued_backup(db, repository):
 
 
 @pytest.mark.asyncio
-async def test_reaped_notifications_resolve_the_table_they_came_from(db, repository):
+async def test_reaped_notifications_resolve_the_table_they_came_from(
+    db, repository, monkeypatch
+):
     """The two tables number rows independently and `resolve_backup_job` gives
     operations precedence, so a reaped legacy row must not notify about an
     operation that happens to share its id."""
@@ -340,16 +342,14 @@ async def test_reaped_notifications_resolve_the_table_they_came_from(db, reposit
     async def _notify(session, job):
         seen.append(job.archive_name)
 
-    import app.services.agent_job_reaper as reaper
-    import app.services.agent_job_notifications as notifications
+    # monkeypatch so the module-level session factory is restored for every
+    # later reaper test, which would otherwise inherit this fixture's session.
+    monkeypatch.setattr(
+        "app.services.agent_job_notifications.notify_backup_job_finished", _notify
+    )
+    monkeypatch.setattr("app.services.agent_job_reaper.SessionLocal", lambda: db)
 
-    original = notifications.notify_backup_job_finished
-    notifications.notify_backup_job_finished = _notify
-    reaper.SessionLocal = lambda: db
-    try:
-        await _notify_reaped_backup_jobs([("backup_jobs", legacy.id)])
-        await _notify_reaped_backup_jobs([("operations", operation.id)])
-    finally:
-        notifications.notify_backup_job_finished = original
+    await _notify_reaped_backup_jobs([("backup_jobs", legacy.id)])
+    await _notify_reaped_backup_jobs([("operations", operation.id)])
 
     assert seen == ["nas-old", "nas-new"]
