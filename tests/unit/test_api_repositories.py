@@ -1782,7 +1782,9 @@ class TestRepositoriesCreate:
         )
         test_db.commit()
         test_db.refresh(check_job)
-        agent_job = agent_maintenance_job(test_db, agent, "check", check_job.id)
+        agent_job = agent_maintenance_job(
+            test_db, agent, "check", check_job.id, repository=repo
+        )
         test_db.refresh(agent_job)
 
         response = test_client.post(
