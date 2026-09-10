@@ -45,15 +45,13 @@ export default function AgentBorgVersionChip({
 
   return (
     <Tooltip title={tooltip} arrow>
-      <span>
-        <Chip
-          size="small"
-          variant="outlined"
-          color={satisfied ? 'info' : 'warning'}
-          label={label}
-          sx={agentChipSx}
-        />
-      </span>
+      <Chip
+        size="small"
+        variant="outlined"
+        color={satisfied ? 'info' : 'warning'}
+        label={label}
+        sx={agentChipSx}
+      />
     </Tooltip>
   )
 }

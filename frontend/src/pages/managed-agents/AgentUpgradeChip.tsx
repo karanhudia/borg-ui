@@ -65,7 +65,7 @@ export default function AgentUpgradeChip({
   const title = tooltipText()
   return title ? (
     <Tooltip title={title} arrow>
-      <span>{chip}</span>
+      {chip}
     </Tooltip>
   ) : (
     chip
