@@ -10,9 +10,12 @@ Never add borg_version checks directly inside v1 service code.
 Use BorgRouter instead so the routing stays in one place.
 """
 
+import asyncio
+import time
+from typing import Callable, List, Optional
+
 import structlog
 from sqlalchemy.orm import Session
-from typing import List, Optional
 
 from app.utils.borg_env import effective_repository_remote_path
 
@@ -64,6 +67,49 @@ async def _fail_orphaned_maintenance_job(
                 await broadcast_operation_updated(job.operation, db)
     except Exception:
         db.rollback()
+
+
+class _MaintenanceWaitCancelled(Exception):
+    """The caller's run was cancelled while its maintenance job waited for
+    read work; the job was never queued."""
+
+
+def _cancel_unqueued_maintenance_job(
+    db: Session, maintenance_kind: str, maintenance_job_id: int
+) -> None:
+    """Close a maintenance job as cancelled when its run was cancelled
+    before the agent job was queued, so the row ends the way the run did
+    rather than as a failure or a `running` orphan.
+
+    A failure to close it is logged and re-raised: returning normally would
+    tell the caller the step ended while the row is still active and blocks
+    the repository. The caller's failure path then gets its turn at the row
+    and the run ends with the cause.
+    """
+    from datetime import datetime
+
+    from app.services.operations.job_facade import resolve_maintenance_job
+
+    try:
+        db.rollback()
+        job = resolve_maintenance_job(db, maintenance_job_id, maintenance_kind)
+        if job is not None and job.status in ("pending", "running"):
+            job.status = "cancelled"
+            if hasattr(job, "error_message"):
+                job.error_message = (
+                    job.error_message or "cancelled before the agent job was queued"
+                )
+            if hasattr(job, "completed_at"):
+                job.completed_at = job.completed_at or datetime.utcnow()
+            db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Could not close the cancelled maintenance job",
+            maintenance_kind=maintenance_kind,
+            maintenance_job_id=maintenance_job_id,
+        )
+        raise
 
 
 class BorgRouter:
@@ -513,6 +559,9 @@ class BorgRouter:
         maintenance_kind: str,
         maintenance_job_id: int,
         operation: Optional[dict] = None,
+        is_cancelled: Optional[Callable[[], bool]] = None,
+        wait_for_read_work: bool = False,
+        retry_pause_seconds: float = 1.0,
     ) -> None:
         """Delegate a maintenance op to the managed agent and wait for it.
 
@@ -530,7 +579,6 @@ class BorgRouter:
         from app.database.models import Repository, SystemSettings
         from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
         from app.services.repository_executor import (
-            queue_agent_repository_operation_job,
             wait_for_agent_repository_operation_job,
         )
 
@@ -549,21 +597,38 @@ class BorgRouter:
                 else settings.backup_timeout
             )
             try:
-                agent_job = queue_agent_repository_operation_job(
+                agent_job = await self._queue_agent_maintenance_job(
                     db,
                     repository,
                     job_kind=job_kind,
                     operation=operation,
-                    maintenance_job_kind=maintenance_kind,
+                    maintenance_kind=maintenance_kind,
                     maintenance_job_id=maintenance_job_id,
+                    is_cancelled=is_cancelled,
+                    wait_for_read_work=wait_for_read_work,
+                    retry_pause_seconds=retry_pause_seconds,
                 )
-            except Exception as exc:
+            except _MaintenanceWaitCancelled:
+                # The run was cancelled while the job waited for read work:
+                # close the row as cancelled and return, the caller reads
+                # the row and reports the cancellation itself. If the row
+                # cannot be closed, that error propagates instead, so the
+                # caller's failure path gets the row and the run ends with
+                # the cause rather than reporting a clean cancellation over
+                # a row that is still active.
+                _cancel_unqueued_maintenance_job(
+                    db, maintenance_kind, maintenance_job_id
+                )
+                return
+            except BaseException as exc:
                 # The maintenance job row was created by the caller before this
                 # runs. If we cannot even queue the agent job (a refused
                 # admission, a locked database), no agent job will ever update
                 # it -> it would stay active forever and block the repo via
                 # admission. Fail it closed so it never orphans, then propagate
-                # the error.
+                # the error. Base: a cancellation arriving during the wait for
+                # read work must close the row too, and CancelledError is not
+                # an Exception.
                 await _fail_orphaned_maintenance_job(
                     db, maintenance_kind, maintenance_job_id, exc
                 )
@@ -586,6 +651,166 @@ class BorgRouter:
             ) from exc
         finally:
             db.close()
+
+    async def _queue_agent_maintenance_job(
+        self,
+        db: Session,
+        repository,
+        *,
+        job_kind: str,
+        operation: Optional[dict],
+        maintenance_kind: str,
+        maintenance_job_id: int,
+        is_cancelled: Optional[Callable[[], bool]] = None,
+        wait_for_read_work: bool = False,
+        retry_pause_seconds: float = 1.0,
+        cancel_check_interval_seconds: float = 5.0,
+    ):
+        """Queue the agent job for a maintenance operation; with
+        `wait_for_read_work`, wait out transient read work instead of
+        failing on it.
+
+        A completed backup enqueues its index follow-up at once, and the
+        runner has a listing on the agent within a second; a plan's prune
+        or compact asks for the repository in the same second. Admission is
+        right to refuse a write beside a listing, but the listing is over in
+        seconds, and the runner already defers its own operations behind
+        such work. This is the plan side's equivalent: while admission
+        refuses the job for transient read work (a listing, a repository
+        info), wait for that work to finish and ask again, for at most
+        `TRANSIENT_READ_WAIT_SECONDS` after the first refusal. A refusal for
+        anything else and every other error propagate unchanged; so does the
+        latest refusal once the budget is spent or the wait reports work
+        that will not clear. A cancelled run raises
+        `_MaintenanceWaitCancelled` instead of a refusal, and is never
+        queued. Without `wait_for_read_work` (the runner, the routes, the
+        schedulers) the first refusal is the answer, as before.
+        """
+        from fastapi import HTTPException
+
+        from app.services.job_admission import (
+            READ_WORK_CANCELLED,
+            READ_WORK_CLEARED,
+            TRANSIENT_READ_WAIT_SECONDS,
+            refused_by_transient_read_work,
+            wait_for_transient_read_work,
+        )
+        from app.services.agent_job_dispatcher import (
+            dispatch_agent_cancel_if_connected,
+        )
+        from app.services.repository_executor import (
+            abandon_agent_repository_operation_job,
+            queue_agent_repository_operation_job,
+        )
+
+        def _queue():
+            return queue_agent_repository_operation_job(
+                db,
+                repository,
+                job_kind=job_kind,
+                operation=operation,
+                maintenance_job_kind=maintenance_kind,
+                maintenance_job_id=maintenance_job_id,
+            )
+
+        if not wait_for_read_work:
+            return _queue()
+
+        # The caller's check may cost a query of its own (the plan opens a
+        # session for it). The polls share one answer for a few seconds;
+        # the decision to queue always asks afresh.
+        cached = {"at": float("-inf"), "value": False}
+
+        def _cancelled(*, fresh: bool = False) -> bool:
+            if is_cancelled is None:
+                return False
+            now = time.monotonic()
+            if fresh or now - cached["at"] >= cancel_check_interval_seconds:
+                cached["value"] = bool(is_cancelled())
+                cached["at"] = now
+            return cached["value"]
+
+        log = logger.bind(
+            repository_id=repository.id,
+            maintenance_kind=maintenance_kind,
+            maintenance_job_id=maintenance_job_id,
+        )
+        deadline: Optional[float] = None
+        attempts = 0
+        while True:
+            # never queue a write for a run that has been cancelled, whether
+            # the cancel arrived before the first attempt or during a pause
+            if _cancelled(fresh=True):
+                raise _MaintenanceWaitCancelled()
+            attempts += 1
+            try:
+                job = _queue()
+            except HTTPException as exc:
+                if not refused_by_transient_read_work(exc):
+                    raise
+                refusal = exc
+            else:
+                # The cancel may have landed between the check above and the
+                # commit inside `_queue()`. Nothing has been dispatched yet:
+                # take the job back before it can be, and report the cancel.
+                # An agent that polls for queued work can still claim it in
+                # these milliseconds; it then receives the cancel request.
+                if _cancelled(fresh=True):
+                    abandoned = abandon_agent_repository_operation_job(db, job.id)
+                    if abandoned is not None and abandoned.status == "cancel_requested":
+                        await dispatch_agent_cancel_if_connected(abandoned)
+                    raise _MaintenanceWaitCancelled()
+                return job
+            params = (
+                refusal.detail.get("params")
+                if isinstance(refusal.detail, dict)
+                else None
+            )
+            active_operation = (params or {}).get("active_operation")
+            if deadline is None:
+                deadline = time.monotonic() + TRANSIENT_READ_WAIT_SECONDS
+                log.info(
+                    "Maintenance waits for read work on the repository",
+                    active_operation=active_operation,
+                    timeout_seconds=TRANSIENT_READ_WAIT_SECONDS,
+                )
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                log.warning(
+                    "Maintenance gave up waiting for read work on the repository",
+                    reason="budget spent",
+                    attempts=attempts,
+                    active_operation=active_operation,
+                    timeout_seconds=TRANSIENT_READ_WAIT_SECONDS,
+                )
+                raise refusal
+            # The wait ends this session's transaction around each poll,
+            # which also releases the row lock the refused admission took.
+            outcome = await wait_for_transient_read_work(
+                db,
+                repository,
+                timeout_seconds=remaining,
+                is_cancelled=lambda: _cancelled(),
+            )
+            if outcome == READ_WORK_CANCELLED or _cancelled(fresh=True):
+                raise _MaintenanceWaitCancelled()
+            if outcome != READ_WORK_CLEARED:
+                log.warning(
+                    "Maintenance gave up waiting for read work on the repository",
+                    reason=outcome,
+                    attempts=attempts,
+                    active_operation=active_operation,
+                    waited_seconds=round(
+                        TRANSIENT_READ_WAIT_SECONDS - (deadline - time.monotonic())
+                    ),
+                )
+                raise refusal
+            # A short pause before asking again: the follow-up chain queues
+            # one archive info after another, and a retry that lands in the
+            # gap between two of them must not spin against admission.
+            await asyncio.sleep(
+                min(retry_pause_seconds, max(0.0, deadline - time.monotonic()))
+            )
 
     async def _run_agent_break_lock(self) -> dict:
         """Break the repository lock on the managed agent and wait for it.
@@ -651,13 +876,28 @@ class BorgRouter:
 
             await check_service.execute_check(job_id, self.repo.id)
 
-    async def compact(self, job_id: int) -> None:
-        """Run repository compaction through the version-aware service layer."""
+    async def compact(
+        self,
+        job_id: int,
+        *,
+        is_cancelled: Optional[Callable[[], bool]] = None,
+        wait_for_read_work: bool = False,
+    ) -> None:
+        """Run repository compaction through the version-aware service layer.
+
+        `wait_for_read_work` lets an agent compact wait out a listing that
+        is refusing it (a plan's post-backup step, see
+        `_queue_agent_maintenance_job`); `is_cancelled` ends that wait when
+        the caller's run has been cancelled meanwhile. Every other caller
+        keeps the immediate refusal.
+        """
         if self._is_agent():
             await self._run_agent_maintenance(
                 job_kind="repository.compact",
                 maintenance_kind="compact",
                 maintenance_job_id=job_id,
+                is_cancelled=is_cancelled,
+                wait_for_read_work=wait_for_read_work,
             )
             return
         if self.is_v2:
@@ -680,13 +920,25 @@ class BorgRouter:
         keep_yearly: int,
         dry_run: bool = False,
         keep_within: str | None = None,
+        *,
+        is_cancelled: Optional[Callable[[], bool]] = None,
+        wait_for_read_work: bool = False,
     ) -> None:
-        """Run repository pruning through the version-aware service layer."""
+        """Run repository pruning through the version-aware service layer.
+
+        `wait_for_read_work` lets an agent prune wait out a listing that is
+        refusing it (a plan's post-backup step, see
+        `_queue_agent_maintenance_job`); `is_cancelled` ends that wait when
+        the caller's run has been cancelled meanwhile. Every other caller
+        keeps the immediate refusal.
+        """
         if self._is_agent():
             await self._run_agent_maintenance(
                 job_kind="repository.prune",
                 maintenance_kind="prune",
                 maintenance_job_id=job_id,
+                is_cancelled=is_cancelled,
+                wait_for_read_work=wait_for_read_work,
                 operation={
                     "keep_hourly": keep_hourly,
                     "keep_daily": keep_daily,

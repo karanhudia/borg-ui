@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy import text
@@ -361,6 +363,136 @@ def ensure_repository_admission(
                     active,
                 ),
             )
+
+
+# Read work that is over in seconds: the listing and the repository info
+# the agent runs for the index follow-up chain and the stats refresh. A
+# write refused because of one can be asked for again shortly. Every other
+# read-class operation (a check, a restore, an archive listing someone
+# browses, a mirror) runs for minutes to hours, and a queued one cannot
+# even start while the caller's own exclusive row is running, so waiting
+# for it is pointless.
+TRANSIENT_READ_OPERATIONS = frozenset(
+    {
+        OPERATION_REPOSITORY_INFO,
+        OPERATION_REPOSITORY_LIST_ARCHIVES,
+    }
+)
+# How long a write may wait for transient read work. The work a plan's
+# prune collides with is one listing plus a bounded batch of archive infos
+# (`index_archive_info_per_run`), each a few seconds; transient work still
+# active after this is an agent that stopped answering, which the agent job
+# reaper handles. Deliberately not the borg list/info timeouts: operators
+# raise those for very large repositories, and a plan run must not stall
+# behind one repository for that long.
+TRANSIENT_READ_WAIT_SECONDS = 180.0
+
+
+def refused_by_transient_read_work(exc: BaseException) -> bool:
+    """True for the admission's 409 whose blocker is transient read work.
+
+    Anything else (a conflicting write, a duplicate of the same operation,
+    a long-running read, another error) is not worth a wait and must reach
+    the caller unchanged.
+    """
+    if getattr(exc, "status_code", None) != status.HTTP_409_CONFLICT:
+        return False
+    detail = getattr(exc, "detail", None)
+    if (
+        not isinstance(detail, dict)
+        or detail.get("key") != REPOSITORY_OPERATION_ACTIVE_KEY
+    ):
+        return False
+    params = detail.get("params")
+    if not isinstance(params, dict):
+        return False
+    active = params.get("active_operation")
+    if active == params.get("requested_operation"):
+        # the same operation is already active: a duplicate, not a lock wait
+        return False
+    return (
+        params.get("active_operation_class") == OPERATION_CLASS_REPOSITORY_READ
+        and active in TRANSIENT_READ_OPERATIONS
+    )
+
+
+# What `wait_for_transient_read_work` came back with.
+READ_WORK_CLEARED = "cleared"  # no read work left
+READ_WORK_BLOCKED = "blocked"  # read work that will not clear on its own
+READ_WORK_UNCLAIMED = "unclaimed"  # only never-claimed jobs left, past the grace
+READ_WORK_CANCELLED = "cancelled"  # the caller's run was cancelled
+READ_WORK_TIMEOUT = "timeout"  # transient work still active at the deadline
+# A queued agent job is usually claimed within a second of its dispatch.
+# One the agent never picks up (it dropped between queue and dispatch) is
+# not reaped: the agent job reaper watches claimed and running jobs only.
+# Past this grace a wait that sees nothing but queued read work gives up.
+UNCLAIMED_READ_WORK_GRACE_SECONDS = 30.0
+
+
+async def wait_for_transient_read_work(
+    db: Session,
+    repository: Repository,
+    *,
+    timeout_seconds: float,
+    poll_interval_seconds: float = 1.0,
+    is_cancelled: Optional[Callable[[], bool]] = None,
+    unclaimed_grace_seconds: float = UNCLAIMED_READ_WORK_GRACE_SECONDS,
+) -> str:
+    """Wait until no transient read work is active on the repository.
+
+    Returns `READ_WORK_CLEARED` once the repository is free of read work.
+    Returns at once with `READ_WORK_BLOCKED` when read work that will not
+    clear on its own is active (any read-class operation outside
+    `TRANSIENT_READ_OPERATIONS`: a check, a restore, a mirror) and with
+    `READ_WORK_CANCELLED` when `is_cancelled` says so; with
+    `READ_WORK_UNCLAIMED` when the only read work left is queued jobs no
+    agent has claimed for `unclaimed_grace_seconds`, counted from the
+    moment that became the case for those jobs; and with
+    `READ_WORK_TIMEOUT` when the deadline passes with transient work still
+    active. Write work is not looked at: a write refused by a write is not
+    this function's case.
+
+    The session's transaction is ended before every poll and before
+    returning: the refused admission that brings a caller here left the
+    repository row locked, and neither the polls nor the caller's pause
+    afterwards may hold that lock or pin a pooled connection idle in a
+    transaction. `is_cancelled` is asked once per poll; a caller whose
+    check is expensive hands in a throttled one.
+    """
+    deadline = time.monotonic() + max(0.0, timeout_seconds)
+    # The grace runs from the moment nothing but queued jobs is left, for
+    # that set of jobs: a listing that ran for a while and then queued a
+    # new job must not use up the new job's grace, and a claim in between
+    # starts it over.
+    unclaimed_since: Optional[float] = None
+    unclaimed_jobs: frozenset[tuple[str, int]] = frozenset()
+    while True:
+        db.rollback()
+        read_work = [
+            work
+            for work in list_active_repository_work(db, repository)
+            if work.operation_class == OPERATION_CLASS_REPOSITORY_READ
+        ]
+        db.rollback()
+        if not read_work:
+            return READ_WORK_CLEARED
+        if any(work.operation not in TRANSIENT_READ_OPERATIONS for work in read_work):
+            return READ_WORK_BLOCKED
+        now = time.monotonic()
+        if all(work.status == "queued" for work in read_work):
+            jobs = frozenset((work.job_table, work.job_id) for work in read_work)
+            if unclaimed_since is None or jobs != unclaimed_jobs:
+                unclaimed_since, unclaimed_jobs = now, jobs
+            elif now - unclaimed_since >= unclaimed_grace_seconds:
+                return READ_WORK_UNCLAIMED
+        else:
+            unclaimed_since, unclaimed_jobs = None, frozenset()
+        if is_cancelled is not None and is_cancelled():
+            return READ_WORK_CANCELLED
+        remaining = deadline - now
+        if remaining <= 0:
+            return READ_WORK_TIMEOUT
+        await asyncio.sleep(min(poll_interval_seconds, remaining))
 
 
 def count_active_manual_backup_jobs(db: Session) -> int:
