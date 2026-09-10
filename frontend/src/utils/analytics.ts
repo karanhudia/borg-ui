@@ -235,7 +235,11 @@ export const setAppVersion = (version: string): void => {
  * Only the plan name is sent, never licence keys or customer details.
  */
 export const setAnalyticsPlan = (plan: string | null): void => {
-  currentPlan = plan || null
+  const next = plan || null
+  // The plan starts unknown, so the first render would otherwise re-identify
+  // the session with nothing new to say.
+  if (next === currentPlan) return
+  currentPlan = next
   identifySession()
 }
 

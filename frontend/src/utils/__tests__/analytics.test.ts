@@ -247,6 +247,13 @@ describe('analytics (umami)', () => {
       expect(window.umami?.identify).toHaveBeenLastCalledWith({ app_version: '1.2.3' })
     })
 
+    it('setAnalyticsPlan does not re-identify when the plan has not changed', () => {
+      setAnalyticsPlan(null)
+      const calls = window.umami?.identify?.mock.calls.length
+      setAnalyticsPlan(null)
+      expect(window.umami?.identify?.mock.calls.length).toBe(calls)
+    })
+
     it('setUserId does not throw', () => {
       expect(() => setUserId('user123')).not.toThrow()
     })
