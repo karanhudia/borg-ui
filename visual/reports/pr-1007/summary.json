@@ -1,39 +1,21 @@
 {
-  "generatedAt": "2026-09-10T11:38:40.975Z",
+  "generatedAt": "2026-09-10T12:34:31.416Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1007 visual report",
-    "commitSha": "adcca8425c20",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34470754111"
+    "commitSha": "fda4d14e63cb",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34475810862"
   },
   "totals": {
     "baseline": 758,
     "actual": 764,
     "compared": 758,
-    "changed": 5,
+    "changed": 4,
     "added": 6,
     "removed": 0,
-    "unchanged": 753
+    "unchanged": 754
   },
   "changed": [
-    {
-      "fileName": "backup-plans-reviewstep--remote-direct-execution.png",
-      "baselinePath": "images/baseline/backup-plans-reviewstep--remote-direct-execution.png",
-      "actualPath": "images/actual/backup-plans-reviewstep--remote-direct-execution.png",
-      "diffPath": "images/diff/backup-plans-reviewstep--remote-direct-execution.png",
-      "diffPixels": 1024000,
-      "totalPixels": 1024000,
-      "diffRatio": 1,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
     {
       "fileName": "managed-agents-agentpincontrol--pinned--mobile.png",
       "baselinePath": "images/baseline/managed-agents-agentpincontrol--pinned--mobile.png",
@@ -389,6 +371,9 @@
     },
     {
       "fileName": "backup-plans-reviewstep--remote-direct-execution--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-reviewstep--remote-direct-execution.png"
     },
     {
       "fileName": "backup-plans-reviewstep--scheduled-upload-policies--mobile.png"
