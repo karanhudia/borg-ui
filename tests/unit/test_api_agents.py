@@ -1195,7 +1195,9 @@ class TestAgentJobTransport:
             test_db,
             agent,
             job_kind="repository.check",
-            operation={"maintenance_job": {"kind": "check", "id": 1}},
+            operation={
+                "maintenance_job": {"kind": "check", "id": 1, "table": "operations"}
+            },
             stale_at=stale_at,
         )
 
@@ -1652,7 +1654,13 @@ class TestAgentJobNotifications:
                 "schema_version": 1,
                 "job_kind": "repository.check",
                 "repository": {"id": repository.id},
-                "operation": {"maintenance_job": {"kind": "check", "id": check_job.id}},
+                "operation": {
+                    "maintenance_job": {
+                        "kind": "check",
+                        "id": check_job.id,
+                        "table": "operations",
+                    }
+                },
             },
             created_at=now,
             updated_at=now,
@@ -2007,7 +2015,11 @@ class TestAgentJobNotifications:
                 "job_kind": "repository.compact",
                 "repository": {"id": repository.id},
                 "operation": {
-                    "maintenance_job": {"kind": "compact", "id": operation.id}
+                    "maintenance_job": {
+                        "kind": "compact",
+                        "id": operation.id,
+                        "table": "operations",
+                    }
                 },
             },
             created_at=now,

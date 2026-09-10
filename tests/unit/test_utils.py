@@ -735,7 +735,11 @@ class TestReconcileOrphanedMaintenanceOperations:
                 payload={
                     "job_kind": "repository.prune",
                     "operation": {
-                        "maintenance_job": {"kind": "prune", "id": operation.id},
+                        "maintenance_job": {
+                            "kind": "prune",
+                            "id": operation.id,
+                            "table": "operations",
+                        },
                     },
                 },
             )

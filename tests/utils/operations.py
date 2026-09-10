@@ -268,16 +268,19 @@ _OPERATION_COLUMNS = (
     "result",
 )
 
-# Columns the operation derives rather than stores: `has_logs` from the log
-# file, `backup_plan_id` through the plan run, `repository_path`,
-# `repository_name` and `borg_version` from the repository, and the id from
-# the insert.
+# Columns no operation column or details row of the kind holds: `has_logs`
+# comes from the log file, `backup_plan_id` through the plan run,
+# `repository_path`, `repository_name` and `borg_version` from the
+# repository, the id from the insert, and a restore's
+# `estimated_time_remaining` from its sizes and speed (a backup stores that
+# one on its details row, which is read out above this).
 _DROPPED = (
     "has_logs",
     "backup_plan_id",
     "repository_path",
     "repository_name",
     "borg_version",
+    "estimated_time_remaining",
     "id",
 )
 

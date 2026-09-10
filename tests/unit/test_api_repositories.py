@@ -1788,7 +1788,13 @@ class TestRepositoriesCreate:
             status="running",
             payload={
                 "job_kind": "repository.check",
-                "operation": {"maintenance_job": {"kind": "check", "id": check_job.id}},
+                "operation": {
+                    "maintenance_job": {
+                        "kind": "check",
+                        "id": check_job.id,
+                        "table": "operations",
+                    }
+                },
             },
         )
         test_db.add(agent_job)

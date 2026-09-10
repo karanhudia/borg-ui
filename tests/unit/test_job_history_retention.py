@@ -522,7 +522,13 @@ def _late_prune_log_scenario(db):
         status="completed",
         payload={
             "job_kind": "repository.prune",
-            "operation": {"maintenance_job": {"kind": "prune", "id": prune_row.id}},
+            "operation": {
+                "maintenance_job": {
+                    "kind": "prune",
+                    "id": prune_row.id,
+                    "table": "operations",
+                }
+            },
         },
         claimed_at=when,
         completed_at=finished,
@@ -705,7 +711,13 @@ def test_agent_prune_completion_marks_the_pruned_archives_jobs(db):
         status="completed",
         payload={
             "job_kind": "repository.prune",
-            "operation": {"maintenance_job": {"kind": "prune", "id": prune_row.id}},
+            "operation": {
+                "maintenance_job": {
+                    "kind": "prune",
+                    "id": prune_row.id,
+                    "table": "operations",
+                }
+            },
         },
         claimed_at=utc_now(),
         started_at=utc_now(),

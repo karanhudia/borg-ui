@@ -157,3 +157,6 @@ trivy-*.sarif
 dist/
 build/
 *.egg-info/
+
+# pytest artifact: a mocked log path resolved to a real directory
+MagicMock/
