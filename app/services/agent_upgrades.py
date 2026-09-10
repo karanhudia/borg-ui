@@ -1,0 +1,143 @@
+"""Dispatching agent self-upgrades, one endpoint at a time and in waves.
+
+The agent is killed by the thing it is reporting on, so a job here records
+only that the upgrade was requested; the outcome is resolved by the register
+path and the reaper (spec section 7.1). Both the upgrade endpoint and the
+agent job reaper dispatch through this module, so there is one dispatcher and
+one place that decides how many endpoints may be down at once.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+
+import structlog
+from sqlalchemy.orm import Session
+
+from app.core.agent_constants import (
+    AGENT_UPGRADE_COMMAND_TIMEOUT_SECONDS,
+    AGENT_UPGRADE_CONCURRENCY,
+)
+from app.database.models import AgentJob, AgentMachine
+from app.services.agent_connection_manager import (
+    AgentCommandError,
+    AgentCommandTimeout,
+    AgentConnectionUnavailable,
+    agent_connection_manager,
+)
+
+logger = structlog.get_logger()
+
+
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+async def request_agent_upgrade(db: Session, agent: AgentMachine, *, target: str):
+    """Create the job, dispatch the command, and record the outcome for one
+    endpoint. The job is completed at "upgrade started": it records that the
+    upgrade was successfully requested, nothing more."""
+    now = _now_utc()
+    job = AgentJob(
+        agent_machine_id=agent.id,
+        job_type="agent_upgrade",
+        status="running",
+        payload={"target_version": target},
+        created_at=now,
+        updated_at=now,
+        started_at=now,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    try:
+        await agent_connection_manager.send_command(
+            agent.id,
+            command="agent.upgrade",
+            payload={},
+            timeout_seconds=AGENT_UPGRADE_COMMAND_TIMEOUT_SECONDS,
+            wait_for_result=True,
+        )
+    except (
+        AgentConnectionUnavailable,
+        AgentCommandTimeout,
+        AgentCommandError,
+    ) as exc:
+        finished = _now_utc()
+        job.status = "failed"
+        job.error_message = str(exc)
+        job.completed_at = finished
+        job.updated_at = finished
+        agent.upgrade_state = "failed"
+        agent.upgrade_error = str(exc)
+        agent.upgrade_target_version = target
+        agent.upgrade_requested_at = None
+        agent.updated_at = finished
+        db.commit()
+        return {"agent_machine_id": agent.id, "job_id": job.id, "state": "failed"}
+
+    finished = _now_utc()
+    job.status = "completed"
+    job.completed_at = finished
+    job.updated_at = finished
+    agent.upgrade_state = "requested"
+    agent.upgrade_requested_at = finished
+    agent.upgrade_target_version = target
+    agent.upgrade_error = None
+    agent.updated_at = finished
+    db.commit()
+    return {"agent_machine_id": agent.id, "job_id": job.id, "state": "requested"}
+
+
+async def release_agent_upgrade_waves(db: Session) -> int:
+    """Dispatch as many queued upgrades as there are free slots.
+
+    Called both by the upgrade endpoint, so a request under the cap starts at
+    once, and by the agent job reaper on every tick, so a slot freed by a
+    success or a timeout starts the next endpoint with nobody watching.
+    Returns the number dispatched.
+    """
+    in_flight = (
+        db.query(AgentMachine).filter(AgentMachine.upgrade_state == "requested").count()
+    )
+    free = AGENT_UPGRADE_CONCURRENCY - in_flight
+    if free <= 0:
+        return 0
+
+    waiting = (
+        db.query(AgentMachine)
+        .filter(AgentMachine.upgrade_state == "queued")
+        .order_by(AgentMachine.id)
+        .limit(free)
+        .all()
+    )
+    dispatched = 0
+    for agent in waiting:
+        # Conditional claim, matching the endpoint's: two releases racing (an
+        # operator request landing on a reaper tick) must not dispatch one
+        # endpoint twice. The loser updates no row and skips it.
+        claimed = (
+            db.query(AgentMachine)
+            .filter(
+                AgentMachine.id == agent.id,
+                AgentMachine.upgrade_state == "queued",
+            )
+            .update(
+                {
+                    AgentMachine.upgrade_state: "requested",
+                    AgentMachine.upgrade_requested_at: _now_utc(),
+                },
+                synchronize_session=False,
+            )
+        )
+        db.commit()
+        if not claimed:
+            continue
+        db.refresh(agent)
+        await request_agent_upgrade(db, agent, target=agent.upgrade_target_version)
+        dispatched += 1
+
+    if dispatched:
+        logger.info("Agent upgrade wave released", count=dispatched)
+    return dispatched

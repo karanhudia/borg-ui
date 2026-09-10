@@ -15,7 +15,6 @@ from app.core.agent_auth import AGENT_TOKEN_PREFIX_LENGTH
 from app.core.agent_versions import compute_agent_upgrade_status
 from app.core.agent_constants import (
     AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS,
-    AGENT_UPGRADE_COMMAND_TIMEOUT_SECONDS,
 )
 from app.core.features import require_feature_access
 from app.core.security import get_current_admin_user, get_password_hash
@@ -37,6 +36,9 @@ from app.services.agent_connection_manager import (
     AgentCommandError,
     AgentCommandTimeout,
     AgentConnectionUnavailable,
+)
+from app.services.agent_upgrades import (
+    request_agent_upgrade,
 )
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.utils.datetime_utils import serialize_datetime
@@ -699,7 +701,7 @@ async def upgrade_agent_machines(
             continue
 
         results.append(
-            await _request_agent_upgrade(
+            await request_agent_upgrade(
                 db, agent, target=agent.desired_agent_version or available
             )
         )
@@ -724,63 +726,6 @@ def _last_upgrade_job_id(db: Session, agent: AgentMachine) -> Optional[int]:
         .first()
     )
     return job.id if job else None
-
-
-async def _request_agent_upgrade(db: Session, agent: AgentMachine, *, target: str):
-    """Create the job, dispatch the command, and record the outcome for one
-    endpoint. The job is completed at "upgrade started": it records that the
-    upgrade was successfully requested, nothing more."""
-    now = _now_utc()
-    job = AgentJob(
-        agent_machine_id=agent.id,
-        job_type="agent_upgrade",
-        status="running",
-        payload={"target_version": target},
-        created_at=now,
-        updated_at=now,
-        started_at=now,
-    )
-    db.add(job)
-    db.commit()
-    db.refresh(job)
-
-    try:
-        await agent_connection_manager.send_command(
-            agent.id,
-            command="agent.upgrade",
-            payload={},
-            timeout_seconds=AGENT_UPGRADE_COMMAND_TIMEOUT_SECONDS,
-            wait_for_result=True,
-        )
-    except (
-        AgentConnectionUnavailable,
-        AgentCommandTimeout,
-        AgentCommandError,
-    ) as exc:
-        finished = _now_utc()
-        job.status = "failed"
-        job.error_message = str(exc)
-        job.completed_at = finished
-        job.updated_at = finished
-        agent.upgrade_state = "failed"
-        agent.upgrade_error = str(exc)
-        agent.upgrade_target_version = target
-        agent.upgrade_requested_at = None
-        agent.updated_at = finished
-        db.commit()
-        return {"agent_machine_id": agent.id, "job_id": job.id, "state": "failed"}
-
-    finished = _now_utc()
-    job.status = "completed"
-    job.completed_at = finished
-    job.updated_at = finished
-    agent.upgrade_state = "requested"
-    agent.upgrade_requested_at = finished
-    agent.upgrade_target_version = target
-    agent.upgrade_error = None
-    agent.updated_at = finished
-    db.commit()
-    return {"agent_machine_id": agent.id, "job_id": job.id, "state": "requested"}
 
 
 @router.post(
