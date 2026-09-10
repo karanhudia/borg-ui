@@ -1,70 +1,73 @@
-"""
-Tests for repository deletion with foreign key constraints
+"""Repository deletion with related job rows.
 
-These tests verify that repositories can be deleted even when they have
-related records in job tables (RestoreJob, CheckJob, PruneJob, CompactJob).
+Deleting a repository that still has CheckJob, PruneJob or CompactJob rows
+used to fail on their repository_id foreign key. These tests replay the
+cleanup steps of the delete route against the models: dependent job rows go
+first (RestoreJob rows are linked by repository path, not by a foreign key,
+and are removed for tidiness), BackupJob history is unlinked rather than
+deleted, schedule links are removed while the schedule itself survives, and a
+delete without cleanup is refused by the database. They do not call the
+route itself.
 """
 
 import pytest
+from sqlalchemy import event
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+
 from app.database.models import (
+    BackupJob,
+    CheckJob,
+    CompactJob,
+    PruneJob,
     Repository,
     RestoreJob,
-    CheckJob,
-    PruneJob,
-    CompactJob,
-    BackupJob,
     ScheduledJob,
     ScheduledJobRepository,
-    User,
+    utc_now,
 )
-from app.database.database import SessionLocal, engine, Base
-from datetime import datetime
 
 
-@pytest.fixture(scope="function")
-def db_session():
-    """Create a fresh database session for each test"""
-    # Create all tables
-    Base.metadata.create_all(bind=engine)
+@pytest.fixture(autouse=True)
+def enforce_foreign_keys(test_db: Session):
+    """Turn on SQLite foreign key enforcement for this module.
 
-    session = SessionLocal()
-    yield session
+    The shared test database leaves the pragma at SQLite's default (off), so
+    the "delete without cleanup fails" case would pass silently. The engine
+    uses NullPool, so every checkout is a fresh connection and the listener
+    covers all of them.
+    """
+    engine = test_db.get_bind()
 
-    # Cleanup
-    session.close()
-    Base.metadata.drop_all(bind=engine)
+    def _enable(dbapi_connection, _connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
-
-@pytest.fixture
-def admin_user(db_session: Session):
-    """Create an admin user for testing"""
-    user = User(
-        username="admin",
-        email="admin@test.com",
-        hashed_password="fake_hash",
-        is_admin=True,
-    )
-    db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
-    return user
+    event.listen(engine, "connect", _enable)
+    # Drop the connection the session may already hold so it reconnects
+    # through the listener.
+    test_db.rollback()
+    try:
+        yield
+    finally:
+        event.remove(engine, "connect", _enable)
 
 
 @pytest.fixture
-def test_repository(db_session: Session):
+def test_repository(test_db: Session):
     """Create a test repository"""
     repo = Repository(
         name="Test Repo", path="/test/repo", encryption="repokey", mode="full"
     )
-    db_session.add(repo)
-    db_session.commit()
-    db_session.refresh(repo)
+    test_db.add(repo)
+    test_db.commit()
+    test_db.refresh(repo)
     return repo
 
 
 def test_delete_repository_with_restore_jobs(
-    db_session: Session, test_repository: Repository
+    test_db: Session, test_repository: Repository
 ):
     """Test: Repository deletion should work even with RestoreJob records"""
 
@@ -75,14 +78,14 @@ def test_delete_repository_with_restore_jobs(
         archive="test-archive",
         destination="/restore/path",
         status="completed",
-        started_at=datetime.utcnow(),
+        started_at=utc_now(),
     )
-    db_session.add(restore_job)
-    db_session.commit()
+    test_db.add(restore_job)
+    test_db.commit()
 
     # Verify RestoreJob exists
     assert (
-        db_session.query(RestoreJob)
+        test_db.query(RestoreJob)
         .filter(RestoreJob.repository == test_repository.path)
         .count()
         == 1
@@ -90,27 +93,27 @@ def test_delete_repository_with_restore_jobs(
 
     # Simulate deletion logic from repositories.py
     restore_jobs = (
-        db_session.query(RestoreJob)
+        test_db.query(RestoreJob)
         .filter(RestoreJob.repository == test_repository.path)
         .all()
     )
     for job in restore_jobs:
-        db_session.delete(job)
+        test_db.delete(job)
 
     # Delete repository
-    db_session.delete(test_repository)
-    db_session.commit()
+    test_db.delete(test_repository)
+    test_db.commit()
 
     # Verify both are deleted
     assert (
-        db_session.query(Repository).filter(Repository.id == test_repository.id).count()
+        test_db.query(Repository).filter(Repository.id == test_repository.id).count()
         == 0
     )
-    assert db_session.query(RestoreJob).count() == 0
+    assert test_db.query(RestoreJob).count() == 0
 
 
 def test_delete_repository_with_check_jobs(
-    db_session: Session, test_repository: Repository
+    test_db: Session, test_repository: Repository
 ):
     """Test: Repository deletion should work even with CheckJob records"""
 
@@ -118,14 +121,14 @@ def test_delete_repository_with_check_jobs(
     check_job = CheckJob(
         repository_id=test_repository.id,
         status="completed",
-        started_at=datetime.utcnow(),
+        started_at=utc_now(),
     )
-    db_session.add(check_job)
-    db_session.commit()
+    test_db.add(check_job)
+    test_db.commit()
 
     # Verify CheckJob exists
     assert (
-        db_session.query(CheckJob)
+        test_db.query(CheckJob)
         .filter(CheckJob.repository_id == test_repository.id)
         .count()
         == 1
@@ -133,27 +136,27 @@ def test_delete_repository_with_check_jobs(
 
     # Simulate deletion logic
     check_jobs = (
-        db_session.query(CheckJob)
+        test_db.query(CheckJob)
         .filter(CheckJob.repository_id == test_repository.id)
         .all()
     )
     for job in check_jobs:
-        db_session.delete(job)
+        test_db.delete(job)
 
     # Delete repository
-    db_session.delete(test_repository)
-    db_session.commit()
+    test_db.delete(test_repository)
+    test_db.commit()
 
     # Verify both are deleted
     assert (
-        db_session.query(Repository).filter(Repository.id == test_repository.id).count()
+        test_db.query(Repository).filter(Repository.id == test_repository.id).count()
         == 0
     )
-    assert db_session.query(CheckJob).count() == 0
+    assert test_db.query(CheckJob).count() == 0
 
 
 def test_delete_repository_with_prune_jobs(
-    db_session: Session, test_repository: Repository
+    test_db: Session, test_repository: Repository
 ):
     """Test: Repository deletion should work even with PruneJob records"""
 
@@ -161,14 +164,14 @@ def test_delete_repository_with_prune_jobs(
     prune_job = PruneJob(
         repository_id=test_repository.id,
         status="completed",
-        started_at=datetime.utcnow(),
+        started_at=utc_now(),
     )
-    db_session.add(prune_job)
-    db_session.commit()
+    test_db.add(prune_job)
+    test_db.commit()
 
     # Verify PruneJob exists
     assert (
-        db_session.query(PruneJob)
+        test_db.query(PruneJob)
         .filter(PruneJob.repository_id == test_repository.id)
         .count()
         == 1
@@ -176,27 +179,27 @@ def test_delete_repository_with_prune_jobs(
 
     # Simulate deletion logic
     prune_jobs = (
-        db_session.query(PruneJob)
+        test_db.query(PruneJob)
         .filter(PruneJob.repository_id == test_repository.id)
         .all()
     )
     for job in prune_jobs:
-        db_session.delete(job)
+        test_db.delete(job)
 
     # Delete repository
-    db_session.delete(test_repository)
-    db_session.commit()
+    test_db.delete(test_repository)
+    test_db.commit()
 
     # Verify both are deleted
     assert (
-        db_session.query(Repository).filter(Repository.id == test_repository.id).count()
+        test_db.query(Repository).filter(Repository.id == test_repository.id).count()
         == 0
     )
-    assert db_session.query(PruneJob).count() == 0
+    assert test_db.query(PruneJob).count() == 0
 
 
 def test_delete_repository_with_compact_jobs(
-    db_session: Session, test_repository: Repository
+    test_db: Session, test_repository: Repository
 ):
     """Test: Repository deletion should work even with CompactJob records"""
 
@@ -204,14 +207,14 @@ def test_delete_repository_with_compact_jobs(
     compact_job = CompactJob(
         repository_id=test_repository.id,
         status="completed",
-        started_at=datetime.utcnow(),
+        started_at=utc_now(),
     )
-    db_session.add(compact_job)
-    db_session.commit()
+    test_db.add(compact_job)
+    test_db.commit()
 
     # Verify CompactJob exists
     assert (
-        db_session.query(CompactJob)
+        test_db.query(CompactJob)
         .filter(CompactJob.repository_id == test_repository.id)
         .count()
         == 1
@@ -219,27 +222,27 @@ def test_delete_repository_with_compact_jobs(
 
     # Simulate deletion logic
     compact_jobs = (
-        db_session.query(CompactJob)
+        test_db.query(CompactJob)
         .filter(CompactJob.repository_id == test_repository.id)
         .all()
     )
     for job in compact_jobs:
-        db_session.delete(job)
+        test_db.delete(job)
 
     # Delete repository
-    db_session.delete(test_repository)
-    db_session.commit()
+    test_db.delete(test_repository)
+    test_db.commit()
 
     # Verify both are deleted
     assert (
-        db_session.query(Repository).filter(Repository.id == test_repository.id).count()
+        test_db.query(Repository).filter(Repository.id == test_repository.id).count()
         == 0
     )
-    assert db_session.query(CompactJob).count() == 0
+    assert test_db.query(CompactJob).count() == 0
 
 
 def test_delete_repository_with_all_job_types(
-    db_session: Session, test_repository: Repository
+    test_db: Session, test_repository: Repository
 ):
     """Test: Repository deletion should work with ALL job types at once"""
 
@@ -249,48 +252,48 @@ def test_delete_repository_with_all_job_types(
         archive="test-archive",
         destination="/restore/path",
         status="completed",
-        started_at=datetime.utcnow(),
+        started_at=utc_now(),
     )
     check_job = CheckJob(
         repository_id=test_repository.id,
         status="completed",
-        started_at=datetime.utcnow(),
+        started_at=utc_now(),
     )
     prune_job = PruneJob(
         repository_id=test_repository.id,
         status="completed",
-        started_at=datetime.utcnow(),
+        started_at=utc_now(),
     )
     compact_job = CompactJob(
         repository_id=test_repository.id,
         status="completed",
-        started_at=datetime.utcnow(),
+        started_at=utc_now(),
     )
 
-    db_session.add_all([restore_job, check_job, prune_job, compact_job])
-    db_session.commit()
+    test_db.add_all([restore_job, check_job, prune_job, compact_job])
+    test_db.commit()
 
     # Verify all jobs exist
     assert (
-        db_session.query(RestoreJob)
+        test_db.query(RestoreJob)
         .filter(RestoreJob.repository == test_repository.path)
         .count()
         == 1
     )
     assert (
-        db_session.query(CheckJob)
+        test_db.query(CheckJob)
         .filter(CheckJob.repository_id == test_repository.id)
         .count()
         == 1
     )
     assert (
-        db_session.query(PruneJob)
+        test_db.query(PruneJob)
         .filter(PruneJob.repository_id == test_repository.id)
         .count()
         == 1
     )
     assert (
-        db_session.query(CompactJob)
+        test_db.query(CompactJob)
         .filter(CompactJob.repository_id == test_repository.id)
         .count()
         == 1
@@ -298,71 +301,70 @@ def test_delete_repository_with_all_job_types(
 
     # Simulate full deletion logic from repositories.py
     for job in (
-        db_session.query(RestoreJob)
+        test_db.query(RestoreJob)
         .filter(RestoreJob.repository == test_repository.path)
         .all()
     ):
-        db_session.delete(job)
+        test_db.delete(job)
     for job in (
-        db_session.query(CheckJob)
+        test_db.query(CheckJob)
         .filter(CheckJob.repository_id == test_repository.id)
         .all()
     ):
-        db_session.delete(job)
+        test_db.delete(job)
     for job in (
-        db_session.query(PruneJob)
+        test_db.query(PruneJob)
         .filter(PruneJob.repository_id == test_repository.id)
         .all()
     ):
-        db_session.delete(job)
+        test_db.delete(job)
     for job in (
-        db_session.query(CompactJob)
+        test_db.query(CompactJob)
         .filter(CompactJob.repository_id == test_repository.id)
         .all()
     ):
-        db_session.delete(job)
+        test_db.delete(job)
 
     # Delete repository
-    db_session.delete(test_repository)
-    db_session.commit()
+    test_db.delete(test_repository)
+    test_db.commit()
 
     # Verify everything is deleted
     assert (
-        db_session.query(Repository).filter(Repository.id == test_repository.id).count()
+        test_db.query(Repository).filter(Repository.id == test_repository.id).count()
         == 0
     )
-    assert db_session.query(RestoreJob).count() == 0
-    assert db_session.query(CheckJob).count() == 0
-    assert db_session.query(PruneJob).count() == 0
-    assert db_session.query(CompactJob).count() == 0
+    assert test_db.query(RestoreJob).count() == 0
+    assert test_db.query(CheckJob).count() == 0
+    assert test_db.query(PruneJob).count() == 0
+    assert test_db.query(CompactJob).count() == 0
 
 
 def test_delete_repository_preserves_backup_job_history(
-    db_session: Session, test_repository: Repository
+    test_db: Session, test_repository: Repository
 ):
     """Test: BackupJob records should be unlinked, not deleted (preserve history)"""
 
-    # Create a BackupJob for this repository
-    # Note: BackupJob stores repository path (string), not repository_id (int)
+    # A BackupJob carries the repository path and, since the column exists,
+    # the repository_id foreign key (ondelete="SET NULL").
     backup_job = BackupJob(
-        repository=test_repository.path,  # Uses path, not ID
+        repository=test_repository.path,
+        repository_id=test_repository.id,
         status="completed",
-        started_at=datetime.utcnow(),
+        started_at=utc_now(),
     )
-    db_session.add(backup_job)
-    db_session.commit()
+    test_db.add(backup_job)
+    test_db.commit()
 
     backup_job_id = backup_job.id
 
     # Verify BackupJob exists
-    assert (
-        db_session.query(BackupJob).filter(BackupJob.id == backup_job_id).count() == 1
-    )
+    assert test_db.query(BackupJob).filter(BackupJob.id == backup_job_id).count() == 1
     assert backup_job.repository == test_repository.path
 
     # Simulate deletion logic - unlink BackupJobs (set path to NULL)
     backup_jobs = (
-        db_session.query(BackupJob)
+        test_db.query(BackupJob)
         .filter(BackupJob.repository == test_repository.path)
         .all()
     )
@@ -370,24 +372,25 @@ def test_delete_repository_preserves_backup_job_history(
         job.repository = None
 
     # Delete repository
-    db_session.delete(test_repository)
-    db_session.commit()
+    test_db.delete(test_repository)
+    test_db.commit()
 
     # Verify repository is deleted but BackupJob remains (unlinked)
     assert (
-        db_session.query(Repository).filter(Repository.id == test_repository.id).count()
+        test_db.query(Repository).filter(Repository.id == test_repository.id).count()
         == 0
     )
 
     backup_job_after = (
-        db_session.query(BackupJob).filter(BackupJob.id == backup_job_id).first()
+        test_db.query(BackupJob).filter(BackupJob.id == backup_job_id).first()
     )
     assert backup_job_after is not None  # Job still exists
     assert backup_job_after.repository is None  # But path is NULL
+    assert backup_job_after.repository_id is None  # FK cleared by ondelete
 
 
 def test_delete_repository_with_scheduled_job_link(
-    db_session: Session, test_repository: Repository
+    test_db: Session, test_repository: Repository
 ):
     """Test: ScheduledJobRepository junction entries should be deleted"""
 
@@ -395,9 +398,9 @@ def test_delete_repository_with_scheduled_job_link(
     scheduled_job = ScheduledJob(
         name="Test Schedule", cron_expression="0 2 * * *", enabled=True
     )
-    db_session.add(scheduled_job)
-    db_session.commit()
-    db_session.refresh(scheduled_job)
+    test_db.add(scheduled_job)
+    test_db.commit()
+    test_db.refresh(scheduled_job)
 
     # Link repository to scheduled job via junction table
     junction = ScheduledJobRepository(
@@ -405,12 +408,12 @@ def test_delete_repository_with_scheduled_job_link(
         repository_id=test_repository.id,
         execution_order=0,
     )
-    db_session.add(junction)
-    db_session.commit()
+    test_db.add(junction)
+    test_db.commit()
 
     # Verify junction entry exists
     assert (
-        db_session.query(ScheduledJobRepository)
+        test_db.query(ScheduledJobRepository)
         .filter(ScheduledJobRepository.repository_id == test_repository.id)
         .count()
         == 1
@@ -418,33 +421,74 @@ def test_delete_repository_with_scheduled_job_link(
 
     # Simulate deletion logic - delete junction entries
     junction_entries = (
-        db_session.query(ScheduledJobRepository)
+        test_db.query(ScheduledJobRepository)
         .filter(ScheduledJobRepository.repository_id == test_repository.id)
         .all()
     )
     for entry in junction_entries:
-        db_session.delete(entry)
+        test_db.delete(entry)
 
     # Delete repository
-    db_session.delete(test_repository)
-    db_session.commit()
+    test_db.delete(test_repository)
+    test_db.commit()
 
     # Verify repository and junction are deleted, but schedule remains
     assert (
-        db_session.query(Repository).filter(Repository.id == test_repository.id).count()
+        test_db.query(Repository).filter(Repository.id == test_repository.id).count()
         == 0
     )
-    assert db_session.query(ScheduledJobRepository).count() == 0
+    assert test_db.query(ScheduledJobRepository).count() == 0
     assert (
-        db_session.query(ScheduledJob)
-        .filter(ScheduledJob.id == scheduled_job.id)
-        .count()
+        test_db.query(ScheduledJob).filter(ScheduledJob.id == scheduled_job.id).count()
         == 1
     )
 
 
+def test_delete_repository_unlinks_single_repository_schedule(
+    test_db: Session, test_repository: Repository
+):
+    """Test: a legacy single-repository ScheduledJob keeps its row, loses the link
+
+    ScheduledJob.repository_id has no ondelete action, so the route nulls it
+    before the delete.
+    """
+
+    scheduled_job = ScheduledJob(
+        name="Legacy Schedule",
+        cron_expression="0 3 * * *",
+        enabled=True,
+        repository_id=test_repository.id,
+    )
+    test_db.add(scheduled_job)
+    test_db.commit()
+    test_db.refresh(scheduled_job)
+
+    # Simulate deletion logic - unlink single-repository schedules
+    for job in (
+        test_db.query(ScheduledJob)
+        .filter(ScheduledJob.repository_id == test_repository.id)
+        .all()
+    ):
+        job.repository_id = None
+
+    # Delete repository
+    test_db.delete(test_repository)
+    test_db.commit()
+
+    # Verify repository is gone and the schedule survives unlinked
+    assert (
+        test_db.query(Repository).filter(Repository.id == test_repository.id).count()
+        == 0
+    )
+    schedule_after = (
+        test_db.query(ScheduledJob).filter(ScheduledJob.id == scheduled_job.id).first()
+    )
+    assert schedule_after is not None
+    assert schedule_after.repository_id is None
+
+
 def test_delete_repository_without_cleanup_fails(
-    db_session: Session, test_repository: Repository
+    test_db: Session, test_repository: Repository
 ):
     """
     Test: WITHOUT cleanup, deletion should fail with FK constraint
@@ -455,36 +499,27 @@ def test_delete_repository_without_cleanup_fails(
     check_job = CheckJob(
         repository_id=test_repository.id,
         status="completed",
-        started_at=datetime.utcnow(),
+        started_at=utc_now(),
     )
-    db_session.add(check_job)
-    db_session.commit()
+    test_db.add(check_job)
+    test_db.commit()
 
     # Try to delete repository WITHOUT cleaning up CheckJob first
-    with pytest.raises(Exception) as exc_info:
-        db_session.delete(test_repository)
-        db_session.commit()
-
-    # Verify we got a foreign key constraint error
-    assert "FOREIGN KEY constraint failed" in str(
-        exc_info.value
-    ) or "IntegrityError" in str(exc_info.value.__class__.__name__)
+    with pytest.raises(IntegrityError, match="FOREIGN KEY constraint failed"):
+        test_db.delete(test_repository)
+        test_db.commit()
 
     # Rollback the failed transaction
-    db_session.rollback()
+    test_db.rollback()
 
     # Verify repository still exists (deletion failed)
     assert (
-        db_session.query(Repository).filter(Repository.id == test_repository.id).count()
+        test_db.query(Repository).filter(Repository.id == test_repository.id).count()
         == 1
     )
     assert (
-        db_session.query(CheckJob)
+        test_db.query(CheckJob)
         .filter(CheckJob.repository_id == test_repository.id)
         .count()
         == 1
     )
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

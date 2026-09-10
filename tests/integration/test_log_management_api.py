@@ -7,31 +7,14 @@ Tests /api/settings/system/logs/* endpoints for log management functionality.
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app
 from app.database.models import User, SystemSettings
 from app.core.security import get_password_hash
 
 
 @pytest.fixture
-def client():
-    """Create test client"""
-    return TestClient(app)
-
-
-@pytest.fixture
-def test_db(tmp_path):
-    """Create test database"""
-    from app.database.database import SessionLocal, engine, Base
-
-    # Create tables
-    Base.metadata.create_all(bind=engine)
-
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-        Base.metadata.drop_all(bind=engine)
+def client(test_client: TestClient) -> TestClient:
+    """The shared client, bound to this test's isolated database."""
+    return test_client
 
 
 @pytest.fixture
@@ -41,7 +24,7 @@ def admin_user(test_db):
         username="admin",
         email="admin@test.com",
         password_hash=get_password_hash("admin123"),
-        is_admin=True,
+        role="admin",
         is_active=True,
     )
     test_db.add(user)
@@ -57,7 +40,7 @@ def regular_user(test_db):
         username="user",
         email="user@test.com",
         password_hash=get_password_hash("user123"),
-        is_admin=False,
+        role="viewer",
         is_active=True,
     )
     test_db.add(user)

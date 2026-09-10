@@ -9,7 +9,7 @@ import pytest
 import json
 from fastapi.testclient import TestClient
 
-from tests.integration.test_helpers import (
+from tests.integration.helpers import (
     parse_archives_payload,
     wait_for_job_terminal_status,
 )

@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.database.models import Repository
-from tests.integration.test_helpers import wait_for_job_terminal_status
+from tests.integration.helpers import wait_for_job_terminal_status
 from tests.utils.borg import (
     create_archive,
     create_source_tree,

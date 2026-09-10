@@ -6,7 +6,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.integration.test_helpers import wait_for_job_terminal_status
+from tests.integration.helpers import wait_for_job_terminal_status
 from tests.utils.jobs import wait_for_payload_status
 
 

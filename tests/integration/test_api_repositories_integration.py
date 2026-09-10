@@ -9,7 +9,7 @@ import shutil
 import subprocess
 from fastapi.testclient import TestClient
 from app.database.models import Repository
-from tests.integration.test_helpers import (
+from tests.integration.helpers import (
     parse_archives_payload,
     wait_for_job_terminal_status,
 )

@@ -17,10 +17,9 @@ import os
 @pytest.mark.requires_borg
 def test_api_endpoints(test_base_url):
     """Test all API endpoints using test_app.py"""
-    # test_app.py is in the project root, not in tests/
     project_root = os.path.join(os.path.dirname(__file__), "..", "..")
     result = subprocess.run(
-        [sys.executable, "test_app.py", "--url", test_base_url],
+        [sys.executable, "tests/manual/test_app.py", "--url", test_base_url],
         cwd=project_root,
         capture_output=True,
         text=True,
@@ -51,7 +50,7 @@ def test_archive_contents(test_base_url, test_directory):
     result = subprocess.run(
         [
             sys.executable,
-            "tests/integration/test_archive_contents.py",
+            "tests/manual/test_archive_contents.py",
             test_directory,
             "--url",
             test_base_url,
@@ -81,7 +80,7 @@ def test_multiple_source_directories(test_base_url):
     result = subprocess.run(
         [
             sys.executable,
-            "tests/integration/test_multiple_source_dirs.py",
+            "tests/manual/test_multiple_source_dirs.py",
             "--url",
             test_base_url,
         ],
@@ -109,7 +108,7 @@ def test_archive_directory_browsing(test_base_url):
     result = subprocess.run(
         [
             sys.executable,
-            "tests/integration/test_archive_directory_browsing.py",
+            "tests/manual/test_archive_directory_browsing.py",
             "--url",
             test_base_url,
         ],

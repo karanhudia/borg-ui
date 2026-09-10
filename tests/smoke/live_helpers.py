@@ -18,7 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from tests.integration.test_helpers import DockerPathHelper, parse_archives_payload
+from tests.integration.helpers import DockerPathHelper, parse_archives_payload
 from tests.utils.jobs import wait_for_payload_status
 
 

@@ -29,9 +29,9 @@ from tests.utils.borg import (
 )
 
 try:
-    from .test_helpers import make_borg_env
+    from .helpers import make_borg_env
 except ImportError:
-    from test_helpers import make_borg_env
+    from helpers import make_borg_env
 
 
 @pytest.mark.integration

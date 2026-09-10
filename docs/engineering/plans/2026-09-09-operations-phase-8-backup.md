@@ -100,8 +100,9 @@ deviation. The review wants a fresh Fable 5.1 session.
   level 409s (`ensure_manual_backup_capacity`, `ensure_repository_admission`)
   stay where they are and learn to count backup operations (Open question 7).
 - Nothing in this phase writes a new row to `backup_jobs`. After this
-  phase, `grep -rn "BackupJob(" app/` matches only `app/database/models.py`
-  and `app/tests/test_repository_deletion.py`. `AgentJob.backup_job_id`,
+  phase, `grep -rn "BackupJob(" app/ tests/unit/` matches only
+  `app/database/models.py` and `tests/unit/test_repository_deletion.py`.
+  `AgentJob.backup_job_id`,
   `ScriptExecution.backup_job_id`, and
   `BackupPlanRunRepository.backup_job_id` are written only when the linked
   job is a legacy row, which no production path produces after this phase.
