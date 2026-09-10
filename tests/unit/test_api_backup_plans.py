@@ -5048,14 +5048,20 @@ class TestBackupPlanRoutes:
             async def prune(self, job_id, **kwargs):
                 maintenance_calls.append("prune")
                 assert kwargs["keep_within"] == "1d"
+                # the plan's step waits out a listing and hands in its
+                # run's cancel check
+                assert kwargs["wait_for_read_work"] is True
+                assert kwargs["is_cancelled"]() is False
                 op = test_db.query(Operation).filter_by(id=job_id, kind="prune").one()
                 assert op.repository_id == repo.id
                 op.status = "completed"
                 op.completed_at = datetime.utcnow()
                 test_db.commit()
 
-            async def compact(self, job_id):
+            async def compact(self, job_id, **kwargs):
                 maintenance_calls.append("compact")
+                assert kwargs["wait_for_read_work"] is True
+                assert kwargs["is_cancelled"]() is False
                 op = test_db.query(Operation).filter_by(id=job_id, kind="compact").one()
                 assert op.repository_id == repo.id
                 op.status = "completed"

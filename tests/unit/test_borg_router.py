@@ -213,6 +213,8 @@ async def test_compact_delegates_to_agent_when_managed():
         job_kind="repository.compact",
         maintenance_kind="compact",
         maintenance_job_id=7,
+        is_cancelled=None,
+        wait_for_read_work=False,
     )
     mock_v2.assert_not_awaited()
 
@@ -239,6 +241,8 @@ async def test_prune_delegates_to_agent_when_managed():
         job_kind="repository.prune",
         maintenance_kind="prune",
         maintenance_job_id=7,
+        is_cancelled=None,
+        wait_for_read_work=False,
         operation={
             "keep_hourly": 1,
             "keep_daily": 2,

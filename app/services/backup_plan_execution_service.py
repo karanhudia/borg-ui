@@ -2198,6 +2198,8 @@ class BackupPlanExecutionService:
                     keep_yearly=context.prune_keep_yearly,
                     dry_run=False,
                     keep_within=context.prune_keep_within,
+                    is_cancelled=lambda: self._is_run_cancelled(run_id),
+                    wait_for_read_work=True,
                 ),
             )
             if self._is_run_cancelled(run_id):
@@ -2228,7 +2230,11 @@ class BackupPlanExecutionService:
                 backup_job,
                 compact_job,
                 run_id,
-                lambda: BorgRouter(repo).compact(compact_job.id),
+                lambda: BorgRouter(repo).compact(
+                    compact_job.id,
+                    is_cancelled=lambda: self._is_run_cancelled(run_id),
+                    wait_for_read_work=True,
+                ),
             )
             if self._is_run_cancelled(run_id):
                 return "cancelled"
