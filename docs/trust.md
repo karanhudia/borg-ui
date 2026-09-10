@@ -129,7 +129,10 @@ Before anything is sent, your real hostname and URL are replaced with
 browser. The script tag is loaded with `referrerpolicy="no-referrer"` so the
 request that fetches it cannot carry the origin either. The identifier attached
 to a session is a hash of your install id and username, not the username
-itself. See `frontend/src/utils/analytics.ts` and [Analytics](analytics).
+itself. The session also carries your app version and your plan name
+(community, pro, or enterprise) so usage can be compared across plans. No
+licence key, customer, or other billing detail is sent. See
+`frontend/src/utils/analytics.ts` and [Analytics](analytics).
 
 Nothing else phones home. No crash reporting, no error telemetry, no update
 beacon.

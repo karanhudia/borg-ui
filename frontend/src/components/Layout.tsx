@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { hasConsentBeenGiven, loadUserPreference } from '../utils/analytics'
+import { hasConsentBeenGiven, loadUserPreference, setAnalyticsPlan } from '../utils/analytics'
 import AnalyticsConsentBanner from './AnalyticsConsentBanner'
 import AnnouncementModal from './AnnouncementModal'
 import AppHeader from './AppHeader'
 import AppSidebar from './AppSidebar'
 import { useAuth } from '../hooks/useAuth'
 import { useAnnouncementSurface } from '../hooks/useAnnouncementSurface'
+import { usePlan } from '../hooks/usePlan'
 import PasskeyEnrollmentPrompt from './PasskeyEnrollmentPrompt'
 import { useActiveBackendTarget } from '../services/remoteBackends/context'
 import {
@@ -34,6 +35,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   } = useAuth()
   const { announcement, acknowledgeAnnouncement, snoozeAnnouncement, trackAnnouncementCtaClick } =
     useAnnouncementSurface()
+  const { plan, isLoading: planLoading } = usePlan()
+
+  // Segment Umami visitors by plan. Skipped while loading so the 'community'
+  // fallback is never reported for a Pro or Enterprise install.
+  useEffect(() => {
+    if (!planLoading) setAnalyticsPlan(plan)
+  }, [plan, planLoading])
   const [mobileOpen, setMobileOpen] = useState(false)
   const [showConsentBanner, setShowConsentBanner] = useState(false)
   const [showPasskeyPrompt, setShowPasskeyPrompt] = useState(false)
