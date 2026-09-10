@@ -289,13 +289,39 @@ Passphrase-protected keys are not suitable for unattended scheduled backups unle
 
 ## Restrict Remote Access
 
-For backup-only remote users, consider restricting the public key in `authorized_keys`:
+For backup-only remote users, restrict the public key in `authorized_keys` so
+it can only run Borg:
 
 ```text
 command="borg serve --restrict-to-path /backups",restrict ssh-ed25519 AAAA... borg-ui
 ```
 
-Adjust the path for your server.
+Adjust the path for your server. Borg UI detects such keys: the connection
+test reports "SSH connection works, remote shell restricted" and stays green,
+because the key authenticated even though the probe command was refused.
+Everything that needs a shell on the repository host is unavailable with a
+restricted key and degrades without failing the connection:
+
+| Feature | Remote command | With a restricted key |
+|---|---|---|
+| Connection test, diagnostics latency | `pwd` | connected (restricted) |
+| Storage information | `df -k <path>` | hidden |
+| Path browsing, repository detection | `ls`, `stat`, SFTP | enter paths manually |
+| Mount connection | SFTP subsystem | unavailable |
+| Borg operations | `<remote_path> serve …` | work |
+
+Do not widen the key's allowlist to make those features work; a backup key
+should stay Borg-only.
+
+If you use a wrapper script instead of a fixed `borg serve` command, match
+`$SSH_ORIGINAL_COMMAND` against what Borg UI actually sends: the repository's
+**Remote Borg path** (default `borg`) followed by `serve` and flags, for example
+`borg serve --umask=077 --info`. With **Use sudo** enabled it is
+`sudo -n -H <remote_path> serve …`. The repository wizard's command preview
+shows the exact remote command for your settings. Match on the prefix rather
+than the full string, since Borg adds flags such as `--info` or `--debug`.
+Note that for a subsystem request `SSH_ORIGINAL_COMMAND` arrives with one
+trailing ASCII space; shell-quoted it is `'/usr/lib/openssh/sftp-server '`.
 
 ## Troubleshooting
 

@@ -5041,7 +5041,9 @@
     "copyToClipboard": "Copia negli appunti",
     "copied": "Copiato!",
     "commandCopied": "Comando copiato negli appunti",
-    "copyFailed": "Impossibile copiare negli appunti"
+    "copyFailed": "Impossibile copiare negli appunti",
+    "remoteServeCommand": "Comando remoto (per chiavi limitate)",
+    "remoteServeCommandDesc": "Borg lo esegue sull'host del repository. Un wrapper forced-command in authorized_keys deve accettarlo."
   },
   "cronBuilderComponent": {
     "runEvery": "Esegui ogni",
@@ -5788,7 +5790,7 @@
         "adminAccessRequired": "Accesso amministratore richiesto",
         "cannotEnableAsBackupSource": "Impossibile abilitare come sorgente di backup: {{error}}",
         "connectionTestFailed": "Test connessione SSH fallito: {{error}}",
-        "failedCollectStorage": "Impossibile raccogliere informazioni di archiviazione",
+        "failedCollectStorage": "Le informazioni storage non sono disponibili per questa connessione.",
         "failedGenerateKey": "Impossibile generare la chiave SSH: {{error}}",
         "invalidKeyType": "Tipo chiave non valido. Deve essere uno di: {{types}}",
         "invalidPrivateKeyFormat": "Formato chiave privata non valido",
@@ -6052,6 +6054,7 @@
         "connectionDeleted": "Connessione SSH eliminata con successo",
         "connectionTestFailed": "Test connessione SSH fallito",
         "connectionTestSuccess": "Test connessione SSH riuscito",
+        "connectionTestSuccessRestricted": "La connessione SSH funziona. La shell remota è limitata a Borg, quindi navigazione e informazioni storage non sono disponibili.",
         "connectionUpdated": "Connessione SSH aggiornata con successo",
         "sshKeyCreated": "Chiave SSH creata con successo",
         "sshKeyDeleted": "Chiave SSH eliminata con successo",

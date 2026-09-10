@@ -150,7 +150,9 @@ export default function SSHConnectionsSingleKey() {
       sshKeysAPI.testSSHConnection(data.keyId, data.connectionData),
     onSuccess: (response) => {
       if (response.data.success) {
-        toast.success(t('sshConnections.toasts.connectionTestSuccess'))
+        toast.success(
+          translateBackendKey(response.data.message, 'sshConnections.toasts.connectionTestSuccess')
+        )
         track(EventCategory.SSH, EventAction.TEST, { resource: 'connection' })
       } else {
         toast.error(t('sshConnections.toasts.connectionTestFailed'))
@@ -214,8 +216,16 @@ export default function SSHConnectionsSingleKey() {
 
   const refreshStorageMutation = useMutation({
     mutationFn: (connectionId: number) => sshKeysAPI.refreshConnectionStorage(connectionId),
-    onSuccess: () => {
-      toast.success(t('sshConnections.toasts.storageRefreshed'))
+    onSuccess: (response) => {
+      // The backend answers 200 with success=false when the remote shell
+      // refuses `df` (restricted key); that is not an error, just no data.
+      if (response.data.success) {
+        toast.success(t('sshConnections.toasts.storageRefreshed'))
+      } else {
+        toast(
+          translateBackendKey(response.data.message, 'sshConnections.toasts.storageRefreshFailed')
+        )
+      }
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
       track(EventCategory.SSH, EventAction.VIEW, { resource: 'storage' })
     },
@@ -232,7 +242,9 @@ export default function SSHConnectionsSingleKey() {
     mutationFn: (connectionId: number) => sshKeysAPI.testExistingConnection(connectionId),
     onSuccess: (response) => {
       if (response.data.success) {
-        toast.success(t('sshConnections.toasts.connectionTestSuccess'))
+        toast.success(
+          translateBackendKey(response.data.message, 'sshConnections.toasts.connectionTestSuccess')
+        )
       } else {
         toast.error(
           translateBackendKey(response.data.error) ||
