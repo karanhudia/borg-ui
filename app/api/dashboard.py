@@ -1,12 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import psutil
 import structlog
 from dataclasses import dataclass, fields
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 
 from app.database.database import get_db
 from app.database.models import (
@@ -16,9 +15,6 @@ from app.database.models import (
     Repository,
     ScheduledJob,
     ScheduledJobRepository,
-    CheckJob,
-    CompactJob,
-    PruneJob,
     RestoreCheckJob,
     SSHConnection,
     SystemSettings,
@@ -28,6 +24,12 @@ from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.operations.backup_facade import (
     backup_jobs_started_since,
     recent_backup_jobs,
+)
+from app.services.operations.job_facade import (
+    UNSETTLED_STATUSES,
+    MaintenanceJobFacade,
+    latest_maintenance_jobs_by_repository,
+    maintenance_jobs_started_since,
 )
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
@@ -177,13 +179,24 @@ def classify_day_age(days: int, warning_days: int, critical_days: int) -> str:
     return "healthy"
 
 
+# A restore check row from either table (spec section 14): the legacy model
+# until phase 9, the facade over an `operations` row since phase 5.
+LatestRestoreCheck = Union[RestoreCheckJob, MaintenanceJobFacade]
+
+
 def build_restore_check_health(
     repo: Repository,
     now: datetime,
-    latest_restore_check: Optional[RestoreCheckJob] = None,
+    latest_restore_check: Optional[LatestRestoreCheck] = None,
     thresholds: Optional[DashboardHealthThresholds] = None,
+    last_verdict: Optional[LatestRestoreCheck] = None,
 ) -> Dict[str, Any]:
-    """Build restore-verification health without penalizing unconfigured repos."""
+    """Build restore-verification health without penalizing unconfigured repos.
+
+    `latest_restore_check` is the newest row and drives the live status;
+    `last_verdict` is the newest row that finished and drives the severity,
+    so a run still queued or running does not hide the failure before it.
+    Without it the newest row is the verdict when it has one."""
     thresholds = thresholds or DashboardHealthThresholds()
     # "Configured" requires both a cron expression AND the user-facing toggle
     # being on. Pausing via the toggle should not penalize dashboard health.
@@ -192,20 +205,36 @@ def build_restore_check_health(
         schedule_enabled = True
     configured = bool(repo.restore_check_cron_expression) and bool(schedule_enabled)
     latest_status = latest_restore_check.status if latest_restore_check else None
-    latest_error = latest_restore_check.error_message if latest_restore_check else None
+    if last_verdict is None and latest_status not in UNSETTLED_STATUSES:
+        last_verdict = latest_restore_check
+    verdict_status = last_verdict.status if last_verdict else None
+    verdict_error = last_verdict.error_message if last_verdict else None
+    # An operation that did not run says why in its reason (spec 6.3); the
+    # facade already reads the restore check's `needs_backup` back as such.
+    verdict_reason = getattr(last_verdict, "skip_reason", None)
+    # The live row rarely carries a message; the verdict's is what the
+    # tooltip should show while a critical or warning reading stands.
+    latest_error = (
+        latest_restore_check.error_message if latest_restore_check else None
+    ) or verdict_error
     last_success = repo.last_restore_check
+    # The repository column is what the service stamps on success; the verdict
+    # row is the same fact, so whichever is newer is the last success.
+    if verdict_status == "completed" and last_verdict and last_verdict.completed_at:
+        if not last_success or last_verdict.completed_at > last_success:
+            last_success = last_verdict.completed_at
 
-    if latest_status == "failed":
+    if verdict_status == "failed":
         return {
             "dimension": "critical",
             "severity": "critical",
-            "warning": f"Restore check failed: {latest_error or 'unknown error'}",
+            "warning": f"Restore check failed: {verdict_error or 'unknown error'}",
             "configured": configured,
             "latest_status": latest_status,
             "latest_error": latest_error,
         }
 
-    if latest_status == "completed_with_warnings":
+    if verdict_status == "completed_with_warnings":
         return {
             "dimension": "warning",
             "severity": "warning",
@@ -215,21 +244,32 @@ def build_restore_check_health(
             "latest_error": latest_error,
         }
 
-    if latest_status == "needs_backup":
+    if verdict_status == "needs_backup":
         return {
             "dimension": "warning",
             "severity": "warning",
-            "warning": latest_error or "Restore check needs a backup first",
+            "warning": verdict_error or "Restore check needs a backup first",
             "configured": configured,
             "latest_status": latest_status,
             "latest_error": latest_error,
         }
 
-    if latest_status == "cancelled":
+    if verdict_status == "cancelled":
         return {
             "dimension": "warning",
             "severity": "warning",
-            "warning": "Latest restore check was cancelled",
+            "warning": "Last restore check run was cancelled",
+            "configured": configured,
+            "latest_status": latest_status,
+            "latest_error": latest_error,
+        }
+
+    if verdict_status == "skipped":
+        return {
+            "dimension": "warning",
+            "severity": "warning",
+            "warning": "Restore check skipped"
+            + (f": {verdict_reason.replace('_', ' ')}" if verdict_reason else ""),
             "configured": configured,
             "latest_status": latest_status,
             "latest_error": latest_error,
@@ -244,9 +284,6 @@ def build_restore_check_health(
             "latest_status": latest_status,
             "latest_error": latest_error,
         }
-
-    if latest_status == "completed" and not last_success and latest_restore_check:
-        last_success = latest_restore_check.completed_at
 
     if last_success:
         days_since_restore_check = (now - last_success).days
@@ -305,8 +342,9 @@ def build_restore_check_health(
 def build_full_repository_health(
     repo: Repository,
     now: datetime,
-    latest_restore_check: Optional[RestoreCheckJob] = None,
+    latest_restore_check: Optional[LatestRestoreCheck] = None,
     thresholds: Optional[DashboardHealthThresholds] = None,
+    last_verdict: Optional[LatestRestoreCheck] = None,
 ) -> Dict[str, Any]:
     """Build health signals for repositories managed directly by Borg UI."""
     thresholds = thresholds or DashboardHealthThresholds()
@@ -356,7 +394,7 @@ def build_full_repository_health(
         compact_dim = "critical"
 
     restore_check_health = build_restore_check_health(
-        repo, now, latest_restore_check, thresholds
+        repo, now, latest_restore_check, thresholds, last_verdict=last_verdict
     )
     if restore_check_health["severity"]:
         health_status, health_color = promote_repository_health(
@@ -384,8 +422,9 @@ def build_full_repository_health(
 def build_observe_repository_health(
     repo: Repository,
     now: datetime,
-    latest_restore_check: Optional[RestoreCheckJob] = None,
+    latest_restore_check: Optional[LatestRestoreCheck] = None,
     thresholds: Optional[DashboardHealthThresholds] = None,
+    last_verdict: Optional[LatestRestoreCheck] = None,
 ) -> Dict[str, Any]:
     """Build monitoring-oriented health signals for observe-only repositories."""
     thresholds = thresholds or DashboardHealthThresholds()
@@ -439,7 +478,7 @@ def build_observe_repository_health(
             health_color = "warning"
 
     restore_check_health = build_restore_check_health(
-        repo, now, latest_restore_check, thresholds
+        repo, now, latest_restore_check, thresholds, last_verdict=last_verdict
     )
     if restore_check_health["severity"]:
         health_status, health_color = promote_repository_health(
@@ -686,6 +725,22 @@ async def get_dashboard_schedule(
         )
 
 
+def _maintenance_repository_name(job, repo_name_map: dict, repo_id_map: dict) -> str:
+    """The repository name for a feed entry, in the order the timeline always
+    used: the path the row captured, exact or without the trailing slash;
+    then the repository id; then the path's last segment. An operations row
+    captures no path, its facade resolves it from the repository."""
+    path = job.repository_path
+    if path in repo_name_map:
+        return repo_name_map[path]
+    if path and path.rstrip("/") in repo_name_map:
+        return repo_name_map[path.rstrip("/")]
+    repository_id = getattr(job, "repository_id", None)
+    if repository_id and repository_id in repo_id_map:
+        return repo_id_map[repository_id]
+    return path.rstrip("/").split("/")[-1] if path else "Unknown"
+
+
 @router.get("/overview")
 async def get_dashboard_overview(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
@@ -729,27 +784,13 @@ async def get_dashboard_overview(
         # Get SSH connections
         ssh_connections = db.query(SSHConnection).all()
 
-        latest_restore_checks = {}
         repository_ids = [repo.id for repo in repositories]
-        if repository_ids:
-            latest_restore_check_ids = (
-                db.query(func.max(RestoreCheckJob.id).label("id"))
-                .filter(RestoreCheckJob.repository_id.in_(repository_ids))
-                .group_by(RestoreCheckJob.repository_id)
-                .subquery()
-            )
-            restore_check_jobs = (
-                db.query(RestoreCheckJob)
-                .join(
-                    latest_restore_check_ids,
-                    RestoreCheckJob.id == latest_restore_check_ids.c.id,
-                )
-                .all()
-            )
-            for restore_check_job in restore_check_jobs:
-                latest_restore_checks[restore_check_job.repository_id] = (
-                    restore_check_job
-                )
+        latest_restore_checks = latest_maintenance_jobs_by_repository(
+            db, "restore_check", repository_ids
+        )
+        restore_check_verdicts = latest_maintenance_jobs_by_repository(
+            db, "restore_check", repository_ids, settled=True
+        )
 
         # Calculate repository health (only for full-mode repos that do backups)
         repo_health = []
@@ -768,7 +809,11 @@ async def get_dashboard_overview(
             size_bytes = parse_size_to_bytes(repo.total_size)
             latest_restore_check = latest_restore_checks.get(repo.id)
             health = build_full_repository_health(
-                repo, now, latest_restore_check, health_thresholds
+                repo,
+                now,
+                latest_restore_check,
+                health_thresholds,
+                last_verdict=restore_check_verdicts.get(repo.id),
             )
 
             # Get associated schedule — prefer enabled over disabled when multiple match
@@ -855,7 +900,11 @@ async def get_dashboard_overview(
             size_bytes = parse_size_to_bytes(repo.total_size)
             latest_restore_check = latest_restore_checks.get(repo.id)
             health = build_observe_repository_health(
-                repo, now, latest_restore_check, health_thresholds
+                repo,
+                now,
+                latest_restore_check,
+                health_thresholds,
+                last_verdict=restore_check_verdicts.get(repo.id),
             )
             repo_backup_plans = backup_plans_by_repo.get(repo.id, [])
 
@@ -1034,22 +1083,17 @@ async def get_dashboard_overview(
         # Get activity for the last 14 days — matches the timeline window exactly
         fourteen_days_ago = now - timedelta(days=14)
         recent_backups = backup_jobs_started_since(db, fourteen_days_ago)
-        recent_checks = (
-            db.query(CheckJob).filter(CheckJob.started_at >= fourteen_days_ago).all()
-        )
-        recent_compacts = (
-            db.query(CompactJob)
-            .filter(CompactJob.started_at >= fourteen_days_ago)
-            .all()
-        )
-        recent_prunes = (
-            db.query(PruneJob).filter(PruneJob.started_at >= fourteen_days_ago).all()
-        )
-        recent_restore_checks = (
-            db.query(RestoreCheckJob)
-            .filter(RestoreCheckJob.started_at >= fourteen_days_ago)
-            .all()
-        )
+        # Maintenance kinds live in `operations` since phase 5 and in their
+        # legacy tables before it; the timeline reads both (spec section 14).
+        recent_maintenance = [
+            (kind, label, maintenance_jobs_started_since(db, kind, fourteen_days_ago))
+            for kind, label in (
+                ("check", "Check"),
+                ("compact", "Compact"),
+                ("prune", "Prune"),
+                ("restore_check", "Restore check"),
+            )
+        ]
 
         # Create a lookup map for repository paths to names (with normalized paths)
         repo_name_map = {}
@@ -1099,140 +1143,29 @@ async def get_dashboard_overview(
                 }
             )
 
-        for job in recent_checks:
-            # Try multiple ways to get repo name
-            repo_name = None
-            if job.repository_path in repo_name_map:
-                repo_name = repo_name_map[job.repository_path]
-            elif (
-                job.repository_path and job.repository_path.rstrip("/") in repo_name_map
-            ):
-                repo_name = repo_name_map[job.repository_path.rstrip("/")]
-            elif (
-                hasattr(job, "repository_id")
-                and job.repository_id
-                and job.repository_id in repo_id_map
-            ):
-                repo_name = repo_id_map[job.repository_id]
-            else:
-                repo_name = (
-                    job.repository_path.rstrip("/").split("/")[-1]
-                    if job.repository_path
-                    else "Unknown"
+        for kind, label, jobs in recent_maintenance:
+            for job in jobs:
+                # a legacy status column is nullable; the feed still names the row
+                status = job.status or "unknown"
+                activity_feed.append(
+                    {
+                        "id": job.id,
+                        "type": kind,
+                        "status": status,
+                        "repository": _maintenance_repository_name(
+                            job, repo_name_map, repo_id_map
+                        ),
+                        "timestamp": serialize_datetime(job.started_at),
+                        "message": f"{label} {status.replace('_', ' ')}",
+                        # a run that did not happen says why in its message too
+                        "error": (
+                            job.error_message
+                            if status in ("failed", "skipped", "needs_backup")
+                            else None
+                        ),
+                        "archive_pruned_at": None,
+                    }
                 )
-
-            activity_feed.append(
-                {
-                    "id": job.id,
-                    "type": "check",
-                    "status": job.status,
-                    "repository": repo_name,
-                    "timestamp": serialize_datetime(job.started_at),
-                    "message": f"Check {job.status}",
-                    "error": job.error_message if job.status == "failed" else None,
-                    "archive_pruned_at": None,
-                }
-            )
-
-        for job in recent_compacts:
-            # Try multiple ways to get repo name
-            repo_name = None
-            if job.repository_path in repo_name_map:
-                repo_name = repo_name_map[job.repository_path]
-            elif (
-                job.repository_path and job.repository_path.rstrip("/") in repo_name_map
-            ):
-                repo_name = repo_name_map[job.repository_path.rstrip("/")]
-            elif (
-                hasattr(job, "repository_id")
-                and job.repository_id
-                and job.repository_id in repo_id_map
-            ):
-                repo_name = repo_id_map[job.repository_id]
-            else:
-                repo_name = (
-                    job.repository_path.rstrip("/").split("/")[-1]
-                    if job.repository_path
-                    else "Unknown"
-                )
-
-            activity_feed.append(
-                {
-                    "id": job.id,
-                    "type": "compact",
-                    "status": job.status,
-                    "repository": repo_name,
-                    "timestamp": serialize_datetime(job.started_at),
-                    "message": f"Compact {job.status}",
-                    "error": job.error_message if job.status == "failed" else None,
-                    "archive_pruned_at": None,
-                }
-            )
-
-        for job in recent_prunes:
-            # Try multiple ways to get repo name
-            repo_name = None
-            if job.repository_path in repo_name_map:
-                repo_name = repo_name_map[job.repository_path]
-            elif (
-                job.repository_path and job.repository_path.rstrip("/") in repo_name_map
-            ):
-                repo_name = repo_name_map[job.repository_path.rstrip("/")]
-            elif (
-                hasattr(job, "repository_id")
-                and job.repository_id
-                and job.repository_id in repo_id_map
-            ):
-                repo_name = repo_id_map[job.repository_id]
-            else:
-                repo_name = (
-                    job.repository_path.rstrip("/").split("/")[-1]
-                    if job.repository_path
-                    else "Unknown"
-                )
-
-            activity_feed.append(
-                {
-                    "id": job.id,
-                    "type": "prune",
-                    "status": job.status,
-                    "repository": repo_name,
-                    "timestamp": serialize_datetime(job.started_at),
-                    "message": f"Prune {job.status}",
-                    "error": job.error_message if job.status == "failed" else None,
-                    "archive_pruned_at": None,
-                }
-            )
-
-        for job in recent_restore_checks:
-            repo_name = None
-            if job.repository_path in repo_name_map:
-                repo_name = repo_name_map[job.repository_path]
-            elif (
-                job.repository_path and job.repository_path.rstrip("/") in repo_name_map
-            ):
-                repo_name = repo_name_map[job.repository_path.rstrip("/")]
-            elif job.repository_id and job.repository_id in repo_id_map:
-                repo_name = repo_id_map[job.repository_id]
-            else:
-                repo_name = (
-                    job.repository_path.rstrip("/").split("/")[-1]
-                    if job.repository_path
-                    else "Unknown"
-                )
-
-            activity_feed.append(
-                {
-                    "id": job.id,
-                    "type": "restore_check",
-                    "status": job.status,
-                    "repository": repo_name,
-                    "timestamp": serialize_datetime(job.started_at),
-                    "message": f"Restore check {job.status}",
-                    "error": job.error_message if job.status == "failed" else None,
-                    "archive_pruned_at": None,
-                }
-            )
 
         activity_feed.sort(key=lambda x: x["timestamp"] or "", reverse=True)
 

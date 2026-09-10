@@ -6,12 +6,20 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import Base, CheckJob, Operation, Repository
+from app.database.models import (
+    Base,
+    CheckJob,
+    Operation,
+    Repository,
+    RestoreCheckJob,
+)
 from app.services.operations.job_facade import (
     MAINTENANCE_KINDS,
     MaintenanceJobFacade,
     claim_running,
+    latest_maintenance_jobs_by_repository,
     legacy_status,
+    maintenance_jobs_started_since,
     operation_status,
     resolve_agent_maintenance_job,
     resolve_maintenance_job,
@@ -446,3 +454,238 @@ def test_resolve_agent_job_rejects_bad_shapes(db, repository):
     payload["operation"]["maintenance_job"]["kind"] = "wipe"
     assert resolve_agent_maintenance_job(db, payload) is None
     assert resolve_agent_maintenance_job(db, _payload(1), kinds=("prune",)) is None
+
+
+def test_started_since_unions_both_tables_newest_first(db, repository):
+    since = datetime(2026, 9, 1)
+    old = CheckJob(
+        repository_id=repository.id,
+        repository_path=repository.path,
+        status="completed",
+        started_at=datetime(2026, 8, 30),
+    )
+    legacy = CheckJob(
+        repository_id=repository.id,
+        repository_path=repository.path,
+        status="completed",
+        started_at=datetime(2026, 9, 2),
+    )
+    db.add_all([old, legacy])
+    db.commit()
+    op = _operation(db, repository, status="completed")
+    op.started_at = datetime(2026, 9, 3)
+    unrelated = _operation(db, repository, kind="prune", status="completed")
+    unrelated.started_at = datetime(2026, 9, 4)
+    db.commit()
+
+    jobs = maintenance_jobs_started_since(db, "check", since)
+
+    assert [(type(job).__name__, job.id) for job in jobs] == [
+        ("MaintenanceJobFacade", op.id),
+        ("CheckJob", legacy.id),
+    ]
+    assert jobs[0].repository_path == repository.path
+
+
+def test_latest_by_repository_takes_the_newer_row_from_either_table(db):
+    ops_repo = Repository(name="ops", path="/repo/ops", borg_version=1)
+    legacy_repo = Repository(name="legacy", path="/repo/legacy", borg_version=1)
+    idle_repo = Repository(name="idle", path="/repo/idle", borg_version=1)
+    db.add_all([ops_repo, legacy_repo, idle_repo])
+    db.commit()
+    db.add_all(
+        [
+            RestoreCheckJob(
+                repository_id=ops_repo.id,
+                repository_path=ops_repo.path,
+                status="completed",
+                created_at=datetime(2026, 9, 1),
+            ),
+            RestoreCheckJob(
+                repository_id=legacy_repo.id,
+                repository_path=legacy_repo.path,
+                status="failed",
+                created_at=datetime(2026, 9, 5),
+            ),
+            RestoreCheckJob(
+                repository_id=legacy_repo.id,
+                repository_path=legacy_repo.path,
+                status="completed",
+                created_at=datetime(2026, 9, 4),
+            ),
+        ]
+    )
+    db.commit()
+    newer = _operation(db, ops_repo, kind="restore_check", status="failed")
+    newer.created_at = datetime(2026, 9, 2)
+    older = _operation(db, legacy_repo, kind="restore_check", status="completed")
+    older.created_at = datetime(2026, 9, 3)
+    db.commit()
+
+    latest = latest_maintenance_jobs_by_repository(
+        db, "restore_check", [ops_repo.id, legacy_repo.id, idle_repo.id]
+    )
+
+    assert set(latest) == {ops_repo.id, legacy_repo.id}
+    assert isinstance(latest[ops_repo.id], MaintenanceJobFacade)
+    assert latest[ops_repo.id].id == newer.id
+    assert isinstance(latest[legacy_repo.id], RestoreCheckJob)
+    assert latest[legacy_repo.id].status == "failed"
+    assert latest_maintenance_jobs_by_repository(db, "restore_check", []) == {}
+
+
+def test_latest_by_repository_gives_a_tie_to_the_operation(db, repository):
+    when = datetime(2026, 9, 6)
+    db.add(
+        RestoreCheckJob(
+            repository_id=repository.id,
+            repository_path=repository.path,
+            status="failed",
+            created_at=when,
+        )
+    )
+    db.commit()
+    op = _operation(db, repository, kind="restore_check", status="completed")
+    op.created_at = when
+    db.commit()
+
+    latest = latest_maintenance_jobs_by_repository(db, "restore_check", [repository.id])
+
+    assert isinstance(latest[repository.id], MaintenanceJobFacade)
+    assert latest[repository.id].id == op.id
+
+
+def test_latest_by_repository_reports_the_live_row_or_the_last_verdict(db, repository):
+    failed = RestoreCheckJob(
+        repository_id=repository.id,
+        repository_path=repository.path,
+        status="failed",
+        created_at=datetime(2026, 9, 6),
+    )
+    db.add(failed)
+    db.commit()
+    queued = _operation(db, repository, kind="restore_check", status="queued")
+    queued.created_at = datetime(2026, 9, 7)
+    running = _operation(db, repository, kind="restore_check", status="running")
+    running.created_at = datetime(2026, 9, 8)
+    db.commit()
+
+    live = latest_maintenance_jobs_by_repository(db, "restore_check", [repository.id])
+    verdicts = latest_maintenance_jobs_by_repository(
+        db, "restore_check", [repository.id], settled=True
+    )
+
+    assert live[repository.id].id == running.id
+    assert live[repository.id].status == "running"
+    assert isinstance(verdicts[repository.id], RestoreCheckJob)
+    assert verdicts[repository.id].id == failed.id
+
+
+def test_latest_by_repository_has_no_verdict_for_a_first_run_still_queued(
+    db, repository
+):
+    pending = RestoreCheckJob(
+        repository_id=repository.id,
+        repository_path=repository.path,
+        status="pending",
+        created_at=datetime(2026, 9, 6),
+    )
+    db.add(pending)
+    db.commit()
+    queued = _operation(db, repository, kind="restore_check", status="queued")
+    queued.created_at = datetime(2026, 9, 7)
+    db.commit()
+
+    live = latest_maintenance_jobs_by_repository(db, "restore_check", [repository.id])
+
+    assert live[repository.id].id == queued.id
+    assert live[repository.id].status == "pending"
+    assert (
+        latest_maintenance_jobs_by_repository(
+            db, "restore_check", [repository.id], settled=True
+        )
+        == {}
+    )
+
+
+def test_latest_by_repository_survives_a_legacy_row_without_created_at(db, repository):
+    db.add(
+        RestoreCheckJob(
+            repository_id=repository.id,
+            repository_path=repository.path,
+            status="failed",
+        )
+    )
+    db.commit()
+    # rows written before the column existed carry NULL; force it past the default
+    db.query(RestoreCheckJob).update({"created_at": None})
+    db.commit()
+    assert db.query(RestoreCheckJob.created_at).scalar() is None
+    op = _operation(db, repository, kind="restore_check", status="completed")
+    op.created_at = datetime(2026, 9, 7)
+    db.commit()
+
+    latest = latest_maintenance_jobs_by_repository(db, "restore_check", [repository.id])
+
+    assert latest[repository.id].id == op.id
+
+
+def test_readers_name_an_unknown_kind(db, repository):
+    with pytest.raises(ValueError, match="restorecheck"):
+        maintenance_jobs_started_since(db, "restorecheck", datetime(2026, 9, 1))
+    with pytest.raises(ValueError, match="restorecheck"):
+        latest_maintenance_jobs_by_repository(db, "restorecheck", [repository.id])
+
+
+def test_latest_by_repository_counts_a_skipped_run_as_the_verdict(db, repository):
+    failed = _operation(db, repository, kind="restore_check", status="failed")
+    failed.created_at = datetime(2026, 9, 6)
+    skipped = _operation(db, repository, kind="restore_check", status="skipped")
+    skipped.created_at = datetime(2026, 9, 7)
+    skipped.skip_reason = "needs_backup"
+    db.commit()
+
+    verdicts = latest_maintenance_jobs_by_repository(
+        db, "restore_check", [repository.id], settled=True
+    )
+
+    assert verdicts[repository.id].id == skipped.id
+    assert verdicts[repository.id].skip_reason == "needs_backup"
+
+
+def test_needs_backup_is_written_as_a_skip_and_read_back(db, repository):
+    op = _operation(db, repository, kind="restore_check")
+    job = MaintenanceJobFacade(db, op)
+
+    job.status = "needs_backup"
+    db.commit()
+    db.refresh(op)
+
+    assert (op.status, op.skip_reason) == ("skipped", "needs_backup")
+    assert job.status == "needs_backup"
+    assert operation_status("needs_backup") == "skipped"
+    other = _operation(db, repository, kind="restore_check", status="skipped")
+    other.skip_reason = "dependency_failed"
+    assert MaintenanceJobFacade(db, other).status == "skipped"
+
+
+def test_latest_by_repository_counts_a_legacy_row_without_status_as_settled(
+    db, repository
+):
+    db.add(
+        RestoreCheckJob(
+            repository_id=repository.id,
+            repository_path=repository.path,
+            created_at=datetime(2026, 9, 6),
+        )
+    )
+    db.commit()
+    db.query(RestoreCheckJob).update({"status": None})
+    db.commit()
+
+    live = latest_maintenance_jobs_by_repository(db, "restore_check", [repository.id])
+    verdicts = latest_maintenance_jobs_by_repository(
+        db, "restore_check", [repository.id], settled=True
+    )
+
+    assert live[repository.id].id == verdicts[repository.id].id
