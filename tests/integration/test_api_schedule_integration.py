@@ -13,8 +13,8 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 from app.database.models import (
-    BackupJob,
     CompactJob,
+    Operation,
     PruneJob,
     Repository,
     ScheduledJob,
@@ -654,10 +654,14 @@ class TestMultiRepositorySchedules:
         matching_jobs = []
         while datetime.now() < deadline:
             test_db.expire_all()
+            # Phase 8: a scheduled backup is an operations row.
             matching_jobs = (
-                test_db.query(BackupJob)
-                .filter(BackupJob.scheduled_job_id == schedule_id)
-                .order_by(BackupJob.id.asc())
+                test_db.query(Operation)
+                .filter(
+                    Operation.kind == "backup",
+                    Operation.scheduled_job_id == schedule_id,
+                )
+                .order_by(Operation.id.asc())
                 .all()
             )
             if len(matching_jobs) == 2 and all(

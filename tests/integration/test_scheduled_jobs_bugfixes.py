@@ -30,6 +30,7 @@ from app.database.models import (
     ScheduledJobRepository,
 )
 from app.api.schedule import execute_multi_repo_schedule
+from tests.utils.operations import operations_runner_for
 
 
 @pytest.mark.integration
@@ -243,7 +244,9 @@ class TestRepositoryInlineScripts:
                 new=AsyncMock(),
             ):
                 # Execute the schedule
-                await execute_multi_repo_schedule(schedule, db_session)
+                # Phase 8: the schedule enqueues and waits for the runner.
+                async with operations_runner_for(db_session, patch_session_local=True):
+                    await execute_multi_repo_schedule(schedule, db_session)
 
         # Verify: Inline script was executed
         assert script_executed, "Repository inline pre-script should have been executed"
@@ -320,7 +323,9 @@ class TestRepositoryInlineScripts:
                 "app.services.backup_service.BackupService.execute_backup",
                 new=mock_backup,
             ):
-                await execute_multi_repo_schedule(schedule, db_session)
+                # Phase 8: the schedule enqueues and waits for the runner.
+                async with operations_runner_for(db_session, patch_session_local=True):
+                    await execute_multi_repo_schedule(schedule, db_session)
 
         # Verify: Post-script was executed
         assert post_script_executed, (
@@ -428,7 +433,9 @@ class TestRepositoryLibraryScripts:
                 "app.services.backup_service.BackupService.execute_backup",
                 new=AsyncMock(),
             ):
-                await execute_multi_repo_schedule(schedule, db_session)
+                # Phase 8: the schedule enqueues and waits for the runner.
+                async with operations_runner_for(db_session, patch_session_local=True):
+                    await execute_multi_repo_schedule(schedule, db_session)
 
         # Verify: Library script was executed
         assert library_script_executed, (
@@ -512,7 +519,11 @@ class TestRepositoryLibraryScripts:
                     "app.services.backup_service.BackupService.execute_backup",
                     new=AsyncMock(),
                 ):
-                    await execute_multi_repo_schedule(schedule, db_session)
+                    # Phase 8: the schedule enqueues and waits for the runner.
+                    async with operations_runner_for(
+                        db_session, patch_session_local=True
+                    ):
+                        await execute_multi_repo_schedule(schedule, db_session)
 
         # Verify: Only library script executed, inline ignored
         assert library_executed, "Library script should have been executed"
@@ -609,7 +620,9 @@ class TestScheduleLevelScripts:
                 "app.services.backup_service.BackupService.execute_backup",
                 new=AsyncMock(),
             ):
-                await execute_multi_repo_schedule(schedule, db_session)
+                # Phase 8: the schedule enqueues and waits for the runner.
+                async with operations_runner_for(db_session, patch_session_local=True):
+                    await execute_multi_repo_schedule(schedule, db_session)
 
         # Verify: Schedule script executed exactly ONCE, not per repository
         assert schedule_script_count == 1, (
@@ -754,7 +767,9 @@ class TestCombinedScenarios:
                 "app.services.backup_service.BackupService.execute_backup",
                 new=mock_backup,
             ):
-                await execute_multi_repo_schedule(schedule, db_session)
+                # Phase 8: the schedule enqueues and waits for the runner.
+                async with operations_runner_for(db_session, patch_session_local=True):
+                    await execute_multi_repo_schedule(schedule, db_session)
 
         # Verify: Execution order is correct
         # Expected: Schedule Pre -> Repo Library Script -> Backup -> Schedule Post

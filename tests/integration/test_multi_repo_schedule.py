@@ -8,6 +8,7 @@ from app.database.models import ScheduledJob, ScheduledJobRepository
 from app.api.schedule import execute_multi_repo_schedule
 from app.utils.archive_names import sanitize_archive_component
 from tests.utils.borg import create_registered_local_repository, run_borg
+from tests.utils.operations import operations_runner_for
 
 try:
     from .test_helpers import make_borg_env
@@ -74,7 +75,10 @@ async def test_multi_repo_schedule_execution_real(
     print("\n[TEST] Starting execution...")
     try:
         with patch.dict(os.environ, borg_env, clear=False):
-            await execute_multi_repo_schedule(job, db_session)
+            # Phase 8: the schedule enqueues and waits for the runner, so a
+            # direct call needs one bound to this test's database.
+            async with operations_runner_for(db_session, patch_session_local=True):
+                await execute_multi_repo_schedule(job, db_session)
     except Exception as e:
         print(f"\n[TEST] Execution failed with exception: {e}")
         # Failure here is expected if the bug is present (detached instance)
