@@ -1,22 +1,119 @@
 {
-  "generatedAt": "2026-09-10T12:44:13.431Z",
+  "generatedAt": "2026-09-10T12:53:52.439Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1009 visual report",
-    "commitSha": "c7633094213b",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34476866653"
+    "commitSha": "6bb3b99f4dc8",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34477914207"
   },
   "totals": {
     "baseline": 758,
-    "actual": 760,
+    "actual": 766,
     "compared": 758,
-    "changed": 0,
-    "added": 2,
+    "changed": 4,
+    "added": 8,
     "removed": 0,
-    "unchanged": 758
+    "unchanged": 754
   },
-  "changed": [],
+  "changed": [
+    {
+      "fileName": "managed-agents-agentpincontrol--pinned--mobile.png",
+      "baselinePath": "images/baseline/managed-agents-agentpincontrol--pinned--mobile.png",
+      "actualPath": "images/actual/managed-agents-agentpincontrol--pinned--mobile.png",
+      "diffPath": "images/diff/managed-agents-agentpincontrol--pinned--mobile.png",
+      "diffPixels": 36730,
+      "totalPixels": 329160,
+      "diffRatio": 0.1115870701178758,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "managed-agents-agentpincontrol--pinned.png",
+      "baselinePath": "images/baseline/managed-agents-agentpincontrol--pinned.png",
+      "actualPath": "images/actual/managed-agents-agentpincontrol--pinned.png",
+      "diffPath": "images/diff/managed-agents-agentpincontrol--pinned.png",
+      "diffPixels": 97843,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0955498046875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "managed-agents-agentpincontrol--unpinned--mobile.png",
+      "baselinePath": "images/baseline/managed-agents-agentpincontrol--unpinned--mobile.png",
+      "actualPath": "images/actual/managed-agents-agentpincontrol--unpinned--mobile.png",
+      "diffPath": "images/diff/managed-agents-agentpincontrol--unpinned--mobile.png",
+      "diffPixels": 39014,
+      "totalPixels": 329160,
+      "diffRatio": 0.11852594482926236,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "managed-agents-agentpincontrol--unpinned.png",
+      "baselinePath": "images/baseline/managed-agents-agentpincontrol--unpinned.png",
+      "actualPath": "images/actual/managed-agents-agentpincontrol--unpinned.png",
+      "diffPath": "images/diff/managed-agents-agentpincontrol--unpinned.png",
+      "diffPixels": 99453,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0971220703125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    }
+  ],
   "added": [
+    {
+      "fileName": "managed-agents-agentborgversionchip--active--mobile.png",
+      "actualPath": "images/actual/managed-agents-agentborgversionchip--active--mobile.png"
+    },
+    {
+      "fileName": "managed-agents-agentborgversionchip--active.png",
+      "actualPath": "images/actual/managed-agents-agentborgversionchip--active.png"
+    },
+    {
+      "fileName": "managed-agents-agentborgversionchip--both-states--mobile.png",
+      "actualPath": "images/actual/managed-agents-agentborgversionchip--both-states--mobile.png"
+    },
+    {
+      "fileName": "managed-agents-agentborgversionchip--both-states.png",
+      "actualPath": "images/actual/managed-agents-agentborgversionchip--both-states.png"
+    },
+    {
+      "fileName": "managed-agents-agentborgversionchip--pending--mobile.png",
+      "actualPath": "images/actual/managed-agents-agentborgversionchip--pending--mobile.png"
+    },
+    {
+      "fileName": "managed-agents-agentborgversionchip--pending.png",
+      "actualPath": "images/actual/managed-agents-agentborgversionchip--pending.png"
+    },
     {
       "fileName": "remote-machines-remotemachinecard--restricted-shell--mobile.png",
       "actualPath": "images/actual/remote-machines-remotemachinecard--restricted-shell--mobile.png"
@@ -1791,18 +1888,6 @@
     },
     {
       "fileName": "managed-agents-agentmanualupgradechip--manual-only.png"
-    },
-    {
-      "fileName": "managed-agents-agentpincontrol--pinned--mobile.png"
-    },
-    {
-      "fileName": "managed-agents-agentpincontrol--pinned.png"
-    },
-    {
-      "fileName": "managed-agents-agentpincontrol--unpinned--mobile.png"
-    },
-    {
-      "fileName": "managed-agents-agentpincontrol--unpinned.png"
     },
     {
       "fileName": "managed-agents-agentupgradebanner--mixed-targets--mobile.png"
