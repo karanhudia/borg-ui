@@ -550,7 +550,7 @@ Agents update this table and nothing else as work advances. Statuses:
 | 1. Version model and visibility | done | `docs/engineering/plans/2026-09-07-agent-upgrades-phase-1.md` | `feat/agent-upgrades` | Pin UI moved to phase 3 |
 | 2. Privileged helper and capability | done | `docs/engineering/plans/2026-09-09-agent-upgrades-phase-2.md` | `feat/agent-upgrades-phase-2` | https is a precondition; opt-out uses a marker file; the trigger is a `.path` unit, not sudoers |
 | 3. Single-agent remote upgrade | done | `docs/engineering/plans/2026-09-09-agent-upgrades-phase-3.md` | `feat/agent-upgrades-phase-3` | Trigger is the `.path` file, not section 7's sudoers argv; the pin control is a dialog off the row, the card has no detail area; the agent holds an expiring upgrade claim so a helper that aborts cannot wedge it |
-| 4. Fleet upgrade | plan drafted | `docs/engineering/plans/2026-09-10-agent-upgrades-phase-4.md` | `feat/agent-upgrades-phase-4` | Queued endpoints do not age towards the reaper timeout; waves release in id order |
+| 4. Fleet upgrade | in review | `docs/engineering/plans/2026-09-10-agent-upgrades-phase-4.md` | `feat/agent-upgrades-phase-4` | Queued endpoints do not age towards the reaper timeout; waves release in id order |
 | 5. Per-endpoint Borg version | not started | | | |
 
 ### 13.2 Phase 1 — version model and visibility
