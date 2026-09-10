@@ -93,3 +93,55 @@ def test_create_access_token():
     assert isinstance(token, str)
     # JWT tokens have 3 parts separated by dots
     assert token.count(".") == 2
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "configured, expected, warns",
+    [
+        (None, "admin123", "admin123"),  # not set: the documented default
+        ("", "admin123", "admin123"),  # a blank template field: empty string
+        ("   ", "admin123", "admin123"),  # whitespace only is no password
+        ("admin123", "admin123", "admin123"),  # the default, set explicitly
+        ("change-me", "change-me", None),
+        (" padded ", "padded", "whitespace"),  # an env file's stray space
+        (" admin123 ", "admin123", "whitespace"),  # trimmed to the default, said
+    ],
+)
+@pytest.mark.asyncio
+async def test_first_admin_password_falls_back_when_the_variable_is_blank(
+    db_session, monkeypatch, configured, expected, warns
+):
+    """A template with a blank password field sets INITIAL_ADMIN_PASSWORD to
+    an empty string; the first admin must then get the documented default,
+    never an empty password, and the operator must see the warning that
+    says so. A trimmed value is announced too. The forced password change
+    stays."""
+    from unittest.mock import patch
+
+    from app.core.security import create_first_user
+    from app.database.models import User
+
+    if configured is None:
+        monkeypatch.delenv("INITIAL_ADMIN_PASSWORD", raising=False)
+    else:
+        monkeypatch.setenv("INITIAL_ADMIN_PASSWORD", configured)
+    assert db_session.query(User).count() == 0
+
+    # `create_first_user` closes the session it gets; the fixture's StaticPool
+    # keeps the in-memory database alive for the assertions below.
+    with (
+        patch("app.core.security.get_db", side_effect=lambda: iter([db_session])),
+        patch("app.core.security.logger") as log,
+    ):
+        await create_first_user()
+
+    admin = db_session.query(User).filter(User.username == "admin").one()
+    assert verify_password(expected, admin.password_hash)
+    assert admin.must_change_password is True
+    assert admin.role == "admin"
+    warnings = " ".join(str(call) for call in log.warning.call_args_list)
+    if warns is None:
+        assert not log.warning.called
+    else:
+        assert warns in warnings
