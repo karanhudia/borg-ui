@@ -2143,10 +2143,10 @@ export function AgentList({
       />
       <AgentUpgradeDialog
         open={!!upgradeTarget}
-        agent={upgradeTarget}
+        agents={upgradeTarget ? [upgradeTarget] : []}
         busy={isUpgrading}
-        onConfirm={(agent) => {
-          onUpgrade?.(agent)
+        onConfirm={(list) => {
+          list.forEach((agent) => onUpgrade?.(agent))
           setUpgradeTarget(null)
         }}
         onCancel={() => setUpgradeTarget(null)}

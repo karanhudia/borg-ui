@@ -423,11 +423,15 @@
         "manualOnlyTooltip": "Dieser Endpunkt hat kein Self-Upgrade-Hilfsprogramm und wird daher mit dem Reinstall-Befehl auf der Maschine aktualisiert. Eine Neuinstallation bereitet es auf servergesteuerte Upgrades vor."
       },
       "upgradeDialog": {
-        "title": "Diesen Endpunkt aktualisieren",
-        "description": "Der Endpunkt installiert sich selbst von diesem Server neu.",
-        "descriptionWithVersion": "Der Endpunkt installiert sich selbst von diesem Server neu und kommt mit Version {{version}} zurück.",
-        "disconnectWarning": "Dabei ist er kurzzeitig getrennt.",
-        "busyWarning": "Ein Endpunkt, der gerade ein Backup ausführt, lehnt die Aktualisierung ab. Versuchen Sie es erneut, sobald er inaktiv ist.",
+        "title_one": "Diesen Endpunkt aktualisieren",
+        "title_other": "{{count}} Endpunkte aktualisieren",
+        "description": "Der Endpunkt installiert sich von diesem Server neu.",
+        "descriptionWithVersion_one": "Der Endpunkt installiert sich von diesem Server neu und kommt mit Version {{version}} zurueck.",
+        "descriptionWithVersion_other": "Jeder Endpunkt installiert sich von diesem Server neu und kommt mit Version {{version}} zurueck.",
+        "mixedTargets": "Jeder Endpunkt installiert sich von diesem Server neu und kommt mit seiner eigenen konfigurierten Version zurueck.",
+        "disconnectWarning_one": "Dabei trennt er die Verbindung kurzzeitig.",
+        "disconnectWarning_other": "Jeder trennt die Verbindung dabei kurzzeitig, und es werden immer nur einige gleichzeitig aktualisiert, daher warten manche zunaechst.",
+        "busyWarning": "Ein Endpunkt, der gerade ein Backup ausfuehrt, lehnt das Upgrade ab. Versuchen Sie es erneut, sobald er im Leerlauf ist.",
         "confirm": "Aktualisieren"
       },
       "upgradeState": {

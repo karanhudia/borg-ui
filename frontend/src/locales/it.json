@@ -423,11 +423,15 @@
         "manualOnlyTooltip": "Questo endpoint non ha l'helper di autoaggiornamento, quindi si aggiorna eseguendo il comando di reinstallazione sulla macchina. Una reinstallazione lo prepara agli aggiornamenti dal server."
       },
       "upgradeDialog": {
-        "title": "Aggiorna questo endpoint",
-        "description": "L'endpoint si reinstalla da solo da questo server.",
-        "descriptionWithVersion": "L'endpoint si reinstalla da solo da questo server e torna con la versione {{version}}.",
-        "disconnectWarning": "Durante l'operazione resta disconnesso per un breve periodo.",
-        "busyWarning": "Un endpoint che sta eseguendo un backup rifiuta l'aggiornamento, quindi riprova quando è inattivo.",
+        "title_one": "Aggiorna questo endpoint",
+        "title_other": "Aggiorna {{count}} endpoint",
+        "description": "L'endpoint si reinstalla da questo server.",
+        "descriptionWithVersion_one": "L'endpoint si reinstalla da questo server e torna con la versione {{version}}.",
+        "descriptionWithVersion_other": "Ogni endpoint si reinstalla da questo server e torna con la versione {{version}}.",
+        "mixedTargets": "Ogni endpoint si reinstalla da questo server e torna con la propria versione configurata.",
+        "disconnectWarning_one": "Durante l'operazione si disconnette per un breve periodo.",
+        "disconnectWarning_other": "Ognuno si disconnette per un breve periodo e vengono aggiornati pochi alla volta, quindi alcuni attendono prima di iniziare.",
+        "busyWarning": "Un endpoint che sta eseguendo un backup rifiuta l'aggiornamento, quindi riprova quando e inattivo.",
         "confirm": "Aggiorna"
       },
       "upgradeState": {
