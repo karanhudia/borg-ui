@@ -48,6 +48,17 @@ export const Community: Story = {
   args: { historyAvailable: false },
 }
 
+// Spec 6.8: an opted-out repository reads as a choice, not a problem.
+export const ArchivesOnly: Story = {
+  args: { repository: hubRepository({ index_mode: 'archives' }) },
+}
+
+export const NotIndexed: Story = {
+  args: {
+    repository: hubRepository({ index_mode: 'off', sync_state: 'stale' }),
+  },
+}
+
 export const Running: Story = {
   args: { repository: hubRepositories[2], track: trackFor(3) },
 }

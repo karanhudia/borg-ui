@@ -44,6 +44,7 @@ const repository = (overrides: Partial<HubRepository> = {}): HubRepository => ({
   repository_id: 1,
   repository_name: 'nas',
   repository_type: 'local',
+  index_mode: 'full',
   sync_state: 'fresh',
   last_synced_at: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
   last_stats_at: new Date(Date.now() - 11 * 60 * 1000).toISOString(),
@@ -241,5 +242,48 @@ describe('RepositoryHubRow', () => {
     expect(screen.getByText('System')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /rebuild/i })).not.toBeInTheDocument()
     expect(screen.queryByText(/archives/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('index mode (spec 6.8)', () => {
+  it('reads "Archives only" in place of the history cell', () => {
+    renderRow({ repository: repository({ index_mode: 'archives' }) })
+    expect(screen.getByText(/archives only/i)).toBeInTheDocument()
+    expect(screen.queryByText(/16 of 18 indexed/i)).not.toBeInTheDocument()
+  })
+
+  it('does not warn that an off repository is out of date', () => {
+    // Spec 6.8: an opted-out repository never reads as a problem, and an
+    // amber warning on the row is the same claim the summary counts drop.
+    renderRow({ repository: repository({ index_mode: 'off', sync_state: 'stale' }) })
+    expect(screen.queryByText(/out of date/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/not refreshed/i)).toBeInTheDocument()
+  })
+
+  it('still warns an archives-mode repository whose listing is stale', () => {
+    renderRow({ repository: repository({ index_mode: 'archives', sync_state: 'stale' }) })
+    expect(screen.getByText(/out of date/i)).toBeInTheDocument()
+  })
+
+  it('reads "Not indexed" for an off repository and drops the track', () => {
+    renderRow({ repository: repository({ index_mode: 'off' }) })
+    expect(screen.getByText(/not indexed/i)).toBeInTheDocument()
+    expect(screen.getByText(/background work is off/i)).toBeInTheDocument()
+    expect(screen.queryByTestId('stage-track')).not.toBeInTheDocument()
+  })
+
+  it('shows the track for an off repository while a manual run is going', () => {
+    renderRow({
+      repository: repository({ index_mode: 'off' }),
+      track: track({
+        stages: [
+          stage('connect'),
+          stage('archives', { status: 'running' }),
+          stage('history'),
+          stage('stats'),
+        ],
+      }),
+    })
+    expect(screen.getByTestId('stage-track')).toBeInTheDocument()
   })
 })

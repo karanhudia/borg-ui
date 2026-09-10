@@ -229,6 +229,25 @@ export const EnableCloudMirror: Story = {
   ),
 }
 
+// Spec 6.8: with background work off, neither last-run entry can move, so
+// the card says so instead of reading "Never".
+export const BackgroundWorkOff: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...sampleRepository,
+      index_mode: 'off',
+      last_prune: null,
+      last_index: null,
+    },
+  },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
 export const EnableCloudMirrorForSsh: Story = {
   args: {
     ...defaultArgs,

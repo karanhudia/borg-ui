@@ -51,10 +51,17 @@ export function trackIsActive(track: RepositoryTrack | null): boolean {
 function reasonsFor(row: HubRow): AttentionReason[] {
   const { repository, track } = row
   if (!repository) return []
+  const mode = repository.index_mode ?? 'full'
   const reasons: AttentionReason[] = []
-  if (repository.sync_state === 'stale') reasons.push('stale')
-  if (repository.sync_state === 'never') reasons.push('never')
-  if (repository.history.failed > 0 || repository.history.truncated > 0) reasons.push('history')
+  // A repository nobody indexes is not stale, it is opted out (spec 6.8).
+  // Its rows are kept and still shown, they are simply not counted as a
+  // problem, so an opted-out repository never reads as one.
+  if (mode !== 'off') {
+    if (repository.sync_state === 'stale') reasons.push('stale')
+    if (repository.sync_state === 'never') reasons.push('never')
+  }
+  if (mode === 'full' && (repository.history.failed > 0 || repository.history.truncated > 0))
+    reasons.push('history')
   if (trackIsActive(track)) reasons.push('running')
   return reasons
 }

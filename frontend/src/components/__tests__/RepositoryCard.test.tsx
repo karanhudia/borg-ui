@@ -406,6 +406,45 @@ describe('RepositoryCard', () => {
       }
     })
 
+    it('says background work is off instead of "Never" on both entries', () => {
+      // Spec 6.8: neither value can move while the mode is `off`, so
+      // "Never" would be a wrong answer rather than an empty one.
+      renderWithProviders(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            index_mode: 'off',
+            last_prune: null,
+            last_index: null,
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      const labels = [screen.getByText(/^Last Prune:/i), screen.getByText(/^Last Index:/i)]
+      for (const label of labels) {
+        expect(label.parentElement).toHaveTextContent(/Background work is off/i)
+        expect(label.parentElement).not.toHaveTextContent(/Never/)
+      }
+    })
+
+    it('leaves an archives-mode repository reading normally', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={{ ...mockRepository, index_mode: 'archives' }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByText(/^Last Index:/i).parentElement).toHaveTextContent(/Jan 20, 2024/)
+    })
+
     it('omits last prune and last index when the backend does not send them', () => {
       const olderPayload = { ...mockRepository, last_prune: undefined, last_index: undefined }
       renderWithProviders(

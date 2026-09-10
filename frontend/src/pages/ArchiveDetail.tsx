@@ -444,7 +444,11 @@ export default function ArchiveDetail() {
 
       <Box sx={{ pt: 1 }}>
         {activeTab === 'changes' && (
-          <ArchiveChangesTab repositoryId={repositoryId} archive={archive} />
+          <ArchiveChangesTab
+            repositoryId={repositoryId}
+            archive={archive}
+            indexMode={repository?.index_mode ?? 'full'}
+          />
         )}
         {activeTab === 'files' && repository && (
           <ArchiveFilesTab

@@ -266,8 +266,7 @@ def finish_inline_maintenance(
     status."""
     from app.database.models import utc_now
     from app.services.operations.enqueue import enqueue_chain
-    from app.services.operations.executors import registered_kinds
-    from app.services.operations.followups import chain_for, history_enabled
+    from app.services.operations.followups import chain_for_repository
     from app.services.operations.vocab import SUCCESS_STATUSES, TERMINAL_STATUSES
 
     if operation.status not in TERMINAL_STATUSES:
@@ -311,11 +310,7 @@ def finish_inline_maintenance(
         return
     if not enqueue_followups or operation.status not in SUCCESS_STATUSES:
         return
-    kinds = chain_for(
-        operation.kind,
-        available=registered_kinds(),
-        history=history_enabled(db),
-    )
+    kinds = chain_for_repository(db, operation.kind, operation.repository_id)
     if not kinds:
         return
     enqueue_chain(

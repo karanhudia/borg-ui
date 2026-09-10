@@ -34,6 +34,7 @@ from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.operations.followups import history_enabled
 from app.services.operations.lanes import lane_free, running_count
 from app.services.operations.models import is_terminal, serialize_operation
+from app.services.operations.index_mode import mode_of as index_mode_of
 from app.services.operations.reconcile import (
     DEFAULT_INTERVAL_MINUTES,
     enqueue_reconcile_runs,
@@ -146,6 +147,9 @@ class HubRepository(BaseModel):
     repository_id: int
     repository_name: str
     repository_type: Optional[str] = None
+    # Spec 6.8. Defaulted rather than optional so a client mid-deploy reads
+    # the value every install had before the mode existed.
+    index_mode: str = "full"
     sync_state: str
     last_synced_at: Optional[datetime] = None
     last_stats_at: Optional[datetime] = None
@@ -523,6 +527,7 @@ async def get_repositories_hub(
                 repository_id=repo.id,
                 repository_name=repo.name,
                 repository_type=repo.repository_type,
+                index_mode=index_mode_of(repo),
                 sync_state=sync_state_from(repo.id in syncing, last_at, interval or 60),
                 last_synced_at=last_at,
                 last_stats_at=last_stats.get(repo.id),

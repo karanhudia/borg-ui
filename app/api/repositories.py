@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Literal, Optional, Dict, Any, Union
 from datetime import datetime, timezone
 from pathlib import Path as FilesystemPath
 from types import SimpleNamespace
@@ -46,6 +46,10 @@ from app.services.operations.maintenance_start import (
 from app.services.operations.job_facade import MaintenanceJobFacade
 from app.services.operations.enqueue import enqueue, wake_runner
 from app.services.operations.rclone_facade import RcloneSyncFacade
+from app.services.operations.index_mode import MODE_KINDS
+from app.services.operations.index_mode import mode_of as index_mode_of
+from app.services.operations.reconcile import enqueue_reconcile_run
+from app.services.operations.runner import operation_runner
 from app.services.operations.repository_status import LastRuns, last_runs
 from app.core.authorization import authorize_request
 from app.core.security import get_current_user, check_repo_access
@@ -1298,6 +1302,7 @@ class RepositoryUpdate(BaseModel):
     )
     bypass_lock: Optional[bool] = None  # Use --bypass-lock for read-only storage access
     history_index_excludes: Optional[List[str]] = None
+    index_mode: Optional[Literal["full", "archives", "off"]] = None
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create
     upload_ratelimit_kib: Optional[int] = None
     source_connection_id: Optional[int] = (
@@ -3039,6 +3044,7 @@ async def get_repositories(
                     if repo.history_index_excludes is None
                     else repo.history_index_excludes
                 ),
+                "index_mode": index_mode_of(repo),
                 "custom_flags": repo.custom_flags,
                 "upload_ratelimit_kib": repo.upload_ratelimit_kib,
                 "has_running_maintenance": has_check or has_compact or has_prune,
@@ -4105,6 +4111,7 @@ async def get_repository(
                 if repository.history_index_excludes is None
                 else repository.history_index_excludes
             ),
+            "index_mode": index_mode_of(repository),
             "stats": stats,
         }
         rclone_storage = _serialize_rclone_storage(repository, db)
@@ -4129,6 +4136,43 @@ async def get_repository(
             status_code=500,
             detail={"key": "backend.errors.repo.failedToRetrieveRepository"},
         )
+
+
+async def _apply_index_mode_change(db: Session, repository: Repository) -> None:
+    """Spec 6.8. Leaving `full` cancels the repository's queued index work,
+    so a mode set to stop the diffs does not leave hours of them waiting in
+    the queue. A running index is left to finish: the lane time is already
+    spent, and the rows it writes are kept either way (the mode makes
+    history stale, never deleted). Returning to `full` enqueues one
+    reconcile run so the repository catches up without waiting for the tick.
+    """
+    mode = index_mode_of(repository)
+    if mode == "full":
+        try:
+            enqueue_reconcile_run(db, repository.id)
+        except Exception as exc:
+            # A catch-up run is a convenience; the tick will pick the
+            # repository up within the hour. The mode change itself is
+            # already stored and must not be undone by this.
+            db.rollback()
+            logger.warning(
+                "Index mode catch-up run failed",
+                repo_id=repository.id,
+                error=str(exc),
+            )
+        return
+    queued = (
+        db.query(Operation)
+        .filter(
+            Operation.repository_id == repository.id,
+            Operation.category == "index",
+            Operation.status == "queued",
+            Operation.kind.notin_(sorted(MODE_KINDS[mode])),
+        )
+        .all()
+    )
+    for operation in queued:
+        await operation_runner.request_cancel(operation.id)
 
 
 @router.put("/{repo_id}")
@@ -4244,6 +4288,7 @@ async def update_repository(
         if target_executor_type == "agent":
             _require_managed_agents_feature(db)
         sync_cloud_mirror_after_update = False
+        index_mode_changed = False
         if requested_rclone_updates:
             storage = existing_rclone_storage
             is_direct_rclone_repository = repository.repository_type == "rclone"
@@ -4885,6 +4930,10 @@ async def update_repository(
                 p.strip() for p in repo_data.history_index_excludes if p and p.strip()
             ]
 
+        if repo_data.index_mode is not None:
+            index_mode_changed = repo_data.index_mode != index_mode_of(repository)
+            repository.index_mode = repo_data.index_mode
+
         if repo_data.custom_flags is not None:
             repository.custom_flags = repo_data.custom_flags
 
@@ -4950,6 +4999,9 @@ async def update_repository(
 
         repository.updated_at = datetime.utcnow()
         db.commit()
+
+        if index_mode_changed:
+            await _apply_index_mode_change(db, repository)
 
         if sync_cloud_mirror_after_update:
             try:

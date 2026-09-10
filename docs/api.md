@@ -273,7 +273,8 @@ plan 403 payload otherwise.
 | GET | `/archives/heatmap` | Community | Per series, per day counts and sizes; `missed_run` days; outlier flags on Pro |
 | GET | `/archives/{archive_id}` | Community | One archive with history state and neighbours |
 | GET | `/status` | Community | Per-category status from repository evidence (newest archive, detected removals, job rows); overdue flags on Pro. The repositories list payload carries `last_prune` and `last_index` from the same evidence for the card |
-| POST | `/rebuild` | Community (`history` stage is Pro) | Body `{"from": "stats" \| "archives" \| "history"}` |
+| POST | `/rebuild` | Community (`history` stage is Pro) | Body `{"from": "stats" \| "archives" \| "history"}`. Answers with `index_mode` and `repeats` |
+| POST | `/resync` | Community | Brings the stored archive list back in line after work that removed archives. Answers with `index_mode` and `repeats` |
 | GET | `/archives/{archive_id}/changes` | Pro | Changes against the predecessor or `compare_to`. `incomplete` and `unindexed_archive_ids` flag a fold whose window contains an archive that was never indexed |
 | GET | `/history?path=` | Pro | Every archive that touched a path, with present ranges |
 | GET | `/search?q=` | Pro | Filename search across all archives |
@@ -283,3 +284,21 @@ plan 403 payload otherwise.
 
 `since` and `until` accept an offset (`2026-01-01T00:00:00Z`); the value is
 converted to UTC before it reaches the index, which stores naive UTC.
+
+### Index mode
+
+Every repository payload carries `index_mode`, one of `full` (the default),
+`archives` or `off`. It says how much derived data the repository keeps
+refreshed: `full` indexes everything, `archives` keeps the archive list and
+the size current but builds no file history, and `off` refreshes nothing.
+
+`PUT /api/repositories/{id}` accepts `index_mode`; any other value is a 422.
+Changing it away from `full` cancels the repository's queued index work (a
+running index is left to finish), and changing it back to `full` enqueues
+one catch-up run.
+
+Manual work is not blocked by the mode. `/rebuild` and `/resync` run once
+for a repository in any mode and report `"repeats": false` when the
+background chain will not keep the stage fresh afterwards; neither builds
+file history for a mode that excludes it. `repositories.history_index_excludes`,
+the glob patterns file history skips, is accepted on the same route.

@@ -35,6 +35,7 @@ from app.database.models import (
     ScheduledJobRepository,
 )
 from app.services.operations import anomalies
+from app.services.operations.index_mode import mode_of as index_mode_of
 from app.services.operations.vocab import SUCCESS_STATUSES
 
 TERMINAL = ("completed", "completed_with_warnings", "failed", "cancelled")
@@ -529,9 +530,14 @@ def repository_status(
     by_series = series_starts(db, repository.id, pending)
     starts = sorted(start for group in by_series.values() for start in group)
     mirror_applies = repository.repository_type == "rclone"
+    # Nothing is refreshed for an `off` repository, so an index cell would
+    # only ever read as overdue for a state the user chose (spec 6.8).
+    index_applies = index_mode_of(repository) != "off"
     cells = []
     for name, spec in CELLS:
         if name == "mirror" and not mirror_applies:
+            continue
+        if name == "index" and not index_applies:
             continue
         if name == "backup":
             cell = backup_cell(db, repository, spec, starts)

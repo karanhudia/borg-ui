@@ -17,6 +17,7 @@ import {
 import FileExplorerDialog from './FileExplorerDialog'
 import { managedAgentsAPI, rcloneAPI, sshKeysAPI, RepositoryData } from '../services/api'
 import { formatDirectRcloneUrl, parseDirectRcloneUrl } from './wizard/directRclonePath'
+import type { IndexMode } from '../types/operations'
 import type {
   AgentMachineResponse,
   CreateRcloneRemoteRequest,
@@ -46,6 +47,8 @@ interface Repository extends RepositoryData {
   continue_on_hook_failure?: boolean
   skip_on_hook_failure?: boolean
   bypass_lock?: boolean
+  index_mode?: IndexMode
+  history_index_excludes?: string[]
 }
 
 interface RepositoryWizardProps {
@@ -108,6 +111,8 @@ interface WizardState {
   postHookTimeout: number
   hookFailureMode: 'fail' | 'continue' | 'skip'
   uploadRatelimitMb: string
+  indexMode: IndexMode
+  historyIndexExcludes: string[]
 }
 
 const createInitialState = (): WizardState => ({
@@ -145,6 +150,8 @@ const createInitialState = (): WizardState => ({
   postHookTimeout: 300,
   hookFailureMode: 'fail',
   uploadRatelimitMb: '',
+  indexMode: 'full',
+  historyIndexExcludes: [],
 })
 
 function repositorySourceLocations(repository?: Repository): SourceLocation[] {
@@ -482,6 +489,8 @@ const RepositoryWizard = ({
           ? 'continue'
           : 'fail',
       uploadRatelimitMb: kibToUploadRatelimitMb(repository.upload_ratelimit_kib),
+      indexMode: repository.index_mode || 'full',
+      historyIndexExcludes: repository.history_index_excludes || [],
     })
   }, [repository])
 
@@ -908,6 +917,14 @@ const RepositoryWizard = ({
       skip_on_hook_failure: wizardState.hookFailureMode === 'skip',
       upload_ratelimit_kib: uploadRatelimitMbToKib(wizardState.uploadRatelimitMb),
       bypass_lock: wizardState.bypassLock,
+      // Spec 6.8 and 6.7: only PUT accepts these, so they ride along
+      // when editing and are left to their defaults at creation.
+      ...(mode === 'edit'
+        ? {
+            index_mode: wizardState.indexMode,
+            history_index_excludes: wizardState.historyIndexExcludes,
+          }
+        : {}),
       executor_type: wizardState.executionTarget === 'agent' ? 'agent' : 'server',
       execution_target: directRcloneEnabled
         ? 'local'
@@ -1246,6 +1263,8 @@ const RepositoryWizard = ({
               hookFailureMode: wizardState.hookFailureMode,
               customFlags: wizardState.customFlags,
               uploadRatelimitMb: wizardState.uploadRatelimitMb,
+              indexMode: wizardState.indexMode,
+              historyIndexExcludes: wizardState.historyIndexExcludes,
             }}
             onChange={handleStateChange}
           />

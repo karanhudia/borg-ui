@@ -161,6 +161,25 @@ export default function RepositoryCard({
   const hasSeparatedRepositoryActions = canBreakLock || canShowDestructiveActions
   const uploadRatelimitLabel = formatUploadRatelimit(repository.upload_ratelimit_kib)
 
+  // Neither value can move while background work is off: `Last index` has
+  // nothing running, and `Last prune` is read from archive listings that no
+  // longer refresh (spec 6.8, 10.2), so "Never" would be a wrong answer
+  // rather than an empty one. The tooltip says where the setting lives; the
+  // metadata row renders plain values, so it is not a link.
+  const backgroundOff = repository.index_mode === 'off'
+  const lastRunValue = (value?: string | null) =>
+    backgroundOff
+      ? t('repositoryCard.backgroundWorkOff')
+      : value
+        ? formatDateShort(value)
+        : t('common.never')
+  const lastRunTooltip = (value?: string | null) =>
+    backgroundOff
+      ? t('repositoryCard.backgroundWorkOffHint')
+      : value
+        ? formatDateTimeFull(value)
+        : ''
+
   const [elapsedTime, setElapsedTime] = useState('')
 
   useEffect(() => {
@@ -251,10 +270,8 @@ export default function RepositoryCard({
       ? [
           {
             label: t('repositoryCard.lastPrune'),
-            value: repository.last_prune
-              ? formatDateShort(repository.last_prune)
-              : t('common.never'),
-            tooltip: repository.last_prune ? formatDateTimeFull(repository.last_prune) : '',
+            value: lastRunValue(repository.last_prune),
+            tooltip: lastRunTooltip(repository.last_prune),
           },
         ]
       : []),
@@ -262,10 +279,8 @@ export default function RepositoryCard({
       ? [
           {
             label: t('repositoryCard.lastIndex'),
-            value: repository.last_index
-              ? formatDateShort(repository.last_index)
-              : t('common.never'),
-            tooltip: repository.last_index ? formatDateTimeFull(repository.last_index) : '',
+            value: lastRunValue(repository.last_index),
+            tooltip: lastRunTooltip(repository.last_index),
           },
         ]
       : []),

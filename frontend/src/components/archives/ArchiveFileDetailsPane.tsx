@@ -4,11 +4,16 @@ import { useTranslation } from 'react-i18next'
 import { formatBytes } from '../../utils/dateUtils'
 import FileTypeIcon from '../FileTypeIcon'
 import FileHistoryPanel from './FileHistoryPanel'
+import IndexModeGate from './IndexModeGate'
 import type { ArchiveItem } from '../ArchivePathSelector'
 import type { HistoryEntry } from '../../types/archives'
+import type { IndexMode } from '../../types/operations'
 
 interface ArchiveFileDetailsPaneProps {
   repositoryId: number
+  // The repository's index mode (spec 6.8). Defaulted so a caller that
+  // predates the mode reads as the behaviour every install had.
+  indexMode?: IndexMode
   selectedPath: string | null
   selectedEntry: ArchiveItem | null
   // Restoring the current selection belongs to the Files tab footer. This
@@ -31,6 +36,7 @@ function SectionTitle({ children }: { children: string }) {
 
 export default function ArchiveFileDetailsPane({
   repositoryId,
+  indexMode = 'full',
   selectedPath,
   selectedEntry,
   onRestore,
@@ -143,11 +149,13 @@ export default function ArchiveFileDetailsPane({
 
       <Box sx={{ px: 2.5, pb: 2, pt: 1, borderTop: 1, borderColor: 'divider' }}>
         <SectionTitle>{t('archives.files.history')}</SectionTitle>
-        <FileHistoryPanel
-          repositoryId={repositoryId}
-          path={selectedPath}
-          onRestoreEntry={onRestore}
-        />
+        <IndexModeGate mode={indexMode}>
+          <FileHistoryPanel
+            repositoryId={repositoryId}
+            path={selectedPath}
+            onRestoreEntry={onRestore}
+          />
+        </IndexModeGate>
       </Box>
     </Box>
   )

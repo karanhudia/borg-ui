@@ -103,10 +103,16 @@ export interface HubHistorySummary {
   rows: number
 }
 
+// How much derived data a repository keeps refreshed (spec 6.8). `full`
+// indexes everything, `archives` keeps the archive list and the size but
+// stops diffing files, `off` refreshes nothing.
+export type IndexMode = 'full' | 'archives' | 'off'
+
 export interface HubRepository {
   repository_id: number
   repository_name: string
   repository_type: string | null
+  index_mode: IndexMode
   sync_state: 'fresh' | 'syncing' | 'stale' | 'never'
   last_synced_at: string | null
   last_stats_at: string | null

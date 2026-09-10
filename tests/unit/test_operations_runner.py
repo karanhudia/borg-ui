@@ -262,7 +262,7 @@ async def test_followups_skip_history_kinds_on_community(
     registry["stats"] = ok
 
     monkeypatch.setattr(
-        "app.services.operations.runner.history_enabled", lambda db: False
+        "app.services.operations.followups.history_enabled", lambda db: False
     )
     enqueue(db, "backup", repository_id=repo.id, trigger="manual")
     await _drain(runner)
@@ -285,7 +285,7 @@ async def test_followups_include_history_kinds_on_pro(
     registry["stats"] = ok
 
     monkeypatch.setattr(
-        "app.services.operations.runner.history_enabled", lambda db: True
+        "app.services.operations.followups.history_enabled", lambda db: True
     )
     enqueue(db, "backup", repository_id=repo.id, trigger="manual")
     await _drain(runner)

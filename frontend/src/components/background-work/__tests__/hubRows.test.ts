@@ -14,6 +14,7 @@ const repo = (overrides: Partial<HubRepository> = {}): HubRepository => ({
   repository_id: 1,
   repository_name: 'nas',
   repository_type: 'local',
+  index_mode: 'full',
   sync_state: 'fresh',
   last_synced_at: '2026-09-06T10:00:00',
   last_stats_at: '2026-09-06T10:00:00',
@@ -190,5 +191,42 @@ describe('mergeRows', () => {
 describe('ATTENTION_FILTERS', () => {
   it('lists the filters in toolbar order', () => {
     expect(ATTENTION_FILTERS).toEqual(['all', 'attention', 'stale', 'never', 'history', 'running'])
+  })
+})
+
+describe('index mode (spec 6.8)', () => {
+  it('does not count an off repository as stale', () => {
+    const rows = [row(repo({ sync_state: 'stale', index_mode: 'off' }))]
+    expect(attentionCounts(rows).stale).toBe(0)
+    expect(attentionCounts(rows).total).toBe(0)
+  })
+
+  it('does not count a never-synced off repository', () => {
+    const rows = [row(repo({ sync_state: 'never', index_mode: 'off' }))]
+    expect(attentionCounts(rows).never).toBe(0)
+  })
+
+  it('does not count history failures on a repository that does not index history', () => {
+    const rows = [
+      row(
+        repo({
+          index_mode: 'archives',
+          history: { indexed: 8, pending: 0, failed: 3, skipped: 0, truncated: 1, rows: 5 },
+        })
+      ),
+    ]
+    expect(attentionCounts(rows).history).toBe(0)
+  })
+
+  it('still counts a stale archives-mode repository', () => {
+    // `archives` keeps the listing fresh, so a stale listing is a real problem.
+    const rows = [row(repo({ sync_state: 'stale', index_mode: 'archives' }))]
+    expect(attentionCounts(rows).stale).toBe(1)
+  })
+
+  it('still shows running work on an off repository', () => {
+    // A manual one-off run is exactly the case (spec 6.8).
+    const rows = [row(repo({ index_mode: 'off' }), runningTrack(1, 'nas'))]
+    expect(attentionCounts(rows).running).toBe(1)
   })
 })
