@@ -2,6 +2,8 @@
 
 from datetime import datetime
 
+import sqlite3
+
 import pytest
 from alembic import command
 from sqlalchemy import MetaData, insert, inspect, select
@@ -179,6 +181,67 @@ def test_an_executed_wipe_of_a_deleted_repository_is_left_in_place(
             )
         ).all()
         assert left == [(1, "completed")]
+    engine.dispose()
+
+
+@pytest.mark.unit
+def test_a_backup_with_dangling_schedule_and_plan_ids_still_copies(
+    tmp_path, monkeypatch
+):
+    """`operations` enforces `scheduled_job_id` and `backup_plan_run_id`;
+    `backup_jobs.scheduled_job_id` carried no ON DELETE, so a SQLite install
+    that ran without foreign keys can hold ids whose rows are gone. Passing
+    them straight through would fail the whole migration."""
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+    url = f"sqlite:///{tmp_path / 'dangling.db'}"
+    _migrate(url, PREVIOUS)
+    engine = _engine(url)
+    with engine.begin() as connection:
+        meta = MetaData()
+        meta.reflect(bind=connection)
+        connection.execute(
+            insert(meta.tables["repositories"]).values(
+                id=1,
+                name="r",
+                path="/srv/r",
+                encryption="none",
+                compression="lz4",
+                mode="full",
+                created_at=NOW,
+                **REPOSITORY_FLAGS,
+            )
+        )
+    engine.dispose()
+    # Written with foreign keys off, which is the only way these ids exist:
+    # the PRAGMA cannot be changed inside a transaction, so this goes through
+    # the driver rather than the engine.
+    raw = sqlite3.connect(tmp_path / "dangling.db")
+    try:
+        raw.execute("PRAGMA foreign_keys=OFF")
+        raw.execute(
+            "INSERT INTO backup_jobs"
+            " (id, repository, repository_id, status, scheduled_job_id,"
+            "  backup_plan_run_id, retry_attempt, created_at)"
+            " VALUES (1, '/srv/r', 1, 'completed', 404, 505, 0, ?)",
+            (NOW,),
+        )
+        raw.commit()
+    finally:
+        raw.close()
+
+    _migrate(url, REVISION)
+
+    engine = _engine(url)
+    with engine.connect() as connection:
+        meta = MetaData()
+        meta.reflect(bind=connection)
+        ops = meta.tables["operations"]
+        row = connection.execute(
+            select(ops.c.kind, ops.c.scheduled_job_id, ops.c.backup_plan_run_id)
+        ).one()
+        assert row.kind == "backup"
+        assert row.scheduled_job_id is None
+        assert row.backup_plan_run_id is None
     engine.dispose()
 
 

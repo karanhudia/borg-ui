@@ -315,7 +315,12 @@ def active_agent_maintenance_jobs(db: Session) -> set[tuple[str, int]]:
         kind, job_id = maintenance_job.get("kind"), maintenance_job.get("id")
         if not kind or job_id is None:
             continue
-        refs.add((kind, job_id))
+        try:
+            # The payload is JSON, so the id can arrive as a string; it has to
+            # match `Operation.id` or a live operation reads as orphaned.
+            refs.add((str(kind), int(job_id)))
+        except (TypeError, ValueError):
+            continue
     return refs
 
 

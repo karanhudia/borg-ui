@@ -713,9 +713,10 @@ class TestReconcileOrphanedMaintenanceOperations:
         assert operation.status == "running"
 
     def test_keeps_an_operation_a_table_less_agent_job_may_refer_to(self, db_session):
-        # A payload without a table marker predates it and may name either a
-        # legacy row or this operation (an agent job queued by the previous
-        # build); the ambiguity keeps the row rather than reaping a live one.
+        # A payload without a table marker predates the marker and may name
+        # either a dropped legacy id or this operation; the reaper ignores the
+        # marker on purpose, so the ambiguity keeps the row rather than
+        # reaping one an agent is still working on.
         repo = _agent_repository(db_session, "table-less")
         agent = AgentMachine(
             name="Agent",
@@ -735,11 +736,7 @@ class TestReconcileOrphanedMaintenanceOperations:
                 payload={
                     "job_kind": "repository.prune",
                     "operation": {
-                        "maintenance_job": {
-                            "kind": "prune",
-                            "id": operation.id,
-                            "table": "operations",
-                        },
+                        "maintenance_job": {"kind": "prune", "id": operation.id},
                     },
                 },
             )

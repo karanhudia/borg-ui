@@ -1220,6 +1220,11 @@ async def _run_stats_refresh_background(repo_ids: list, username: str):
                 )
                 success_count += 1
             except Exception as e:
+                # `enqueue_chain` commits, so a failed commit leaves this
+                # session unusable: without the rollback the next
+                # repository's query raises and the rest of the list is
+                # never enqueued.
+                db.rollback()
                 logger.error(
                     "Error refreshing stats for repository",
                     repo_id=repo.id,
@@ -1228,16 +1233,14 @@ async def _run_stats_refresh_background(repo_ids: list, username: str):
                 )
                 error_count += 1
 
-        # Update last_stats_refresh timestamp
-        settings = db.query(SystemSettings).first()
-        if settings:
-            settings.last_stats_refresh = datetime.utcnow()
-            db.commit()
-
+        # `last_stats_refresh` is not written here: the frontend reads it as
+        # the signal that statistics have actually been refreshed, and the
+        # `stats` executor sets it when the work finishes. Writing it at
+        # enqueue time would stop the polling and show the old sizes as new.
         logger.info(
-            "Background stats refresh completed",
+            "Background stats refresh enqueued",
             user=username,
-            success=success_count,
+            enqueued=success_count,
             errors=error_count,
         )
     except Exception as e:

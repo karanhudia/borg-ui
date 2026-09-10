@@ -23,7 +23,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy import text
 from app.core.agent_auth import AGENT_AUTH_HEADER
 from app.core.security import get_password_hash
 from app.services.operations.maintenance_start import active_maintenance_operation
@@ -3174,9 +3173,6 @@ class TestRepositoriesDelete:
         self, test_client: TestClient, admin_headers, test_db
     ):
         """Deleting observe-only repositories should clean up restore-check jobs."""
-        test_db.execute(text("PRAGMA foreign_keys=ON"))
-        test_db.commit()
-
         repo = Repository(
             name="Delete Observe Repo",
             path="/tmp/delete-observe-repo",
@@ -3209,9 +3205,10 @@ class TestRepositoriesDelete:
         assert response.status_code == 200
         assert test_db.get(Repository, repo_id) is None
         # `operations.repository_id` is ON DELETE CASCADE, so the rows go with
-        # the repository on a database that enforces foreign keys. This test
-        # session does not, so the route's own cleanup is what is asserted
-        # here: it no longer has to delete job rows by hand.
+        # the repository wherever foreign keys are enforced. They are not in
+        # this session (SQLite ignores `PRAGMA foreign_keys` inside a
+        # transaction, which is where a Session always is), so what this
+        # asserts is the route itself: it no longer deletes job rows by hand.
 
     def test_delete_nonexistent_repository(
         self, test_client: TestClient, admin_headers

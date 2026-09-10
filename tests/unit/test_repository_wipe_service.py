@@ -6,7 +6,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.core.borg_router import BorgRouter
-from app.database.models import Repository, RepositoryWipeJob, User
+from app.database.models import Operation, Repository, RepositoryWipeJob, User
 from app.services.operations.wipe_facade import resolve_wipe_job
 from tests.utils.operations import seed_job_operation
 from app.services.repository_wipe_service import (
@@ -465,6 +465,39 @@ def test_cancel_preview_still_cancels_a_queued_operation(db_session):
     assert payload["status"] == "cancelled"
     db_session.refresh(operation)
     assert operation.status == "cancelled"
+
+
+def test_cancel_preview_finds_a_preview_behind_another_repositorys_operation(
+    db_session,
+):
+    """The two id spaces are independent, so an operation elsewhere can hold
+    the preview's id. It must not shadow the preview, which the caller would
+    then reject on the repository check and never reach."""
+    user, repo = _wipe_user_and_repository(db_session)
+    other = Repository(
+        name="Other",
+        path="/repos/other-wipe-shadow",
+        encryption="none",
+        repository_type="local",
+    )
+    db_session.add(other)
+    db_session.commit()
+    preview = _fresh_preview(db_session, user, repo)
+    shadow = seed_job_operation(
+        db_session, "wipe", repository_id=other.id, status="queued"
+    )
+    # force the collision the id spaces allow
+    db_session.query(Operation).filter(Operation.id == shadow.id).update(
+        {Operation.id: preview.id}
+    )
+    db_session.commit()
+    service = RepositoryWipeService()
+
+    payload = service.cancel_preview(db_session, repo, user, job_id=preview.id)
+
+    assert payload["status"] == "cancelled"
+    db_session.refresh(preview)
+    assert preview.status == "cancelled"
 
 
 def test_cancel_preview_rejects_a_preview_of_another_repository(db_session):

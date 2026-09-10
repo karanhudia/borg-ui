@@ -520,10 +520,11 @@ class RepositoryWipeService:
         keep their own id sequence, so a caller holding a preview id (the
         status and cancel routes take whichever id the client was given)
         cannot be answered by the operations facade alone. The operation wins
-        the ambiguity: an id that names one is execution work, and only an id
-        that names none can be a preview."""
+        the ambiguity, but only for this repository: an operation of another
+        repository with the same id would otherwise win and be rejected by
+        the caller's repository check, leaving a valid preview unreachable."""
         job = resolve_wipe_job(db, job_id)
-        if job is not None:
+        if job is not None and job.repository_id == repository.id:
             return job
         return (
             db.query(RepositoryWipeJob)

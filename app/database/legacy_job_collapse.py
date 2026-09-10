@@ -78,6 +78,7 @@ class _Target:
         self.script_executions = meta.tables["script_executions"]
         self.plan_run_repositories = meta.tables["backup_plan_run_repositories"]
         self.plan_runs = meta.tables["backup_plan_runs"]
+        self.scheduled_jobs = meta.tables["scheduled_jobs"]
         self.users = meta.tables["users"]
         self.ssh_connections = meta.tables["ssh_connections"]
 
@@ -190,6 +191,12 @@ def _iter(connection: Connection, table: Table):
 def _copy_backups(connection, target, log_dir, ids, by_path, users, ssh, report):
     id_map: dict[int, int] = {}
     pending_retry: list[tuple[int, Optional[int], Optional[int]]] = []
+    # `operations` enforces both of these; the legacy columns did not always
+    # (`backup_jobs.scheduled_job_id` carries no ON DELETE at all), so a
+    # SQLite install that ran without foreign keys can hold a dangling id
+    # that would fail the whole migration on insert.
+    schedules = _ids(connection, target.scheduled_jobs)
+    plan_runs = _ids(connection, target.plan_runs)
     copied = 0
     for row in _iter(connection, legacy.backup_jobs):
         m = row._mapping
@@ -215,8 +222,8 @@ def _copy_backups(connection, target, log_dir, ids, by_path, users, ssh, report)
                 repository_id=repository_id,
                 status=_status(m["status"]),
                 trigger=trigger,
-                scheduled_job_id=m["scheduled_job_id"],
-                backup_plan_run_id=m["backup_plan_run_id"],
+                scheduled_job_id=_kept(m["scheduled_job_id"], schedules),
+                backup_plan_run_id=_kept(m["backup_plan_run_id"], plan_runs),
                 triggered_by_user_id=requested_by,
                 execution_mode=_BACKUP_MODE.get(mode, mode),
                 progress_percent=(

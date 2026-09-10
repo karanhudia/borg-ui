@@ -7,6 +7,20 @@ from unittest.mock import MagicMock, patch, AsyncMock, Mock
 from app.services.backup_service import BackupService
 
 
+# Where a mocked job's log file goes. pytest owns the directory and cleans it
+# up; the module-level default only matters if a test calls the helper without
+# the fixture, which nothing does.
+_mock_log_dir: Path | None = None
+
+
+@pytest.fixture(autouse=True)
+def _mock_log_directory(tmp_path_factory):
+    global _mock_log_dir
+    _mock_log_dir = tmp_path_factory.mktemp("mock-backup-log")
+    yield
+    _mock_log_dir = None
+
+
 def _mock_backup_job(**fields):
     """A stand-in for the backup the service drives.
 
@@ -20,7 +34,9 @@ def _mock_backup_job(**fields):
     root.
     """
     job = MagicMock()
-    fields.setdefault("log_file_path", str(Path(tempfile.mkdtemp()) / "operation.log"))
+    if "log_file_path" not in fields:
+        directory = _mock_log_dir or Path(tempfile.mkdtemp())
+        fields["log_file_path"] = str(directory / "operation.log")
     for name, value in fields.items():
         setattr(job, name, value)
     return job
@@ -1314,15 +1330,22 @@ async def test_execute_backup_delegates_remote_ssh_job(
     )
     mock_db_session.query.side_effect = _make_execute_query_side_effect(job, repo)
 
-    with patch(
-        "app.services.remote_backup_service.remote_backup_service.execute_remote_backup",
-        new=AsyncMock(),
-    ) as mock_remote_execute:
+    with (
+        # Without this the real facade wraps the mocked operation and reads
+        # the connection id from an unconfigured details row, so the test
+        # would pass while forwarding a mock instead of 77.
+        patch("app.services.backup_service.resolve_backup_job", return_value=job),
+        patch(
+            "app.services.remote_backup_service.remote_backup_service.execute_remote_backup",
+            new=AsyncMock(),
+        ) as mock_remote_execute,
+    ):
         await backup_service_fixture.execute_backup(
             job_id, repo.path, db=mock_db_session
         )
 
     mock_remote_execute.assert_awaited_once()
+    assert mock_remote_execute.await_args.kwargs["source_ssh_connection_id"] == 77
     assert job.status == "pending"
 
 
