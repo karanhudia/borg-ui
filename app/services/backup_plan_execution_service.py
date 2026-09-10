@@ -26,6 +26,7 @@ from app.database.models import (
     BackupPlanRun,
     BackupPlanRunRetryLineage,
     BackupPlanRunRepository,
+    Operation,
     Repository,
     Script,
     ScriptExecution,

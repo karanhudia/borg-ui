@@ -18,7 +18,6 @@ import time
 import os
 import structlog
 import json
-import os
 
 from app.database.models import (
     Script,

@@ -1,7 +1,7 @@
 target-version = "py311"
 
 [lint]
-select = ["F401"]
+select = ["F401", "F811", "F821"]
 
 [lint.per-file-ignores]
 "tests/fixtures/database.py" = ["F401"]
