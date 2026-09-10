@@ -178,6 +178,12 @@ def serialize_job_status(
         payload["has_logs"] = job_has_logs_for_policy(
             job, log_save_policy=log_save_policy
         )
+    # Compact only: `borg compact --stats` output (Borg 2). The facade would
+    # hand back a `stats` key of any kind's result; keep the contract narrow.
+    if getattr(job, "kind", None) == "compact":
+        stats = getattr(job, "stats", None)
+        if stats is not None:
+            payload["stats"] = stats
     return payload
 
 

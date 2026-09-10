@@ -1,7 +1,9 @@
+import json
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
@@ -1953,6 +1955,370 @@ class TestAgentJobNotifications:
             == "failed"
         )
 
+    def _running_compact_operation(self, test_db, repository):
+        operation = Operation(
+            repository_id=repository.id,
+            kind="compact",
+            category="maintenance",
+            status="running",
+            trigger="manual",
+            priority=10,
+            run_id="run-compact",
+        )
+        test_db.add(operation)
+        test_db.commit()
+        return operation
+
+    def _compact_agent_job(self, test_db, agent, repository, operation):
+        now = datetime.now(timezone.utc)
+        job = AgentJob(
+            agent_machine_id=agent.id,
+            job_type="repository",
+            status="running",
+            payload={
+                "schema_version": 1,
+                "job_kind": "repository.compact",
+                "repository": {"id": repository.id},
+                "operation": {
+                    "maintenance_job": {"kind": "compact", "id": operation.id}
+                },
+            },
+            created_at=now,
+            updated_at=now,
+        )
+        test_db.add(job)
+        test_db.commit()
+        return job
+
+    def _post_stats_line(self, test_client, headers, job, sequence, message):
+        response = test_client.post(
+            f"/api/agents/jobs/{job.id}/logs",
+            json={
+                "sequence": sequence,
+                "stream": "stderr",
+                "message": json.dumps(
+                    {
+                        "type": "log_message",
+                        "levelname": "INFO",
+                        "name": "borg.archiver.compact_cmd",
+                        "message": message,
+                    }
+                ),
+            },
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+
+    def test_agent_compact_completion_takes_stats_from_the_completion_report(
+        self, test_client, test_db, admin_headers
+    ):
+        """An agent from release 0.1.4 parses its own `compact --stats`
+        output and sends the statistics with its completion; they land on
+        the operation's result and fill a size nothing has measured (#931).
+        No log line is needed for that."""
+        agent, headers = self._register(test_client, test_db, admin_headers)
+        repository = Repository(
+            name="agent-compact-repo", path="/agent-compact", borg_version=2
+        )
+        test_db.add(repository)
+        test_db.commit()
+        operation = self._running_compact_operation(test_db, repository)
+        job = self._compact_agent_job(test_db, agent, repository, operation)
+        stats = {
+            "repository_size": 502_000,
+            "compaction_saved": 0,
+            "size_precision": "exact",
+        }
+        # stored as reported, so only the known fields in their shapes are
+        reported = {
+            **stats,
+            "deduplication_factor": -1.5,
+            "compression_factor": 2,
+            "object_count": 1e300,
+            "source_size": -1,
+            "archive_count": True,
+            "padding": "x" * 1000,
+        }
+        stats["compression_factor"] = 2.0
+
+        response = test_client.post(
+            f"/api/agents/jobs/{job.id}/complete",
+            json={"result": {"return_code": 0, "stats": reported}},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        test_db.refresh(operation)
+        test_db.refresh(repository)
+        assert operation.status == "completed"
+        assert operation.result["stats"] == stats
+        assert repository.total_size == "490.23 KB"
+        assert repository.total_size_source == "compact_stats"
+
+        status = test_client.get(
+            f"/api/repositories/compact-jobs/{operation.id}",
+            headers=admin_headers,
+        )
+        assert status.status_code == 200, status.text
+        assert status.json()["stats"]["repository_size"] == 502_000
+
+    def test_agent_compact_report_with_a_figure_beyond_borgs_range(
+        self, test_client, test_db, admin_headers
+    ):
+        """A `repository_size` no Borg printed (too large for a float) is not
+        a statistics block: the completion goes through, the compact records
+        no statistics, and a precision label that is not one of the two
+        known values is dropped rather than trusted."""
+        agent, headers = self._register(test_client, test_db, admin_headers)
+        repository = Repository(
+            name="agent-compact-huge",
+            path="/agent-compact-huge",
+            borg_version=2,
+            total_size="keep",
+            total_size_source="storage_used",
+        )
+        test_db.add(repository)
+        test_db.commit()
+        operation = self._running_compact_operation(test_db, repository)
+        job = self._compact_agent_job(test_db, agent, repository, operation)
+
+        response = test_client.post(
+            f"/api/agents/jobs/{job.id}/complete",
+            json={
+                "result": {
+                    "return_code": 0,
+                    "stats": {
+                        "repository_size": 10**400,
+                        "compression_factor": 10**400,
+                        "size_precision": "exact",
+                    },
+                }
+            },
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+        test_db.refresh(operation)
+        test_db.refresh(repository)
+        assert operation.status == "completed"
+        assert (operation.result or {}).get("stats") is None
+        assert repository.total_size == "keep"
+
+        # a label outside the known two counts as rounded: a store walk
+        # stays; a factor that is not a finite number is dropped, not stored
+        operation2 = self._running_compact_operation(test_db, repository)
+        job2 = self._compact_agent_job(test_db, agent, repository, operation2)
+        response = test_client.post(
+            f"/api/agents/jobs/{job2.id}/complete",
+            content=json.dumps(
+                {
+                    "result": {
+                        "return_code": 0,
+                        "stats": {
+                            "repository_size": 5,
+                            "deduplication_factor": 1e400,
+                            "size_precision": "guess",
+                        },
+                    }
+                }
+            ),
+            headers={**headers, "Content-Type": "application/json"},
+        )
+        assert response.status_code == 200, response.text
+        test_db.refresh(operation2)
+        test_db.refresh(repository)
+        assert operation2.result["stats"] == {"repository_size": 5}
+        assert repository.total_size == "keep"
+        assert repository.total_size_source == "storage_used"
+        status = test_client.get(
+            f"/api/repositories/compact-jobs/{operation2.id}", headers=admin_headers
+        )
+        assert status.status_code == 200, status.text
+
+    def test_agent_compact_completion_parses_the_log_when_the_report_has_no_stats(
+        self, test_client, test_db, admin_headers
+    ):
+        """An agent that streamed the statistics lines but reported none
+        (the build before the report carried them) still gets them parsed
+        from the tail of its log at completion; a report whose `stats` is
+        not a statistics block counts as none."""
+        agent, headers = self._register(test_client, test_db, admin_headers)
+        repository = Repository(
+            name="agent-compact-log", path="/agent-compact-log", borg_version=2
+        )
+        test_db.add(repository)
+        test_db.commit()
+        operation = self._running_compact_operation(test_db, repository)
+        job = self._compact_agent_job(test_db, agent, repository, operation)
+        for sequence in range(1, 80):
+            self._post_stats_line(
+                test_client, headers, job, sequence, f"line {sequence}"
+            )
+        # two lines flushed in one frame land in one row
+        frames = "\n".join(
+            json.dumps({"type": "log_message", "levelname": "INFO", "message": m})
+            for m in (
+                "Repository size is 502000 B in 6 objects.",
+                "Compaction saved 0 B.",
+            )
+        )
+        response = test_client.post(
+            f"/api/agents/jobs/{job.id}/logs",
+            json={"sequence": 80, "stream": "stderr", "message": frames},
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+
+        response = test_client.post(
+            f"/api/agents/jobs/{job.id}/complete",
+            json={"result": {"return_code": 0, "stats": {"repository_size": "6"}}},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        test_db.refresh(operation)
+        test_db.refresh(repository)
+        assert operation.status == "completed"
+        assert operation.result["stats"]["repository_size"] == 502_000
+        assert operation.result["stats"]["compaction_saved"] == 0
+        assert repository.total_size == "490.23 KB"
+        assert repository.total_size_source == "compact_stats"
+
+    def test_agent_compact_completion_without_stats_records_none(
+        self, test_client, test_db, admin_headers
+    ):
+        """Seen live: the agent's last log lines and its completion travel
+        on different paths, and the completion can win by 150 ms. With no
+        statistics in the report and none in the log yet, this compact
+        records none and the size stays as it was; nothing re-reads the
+        lines that arrive later."""
+        agent, headers = self._register(test_client, test_db, admin_headers)
+        repository = Repository(
+            name="agent-compact-late",
+            path="/agent-compact-late",
+            borg_version=2,
+            total_size="keep",
+            total_size_source="storage_used",
+        )
+        test_db.add(repository)
+        test_db.commit()
+        operation = self._running_compact_operation(test_db, repository)
+        job = self._compact_agent_job(test_db, agent, repository, operation)
+
+        response = test_client.post(
+            f"/api/agents/jobs/{job.id}/complete",
+            json={"result": {"return_code": 0}},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        self._post_stats_line(
+            test_client, headers, job, 1, "Repository size is 502000 B in 6 objects."
+        )
+        test_db.refresh(operation)
+        test_db.refresh(repository)
+        assert operation.status == "completed"
+        assert (operation.result or {}).get("stats") is None
+        assert repository.total_size == "keep"
+        assert repository.total_size_source == "storage_used"
+
+    def test_agent_compact_report_for_a_borg1_repository_is_not_believed(
+        self, test_client, test_db, admin_headers
+    ):
+        """Borg 1 compact prints no statistics; a report that carries some
+        for a Borg 1 repository does not touch the size."""
+        agent, headers = self._register(test_client, test_db, admin_headers)
+        repository = Repository(
+            name="agent-compact-borg1", path="/agent-compact-borg1", borg_version=1
+        )
+        test_db.add(repository)
+        test_db.commit()
+        operation = self._running_compact_operation(test_db, repository)
+        job = self._compact_agent_job(test_db, agent, repository, operation)
+
+        response = test_client.post(
+            f"/api/agents/jobs/{job.id}/complete",
+            json={
+                "result": {
+                    "return_code": 0,
+                    "stats": {"repository_size": 5, "size_precision": "exact"},
+                }
+            },
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+        test_db.refresh(operation)
+        test_db.refresh(repository)
+        assert operation.status == "completed"
+        assert (operation.result or {}).get("stats") is None
+        assert repository.total_size is None
+
+    def test_agent_compact_with_a_warning_exit_keeps_its_statistics(
+        self, test_client, test_db, admin_headers
+    ):
+        """A compact that warned ran through: the operation ends
+        `completed_with_warnings` and the statistics of its report are
+        stored and acted on like those of a clean run."""
+        agent, headers = self._register(test_client, test_db, admin_headers)
+        repository = Repository(
+            name="agent-compact-warn", path="/agent-compact-warn", borg_version=2
+        )
+        test_db.add(repository)
+        test_db.commit()
+        operation = self._running_compact_operation(test_db, repository)
+        job = self._compact_agent_job(test_db, agent, repository, operation)
+
+        response = test_client.post(
+            f"/api/agents/jobs/{job.id}/complete",
+            json={
+                "result": {
+                    "return_code": 1,
+                    "status": "completed_with_warnings",
+                    "stats": {"repository_size": 502_000, "size_precision": "exact"},
+                }
+            },
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+        test_db.refresh(operation)
+        test_db.refresh(repository)
+        assert operation.status == "completed_with_warnings"
+        assert operation.result["stats"]["repository_size"] == 502_000
+        assert repository.total_size == "490.23 KB"
+        assert repository.last_compact is not None
+
+    def test_agent_compact_statistics_keep_a_measured_size(
+        self, test_client, test_db, admin_headers
+    ):
+        """The statistics always land on the operation; a size the chunk
+        index measured is not replaced by the compact's pack file figure
+        (the `stats` follow-up measures again after every compact)."""
+        agent, headers = self._register(test_client, test_db, admin_headers)
+        repository = Repository(
+            name="agent-compact-measured",
+            path="/agent-compact-measured",
+            borg_version=2,
+            total_size="7.00 GB",
+            total_size_source="borg2_index",
+        )
+        test_db.add(repository)
+        test_db.commit()
+        operation = self._running_compact_operation(test_db, repository)
+        job = self._compact_agent_job(test_db, agent, repository, operation)
+
+        response = test_client.post(
+            f"/api/agents/jobs/{job.id}/complete",
+            json={
+                "result": {
+                    "return_code": 0,
+                    "stats": {"repository_size": 5, "size_precision": "exact"},
+                }
+            },
+            headers=headers,
+        )
+        assert response.status_code == 200
+        test_db.refresh(operation)
+        test_db.refresh(repository)
+        assert operation.result["stats"]["repository_size"] == 5
+        assert repository.total_size == "7.00 GB"
+        assert repository.total_size_source == "borg2_index"
+
 
 @pytest.mark.unit
 class TestAgentTimezone:
@@ -2031,3 +2397,83 @@ class TestAgentTimezone:
         assert response.status_code == 200
         test_db.refresh(agent)
         assert agent.timezone == "America/New_York"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_waiter_returns_on_a_completion_with_warnings(
+    test_client, test_db, admin_headers
+):
+    """An agent that ran a Borg command through with a warning exit reports
+    a completion, which the server records as `completed_with_warnings`;
+    the waiter of a delegated maintenance operation must return on it,
+    not poll until the timeout."""
+    from app.services.repository_executor import (
+        wait_for_agent_repository_operation_job,
+    )
+
+    registered = _register_agent(
+        test_client, _create_enrollment_token(test_client, admin_headers)["token"]
+    )
+    agent = _get_agent(test_db, registered["agent_id"])
+    job = _create_agent_job(test_db, agent, status="completed_with_warnings")
+    job.result = {"return_code": 1, "stats": {"repository_size": 5}}
+    test_db.commit()
+
+    result = await wait_for_agent_repository_operation_job(
+        test_db, job.id, timeout_seconds=2, poll_interval_seconds=0.01
+    )
+    assert result["stats"] == {"repository_size": 5}
+
+    job.status = "failed"
+    job.error_message = "borg exited with code 2"
+    test_db.commit()
+    with pytest.raises(HTTPException) as excinfo:
+        await wait_for_agent_repository_operation_job(
+            test_db, job.id, timeout_seconds=2, poll_interval_seconds=0.01
+        )
+    assert excinfo.value.status_code == 502
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_script_and_backup_waiters_return_on_a_completion_with_warnings(
+    test_client, test_db, admin_headers
+):
+    """The other waiters share the terminal set: a hook script or a backup
+    whose agent job ended `completed_with_warnings` must not be polled
+    forever."""
+    from app.services.repository_executor import (
+        wait_for_agent_backup_job,
+        wait_for_agent_script_job,
+    )
+
+    registered = _register_agent(
+        test_client, _create_enrollment_token(test_client, admin_headers)["token"]
+    )
+    agent = _get_agent(test_db, registered["agent_id"])
+    script_job = _create_agent_job(test_db, agent, status="completed_with_warnings")
+    script_job.result = {"return_code": 1}
+    backup_job = BackupJob(repository="/repo", status="completed_with_warnings")
+    test_db.add(backup_job)
+    test_db.commit()
+    agent_backup_job = _create_agent_job(
+        test_db, agent, status="completed_with_warnings"
+    )
+    agent_backup_job.backup_job_id = backup_job.id
+    test_db.commit()
+
+    snapshot = await wait_for_agent_script_job(
+        test_db, script_job.id, timeout_seconds=2, poll_interval_seconds=0.01
+    )
+    assert snapshot["status"] == "completed_with_warnings"
+    assert snapshot["result"] == {"return_code": 1}
+
+    status_value = await wait_for_agent_backup_job(
+        test_db,
+        agent_backup_job.id,
+        backup_job.id,
+        lambda: False,
+        poll_interval_seconds=0.01,
+    )
+    assert status_value == "completed_with_warnings"

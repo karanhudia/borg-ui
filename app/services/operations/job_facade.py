@@ -284,6 +284,26 @@ class MaintenanceJobFacade:
         it alongside `logs` keeps working."""
         return None
 
+    # -- summary -----------------------------------------------------------
+
+    @property
+    def stats(self):
+        """Statistics the service recorded for this run (a Borg 2 compact's
+        `--stats` output). Kept under `result["stats"]`, the kind-specific
+        output summary of spec 6.1, next to whatever the executor adds."""
+        result = self.operation.result
+        return result.get("stats") if isinstance(result, dict) else None
+
+    @stats.setter
+    def stats(self, value) -> None:
+        stored = self.operation.result
+        result = dict(stored) if isinstance(stored, dict) else {}
+        if value is None:
+            result.pop("stats", None)
+        else:
+            result["stats"] = value
+        self.operation.result = result or None
+
     # -- kind-specific inputs ---------------------------------------------
 
     def __getattr__(self, name: str):

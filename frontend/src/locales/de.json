@@ -303,14 +303,18 @@
         "agentRevoked": "Agent widerrufen",
         "agentDeleted": "Agent gelöscht",
         "cancellationRequested": "Abbruch angefordert",
-        "copied": "Kopiert"
+        "copied": "Kopiert",
+        "agentUpgradeRequested": "Aktualisierung angefordert",
+        "agentVersionPinned": "Versions-Pin gespeichert"
       },
       "errors": {
         "revokeToken": "Registrierungstoken konnte nicht widerrufen werden",
         "revokeAgent": "Agent konnte nicht widerrufen werden",
         "deleteAgent": "Agent konnte nicht gelöscht werden",
         "cancelJob": "Job konnte nicht abgebrochen werden",
-        "runDiagnostics": "Diagnose konnte nicht ausgeführt werden"
+        "runDiagnostics": "Diagnose konnte nicht ausgeführt werden",
+        "upgradeAgent": "Aktualisierung konnte nicht angefordert werden",
+        "pinAgentVersion": "Versions-Pin konnte nicht gespeichert werden"
       },
       "table": {
         "job": "Job",
@@ -331,7 +335,9 @@
         "deleteAgent": "Agent löschen",
         "viewLogs": "Protokolle anzeigen",
         "cancelJob": "Job abbrechen",
-        "revokeToken": "Token widerrufen"
+        "revokeToken": "Token widerrufen",
+        "upgradeAgent": "Diesen Endpunkt aktualisieren",
+        "pinAgentVersion": "Version dieses Endpunkts festlegen"
       },
       "noBorg": {
         "title": "Keine verwendbare Borg-Binärdatei gemeldet",
@@ -412,7 +418,35 @@
         "outdatedCount_other": "{{count}} Endpunkte verwenden einen älteren Agenten",
         "bannerBody": "Die aktuelle Agent-Version ist {{version}}.",
         "bannerManual": "Installieren Sie jeden Endpunkt über seine Karte neu, um ihn zu aktualisieren.",
-        "bannerMixedTargets": "Jeder Endpunkt zielt auf seine eigene konfigurierte Version."
+        "bannerMixedTargets": "Jeder Endpunkt zielt auf seine eigene konfigurierte Version.",
+        "manualOnly": "Nur manuelle Updates",
+        "manualOnlyTooltip": "Dieser Endpunkt hat kein Self-Upgrade-Hilfsprogramm und wird daher mit dem Reinstall-Befehl auf der Maschine aktualisiert. Eine Neuinstallation bereitet es auf servergesteuerte Upgrades vor."
+      },
+      "upgradeDialog": {
+        "title": "Diesen Endpunkt aktualisieren",
+        "description": "Der Endpunkt installiert sich selbst von diesem Server neu.",
+        "descriptionWithVersion": "Der Endpunkt installiert sich selbst von diesem Server neu und kommt mit Version {{version}} zurück.",
+        "disconnectWarning": "Dabei ist er kurzzeitig getrennt.",
+        "busyWarning": "Ein Endpunkt, der gerade ein Backup ausführt, lehnt die Aktualisierung ab. Versuchen Sie es erneut, sobald er inaktiv ist.",
+        "confirm": "Aktualisieren"
+      },
+      "upgradeState": {
+        "upgrading": "Wird aktualisiert",
+        "upgradingTo": "Aktualisierung auf {{version}}",
+        "upgradingTooltip": "Der Endpunkt installiert sich neu und verbindet sich von selbst wieder.",
+        "failed": "Aktualisierung fehlgeschlagen",
+        "failedHint": "Der Endpunkt kam nicht rechtzeitig zurück. Installieren Sie ihn manuell neu."
+      },
+      "pinControl": {
+        "title": "Versions-Pin",
+        "hint": "Standardmäßig folgt ein Endpunkt der Version, die dieser Server ausliefert. Mit einem Pin bleibt er stattdessen auf einer bestimmten Version.",
+        "agentVersionLabel": "Agent-Version",
+        "trackServer": "Server folgen",
+        "borgVersionLabel": "Borg-Version",
+        "leaveAsInstalled": "Wie installiert lassen",
+        "borgHint": "Die Borg-Auswahl wird jetzt gespeichert und von einer späteren Version angewendet, sobald Aktualisierungen die installierte Borg-Version ändern können.",
+        "save": "Speichern",
+        "unavailableVersion": "{{version}} (wird nicht mehr ausgeliefert)"
       }
     },
     "installCommand": {
@@ -2512,6 +2546,9 @@
       "presetHetzner": "Hetzner Storage Box",
       "presetHetznerDescription": "Storage-Box-Repository über Hetzners erweiterten SSH-Dienst.",
       "presetHetznerDefaults": "Port 23, SFTP-Bereitstellung an, Standardpfad /home",
+      "presetRsyncNet": "rsync.net",
+      "presetRsyncNetDescription": "Einfaches SSH-Konto mit vorinstalliertem Borg und eingeschränkter Shell.",
+      "presetRsyncNetDefaults": "Port 22, SFTP-Bereitstellung an, Standardpfad /",
       "presetNas": "NAS",
       "presetNasDescription": "Synology, Unraid oder ähnliches NAS mit SSH-Pfadzuordnung.",
       "presetNasDefaults": "Port 22, Standardpfad /backups, SSH-Pfadpräfix /volume1",
@@ -5534,7 +5571,9 @@
         "repositoryOperationFailed": "Die Repository-Operation des Agenten ist fehlgeschlagen",
         "repositoryOperationTimeout": "Zeitüberschreitung bei der Repository-Operation des Agenten",
         "unsupportedJobKind": "Nicht unterstützter Agent-Auftragstyp",
-        "desiredVersionUnavailable": "Diese Agent-Version ist auf diesem Server nicht verfügbar."
+        "desiredVersionUnavailable": "Diese Agent-Version ist auf diesem Server nicht verfügbar.",
+        "upgradeUnsupported": "Dieser Endpunkt kann sich noch nicht selbst aktualisieren. Installieren Sie ihn einmal mit dem Befehl aus dem Neuinstallations-Dialog neu.",
+        "upgradeTargetUnavailable": "Dieser Server liefert keine Agent-Version aus, auf die aktualisiert werden könnte."
       },
       "repo": {
         "repositoryNotFound": "Repository nicht gefunden",

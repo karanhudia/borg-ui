@@ -200,7 +200,17 @@ nothing to trigger and therefore no upgrade path at all: strictly worse than
 the unprivileged case the escalation exists to serve. The escalation is what
 root does not need; the mechanism it escalates to is needed either way.
 
-**`/etc/borg-ui-agent/upgrade.conf`** — mode `0644`, owned `root:root`. Records
+> **Amended during phase 2 review.** The trigger is a systemd `.path` unit
+> watching `/etc/borg-ui-agent/upgrade-requested`, not a sudoers rule. The agent
+> unit runs with `NoNewPrivileges=true`, under which `sudo` refuses to run at
+> all, so `sudo -n` would have failed on every non-root endpoint, which is the
+> default install and the only case the rule existed for. The `.path` unit needs
+> no sudo, no setuid binary and no sudoers file, and the agent still passes no
+> arguments: it creates one empty file that nothing ever reads.
+
+**`/etc/borg-ui-agent-upgrade.conf`** — mode `0644`, owned `root:root`, and
+deliberately outside `/etc/borg-ui-agent`, which the service user owns and could
+otherwise replace a file in. Records
 the parameters a reinstall needs: server URL, borg install mode, service user
 mode, service user and group, agent root. Written at install time from the
 values the operator gave the installer.
@@ -291,25 +301,19 @@ after the operator has already been told the endpoint can upgrade itself:
    is nothing to start.
 2. The helper its `ExecStart` names is present and executable. Without it the
    unit starts and fails at exec time.
-3. `/etc/borg-ui-agent/upgrade.conf` is readable and carries its required
+3. `/etc/borg-ui-agent-upgrade.conf` is readable and carries its required
    fields. The helper takes no arguments and reads every parameter from this
-   file, so without it the root helper runs and fails having done nothing. The
-   agent needs the file for the recorded `systemctl` path in any case.
+   file, so without it the root helper runs and fails having done nothing.
+4. `/etc/systemd/system/borg-ui-agent-upgrade.path` exists, and the agent can
+   create the trigger it watches. Without either, nothing starts the helper.
 
 Splitting the predicate between the probe and the command is what would let
 those diverge, so both call it and the failure is reported once, honestly, as
 "cannot upgrade itself" rather than as an upgrade that starts and dies.
 
-On top of the preconditions the probe branches on how the agent runs, because
-the escalation only exists for the unprivileged case:
-
-- **Running as root.** The preconditions are the whole probe. There is no
-  sudoers file to consult and the installer does not install `sudo`, so a probe
-  that shelled out to `sudo -l` would report no capability on exactly the
-  endpoints that need none.
-- **Running unprivileged.** Additionally,
-  `sudo -n <systemctl path> start --no-block borg-ui-agent-upgrade.service`
-  is listed by `sudo -l`.
+The preconditions are the whole probe, root or not. The trigger is a file the
+agent creates, so there is no sudoers file to consult and nothing that behaves
+differently for a root agent.
 
 ## 7. The upgrade command
 
@@ -544,8 +548,8 @@ Agents update this table and nothing else as work advances. Statuses:
 | Phase | Status | Plan file | Branch | Notes |
 | --- | --- | --- | --- | --- |
 | 1. Version model and visibility | done | `docs/engineering/plans/2026-09-07-agent-upgrades-phase-1.md` | `feat/agent-upgrades` | Pin UI moved to phase 3 |
-| 2. Privileged helper and capability | not started | | | |
-| 3. Single-agent remote upgrade | not started | | | |
+| 2. Privileged helper and capability | done | `docs/engineering/plans/2026-09-09-agent-upgrades-phase-2.md` | `feat/agent-upgrades-phase-2` | https is a precondition; opt-out uses a marker file; the trigger is a `.path` unit, not sudoers |
+| 3. Single-agent remote upgrade | in review | `docs/engineering/plans/2026-09-09-agent-upgrades-phase-3.md` | `feat/agent-upgrades-phase-3` | Trigger is the `.path` file, not section 7's sudoers argv; the pin control is a dialog off the row, the card has no detail area |
 | 4. Fleet upgrade | not started | | | |
 | 5. Per-endpoint Borg version | not started | | | |
 

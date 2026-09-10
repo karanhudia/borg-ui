@@ -1,5 +1,6 @@
 import asyncio
 import json
+import math
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -61,6 +62,14 @@ from app.services.agent_job_notifications import (
     notify_check_job_finished,
     orm_identity_id,
 )
+from app.services.borg2_compact_stats import (
+    MAX_COUNT,
+    PRECISION_EXACT,
+    PRECISION_ROUNDED,
+    TAIL_LINES,
+    parse_compact_stats,
+)
+from app.services.maintenance_state import apply_compact_stats
 from app.services.operations.followups import (
     enqueue_backup_followups,
     history_enabled,
@@ -128,6 +137,30 @@ def _as_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
+
+
+def resolve_agent_upgrade(agent: AgentMachine) -> None:
+    """Clear a requested upgrade when the endpoint comes back on its target.
+
+    The agent is killed by the thing it is reporting on, so the server owns the
+    outcome. An endpoint that comes back on the old version is left in
+    `requested`: the reinstall may still be mid flight, and only the timeout
+    resolves it.
+
+    An endpoint already marked `failed` is cleared too when it turns up on the
+    target version. The agent can be killed before its acknowledgement reaches
+    the server, and the timeout is a guess by construction, so the version the
+    endpoint actually reports outranks either.
+    """
+    if agent.upgrade_state not in ("requested", "failed"):
+        return
+    if (
+        agent.upgrade_target_version
+        and agent.agent_version == agent.upgrade_target_version
+    ):
+        agent.upgrade_state = "idle"
+        agent.upgrade_error = None
+        agent.upgrade_requested_at = None
 
 
 def _validated_timezone(value: Optional[str]) -> Optional[str]:
@@ -445,6 +478,103 @@ def _collect_agent_logs(job: AgentJob, db: Session) -> str:
     return "\n".join(log.message for log in logs)
 
 
+# The statistics block as `parse_compact_stats` produces it: the counts
+# (non-negative integers below MAX_COUNT), the factors (ratios, bounded)
+# and the precision label. A report from an agent is stored, served and, for the
+# size, acted on as it is, so only these fields in these shapes are taken.
+_COMPACT_STATS_COUNTS = (
+    "archive_count",
+    "source_size",
+    "source_files",
+    "deduplicated_size",
+    "repository_size",
+    "object_count",
+    "compaction_saved",
+)
+_COMPACT_STATS_FACTORS = ("deduplication_factor", "compression_factor")
+
+
+def _compact_stats(
+    agent_job: AgentJob, repository: Repository, logs: str
+) -> Optional[dict]:
+    """The statistics of a Borg 2 compact the agent just completed: the
+    ones its completion report carries (an agent from release 0.1.4 parses
+    its own `compact --stats` output into `result["stats"]`), else the ones
+    the tail of the collected transcript yields, else None. Borg 1 compact
+    prints no statistics, so a report carrying some for a Borg 1 repository
+    is not believed. The transcript is the fallback for an agent that ran
+    `--stats` but reported nothing: its last lines and its completion travel
+    on different paths, so the tail may still be in flight, and then this
+    compact records no statistics, which is logged."""
+    if repository.borg_version != 2:
+        return None
+    result = agent_job.result if isinstance(agent_job.result, dict) else {}
+    stats = _reported_compact_stats(result.get("stats"))
+    if stats is None:
+        stats = parse_compact_stats(logs.splitlines()[-TAIL_LINES:])
+    if stats is None:
+        # The size this compact was asked for is missing. At completion the
+        # cases (an agent that predates the flag or the report, last lines
+        # still in flight, a Borg release that no longer prints them) look
+        # the same, so this is information, not a warning; `ran_stats`
+        # (the report names the command) narrows it for a reader.
+        command = result.get("command")
+        ran_stats = isinstance(command, list) and "--stats" in command
+        (logger.info if ran_stats else logger.debug)(
+            "Agent compact reported no statistics",
+            agent_job_id=agent_job.id,
+            repository_id=repository.id,
+            ran_stats=ran_stats,
+        )
+    return stats
+
+
+def _reported_compact_stats(value) -> Optional[dict]:
+    """`value` reduced to the known statistics fields in their shapes, or
+    None when it is not a statistics block (no usable `repository_size`)."""
+    if not isinstance(value, dict):
+        return None
+    stats: dict = {}
+    for name in _COMPACT_STATS_COUNTS:
+        field = value.get(name)
+        if _is_count(field):
+            stats[name] = field
+    for name in _COMPACT_STATS_FACTORS:
+        field = value.get(name)
+        if _is_factor(field):
+            stats[name] = float(field)
+    if value.get("size_precision") in (PRECISION_EXACT, PRECISION_ROUNDED):
+        stats["size_precision"] = value["size_precision"]
+    if "repository_size" not in stats:
+        return None
+    return stats
+
+
+def _is_count(value) -> bool:
+    return (
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and 0 <= value < MAX_COUNT
+    )
+
+
+# Borg prints the factors (ratios) with two decimals; a figure beyond this
+# did not come from Borg.
+_MAX_FACTOR = 1e9
+
+
+def _is_factor(value) -> bool:
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        # bounded before any float conversion: `math.isfinite` itself
+        # refuses an integer too large for a float
+        return 0 <= value < _MAX_FACTOR
+    return (
+        isinstance(value, float) and math.isfinite(value) and 0 <= value < _MAX_FACTOR
+    )
+
+
 def _sync_backup_progress(agent_job: AgentJob, backup_job: BackupJob) -> None:
     for field_name in (
         "progress_percent",
@@ -591,8 +721,9 @@ def _finish_linked_repository_operation_job(
         operation_job.started_at = agent_job.started_at or completed_at
     operation_job.completed_at = completed_at
     operation_job.error_message = error_message
-    operation_job.logs = _collect_agent_logs(agent_job, db)
-    operation_job.has_logs = bool(operation_job.logs)
+    logs = _collect_agent_logs(agent_job, db)
+    operation_job.logs = logs
+    operation_job.has_logs = bool(logs)
     if status_value in ("completed", "completed_with_warnings") and hasattr(
         operation_job, "progress"
     ):
@@ -609,6 +740,9 @@ def _finish_linked_repository_operation_job(
             repository.last_check = completed_at
         elif kind == "compact":
             repository.last_compact = completed_at
+            apply_compact_stats(
+                operation_job, repository, _compact_stats(agent_job, repository, logs)
+            )
         repository.updated_at = _now_utc()
 
     # Archives that no longer exist are recorded on their backup jobs - the
@@ -1254,6 +1388,7 @@ async def heartbeat(
     now = _now_utc()
     current_agent.hostname = payload.hostname or current_agent.hostname
     current_agent.agent_version = payload.agent_version or current_agent.agent_version
+    resolve_agent_upgrade(current_agent)
     current_agent.timezone = (
         _validated_timezone(payload.timezone) or current_agent.timezone
     )
@@ -1322,6 +1457,7 @@ async def session(websocket: WebSocket, db: Session = Depends(get_db)):
         now = _now_utc()
         current_agent.hostname = hello.hostname or current_agent.hostname
         current_agent.agent_version = hello.agent_version or current_agent.agent_version
+        resolve_agent_upgrade(current_agent)
         current_agent.timezone = (
             _validated_timezone(hello.timezone) or current_agent.timezone
         )

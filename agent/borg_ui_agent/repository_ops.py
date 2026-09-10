@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,6 +25,12 @@ from agent.borg_ui_agent.backup import (
 )
 from agent.borg_ui_agent.borg import is_warning_return_code
 from agent.borg_ui_agent.client import AgentClient
+from agent.borg_ui_agent.compact_stats import (
+    TAIL_LINES,
+    has_compact_stats,
+    parse_borg_version,
+    parse_compact_stats,
+)
 
 
 REPOSITORY_JOB_KINDS = {
@@ -149,7 +156,9 @@ class RepositoryOperationPayload:
             cmd.extend(["--remote-path", self.remote_path])
         return cmd
 
-    def build_command(self, *, rclone_config_path: Optional[str] = None) -> list[str]:
+    def build_command(
+        self, *, rclone_config_path: Optional[str] = None, compact_stats: bool = True
+    ) -> list[str]:
         if self.job_kind == "repository.disk_usage":
             if not self.repository_path:
                 raise ValueError("repository.disk_usage requires a repository path")
@@ -358,14 +367,14 @@ class RepositoryOperationPayload:
         if self.job_kind == "repository.compact":
             if self.borg_version == 2:
                 # --stats: the only place Borg 2 reports repository-wide
-                # statistics; the server parses them from the job log.
-                return [
-                    *self._base_borg2("compact"),
-                    "--stats",
-                    "--progress",
-                    "--verbose",
-                    "--log-json",
-                ]
+                # statistics; parsed from the tail of the output into the
+                # completion report (`_execute_streaming_repository_operation`).
+                # The flag exists from 2.0.0b15 (`compact_stats_supported`).
+                cmd = [*self._base_borg2("compact")]
+                if compact_stats:
+                    cmd.append("--stats")
+                cmd.extend(["--progress", "--verbose", "--log-json"])
+                return cmd
             return [
                 *self._base_borg1("compact"),
                 "--progress",
@@ -559,12 +568,15 @@ def execute_repository_operation_job(
     rclone_config_path: Optional[str] = None
     try:
         payload = RepositoryOperationPayload.from_job_payload(job.get("payload") or {})
+        with_stats = _reports_compact_stats(payload) and compact_stats_supported(
+            payload.borg_cmd
+        )
         try:
             if payload.job_kind == "repository.rclone_sync":
                 rclone_config_path = _write_temp_rclone_config(payload)
                 cmd = payload.build_command(rclone_config_path=rclone_config_path)
             else:
-                cmd = payload.build_command()
+                cmd = payload.build_command(compact_stats=with_stats)
         except Exception:
             _remove_temp_file(rclone_config_path)
             raise
@@ -582,10 +594,10 @@ def execute_repository_operation_job(
         # zone so they come out UTC. Applied after the server-sent overrides:
         # the reported machine timezone is "UTC" on the same contract.
         env["TZ"] = "UTC"
-    if payload.job_kind == "repository.compact" and payload.borg_version == 2:
-        # The server parses the --stats lines from the job log; raw units
-        # print exact byte counts instead of the rounded human form, which
-        # follows whatever BORG_UNITS the machine environment carries.
+    if with_stats:
+        # Raw units print exact byte counts in the --stats lines instead of
+        # the rounded human form, which follows whatever BORG_UNITS the
+        # machine environment carries.
         env["BORG_UNITS"] = "raw"
     if payload.job_kind == "repository.init":
         # Repo creation must not touch the shared pack cache: borgstore
@@ -656,6 +668,7 @@ def execute_repository_operation_job(
             env,
             initial_sequence=sequence,
             should_cancel=should_cancel,
+            compact_stats=with_stats,
         )
     finally:
         _remove_temp_file(rclone_config_path)
@@ -1084,7 +1097,13 @@ def _execute_streaming_repository_operation(
     *,
     initial_sequence: int,
     should_cancel: Optional[Callable[[], bool]],
+    compact_stats: bool = False,
 ) -> RepositoryOperationResult:
+    """Run a Borg (or rclone) command to completion, streaming its output
+    as log lines. `compact_stats`: the command is a Borg 2 `compact
+    --stats`, whose statistics are parsed from the tail of the output into
+    the completion report, and whose Borg warning exit code completes the
+    job with warnings (`_warning_exit`)."""
     try:
         popen_kwargs: dict[str, Any] = {
             "stdout": subprocess.PIPE,
@@ -1106,11 +1125,14 @@ def _execute_streaming_repository_operation(
         )
 
     sequence = initial_sequence
+    tail: deque[str] = deque(maxlen=TAIL_LINES)
     if process.stdout is not None:
         for line in process.stdout:
             message = line.rstrip("\n")
             client.send_log(job_id, sequence=sequence, stream="stdout", message=message)
             sequence += 1
+            if compact_stats:
+                tail.append(message)
             progress = parse_borg_progress(message)
             if progress:
                 client.send_progress(job_id, progress)
@@ -1125,14 +1147,24 @@ def _execute_streaming_repository_operation(
                 )
 
     return_code = process.wait()
-    if return_code == 0:
-        client.complete_job(
-            job_id,
-            result={"return_code": return_code, "command": cmd, "status": "completed"},
-        )
+    if return_code == 0 or _warning_exit(payload, return_code):
+        status = "completed" if return_code == 0 else "completed_with_warnings"
+        result: dict[str, Any] = {
+            "return_code": return_code,
+            "command": cmd,
+            "status": status,
+        }
+        if compact_stats:
+            # The statistics ride with the completion report: the log lines
+            # that carry them are queued behind it on the outbox, so the
+            # server would otherwise have to wait for them.
+            stats = parse_compact_stats(tail)
+            if stats is not None:
+                result["stats"] = stats
+        client.complete_job(job_id, result=result)
         return RepositoryOperationResult(
             job_id=job_id,
-            status="completed",
+            status=status,
             return_code=return_code,
             message=f"{payload.job_kind} exited with code {return_code}",
         )
@@ -1145,6 +1177,71 @@ def _execute_streaming_repository_operation(
         return_code=return_code,
         message=error_message,
     )
+
+
+def _reports_compact_stats(payload: RepositoryOperationPayload) -> bool:
+    """Whether this job is a Borg 2 compact, the one operation with
+    repository statistics (Borg 1 compact has none)."""
+    return payload.job_kind == "repository.compact" and payload.borg_version == 2
+
+
+def _warning_exit(payload: RepositoryOperationPayload, return_code: int) -> bool:
+    """Whether `return_code` is a Borg warning that still leaves this job a
+    completion: a compact that warned ran through and printed its
+    statistics, as the short and backup paths and the server classify it.
+    The other streamed kinds keep failing on any non-zero exit as they did:
+    `check` exits 1 for consistency errors found, which must not count as
+    a repository checked; `prune` is left as it was until its warning
+    semantics are settled with the server's; rclone has no warning range
+    at all."""
+    if payload.job_kind != "repository.compact":
+        return False
+    return is_warning_return_code(return_code)
+
+
+# Whether a Borg 2 binary accepts `compact --stats`, by binary file
+# (path, mtime, size): probed once per file (`borg2 --version` is a
+# subprocess), again when the file changes under a long-lived agent.
+_COMPACT_STATS_SUPPORT: dict[tuple, bool] = {}
+
+
+def _binary_key(binary: str) -> tuple:
+    path = shutil.which(binary) or binary
+    try:
+        stat = os.stat(path)
+    except OSError:
+        return (path, None, None)
+    return (path, stat.st_mtime_ns, stat.st_size)
+
+
+def compact_stats_supported(binary: str) -> bool:
+    """Whether `binary` accepts `compact --stats` (Borg 2.0.0b15 on, see
+    `compact_stats.has_compact_stats`). A binary whose version cannot be
+    read this time (a probe timeout, a banner without a version) does not
+    get the flag: a wrong flag would fail the whole compact, a missing one
+    only its statistics. It is probed again next time; only a read version
+    is remembered."""
+    key = _binary_key(binary)
+    known = _COMPACT_STATS_SUPPORT.get(key)
+    if known is not None:
+        return known
+    try:
+        probe = subprocess.run(
+            [binary, "--version"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        version = parse_borg_version(f"{probe.stdout}\n{probe.stderr}")
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        # ValueError covers a `--version` output the locale cannot decode
+        version = None
+    if version is None:
+        return False
+    supported = has_compact_stats(version)
+    _COMPACT_STATS_SUPPORT[key] = supported
+    return supported
 
 
 def _resolve_restore_target(operation: dict[str, Any]) -> tuple[str, bool]:

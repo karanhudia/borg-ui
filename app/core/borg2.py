@@ -39,6 +39,7 @@ Key command differences from Borg 1:
 
 import asyncio
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -128,6 +129,53 @@ def normalize_repo_info_encryption(info: Dict) -> Dict:
 
 
 DEFAULT_BORG2_BINARY = "borg2"
+
+
+# Whether a Borg 2 binary accepts `compact --stats`, by binary file
+# (path, mtime, size): probed once per file, again when the file changes.
+_COMPACT_STATS_SUPPORT: dict[tuple, bool] = {}
+
+
+def _binary_key(binary: str) -> tuple:
+    path = shutil.which(binary) or binary
+    try:
+        stat = os.stat(path)
+    except OSError:
+        return (path, None, None)
+    return (path, stat.st_mtime_ns, stat.st_size)
+
+
+def compact_stats_supported(binary: str) -> bool:
+    """Whether `binary` accepts `compact --stats` (Borg 2.0.0b15 on, see
+    `borg2_compact_stats.has_compact_stats`); a configured binary may be
+    any build. One whose version cannot be read this time (a probe timeout,
+    a banner without a version) does not get the flag: a wrong flag would
+    fail the whole compact, a missing one only its statistics. It is probed
+    again next time; only a read version is remembered."""
+    from app.services.borg2_compact_stats import has_compact_stats, parse_borg_version
+
+    key = _binary_key(binary)
+    known = _COMPACT_STATS_SUPPORT.get(key)
+    if known is not None:
+        return known
+    try:
+        probe = subprocess.run(
+            [binary, "--version"], capture_output=True, text=True, timeout=15
+        )
+        version = parse_borg_version(f"{probe.stdout}\n{probe.stderr}")
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        version = None
+    supported = version is not None and has_compact_stats(version)
+    logger.info(
+        "Probed borg2 for compact --stats",
+        binary=binary,
+        version=version,
+        supported=supported,
+    )
+    if version is not None:
+        # a probe that read nothing is not remembered: it is tried again
+        _COMPACT_STATS_SUPPORT[key] = supported
+    return supported
 
 
 def _get_borg2_binary() -> str:

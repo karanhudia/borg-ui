@@ -5,7 +5,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import CheckJob, CompactJob, DeleteArchiveJob, Repository
+from app.database.models import (
+    CheckJob,
+    CompactJob,
+    DeleteArchiveJob,
+    Operation,
+    Repository,
+)
 from app.services.v2.check_service import CheckV2Service
 from app.services.v2.compact_service import CompactV2Service
 from app.services.v2.delete_archive_service import DeleteArchiveV2Service
@@ -527,6 +533,179 @@ class TestCompactV2Service:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
+    async def test_execute_compact_persists_stats_from_log_json(
+        self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
+    ):
+        """The compact runs with --stats --info; the INFO statistics lines
+        are parsed from the --log-json stream and persisted on the operation
+        row the service drives through the facade (#931)."""
+        job = Operation(
+            repository_id=borg_v2_repo_for_services.id,
+            kind="compact",
+            category="maintenance",
+            status="running",
+            trigger="manual",
+            priority=10,
+            run_id="run-compact",
+        )
+        db_session.add(job)
+        db_session.commit()
+        db_session.refresh(job)
+        # what `BORG_UNITS=raw` prints: exact byte counts
+        messages = [
+            "Overall statistics, considering all 2 archives in this repository:",
+            "Source data size was 1000000 B in 6 files.",
+            "Deduplicated size is 500000 B.",
+            "Repository size is 502000 B in 6 objects.",
+            "Compression factor is 1.00.",
+            "Compaction saved 0 B.",
+        ]
+        lines = [
+            json.dumps(
+                {
+                    "type": "log_message",
+                    "levelname": "INFO",
+                    "name": "borg.archiver.compact_cmd",
+                    "message": m,
+                }
+            )
+            for m in messages
+        ]
+        service = CompactV2Service()
+        service.log_dir = tmp_path
+        with (
+            patch(
+                "app.services.v2.compact_service.SessionLocal", testing_session_local
+            ),
+            patch(
+                "app.services.v2.compact_service.resolve_repo_ssh_key_file",
+                return_value=None,
+            ),
+            patch(
+                "app.services.v2.compact_service.compact_stats_supported",
+                return_value=True,
+            ),
+            patch(
+                "app.services.v2.compact_service._get_borg2_binary",
+                return_value="borg2",
+            ),
+            patch(
+                "app.services.v2.compact_service._get_process_start_time",
+                return_value=123,
+            ),
+            patch(
+                "app.services.v2.compact_service.asyncio.create_subprocess_exec",
+                return_value=FakeProcess(returncode=0, stderr_lines=lines),
+            ) as spawn,
+        ):
+            await service.execute_compact(job.id, borg_v2_repo_for_services.id)
+
+        cmd = list(spawn.call_args.args)
+        assert cmd[cmd.index("compact") + 1 :][:2] == ["--stats", "--info"]
+        assert spawn.call_args.kwargs["env"]["BORG_UNITS"] == "raw"
+        verification = testing_session_local()
+        refreshed = verification.get(Operation, job.id)
+        refreshed_repo = (
+            verification.query(Repository)
+            .filter(Repository.id == borg_v2_repo_for_services.id)
+            .first()
+        )
+        assert refreshed.status == "completed"
+        assert refreshed.result["stats"]["repository_size"] == 502_000
+        assert refreshed.result["stats"]["source_files"] == 6
+        assert refreshed.result["stats"]["size_precision"] == "exact"
+        assert refreshed_repo.total_size == "490.23 KB"
+        assert refreshed_repo.total_size_source == "compact_stats"
+        verification.close()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_execute_compact_keeps_stats_when_finalize_commit_retries(
+        self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
+    ):
+        """commit_with_retry rolls the session back before it reruns
+        prepare(); the finalize closure must restore stats and total_size
+        too, or a retried commit drops them (review finding on #931)."""
+        job = Operation(
+            repository_id=borg_v2_repo_for_services.id,
+            kind="compact",
+            category="maintenance",
+            status="running",
+            trigger="manual",
+            priority=10,
+            run_id="run-compact",
+        )
+        db_session.add(job)
+        db_session.commit()
+        db_session.refresh(job)
+        lines = [
+            json.dumps(
+                {
+                    "type": "log_message",
+                    "levelname": "INFO",
+                    "name": "borg.archiver.compact_cmd",
+                    "message": "Repository size is 502000 B in 6 objects.",
+                }
+            )
+        ]
+
+        from app.services.v2 import compact_service as compact_service_module
+
+        real_commit_with_retry = compact_service_module.commit_with_retry
+
+        async def rollback_then_commit(db, **kwargs):
+            if kwargs.get("action") == "borg2_compact_finalize":
+                db.rollback()  # what a SQLite lock error does before the retry
+            return await real_commit_with_retry(db, **kwargs)
+
+        service = CompactV2Service()
+        service.log_dir = tmp_path
+        with (
+            patch(
+                "app.services.v2.compact_service.SessionLocal", testing_session_local
+            ),
+            patch(
+                "app.services.v2.compact_service.commit_with_retry",
+                new=rollback_then_commit,
+            ),
+            patch(
+                "app.services.v2.compact_service.resolve_repo_ssh_key_file",
+                return_value=None,
+            ),
+            patch(
+                "app.services.v2.compact_service.compact_stats_supported",
+                return_value=True,
+            ),
+            patch(
+                "app.services.v2.compact_service._get_borg2_binary",
+                return_value="borg2",
+            ),
+            patch(
+                "app.services.v2.compact_service._get_process_start_time",
+                return_value=123,
+            ),
+            patch(
+                "app.services.v2.compact_service.asyncio.create_subprocess_exec",
+                return_value=FakeProcess(returncode=0, stderr_lines=lines),
+            ),
+        ):
+            await service.execute_compact(job.id, borg_v2_repo_for_services.id)
+
+        verification = testing_session_local()
+        refreshed = verification.get(Operation, job.id)
+        refreshed_repo = (
+            verification.query(Repository)
+            .filter(Repository.id == borg_v2_repo_for_services.id)
+            .first()
+        )
+        assert refreshed.status == "completed"
+        assert refreshed.result["stats"]["repository_size"] == 502_000
+        assert refreshed_repo.total_size == "490.23 KB"
+        assert refreshed_repo.total_size_source == "compact_stats"
+        verification.close()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
     async def test_execute_compact_sets_started_at_on_pending_scheduler_job(
         self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
     ):
@@ -788,3 +967,124 @@ class TestDeleteArchiveV2Service:
         assert refreshed.status == "completed"
         assert refreshed.progress == 100
         verification.close()
+
+
+@pytest.mark.unit
+def test_compact_log_window_keeps_head_and_tail():
+    from app.services.v2.compact_service import _LogWindow
+
+    window = _LogWindow()
+    for i in range(_LogWindow.HEAD + _LogWindow.TAIL + 7):
+        window.append(f"line {i}")
+    lines = window.lines()
+    assert lines[0] == "line 0"
+    assert lines[_LogWindow.HEAD - 1] == f"line {_LogWindow.HEAD - 1}"
+    assert lines[_LogWindow.HEAD] == "... 7 lines omitted ..."
+    assert lines[_LogWindow.HEAD + 1] == f"line {_LogWindow.HEAD + 7}"
+    assert lines[-1] == f"line {_LogWindow.HEAD + _LogWindow.TAIL + 6}"
+    assert len(window) == _LogWindow.HEAD + _LogWindow.TAIL
+    # the statistics come last, wherever the newest lines sit
+    assert window.last(2) == lines[-2:]
+
+    short = _LogWindow()
+    short.append("only")
+    assert short.lines() == ["only"] and len(short) == 1
+    assert short.last(64) == ["only"]
+    assert short.last(0) == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_execute_compact_without_stats_on_a_borg_before_b15(
+    db_session, testing_session_local, borg_v2_repo_for_services, tmp_path, monkeypatch
+):
+    """A configured Borg 2 binary may be any build; before 2.0.0b15 the
+    flag fails the whole compact, so it is left out with `--info` and
+    `BORG_UNITS=raw`, and no statistics are expected."""
+    monkeypatch.delenv("BORG_UNITS", raising=False)
+    job = Operation(
+        repository_id=borg_v2_repo_for_services.id,
+        kind="compact",
+        category="maintenance",
+        status="running",
+        trigger="manual",
+        priority=10,
+        run_id="run-compact-old",
+    )
+    db_session.add(job)
+    db_session.commit()
+    db_session.refresh(job)
+    service = CompactV2Service()
+    service.log_dir = tmp_path
+    with (
+        patch("app.services.v2.compact_service.SessionLocal", testing_session_local),
+        patch(
+            "app.services.v2.compact_service.resolve_repo_ssh_key_file",
+            return_value=None,
+        ),
+        patch(
+            "app.services.v2.compact_service._get_borg2_binary", return_value="borg2"
+        ),
+        patch(
+            "app.services.v2.compact_service.compact_stats_supported",
+            return_value=False,
+        ),
+        patch(
+            "app.services.v2.compact_service._get_process_start_time", return_value=1
+        ),
+        patch(
+            "app.services.v2.compact_service.asyncio.create_subprocess_exec",
+            return_value=FakeProcess(returncode=0, stderr_lines=[]),
+        ) as spawn,
+    ):
+        await service.execute_compact(job.id, borg_v2_repo_for_services.id)
+
+    cmd = list(spawn.call_args.args)
+    assert "--stats" not in cmd and "--info" not in cmd
+    assert "BORG_UNITS" not in spawn.call_args.kwargs["env"]
+    verification = testing_session_local()
+    refreshed = verification.get(Operation, job.id)
+    assert refreshed.status == "completed"
+    assert (refreshed.result or {}).get("stats") is None
+    verification.close()
+
+
+@pytest.mark.unit
+def test_server_compact_stats_support_is_probed_per_binary_file(monkeypatch):
+    from app.core import borg2 as borg2_core
+
+    calls = []
+
+    class _Probe:
+        stdout = "borg2 2.0.0b14\n"
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return _Probe()
+
+    monkeypatch.setattr(borg2_core.subprocess, "run", fake_run)
+    monkeypatch.setattr(borg2_core, "_COMPACT_STATS_SUPPORT", {})
+    assert borg2_core.compact_stats_supported("/opt/borg2") is False
+    assert borg2_core.compact_stats_supported("/opt/borg2") is False
+    assert calls == [["/opt/borg2", "--version"]]
+
+    _Probe.stdout = "borg2 2.0.0b24\n"
+    monkeypatch.setattr(borg2_core, "_binary_key", lambda binary: (binary, 2, 2))
+    assert borg2_core.compact_stats_supported("/opt/borg2") is True
+
+    def failing_run(cmd, **kwargs):
+        raise OSError("no such binary")
+
+    monkeypatch.setattr(borg2_core.subprocess, "run", failing_run)
+    # unreadable: no flag this time (a wrong flag fails the whole compact)
+    assert borg2_core.compact_stats_supported("/opt/other") is False
+
+    # output without a version token: nothing known, no flag, and nothing
+    # is remembered, so the next probe decides afresh
+    _Probe.stdout = "some wrapper banner\n"
+    monkeypatch.setattr(borg2_core.subprocess, "run", fake_run)
+    monkeypatch.setattr(borg2_core, "_binary_key", lambda binary: (binary, 3, 3))
+    assert borg2_core.compact_stats_supported("/opt/borg2") is False
+    _Probe.stdout = "borg2 2.0.0b24\n"
+    assert borg2_core.compact_stats_supported("/opt/borg2") is True

@@ -1,9 +1,10 @@
 import type { ComponentType } from 'react'
-import { Settings2 } from 'lucide-react'
+import { Server, Settings2 } from 'lucide-react'
 import { SiBorgbackup, SiHetzner, SiLinux, SiSynology } from 'react-icons/si'
 import type { DeployConnectionPayload } from './types'
 
-export type RemoteMachineSetupPresetId = 'custom' | 'linux' | 'borgbase' | 'hetzner' | 'nas'
+export type RemoteMachineSetupPresetId =
+  'custom' | 'linux' | 'borgbase' | 'hetzner' | 'rsyncnet' | 'nas'
 
 export interface RemoteMachineSetupPreset {
   id: RemoteMachineSetupPresetId
@@ -63,6 +64,20 @@ export const remoteMachineSetupPresets: RemoteMachineSetupPreset[] = [
       default_path: '/home',
       ssh_path_prefix: '',
       mount_point: 'hetzner-storage-box',
+    },
+  },
+  {
+    id: 'rsyncnet',
+    icon: Server,
+    brandColor: '#1E6BB8',
+    hostPlaceholder: 'ch-s011.rsync.net',
+    usernamePlaceholder: '12345',
+    defaults: {
+      port: 22,
+      use_sftp_mode: true,
+      default_path: '/',
+      ssh_path_prefix: '',
+      mount_point: 'rsync-net',
     },
   },
   {

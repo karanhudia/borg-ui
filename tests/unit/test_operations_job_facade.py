@@ -332,3 +332,26 @@ def test_claim_running_rejects_an_already_started_legacy_row(db, repository):
 
     second_started = datetime(2026, 9, 6, 12, 5, 0)
     assert claim_running(db, legacy.id, "check", second_started) == 0
+
+
+def test_stats_live_in_the_operation_result(db, repository):
+    """A service's `job.stats = ...` (a Borg 2 compact's statistics) lands
+    in `result["stats"]`, next to what the executor puts there, instead of
+    on the facade instance where a plain attribute write would leave it."""
+    op = _operation(db, repository, kind="compact")
+    job = MaintenanceJobFacade(db, op)
+    assert job.stats is None
+
+    job.stats = {"repository_size": 502_000}
+    db.commit()
+    db.refresh(op)
+    assert op.result == {"stats": {"repository_size": 502_000}}
+    assert job.stats == {"repository_size": 502_000}
+
+    op.result = {"logs": True, "stats": {"repository_size": 502_000}}
+    job.stats = {"repository_size": 1}
+    assert op.result == {"logs": True, "stats": {"repository_size": 1}}
+
+    job.stats = None
+    assert op.result == {"logs": True}
+    assert job.stats is None

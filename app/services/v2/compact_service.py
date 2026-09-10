@@ -14,14 +14,16 @@ Both phases emit progress_percent on stderr with --progress --log-json.
 
 import asyncio
 import json
+from collections import deque
 from datetime import datetime
 from pathlib import Path
 import structlog
 
 from app.database.models import Repository
 from app.database.database import SessionLocal
-from app.core.borg2 import _get_borg2_binary
+from app.core.borg2 import _get_borg2_binary, compact_stats_supported
 from app.config import settings
+from app.services.borg2_compact_stats import is_stats_line, parse_compact_stats
 from app.services.maintenance_state import apply_compact_completion
 from app.services.operations.job_facade import (
     claim_running,
@@ -50,6 +52,43 @@ def _get_process_start_time(pid: int) -> int:
     except Exception as e:
         logger.error("Failed to read process start time", pid=pid, error=str(e))
         return 0
+
+
+class _LogWindow:
+    """The lines a compact's saved log keeps: the first `head` lines and
+    the last `tail` lines, with a marker for what fell out between them.
+    `--info` prints a line per analysed archive and `--progress` a frame
+    per step, so a large repository outgrows any flat cap; the start and
+    the end (the statistics, the verdict) are what a reader needs."""
+
+    HEAD = 1000
+    TAIL = 4000
+
+    def __init__(self) -> None:
+        self.head: list[str] = []
+        self.tail: deque[str] = deque(maxlen=self.TAIL)
+        self.dropped = 0
+
+    def append(self, line: str) -> None:
+        if len(self.head) < self.HEAD:
+            self.head.append(line)
+            return
+        if len(self.tail) == self.tail.maxlen:
+            self.dropped += 1
+        self.tail.append(line)
+
+    def __len__(self) -> int:
+        return len(self.head) + len(self.tail)
+
+    def lines(self) -> list[str]:
+        marker = [f"... {self.dropped} lines omitted ..."] if self.dropped else []
+        return [*self.head, *marker, *self.tail]
+
+    def last(self, count: int) -> list[str]:
+        """The newest `count` lines, wherever they sit."""
+        if count <= 0:
+            return []
+        return [*self.head, *self.tail][-count:]
 
 
 class CompactV2Service:
@@ -169,14 +208,18 @@ class CompactV2Service:
             )
 
             borg_cmd = _get_borg2_binary()
-            cmd = [
-                borg_cmd,
-                "-r",
-                repository.path,
-                "compact",
-                "--progress",
-                "--log-json",
-            ]
+            # --stats --info: Borg 2 reports the repository statistics only
+            # here, on INFO level (see borg2_compact_stats), from 2.0.0b15 on.
+            # a subprocess probe, off the event loop
+            with_stats = await asyncio.to_thread(compact_stats_supported, borg_cmd)
+            if with_stats:
+                # Exact byte counts in the statistics lines instead of the
+                # rounded, BORG_UNITS-dependent human form.
+                env["BORG_UNITS"] = "raw"
+            cmd = [borg_cmd, "-r", repository.path, "compact"]
+            if with_stats:
+                cmd.extend(["--stats", "--info"])
+            cmd.extend(["--progress", "--log-json"])
             if remote_path := effective_repository_remote_path(repository):
                 cmd.extend(["--remote-path", remote_path])
 
@@ -216,8 +259,7 @@ class CompactV2Service:
             first_progress_committed = False
             last_progress_update: dict = {}
             PROGRESS_THROTTLE = 2.0
-            log_buffer: list = []
-            MAX_BUFFER = 1000
+            log_buffer = _LogWindow()
 
             async def check_cancellation():
                 nonlocal cancelled
@@ -245,19 +287,44 @@ class CompactV2Service:
                             break
                         line_str = line.decode("utf-8", errors="replace").strip()
                         log_buffer.append(line_str)
-                        if len(log_buffer) > MAX_BUFFER:
-                            log_buffer.pop(0)
 
+                        framed = None
+                        if line_str and line_str[0] == "{":
+                            try:
+                                framed = json.loads(line_str)
+                            except (ValueError, RecursionError):
+                                # not a frame: an integer literal past the
+                                # interpreter's digit limit is a ValueError
+                                # that is not a JSONDecodeError
+                                framed = None
                         if line_str:
-                            logger.info(
+                            # --info makes this stream long (a line per
+                            # analysed archive); framed INFO and progress
+                            # entries go to debug, everything else (borg's
+                            # warnings, errors, criticals, unframed text)
+                            # stays visible, as do the statistics lines
+                            # themselves, so a compact that printed none
+                            # can be told from one whose lines did not
+                            # parse.
+                            quiet = isinstance(framed, dict) and (
+                                framed.get("type") != "log_message"
+                                or (
+                                    framed.get("levelname") in ("DEBUG", "INFO")
+                                    and not is_stats_line(
+                                        str(framed.get("message", ""))
+                                    )
+                                )
+                            )
+                            emit = logger.debug if quiet else logger.info
+                            emit(
                                 "Borg2 compact output",
                                 job_id=job_id,
                                 line=line_str[:200],
                             )
 
                         try:
-                            if line_str and line_str[0] == "{":
-                                msg = json.loads(line_str)
+                            if isinstance(framed, dict):
+                                msg = framed
                                 msg_type = msg.get("type")
 
                                 if msg_type == "progress_percent":
@@ -344,14 +411,37 @@ class CompactV2Service:
             if process.returncode is None:
                 await process.wait()
 
+            size_written = False
             if job.status == "cancelled":
                 job.completed_at = datetime.utcnow()
             else:
-                apply_compact_completion(
+                # the whole window: the parser is line-anchored and cheap,
+                # and the statistics must not depend on how many lines
+                # Borg prints after them
+                stats = parse_compact_stats(log_buffer.lines()) if with_stats else None
+                size_written = apply_compact_completion(
                     job,
                     repository,
                     process.returncode,
+                    stats=stats,
                 )
+                if (
+                    with_stats
+                    and stats is None
+                    and job.status
+                    in (
+                        "completed",
+                        "completed_with_warnings",
+                    )
+                ):
+                    # The size this compact was asked for is missing: a
+                    # Borg release that no longer prints these lines shows
+                    # up here, not as a silently unchanged total_size.
+                    logger.warning(
+                        "Borg2 compact reported no statistics",
+                        job_id=job_id,
+                        repository_id=repository_id,
+                    )
                 if job.status == "completed":
                     logger.info("Borg2 compact completed", job_id=job_id)
                 elif job.status == "completed_with_warnings":
@@ -373,7 +463,7 @@ class CompactV2Service:
                     / f"compact_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
                 )
                 try:
-                    log_file.write_text("\n".join(log_buffer))
+                    log_file.write_text("\n".join(log_buffer.lines()))
                     job.log_file_path = str(log_file)
                     job.has_logs = True
                     job.logs = f"Logs saved to: {log_file.name}"
@@ -392,7 +482,11 @@ class CompactV2Service:
             final_log_file_path = job.log_file_path
             final_has_logs = job.has_logs
             final_logs = job.logs
+            # A pre-phase-5 legacy row has no statistics attribute at all.
+            final_stats = getattr(job, "stats", None)
             repository_last_compact = repository.last_compact
+            repository_total_size = repository.total_size
+            repository_total_size_source = repository.total_size_source
 
             def persist_final_state():
                 job.status = final_status
@@ -404,6 +498,14 @@ class CompactV2Service:
                 job.has_logs = final_has_logs
                 job.logs = final_logs
                 repository.last_compact = repository_last_compact
+                if final_stats is not None:
+                    job.stats = final_stats
+                if size_written:
+                    # Only a size this compact wrote is restored after a
+                    # rolled-back attempt; one it left alone may have been
+                    # measured by a follow-up in the meantime.
+                    repository.total_size = repository_total_size
+                    repository.total_size_source = repository_total_size_source
 
             await commit_with_retry(
                 db,

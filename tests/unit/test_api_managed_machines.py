@@ -997,6 +997,13 @@ def test_list_agents_reports_upgrade_status(
         capabilities=["filesystem.browse", "self_upgrade"],
     )
 
+    _agent(
+        test_db,
+        name="silent",
+        agent_id="agt_silent",
+        capabilities=None,
+    )
+
     response = test_client.get("/api/managed-machines/agents", headers=admin_headers)
     assert response.status_code == 200
     by_name = {row["name"]: row for row in response.json()}
@@ -1007,6 +1014,10 @@ def test_list_agents_reports_upgrade_status(
 
     assert by_name["current"]["upgrade_status"] == "up_to_date"
     assert by_name["current"]["self_upgrade_supported"] is True
+
+    # Never checked in: it has not said it cannot upgrade itself, so it must
+    # not be reported as manual only.
+    assert by_name["silent"]["self_upgrade_supported"] is None
 
 
 def test_list_agents_respects_pin(test_client, admin_headers, test_db, monkeypatch):

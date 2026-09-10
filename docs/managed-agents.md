@@ -83,6 +83,56 @@ the registration step, refreshes the installed package and systemd unit, and
 restarts `borg-ui-agent`. You do not need a new enrollment token unless you are
 enrolling a different machine or recreating a missing local agent config.
 
+## Remote Upgrade and What It Grants
+
+New installs place four root-owned files on the endpoint so a future Borg UI
+release can reinstall the agent from the server instead of you visiting the
+machine. The agent asks for an upgrade by creating one empty file, which is the
+entire privilege it is given. It passes no arguments and runs no privileged
+command itself, so nothing here needs `sudo`, which the agent's own unit would
+refuse anyway under `NoNewPrivileges=true`.
+
+| File | Purpose |
+| --- | --- |
+| `/etc/borg-ui-agent-upgrade.conf` | The reinstall parameters. Root-owned, and outside the agent-owned config directory so the agent cannot replace it. |
+| `/opt/borg-ui-agent/bin/borg-ui-agent-upgrade` | The helper. Takes no arguments and reads only `upgrade.conf`. |
+| `/etc/systemd/system/borg-ui-agent-upgrade.service` | A oneshot unit that runs the helper. Never enabled. |
+| `/etc/systemd/system/borg-ui-agent-upgrade.path` | Watches for `/etc/borg-ui-agent/upgrade-requested` and starts that one unit when it appears. |
+
+Be clear about the trade. Before this, a compromised Borg UI server could
+already run code as the agent's service user on every endpoint and read any
+file on it, and it already decided which agent code the endpoint runs. With the
+helper it can additionally obtain root on that endpoint: write access and
+persistence. That is a real escalation, not a repackaging of existing trust. It
+is bounded to the server that already controls the endpoint's agent code, and
+it is what makes upgrades possible on the installer's default service user mode
+rather than only on root installs.
+
+Remote upgrade needs an `https` server URL, because the helper runs what it
+downloads as root and will not fetch it over cleartext. An endpoint enrolled
+against an `http` server reports no remote upgrade support and stays on the
+manual path.
+
+To decline it on a sensitive host:
+
+```bash
+curl -fsSL https://borg-ui-host:8083/agent/install.sh | sudo bash -s -- \
+  --server https://borg-ui-host:8083 --token TOKEN --name NAME \
+  --no-remote-upgrade
+```
+
+That endpoint keeps the manual reinstall path and reports no remote upgrade
+support. A later reinstall remembers the choice; pass `--remote-upgrade` to
+undo it.
+
+Endpoints enrolled before this release have none of these files and are shown
+as manual only. One reinstall gives them remote upgrade:
+
+```bash
+curl -fsSL https://borg-ui-host:8083/agent/install.sh | sudo bash -s -- \
+  --server https://borg-ui-host:8083 --reinstall
+```
+
 ## Knowing Which Agents Are Out of Date
 
 Every agent reports the version it runs each time it checks in. Borg UI compares
@@ -92,21 +142,49 @@ a chip on the agent card:
 | Chip | Meaning |
 | --- | --- |
 | No chip | The agent runs the version this server serves. Nothing to do. |
-| **Update available** | The agent is older than the version this server serves. Reinstall it using the command above. |
+| **Update available** | The agent is older than the version this server serves. Use the Upgrade action on the row, or reinstall it with the plain `--reinstall` command above. |
 | **Ahead of server** | The agent is newer than the version this server serves, which happens after a server rollback. Upgrade the server rather than downgrading the agent. |
 | **Pinned** | The agent is held at a specific version and will not follow the server. |
 | **Version unknown** | The agent has not reported a version yet, or the version cannot be compared. A freshly enrolled agent shows this until its first check-in. |
 
 A banner above the fleet counts how many endpoints are running an older agent.
 
-Upgrading is still a manual reinstall on each machine in this release. The
-comparison tells you which machines need it, so you are not reinstalling
-everything to be sure.
+## Upgrading an Endpoint from the UI
+
+An endpoint that carries the helper described above shows an Upgrade action on
+its row when it is out of date. Confirming it asks that endpoint to reinstall
+itself from this server.
+
+What to expect:
+
+- The endpoint disconnects for a short period while it reinstalls, and
+  reconnects on its own.
+- An endpoint that is running a backup refuses the upgrade, because the restart
+  would orphan that backup. Try again once it is idle.
+- The row shows **Upgrading** with the target version until the endpoint comes
+  back. Nothing to do while it does.
+- When the endpoint reconnects on the target version, the row clears itself.
+- If it does not come back within 10 minutes, the row shows **Upgrade failed**.
+  That endpoint needs the manual reinstall command above; nothing is retried
+  automatically.
+
+Upgrading several endpoints at once is a later release. Endpoints shown as
+manual only, and endpoints enrolled before the helper existed, keep the manual
+reinstall path.
 
 ### Pinning an Agent Version
 
 An endpoint can be held at a specific agent version so it stops tracking the
-server. Pinning is available through the API:
+server. The pin action on the agent row opens the version pin, with the agent
+version (default "Track server") and the Borg major version. You can only pin
+to a version this server can actually serve, because the installer installs
+from this server and nowhere else. A pinned endpoint upgrades to its pin rather
+than to the version the server serves.
+
+The Borg choice is recorded now and takes effect in a later release, once an
+upgrade can change the installed Borg version.
+
+The same pin is available through the API:
 
 ```bash
 curl -X PUT "$BASE_URL/api/managed-machines/agents/<id>/desired-version" \

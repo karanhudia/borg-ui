@@ -1,6 +1,7 @@
 import { Chip, Tooltip } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import type { AgentUpgradeStatus } from '../../services/api'
+import { agentChipSx } from './agentChipSx'
 
 const STATUS_COLOR: Record<AgentUpgradeStatus, 'success' | 'warning' | 'info' | 'default'> = {
   up_to_date: 'success',
@@ -57,7 +58,7 @@ export default function AgentUpgradeChip({
       variant="outlined"
       color={STATUS_COLOR[status]}
       label={t(STATUS_LABEL[status])}
-      sx={{ height: 18, fontSize: '0.58rem', fontWeight: 600, '& .MuiChip-label': { px: 0.75 } }}
+      sx={agentChipSx}
     />
   )
 

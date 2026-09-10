@@ -462,6 +462,28 @@ describe('SSHConnectionsSingleKey', () => {
     expect(within(dialog).getByLabelText(/mount point/i)).toHaveValue('')
   }, 30000)
 
+  it('selects the rsync.net preset for its defaults instead of the Linux preset', async () => {
+    renderWithProviders(
+      <DeployDialogHarness
+        initialForm={{
+          ...createConnectionForm(),
+          port: 22,
+          use_sftp_mode: true,
+          default_path: '/',
+          ssh_path_prefix: '',
+          mount_point: 'rsync-net',
+        }}
+      />
+    )
+
+    const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
+    expect(within(dialog).getByRole('combobox', { name: /setup preset/i })).toHaveTextContent(
+      /rsync\.net/i
+    )
+    expect(within(dialog).getByLabelText(/^port$/i)).toHaveValue(22)
+    expect(within(dialog).getByLabelText(/mount point/i)).toHaveValue('rsync-net')
+  }, 30000)
+
   it('selects the matching setup preset for corrected Hetzner and reset defaults', async () => {
     const { unmount } = renderWithProviders(
       <DeployDialogHarness
