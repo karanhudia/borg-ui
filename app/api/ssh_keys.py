@@ -549,12 +549,6 @@ async def create_ssh_key(
         )
 
 
-class SSHKeyGenerate(BaseModel):
-    name: str
-    key_type: str = "rsa"
-    description: Optional[str] = None
-
-
 class SSHKeyImport(BaseModel):
     name: str
     private_key_path: str

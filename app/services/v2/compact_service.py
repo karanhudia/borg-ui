@@ -521,9 +521,11 @@ class CompactV2Service:
             try:
                 completed_at = datetime.utcnow()
 
+                error_message = str(e)
+
                 def persist_failure_state():
                     job.status = "failed"
-                    job.error_message = str(e)
+                    job.error_message = error_message
                     job.completed_at = completed_at
 
                 await commit_with_retry(
