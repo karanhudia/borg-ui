@@ -14,7 +14,13 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.api.schedule import execute_multi_repo_schedule
-from app.database.models import BackupJob, ScheduledJob, ScheduledJobRepository
+from tests.utils.operations import operations_runner_for
+from app.database.models import (
+    BackupJob,
+    Operation,
+    ScheduledJob,
+    ScheduledJobRepository,
+)
 from app.services.backup_service import backup_service
 from tests.utils.borg import (
     create_registered_local_repository,
@@ -160,14 +166,23 @@ class TestMultiRepoScheduledBackupIntegration:
                     "app.services.backup_service.mqtt_service.sync_state_with_db"
                 ):
                     with patch.dict("os.environ", borg_env, clear=False):
-                        await execute_multi_repo_schedule(schedule, test_db)
+                        # Phase 8: the schedule enqueues and waits for the
+                        # runner, so a direct call needs one bound to this
+                        # test's database.
+                        async with operations_runner_for(test_db):
+                            await execute_multi_repo_schedule(schedule, test_db)
 
         test_db.refresh(schedule)
 
+        # Phase 8: a scheduled backup is an operations row, not a backup_jobs
+        # row, so the schedule's children are read from `operations`.
         backup_jobs = (
-            test_db.query(BackupJob)
-            .filter(BackupJob.scheduled_job_id == schedule.id)
-            .order_by(BackupJob.id.asc())
+            test_db.query(Operation)
+            .filter(
+                Operation.kind == "backup",
+                Operation.scheduled_job_id == schedule.id,
+            )
+            .order_by(Operation.id.asc())
             .all()
         )
         assert len(backup_jobs) == 2

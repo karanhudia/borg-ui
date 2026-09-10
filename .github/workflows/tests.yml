@@ -50,6 +50,7 @@ jobs:
   backend-unit-coverage:
     name: Backend / Unit Tests (${{ matrix.shard }}/${{ matrix.total_shards }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -214,6 +215,9 @@ jobs:
   backend-api-integration:
     name: Backend / Integration Tests
     runs-on: ubuntu-latest
+    # Without a cap a hung test holds the runner for GitHub's six hour
+    # default; the suite finishes in a couple of minutes.
+    timeout-minutes: 20
 
     services:
       redis:
