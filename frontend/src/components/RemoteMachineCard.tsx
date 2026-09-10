@@ -21,6 +21,7 @@ import {
   Key,
   ShieldCheck,
   ShieldAlert,
+  Lock,
 } from 'lucide-react'
 
 interface StorageInfo {
@@ -46,6 +47,7 @@ interface RemoteMachine {
   default_path?: string
   mount_point?: string
   status: string
+  shell_restricted?: boolean
   last_test?: string
   last_success?: string
   error_message?: string
@@ -190,6 +192,40 @@ export default function RemoteMachineCard({
                   defaultValue: t('remoteMachineCard.status.unknown'),
                 })}
               </Typography>
+              {machine.shell_restricted && (
+                <Tooltip title={t('remoteMachineCard.restricted.tooltip')} arrow>
+                  <Box
+                    component="span"
+                    tabIndex={0}
+                    aria-label={t('remoteMachineCard.restricted.tooltip')}
+                    sx={{
+                      ml: 0.5,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 0.375,
+                      px: 0.625,
+                      py: 0.125,
+                      borderRadius: 1,
+                      border: '1px solid',
+                      borderColor: alpha(theme.palette.text.primary, isDark ? 0.18 : 0.14),
+                      color: 'text.secondary',
+                      fontSize: '0.58rem',
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      lineHeight: 1,
+                      cursor: 'default',
+                      '&:focus-visible': {
+                        outline: `2px solid ${theme.palette.primary.main}`,
+                        outlineOffset: 1,
+                      },
+                    }}
+                  >
+                    <Lock size={10} aria-hidden />
+                    {t('remoteMachineCard.restricted.label')}
+                  </Box>
+                </Tooltip>
+              )}
             </Box>
 
             {/* SSH key badge — right of status row, small */}

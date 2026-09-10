@@ -70,6 +70,13 @@ export const WithoutRunDiagnostics: Story = {
   },
 }
 
+export const RestrictedShell: Story = {
+  args: {
+    machine: { ...machine, shell_restricted: true, storage: null },
+    ...handlers,
+  },
+}
+
 export const HostKeyVerified: Story = {
   args: {
     machine: {

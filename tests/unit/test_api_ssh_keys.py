@@ -261,8 +261,25 @@ class TestSSHKeysEndpoints:
         assert data["message"] == "backend.success.ssh.connectionTestSuccessRestricted"
         assert data["connection"]["status"] == "connected"
         assert data["connection"]["error_message"] is None
+        assert data["connection"]["shell_restricted"] is True
         # borg serve would block on an open stdin
         assert seen_kwargs["stdin"] == asyncio.subprocess.DEVNULL
+
+        stored = (
+            test_db.query(SSHConnection)
+            .filter(SSHConnection.id == data["connection"]["id"])
+            .one()
+        )
+        assert stored.shell_restricted is True
+
+        listed = test_client.get("/api/ssh-keys/connections", headers=admin_headers)
+        assert listed.status_code == 200
+        assert (
+            next(c for c in listed.json()["connections"] if c["id"] == stored.id)[
+                "shell_restricted"
+            ]
+            is True
+        )
 
     def test_connection_diagnostics_latency_marks_restricted_shell(
         self, test_client: TestClient, admin_headers, test_db, monkeypatch
