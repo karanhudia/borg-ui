@@ -2572,6 +2572,22 @@ class TestBackupPlanRoutes:
         test_db.refresh(plan)
         assert plan.repositories[0].enabled is True
 
+    def test_create_plan_rejects_all_repositories_disabled(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        payload = _payload([repo.id])
+        payload["repositories"][0]["enabled"] = False
+
+        response = test_client.post(
+            "/api/backup-plans/", json=payload, headers=admin_headers
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"] == {
+            "key": "backend.errors.backupPlans.repositoriesRequired"
+        }
+
     def test_toggle_plan_repository_unknown_link_returns_404(
         self, test_client: TestClient, admin_headers, test_db
     ):

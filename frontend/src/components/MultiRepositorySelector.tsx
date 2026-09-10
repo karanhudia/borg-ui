@@ -89,6 +89,8 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
     onChange(newIds)
   }
 
+  const enabledCount = selectedRepos.filter((repo) => !disabledIds.includes(repo.id)).length
+
   const handleRemove = (repoId: number) => {
     onChange(selectedIds.filter((id) => id !== repoId))
   }
@@ -176,6 +178,8 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
           <Stack spacing={1}>
             {selectedRepos.map((repo, index) => {
               const skipped = disabledIds.includes(repo.id)
+              // Mirrors the backend rule: a plan must keep one enabled repository.
+              const isLastEnabled = !skipped && enabledCount <= 1
               return (
                 <Box
                   key={repo.id}
@@ -234,14 +238,16 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
                         title={
                           skipped
                             ? t('multiRepositorySelector.resume')
-                            : t('multiRepositorySelector.skip')
+                            : isLastEnabled
+                              ? t('multiRepositorySelector.lastEnabled')
+                              : t('multiRepositorySelector.skip')
                         }
                         arrow
                       >
                         <span>
                           <IconButton
                             size="small"
-                            disabled={disabled}
+                            disabled={disabled || isLastEnabled}
                             onClick={() => onToggleEnabled(repo.id)}
                             aria-label={
                               skipped

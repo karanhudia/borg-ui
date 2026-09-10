@@ -4418,7 +4418,8 @@
     "searchOrAddMore": "Buscar o agregar más...",
     "skipped": "Omitido",
     "skip": "Omitir en las ejecuciones",
-    "resume": "Reanudar copias"
+    "resume": "Reanudar copias",
+    "lastEnabled": "Al menos un repositorio debe permanecer activado"
   },
   "wizard": {
     "steps": {

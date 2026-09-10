@@ -1131,7 +1131,7 @@ def _validate_payload(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"key": "backend.errors.backupPlans.sourceRequired"},
         )
-    if not payload.repositories:
+    if not any(link.enabled for link in payload.repositories):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"key": "backend.errors.backupPlans.repositoriesRequired"},

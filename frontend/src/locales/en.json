@@ -4418,7 +4418,8 @@
     "searchOrAddMore": "Search or add more...",
     "skipped": "Skipped",
     "skip": "Skip during runs",
-    "resume": "Resume backups"
+    "resume": "Resume backups",
+    "lastEnabled": "At least one repository must stay enabled"
   },
   "wizard": {
     "steps": {

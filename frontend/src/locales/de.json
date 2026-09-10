@@ -4418,7 +4418,8 @@
     "searchOrAddMore": "Suchen oder weitere hinzufügen...",
     "skipped": "Übersprungen",
     "skip": "Bei Läufen überspringen",
-    "resume": "Backups fortsetzen"
+    "resume": "Backups fortsetzen",
+    "lastEnabled": "Mindestens ein Repository muss aktiviert bleiben"
   },
   "wizard": {
     "steps": {

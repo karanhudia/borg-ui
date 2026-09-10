@@ -4418,7 +4418,8 @@
     "searchOrAddMore": "Cerca o aggiungi altri...",
     "skipped": "Saltato",
     "skip": "Salta durante le esecuzioni",
-    "resume": "Riprendi i backup"
+    "resume": "Riprendi i backup",
+    "lastEnabled": "Almeno un repository deve restare attivo"
   },
   "wizard": {
     "steps": {
