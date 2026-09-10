@@ -63,6 +63,33 @@ def _wait_for_agent_job(test_db, operation_id: int, timeout: float = 5.0):
     raise AssertionError(f"no agent job queued for operation {operation_id}")
 
 
+def _wait_for_followups(test_db, repository_id: int, timeout: float = 5.0):
+    """The spec 7.4 chain, once the runner has enqueued it.
+
+    For an agent backup the chain comes from the runner when the executor
+    returns from waiting on the transport job, not from the completion report
+    (which sees the operation still running and stands down), so a caller has
+    to wait for the executor to wake rather than read straight after the
+    report.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        test_db.expire_all()
+        followups = (
+            test_db.query(Operation)
+            .filter(
+                Operation.repository_id == repository_id,
+                Operation.trigger == "followup",
+            )
+            .order_by(Operation.id)
+            .all()
+        )
+        if followups:
+            return followups
+        time.sleep(0.05)
+    raise AssertionError(f"no follow-up chain enqueued for repository {repository_id}")
+
+
 def _set_log_save_policy(test_db, policy: str) -> None:
     settings = test_db.query(SystemSettings).first()
     if settings is None:
@@ -881,13 +908,8 @@ class TestBackupStart:
         # last_backup now comes from the archive index: completion enqueues
         # the backup follow-up chain instead of writing the column (#933).
         assert repo.last_backup is None
-        followups = (
-            test_db.query(Operation)
-            .filter(Operation.repository_id == repo.id, Operation.trigger == "followup")
-            .order_by(Operation.id)
-            .all()
-        )
-        assert followups and followups[0].kind == "archive_sync"
+        followups = _wait_for_followups(test_db, repo.id)
+        assert followups[0].kind == "archive_sync"
 
         logs_response = test_client.get(
             f"/api/activity/backup/{backup_job_id}/logs", headers=admin_headers
