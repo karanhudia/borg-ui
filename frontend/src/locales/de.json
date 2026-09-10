@@ -5790,7 +5790,7 @@
         "adminAccessRequired": "Administratorzugriff erforderlich",
         "cannotEnableAsBackupSource": "Kann nicht als Sicherungsquelle aktiviert werden: {{error}}",
         "connectionTestFailed": "SSH-Verbindungstest fehlgeschlagen: {{error}}",
-        "failedCollectStorage": "Speicherinformationen nicht verfügbar: Die Remote-Shell erlaubt kein df. Borg-Backups sind nicht betroffen.",
+        "failedCollectStorage": "Speicherinformationen sind für diese Verbindung nicht verfügbar.",
         "failedGenerateKey": "SSH-Schlüssel konnte nicht generiert werden: {{error}}",
         "invalidKeyType": "Ungültiger Schlüsseltyp. Muss einer der folgenden sein: {{types}}",
         "invalidPrivateKeyFormat": "Ungültiges Format des privaten Schlüssels",

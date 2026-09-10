@@ -5790,7 +5790,7 @@
         "adminAccessRequired": "Admin access required",
         "cannotEnableAsBackupSource": "Cannot enable as backup source: {{error}}",
         "connectionTestFailed": "SSH connection test failed: {{error}}",
-        "failedCollectStorage": "Storage information is unavailable: the remote shell does not allow df. Borg backups are not affected.",
+        "failedCollectStorage": "Storage information is unavailable for this connection.",
         "failedGenerateKey": "Failed to generate SSH key: {{error}}",
         "invalidKeyType": "Invalid key type. Must be one of: {{types}}",
         "invalidPrivateKeyFormat": "Invalid private key format",

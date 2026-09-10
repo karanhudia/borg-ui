@@ -149,6 +149,33 @@ export default function CommandPreview({
       ? `${useSudo ? 'sudo -n -H ' : ''}${remotePath || 'borg'} serve --umask=077`
       : ''
 
+  const remoteServeBlock = remoteServeCommand ? (
+    <Box sx={{ mb: 2 }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'primary.main',
+          fontWeight: 600,
+          mb: 0.5,
+          display: 'block',
+        }}
+      >
+        {t('commandPreview.remoteServeCommand')}
+      </Typography>
+      <CopyableCommandBox command={remoteServeCommand} />
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'text.secondary',
+          mt: 0.5,
+          display: 'block',
+        }}
+      >
+        {t('commandPreview.remoteServeCommandDesc')}
+      </Typography>
+    </Box>
+  ) : null
+
   // Generate init command
   const initCommand = generateBorgInitCommand({
     repositoryPath: fullRepoPath,
@@ -272,6 +299,8 @@ export default function CommandPreview({
             <CopyableCommandBox command={initCommand} />
           </Box>
         )}
+
+        {remoteServeBlock}
 
         <Box sx={{ mb: 2 }}>
           <Typography
@@ -403,32 +432,7 @@ export default function CommandPreview({
         </Box>
       )}
 
-      {remoteServeCommand && (
-        <Box sx={{ mb: 2 }}>
-          <Typography
-            variant="caption"
-            sx={{
-              color: 'primary.main',
-              fontWeight: 600,
-              mb: 0.5,
-              display: 'block',
-            }}
-          >
-            {t('commandPreview.remoteServeCommand')}
-          </Typography>
-          <CopyableCommandBox command={remoteServeCommand} />
-          <Typography
-            variant="caption"
-            sx={{
-              color: 'text.secondary',
-              mt: 0.5,
-              display: 'block',
-            }}
-          >
-            {t('commandPreview.remoteServeCommandDesc')}
-          </Typography>
-        </Box>
-      )}
+      {remoteServeBlock}
 
       {repositoryMode === 'full' && (
         <Box>

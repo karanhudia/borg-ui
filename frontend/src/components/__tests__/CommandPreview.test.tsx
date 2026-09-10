@@ -231,6 +231,25 @@ describe('CommandPreview', () => {
       expect(screen.getByText(/fusermount -u/)).toBeInTheDocument()
     })
 
+    it('shows the remote serve command for an SSH repository with a remote source', () => {
+      render(
+        <CommandPreview
+          mode="create"
+          repositoryLocation="ssh"
+          repositoryPath="/backups/repo"
+          host="repo.example"
+          username="borg"
+          sourceDirs={['/var/data']}
+          repositoryMode="full"
+          dataSource="remote"
+          sourceSshConnection={sshConnection}
+        />
+      )
+
+      expect(screen.getByText('borg serve --umask=077')).toBeInTheDocument()
+      expect(screen.getByText(/sshfs admin@192.168.1.100/)).toBeInTheDocument()
+    })
+
     it('renders mount, backup, cleanup steps for import mode with remote source', () => {
       render(
         <CommandPreview

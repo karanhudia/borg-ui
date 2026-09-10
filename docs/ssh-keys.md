@@ -320,8 +320,8 @@ If you use a wrapper script instead of a fixed `borg serve` command, match
 `sudo -n -H <remote_path> serve …`. The repository wizard's command preview
 shows the exact remote command for your settings. Match on the prefix rather
 than the full string, since Borg adds flags such as `--info` or `--debug`.
-Note that for a subsystem request `SSH_ORIGINAL_COMMAND` arrives with a
-trailing space (`/usr/lib/openssh/sftp-server `).
+Note that for a subsystem request `SSH_ORIGINAL_COMMAND` arrives with one
+trailing ASCII space; shell-quoted it is `'/usr/lib/openssh/sftp-server '`.
 
 ## Troubleshooting
 

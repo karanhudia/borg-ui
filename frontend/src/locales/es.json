@@ -5790,7 +5790,7 @@
         "adminAccessRequired": "Se requiere acceso de administrador",
         "cannotEnableAsBackupSource": "No se puede habilitar como fuente de copia de seguridad: {{error}}",
         "connectionTestFailed": "Prueba de conexión SSH fallida: {{error}}",
-        "failedCollectStorage": "Información de almacenamiento no disponible: el shell remoto no permite df. Las copias de Borg no se ven afectadas.",
+        "failedCollectStorage": "La información de almacenamiento no está disponible para esta conexión.",
         "failedGenerateKey": "Error al generar clave SSH: {{error}}",
         "invalidKeyType": "Tipo de clave no válido. Debe ser uno de: {{types}}",
         "invalidPrivateKeyFormat": "Formato de clave privada no válido",
