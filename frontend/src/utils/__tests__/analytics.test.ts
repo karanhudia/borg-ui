@@ -9,6 +9,7 @@ import {
   trackSiteSearch,
   setCustomDimension,
   setAppVersion,
+  setAnalyticsPlan,
   setUserId,
   resetUserId,
   trackOptOut,
@@ -233,6 +234,24 @@ describe('analytics (umami)', () => {
     it('setAppVersion identifies the current app version when umami is available', () => {
       expect(() => setAppVersion('1.2.3')).not.toThrow()
       expect(window.umami?.identify).toHaveBeenCalledWith({ app_version: '1.2.3' })
+    })
+
+    it('setAnalyticsPlan adds the plan to the identity payload', () => {
+      setAppVersion('1.2.3')
+      setAnalyticsPlan('pro')
+      expect(window.umami?.identify).toHaveBeenLastCalledWith(
+        expect.objectContaining({ app_version: '1.2.3', plan: 'pro' })
+      )
+
+      setAnalyticsPlan(null)
+      expect(window.umami?.identify).toHaveBeenLastCalledWith({ app_version: '1.2.3' })
+    })
+
+    it('setAnalyticsPlan does not re-identify when the plan has not changed', () => {
+      setAnalyticsPlan(null)
+      const calls = window.umami?.identify?.mock.calls.length
+      setAnalyticsPlan(null)
+      expect(window.umami?.identify?.mock.calls.length).toBe(calls)
     })
 
     it('setUserId does not throw', () => {
