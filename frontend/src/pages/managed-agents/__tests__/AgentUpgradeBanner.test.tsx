@@ -150,6 +150,16 @@ describe('AgentUpgradeBanner upgrade all', () => {
     expect(screen.getByRole('button', { name: /upgrade all \(1\)/i })).toBeInTheDocument()
   })
 
+  it('does not call an endpoint that is already upgrading a manual one', () => {
+    renderWithProviders(
+      <AgentUpgradeBanner
+        agents={[outdated(), outdated({ id: 2, upgrade_state: 'requested' })]}
+        onUpgradeAll={() => {}}
+      />
+    )
+    expect(screen.queryByText(/manual reinstall/i)).toBeNull()
+  })
+
   it('hands every upgradable endpoint to the handler', async () => {
     const onUpgradeAll = vi.fn()
     const agents = [outdated()]

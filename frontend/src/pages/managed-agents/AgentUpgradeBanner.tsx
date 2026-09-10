@@ -40,7 +40,10 @@ export default function AgentUpgradeBanner({
   const targets = new Set(outdated.map(effectiveTarget).filter(Boolean))
   const sharedTarget = targets.size === 1 ? [...targets][0] : null
   const upgradable = outdated.filter(canUpgradeNow)
-  const manualOnly = outdated.length - upgradable.length
+  // Counted from the capability, not from what is left over: an endpoint whose
+  // upgrade is already queued or in flight is not upgradable right now, and
+  // telling the operator to go reinstall it by hand would be wrong.
+  const manualOnly = outdated.filter((agent) => agent.self_upgrade_supported === false).length
 
   return (
     <Alert
