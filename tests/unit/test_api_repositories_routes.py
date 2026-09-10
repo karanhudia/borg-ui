@@ -11,7 +11,6 @@ from fastapi.testclient import TestClient
 from app.api import repositories as repositories_api
 from tests.utils.operations import seed_job_operation
 from app.database.models import (
-    AgentJob,
     AgentMachine,
     BackupPlan,
     BackupPlanRun,
@@ -557,42 +556,6 @@ class TestRepositoryHelperContracts:
         ]
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        ("before", "after", "cancel_sent"),
-        [
-            ("queued", "canceled", False),
-            ("claimed", "cancel_requested", True),
-            ("running", "cancel_requested", True),
-            ("completed", "completed", False),
-        ],
-    )
-    async def test_timed_out_storage_usage_job_is_released(
-        self, test_db, before, after, cancel_sent
-    ):
-        """A 504 from the wait leaves the agent job where admission would
-        count it as active work: queued jobs are cancelled, live ones get
-        the cancel request, terminal ones stay."""
-        agent = self._agent(test_db, ["repository.storage_usage"])
-        job = AgentJob(
-            agent_machine_id=agent.id,
-            job_type="repository",
-            status=before,
-            payload={"job_kind": "repository.storage_usage"},
-        )
-        test_db.add(job)
-        test_db.commit()
-        with patch(
-            "app.api.repositories.dispatch_agent_cancel_if_connected",
-            new=AsyncMock(return_value=True),
-        ) as cancel:
-            await repositories_api._release_timed_out_agent_job(test_db, job.id)
-        test_db.refresh(job)
-        assert job.status == after
-        assert cancel.await_count == (1 if cancel_sent else 0)
-        if before == "queued":
-            assert job.completed_at is not None and "Abandoned" in job.error_message
-
-    @pytest.mark.asyncio
     async def test_storage_usage_wait_timeout_releases_the_job(self, test_db):
         """The stats refresh survives the 504 and releases the job it
         stopped waiting for."""
@@ -636,14 +599,14 @@ class TestRepositoryHelperContracts:
                 new=fake_wait,
             ),
             patch(
-                "app.api.repositories._release_timed_out_agent_job", new=AsyncMock()
-            ) as release,
+                "app.services.repository_executor.cancel_unclaimed_agent_repository_job"
+            ) as cancel_unclaimed,
         ):
             assert (
                 await repositories_api._update_agent_repository_stats(repo, test_db)
                 is True
             )
-        release.assert_awaited_once_with(test_db, 1)
+        cancel_unclaimed.assert_called_once_with(test_db, 1)
 
     def _agent(self, test_db, capabilities):
         from app.core.security import get_password_hash

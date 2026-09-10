@@ -217,6 +217,136 @@ class TestSSHKeysEndpoints:
         )
         assert listed_connection["error_message"] == error_message
 
+    def test_connection_test_restricted_shell_counts_as_connected(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """A forced-command key refuses `pwd` but authenticated: that is connected."""
+        from app.core.security import encrypt_secret
+
+        fake_private_key = "-----BEGIN OPENSSH PRIVATE KEY-----\ntest\n-----END OPENSSH PRIVATE KEY-----\n"
+        ssh_key = SSHKey(
+            name="Restricted key",
+            public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItest test@test",
+            private_key=encrypt_secret(fake_private_key),
+            is_active=True,
+        )
+        test_db.add(ssh_key)
+        test_db.commit()
+        test_db.refresh(ssh_key)
+
+        seen_kwargs: dict = {}
+
+        async def mock_subprocess(*cmd, **kwargs):
+            seen_kwargs.update(kwargs)
+            mock_process = AsyncMock()
+            mock_process.communicate = AsyncMock(
+                return_value=(b"", b"Only borg serve is permitted\n")
+            )
+            mock_process.returncode = 64
+            return mock_process
+
+        with patch(
+            "app.api.ssh_keys.asyncio.create_subprocess_exec",
+            side_effect=mock_subprocess,
+        ):
+            response = test_client.post(
+                f"/api/ssh-keys/{ssh_key.id}/test-connection",
+                json={"host": "repo.example", "username": "borg", "port": 22},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["message"] == "backend.success.ssh.connectionTestSuccessRestricted"
+        assert data["connection"]["status"] == "connected"
+        assert data["connection"]["error_message"] is None
+        assert data["connection"]["shell_restricted"] is True
+        # borg serve would block on an open stdin
+        assert seen_kwargs["stdin"] == asyncio.subprocess.DEVNULL
+
+        stored = (
+            test_db.query(SSHConnection)
+            .filter(SSHConnection.id == data["connection"]["id"])
+            .one()
+        )
+        assert stored.shell_restricted is True
+
+        listed = test_client.get("/api/ssh-keys/connections", headers=admin_headers)
+        assert listed.status_code == 200
+        assert (
+            next(c for c in listed.json()["connections"] if c["id"] == stored.id)[
+                "shell_restricted"
+            ]
+            is True
+        )
+
+    def test_connection_diagnostics_latency_marks_restricted_shell(
+        self, test_client: TestClient, admin_headers, test_db, monkeypatch
+    ):
+        _, connection = self._create_diagnostics_connection(test_db)
+
+        async def fake_run_ssh_process(cmd, timeout_seconds):
+            if "-W" in cmd:
+                return 0, b"", b""
+            if cmd[-1].startswith("dd if=/dev/zero"):
+                return 0, b"x" * 131072, b""
+            return 1, b"", b"Only borg serve is permitted\n"
+
+        monkeypatch.setattr(
+            ssh_keys_api, "_run_ssh_process", fake_run_ssh_process, raising=False
+        )
+        self._patch_monotonic(monkeypatch, [10.0, 10.0, 10.0, 10.025])
+
+        response = test_client.post(
+            f"/api/ssh-keys/connections/{connection.id}/diagnostics",
+            json={"timeout_seconds": 4},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["session"]["status"] == "success"
+        assert data["session"]["restricted"] is True
+
+    def test_restricted_result_clears_cached_storage(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Storage numbers collected before the key was locked down cannot be
+        refreshed any more, so a restricted result drops them."""
+        _, connection = self._create_diagnostics_connection(test_db)
+        connection.storage_total = 1000
+        connection.storage_used = 400
+        connection.storage_available = 600
+        connection.storage_percent_used = 40.0
+        connection.last_storage_check = datetime.utcnow()
+        test_db.commit()
+
+        async def mock_subprocess(*cmd, **kwargs):
+            mock_process = AsyncMock()
+            mock_process.communicate = AsyncMock(return_value=(b"", b"denied\n"))
+            mock_process.returncode = 1
+            return mock_process
+
+        with patch(
+            "app.api.ssh_keys.asyncio.create_subprocess_exec",
+            side_effect=mock_subprocess,
+        ):
+            response = test_client.post(
+                f"/api/ssh-keys/connections/{connection.id}/test",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+        test_db.refresh(connection)
+        assert connection.shell_restricted is True
+        assert connection.storage_total is None
+        assert connection.storage_used is None
+        assert connection.storage_available is None
+        assert connection.storage_percent_used is None
+        assert connection.last_storage_check is None
+
     def _create_diagnostics_connection(self, test_db):
         fake_private_key = "-----BEGIN OPENSSH PRIVATE KEY-----\ntest\n-----END OPENSSH PRIVATE KEY-----\n"
         ssh_key = SSHKey(

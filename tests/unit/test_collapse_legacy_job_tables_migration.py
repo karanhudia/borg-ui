@@ -1,4 +1,4 @@
-"""Tests for revision c9d0e1f2a3b4 (collapse of the legacy job tables)."""
+"""Tests for revision d0e1f2a3b4c5 (collapse of the legacy job tables)."""
 
 from datetime import datetime
 
@@ -9,8 +9,11 @@ from sqlalchemy import MetaData, insert, inspect, select
 from app.database import legacy_job_tables as legacy
 from app.database.db_upgrade import _alembic_config, _engine
 
-REVISION = "c9d0e1f2a3b4"
+REVISION = "d0e1f2a3b4c5"
+# The last revision whose schema still holds the legacy job tables; the
+# collapse chains onto the head that landed after it.
 PREVIOUS = "b8c9d0e1f2a3"
+PARENT = "c9d0e1f2a3b4"
 NOW = datetime(2026, 9, 1, 12, 0, 0)
 
 # The NOT NULL columns of `repositories` that carry no server default.
@@ -139,5 +142,5 @@ def test_revision_chains_on_the_previous_head_and_leaves_one_head():
     from alembic.script import ScriptDirectory
 
     script = ScriptDirectory.from_config(_alembic_config("sqlite://"))
-    assert script.get_revision(REVISION).down_revision == PREVIOUS
+    assert script.get_revision(REVISION).down_revision == PARENT
     assert len(script.get_heads()) == 1

@@ -29,6 +29,7 @@ interface CommandPreviewProps {
   sourceDirs?: string[]
   customFlags?: string
   remotePath?: string
+  useSudo?: boolean
   repositoryMode?: 'full' | 'observe'
   // Remote source props
   dataSource?: 'local' | 'remote'
@@ -125,6 +126,7 @@ export default function CommandPreview({
   sourceDirs = [],
   customFlags = '',
   remotePath = '',
+  useSudo = false,
   repositoryMode = 'full',
   dataSource = 'local',
   sourceSshConnection = null,
@@ -141,6 +143,38 @@ export default function CommandPreview({
   }
 
   const remotePathFlag = remotePath ? `--remote-path ${remotePath} ` : ''
+  // What the repository host's forced-command wrapper has to accept.
+  const remoteServeCommand =
+    repositoryLocation === 'ssh'
+      ? `${useSudo ? 'sudo -n -H ' : ''}${remotePath || 'borg'} serve --umask=077`
+      : ''
+
+  const remoteServeBlock = remoteServeCommand ? (
+    <Box sx={{ mb: 2 }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'primary.main',
+          fontWeight: 600,
+          mb: 0.5,
+          display: 'block',
+        }}
+      >
+        {t('commandPreview.remoteServeCommand')}
+      </Typography>
+      <CopyableCommandBox command={remoteServeCommand} />
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'text.secondary',
+          mt: 0.5,
+          display: 'block',
+        }}
+      >
+        {t('commandPreview.remoteServeCommandDesc')}
+      </Typography>
+    </Box>
+  ) : null
 
   // Generate init command
   const initCommand = generateBorgInitCommand({
@@ -265,6 +299,8 @@ export default function CommandPreview({
             <CopyableCommandBox command={initCommand} />
           </Box>
         )}
+
+        {remoteServeBlock}
 
         <Box sx={{ mb: 2 }}>
           <Typography
@@ -395,6 +431,8 @@ export default function CommandPreview({
           </Typography>
         </Box>
       )}
+
+      {remoteServeBlock}
 
       {repositoryMode === 'full' && (
         <Box>

@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Box } from '@mui/material'
+import { Box, CssBaseline } from '@mui/material'
+import { ThemeProvider } from '@mui/material/styles'
 import type { ComponentProps } from 'react'
+import { darkTheme } from '../theme'
 import { fn } from 'storybook/test'
 import RemoteMachineCard from './RemoteMachineCard'
 
@@ -68,6 +70,28 @@ export const WithoutRunDiagnostics: Story = {
     machine,
     ...handlers,
   },
+}
+
+export const RestrictedShell: Story = {
+  args: {
+    machine: { ...machine, shell_restricted: true, storage: null },
+    ...handlers,
+  },
+}
+
+export const RestrictedShellDark: Story = {
+  args: {
+    machine: { ...machine, shell_restricted: true, storage: null },
+    ...handlers,
+  },
+  render: (args) => (
+    <ThemeProvider theme={darkTheme}>
+      <CssBaseline />
+      <Box sx={{ width: 360, p: 2, bgcolor: 'background.default' }}>
+        <RemoteMachineCard {...args} />
+      </Box>
+    </ThemeProvider>
+  ),
 }
 
 export const HostKeyVerified: Story = {

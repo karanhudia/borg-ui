@@ -304,8 +304,9 @@
         "agentDeleted": "Agente eliminado",
         "cancellationRequested": "Cancelación solicitada",
         "copied": "Copiado",
-        "agentUpgradeRequested": "Actualización solicitada",
-        "agentVersionPinned": "Versión fijada guardada"
+        "agentVersionPinned": "Versión fijada guardada",
+        "agentUpgradeRequested_one": "Actualización solicitada",
+        "agentUpgradeRequested_other": "Actualización solicitada para {{count}} endpoints"
       },
       "errors": {
         "revokeToken": "No se pudo revocar el token de registro",
@@ -417,17 +418,29 @@
         "outdatedCount_one": "{{count}} endpoint ejecuta un agente antiguo",
         "outdatedCount_other": "{{count}} endpoints ejecutan un agente antiguo",
         "bannerBody": "La versión actual del agente es {{version}}.",
-        "bannerManual": "Reinstale cada uno desde su tarjeta para actualizarlo.",
         "bannerMixedTargets": "Cada uno apunta a su propia versión configurada.",
         "manualOnly": "Solo actualizaciones manuales",
-        "manualOnlyTooltip": "Este endpoint no tiene el asistente de autoactualización, así que se actualiza ejecutando el comando de reinstalación en la máquina. Una reinstalación lo prepara para las actualizaciones desde el servidor."
+        "manualOnlyTooltip": "Este endpoint no tiene el asistente de autoactualización, así que se actualiza ejecutando el comando de reinstalación en la máquina. Una reinstalación lo prepara para las actualizaciones desde el servidor.",
+        "selectedCount_one": "{{count}} endpoint seleccionado",
+        "selectedCount_other": "{{count}} endpoints seleccionados",
+        "upgradeSelected_one": "Actualizar {{count}} endpoint",
+        "upgradeSelected_other": "Actualizar {{count}} endpoints",
+        "selectAgent": "Seleccionar {{name}}",
+        "clearSelection": "Limpiar",
+        "bannerManualOnly_one": "{{count}} endpoint necesita una reinstalación manual desde su tarjeta antes de poder actualizarse desde aquí.",
+        "bannerManualOnly_other": "{{count}} endpoints necesitan una reinstalación manual desde sus tarjetas antes de poder actualizarse desde aquí.",
+        "upgradeAll": "Actualizar todos ({{count}})"
       },
       "upgradeDialog": {
-        "title": "Actualizar este endpoint",
-        "description": "El endpoint se reinstala solo desde este servidor.",
-        "descriptionWithVersion": "El endpoint se reinstala solo desde este servidor y vuelve con la versión {{version}}.",
-        "disconnectWarning": "Se desconecta durante un breve periodo mientras lo hace.",
-        "busyWarning": "Un endpoint que está ejecutando una copia rechaza la actualización, así que inténtalo de nuevo cuando esté inactivo.",
+        "title_one": "Actualizar este endpoint",
+        "title_other": "Actualizar {{count}} endpoints",
+        "description": "El endpoint se reinstala desde este servidor.",
+        "descriptionWithVersion_one": "El endpoint se reinstala desde este servidor y vuelve con la versión {{version}}.",
+        "descriptionWithVersion_other": "Cada endpoint se reinstala desde este servidor y vuelve con la versión {{version}}.",
+        "mixedTargets": "Cada endpoint se reinstala desde este servidor y vuelve con su propia versión configurada.",
+        "disconnectWarning_one": "Se desconecta durante un breve período mientras lo hace.",
+        "disconnectWarning_other": "Cada uno se desconecta durante un breve período mientras lo hace, y se actualizan unos pocos a la vez, así que algunos esperan antes de empezar.",
+        "busyWarning": "Un endpoint que está ejecutando una copia de seguridad rechaza la actualización, así que inténtalo de nuevo cuando esté inactivo.",
         "confirm": "Actualizar"
       },
       "upgradeState": {
@@ -435,7 +448,9 @@
         "upgradingTo": "Actualizando a {{version}}",
         "upgradingTooltip": "El endpoint se está reinstalando y volverá a conectarse solo.",
         "failed": "Actualización fallida",
-        "failedHint": "El endpoint no volvió a tiempo. Reinstálalo manualmente."
+        "failedHint": "El endpoint no volvió a tiempo. Reinstálalo manualmente.",
+        "queued": "Esperando para actualizar",
+        "queuedTooltip": "En cola detrás de otros endpoints. Empieza solo cuando se libera un hueco."
       },
       "pinControl": {
         "title": "Fijar versión",
@@ -444,9 +459,15 @@
         "trackServer": "Seguir al servidor",
         "borgVersionLabel": "Versión de Borg",
         "leaveAsInstalled": "Dejar como está instalada",
-        "borgHint": "La elección de Borg se guarda ahora y la aplicará una versión posterior, cuando las actualizaciones puedan cambiar la versión de Borg instalada.",
+        "borgHint": "La elección de Borg se aplica en la próxima actualización de este endpoint.",
         "save": "Guardar",
         "unavailableVersion": "{{version}} (ya no se distribuye)"
+      },
+      "borgPin": {
+        "active": "Borg {{version}}",
+        "activeTooltip": "Fijado a Borg {{version}}, la versión que informa este endpoint.",
+        "pending": "Borg {{version}} pendiente",
+        "pendingTooltip": "Fijado a Borg {{version}}, pero este endpoint todavía no informa esa versión. La próxima actualización la instalará."
       }
     },
     "installCommand": {
@@ -1411,7 +1432,11 @@
       "nextRun": "Próxima ejecución: {{date}}",
       "repositoryFallback": "Repositorio",
       "moreRepositories": "+{{count}} más",
-      "runningNow": "En curso"
+      "runningNow": "En curso",
+      "repositoryCountPartial": "{{enabled}} de {{total}} repositorios",
+      "skippedRepositoriesTooltip": "Omitidos en las ejecuciones: {{names}}",
+      "skippedLabel": "Omitidos",
+      "clickToResumeRepository": "Reanudar copias en {{name}}"
     },
     "statuses": {
       "unknown": "Desconocido",
@@ -1443,7 +1468,9 @@
       "repositoryCreateFailed": "No se pudo crear el repositorio",
       "multiRepositoryRequiresPro": "Varios repositorios en un plan de copia requieren Pro",
       "selectSourceConnection": "Selecciona un cliente remoto antes de explorar rutas de origen",
-      "scriptCreateFailed": "Failed to create generated script"
+      "scriptCreateFailed": "No se pudo crear el script generado",
+      "repositoryToggled": "Repositorio actualizado",
+      "repositoryToggleFailed": "No se pudo actualizar el repositorio"
     },
     "sourceChooser": {
       "summaryTitle": "Backup source",
@@ -4133,6 +4160,11 @@
       "testing": "Probando",
       "unknown": "Desconocido"
     },
+    "restricted": {
+      "label": "Solo Borg",
+      "tooltip": "El shell remoto está restringido a Borg. La navegación y la información de almacenamiento no están disponibles en esta conexión.",
+      "storage": "Almacenamiento no disponible (solo Borg)"
+    },
     "storage": "Almacenamiento",
     "mountPoint": "Punto de montaje",
     "actions": {
@@ -4409,7 +4441,11 @@
     "moveUp": "Subir",
     "moveDown": "Bajar",
     "remove": "Eliminar",
-    "searchOrAddMore": "Buscar o agregar más..."
+    "searchOrAddMore": "Buscar o agregar más...",
+    "skipped": "Omitido",
+    "skip": "Omitir en las ejecuciones",
+    "resume": "Reanudar copias",
+    "lastEnabled": "Al menos un repositorio debe permanecer activado"
   },
   "wizard": {
     "steps": {
@@ -5016,7 +5052,9 @@
     "copyToClipboard": "Copiar al portapapeles",
     "copied": "¡Copiado!",
     "commandCopied": "Comando copiado al portapapeles",
-    "copyFailed": "No se pudo copiar al portapapeles"
+    "copyFailed": "No se pudo copiar al portapapeles",
+    "remoteServeCommand": "Comando remoto (para claves restringidas)",
+    "remoteServeCommandDesc": "Borg ejecuta esto en el host del repositorio. Un wrapper forced-command en authorized_keys debe aceptarlo."
   },
   "cronBuilderComponent": {
     "runEvery": "Ejecutar cada",
@@ -5763,7 +5801,7 @@
         "adminAccessRequired": "Se requiere acceso de administrador",
         "cannotEnableAsBackupSource": "No se puede habilitar como fuente de copia de seguridad: {{error}}",
         "connectionTestFailed": "Prueba de conexión SSH fallida: {{error}}",
-        "failedCollectStorage": "Error al recopilar información de almacenamiento",
+        "failedCollectStorage": "La información de almacenamiento no está disponible para esta conexión.",
         "failedGenerateKey": "Error al generar clave SSH: {{error}}",
         "invalidKeyType": "Tipo de clave no válido. Debe ser uno de: {{types}}",
         "invalidPrivateKeyFormat": "Formato de clave privada no válido",
@@ -6027,6 +6065,7 @@
         "connectionDeleted": "Conexión SSH eliminada correctamente",
         "connectionTestFailed": "Prueba de conexión SSH fallida",
         "connectionTestSuccess": "Prueba de conexión SSH exitosa",
+        "connectionTestSuccessRestricted": "La conexión SSH funciona. El shell remoto está restringido a Borg, por lo que la navegación y la información de almacenamiento no están disponibles.",
         "connectionUpdated": "Conexión SSH actualizada correctamente",
         "sshKeyCreated": "Clave SSH creada correctamente",
         "sshKeyDeleted": "Clave SSH eliminada correctamente",

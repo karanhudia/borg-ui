@@ -108,8 +108,12 @@ async def _run_df_command(
         df_command,
     ]
 
+    # Closed stdin: a forced `borg serve` key would otherwise hold this open.
     process = await asyncio.create_subprocess_exec(
-        *df_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        *df_cmd,
+        stdin=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
     stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=15)
 
@@ -1149,6 +1153,7 @@ async def get_ssh_connections(
                     "ssh_path_prefix": conn.ssh_path_prefix,
                     "mount_point": conn.mount_point,
                     "status": conn.status,
+                    "shell_restricted": bool(conn.shell_restricted),
                     "last_test": serialize_datetime(conn.last_test),
                     "last_success": serialize_datetime(conn.last_success),
                     "error_message": conn.error_message,
@@ -1190,6 +1195,11 @@ def _remaining_timeout(deadline: float) -> tuple[float, float]:
 
 def _ssh_connect_timeout(timeout_seconds: float) -> str:
     return str(max(1, math.ceil(timeout_seconds)))
+
+
+# ssh(1) exits 255 for its own errors; otherwise it returns the remote
+# command's exit status, which means the key authenticated.
+SSH_CLIENT_FAILURE_EXIT_CODE = 255
 
 
 def _ssh_command_base(
@@ -1327,8 +1337,12 @@ async def _run_ssh_latency_probe(
         )
 
     elapsed = _elapsed_ms(started_at)
-    if return_code == 0:
+    if return_code != SSH_CLIENT_FAILURE_EXIT_CODE:
+        # The session was established; a refused `pwd` (restricted shell or
+        # forced-command key) still measures the round trip.
         result: dict[str, Any] = {"status": "success", "elapsed_ms": elapsed}
+        if return_code != 0:
+            result["restricted"] = True
         output = stdout.decode(errors="replace").strip()
         if output:
             result["output"] = output
@@ -1723,6 +1737,14 @@ async def test_ssh_connection(
             connection.status = "connected"
             connection.last_success = datetime.utcnow()
             connection.error_message = None
+            connection.shell_restricted = bool(test_result.get("restricted"))
+            if connection.shell_restricted:
+                # df cannot run here any more; drop numbers we can no longer refresh.
+                connection.storage_total = None
+                connection.storage_used = None
+                connection.storage_available = None
+                connection.storage_percent_used = None
+                connection.last_storage_check = None
         else:
             connection.status = "failed"
             connection.error_message = test_result.get(
@@ -1734,7 +1756,7 @@ async def test_ssh_connection(
 
         return {
             "success": test_result["success"],
-            "message": "backend.success.ssh.connectionTestSuccess"
+            "message": test_result["message"]
             if test_result["success"]
             else "backend.success.ssh.connectionTestFailed",
             "connection": {
@@ -1743,6 +1765,7 @@ async def test_ssh_connection(
                 "username": connection.username,
                 "port": connection.port,
                 "status": connection.status,
+                "shell_restricted": bool(connection.shell_restricted),
                 "error_message": connection.error_message,
             },
         }
@@ -2005,6 +2028,14 @@ async def test_existing_connection(
             connection.status = "connected"
             connection.last_success = datetime.utcnow()
             connection.error_message = None
+            connection.shell_restricted = bool(test_result.get("restricted"))
+            if connection.shell_restricted:
+                # df cannot run here any more; drop numbers we can no longer refresh.
+                connection.storage_total = None
+                connection.storage_used = None
+                connection.storage_available = None
+                connection.storage_percent_used = None
+                connection.last_storage_check = None
             logger.info(
                 "SSH connection test successful",
                 connection_id=connection_id,
@@ -2027,7 +2058,7 @@ async def test_existing_connection(
 
         return {
             "success": test_result["success"],
-            "message": "backend.success.ssh.connectionTestSuccess"
+            "message": test_result["message"]
             if test_result["success"]
             else "backend.success.ssh.connectionTestFailed",
             "status": connection.status,
@@ -2979,8 +3010,14 @@ async def test_ssh_key_connection(
         )
 
         try:
+            # stdin must be closed: a key forced to `command="borg serve ..."`
+            # runs borg serve for this probe too, and borg serve waits on
+            # stdin until EOF.
             process = await asyncio.create_subprocess_exec(
-                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+                *cmd,
+                stdin=asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
 
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=15)
@@ -2999,21 +3036,34 @@ async def test_ssh_key_connection(
                     "output": stdout.decode().strip(),
                     "key_file": key_file_path,
                 }
+            elif process.returncode != SSH_CLIENT_FAILURE_EXIT_CODE:
+                # ssh itself failed (auth, DNS, refused, host key) only on 255.
+                # Any other status is the remote side refusing `pwd`: a
+                # restricted shell (Hetzner, rsync.net) or a forced-command key
+                # that only allows `borg serve`. The key authenticated, so the
+                # connection is fine for Borg; browsing and storage info are not.
+                logger.info(
+                    "ssh_connection_test_successful_restricted",
+                    host=host,
+                    username=username,
+                    port=port,
+                    return_code=process.returncode,
+                    stderr=stderr.decode(errors="replace")[:500] if stderr else None,
+                )
+                return {
+                    "success": True,
+                    "restricted": True,
+                    "message": "backend.success.ssh.connectionTestSuccessRestricted",
+                    "output": stdout.decode(errors="replace").strip(),
+                    "key_file": key_file_path,
+                }
             else:
                 stdout_str = stdout.decode() if stdout else ""
                 stderr_str = stderr.decode() if stderr else ""
                 error_msg = stderr_str or stdout_str or "SSH connection failed"
 
                 # Parse common errors with helpful hints
-                if (
-                    "Command not found" in error_msg
-                    or "Command not found" in stdout_str
-                ):
-                    error_summary = (
-                        f"SSH connection works but remote shell is restricted"
-                    )
-                    helpful_hint = "Server uses restricted shell (e.g., Hetzner Storage Box). Connection is valid for borg/rsync/sftp operations."
-                elif _is_ssh_dns_resolution_error(error_msg):
+                if _is_ssh_dns_resolution_error(error_msg):
                     error_summary = f"Host did not resolve: {host}"
                     helpful_hint = "Check the saved host value, DNS records/resolvers, provider sub-account existence, and container/runtime DNS."
                 elif "Connection refused" in error_msg:

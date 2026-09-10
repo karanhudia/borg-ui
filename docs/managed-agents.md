@@ -147,7 +147,8 @@ a chip on the agent card:
 | **Pinned** | The agent is held at a specific version and will not follow the server. |
 | **Version unknown** | The agent has not reported a version yet, or the version cannot be compared. A freshly enrolled agent shows this until its first check-in. |
 
-A banner above the fleet counts how many endpoints are running an older agent.
+A banner above the fleet counts how many endpoints are running an older agent
+and offers to upgrade the ones this server can move.
 
 ## Upgrading an Endpoint from the UI
 
@@ -168,9 +169,34 @@ What to expect:
   That endpoint needs the manual reinstall command above; nothing is retried
   automatically.
 
-Upgrading several endpoints at once is a later release. Endpoints shown as
-manual only, and endpoints enrolled before the helper existed, keep the manual
-reinstall path.
+### Upgrading a Whole Fleet
+
+Two ways to move more than one endpoint at once:
+
+- Tick the checkbox on each out-of-date card and use **Upgrade N endpoints** in
+  the bar above the list.
+- Use **Upgrade all** in the out-of-date banner. Its count is the number of
+  endpoints that will actually move, so endpoints that cannot upgrade
+  themselves are excluded from it and called out separately in the banner.
+
+Either way one confirmation lists every endpoint before anything is requested.
+
+Endpoints are upgraded at most five at a time. Every upgrading endpoint is
+briefly offline, and taking a whole fleet down together turns routine
+maintenance into an outage. Endpoints beyond that limit show **Waiting to
+upgrade** and start on their own as slots free, with nothing further for you to
+do. An endpoint that does not come back in time is marked **Upgrade failed**,
+frees its slot, and is skipped by later waves until you act on it.
+
+The limit counts upgrades in flight, not endpoints offline. A timed-out
+endpoint frees its slot while it may still be mid-reinstall, so briefly more
+than five can be down at once. The alternative, holding a slot until an
+endpoint reconnects, lets one machine that never comes back stall the rest of
+the fleet indefinitely.
+
+Endpoints shown as manual only, and endpoints enrolled before the helper
+existed, keep the manual reinstall path and are never included in a fleet
+upgrade.
 
 ### Pinning an Agent Version
 
@@ -181,8 +207,20 @@ to a version this server can actually serve, because the installer installs
 from this server and nowhere else. A pinned endpoint upgrades to its pin rather
 than to the version the server serves.
 
-The Borg choice is recorded now and takes effect in a later release, once an
-upgrade can change the installed Borg version.
+The Borg choice takes effect at that endpoint's next upgrade. Pinning Borg 2
+on an endpoint running Borg 1 does not change anything by itself: press
+Upgrade on the row, and the reinstall installs the pinned major version. The
+row shows "Borg 2 pending" until the endpoint reports it.
+
+A Borg pin outranks how the endpoint was installed. An endpoint installed with
+`--skip-borg-install` still gets the pinned version, and an endpoint that took
+Borg 1 from distribution packages gets a pinned Borg 2 from this server's
+static binaries, because no distribution ships Borg 2.
+
+Because the upgrade is only complete once the endpoint reports the pinned
+major version, a Borg pin that cannot be installed shows up as a failed
+upgrade once the timeout elapses, rather than as a success that changed
+nothing.
 
 The same pin is available through the API:
 
@@ -198,6 +236,10 @@ This is an admin endpoint. `$TOKEN` is an API token for an admin account; see
 `desired_agent_version` to clear the pin and track the server
 again. You can only pin to a version this server can actually serve, because
 the installer installs from this server and nowhere else.
+
+`desired_borg_version` takes `"1"`, `"2"`, or `null` to leave whatever is
+installed alone. It is applied by the next upgrade of that endpoint, not by
+this call.
 
 ## Server URL and Localhost
 

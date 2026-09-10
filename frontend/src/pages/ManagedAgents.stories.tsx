@@ -690,3 +690,65 @@ export const AgentFleetVersionStates: Story = {
     />
   ),
 }
+
+export const AgentFleetUpgradeSelection: Story = {
+  name: 'Agent list with endpoints selected for a fleet upgrade',
+  // The bulk bar is hidden at zero selected, so the snapshot has to tick a box
+  // to cover it. Matches the play convention in BackendTargetSwitcher.stories.
+  play: async ({ canvasElement }) => {
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+    canvasElement.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click()
+  },
+  render: () => (
+    <AgentList
+      agents={[
+        {
+          ...agents[0],
+          name: 'Production NAS',
+          agent_version: '0.1.2',
+          available_agent_version: '0.1.3',
+          upgrade_status: 'outdated',
+          self_upgrade_supported: true,
+        },
+        {
+          ...agents[1],
+          name: 'Finance Workstation',
+          agent_version: '0.1.2',
+          available_agent_version: '0.1.3',
+          upgrade_status: 'outdated',
+          self_upgrade_supported: true,
+        },
+        {
+          ...agents[0],
+          id: 93,
+          agent_id: 'agt_waiting_93',
+          name: 'Build Server',
+          agent_version: '0.1.2',
+          available_agent_version: '0.1.3',
+          upgrade_status: 'outdated',
+          self_upgrade_supported: true,
+          upgrade_state: 'queued',
+          upgrade_requested_at: null,
+        },
+        {
+          ...agents[0],
+          id: 94,
+          agent_id: 'agt_manual_94',
+          name: 'Legacy Print Server',
+          agent_version: '0.1.2',
+          available_agent_version: '0.1.3',
+          upgrade_status: 'outdated',
+          self_upgrade_supported: false,
+        },
+      ]}
+      serverUrl="https://borg-ui.example.com"
+      onCopy={() => {}}
+      onRevoke={() => {}}
+      onDelete={() => {}}
+      onViewLogs={() => {}}
+      onUpgradeMany={() => {}}
+      isRevoking={false}
+      isDeleting={false}
+    />
+  ),
+}

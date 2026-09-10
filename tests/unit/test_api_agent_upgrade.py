@@ -236,3 +236,101 @@ def test_an_offline_agent_fails_its_job_and_reports_failed(
     assert agent.upgrade_error
     job = test_db.query(AgentJob).one()
     assert job.status == "failed"
+
+
+def test_upgrade_beyond_the_cap_leaves_the_rest_queued(
+    test_client: TestClient,
+    test_db,
+    admin_headers,
+    served_version,
+    sent_commands,
+    monkeypatch,
+):
+    monkeypatch.setattr("app.services.agent_upgrades.AGENT_UPGRADE_CONCURRENCY", 2)
+    agents = [_agent(test_db, agent_id=f"agt_{index}") for index in range(4)]
+
+    response = test_client.post(
+        "/api/managed-machines/agents/upgrade",
+        json={"agent_machine_ids": [agent.id for agent in agents]},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+    results = response.json()["results"]
+    assert [result["state"] for result in results] == [
+        "requested",
+        "requested",
+        "queued",
+        "queued",
+    ]
+    # A queued endpoint has no job yet: the job is created at dispatch.
+    assert [result["job_id"] for result in results[2:]] == [None, None]
+    assert len(sent_commands) == 2
+
+
+def test_a_queued_endpoint_is_not_queued_twice(
+    test_client: TestClient,
+    test_db,
+    admin_headers,
+    served_version,
+    sent_commands,
+    monkeypatch,
+):
+    """Idempotent under a double click, exactly as an in-flight one is."""
+    monkeypatch.setattr("app.services.agent_upgrades.AGENT_UPGRADE_CONCURRENCY", 0)
+    agent = _agent(test_db)
+    body = {"agent_machine_ids": [agent.id]}
+
+    test_client.post(
+        "/api/managed-machines/agents/upgrade", json=body, headers=admin_headers
+    )
+    response = test_client.post(
+        "/api/managed-machines/agents/upgrade", json=body, headers=admin_headers
+    )
+
+    assert response.json()["results"][0]["state"] == "queued"
+    assert test_db.query(AgentJob).count() == 0
+    assert sent_commands == []
+
+
+def test_a_queued_endpoint_does_not_age_towards_the_timeout(
+    test_client: TestClient,
+    test_db,
+    admin_headers,
+    served_version,
+    sent_commands,
+    monkeypatch,
+):
+    """The reaper times out from upgrade_requested_at, and time spent waiting
+    for a wave is not time the endpoint has failed to come back."""
+    monkeypatch.setattr("app.services.agent_upgrades.AGENT_UPGRADE_CONCURRENCY", 0)
+    agent = _agent(test_db)
+
+    test_client.post(
+        "/api/managed-machines/agents/upgrade",
+        json={"agent_machine_ids": [agent.id]},
+        headers=admin_headers,
+    )
+
+    test_db.refresh(agent)
+    assert agent.upgrade_state == "queued"
+    assert agent.upgrade_requested_at is None
+    assert agent.upgrade_target_version == "0.1.3"
+
+
+def test_a_rejected_request_queues_nothing(
+    test_client: TestClient, test_db, admin_headers, served_version
+):
+    """Validation still runs over the whole request before anything is written."""
+    ok = _agent(test_db, agent_id="agt_ok")
+    bad = _agent(test_db, agent_id="agt_bad", name="old", capabilities=["jobs.poll"])
+
+    response = test_client.post(
+        "/api/managed-machines/agents/upgrade",
+        json={"agent_machine_ids": [ok.id, bad.id]},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 422
+    test_db.refresh(ok)
+    assert ok.upgrade_state is None

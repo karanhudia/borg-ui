@@ -16,7 +16,6 @@ import uuid
 
 from app.database.database import get_db, SessionLocal
 from app.database.models import (
-    AgentJob,
     AgentMachine,
     DEFAULT_HISTORY_INDEX_EXCLUDES,
     Operation,
@@ -39,6 +38,7 @@ from app.api.maintenance_jobs import (
 )
 from app.services.operations.maintenance_start import (
     active_maintenance_operation,
+    fail_inline_maintenance,
     finish_inline_maintenance,
     start_inline_maintenance,
     start_maintenance,
@@ -48,7 +48,7 @@ from app.services.operations.enqueue import enqueue, wake_runner
 from app.services.operations.rclone_facade import RcloneSyncFacade
 from app.services.operations.repository_status import LastRuns, last_runs
 from app.core.authorization import authorize_request
-from app.core.security import get_current_user, check_repo_access, decrypt_secret
+from app.core.security import get_current_user, check_repo_access
 from app.core.borg import BorgInterface
 from app.core.borg_router import BorgRouter
 from app.core.borg_errors import is_lock_error
@@ -85,7 +85,6 @@ from app.services.check_flag_validation import (
     validate_check_flags_for_max_duration,
 )
 from app.services.agent_job_dispatcher import (
-    dispatch_agent_cancel_if_connected,
     dispatch_agent_job_best_effort,
 )
 from app.services.agent_connection_manager import (
@@ -111,7 +110,6 @@ from app.services.rclone_repository_service import (
     normalize_rclone_relative_path,
     rclone_repository_service,
 )
-from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.datetime_utils import (
     parse_borg_archive_time,
     serialize_borg_archive_time,
@@ -140,7 +138,6 @@ from app.utils.borg_env import (
 )
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,  # noqa: F401
-    ssh_key_auth_args,
 )  # Backward-compatible patch target for tests
 
 logger = structlog.get_logger()
@@ -836,43 +833,51 @@ def _agent_storage_usage_data(result: Optional[dict]) -> dict:
     return parsed if isinstance(parsed, dict) else {}
 
 
-async def _release_timed_out_agent_job(db: Session, agent_job_id: int) -> None:
-    """The server stopped waiting for a storage_usage job: the agent's own
-    budget starts only when it runs, so the job may still be queued,
-    claimed or running, where admission would refuse the next refresh as a
-    duplicate. Cancel a queued job outright; ask the agent to end a live
-    one. Terminal jobs are left alone."""
-    job = db.get(AgentJob, agent_job_id)
-    if job is None:
-        return
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    if job.status == "queued":
-        job.status = "canceled"
-        job.completed_at = now
-        job.error_message = "Abandoned by server: the stats refresh stopped waiting"
-    elif job.status in ("claimed", "running"):
-        job.status = "cancel_requested"
-    else:
-        return
-    job.updated_at = now
-    db.commit()
-    if job.status == "cancel_requested":
-        await dispatch_agent_cancel_if_connected(job)
-
-
-async def _update_agent_repository_stats(repository: Repository, db: Session) -> bool:
+async def _update_agent_repository_stats(
+    repository: Repository, db: Session, *, raise_busy: bool = False
+) -> bool:
     """Refresh stats for an agent repo by running list + repo-info on the node.
 
     Sets archive_count, last_backup and encryption from the live agent results.
     A remote Borg 2 repository has no client-computable on-disk size (borg2
     repo-info exposes no size, and du is server/local-only), so total_size is
     left unchanged rather than reset.
+
+    With `raise_busy` the admission's refusal of the list job (another job
+    holds the repository, nothing gathered yet) is raised instead of logged,
+    so the operations runner can defer the `stats` operation and retry it
+    later. Only the list, because a deferral repeats the whole refresh,
+    listing included: raising for a later job would make every retry pay
+    for the listing again and could fail an operation that used to complete
+    with the listing. Those jobs keep the swallow and only cost what they
+    would have added. A route caller keeps the swallow throughout and
+    reports "not refreshed" for a refused list.
     """
     from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+    from app.services.operations.runner import repository_busy
     from app.services.repository_executor import (
+        cancel_unclaimed_agent_repository_job,
         queue_agent_repository_operation_job,
         wait_for_agent_repository_operation_job,
     )
+
+    def busy(exc: BaseException) -> bool:
+        return raise_busy and repository_busy(exc)
+
+    async def wait(job, timeout_seconds):
+        # A job the server stops waiting for that no agent took (still
+        # queued) is taken out of the admission's way, or every later refresh
+        # would be refused as its duplicate with no bound: the reaper never
+        # reaps a queued job. A job the agent claimed or runs stays: its
+        # result warms the next attempt, and a dead agent's job is reaped.
+        try:
+            return await wait_for_agent_repository_operation_job(
+                db, job.id, timeout_seconds=timeout_seconds
+            )
+        except HTTPException as exc:
+            if exc.status_code == 504:
+                cancel_unclaimed_agent_repository_job(db, job.id)
+            raise
 
     try:
         timeouts = get_operation_timeouts(db)
@@ -881,9 +886,7 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
             db, repository, job_kind="repository.list_archives"
         )
         await dispatch_agent_job_best_effort(db, list_job, repository_id=repository.id)
-        list_result = await wait_for_agent_repository_operation_job(
-            db, list_job.id, timeout_seconds=timeouts["list_timeout"]
-        )
+        list_result = await wait(list_job, timeouts["list_timeout"])
         archives = _agent_result_archives(list_result)
         # A completed job can still carry a non-zero borg exit with no stdout,
         # which parses to [] -- don't let that wipe the stored count to 0. Trust
@@ -925,9 +928,7 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
             await dispatch_agent_job_best_effort(
                 db, rinfo_job, repository_id=repository.id
             )
-            rinfo_result = await wait_for_agent_repository_operation_job(
-                db, rinfo_job.id, timeout_seconds=timeouts["info_timeout"]
-            )
+            rinfo_result = await wait(rinfo_job, timeouts["info_timeout"])
             rinfo = json.loads((rinfo_result or {}).get("stdout") or "{}")
             # Deliberately NOT normalize_repo_info_encryption() here. That fills
             # `mode` with the bare cipher for Borg 2.0.0b22, which is right for
@@ -967,7 +968,6 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
             db, repository, "repository.storage_usage"
         ):
             storage_usage_tried = True
-            usage_job = None
             try:
                 usage_job = queue_agent_repository_operation_job(
                     db,
@@ -978,9 +978,7 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
                 await dispatch_agent_job_best_effort(
                     db, usage_job, repository_id=repository.id
                 )
-                usage_result = await wait_for_agent_repository_operation_job(
-                    db, usage_job.id, timeout_seconds=timeouts["info_timeout"]
-                )
+                usage_result = await wait(usage_job, timeouts["info_timeout"])
                 usage = _agent_storage_usage_data(usage_result)
                 size_bytes = usage.get("bytes")
                 if (
@@ -996,12 +994,6 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
                     repository=repository.name,
                     error=str(e),
                 )
-                if (
-                    usage_job is not None
-                    and isinstance(e, HTTPException)
-                    and e.status_code == 504
-                ):
-                    await _release_timed_out_agent_job(db, usage_job.id)
         # du is the older agents' only tool and the Borg 1 fallback when
         # rinfo carried no cache stats (storage_usage answers Borg 1 with
         # borg1_uses_rinfo). For Borg 2 it adds nothing: storage_usage runs
@@ -1016,9 +1008,7 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
                 await dispatch_agent_job_best_effort(
                     db, du_job, repository_id=repository.id
                 )
-                du_result = await wait_for_agent_repository_operation_job(
-                    db, du_job.id, timeout_seconds=timeouts["info_timeout"]
-                )
+                du_result = await wait(du_job, timeouts["info_timeout"])
                 du_meta = du_result or {}
                 if du_meta.get("return_code", 0) == 0:
                     # `du -sb` prints "<bytes>\t<path>".
@@ -1055,6 +1045,8 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
         )
         return True
     except Exception as e:
+        if busy(e):
+            raise
         logger.error(
             "Failed to update agent repository stats",
             repository=repository.name,
@@ -5430,17 +5422,22 @@ async def prune_repository(
 
         # Wait for prune to complete and get logs
         prune_kwargs = {"keep_within": keep_within} if keep_within is not None else {}
-        await BorgRouter(repository).prune(
-            prune_job.id,
-            keep_hourly,
-            keep_daily,
-            keep_weekly,
-            keep_monthly,
-            keep_quarterly,
-            keep_yearly,
-            dry_run,
-            **prune_kwargs,
-        )
+        try:
+            await BorgRouter(repository).prune(
+                prune_job.id,
+                keep_hourly,
+                keep_daily,
+                keep_weekly,
+                keep_monthly,
+                keep_quarterly,
+                keep_yearly,
+                dry_run,
+                **prune_kwargs,
+            )
+        except Exception as exc:
+            # The row was created `running`; a step that raised never closed it.
+            await fail_inline_maintenance(db, prune_job, exc)
+            raise
 
         # Refresh job to get updated status and logs
         db.refresh(prune_job)
@@ -5644,89 +5641,6 @@ async def get_repository_statistics(
         raise HTTPException(
             status_code=500, detail={"key": "backend.errors.repo.failedToGetStatistics"}
         )
-
-
-async def check_remote_borg_installation(
-    host: str, username: str, port: int, ssh_key_id: int
-) -> Dict[str, Any]:
-    """Check if borg is installed on remote machine"""
-    temp_key_file = None
-    try:
-        logger.info(
-            "Checking remote borg installation", host=host, username=username, port=port
-        )
-
-        # Get SSH key from database
-        from app.database.models import SSHKey
-        from app.database.database import get_db
-        import tempfile
-
-        db = next(get_db())
-        ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
-        if not ssh_key:
-            return {"success": False, "error": "SSH key not found", "has_borg": False}
-
-        # Decrypt private key
-        private_key = decrypt_secret(ssh_key.private_key)
-
-        # Ensure private key ends with newline
-        if not private_key.endswith("\n"):
-            private_key += "\n"
-
-        # Create temporary key file
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-            f.write(private_key)
-            temp_key_file = f.name
-
-        os.chmod(temp_key_file, 0o600)
-
-        # Check for borg
-        borg_cmd = [
-            "ssh",
-            *ssh_key_auth_args(temp_key_file),
-            *host_key_ssh_opts(None),
-            "-o",
-            "ConnectTimeout=10",
-            "-p",
-            str(port),
-            f"{username}@{host}",
-            "which borg",
-        ]
-
-        borg_process = await asyncio.create_subprocess_exec(
-            *borg_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        borg_stdout, borg_stderr = await asyncio.wait_for(
-            borg_process.communicate(), timeout=15
-        )
-        has_borg = borg_process.returncode == 0
-
-        logger.info("Remote borg check completed", host=host, has_borg=has_borg)
-
-        return {
-            "success": True,
-            "has_borg": has_borg,
-            "borg_path": borg_stdout.decode().strip() if has_borg else None,
-        }
-
-    except asyncio.TimeoutError:
-        logger.error("Remote borg check timed out", host=host)
-        return {
-            "success": False,
-            "error": "Connection timeout while checking remote borg installation",
-            "has_borg": False,
-        }
-    except Exception as e:
-        logger.error(
-            "Failed to check remote borg installation", host=host, error=str(e)
-        )
-        return {"success": False, "error": str(e), "has_borg": False}
-    finally:
-        if temp_key_file and os.path.exists(temp_key_file):
-            try:
-                os.unlink(temp_key_file)
-            except Exception as e:
-                logger.warning("Failed to clean up temp SSH key", error=str(e))
 
 
 async def verify_existing_repository(

@@ -57,6 +57,53 @@ describe('CommandPreview', () => {
       expect(screen.getByText(/borg create/)).toBeInTheDocument()
     })
 
+    it('shows the remote serve command for SSH repositories', () => {
+      const { rerender } = render(
+        <CommandPreview
+          mode="create"
+          repositoryLocation="ssh"
+          repositoryPath="/backups/repo"
+          host="repo.example"
+          username="borg"
+          repositoryMode="full"
+          dataSource="local"
+        />
+      )
+      expect(screen.getByText('Remote command (for restricted keys)')).toBeInTheDocument()
+      expect(screen.getByText('borg serve --umask=077')).toBeInTheDocument()
+
+      rerender(
+        <CommandPreview
+          mode="create"
+          repositoryLocation="ssh"
+          repositoryPath="/backups/repo"
+          host="repo.example"
+          username="borg"
+          remotePath="/usr/local/bin/borg"
+          repositoryMode="full"
+          dataSource="local"
+        />
+      )
+      expect(screen.getByText('/usr/local/bin/borg serve --umask=077')).toBeInTheDocument()
+
+      rerender(
+        <CommandPreview
+          mode="create"
+          repositoryLocation="ssh"
+          repositoryPath="/backups/repo"
+          host="repo.example"
+          username="borg"
+          remotePath="/usr/local/sbin/borg-serve"
+          useSudo
+          repositoryMode="full"
+          dataSource="local"
+        />
+      )
+      expect(
+        screen.getByText('sudo -n -H /usr/local/sbin/borg-serve serve --umask=077')
+      ).toBeInTheDocument()
+    })
+
     it('renders borg2 init and backup commands for Borg 2 repositories', () => {
       render(
         <CommandPreview
@@ -182,6 +229,25 @@ describe('CommandPreview', () => {
       expect(screen.getByText('Step 4: Cleanup')).toBeInTheDocument()
       expect(screen.getByText(/sshfs admin@192.168.1.100/)).toBeInTheDocument()
       expect(screen.getByText(/fusermount -u/)).toBeInTheDocument()
+    })
+
+    it('shows the remote serve command for an SSH repository with a remote source', () => {
+      render(
+        <CommandPreview
+          mode="create"
+          repositoryLocation="ssh"
+          repositoryPath="/backups/repo"
+          host="repo.example"
+          username="borg"
+          sourceDirs={['/var/data']}
+          repositoryMode="full"
+          dataSource="remote"
+          sourceSshConnection={sshConnection}
+        />
+      )
+
+      expect(screen.getByText('borg serve --umask=077')).toBeInTheDocument()
+      expect(screen.getByText(/sshfs admin@192.168.1.100/)).toBeInTheDocument()
     })
 
     it('renders mount, backup, cleanup steps for import mode with remote source', () => {

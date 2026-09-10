@@ -6,6 +6,7 @@ import time
 from datetime import datetime
 from typing import Any, Callable, Optional
 
+import structlog
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -23,6 +24,8 @@ from app.services.operations.backup_facade import (
     is_backup_operation,
     resolve_backup_job,
 )
+
+logger = structlog.get_logger()
 
 EXECUTOR_SERVER = "server"
 EXECUTOR_AGENT = "agent"
@@ -222,9 +225,14 @@ def build_agent_repository_operation_payload(
 
     operation_payload = dict(operation or {})
     if maintenance_job_kind and maintenance_job_id:
+        # Since phase 5 every maintenance job is an `operations` row. The
+        # legacy `*_jobs` ids are an independent sequence, so the table is
+        # named: a payload without it was written before the upgrade and
+        # names a legacy row.
         operation_payload["maintenance_job"] = {
             "kind": maintenance_job_kind,
             "id": maintenance_job_id,
+            "table": "operations",
         }
 
     secrets = {}
@@ -694,6 +702,43 @@ def abandon_agent_repository_operation_job(
         if changed:
             return agent_job
     return agent_job
+
+
+def cancel_unclaimed_agent_repository_job(db: Session, agent_job_id: int) -> None:
+    """Cancel a repository job the caller stopped waiting for (a 504 from the
+    wait) if no agent has taken it yet.
+
+    Left queued, the job is the duplicate every later request on the
+    repository is refused for, with no bound: the reaper never reaps a
+    queued job. A job the agent claimed or runs is left alone: the work is
+    the agent's (a long `borg info` cache build outlives the server's
+    patience and warms the next attempt), and if the agent is gone the
+    reaper reaps the job after its window. Never raises: the callers hold no
+    pending session state at this point, so a failed commit is rolled back
+    and logged, and the caller leaves with the timeout it came with."""
+    now = datetime.utcnow()
+    try:
+        db.query(AgentJob).filter(
+            AgentJob.id == agent_job_id, AgentJob.status == "queued"
+        ).update(
+            {
+                "status": "canceled",
+                "completed_at": now,
+                "error_message": (
+                    "Abandoned by server: the agent did not pick the job up in time"
+                ),
+                "updated_at": now,
+            },
+            synchronize_session=False,
+        )
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.warning(
+            "agent job could not be cancelled",
+            agent_job_id=agent_job_id,
+            error=str(exc),
+        )
 
 
 def cancel_agent_backup_job(

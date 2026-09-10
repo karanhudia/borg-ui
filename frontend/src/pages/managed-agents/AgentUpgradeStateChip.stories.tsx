@@ -13,10 +13,15 @@ type Story = StoryObj<typeof AgentUpgradeStateChip>
 export const AllStates: Story = {
   render: () => (
     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+      <AgentUpgradeStateChip state="queued" targetVersion="0.1.3" />
       <AgentUpgradeStateChip state="requested" targetVersion="0.1.3" />
       <AgentUpgradeStateChip state="failed" error="The endpoint did not come back." />
     </Stack>
   ),
+}
+
+export const Queued: Story = {
+  args: { state: 'queued', targetVersion: '0.1.3' },
 }
 
 export const Upgrading: Story = {

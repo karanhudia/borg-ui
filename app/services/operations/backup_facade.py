@@ -546,7 +546,7 @@ def backup_jobs_for_archive_names(db: Session, repository: Repository, names) ->
     return jobs
 
 
-def _newest_per_group(db: Session, model, group_column, order_column, filters) -> list:
+def newest_per_group(db: Session, model, group_column, order_column, filters) -> list:
     """The newest row of each group, ranked in SQL. Only the winners are
     loaded, so a caller reading one row per repository does not materialize
     every backup ever taken."""
@@ -583,7 +583,7 @@ def latest_backup_jobs_by_repository(db: Session, *, running: bool = False) -> d
         attr = "created_at"
     candidates = _facades(
         db,
-        _newest_per_group(db, Operation, Operation.repository_id, op_order, op_filters),
+        newest_per_group(db, Operation, Operation.repository_id, op_order, op_filters),
     )
     result: dict = {}
     for job in candidates:

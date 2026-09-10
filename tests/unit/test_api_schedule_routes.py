@@ -18,6 +18,7 @@ from app.database.models import (
     ScheduledJobRepository,
     SSHConnection,
 )
+from app.services.operations.backup_facade import BackupJobFacade
 from app.services.rclone_service import RcloneCommandResult
 from tests.utils.operations import seed_job_operation
 
@@ -510,6 +511,212 @@ class TestScheduleRouteContracts:
         assert details.route_strategy == "remote_direct"
         assert operation.execution_mode == "remote_ssh"
         assert details.source_ssh_connection_id == connection.id
+
+    @pytest.mark.asyncio
+    async def test_multi_repo_schedule_closes_the_prune_operation_when_the_step_raises(
+        self, test_db, monkeypatch
+    ):
+        """The post-backup prune is an inline operation created `running`.
+        When the router raises (an agent job refused by admission), the
+        handler must close that row with the cause and record the failed
+        step on the backup, or the row blocks the repository until a
+        restart."""
+        repo = _create_repo(test_db, "Prune Repo", "/repos/prune")
+        schedule = _create_schedule(
+            test_db,
+            "Prune After",
+            run_prune_after=True,
+            prune_keep_daily=7,
+            run_compact_after=True,
+        )
+        test_db.add(
+            ScheduledJobRepository(
+                scheduled_job_id=schedule.id,
+                repository_id=repo.id,
+                execution_order=0,
+            )
+        )
+        test_db.commit()
+
+        async def _complete(db, operation_id, **kwargs):
+            operation = db.get(Operation, operation_id)
+            operation.status = "completed"
+            db.commit()
+            return "completed"
+
+        monkeypatch.setattr("app.api.schedule.wait_for_backup_operation", _complete)
+        monkeypatch.setattr(
+            "app.api.schedule.BorgRouter.prune",
+            AsyncMock(side_effect=RuntimeError("agent prune failed: refused")),
+        )
+
+        await schedule_api.execute_multi_repo_schedule(schedule, test_db)
+
+        test_db.expire_all()
+        prune = test_db.query(Operation).filter(Operation.kind == "prune").one()
+        assert prune.status == "failed"
+        assert prune.error_message == "agent prune failed: refused"
+        assert prune.completed_at is not None
+        backup = test_db.query(Operation).filter(Operation.kind == "backup").one()
+        assert BackupJobFacade(test_db, backup).maintenance_status == "prune_failed"
+        # the compact does not run on a repository whose prune step raised
+        assert test_db.query(Operation).filter(Operation.kind == "compact").count() == 0
+
+    @pytest.mark.asyncio
+    async def test_multi_repo_schedule_keeps_a_prune_its_agent_is_still_running(
+        self, test_db, monkeypatch
+    ):
+        """The wait on an agent prune can give up (504) while the agent is
+        still running it. The handler records the failed step but must not
+        close the operation: the agent's report will, and until then the
+        repository really is busy."""
+        from app.core.security import get_password_hash
+        from app.database.models import AgentJob, AgentMachine
+
+        repo = _create_repo(test_db, "Slow Prune Repo", "/repos/slow-prune")
+        agent = AgentMachine(
+            name="Agent",
+            agent_id="agt_slow_prune",
+            token_hash=get_password_hash("secret"),
+            token_prefix="secret",
+            status="online",
+        )
+        test_db.add(agent)
+        schedule = _create_schedule(
+            test_db, "Slow Prune After", run_prune_after=True, prune_keep_daily=7
+        )
+        test_db.add(
+            ScheduledJobRepository(
+                scheduled_job_id=schedule.id,
+                repository_id=repo.id,
+                execution_order=0,
+            )
+        )
+        test_db.commit()
+
+        async def _complete(db, operation_id, **kwargs):
+            operation = db.get(Operation, operation_id)
+            operation.status = "completed"
+            db.commit()
+            return "completed"
+
+        async def _timeout(self, job_id, *args, **kwargs):
+            # The agent job for this operation exists and is running when
+            # the server-side wait gives up.
+            test_db.add(
+                AgentJob(
+                    agent_machine_id=agent.id,
+                    job_type="repository",
+                    status="running",
+                    payload={
+                        "job_kind": "repository.prune",
+                        "operation": {
+                            "maintenance_job": {
+                                "kind": "prune",
+                                "id": job_id,
+                                "table": "operations",
+                            }
+                        },
+                    },
+                )
+            )
+            test_db.commit()
+            raise RuntimeError(
+                "agent prune failed: backend.errors.agents.repositoryOperationTimeout"
+            )
+
+        monkeypatch.setattr("app.api.schedule.wait_for_backup_operation", _complete)
+        monkeypatch.setattr("app.api.schedule.BorgRouter.prune", _timeout)
+
+        await schedule_api.execute_multi_repo_schedule(schedule, test_db)
+
+        test_db.expire_all()
+        prune = test_db.query(Operation).filter(Operation.kind == "prune").one()
+        assert prune.status == "running"
+        assert prune.error_message is None
+        backup = test_db.query(Operation).filter(Operation.kind == "backup").one()
+        assert BackupJobFacade(test_db, backup).maintenance_status == "prune_failed"
+
+    @pytest.mark.asyncio
+    async def test_multi_repo_schedule_closes_the_compact_operation_when_the_step_raises(
+        self, test_db, monkeypatch
+    ):
+        repo = _create_repo(test_db, "Compact Repo", "/repos/compact")
+        schedule = _create_schedule(test_db, "Compact After", run_compact_after=True)
+        test_db.add(
+            ScheduledJobRepository(
+                scheduled_job_id=schedule.id,
+                repository_id=repo.id,
+                execution_order=0,
+            )
+        )
+        test_db.commit()
+
+        async def _complete(db, operation_id, **kwargs):
+            operation = db.get(Operation, operation_id)
+            operation.status = "completed"
+            db.commit()
+            return "completed"
+
+        monkeypatch.setattr("app.api.schedule.wait_for_backup_operation", _complete)
+        monkeypatch.setattr(
+            "app.api.schedule.BorgRouter.compact",
+            AsyncMock(side_effect=RuntimeError("agent compact failed: refused")),
+        )
+
+        await schedule_api.execute_multi_repo_schedule(schedule, test_db)
+
+        test_db.expire_all()
+        compact = test_db.query(Operation).filter(Operation.kind == "compact").one()
+        assert compact.status == "failed"
+        assert compact.error_message == "agent compact failed: refused"
+        backup = test_db.query(Operation).filter(Operation.kind == "backup").one()
+        assert BackupJobFacade(test_db, backup).maintenance_status == "compact_failed"
+
+    @pytest.mark.asyncio
+    async def test_single_repo_schedule_closes_the_prune_operation_when_the_step_raises(
+        self, test_db, monkeypatch
+    ):
+        """The single-repository schedule path has its own post-backup
+        handlers; they must close the inline operation the same way."""
+        from app.services.operations.backup_facade import create_backup_operation
+
+        repo = _create_repo(test_db, "Single Prune Repo", "/repos/single-prune")
+        schedule = _create_schedule(
+            test_db, "Single Prune After", run_prune_after=True, prune_keep_daily=7
+        )
+        backup_job = create_backup_operation(
+            test_db,
+            repo,
+            trigger="schedule",
+            executor="server",
+            params={},
+            scheduled_job_id=schedule.id,
+        )
+        backup_job.status = "completed"
+        backup_job.completed_at = datetime.utcnow()
+        test_db.commit()
+
+        async def _completed(db, operation_id, **kwargs):
+            return "completed"
+
+        monkeypatch.setattr("app.api.schedule.wait_for_backup_operation", _completed)
+        monkeypatch.setattr(
+            "app.api.schedule.BorgRouter.prune",
+            AsyncMock(side_effect=RuntimeError("agent prune failed: refused")),
+        )
+
+        await schedule_api.execute_scheduled_backup_with_maintenance(
+            backup_job.id, repo.path, schedule.id
+        )
+
+        test_db.expire_all()
+        prune = test_db.query(Operation).filter(Operation.kind == "prune").one()
+        assert prune.status == "failed"
+        assert prune.error_message == "agent prune failed: refused"
+        assert prune.completed_at is not None
+        backup = test_db.get(Operation, backup_job.id)
+        assert BackupJobFacade(test_db, backup).maintenance_status == "prune_failed"
 
     def test_dispatch_due_multi_repo_schedule_defers_for_active_repository_work(
         self, test_db, monkeypatch

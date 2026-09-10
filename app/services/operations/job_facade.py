@@ -13,12 +13,13 @@ refactor, not a migration step.
 """
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from app.database.models import Operation, Repository
+from app.services.operations.backup_facade import newest_per_group
 
 MAINTENANCE_KINDS: tuple[str, ...] = (
     "check",
@@ -67,10 +68,12 @@ _BOOLEAN_PARAMS = frozenset(
     }
 )
 
-# Only "pending" differs between the two vocabularies (spec 6.3); every other
-# legacy word is already an operations word.
-_LEGACY_TO_OPERATION = {"pending": "queued"}
+# The words that differ between the two vocabularies (spec 6.3). The restore
+# check's `needs_backup` is `skipped` with that reason on an operation; the
+# facade's status property carries the reason both ways.
+_LEGACY_TO_OPERATION = {"pending": "queued", "needs_backup": "skipped"}
 _OPERATION_TO_LEGACY = {"queued": "pending"}
+NEEDS_BACKUP = "needs_backup"
 
 
 def operation_status(status: str) -> str:
@@ -139,11 +142,18 @@ class MaintenanceJobFacade:
 
     @property
     def status(self) -> str:
+        if (
+            self.operation.status == "skipped"
+            and self.operation.skip_reason == NEEDS_BACKUP
+        ):
+            return NEEDS_BACKUP
         return legacy_status(self.operation.status)
 
     @status.setter
     def status(self, value: str) -> None:
         self.operation.status = operation_status(value)
+        if value == NEEDS_BACKUP:
+            self.operation.skip_reason = NEEDS_BACKUP
 
     @property
     def started_at(self):
@@ -168,6 +178,16 @@ class MaintenanceJobFacade:
     @error_message.setter
     def error_message(self, value) -> None:
         self.operation.error_message = value
+
+    @property
+    def skip_reason(self):
+        """Why a `skipped` operation did not run (spec 6.3); a legacy row has
+        no such column, its `needs_backup` status carries the reason."""
+        return self.operation.skip_reason
+
+    @skip_reason.setter
+    def skip_reason(self, value) -> None:
+        self.operation.skip_reason = value
 
     # -- progress ----------------------------------------------------------
 
@@ -319,6 +339,56 @@ def resolve_maintenance_job(
     return MaintenanceJobFacade(db, operation)
 
 
+def resolve_agent_maintenance_job(
+    db: Session, payload: Any, *, kinds: Iterable[str] = MAINTENANCE_KINDS
+) -> Any:
+    """The maintenance job an agent job's payload names, or None; only for
+    the `kinds` the caller handles.
+
+    The payload's `operation.maintenance_job` carries `kind`, `id` and, since
+    phase 5, `table`. `operations` is the only table left, so a payload naming
+    another one is from before the collapse and names a row that is gone: its
+    id belongs to a dropped sequence and cannot be mapped to the operation the
+    copy became, so it resolves to nothing rather than to an unrelated row of
+    the same kind.
+    """
+    if not isinstance(payload, dict):
+        return None
+    operation_payload = payload.get("operation")
+    maintenance = (
+        operation_payload.get("maintenance_job")
+        if isinstance(operation_payload, dict)
+        else None
+    )
+    if not isinstance(maintenance, dict):
+        return None
+    kind = str(maintenance.get("kind") or "")
+    if kind not in MAINTENANCE_KINDS or kind not in set(kinds):
+        return None
+    try:
+        job_id = int(maintenance.get("id"))
+    except (TypeError, ValueError):
+        return None
+    if job_id <= 0:
+        return None
+    table = maintenance.get("table")
+    if table and table != Operation.__tablename__:
+        return None
+    operation = (
+        db.query(Operation)
+        .filter(Operation.id == job_id, Operation.kind == kind)
+        .first()
+    )
+    if operation is None:
+        return None
+    repository = payload.get("repository")
+    repository_id = repository.get("id") if isinstance(repository, dict) else None
+    if repository_id is not None and operation.repository_id != repository_id:
+        # a row of another repository is never the one this job reports on
+        return None
+    return MaintenanceJobFacade(db, operation)
+
+
 def refresh_job(db: Session, job: Any) -> None:
     """`db.refresh()` requires a mapped instance, which a facade is not: its
     mapped object is `.operation`. Callers hold either shape after
@@ -354,3 +424,50 @@ def claim_running(db: Session, job_id: int, kind: str, started_at: datetime) -> 
             synchronize_session=False,
         )
     )
+
+
+def maintenance_jobs_started_since(db: Session, kind: str, since: datetime) -> list:
+    """Every `kind` job started at or after `since`, newest first, for a reader
+    of recent history (the dashboard timeline)."""
+    _require_maintenance_kind(kind)
+    operations = (
+        db.query(Operation)
+        .filter(Operation.kind == kind, Operation.started_at >= since)
+        .all()
+    )
+    jobs = [MaintenanceJobFacade(db, operation) for operation in operations]
+    jobs.sort(key=lambda job: (job.started_at, job.id), reverse=True)
+    return jobs
+
+
+# A row still waiting for its verdict. Every other status is an outcome,
+# `skipped` included, since its reason says what kept the run from happening.
+UNSETTLED_STATUSES: frozenset[str] = frozenset({"queued", "running"})
+
+
+def _require_maintenance_kind(kind: str) -> None:
+    if kind not in MAINTENANCE_KINDS:
+        raise ValueError(f"Not a maintenance kind: {kind!r}")
+
+
+def latest_maintenance_jobs_by_repository(
+    db: Session, kind: str, repository_ids: list[int], *, settled: bool = False
+) -> dict[int, Any]:
+    """The newest `kind` row of each repository. Newest by creation, as the
+    legacy max-id lookup was.
+
+    With `settled`, only rows that reached a verdict count: a queued run can
+    wait hours for a runner slot and must not hide the failure before it, so
+    a health reading asks for the verdict separately from the live row."""
+    if not repository_ids:
+        return {}
+    _require_maintenance_kind(kind)
+    op_filters = [Operation.kind == kind, Operation.repository_id.in_(repository_ids)]
+    if settled:
+        op_filters.append(Operation.status.notin_(UNSETTLED_STATUSES))
+    return {
+        operation.repository_id: MaintenanceJobFacade(db, operation)
+        for operation in newest_per_group(
+            db, Operation, Operation.repository_id, Operation.created_at, op_filters
+        )
+    }

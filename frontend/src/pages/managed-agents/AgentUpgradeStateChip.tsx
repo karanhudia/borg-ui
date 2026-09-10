@@ -19,6 +19,21 @@ export default function AgentUpgradeStateChip({
 }) {
   const { t } = useTranslation()
 
+  // No spinner: nothing is happening on that machine yet, and a spinner would
+  // say otherwise.
+  if (state === 'queued') {
+    return (
+      <Tooltip title={t('managedAgents.page.upgradeState.queuedTooltip')} arrow>
+        <Chip
+          size="small"
+          variant="outlined"
+          label={t('managedAgents.page.upgradeState.queued')}
+          sx={agentChipSx}
+        />
+      </Tooltip>
+    )
+  }
+
   if (state === 'requested') {
     return (
       <Tooltip title={t('managedAgents.page.upgradeState.upgradingTooltip')} arrow>

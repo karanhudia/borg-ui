@@ -1062,6 +1062,8 @@ export const backupPlansAPI = {
   update: (id: number, data: BackupPlanData) => api.put(`/backup-plans/${id}`, data),
   delete: (id: number) => api.delete(`/backup-plans/${id}`),
   toggle: (id: number) => api.post(`/backup-plans/${id}/toggle`),
+  toggleRepository: (id: number, repositoryId: number) =>
+    api.post(`/backup-plans/${id}/repositories/${repositoryId}/toggle`),
   run: (id: number) => api.post(`/backup-plans/${id}/run`),
   listRuns: () => api.get('/backup-plans/runs'),
   getRun: (id: number) => api.get(`/backup-plans/runs/${id}`),

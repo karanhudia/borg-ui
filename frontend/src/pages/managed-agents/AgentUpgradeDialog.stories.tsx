@@ -24,18 +24,40 @@ export default meta
 type Story = StoryObj<typeof AgentUpgradeDialog>
 
 export const Confirm: Story = {
-  args: { open: true, agent, onConfirm: () => {}, onCancel: () => {} },
+  args: { open: true, agents: [agent], onConfirm: () => {}, onCancel: () => {} },
 }
 
 export const Pinned: Story = {
   args: {
     open: true,
-    agent: { ...agent, desired_agent_version: '0.1.1' } as AgentMachineResponse,
+    agents: [{ ...agent, desired_agent_version: '0.1.1' } as AgentMachineResponse],
     onConfirm: () => {},
     onCancel: () => {},
   },
 }
 
 export const Busy: Story = {
-  args: { open: true, busy: true, agent, onConfirm: () => {}, onCancel: () => {} },
+  args: { open: true, busy: true, agents: [agent], onConfirm: () => {}, onCancel: () => {} },
+}
+
+const fleet = [
+  agent,
+  { ...agent, id: 2, name: 'web-01', hostname: 'web-01.internal' },
+  { ...agent, id: 3, name: 'mail-01', hostname: 'mail-01.internal' },
+] as AgentMachineResponse[]
+
+export const ManyEndpoints: Story = {
+  args: { open: true, agents: fleet, onConfirm: () => {}, onCancel: () => {} },
+}
+
+export const MixedTargets: Story = {
+  args: {
+    open: true,
+    agents: [
+      agent,
+      { ...agent, id: 2, name: 'web-01', desired_agent_version: '0.1.2' },
+    ] as AgentMachineResponse[],
+    onConfirm: () => {},
+    onCancel: () => {},
+  },
 }

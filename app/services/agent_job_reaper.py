@@ -212,13 +212,25 @@ def reap_stale_agent_upgrades(
 
 def _reap_once(
     failed_backup_job_ids: Optional[list[int]] = None,
+    reaped_operation_ids: Optional[list[int]] = None,
 ) -> int:
     """One reap pass with its own session (runs in a worker thread)."""
-    from app.utils.process_utils import reconcile_stale_backup_maintenance
+    from app.utils.process_utils import (
+        reconcile_orphaned_maintenance_operations,
+        reconcile_stale_backup_maintenance,
+    )
 
     db = SessionLocal()
     try:
         reaped = reap_stale_agent_jobs(db, failed_backup_job_ids=failed_backup_job_ids)
+        # A `running` maintenance operation an inline caller handed to an
+        # agent and never closed: with no agent job behind it, it would block
+        # the repository via admission control until the next restart. Runs
+        # before the backup-row pass below so the backup's maintenance state
+        # is reconciled in the same tick.
+        reaped += reconcile_orphaned_maintenance_operations(
+            db, reaped_operation_ids=reaped_operation_ids
+        )
         # Reconcile backup rows stuck in a running maintenance state whose
         # maintenance op died without writing a terminal status (startup-only
         # cleanup previously left these "running" until the next restart).
@@ -247,6 +259,35 @@ async def _notify_reaped_backup_jobs(operation_ids: list[int]) -> None:
         db.close()
 
 
+async def _release_upgrade_waves() -> None:
+    """Advance the fleet upgrade waves with a session of our own."""
+    # Imported here, not at module scope: the upgrade service is reached from
+    # the API module, which imports this one.
+    from app.services.agent_upgrades import release_agent_upgrade_waves
+
+    db = SessionLocal()
+    try:
+        await release_agent_upgrade_waves(db)
+    finally:
+        db.close()
+
+
+async def _broadcast_reaped_operations(operation_ids: list[int]) -> None:
+    """Tell the operations feed about rows the reaper failed, the way every
+    other writer of a terminal status does; the reap pass itself runs in a
+    worker thread and cannot await."""
+    from app.services.operations.events import broadcast_operation_updated
+
+    db = SessionLocal()
+    try:
+        for operation_id in operation_ids:
+            operation = db.get(Operation, operation_id)
+            if operation is not None:
+                await broadcast_operation_updated(operation, db)
+    finally:
+        db.close()
+
+
 async def start_agent_job_reaper(
     interval_seconds: float = REAPER_INTERVAL_SECONDS,
 ) -> None:
@@ -263,9 +304,19 @@ async def start_agent_job_reaper(
             # blocks the event loop. The session is created and used inside the
             # thread (SQLite connections are thread-affine).
             failed_backup_job_ids: list[int] = []
-            await asyncio.to_thread(_reap_once, failed_backup_job_ids)
+            reaped_operation_ids: list[int] = []
+            await asyncio.to_thread(
+                _reap_once, failed_backup_job_ids, reaped_operation_ids
+            )
             if failed_backup_job_ids:
                 await _notify_reaped_backup_jobs(failed_backup_job_ids)
+            if reaped_operation_ids:
+                await _broadcast_reaped_operations(reaped_operation_ids)
+            # A slot frees when an endpoint leaves "requested", by success or
+            # by the timeout reaped just above, so the next wave starts here
+            # (spec section 8). This runs on the loop rather than in the
+            # thread: it dispatches over the agent WebSocket.
+            await _release_upgrade_waves()
         except asyncio.CancelledError:
             logger.info("Agent job reaper stopped")
             raise

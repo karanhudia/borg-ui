@@ -26,6 +26,8 @@ export interface BackupPlanPayloadState {
   sourceLocations?: SourceLocation[]
   excludePatterns: string[]
   repositoryIds: number[]
+  // Repositories kept on the plan but skipped during runs (issue #879).
+  disabledRepositoryIds?: number[]
   compression: string
   archiveNameTemplate: string
   customFlags: string
@@ -432,7 +434,7 @@ export function buildBackupPlanPayload(
     prune_keep_within: normalizeOptionalString(state.pruneKeepWithin),
     repositories: state.repositoryIds.map((repositoryId, index) => ({
       repository_id: repositoryId,
-      enabled: true,
+      enabled: !(state.disabledRepositoryIds || []).includes(repositoryId),
       execution_order: index + 1,
       compression_source: 'plan',
       compression_override: null,

@@ -38,6 +38,8 @@ const t = ((
     name?: string
     feature?: string
     features?: string
+    enabled?: number
+    total?: number
   }
 ) => {
   const translations: Record<string, string> = {
@@ -63,6 +65,9 @@ const t = ((
     'backupPlans.wizard.review.compression': 'Compression',
     'backupPlans.status.sourcePathCount': `${options?.count ?? 0} sources`,
     'backupPlans.status.repositoryCount': `${options?.count ?? 0} repositories`,
+    'backupPlans.status.repositoryCountPartial': `${options?.enabled} of ${options?.total} repositories`,
+    'backupPlans.status.skippedLabel': 'Skipped',
+    'backupPlans.status.clickToResumeRepository': `Resume backups to ${options?.name}`,
     'backupPlans.status.lastRunLabel': 'Last run',
     'backupPlans.status.nextRunLabel': 'Next run',
     'backupPlans.status.manualOnly': 'Manual only',
@@ -186,6 +191,8 @@ function renderContent(overrides: Partial<React.ComponentProps<typeof BackupPlan
     onCancelRun: vi.fn(),
     onViewLogs: vi.fn(),
     onTogglePlan: vi.fn(),
+    onToggleRepository: vi.fn(),
+    togglingRepository: null,
     onEditPlan: vi.fn(),
     onDeletePlan: vi.fn(),
     onViewHistory: vi.fn(),
@@ -238,6 +245,66 @@ describe('BackupPlansContent', () => {
 
     expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Cancel Run' })).toBeInTheDocument()
+  })
+
+  it('shows skipped repositories on the card and re-enables one in a single click', () => {
+    const onToggleRepository = vi.fn()
+    const plan: BackupPlan = {
+      ...basePlan,
+      repository_count: 1,
+      repositories: [
+        {
+          repository_id: 11,
+          enabled: true,
+          execution_order: 1,
+          repository: { id: 11, name: 'Primary Repo', path: '/backups/primary' } as never,
+        },
+        {
+          repository_id: 12,
+          enabled: false,
+          execution_order: 2,
+          repository: { id: 12, name: 'Offsite Repo', path: '/backups/offsite' } as never,
+        },
+      ],
+    }
+
+    renderContent({
+      onToggleRepository,
+      backupPlans: [plan],
+      processedPlans: { groups: [{ name: null, plans: [plan] }] },
+    })
+
+    expect(screen.getByText('1 of 2 repositories')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Offsite Repo'))
+
+    expect(onToggleRepository).toHaveBeenCalledWith(plan.id, 12)
+  })
+
+  it('ignores clicks on a skipped repository chip while its toggle is pending', () => {
+    const onToggleRepository = vi.fn()
+    const plan: BackupPlan = {
+      ...basePlan,
+      repositories: [
+        { repository_id: 11, enabled: true, execution_order: 1 },
+        {
+          repository_id: 12,
+          enabled: false,
+          execution_order: 2,
+          repository: { id: 12, name: 'Offsite Repo', path: '/backups/offsite' } as never,
+        },
+      ],
+    }
+
+    renderContent({
+      onToggleRepository,
+      togglingRepository: { planId: plan.id, repositoryId: 12 },
+      backupPlans: [plan],
+      processedPlans: { groups: [{ name: null, plans: [plan] }] },
+    })
+
+    fireEvent.click(screen.getByText('Offsite Repo'))
+
+    expect(onToggleRepository).not.toHaveBeenCalled()
   })
 
   it('calls the repository navigation action from a backup plan card', async () => {

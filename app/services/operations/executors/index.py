@@ -188,6 +188,7 @@ async def list_archives_for_repository(
     if is_agent_executor(repository):
         from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
         from app.services.repository_executor import (
+            cancel_unclaimed_agent_repository_job,
             queue_agent_repository_operation_job,
             wait_for_agent_repository_operation_job,
         )
@@ -197,9 +198,19 @@ async def list_archives_for_repository(
             db, repository, job_kind="repository.list_archives"
         )
         await dispatch_agent_job_best_effort(db, job, repository_id=repository.id)
-        result = await wait_for_agent_repository_operation_job(
-            db, job.id, timeout_seconds=timeouts["list_timeout"]
-        )
+        try:
+            result = await wait_for_agent_repository_operation_job(
+                db, job.id, timeout_seconds=timeouts["list_timeout"]
+            )
+        except HTTPException as exc:
+            if exc.status_code == status.HTTP_504_GATEWAY_TIMEOUT:
+                # Left queued (the agent was not connected to take it), the
+                # job is the duplicate every later list (stats, the next
+                # sync) is refused for, and the reaper never reaps a queued
+                # job. A list the agent claimed or runs stays: its result
+                # warms the next attempt, and a dead agent's job is reaped.
+                cancel_unclaimed_agent_repository_job(db, job.id)
+            raise
         return (
             _agent_listing_ok(result),
             _agent_result_archives(result),
@@ -483,7 +494,11 @@ async def run_stats(ctx) -> Outcome:
         # agent repositories would never refresh size in the background.
         from app.api.repositories import _update_agent_repository_stats
 
-        updated = await _update_agent_repository_stats(repository, db)
+        # The admission's refusal (another job of this repository is active)
+        # must reach the runner: it defers the operation and retries, as it
+        # does for archive_sync, instead of recording a failure for a race
+        # the follow-up chains of one backup lose against each other.
+        updated = await _update_agent_repository_stats(repository, db, raise_busy=True)
         if not updated:
             return Outcome(
                 status="failed", error_message="agent repository stats refresh failed"

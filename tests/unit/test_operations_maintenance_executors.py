@@ -555,3 +555,31 @@ async def test_restore_check_cancellation_terminates_the_tracked_borg_process(
         fake_process.terminate.assert_called_once()
     finally:
         restore_check_service.running_processes.pop(op.id, None)
+
+
+@pytest.mark.asyncio
+async def test_restore_check_needs_backup_is_a_skip_with_that_reason(
+    db, repository, monkeypatch
+):
+    from app.services.operations.executors import maintenance
+    from app.services.restore_check_service import restore_check_service
+
+    op = _operation(db, repository, kind="restore_check", category="restore")
+    ctx = FakeContext(db, op)
+
+    async def needs_backup(job_id, repository_id):
+        job = MaintenanceJobFacade(db, db.get(Operation, job_id))
+        job.status = "needs_backup"
+        job.error_message = "Run a backup, then run this restore check again"
+        db.commit()
+
+    monkeypatch.setattr(restore_check_service, "execute_restore_check", needs_backup)
+
+    outcome = await maintenance.run_restore_check(ctx)
+
+    assert outcome.status == "skipped"
+    assert outcome.skip_reason == "needs_backup"
+    assert outcome.error_message == "Run a backup, then run this restore check again"
+    db.refresh(op)
+    assert (op.status, op.skip_reason) == ("skipped", "needs_backup")
+    assert MaintenanceJobFacade(db, op).status == "needs_backup"

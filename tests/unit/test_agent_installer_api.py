@@ -423,6 +423,7 @@ def test_agent_installer_pins_the_versions_the_server_runs(monkeypatch):
     assert f'PINNED_BORG1_VERSION="{borg1}"' in script
     assert f'PINNED_BORG2_VERSION="{borg2}"' in script
     assert 'PINNED_AGENT_VERSION="0.1.2"' in script
+    assert 'PINNED_DESIRED_BORG_VERSION=""' in script
     # The binary rows are exactly what the manifest renders for these versions —
     # derived, not hardcoded, so a version bump does not turn this into a chore.
     assert binary_table({"1": borg1, "2": borg2}) in script

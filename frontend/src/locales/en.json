@@ -304,8 +304,9 @@
         "agentDeleted": "Agent deleted",
         "cancellationRequested": "Cancellation requested",
         "copied": "Copied",
-        "agentUpgradeRequested": "Upgrade requested",
-        "agentVersionPinned": "Version pin saved"
+        "agentVersionPinned": "Version pin saved",
+        "agentUpgradeRequested_one": "Upgrade requested",
+        "agentUpgradeRequested_other": "Upgrade requested for {{count}} endpoints"
       },
       "errors": {
         "revokeToken": "Failed to revoke enrollment token",
@@ -417,16 +418,28 @@
         "outdatedCount_one": "{{count}} endpoint is running an older agent",
         "outdatedCount_other": "{{count}} endpoints are running an older agent",
         "bannerBody": "The current agent version is {{version}}.",
-        "bannerManual": "Reinstall each one from its card to bring it up to date.",
         "bannerMixedTargets": "Each one targets its own configured version.",
         "manualOnly": "Manual upgrades only",
-        "manualOnlyTooltip": "This endpoint has no self-upgrade helper, so it is updated by running the reinstall command on the machine. One reinstall prepares it for server-driven upgrades."
+        "manualOnlyTooltip": "This endpoint has no self-upgrade helper, so it is updated by running the reinstall command on the machine. One reinstall prepares it for server-driven upgrades.",
+        "selectedCount_one": "{{count}} endpoint selected",
+        "selectedCount_other": "{{count}} endpoints selected",
+        "upgradeSelected_one": "Upgrade {{count}} endpoint",
+        "upgradeSelected_other": "Upgrade {{count}} endpoints",
+        "selectAgent": "Select {{name}}",
+        "clearSelection": "Clear",
+        "bannerManualOnly_one": "{{count}} endpoint needs a manual reinstall from its card before it can be upgraded from here.",
+        "bannerManualOnly_other": "{{count}} endpoints need a manual reinstall from their cards before they can be upgraded from here.",
+        "upgradeAll": "Upgrade all ({{count}})"
       },
       "upgradeDialog": {
-        "title": "Upgrade this endpoint",
+        "title_one": "Upgrade this endpoint",
+        "title_other": "Upgrade {{count}} endpoints",
         "description": "The endpoint reinstalls itself from this server.",
-        "descriptionWithVersion": "The endpoint reinstalls itself from this server and comes back on version {{version}}.",
-        "disconnectWarning": "It disconnects for a short period while it does.",
+        "descriptionWithVersion_one": "The endpoint reinstalls itself from this server and comes back on version {{version}}.",
+        "descriptionWithVersion_other": "Each endpoint reinstalls itself from this server and comes back on version {{version}}.",
+        "mixedTargets": "Each endpoint reinstalls itself from this server and comes back on its own configured version.",
+        "disconnectWarning_one": "It disconnects for a short period while it does.",
+        "disconnectWarning_other": "Each one disconnects for a short period while it does, and they are upgraded a few at a time, so some wait before they start.",
         "busyWarning": "An endpoint that is running a backup refuses the upgrade, so try again once it is idle.",
         "confirm": "Upgrade"
       },
@@ -435,7 +448,9 @@
         "upgradingTo": "Upgrading to {{version}}",
         "upgradingTooltip": "The endpoint is reinstalling itself and will reconnect on its own.",
         "failed": "Upgrade failed",
-        "failedHint": "The endpoint did not come back in time. Reinstall it manually."
+        "failedHint": "The endpoint did not come back in time. Reinstall it manually.",
+        "queued": "Waiting to upgrade",
+        "queuedTooltip": "Queued behind other endpoints. It starts on its own when a slot frees."
       },
       "pinControl": {
         "title": "Version pin",
@@ -444,9 +459,15 @@
         "trackServer": "Track server",
         "borgVersionLabel": "Borg version",
         "leaveAsInstalled": "Leave as installed",
-        "borgHint": "The Borg choice is recorded now and applied by a later release, once upgrades can change the installed Borg version.",
+        "borgHint": "The Borg choice applies at the next upgrade of this endpoint.",
         "save": "Save",
         "unavailableVersion": "{{version}} (no longer served)"
+      },
+      "borgPin": {
+        "active": "Borg {{version}}",
+        "activeTooltip": "Pinned to Borg {{version}}, which this endpoint reports.",
+        "pending": "Borg {{version}} pending",
+        "pendingTooltip": "Pinned to Borg {{version}}, which this endpoint does not report yet. The next upgrade installs it."
       }
     },
     "installCommand": {
@@ -1411,7 +1432,11 @@
       "nextRun": "Next run: {{date}}",
       "repositoryFallback": "Repository",
       "moreRepositories": "+{{count}} more",
-      "runningNow": "Running"
+      "runningNow": "Running",
+      "repositoryCountPartial": "{{enabled}} of {{total}} repositories",
+      "skippedRepositoriesTooltip": "Skipped during runs: {{names}}",
+      "skippedLabel": "Skipped",
+      "clickToResumeRepository": "Resume backups to {{name}}"
     },
     "statuses": {
       "unknown": "Unknown",
@@ -1443,7 +1468,9 @@
       "repositoryCreateFailed": "Failed to create repository",
       "multiRepositoryRequiresPro": "Multiple repositories in one backup plan require Pro",
       "selectSourceConnection": "Select a remote client before browsing source paths",
-      "scriptCreateFailed": "Failed to create generated script"
+      "scriptCreateFailed": "Failed to create generated script",
+      "repositoryToggled": "Repository updated",
+      "repositoryToggleFailed": "Failed to update repository"
     },
     "sourceChooser": {
       "summaryTitle": "Backup source",
@@ -4133,6 +4160,11 @@
       "testing": "Testing",
       "unknown": "Unknown"
     },
+    "restricted": {
+      "label": "Borg only",
+      "tooltip": "The remote shell is restricted to Borg. Browsing and storage information are unavailable on this connection.",
+      "storage": "Storage unavailable (Borg only)"
+    },
     "storage": "Storage",
     "mountPoint": "Mount Point",
     "actions": {
@@ -4409,7 +4441,11 @@
     "moveUp": "Move up",
     "moveDown": "Move down",
     "remove": "Remove",
-    "searchOrAddMore": "Search or add more..."
+    "searchOrAddMore": "Search or add more...",
+    "skipped": "Skipped",
+    "skip": "Skip during runs",
+    "resume": "Resume backups",
+    "lastEnabled": "At least one repository must stay enabled"
   },
   "wizard": {
     "steps": {
@@ -5016,7 +5052,9 @@
     "copyToClipboard": "Copy to clipboard",
     "copied": "Copied!",
     "commandCopied": "Command copied to clipboard",
-    "copyFailed": "Failed to copy to clipboard"
+    "copyFailed": "Failed to copy to clipboard",
+    "remoteServeCommand": "Remote command (for restricted keys)",
+    "remoteServeCommandDesc": "Borg runs this on the repository host. A forced-command wrapper in authorized_keys must accept it."
   },
   "cronBuilderComponent": {
     "runEvery": "Run every",
@@ -5763,7 +5801,7 @@
         "adminAccessRequired": "Admin access required",
         "cannotEnableAsBackupSource": "Cannot enable as backup source: {{error}}",
         "connectionTestFailed": "SSH connection test failed: {{error}}",
-        "failedCollectStorage": "Failed to collect storage information",
+        "failedCollectStorage": "Storage information is unavailable for this connection.",
         "failedGenerateKey": "Failed to generate SSH key: {{error}}",
         "invalidKeyType": "Invalid key type. Must be one of: {{types}}",
         "invalidPrivateKeyFormat": "Invalid private key format",
@@ -6027,6 +6065,7 @@
         "connectionDeleted": "SSH connection deleted successfully",
         "connectionTestFailed": "SSH connection test failed",
         "connectionTestSuccess": "SSH connection test successful",
+        "connectionTestSuccessRestricted": "SSH connection works. The remote shell is restricted to Borg, so browsing and storage information are unavailable.",
         "connectionUpdated": "SSH connection updated successfully",
         "sshKeyCreated": "SSH key created successfully",
         "sshKeyDeleted": "SSH key deleted successfully",

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Box } from '@mui/material'
+import { Box, CssBaseline, ThemeProvider } from '@mui/material'
+
+import { getTheme } from '../../theme'
 import i18next from 'i18next'
 import type { TFunction } from 'i18next'
 
@@ -127,6 +129,97 @@ const managedAgentPlan: BackupPlan = {
 
 const lockedPlans = [databasePlan, containerPlan, multiRepositoryPlan, managedAgentPlan]
 
+// Issue #879: a plan keeps a repository attached but skips it during runs.
+const skippedRepositoryPlan: BackupPlan = {
+  id: 105,
+  name: 'Home Media',
+  description: 'Local NAS plus an off-site copy that is down for maintenance.',
+  enabled: true,
+  source_type: 'local',
+  source_directories: ['/srv/media', '/srv/photos'],
+  exclude_patterns: [],
+  archive_name_template: '{plan_name}-{repo_name}-{now}',
+  compression: 'zstd,3',
+  repository_run_mode: 'series',
+  max_parallel_repositories: 1,
+  failure_behavior: 'continue',
+  schedule_enabled: true,
+  cron_expression: '0 2 * * *',
+  timezone: 'UTC',
+  next_run: '2026-06-09T02:00:00.000Z',
+  repository_count: 2,
+  repositories: [
+    {
+      repository_id: 1,
+      enabled: true,
+      execution_order: 1,
+      repository: { id: 1, name: 'NAS', path: '/mnt/nas/borg' } as never,
+    },
+    {
+      repository_id: 2,
+      enabled: false,
+      execution_order: 2,
+      repository: { id: 2, name: 'rsync.net', path: 'ssh://rsync.net/borg' } as never,
+    },
+    {
+      repository_id: 3,
+      enabled: true,
+      execution_order: 3,
+      repository: { id: 3, name: 'USB Drive', path: '/Volumes/usb/borg' } as never,
+    },
+  ],
+}
+
+function SkippedRepositoryBackupPlans() {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortBy, setSortBy] = useState('name-asc')
+  const [groupBy, setGroupBy] = useState('none')
+  const plans = [skippedRepositoryPlan, managedAgentPlan]
+
+  return (
+    <Box sx={{ p: 3, maxWidth: 1120, mx: 'auto' }}>
+      <BackupPlansContent
+        loadingPlans={false}
+        backupPlans={plans}
+        processedPlans={{ groups: [{ name: null, plans }] }}
+        latestRunByPlan={new Map()}
+        backupPlanRuns={[]}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        sortBy={sortBy}
+        setSortBy={setSortBy}
+        groupBy={groupBy}
+        setGroupBy={setGroupBy}
+        repositoryFilter={null}
+        onClearRepositoryFilter={noop}
+        startingPlanId={null}
+        highlightedPlanId={null}
+        canUseMultiRepository
+        canUseManagedAgents
+        canUseDatabaseDiscovery
+        canUseContainerBackups
+        cancellingRunId={null}
+        runPending={false}
+        togglePending={false}
+        toggleVariables={undefined}
+        openCreateWizard={noop}
+        onRunPlan={noop}
+        onCancelRun={noop}
+        onViewLogs={noop}
+        onTogglePlan={noop}
+        onToggleRepository={noop}
+        togglingRepository={null}
+        onEditPlan={noop}
+        onDeletePlan={noop}
+        onViewHistory={noop}
+        onViewRepositories={noop}
+        formatStatusLabel={(status) => status ?? t('backupPlans.statuses.unknown')}
+        t={t}
+      />
+    </Box>
+  )
+}
+
 function CommunityLockedBackupPlans() {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState('name-asc')
@@ -163,6 +256,8 @@ function CommunityLockedBackupPlans() {
         onCancelRun={noop}
         onViewLogs={noop}
         onTogglePlan={noop}
+        onToggleRepository={noop}
+        togglingRepository={null}
         onEditPlan={noop}
         onDeletePlan={noop}
         onViewHistory={noop}
@@ -187,4 +282,17 @@ type Story = StoryObj<typeof meta>
 
 export const CommunityLockedRuns: Story = {
   render: () => <CommunityLockedBackupPlans />,
+}
+
+export const SkippedRepository: Story = {
+  render: () => <SkippedRepositoryBackupPlans />,
+}
+
+export const SkippedRepositoryDark: Story = {
+  render: () => (
+    <ThemeProvider theme={getTheme('dark')}>
+      <CssBaseline />
+      <SkippedRepositoryBackupPlans />
+    </ThemeProvider>
+  ),
 }

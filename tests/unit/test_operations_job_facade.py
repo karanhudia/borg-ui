@@ -11,8 +11,11 @@ from app.services.operations.job_facade import (
     MAINTENANCE_KINDS,
     MaintenanceJobFacade,
     claim_running,
+    latest_maintenance_jobs_by_repository,
     legacy_status,
+    maintenance_jobs_started_since,
     operation_status,
+    resolve_agent_maintenance_job,
     resolve_maintenance_job,
 )
 
@@ -300,3 +303,198 @@ def test_stats_live_in_the_operation_result(db, repository):
     job.stats = None
     assert op.result == {"logs": True}
     assert job.stats is None
+
+
+def _payload(job_id, **maintenance_extra):
+    return {
+        "job_kind": "repository.check",
+        "operation": {
+            "maintenance_job": {"kind": "check", "id": job_id, **maintenance_extra}
+        },
+    }
+
+
+def test_resolve_agent_job_takes_the_operation_the_payload_names(db, repository):
+    op = _operation(db, repository)
+
+    for payload in (_payload(op.id), _payload(op.id, table="operations")):
+        job = resolve_agent_maintenance_job(db, payload)
+        assert isinstance(job, MaintenanceJobFacade)
+        assert job.id == op.id
+
+
+def test_resolve_agent_job_ignores_a_payload_from_a_dropped_table(db, repository):
+    """A job queued before the collapse names an id from a table that is
+    gone; the copy it became has another id, so nothing is resolved rather
+    than an unrelated operation that happens to hold that id."""
+    op = _operation(db, repository)
+
+    assert (
+        resolve_agent_maintenance_job(db, _payload(op.id, table="check_jobs")) is None
+    )
+    assert resolve_agent_maintenance_job(db, _payload(op.id, table="x")) is None
+
+
+def test_resolve_agent_job_checks_the_payloads_repository(db, repository):
+    other = Repository(name="other", path="/repo/other", borg_version=1)
+    db.add(other)
+    db.commit()
+    op = _operation(db, repository)
+
+    payload = _payload(op.id)
+    payload["repository"] = {"id": repository.id, "path": repository.path}
+    assert resolve_agent_maintenance_job(db, payload).id == op.id
+
+    # a row of another repository is never the one this job reports on
+    payload["repository"] = {"id": other.id, "path": other.path}
+    assert resolve_agent_maintenance_job(db, payload) is None
+
+
+def test_resolve_agent_job_rejects_bad_shapes(db, repository):
+    assert resolve_agent_maintenance_job(db, None) is None
+    assert (
+        resolve_agent_maintenance_job(db, {"operation": {"maintenance_job": []}})
+        is None
+    )
+    assert resolve_agent_maintenance_job(db, _payload("not-a-number")) is None
+    assert resolve_agent_maintenance_job(db, _payload(0)) is None
+    payload = _payload(1)
+    payload["operation"]["maintenance_job"]["kind"] = "wipe"
+    assert resolve_agent_maintenance_job(db, payload) is None
+    assert resolve_agent_maintenance_job(db, _payload(1), kinds=("prune",)) is None
+
+
+def test_started_since_reads_one_kind_newest_first(db, repository):
+    since = datetime(2026, 9, 1)
+    too_old = _operation(db, repository, status="completed")
+    too_old.started_at = datetime(2026, 8, 30)
+    op = _operation(db, repository, status="completed")
+    op.started_at = datetime(2026, 9, 3)
+    newer = _operation(db, repository, status="completed")
+    newer.started_at = datetime(2026, 9, 5)
+    unrelated = _operation(db, repository, kind="prune", status="completed")
+    unrelated.started_at = datetime(2026, 9, 4)
+    db.commit()
+
+    jobs = maintenance_jobs_started_since(db, "check", since)
+
+    assert [job.id for job in jobs] == [newer.id, op.id]
+    assert all(isinstance(job, MaintenanceJobFacade) for job in jobs)
+    assert jobs[0].repository_path == repository.path
+
+
+def test_latest_by_repository_takes_the_newest_row_of_each(db):
+    ops_repo = Repository(name="ops", path="/repo/ops", borg_version=1)
+    busy_repo = Repository(name="busy", path="/repo/busy", borg_version=1)
+    idle_repo = Repository(name="idle", path="/repo/idle", borg_version=1)
+    db.add_all([ops_repo, busy_repo, idle_repo])
+    db.commit()
+    newer = _operation(db, ops_repo, kind="restore_check", status="failed")
+    newer.created_at = datetime(2026, 9, 2)
+    older = _operation(db, ops_repo, kind="restore_check", status="completed")
+    older.created_at = datetime(2026, 9, 1)
+    latest_failure = _operation(db, busy_repo, kind="restore_check", status="failed")
+    latest_failure.created_at = datetime(2026, 9, 5)
+    earlier = _operation(db, busy_repo, kind="restore_check", status="completed")
+    earlier.created_at = datetime(2026, 9, 4)
+    db.commit()
+
+    latest = latest_maintenance_jobs_by_repository(
+        db, "restore_check", [ops_repo.id, busy_repo.id, idle_repo.id]
+    )
+
+    assert set(latest) == {ops_repo.id, busy_repo.id}
+    assert all(isinstance(job, MaintenanceJobFacade) for job in latest.values())
+    assert latest[ops_repo.id].id == newer.id
+    assert latest[busy_repo.id].id == latest_failure.id
+    assert latest_maintenance_jobs_by_repository(db, "restore_check", []) == {}
+
+
+def test_latest_by_repository_breaks_a_tie_on_the_newer_row(db, repository):
+    when = datetime(2026, 9, 6)
+    first = _operation(db, repository, kind="restore_check", status="failed")
+    first.created_at = when
+    second = _operation(db, repository, kind="restore_check", status="completed")
+    second.created_at = when
+    db.commit()
+
+    latest = latest_maintenance_jobs_by_repository(db, "restore_check", [repository.id])
+
+    assert latest[repository.id].id == second.id
+
+
+def test_latest_by_repository_reports_the_live_row_or_the_last_verdict(db, repository):
+    failed = _operation(db, repository, kind="restore_check", status="failed")
+    failed.created_at = datetime(2026, 9, 6)
+    queued = _operation(db, repository, kind="restore_check", status="queued")
+    queued.created_at = datetime(2026, 9, 7)
+    running = _operation(db, repository, kind="restore_check", status="running")
+    running.created_at = datetime(2026, 9, 8)
+    db.commit()
+
+    live = latest_maintenance_jobs_by_repository(db, "restore_check", [repository.id])
+    verdicts = latest_maintenance_jobs_by_repository(
+        db, "restore_check", [repository.id], settled=True
+    )
+
+    assert live[repository.id].id == running.id
+    assert live[repository.id].status == "running"
+    assert verdicts[repository.id].id == failed.id
+
+
+def test_latest_by_repository_has_no_verdict_for_a_first_run_still_queued(
+    db, repository
+):
+    queued = _operation(db, repository, kind="restore_check", status="queued")
+    queued.created_at = datetime(2026, 9, 7)
+    db.commit()
+
+    live = latest_maintenance_jobs_by_repository(db, "restore_check", [repository.id])
+
+    assert live[repository.id].id == queued.id
+    assert live[repository.id].status == "pending"
+    assert (
+        latest_maintenance_jobs_by_repository(
+            db, "restore_check", [repository.id], settled=True
+        )
+        == {}
+    )
+
+
+def test_readers_name_an_unknown_kind(db, repository):
+    with pytest.raises(ValueError, match="restorecheck"):
+        maintenance_jobs_started_since(db, "restorecheck", datetime(2026, 9, 1))
+    with pytest.raises(ValueError, match="restorecheck"):
+        latest_maintenance_jobs_by_repository(db, "restorecheck", [repository.id])
+
+
+def test_latest_by_repository_counts_a_skipped_run_as_the_verdict(db, repository):
+    failed = _operation(db, repository, kind="restore_check", status="failed")
+    failed.created_at = datetime(2026, 9, 6)
+    skipped = _operation(db, repository, kind="restore_check", status="skipped")
+    skipped.created_at = datetime(2026, 9, 7)
+    skipped.skip_reason = "needs_backup"
+    db.commit()
+
+    verdicts = latest_maintenance_jobs_by_repository(
+        db, "restore_check", [repository.id], settled=True
+    )
+
+    assert verdicts[repository.id].id == skipped.id
+    assert verdicts[repository.id].skip_reason == "needs_backup"
+
+
+def test_needs_backup_is_written_as_a_skip_and_read_back(db, repository):
+    op = _operation(db, repository, kind="restore_check")
+    job = MaintenanceJobFacade(db, op)
+
+    job.status = "needs_backup"
+    db.commit()
+    db.refresh(op)
+
+    assert (op.status, op.skip_reason) == ("skipped", "needs_backup")
+    assert job.status == "needs_backup"
+    assert operation_status("needs_backup") == "skipped"
+    other = _operation(db, repository, kind="restore_check", status="skipped")
+    other.skip_reason = "dependency_failed"
+    assert MaintenanceJobFacade(db, other).status == "skipped"

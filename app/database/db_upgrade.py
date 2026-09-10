@@ -154,7 +154,7 @@ def _engine(url: str, *, disposable: bool = False) -> Engine:
 
 # The last revision whose schema still holds the legacy job tables. A
 # pre-Alembic database is transferred onto this revision, not onto head, so
-# the collapse revision (c9d0e1f2a3b4) folds its job history into
+# the collapse revision (d0e1f2a3b4c5) folds its job history into
 # `operations` instead of the transfer silently skipping tables head no
 # longer has.
 PRE_COLLAPSE_REVISION = "b8c9d0e1f2a3"

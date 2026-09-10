@@ -537,6 +537,10 @@ class SSHConnection(Base):
     use_sudo = Column(
         Boolean, default=False
     )  # Prepend sudo when running borg on remote host
+    # Last connection test authenticated but the remote shell refused the
+    # probe command: a forced-command (Borg-only) key or a restricted shell.
+    # Browsing and storage info are unavailable on such a connection.
+    shell_restricted = Column(Boolean, nullable=True)
 
     # Pinned host key (known_hosts lines) used to verify the remote host on
     # every SSH invocation. Null means nothing has been trusted yet; see

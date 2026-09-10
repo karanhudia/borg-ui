@@ -31,6 +31,7 @@ export function BackupPlanWizardStep({
   onCreateScript,
   updateBasicRepositoryState,
   handleRepositoryIdsChange,
+  handleRepositoryEnabledToggle,
   handlePruneSettingsChange,
   createBasicRepository,
   openExcludeExplorer,
@@ -75,6 +76,7 @@ export function BackupPlanWizardStep({
         repositoryCreatePending={repositoryCreatePending}
         updateBasicRepositoryState={updateBasicRepositoryState}
         handleRepositoryIdsChange={handleRepositoryIdsChange}
+        handleRepositoryEnabledToggle={handleRepositoryEnabledToggle}
         createBasicRepository={createBasicRepository}
         setBasicRepositoryOpen={setBasicRepositoryOpen}
         setRepositoryWizardOpen={setRepositoryWizardOpen}

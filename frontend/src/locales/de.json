@@ -304,8 +304,9 @@
         "agentDeleted": "Agent gelöscht",
         "cancellationRequested": "Abbruch angefordert",
         "copied": "Kopiert",
-        "agentUpgradeRequested": "Aktualisierung angefordert",
-        "agentVersionPinned": "Versions-Pin gespeichert"
+        "agentVersionPinned": "Versions-Pin gespeichert",
+        "agentUpgradeRequested_one": "Upgrade angefordert",
+        "agentUpgradeRequested_other": "Upgrade fuer {{count}} Endpunkte angefordert"
       },
       "errors": {
         "revokeToken": "Registrierungstoken konnte nicht widerrufen werden",
@@ -417,17 +418,29 @@
         "outdatedCount_one": "{{count}} Endpunkt verwendet einen älteren Agenten",
         "outdatedCount_other": "{{count}} Endpunkte verwenden einen älteren Agenten",
         "bannerBody": "Die aktuelle Agent-Version ist {{version}}.",
-        "bannerManual": "Installieren Sie jeden Endpunkt über seine Karte neu, um ihn zu aktualisieren.",
         "bannerMixedTargets": "Jeder Endpunkt zielt auf seine eigene konfigurierte Version.",
         "manualOnly": "Nur manuelle Updates",
-        "manualOnlyTooltip": "Dieser Endpunkt hat kein Self-Upgrade-Hilfsprogramm und wird daher mit dem Reinstall-Befehl auf der Maschine aktualisiert. Eine Neuinstallation bereitet es auf servergesteuerte Upgrades vor."
+        "manualOnlyTooltip": "Dieser Endpunkt hat kein Self-Upgrade-Hilfsprogramm und wird daher mit dem Reinstall-Befehl auf der Maschine aktualisiert. Eine Neuinstallation bereitet es auf servergesteuerte Upgrades vor.",
+        "selectedCount_one": "{{count}} Endpunkt ausgewählt",
+        "selectedCount_other": "{{count}} Endpunkte ausgewählt",
+        "upgradeSelected_one": "{{count}} Endpunkt aktualisieren",
+        "upgradeSelected_other": "{{count}} Endpunkte aktualisieren",
+        "selectAgent": "{{name}} auswählen",
+        "clearSelection": "Auswahl aufheben",
+        "bannerManualOnly_one": "{{count}} Endpunkt braucht eine manuelle Neuinstallation über seine Karte, bevor er von hier aktualisiert werden kann.",
+        "bannerManualOnly_other": "{{count}} Endpunkte brauchen eine manuelle Neuinstallation über ihre Karten, bevor sie von hier aktualisiert werden können.",
+        "upgradeAll": "Alle aktualisieren ({{count}})"
       },
       "upgradeDialog": {
-        "title": "Diesen Endpunkt aktualisieren",
-        "description": "Der Endpunkt installiert sich selbst von diesem Server neu.",
-        "descriptionWithVersion": "Der Endpunkt installiert sich selbst von diesem Server neu und kommt mit Version {{version}} zurück.",
-        "disconnectWarning": "Dabei ist er kurzzeitig getrennt.",
-        "busyWarning": "Ein Endpunkt, der gerade ein Backup ausführt, lehnt die Aktualisierung ab. Versuchen Sie es erneut, sobald er inaktiv ist.",
+        "title_one": "Diesen Endpunkt aktualisieren",
+        "title_other": "{{count}} Endpunkte aktualisieren",
+        "description": "Der Endpunkt installiert sich von diesem Server neu.",
+        "descriptionWithVersion_one": "Der Endpunkt installiert sich von diesem Server neu und kommt mit Version {{version}} zurück.",
+        "descriptionWithVersion_other": "Jeder Endpunkt installiert sich von diesem Server neu und kommt mit Version {{version}} zurück.",
+        "mixedTargets": "Jeder Endpunkt installiert sich von diesem Server neu und kommt mit seiner eigenen konfigurierten Version zurück.",
+        "disconnectWarning_one": "Dabei trennt er die Verbindung kurzzeitig.",
+        "disconnectWarning_other": "Jeder trennt die Verbindung dabei kurzzeitig, und es werden immer nur einige gleichzeitig aktualisiert, daher warten manche zunächst.",
+        "busyWarning": "Ein Endpunkt, der gerade ein Backup ausführt, lehnt das Upgrade ab. Versuchen Sie es erneut, sobald er im Leerlauf ist.",
         "confirm": "Aktualisieren"
       },
       "upgradeState": {
@@ -435,7 +448,9 @@
         "upgradingTo": "Aktualisierung auf {{version}}",
         "upgradingTooltip": "Der Endpunkt installiert sich neu und verbindet sich von selbst wieder.",
         "failed": "Aktualisierung fehlgeschlagen",
-        "failedHint": "Der Endpunkt kam nicht rechtzeitig zurück. Installieren Sie ihn manuell neu."
+        "failedHint": "Der Endpunkt kam nicht rechtzeitig zurück. Installieren Sie ihn manuell neu.",
+        "queued": "Wartet auf Upgrade",
+        "queuedTooltip": "Wartet hinter anderen Endpunkten. Der Vorgang startet automatisch, sobald ein Platz frei wird."
       },
       "pinControl": {
         "title": "Versions-Pin",
@@ -444,9 +459,15 @@
         "trackServer": "Server folgen",
         "borgVersionLabel": "Borg-Version",
         "leaveAsInstalled": "Wie installiert lassen",
-        "borgHint": "Die Borg-Auswahl wird jetzt gespeichert und von einer späteren Version angewendet, sobald Aktualisierungen die installierte Borg-Version ändern können.",
+        "borgHint": "Die Borg-Auswahl wird beim nächsten Upgrade dieses Endpunkts angewendet.",
         "save": "Speichern",
         "unavailableVersion": "{{version}} (wird nicht mehr ausgeliefert)"
+      },
+      "borgPin": {
+        "active": "Borg {{version}}",
+        "activeTooltip": "Auf Borg {{version}} festgelegt, und dieser Endpunkt meldet diese Version.",
+        "pending": "Borg {{version}} ausstehend",
+        "pendingTooltip": "Auf Borg {{version}} festgelegt, aber dieser Endpunkt meldet die Version noch nicht. Das nächste Upgrade installiert sie."
       }
     },
     "installCommand": {
@@ -1411,7 +1432,11 @@
       "nextRun": "Nächster Lauf: {{date}}",
       "repositoryFallback": "Repository",
       "moreRepositories": "+{{count}} weitere",
-      "runningNow": "Läuft"
+      "runningNow": "Läuft",
+      "repositoryCountPartial": "{{enabled}} von {{total}} Repositories",
+      "skippedRepositoriesTooltip": "Bei Läufen übersprungen: {{names}}",
+      "skippedLabel": "Übersprungen",
+      "clickToResumeRepository": "Backups nach {{name}} fortsetzen"
     },
     "statuses": {
       "unknown": "Unbekannt",
@@ -1443,7 +1468,9 @@
       "repositoryCreateFailed": "Repository konnte nicht erstellt werden",
       "multiRepositoryRequiresPro": "Mehrere Repositories in einem Backup-Plan erfordern Pro",
       "selectSourceConnection": "Wähle einen Remote-Client aus, bevor du Quellpfade durchsuchst",
-      "scriptCreateFailed": "Failed to create generated script"
+      "scriptCreateFailed": "Generiertes Skript konnte nicht erstellt werden",
+      "repositoryToggled": "Repository aktualisiert",
+      "repositoryToggleFailed": "Repository konnte nicht aktualisiert werden"
     },
     "sourceChooser": {
       "summaryTitle": "Backup source",
@@ -4133,6 +4160,11 @@
       "testing": "Testet",
       "unknown": "Unbekannt"
     },
+    "restricted": {
+      "label": "Nur Borg",
+      "tooltip": "Die Remote-Shell ist auf Borg beschränkt. Durchsuchen und Speicherinformationen sind für diese Verbindung nicht verfügbar.",
+      "storage": "Speicher nicht verfügbar (nur Borg)"
+    },
     "storage": "Speicher",
     "mountPoint": "Einhängepunkt",
     "actions": {
@@ -4409,7 +4441,11 @@
     "moveUp": "Nach oben",
     "moveDown": "Nach unten",
     "remove": "Entfernen",
-    "searchOrAddMore": "Suchen oder weitere hinzufügen..."
+    "searchOrAddMore": "Suchen oder weitere hinzufügen...",
+    "skipped": "Übersprungen",
+    "skip": "Bei Läufen überspringen",
+    "resume": "Backups fortsetzen",
+    "lastEnabled": "Mindestens ein Repository muss aktiviert bleiben"
   },
   "wizard": {
     "steps": {
@@ -5016,7 +5052,9 @@
     "copyToClipboard": "In Zwischenablage kopieren",
     "copied": "Kopiert!",
     "commandCopied": "Befehl in die Zwischenablage kopiert",
-    "copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen"
+    "copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen",
+    "remoteServeCommand": "Remote-Befehl (für eingeschränkte Schlüssel)",
+    "remoteServeCommandDesc": "Borg führt dies auf dem Repository-Host aus. Ein forced-command-Wrapper in authorized_keys muss ihn akzeptieren."
   },
   "cronBuilderComponent": {
     "runEvery": "Alle",
@@ -5763,7 +5801,7 @@
         "adminAccessRequired": "Administratorzugriff erforderlich",
         "cannotEnableAsBackupSource": "Kann nicht als Sicherungsquelle aktiviert werden: {{error}}",
         "connectionTestFailed": "SSH-Verbindungstest fehlgeschlagen: {{error}}",
-        "failedCollectStorage": "Speicherinformationen konnten nicht gesammelt werden",
+        "failedCollectStorage": "Speicherinformationen sind für diese Verbindung nicht verfügbar.",
         "failedGenerateKey": "SSH-Schlüssel konnte nicht generiert werden: {{error}}",
         "invalidKeyType": "Ungültiger Schlüsseltyp. Muss einer der folgenden sein: {{types}}",
         "invalidPrivateKeyFormat": "Ungültiges Format des privaten Schlüssels",
@@ -6027,6 +6065,7 @@
         "connectionDeleted": "SSH-Verbindung erfolgreich gelöscht",
         "connectionTestFailed": "SSH-Verbindungstest fehlgeschlagen",
         "connectionTestSuccess": "SSH-Verbindungstest erfolgreich",
+        "connectionTestSuccessRestricted": "SSH-Verbindung funktioniert. Die Remote-Shell ist auf Borg beschränkt, daher sind Durchsuchen und Speicherinformationen nicht verfügbar.",
         "connectionUpdated": "SSH-Verbindung erfolgreich aktualisiert",
         "sshKeyCreated": "SSH-Schlüssel erfolgreich erstellt",
         "sshKeyDeleted": "SSH-Schlüssel erfolgreich gelöscht",

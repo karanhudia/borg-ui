@@ -28,6 +28,7 @@ from app.database.models import (
     SystemSettings,
     UserRepositoryPermission,
 )
+from app.core.borg_router import BorgRouter
 from app.core.security import get_password_hash
 from app.services.backup_plan_execution_service import backup_plan_execution_service
 from app.services.operations.backup_facade import (
@@ -2520,6 +2521,111 @@ class TestBackupPlanRoutes:
         assert plan.enabled is True
         assert plan.next_run is not None
 
+    def test_toggle_plan_repository_disables_link_and_list_reports_it(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "pro")
+        repo_a = _create_repo(test_db, "Primary", "/repos/primary")
+        repo_b = _create_repo(test_db, "Offsite", "/repos/offsite")
+        plan = _create_scheduled_plan(test_db, [repo_a, repo_b])
+
+        response = test_client.post(
+            f"/api/backup-plans/{plan.id}/repositories/{repo_b.id}/toggle",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["repository_count"] == 1
+        assert {
+            link["repository_id"]: link["enabled"] for link in body["repositories"]
+        } == {repo_a.id: True, repo_b.id: False}
+
+        listed = test_client.get("/api/backup-plans/", headers=admin_headers).json()
+        listed_plan = next(p for p in listed["backup_plans"] if p["id"] == plan.id)
+        assert listed_plan["repository_count"] == 1
+        assert [
+            (link["repository_id"], link["enabled"], link["repository"]["name"])
+            for link in listed_plan["repositories"]
+        ] == [(repo_a.id, True, "Primary"), (repo_b.id, False, "Offsite")]
+
+        # Toggle again re-enables in one action.
+        response = test_client.post(
+            f"/api/backup-plans/{plan.id}/repositories/{repo_b.id}/toggle",
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["repository_count"] == 2
+
+    def test_toggle_plan_repository_refuses_to_disable_last_enabled_link(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        plan = _create_scheduled_plan(test_db, [repo])
+
+        response = test_client.post(
+            f"/api/backup-plans/{plan.id}/repositories/{repo.id}/toggle",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"] == {
+            "key": "backend.errors.backupPlans.repositoriesRequired"
+        }
+        test_db.refresh(plan)
+        assert plan.repositories[0].enabled is True
+
+    def test_create_plan_rejects_all_repositories_disabled(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        payload = _payload([repo.id])
+        payload["repositories"][0]["enabled"] = False
+
+        response = test_client.post(
+            "/api/backup-plans/", json=payload, headers=admin_headers
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"] == {
+            "key": "backend.errors.backupPlans.repositoriesRequired"
+        }
+
+    def test_toggle_plan_repository_refuses_to_resume_observe_repository(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "pro")
+        repo_a = _create_repo(test_db, "Primary", "/repos/primary")
+        repo_b = _create_repo(test_db, "Watch only", "/repos/watch")
+        plan = _create_scheduled_plan(test_db, [repo_a, repo_b])
+        plan.repositories[1].enabled = False
+        repo_b.mode = "observe"
+        test_db.commit()
+
+        response = test_client.post(
+            f"/api/backup-plans/{plan.id}/repositories/{repo_b.id}/toggle",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"] == {
+            "key": "backend.errors.backupPlans.observeRepositorySelected"
+        }
+
+    def test_toggle_plan_repository_unknown_link_returns_404(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        other = _create_repo(test_db, "Other", "/repos/other")
+        plan = _create_scheduled_plan(test_db, [repo])
+
+        response = test_client.post(
+            f"/api/backup-plans/{plan.id}/repositories/{other.id}/toggle",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 404
+
     def test_community_cannot_enable_existing_multi_repository_plan_after_downgrade(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -4662,6 +4768,154 @@ class TestBackupPlanRoutes:
         assert sorted(execution_order) == sorted(repo.path for repo in repos)
         assert {child.status for child in run.repositories} == {"completed"}
         assert run.status == "completed"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "raising_step, steps_before",
+        [("prune", []), ("compact", ["prune"]), ("check", ["prune", "compact"])],
+    )
+    async def test_maintenance_step_that_raises_fails_its_operation(
+        self, test_db, raising_step, steps_before
+    ):
+        """A step whose agent job is refused raises out of the router. The
+        operation the plan created `running` must end `failed` with the
+        cause and the repository's run must end failed with that cause -
+        not leave the operation `running` (which blocks every later backup
+        of the repository) while the run reports a generic execution
+        failure. The steps after it do not run on a repository in unknown
+        state; the steps before it completed normally."""
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        _plan, run = _create_execution_plan(
+            test_db,
+            [repo],
+            run_prune_after=True,
+            run_compact_after=True,
+            run_check_after=True,
+        )
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            job = resolve_backup_job(db, job_id)
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        calls = []
+
+        def step(kind):
+            async def run(self, job_id, *args, **kwargs):
+                calls.append(kind)
+                if kind == raising_step:
+                    raise RuntimeError(
+                        f"agent {kind} failed: list_archives is active on the "
+                        "repository"
+                    )
+                operation = test_db.get(Operation, job_id)
+                operation.status = "completed"
+                operation.completed_at = datetime.utcnow()
+                test_db.commit()
+
+            return run
+
+        with (
+            patch(
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
+            ),
+            patch.object(BorgRouter, "prune", new=step("prune")),
+            patch.object(BorgRouter, "compact", new=step("compact")),
+            patch.object(BorgRouter, "check", new=step("check")),
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        cause = (
+            f"agent {raising_step} failed: list_archives is active on the repository"
+        )
+        test_db.expire_all()
+        run = test_db.query(BackupPlanRun).filter_by(id=run.id).one()
+        child = run.repositories[0]
+        assert child.status == "failed"
+        assert child.error_message == cause
+        assert run.status == "failed"
+        assert calls == steps_before + [raising_step]
+        by_kind = {
+            operation.kind: operation
+            for operation in test_db.query(Operation)
+            .filter(Operation.repository_id == repo.id)
+            .all()
+        }
+        assert by_kind[raising_step].status == "failed"
+        assert by_kind[raising_step].error_message == cause
+        assert by_kind[raising_step].completed_at is not None
+        for kind in steps_before:
+            assert by_kind[kind].status == "completed"
+        # A completed step enqueues its follow-up chain; the maintenance
+        # kinds themselves stop at the one that raised.
+        assert set(by_kind) & {"prune", "compact", "check"} == {
+            *steps_before,
+            raising_step,
+        }
+        backup_job = BackupJobFacade(test_db, by_kind["backup"])
+        assert backup_job.maintenance_status == f"{raising_step}_failed"
+        assert (
+            test_db.query(Operation).filter(Operation.status == "running").count() == 0
+        )
+
+    @pytest.mark.asyncio
+    async def test_maintenance_step_left_to_its_agent_still_fails_the_run(
+        self, test_db
+    ):
+        """When the close is declined (a live agent job still carries the
+        operation), the step is still recorded as failed on the backup and
+        the run ends failed with the cause; the row stays for the agent."""
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        _plan, run = _create_execution_plan(
+            test_db, [repo], run_prune_after=True, run_compact_after=True
+        )
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            job = resolve_backup_job(db, job_id)
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        with (
+            patch(
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
+            ),
+            patch.object(
+                BorgRouter,
+                "prune",
+                new=AsyncMock(
+                    side_effect=RuntimeError(
+                        "agent prune failed: repositoryOperationTimeout"
+                    )
+                ),
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.fail_inline_maintenance",
+                new=AsyncMock(return_value=False),
+            ),
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.expire_all()
+        run = test_db.query(BackupPlanRun).filter_by(id=run.id).one()
+        assert run.repositories[0].status == "failed"
+        assert (
+            run.repositories[0].error_message
+            == "agent prune failed: repositoryOperationTimeout"
+        )
+        by_kind = {
+            operation.kind: operation
+            for operation in test_db.query(Operation)
+            .filter(Operation.repository_id == repo.id)
+            .all()
+        }
+        assert by_kind["prune"].status == "running"
+        assert "compact" not in by_kind
+        backup_job = BackupJobFacade(test_db, by_kind["backup"])
+        assert backup_job.maintenance_status == "prune_failed"
 
     @pytest.mark.asyncio
     async def test_maintenance_failure_marks_repository_warning(self, test_db):

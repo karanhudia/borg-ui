@@ -9,6 +9,8 @@ freshest timestamp, so genuinely live work never looks old.
 from datetime import timedelta
 from pathlib import Path
 
+from unittest.mock import patch
+
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
@@ -1106,3 +1108,167 @@ def test_recent_extension_log_columns_are_kept(db):
 
     db.expunge_all()
     assert db.get(OperationRcloneDetails, rclone_id).log_text == "copied 2 files"
+
+
+@pytest.mark.unit
+def test_sweep_marks_only_the_repository_of_the_prune_it_resolves(
+    db, monkeypatch, tmp_path
+):
+    """The prune's payload names its operation. Another repository's backup of
+    the same archive name must not be marked from it, and a data directory
+    that cannot be written loses the log repair, not the marking."""
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+    _settings(db)
+    machine = _machine(db)
+    repo_b = _repo(db)
+    repo_a = Repository(
+        name="other", path="/repo/other", encryption="none", borg_version=1
+    )
+    db.add(repo_a)
+    db.flush()
+    when = utc_now() - timedelta(hours=6)
+    finished = when + timedelta(minutes=5)
+    backups = {
+        repo.id: seed_job_operation(
+            db,
+            "backup",
+            repository_id=repo.id,
+            status="completed",
+            archive_name="host-old",
+            completed_at=when - timedelta(hours=1),
+            created_at=when - timedelta(hours=1),
+        ).id
+        for repo in (repo_b, repo_a)
+    }
+    prune = seed_job_operation(
+        db,
+        "prune",
+        repository_id=repo_b.id,
+        status="completed",
+        started_at=when,
+        completed_at=finished,
+        created_at=when,
+    )
+    agent_job = AgentJob(
+        agent_machine_id=machine.id,
+        job_type="repository",
+        status="completed",
+        payload={
+            "job_kind": "repository.prune",
+            "operation": {
+                "maintenance_job": {
+                    "kind": "prune",
+                    "id": prune.id,
+                    "table": "operations",
+                }
+            },
+        },
+        claimed_at=when,
+        completed_at=finished,
+        created_at=when,
+        updated_at=when,
+    )
+    db.add(agent_job)
+    db.flush()
+    db.add(
+        AgentJobLog(
+            agent_job_id=agent_job.id,
+            sequence=0,
+            stream="stderr",
+            message="Pruning archive: host-old"
+            "                     Mon, 2026-07-20 03:00:00 [aa00] (1/1)",
+            created_at=when,
+        )
+    )
+    db.commit()
+    repo_a_id, repo_b_id, prune_id = repo_a.id, repo_b.id, prune.id
+
+    with patch("builtins.open", side_effect=OSError("read-only file system")):
+        assert sweep_pruned_archive_records(db) == 1
+    db.expunge_all()
+    assert db.get(OperationBackupDetails, backups[repo_b_id]).archive_pruned_at == (
+        finished
+    )
+    db.query(OperationBackupDetails).filter(
+        OperationBackupDetails.operation_id == backups[repo_b_id]
+    ).update({OperationBackupDetails.archive_pruned_at: None})
+    db.commit()
+
+    assert sweep_pruned_archive_records(db) == 1
+
+    db.expunge_all()
+    assert db.get(OperationBackupDetails, backups[repo_b_id]).archive_pruned_at == (
+        finished
+    )
+    assert db.get(OperationBackupDetails, backups[repo_a_id]).archive_pruned_at is None
+    # the repair wrote the full log to the operation's own file
+    repaired = resolve_maintenance_job(db, prune_id, "prune")
+    assert "Pruning archive: host-old" in repaired.logs
+
+
+@pytest.mark.unit
+def test_sweep_ignores_a_prune_payload_from_a_dropped_table(db):
+    """An agent job queued before the collapse names an id from a table that
+    is gone; the sweep must not mark anything from an operation that happens
+    to hold that id."""
+    _settings(db)
+    machine = _machine(db)
+    repo = _repo(db)
+    when = utc_now() - timedelta(hours=6)
+    finished = when + timedelta(minutes=5)
+    pruned = seed_job_operation(
+        db,
+        "backup",
+        repository_id=repo.id,
+        status="completed",
+        archive_name="host-old",
+        completed_at=when - timedelta(hours=1),
+        created_at=when - timedelta(hours=1),
+    )
+    prune = seed_job_operation(
+        db,
+        "prune",
+        repository_id=repo.id,
+        status="completed",
+        started_at=when,
+        completed_at=finished,
+        created_at=when,
+    )
+    agent_job = AgentJob(
+        agent_machine_id=machine.id,
+        job_type="repository",
+        status="completed",
+        payload={
+            "job_kind": "repository.prune",
+            "operation": {
+                "maintenance_job": {
+                    "kind": "prune",
+                    "id": prune.id,
+                    "table": "prune_jobs",
+                }
+            },
+        },
+        claimed_at=when,
+        completed_at=finished,
+        created_at=when,
+        updated_at=when,
+    )
+    db.add(agent_job)
+    db.flush()
+    db.add(
+        AgentJobLog(
+            agent_job_id=agent_job.id,
+            sequence=0,
+            stream="stderr",
+            message="Pruning archive: host-old"
+            "                     Mon, 2026-07-20 03:00:00 [aa00] (1/1)",
+            created_at=when,
+        )
+    )
+    db.commit()
+    pruned_id = pruned.id
+
+    assert sweep_pruned_archive_records(db) == 0
+
+    db.expunge_all()
+    assert db.get(OperationBackupDetails, pruned_id).archive_pruned_at is None
