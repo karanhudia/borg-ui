@@ -14,6 +14,11 @@ describe('AgentUpgradeStateChip', () => {
     expect(screen.getByText(/failed/i)).toBeInTheDocument()
   })
 
+  it('shows a waiting label for an endpoint queued behind a wave', () => {
+    renderWithProviders(<AgentUpgradeStateChip state="queued" targetVersion="0.1.3" />)
+    expect(screen.getByText('Waiting to upgrade')).toBeInTheDocument()
+  })
+
   it('renders nothing when the endpoint is idle', () => {
     renderWithProviders(<AgentUpgradeStateChip state="idle" />)
     expect(screen.queryByText(/upgrad/i)).not.toBeInTheDocument()

@@ -304,8 +304,9 @@
         "agentDeleted": "Agente eliminado",
         "cancellationRequested": "Cancelación solicitada",
         "copied": "Copiado",
-        "agentUpgradeRequested": "Actualización solicitada",
-        "agentVersionPinned": "Versión fijada guardada"
+        "agentVersionPinned": "Versión fijada guardada",
+        "agentUpgradeRequested_one": "Actualización solicitada",
+        "agentUpgradeRequested_other": "Actualización solicitada para {{count}} endpoints"
       },
       "errors": {
         "revokeToken": "No se pudo revocar el token de registro",
@@ -417,17 +418,29 @@
         "outdatedCount_one": "{{count}} endpoint ejecuta un agente antiguo",
         "outdatedCount_other": "{{count}} endpoints ejecutan un agente antiguo",
         "bannerBody": "La versión actual del agente es {{version}}.",
-        "bannerManual": "Reinstale cada uno desde su tarjeta para actualizarlo.",
         "bannerMixedTargets": "Cada uno apunta a su propia versión configurada.",
         "manualOnly": "Solo actualizaciones manuales",
-        "manualOnlyTooltip": "Este endpoint no tiene el asistente de autoactualización, así que se actualiza ejecutando el comando de reinstalación en la máquina. Una reinstalación lo prepara para las actualizaciones desde el servidor."
+        "manualOnlyTooltip": "Este endpoint no tiene el asistente de autoactualización, así que se actualiza ejecutando el comando de reinstalación en la máquina. Una reinstalación lo prepara para las actualizaciones desde el servidor.",
+        "selectedCount_one": "{{count}} endpoint seleccionado",
+        "selectedCount_other": "{{count}} endpoints seleccionados",
+        "upgradeSelected_one": "Actualizar {{count}} endpoint",
+        "upgradeSelected_other": "Actualizar {{count}} endpoints",
+        "selectAgent": "Seleccionar {{name}}",
+        "clearSelection": "Limpiar",
+        "bannerManualOnly_one": "{{count}} endpoint necesita una reinstalación manual desde su tarjeta antes de poder actualizarse desde aquí.",
+        "bannerManualOnly_other": "{{count}} endpoints necesitan una reinstalación manual desde sus tarjetas antes de poder actualizarse desde aquí.",
+        "upgradeAll": "Actualizar todos ({{count}})"
       },
       "upgradeDialog": {
-        "title": "Actualizar este endpoint",
-        "description": "El endpoint se reinstala solo desde este servidor.",
-        "descriptionWithVersion": "El endpoint se reinstala solo desde este servidor y vuelve con la versión {{version}}.",
-        "disconnectWarning": "Se desconecta durante un breve periodo mientras lo hace.",
-        "busyWarning": "Un endpoint que está ejecutando una copia rechaza la actualización, así que inténtalo de nuevo cuando esté inactivo.",
+        "title_one": "Actualizar este endpoint",
+        "title_other": "Actualizar {{count}} endpoints",
+        "description": "El endpoint se reinstala desde este servidor.",
+        "descriptionWithVersion_one": "El endpoint se reinstala desde este servidor y vuelve con la versión {{version}}.",
+        "descriptionWithVersion_other": "Cada endpoint se reinstala desde este servidor y vuelve con la versión {{version}}.",
+        "mixedTargets": "Cada endpoint se reinstala desde este servidor y vuelve con su propia versión configurada.",
+        "disconnectWarning_one": "Se desconecta durante un breve período mientras lo hace.",
+        "disconnectWarning_other": "Cada uno se desconecta durante un breve período mientras lo hace, y se actualizan unos pocos a la vez, así que algunos esperan antes de empezar.",
+        "busyWarning": "Un endpoint que está ejecutando una copia de seguridad rechaza la actualización, así que inténtalo de nuevo cuando esté inactivo.",
         "confirm": "Actualizar"
       },
       "upgradeState": {
@@ -435,7 +448,9 @@
         "upgradingTo": "Actualizando a {{version}}",
         "upgradingTooltip": "El endpoint se está reinstalando y volverá a conectarse solo.",
         "failed": "Actualización fallida",
-        "failedHint": "El endpoint no volvió a tiempo. Reinstálalo manualmente."
+        "failedHint": "El endpoint no volvió a tiempo. Reinstálalo manualmente.",
+        "queued": "Esperando para actualizar",
+        "queuedTooltip": "En cola detrás de otros endpoints. Empieza solo cuando se libera un hueco."
       },
       "pinControl": {
         "title": "Fijar versión",

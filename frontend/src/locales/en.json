@@ -304,8 +304,9 @@
         "agentDeleted": "Agent deleted",
         "cancellationRequested": "Cancellation requested",
         "copied": "Copied",
-        "agentUpgradeRequested": "Upgrade requested",
-        "agentVersionPinned": "Version pin saved"
+        "agentVersionPinned": "Version pin saved",
+        "agentUpgradeRequested_one": "Upgrade requested",
+        "agentUpgradeRequested_other": "Upgrade requested for {{count}} endpoints"
       },
       "errors": {
         "revokeToken": "Failed to revoke enrollment token",
@@ -417,16 +418,28 @@
         "outdatedCount_one": "{{count}} endpoint is running an older agent",
         "outdatedCount_other": "{{count}} endpoints are running an older agent",
         "bannerBody": "The current agent version is {{version}}.",
-        "bannerManual": "Reinstall each one from its card to bring it up to date.",
         "bannerMixedTargets": "Each one targets its own configured version.",
         "manualOnly": "Manual upgrades only",
-        "manualOnlyTooltip": "This endpoint has no self-upgrade helper, so it is updated by running the reinstall command on the machine. One reinstall prepares it for server-driven upgrades."
+        "manualOnlyTooltip": "This endpoint has no self-upgrade helper, so it is updated by running the reinstall command on the machine. One reinstall prepares it for server-driven upgrades.",
+        "selectedCount_one": "{{count}} endpoint selected",
+        "selectedCount_other": "{{count}} endpoints selected",
+        "upgradeSelected_one": "Upgrade {{count}} endpoint",
+        "upgradeSelected_other": "Upgrade {{count}} endpoints",
+        "selectAgent": "Select {{name}}",
+        "clearSelection": "Clear",
+        "bannerManualOnly_one": "{{count}} endpoint needs a manual reinstall from its card before it can be upgraded from here.",
+        "bannerManualOnly_other": "{{count}} endpoints need a manual reinstall from their cards before they can be upgraded from here.",
+        "upgradeAll": "Upgrade all ({{count}})"
       },
       "upgradeDialog": {
-        "title": "Upgrade this endpoint",
+        "title_one": "Upgrade this endpoint",
+        "title_other": "Upgrade {{count}} endpoints",
         "description": "The endpoint reinstalls itself from this server.",
-        "descriptionWithVersion": "The endpoint reinstalls itself from this server and comes back on version {{version}}.",
-        "disconnectWarning": "It disconnects for a short period while it does.",
+        "descriptionWithVersion_one": "The endpoint reinstalls itself from this server and comes back on version {{version}}.",
+        "descriptionWithVersion_other": "Each endpoint reinstalls itself from this server and comes back on version {{version}}.",
+        "mixedTargets": "Each endpoint reinstalls itself from this server and comes back on its own configured version.",
+        "disconnectWarning_one": "It disconnects for a short period while it does.",
+        "disconnectWarning_other": "Each one disconnects for a short period while it does, and they are upgraded a few at a time, so some wait before they start.",
         "busyWarning": "An endpoint that is running a backup refuses the upgrade, so try again once it is idle.",
         "confirm": "Upgrade"
       },
@@ -435,7 +448,9 @@
         "upgradingTo": "Upgrading to {{version}}",
         "upgradingTooltip": "The endpoint is reinstalling itself and will reconnect on its own.",
         "failed": "Upgrade failed",
-        "failedHint": "The endpoint did not come back in time. Reinstall it manually."
+        "failedHint": "The endpoint did not come back in time. Reinstall it manually.",
+        "queued": "Waiting to upgrade",
+        "queuedTooltip": "Queued behind other endpoints. It starts on its own when a slot frees."
       },
       "pinControl": {
         "title": "Version pin",

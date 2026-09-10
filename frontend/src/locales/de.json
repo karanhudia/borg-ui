@@ -304,8 +304,9 @@
         "agentDeleted": "Agent gelöscht",
         "cancellationRequested": "Abbruch angefordert",
         "copied": "Kopiert",
-        "agentUpgradeRequested": "Aktualisierung angefordert",
-        "agentVersionPinned": "Versions-Pin gespeichert"
+        "agentVersionPinned": "Versions-Pin gespeichert",
+        "agentUpgradeRequested_one": "Upgrade angefordert",
+        "agentUpgradeRequested_other": "Upgrade fuer {{count}} Endpunkte angefordert"
       },
       "errors": {
         "revokeToken": "Registrierungstoken konnte nicht widerrufen werden",
@@ -417,17 +418,29 @@
         "outdatedCount_one": "{{count}} Endpunkt verwendet einen älteren Agenten",
         "outdatedCount_other": "{{count}} Endpunkte verwenden einen älteren Agenten",
         "bannerBody": "Die aktuelle Agent-Version ist {{version}}.",
-        "bannerManual": "Installieren Sie jeden Endpunkt über seine Karte neu, um ihn zu aktualisieren.",
         "bannerMixedTargets": "Jeder Endpunkt zielt auf seine eigene konfigurierte Version.",
         "manualOnly": "Nur manuelle Updates",
-        "manualOnlyTooltip": "Dieser Endpunkt hat kein Self-Upgrade-Hilfsprogramm und wird daher mit dem Reinstall-Befehl auf der Maschine aktualisiert. Eine Neuinstallation bereitet es auf servergesteuerte Upgrades vor."
+        "manualOnlyTooltip": "Dieser Endpunkt hat kein Self-Upgrade-Hilfsprogramm und wird daher mit dem Reinstall-Befehl auf der Maschine aktualisiert. Eine Neuinstallation bereitet es auf servergesteuerte Upgrades vor.",
+        "selectedCount_one": "{{count}} Endpunkt ausgewählt",
+        "selectedCount_other": "{{count}} Endpunkte ausgewählt",
+        "upgradeSelected_one": "{{count}} Endpunkt aktualisieren",
+        "upgradeSelected_other": "{{count}} Endpunkte aktualisieren",
+        "selectAgent": "{{name}} auswählen",
+        "clearSelection": "Auswahl aufheben",
+        "bannerManualOnly_one": "{{count}} Endpunkt braucht eine manuelle Neuinstallation über seine Karte, bevor er von hier aktualisiert werden kann.",
+        "bannerManualOnly_other": "{{count}} Endpunkte brauchen eine manuelle Neuinstallation über ihre Karten, bevor sie von hier aktualisiert werden können.",
+        "upgradeAll": "Alle aktualisieren ({{count}})"
       },
       "upgradeDialog": {
-        "title": "Diesen Endpunkt aktualisieren",
-        "description": "Der Endpunkt installiert sich selbst von diesem Server neu.",
-        "descriptionWithVersion": "Der Endpunkt installiert sich selbst von diesem Server neu und kommt mit Version {{version}} zurück.",
-        "disconnectWarning": "Dabei ist er kurzzeitig getrennt.",
-        "busyWarning": "Ein Endpunkt, der gerade ein Backup ausführt, lehnt die Aktualisierung ab. Versuchen Sie es erneut, sobald er inaktiv ist.",
+        "title_one": "Diesen Endpunkt aktualisieren",
+        "title_other": "{{count}} Endpunkte aktualisieren",
+        "description": "Der Endpunkt installiert sich von diesem Server neu.",
+        "descriptionWithVersion_one": "Der Endpunkt installiert sich von diesem Server neu und kommt mit Version {{version}} zurück.",
+        "descriptionWithVersion_other": "Jeder Endpunkt installiert sich von diesem Server neu und kommt mit Version {{version}} zurück.",
+        "mixedTargets": "Jeder Endpunkt installiert sich von diesem Server neu und kommt mit seiner eigenen konfigurierten Version zurück.",
+        "disconnectWarning_one": "Dabei trennt er die Verbindung kurzzeitig.",
+        "disconnectWarning_other": "Jeder trennt die Verbindung dabei kurzzeitig, und es werden immer nur einige gleichzeitig aktualisiert, daher warten manche zunächst.",
+        "busyWarning": "Ein Endpunkt, der gerade ein Backup ausführt, lehnt das Upgrade ab. Versuchen Sie es erneut, sobald er im Leerlauf ist.",
         "confirm": "Aktualisieren"
       },
       "upgradeState": {
@@ -435,7 +448,9 @@
         "upgradingTo": "Aktualisierung auf {{version}}",
         "upgradingTooltip": "Der Endpunkt installiert sich neu und verbindet sich von selbst wieder.",
         "failed": "Aktualisierung fehlgeschlagen",
-        "failedHint": "Der Endpunkt kam nicht rechtzeitig zurück. Installieren Sie ihn manuell neu."
+        "failedHint": "Der Endpunkt kam nicht rechtzeitig zurück. Installieren Sie ihn manuell neu.",
+        "queued": "Wartet auf Upgrade",
+        "queuedTooltip": "Wartet hinter anderen Endpunkten. Der Vorgang startet automatisch, sobald ein Platz frei wird."
       },
       "pinControl": {
         "title": "Versions-Pin",

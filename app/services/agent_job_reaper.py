@@ -287,6 +287,19 @@ async def _notify_reaped_backup_jobs(backup_jobs: list[tuple[str, int]]) -> None
         db.close()
 
 
+async def _release_upgrade_waves() -> None:
+    """Advance the fleet upgrade waves with a session of our own."""
+    # Imported here, not at module scope: the upgrade service is reached from
+    # the API module, which imports this one.
+    from app.services.agent_upgrades import release_agent_upgrade_waves
+
+    db = SessionLocal()
+    try:
+        await release_agent_upgrade_waves(db)
+    finally:
+        db.close()
+
+
 async def start_agent_job_reaper(
     interval_seconds: float = REAPER_INTERVAL_SECONDS,
 ) -> None:
@@ -306,6 +319,11 @@ async def start_agent_job_reaper(
             await asyncio.to_thread(_reap_once, failed_backup_job_ids)
             if failed_backup_job_ids:
                 await _notify_reaped_backup_jobs(failed_backup_job_ids)
+            # A slot frees when an endpoint leaves "requested", by success or
+            # by the timeout reaped just above, so the next wave starts here
+            # (spec section 8). This runs on the loop rather than in the
+            # thread: it dispatches over the agent WebSocket.
+            await _release_upgrade_waves()
         except asyncio.CancelledError:
             logger.info("Agent job reaper stopped")
             raise

@@ -15,7 +15,6 @@ from app.core.agent_auth import AGENT_TOKEN_PREFIX_LENGTH
 from app.core.agent_versions import compute_agent_upgrade_status
 from app.core.agent_constants import (
     AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS,
-    AGENT_UPGRADE_COMMAND_TIMEOUT_SECONDS,
 )
 from app.core.features import require_feature_access
 from app.core.security import get_current_admin_user, get_password_hash
@@ -38,6 +37,7 @@ from app.services.agent_connection_manager import (
     AgentCommandTimeout,
     AgentConnectionUnavailable,
 )
+from app.services.agent_upgrades import release_agent_upgrade_waves
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.utils.datetime_utils import serialize_datetime
 
@@ -647,7 +647,6 @@ async def upgrade_agent_machines(
                 detail={"key": "backend.errors.agents.upgradeTargetUnavailable"},
             )
 
-    results = []
     for agent_id in wanted:
         agent = found[agent_id]
         existing = (
@@ -659,49 +658,58 @@ async def upgrade_agent_machines(
             )
             .first()
         )
-        # Claim the agent with a conditional write before anything is created,
-        # so two concurrent requests cannot both dispatch a restart: the loser
-        # updates no row and reuses the in-flight request.
-        claimed = (
-            db.query(AgentMachine)
-            .filter(
-                AgentMachine.id == agent.id,
-                or_(
-                    AgentMachine.upgrade_state.is_(None),
-                    AgentMachine.upgrade_state != "requested",
-                ),
-            )
-            .update(
-                {
-                    AgentMachine.upgrade_state: "requested",
-                    # Stamped with the claim, not with the dispatch, so a
-                    # request the server dies in the middle of is still
-                    # resolvable by the reaper rather than stuck forever.
-                    AgentMachine.upgrade_requested_at: _now_utc(),
-                },
-                synchronize_session=False,
-            )
-        )
-        db.commit()
-        db.refresh(agent)
-        if existing is not None or not claimed:
+        if existing is not None:
             # Idempotent under a double click or a client retry: the endpoint
             # is already restarting for a request nobody has answered for yet.
-            results.append(
-                {
-                    "agent_machine_id": agent.id,
-                    "job_id": existing.id
-                    if existing
-                    else _last_upgrade_job_id(db, agent),
-                    "state": "requested",
-                }
-            )
             continue
+        # Accept, do not dispatch. The conditional write is what makes two
+        # concurrent requests safe: an endpoint already queued or already
+        # upgrading keeps the state it has, because an upgrade restarts the
+        # machine and a double click must not restart it twice.
+        db.query(AgentMachine).filter(
+            AgentMachine.id == agent.id,
+            or_(
+                AgentMachine.upgrade_state.is_(None),
+                AgentMachine.upgrade_state.notin_(("queued", "requested")),
+            ),
+        ).update(
+            {
+                AgentMachine.upgrade_state: "queued",
+                # Deliberately not stamped here: the reaper times an endpoint
+                # out from upgrade_requested_at, and time spent waiting for a
+                # wave is not time the endpoint failed to come back. It is
+                # stamped when the endpoint is actually dispatched.
+                AgentMachine.upgrade_requested_at: None,
+                AgentMachine.upgrade_target_version: (
+                    agent.desired_agent_version or available
+                ),
+                AgentMachine.upgrade_error: None,
+            },
+            synchronize_session=False,
+        )
+        db.commit()
 
+    # Release the first wave inline so a request within the cap starts at once
+    # rather than waiting up to a reaper interval. Everything over the cap is
+    # left queued and picked up by the reaper as slots free (spec section 8).
+    await release_agent_upgrade_waves(db)
+
+    results = []
+    for agent_id in wanted:
+        agent = db.query(AgentMachine).filter(AgentMachine.id == agent_id).first()
         results.append(
-            await _request_agent_upgrade(
-                db, agent, target=agent.desired_agent_version or available
-            )
+            {
+                "agent_machine_id": agent_id,
+                # None while queued: the job is created at dispatch, so an
+                # earlier upgrade's job must not be reported as this one's.
+                "job_id": None
+                if agent.upgrade_state == "queued"
+                else _last_upgrade_job_id(db, agent),
+                # An endpoint skipped above because a dispatch was already in
+                # flight for it may not have reached "requested" yet, and the
+                # caller is owed a state either way.
+                "state": agent.upgrade_state or "requested",
+            }
         )
 
     logger.info(
@@ -724,63 +732,6 @@ def _last_upgrade_job_id(db: Session, agent: AgentMachine) -> Optional[int]:
         .first()
     )
     return job.id if job else None
-
-
-async def _request_agent_upgrade(db: Session, agent: AgentMachine, *, target: str):
-    """Create the job, dispatch the command, and record the outcome for one
-    endpoint. The job is completed at "upgrade started": it records that the
-    upgrade was successfully requested, nothing more."""
-    now = _now_utc()
-    job = AgentJob(
-        agent_machine_id=agent.id,
-        job_type="agent_upgrade",
-        status="running",
-        payload={"target_version": target},
-        created_at=now,
-        updated_at=now,
-        started_at=now,
-    )
-    db.add(job)
-    db.commit()
-    db.refresh(job)
-
-    try:
-        await agent_connection_manager.send_command(
-            agent.id,
-            command="agent.upgrade",
-            payload={},
-            timeout_seconds=AGENT_UPGRADE_COMMAND_TIMEOUT_SECONDS,
-            wait_for_result=True,
-        )
-    except (
-        AgentConnectionUnavailable,
-        AgentCommandTimeout,
-        AgentCommandError,
-    ) as exc:
-        finished = _now_utc()
-        job.status = "failed"
-        job.error_message = str(exc)
-        job.completed_at = finished
-        job.updated_at = finished
-        agent.upgrade_state = "failed"
-        agent.upgrade_error = str(exc)
-        agent.upgrade_target_version = target
-        agent.upgrade_requested_at = None
-        agent.updated_at = finished
-        db.commit()
-        return {"agent_machine_id": agent.id, "job_id": job.id, "state": "failed"}
-
-    finished = _now_utc()
-    job.status = "completed"
-    job.completed_at = finished
-    job.updated_at = finished
-    agent.upgrade_state = "requested"
-    agent.upgrade_requested_at = finished
-    agent.upgrade_target_version = target
-    agent.upgrade_error = None
-    agent.updated_at = finished
-    db.commit()
-    return {"agent_machine_id": agent.id, "job_id": job.id, "state": "requested"}
 
 
 @router.post(

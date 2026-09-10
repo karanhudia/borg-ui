@@ -8,6 +8,7 @@ import {
   alpha,
   Box,
   Button,
+  Checkbox,
   Chip,
   CircularProgress,
   DialogActions,
@@ -67,12 +68,14 @@ import LogViewerDialog, { type LogViewerFetchLogs } from '../components/shared/L
 import ResponsiveDialog from '../components/shared/ResponsiveDialog'
 import DiagnosticsTcpTargetFields from '../components/shared/DiagnosticsTcpTargetFields'
 import AddAgentDialog from './managed-agents/AddAgentDialog'
+import AgentBulkUpgradeBar from './managed-agents/AgentBulkUpgradeBar'
 import AgentUpgradeBanner from './managed-agents/AgentUpgradeBanner'
 import AgentManualUpgradeChip from './managed-agents/AgentManualUpgradeChip'
 import AgentUpgradeChip from './managed-agents/AgentUpgradeChip'
 import AgentPinControl from './managed-agents/AgentPinControl'
 import AgentUpgradeDialog from './managed-agents/AgentUpgradeDialog'
 import AgentUpgradeStateChip from './managed-agents/AgentUpgradeStateChip'
+import { canUpgradeNow } from './managed-agents/agentUpgradeEligibility'
 import BorgInstallModeRadioGroup from './managed-agents/BorgInstallModeRadioGroup'
 import { resolveAgentServerUrl } from './managed-agents/agentServerUrl'
 import {
@@ -503,8 +506,8 @@ export default function ManagedAgents() {
   })
 
   const upgradeAgentMutation = useMutation({
-    mutationFn: (agentId: number) => managedAgentsAPI.upgradeAgents([agentId]),
-    onSuccess: () => {
+    mutationFn: (agentIds: number[]) => managedAgentsAPI.upgradeAgents(agentIds),
+    onSuccess: (_data, agentIds) => {
       queryClient.invalidateQueries({ queryKey: ['managed-agents'] })
       trackSystem(EventAction.START, {
         section: MANAGED_AGENTS_ANALYTICS_SECTION,
@@ -514,7 +517,9 @@ export default function ManagedAgents() {
         surface: MANAGED_AGENTS_ANALYTICS_SECTION,
         operation: 'upgrade_agent',
       })
-      toast.success(t('managedAgents.page.toasts.agentUpgradeRequested'))
+      toast.success(
+        t('managedAgents.page.toasts.agentUpgradeRequested', { count: agentIds.length })
+      )
     },
     onError: (error: unknown) => {
       toast.error(extractBackendMessage(error, t('managedAgents.page.errors.upgradeAgent')))
@@ -670,7 +675,7 @@ export default function ManagedAgents() {
           onCopy={handleCopy}
           onRevoke={(agent) => revokeAgentMutation.mutate(agent.id)}
           onDelete={(agent) => deleteAgentMutation.mutate(agent.id)}
-          onUpgrade={(agent) => upgradeAgentMutation.mutate(agent.id)}
+          onUpgradeMany={(list) => upgradeAgentMutation.mutate(list.map((agent) => agent.id))}
           onPinVersion={(agent, data) =>
             pinAgentVersionMutation.mutate({ agentId: agent.id, data })
           }
@@ -1606,7 +1611,7 @@ export function AgentList({
   onRevoke,
   onDelete,
   onViewLogs,
-  onUpgrade,
+  onUpgradeMany,
   onPinVersion,
   onRunDiagnostics,
   isRevoking,
@@ -1620,7 +1625,7 @@ export function AgentList({
   onRevoke: (agent: AgentMachineResponse) => void
   onDelete: (agent: AgentMachineResponse) => void
   onViewLogs: (agent: AgentMachineResponse) => void
-  onUpgrade?: (agent: AgentMachineResponse) => void
+  onUpgradeMany?: (agents: AgentMachineResponse[]) => void
   onPinVersion?: (agent: AgentMachineResponse, data: AgentDesiredVersionRequest) => void
   onRunDiagnostics?: (
     agent: AgentMachineResponse,
@@ -1637,7 +1642,8 @@ export function AgentList({
   const isDark = theme.palette.mode === 'dark'
   const [deleteTarget, setDeleteTarget] = useState<AgentMachineResponse | null>(null)
   const [reinstallTarget, setReinstallTarget] = useState<AgentMachineResponse | null>(null)
-  const [upgradeTarget, setUpgradeTarget] = useState<AgentMachineResponse | null>(null)
+  const [upgradeTargets, setUpgradeTargets] = useState<AgentMachineResponse[]>([])
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [pinTarget, setPinTarget] = useState<AgentMachineResponse | null>(null)
   const [diagnosticsTarget, setDiagnosticsTarget] = useState<AgentMachineResponse | null>(null)
   const handleRunDiagnostics =
@@ -1664,13 +1670,31 @@ export function AgentList({
       tcp: null,
     }))
 
+  // Filtered against the current fleet on every render, not trusted from the
+  // click that made it: an endpoint selected before a refetch may since have
+  // been queued by someone else, and counting it would promise an upgrade that
+  // will not happen.
+  const selectedAgents = agents.filter(
+    (agent) => selectedIds.includes(agent.id) && canUpgradeNow(agent)
+  )
+
   if (!agents.length) {
     return <Alert severity="info">{t('managedAgents.page.emptyAgents')}</Alert>
   }
 
   return (
     <>
-      <AgentUpgradeBanner agents={agents} />
+      <AgentUpgradeBanner
+        agents={agents}
+        busy={isUpgrading}
+        onUpgradeAll={onUpgradeMany ? (list) => setUpgradeTargets(list) : undefined}
+      />
+      <AgentBulkUpgradeBar
+        count={selectedAgents.length}
+        busy={isUpgrading}
+        onClear={() => setSelectedIds([])}
+        onUpgrade={() => setUpgradeTargets(selectedAgents)}
+      />
       <Box
         sx={{
           display: 'grid',
@@ -1739,6 +1763,27 @@ export function AgentList({
                     }}
                   >
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      {onUpgradeMany && canUpgradeNow(agent) ? (
+                        <Checkbox
+                          size="small"
+                          sx={{ p: 0.25, mr: 0.25 }}
+                          checked={selectedIds.includes(agent.id)}
+                          slotProps={{
+                            input: {
+                              'aria-label': t('managedAgents.page.upgrade.selectAgent', {
+                                name: agent.name,
+                              }),
+                            },
+                          }}
+                          onChange={(event) =>
+                            setSelectedIds((current) =>
+                              event.target.checked
+                                ? [...current, agent.id]
+                                : current.filter((id) => id !== agent.id)
+                            )
+                          }
+                        />
+                      ) : null}
                       <Box sx={{ color: accent, display: 'flex', alignItems: 'center' }}>
                         {getAgentStatusIcon(agent.status)}
                       </Box>
@@ -2009,7 +2054,7 @@ export function AgentList({
                       </IconButton>
                     </Tooltip>
                   ) : null}
-                  {onUpgrade &&
+                  {onUpgradeMany &&
                   agent.self_upgrade_supported === true &&
                   agent.upgrade_status === 'outdated' ? (
                     <Tooltip title={t('managedAgents.page.actions.upgradeAgent')} arrow>
@@ -2017,14 +2062,17 @@ export function AgentList({
                         <IconButton
                           size="small"
                           aria-label={t('managedAgents.page.actions.upgradeAgent')}
-                          disabled={agent.upgrade_state === 'requested'}
+                          // An upgrade already in flight or queued has nothing
+                          // more to request, so the affordance stays visible
+                          // and inert rather than disappearing under the cursor.
+                          disabled={!canUpgradeNow(agent)}
                           onClick={() => {
                             trackSystem(EventAction.VIEW, {
                               section: MANAGED_AGENTS_ANALYTICS_SECTION,
                               operation: 'upgrade_agent',
                               status: agent.status,
                             })
-                            setUpgradeTarget(agent)
+                            setUpgradeTargets([agent])
                           }}
                           sx={{
                             width: { xs: 40, sm: 34 },
@@ -2142,14 +2190,23 @@ export function AgentList({
         onCancel={() => setPinTarget(null)}
       />
       <AgentUpgradeDialog
-        open={!!upgradeTarget}
-        agent={upgradeTarget}
+        open={upgradeTargets.length > 0}
+        agents={upgradeTargets}
         busy={isUpgrading}
-        onConfirm={(agent) => {
-          onUpgrade?.(agent)
-          setUpgradeTarget(null)
+        onConfirm={(list) => {
+          // The dialog holds a snapshot. A refetch while it was open may have
+          // queued one of these endpoints already, and submitting it would be
+          // counted in the toast without producing an upgrade.
+          const stillEligible = agents.filter(
+            (agent) => list.some((target) => target.id === agent.id) && canUpgradeNow(agent)
+          )
+          if (stillEligible.length > 0) {
+            onUpgradeMany?.(stillEligible)
+          }
+          setUpgradeTargets([])
+          setSelectedIds([])
         }}
-        onCancel={() => setUpgradeTarget(null)}
+        onCancel={() => setUpgradeTargets([])}
       />
       <AgentReinstallDialog
         open={!!reinstallTarget}

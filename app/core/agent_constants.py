@@ -17,3 +17,10 @@ AGENT_UPGRADE_COMMAND_TIMEOUT_SECONDS = 15.0
 # upgrade is called failed. Generous on purpose: an endpoint that hits this is
 # far more likely broken than slow.
 AGENT_UPGRADE_TIMEOUT_SECONDS = 600
+
+# How many endpoints may be upgrading at once. Every upgrading endpoint is
+# briefly offline, so a fleet-wide request is released in waves rather than
+# taking the whole fleet down together. The cap bounds upgrades in flight, not
+# endpoints offline: a timeout frees its slot while that endpoint may still be
+# mid-reinstall (spec section 8).
+AGENT_UPGRADE_CONCURRENCY = 5
