@@ -3197,6 +3197,7 @@ class TestRepositoriesDelete:
         )
         test_db.commit()
         repo_id = repo.id
+        operation_id = restore_check_job.id
 
         response = test_client.delete(
             f"/api/repositories/{repo_id}", headers=admin_headers
@@ -3207,8 +3208,11 @@ class TestRepositoriesDelete:
         # `operations.repository_id` is ON DELETE CASCADE, so the rows go with
         # the repository wherever foreign keys are enforced. They are not in
         # this session (SQLite ignores `PRAGMA foreign_keys` inside a
-        # transaction, which is where a Session always is), so what this
-        # asserts is the route itself: it no longer deletes job rows by hand.
+        # transaction, which is where a Session always is), so the row is
+        # still here, and that is the assertion: the route leaves job rows to
+        # the cascade instead of deleting them by hand.
+        test_db.expunge_all()
+        assert test_db.get(Operation, operation_id) is not None
 
     def test_delete_nonexistent_repository(
         self, test_client: TestClient, admin_headers
