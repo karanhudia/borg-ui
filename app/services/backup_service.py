@@ -22,6 +22,7 @@ from app.services.notification_service import notification_service
 from app.services.script_executor import execute_script
 from app.services.script_library_executor import ScriptLibraryExecutor
 from app.services.mqtt_service import mqtt_service
+from app.services.mount_service import stable_sshfs_temp_root
 from app.services.operations.backup_facade import (
     refresh_backup_job,
     resolve_backup_job,
@@ -64,16 +65,6 @@ def _uses_remote_execution(job: BackupJob) -> bool:
     return (job.execution_mode or "").strip().lower() in REMOTE_EXECUTION_MODES or (
         job.route_strategy or ""
     ).strip().lower() == "remote_direct"
-
-
-def _stable_sshfs_temp_root(repository_id: int | None) -> str | None:
-    if repository_id is None:
-        return None
-    return os.path.join(
-        settings.data_dir,
-        "sshfs-cache",
-        f"repository-{repository_id}",
-    )
 
 
 class BackupService:
@@ -1897,7 +1888,7 @@ class BackupService:
                 source_paths,
                 job_id,
                 source_connection_id=effective_source_ssh_connection_id,
-                stable_sshfs_temp_root=_stable_sshfs_temp_root(
+                stable_sshfs_temp_root=stable_sshfs_temp_root(
                     repo_record.id if repo_record else None
                 ),
             )

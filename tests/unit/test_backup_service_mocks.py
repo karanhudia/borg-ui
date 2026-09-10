@@ -299,7 +299,7 @@ async def test_execute_backup_passes_repository_stable_sshfs_root_to_source_prep
         port=22,
     )
     job = BackupJob(id=job_id, status="pending")
-    stable_root = "/tmp/borg-data/sshfs-cache/repository-7"
+    stable_root = "/tmp/borg-ui/sshfs-cache/repository-7"
 
     def query_side_effect(model):
         m = MagicMock()
@@ -1402,7 +1402,7 @@ async def test_execute_backup_resolves_grouped_source_locations(
     mock_process.returncode = 0
     mock_process.stdout = AsyncMock()
     mock_process.stdout.__aiter__.return_value = iter([])
-    stable_root = "/tmp/borg-data/sshfs-cache/repository-1"
+    stable_root = "/tmp/borg-ui/sshfs-cache/repository-1"
 
     with (
         patch("app.services.backup_service.SessionLocal", return_value=mock_db_session),

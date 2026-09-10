@@ -5,10 +5,17 @@ Unit tests for MountService
 import pytest
 import tempfile
 import os
+import stat
 from unittest.mock import Mock, patch, AsyncMock
 from datetime import datetime, timezone
 
-from app.services.mount_service import MountService, MountType, MountInfo
+from app.services.mount_service import (
+    MountService,
+    MountType,
+    MountInfo,
+    stable_sshfs_temp_root,
+    _ensure_sshfs_cache_root,
+)
 from app.database.models import SSHConnection, SSHKey, Repository
 
 
@@ -242,6 +249,65 @@ class TestMountService:
 
         assert not orphaned_root.exists()
         assert tracked_root.exists()
+
+    def test_stable_sshfs_temp_root_stays_under_tmp(self):
+        # Ubuntu 25.04+ AppArmor only allows FUSE mounts under /tmp/**/ and a few
+        # other roots; moving this off /tmp breaks SSHFS backups there (#760).
+        assert stable_sshfs_temp_root(3) == "/tmp/borg-ui/sshfs-cache/repository-3"
+        assert stable_sshfs_temp_root(None) is None
+
+    def test_ensure_sshfs_cache_root_rejects_symlinked_parent(
+        self, tmp_path, monkeypatch
+    ):
+        # /tmp is world-writable, so a hijacked parent must not be followed.
+        elsewhere = tmp_path / "attacker"
+        elsewhere.mkdir()
+        hijacked_parent = tmp_path / "borg-ui"
+        hijacked_parent.symlink_to(elsewhere)
+        cache_base = hijacked_parent / "sshfs-cache"
+        monkeypatch.setattr(
+            "app.services.mount_service.SSHFS_CACHE_BASE", str(cache_base)
+        )
+
+        with pytest.raises(Exception, match="symlink"):
+            _ensure_sshfs_cache_root(str(cache_base / "repository-3"))
+
+        assert not (elsewhere / "sshfs-cache").exists()
+
+    def test_ensure_sshfs_cache_root_creates_private_dirs(self, tmp_path, monkeypatch):
+        cache_base = tmp_path / "borg-ui" / "sshfs-cache"
+        monkeypatch.setattr(
+            "app.services.mount_service.SSHFS_CACHE_BASE", str(cache_base)
+        )
+        temp_root = cache_base / "repository-3"
+
+        _ensure_sshfs_cache_root(str(temp_root))
+
+        assert temp_root.is_dir()
+        assert stat.S_IMODE(temp_root.stat().st_mode) == 0o700
+        assert stat.S_IMODE(cache_base.parent.stat().st_mode) == 0o700
+
+    def test_cleanup_orphaned_temp_dirs_removes_roots_under_cache_base(
+        self, mount_service, tmp_path, monkeypatch
+    ):
+        cache_base = tmp_path / "borg-ui" / "sshfs-cache"
+        orphaned_root = cache_base / "repository-7"
+        orphaned_root.mkdir(parents=True)
+        monkeypatch.setattr(
+            "app.services.mount_service.SSHFS_CACHE_BASE", str(cache_base)
+        )
+
+        def glob_side_effect(pattern):
+            if pattern == "/tmp/sshfs_mount_*":
+                return []
+            if pattern.startswith(str(cache_base)):
+                return [str(orphaned_root)]
+            return []
+
+        with patch("glob.glob", side_effect=glob_side_effect):
+            mount_service._cleanup_orphaned_temp_dirs()
+
+        assert not orphaned_root.exists()
 
     def test_cleanup_orphaned_temp_dirs_preserves_mounted_stable_sshfs_cache_root(
         self, mount_service
