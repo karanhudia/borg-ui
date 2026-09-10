@@ -142,3 +142,32 @@ async def test_release_does_nothing_when_the_cap_is_full(test_db, sent, cap):
 
     assert await release_agent_upgrade_waves(test_db) == 0
     assert sent == []
+
+
+async def test_reaper_tick_releases_the_next_wave(monkeypatch):
+    """A slot freed by a success or a timeout starts the next endpoint with
+    nobody watching, so the release runs on every reaper tick."""
+    import asyncio
+
+    from app.services import agent_job_reaper
+
+    released = []
+
+    async def fake_release(db):
+        released.append(True)
+        return 0
+
+    monkeypatch.setattr(
+        "app.services.agent_upgrades.release_agent_upgrade_waves", fake_release
+    )
+    monkeypatch.setattr(agent_job_reaper, "_reap_once", lambda ids=None: 0)
+
+    task = asyncio.create_task(
+        agent_job_reaper.start_agent_job_reaper(interval_seconds=0.01)
+    )
+    await asyncio.sleep(0.1)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert released
