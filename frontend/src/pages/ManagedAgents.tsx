@@ -1805,8 +1805,14 @@ export function AgentList({
                       sx={{
                         display: 'flex',
                         alignItems: 'center',
+                        justifyContent: 'flex-end',
+                        // An endpoint can carry the version, the upgrade chip,
+                        // a Borg pin and an upgrade state at once, which is
+                        // wider than a card on a phone. Wrap and shrink rather
+                        // than overflow it.
+                        flexWrap: 'wrap',
+                        minWidth: 0,
                         gap: 0.5,
-                        flexShrink: 0,
                       }}
                     >
                       {agent.agent_version && (

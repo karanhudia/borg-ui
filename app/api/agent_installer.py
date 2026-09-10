@@ -1179,7 +1179,10 @@ def installer_pins_for_agent(db: Session, agent_id: Optional[str]) -> InstallerP
         return InstallerPins()
 
     agent_version = agent.desired_agent_version
-    if agent_version is not None and not _SAFE_PIN.match(agent_version):
+    # fullmatch, not match: `$` also matches just before a trailing newline, so
+    # `match` would accept "0.1.3\n" and interpolate the newline into the
+    # script's PINNED_AGENT_VERSION assignment.
+    if agent_version is not None and _SAFE_PIN.fullmatch(agent_version) is None:
         logger.warning(
             "agent_installer_pin_refused",
             agent_id=agent_id,

