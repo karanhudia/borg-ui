@@ -20,6 +20,7 @@ from app.database.models import (
 )
 from app.services.operations.backup_facade import BackupJobFacade
 from app.services.rclone_service import RcloneCommandResult
+from tests.utils.agent_jobs import agent_maintenance_job
 from tests.utils.operations import seed_job_operation
 
 
@@ -571,7 +572,7 @@ class TestScheduleRouteContracts:
         close the operation: the agent's report will, and until then the
         repository really is busy."""
         from app.core.security import get_password_hash
-        from app.database.models import AgentJob, AgentMachine
+        from app.database.models import AgentMachine
 
         repo = _create_repo(test_db, "Slow Prune Repo", "/repos/slow-prune")
         agent = AgentMachine(
@@ -603,24 +604,7 @@ class TestScheduleRouteContracts:
         async def _timeout(self, job_id, *args, **kwargs):
             # The agent job for this operation exists and is running when
             # the server-side wait gives up.
-            test_db.add(
-                AgentJob(
-                    agent_machine_id=agent.id,
-                    job_type="repository",
-                    status="running",
-                    payload={
-                        "job_kind": "repository.prune",
-                        "operation": {
-                            "maintenance_job": {
-                                "kind": "prune",
-                                "id": job_id,
-                                "table": "operations",
-                            }
-                        },
-                    },
-                )
-            )
-            test_db.commit()
+            agent_maintenance_job(test_db, agent, "prune", job_id)
             raise RuntimeError(
                 "agent prune failed: backend.errors.agents.repositoryOperationTimeout"
             )

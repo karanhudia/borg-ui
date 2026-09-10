@@ -39,6 +39,7 @@ from app.database.models import (
 )
 from app.api.repositories import _build_repository_path_from_connection
 from app.services.operations.job_facade import resolve_maintenance_job
+from tests.utils.agent_jobs import agent_maintenance_job
 from tests.utils.operations import seed_job_operation
 
 
@@ -1781,23 +1782,7 @@ class TestRepositoriesCreate:
         )
         test_db.commit()
         test_db.refresh(check_job)
-        agent_job = AgentJob(
-            agent_machine_id=agent.id,
-            job_type="repository",
-            status="running",
-            payload={
-                "job_kind": "repository.check",
-                "operation": {
-                    "maintenance_job": {
-                        "kind": "check",
-                        "id": check_job.id,
-                        "table": "operations",
-                    }
-                },
-            },
-        )
-        test_db.add(agent_job)
-        test_db.commit()
+        agent_job = agent_maintenance_job(test_db, agent, "check", check_job.id)
         test_db.refresh(agent_job)
 
         response = test_client.post(

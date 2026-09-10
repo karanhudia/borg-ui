@@ -22,6 +22,7 @@ from app.database.models import (
 from app.services.operations.executors import load_default_executors
 from app.services.operations.backup_facade import resolve_backup_job
 from app.database.models import BackupPlanRun
+from tests.utils.agent_jobs import agent_maintenance_job
 from tests.utils.operations import seed_job_operation
 
 
@@ -1646,27 +1647,15 @@ class TestAgentJobNotifications:
         test_db.commit()
         test_db.refresh(check_job)
         now = datetime.now(timezone.utc)
-        job = AgentJob(
-            agent_machine_id=agent.id,
-            job_type="repository",
-            status="running",
-            payload={
-                "schema_version": 1,
-                "job_kind": "repository.check",
-                "repository": {"id": repository.id},
-                "operation": {
-                    "maintenance_job": {
-                        "kind": "check",
-                        "id": check_job.id,
-                        "table": "operations",
-                    }
-                },
-            },
+        job = agent_maintenance_job(
+            test_db,
+            agent,
+            "check",
+            check_job.id,
+            repository=repository,
             created_at=now,
             updated_at=now,
         )
-        test_db.add(job)
-        test_db.commit()
         test_db.refresh(job)
         return job, check_job, repository
 
@@ -2006,27 +1995,15 @@ class TestAgentJobNotifications:
 
     def _compact_agent_job(self, test_db, agent, repository, operation):
         now = datetime.now(timezone.utc)
-        job = AgentJob(
-            agent_machine_id=agent.id,
-            job_type="repository",
-            status="running",
-            payload={
-                "schema_version": 1,
-                "job_kind": "repository.compact",
-                "repository": {"id": repository.id},
-                "operation": {
-                    "maintenance_job": {
-                        "kind": "compact",
-                        "id": operation.id,
-                        "table": "operations",
-                    }
-                },
-            },
+        job = agent_maintenance_job(
+            test_db,
+            agent,
+            "compact",
+            operation.id,
+            repository=repository,
             created_at=now,
             updated_at=now,
         )
-        test_db.add(job)
-        test_db.commit()
         return job
 
     def _post_stats_line(self, test_client, headers, job, sequence, message):
