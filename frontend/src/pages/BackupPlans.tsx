@@ -475,6 +475,19 @@ export default function BackupPlans() {
     },
   })
 
+  const toggleRepositoryMutation = useMutation({
+    mutationFn: ({ planId, repositoryId }: { planId: number; repositoryId: number }) =>
+      backupPlansAPI.toggleRepository(planId, repositoryId),
+    onSuccess: () => {
+      toast.success(t('backupPlans.toasts.repositoryToggled'))
+      queryClient.invalidateQueries({ queryKey: ['backup-plans'] })
+      queryClient.invalidateQueries({ queryKey: ['backup-plan'] })
+    },
+    onError: (error: unknown) => {
+      toast.error(errorMessage(error, t('backupPlans.toasts.repositoryToggleFailed')))
+    },
+  })
+
   const repositoryCreateMutation = useMutation({
     mutationFn: (data: RepositoryData) => BorgApiClient.createRepository(data),
     onSuccess: (response) => {
@@ -631,10 +644,28 @@ export default function BackupPlans() {
       })
     }
 
-    setWizardState((prev) => ({
-      ...prev,
-      repositoryIds: nextSelection.ids,
-    }))
+    setWizardState((prev) => {
+      let disabled = (prev.disabledRepositoryIds || []).filter((id) =>
+        nextSelection.ids.includes(id)
+      )
+      // Removing the last enabled repository must not leave only skipped ones.
+      if (nextSelection.ids.length > 0 && disabled.length === nextSelection.ids.length) {
+        disabled = disabled.filter((id) => id !== nextSelection.ids[0])
+      }
+      return { ...prev, repositoryIds: nextSelection.ids, disabledRepositoryIds: disabled }
+    })
+  }
+
+  const handleRepositoryEnabledToggle = (repositoryId: number) => {
+    setWizardState((prev) => {
+      const disabled = prev.disabledRepositoryIds || []
+      return {
+        ...prev,
+        disabledRepositoryIds: disabled.includes(repositoryId)
+          ? disabled.filter((id) => id !== repositoryId)
+          : [...disabled, repositoryId],
+      }
+    })
   }
 
   const handlePruneSettingsChange = (values: PruneSettings) => {
@@ -800,6 +831,7 @@ export default function BackupPlans() {
       onCreateScript={createSourceScript}
       updateBasicRepositoryState={updateBasicRepositoryState}
       handleRepositoryIdsChange={handleRepositoryIdsChange}
+      handleRepositoryEnabledToggle={handleRepositoryEnabledToggle}
       handlePruneSettingsChange={handlePruneSettingsChange}
       createBasicRepository={createBasicRepository}
       openSourceExplorer={openSourceExplorer}
@@ -828,6 +860,11 @@ export default function BackupPlans() {
   const handleCancelRun = useCallback((runId: number) => cancelRunMutate(runId), [cancelRunMutate])
   const handleRetryRun = useCallback((runId: number) => retryRunMutate(runId), [retryRunMutate])
   const handleTogglePlan = useCallback((planId: number) => toggleMutate(planId), [toggleMutate])
+  const toggleRepositoryMutate = toggleRepositoryMutation.mutate
+  const handleToggleRepository = useCallback(
+    (planId: number, repositoryId: number) => toggleRepositoryMutate({ planId, repositoryId }),
+    [toggleRepositoryMutate]
+  )
   const handleDeletePlan = useCallback((planId: number) => deleteMutate(planId), [deleteMutate])
   const handleViewRepositories = useCallback(
     (planId: number) => navigate(`/repositories?backupPlanId=${planId}`),
@@ -872,6 +909,10 @@ export default function BackupPlans() {
         onCancelRun={handleCancelRun}
         onViewLogs={setLogJob}
         onTogglePlan={handleTogglePlan}
+        onToggleRepository={handleToggleRepository}
+        togglingRepository={
+          toggleRepositoryMutation.isPending ? (toggleRepositoryMutation.variables ?? null) : null
+        }
         onEditPlan={openEditWizard}
         onDeletePlan={handleDeletePlan}
         onViewHistory={setHistoryPlanId}

@@ -31,6 +31,7 @@ export interface BackupPlanWizardStepProps {
   onCreateScript: (input: SourceScriptCreateInput) => Promise<{ id: number }>
   updateBasicRepositoryState: (updates: Partial<BasicRepositoryState>) => void
   handleRepositoryIdsChange: (ids: number[]) => void
+  handleRepositoryEnabledToggle: (id: number) => void
   handlePruneSettingsChange: (values: PruneSettings) => void
   createBasicRepository: () => void
   openSourceExplorer: () => void

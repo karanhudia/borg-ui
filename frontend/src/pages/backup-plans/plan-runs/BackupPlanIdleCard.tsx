@@ -10,7 +10,16 @@ import {
   Typography,
   useTheme,
 } from '@mui/material'
-import { CalendarClock, Database, Folder, History, Play, SquarePen, Trash2 } from 'lucide-react'
+import {
+  CalendarClock,
+  Database,
+  Folder,
+  History,
+  Pause,
+  Play,
+  SquarePen,
+  Trash2,
+} from 'lucide-react'
 import type { TFunction } from 'i18next'
 
 import BackupPlanScheduleBadge from '../../../components/BackupPlanScheduleBadge'
@@ -44,6 +53,8 @@ interface BackupPlanIdleCardProps {
   onDelete: () => void
   onViewHistory: () => void
   onViewRepositories: () => void
+  onToggleRepository: (repositoryId: number) => void
+  togglingRepositoryId: number | null
   planIsToggling: boolean
   t: TFunction
   formatStatusLabel: (status?: string) => string
@@ -66,6 +77,8 @@ export function BackupPlanIdleCard({
   onDelete,
   onViewHistory,
   onViewRepositories,
+  onToggleRepository,
+  togglingRepositoryId,
   planIsToggling,
   t,
   formatStatusLabel,
@@ -119,6 +132,14 @@ export function BackupPlanIdleCard({
       : t('backupPlans.status.scheduledBadge', { defaultValue: 'Scheduled' })
     : t('backupPlans.status.manualOnly')
 
+  // Links the plan keeps but skips at run time (issue #879). The list payload
+  // always carries `repositories`, so this needs no extra fetch.
+  const skippedLinks = (plan.repositories || []).filter((link) => !link.enabled)
+  const totalRepositoryCount = plan.repository_count + skippedLinks.length
+  const skippedNames = skippedLinks
+    .map((link) => link.repository?.name)
+    .filter((name): name is string => Boolean(name))
+
   const keyStats = [
     {
       label: t('backupPlans.wizard.review.sources'),
@@ -130,11 +151,23 @@ export function BackupPlanIdleCard({
     },
     {
       label: t('backupPlans.wizard.review.repositories'),
-      value: t('backupPlans.status.repositoryCount', {
-        count: plan.repository_count,
-      }),
+      value:
+        skippedLinks.length > 0
+          ? t('backupPlans.status.repositoryCountPartial', {
+              enabled: plan.repository_count,
+              total: totalRepositoryCount,
+            })
+          : t('backupPlans.status.repositoryCount', {
+              count: plan.repository_count,
+            }),
       icon: <Database size={11} />,
-      tooltip: '',
+      valueColor: skippedLinks.length > 0 ? theme.palette.warning.main : undefined,
+      tooltip:
+        skippedLinks.length > 0
+          ? t('backupPlans.status.skippedRepositoriesTooltip', {
+              names: skippedNames.join(', '),
+            })
+          : '',
     },
     {
       label: t('backupPlans.status.lastRunLabel', { defaultValue: 'Last run' }),
@@ -402,6 +435,7 @@ export function BackupPlanIdleCard({
                       fontWeight: 600,
                       fontVariantNumeric: 'tabular-nums',
                       fontSize: '0.85rem',
+                      color: stat.valueColor,
                     }}
                   >
                     {stat.value}
@@ -411,6 +445,66 @@ export function BackupPlanIdleCard({
             )
           })}
         </Box>
+
+        {skippedLinks.length > 0 && (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 0.75,
+              mb: 1.5,
+              px: 0.25,
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: '0.58rem',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.07em',
+                color: alpha(theme.palette.warning.main, 0.85),
+                lineHeight: 1,
+              }}
+            >
+              {t('backupPlans.status.skippedLabel')}
+            </Typography>
+            {skippedLinks.map((link) => {
+              const name =
+                link.repository?.name ||
+                t('backupPlans.status.repositoryFallback', { id: link.repository_id })
+              return (
+                <Tooltip
+                  key={link.repository_id}
+                  title={t('backupPlans.status.clickToResumeRepository', { name })}
+                  arrow
+                >
+                  <Chip
+                    size="small"
+                    icon={<Pause size={11} />}
+                    label={name}
+                    onClick={() => onToggleRepository(link.repository_id)}
+                    disabled={togglingRepositoryId === link.repository_id}
+                    sx={{
+                      height: 22,
+                      fontSize: '0.68rem',
+                      fontWeight: 600,
+                      color: isDark ? theme.palette.warning.light : theme.palette.warning.dark,
+                      bgcolor: alpha(theme.palette.warning.main, isDark ? 0.14 : 0.08),
+                      border: `1px dashed ${alpha(theme.palette.warning.main, isDark ? 0.5 : 0.4)}`,
+                      '& .MuiChip-icon': { color: 'inherit', ml: '6px' },
+                      '& .MuiChip-label': { px: 0.75 },
+                      '&:hover': {
+                        bgcolor: alpha(theme.palette.warning.main, isDark ? 0.24 : 0.16),
+                        borderStyle: 'solid',
+                      },
+                    }}
+                  />
+                </Tooltip>
+              )
+            })}
+          </Box>
+        )}
 
         <Box
           sx={{

@@ -32,6 +32,7 @@ type RepositoriesStepProps = Pick<
   | 'repositoryCreatePending'
   | 'updateBasicRepositoryState'
   | 'handleRepositoryIdsChange'
+  | 'handleRepositoryEnabledToggle'
   | 'createBasicRepository'
   | 'setBasicRepositoryOpen'
   | 'setRepositoryWizardOpen'
@@ -50,6 +51,7 @@ export function RepositoriesStep({
   repositoryCreatePending,
   updateBasicRepositoryState,
   handleRepositoryIdsChange,
+  handleRepositoryEnabledToggle,
   createBasicRepository,
   setBasicRepositoryOpen,
   setRepositoryWizardOpen,
@@ -74,6 +76,8 @@ export function RepositoriesStep({
           repositories={fullRepositories}
           selectedIds={wizardState.repositoryIds}
           onChange={handleRepositoryIdsChange}
+          disabledIds={wizardState.disabledRepositoryIds}
+          onToggleEnabled={handleRepositoryEnabledToggle}
           label={t('backupPlans.wizard.fields.repositories')}
           helperText={
             canUseMultiRepository

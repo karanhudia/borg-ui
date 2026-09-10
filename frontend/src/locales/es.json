@@ -1426,7 +1426,11 @@
       "nextRun": "Próxima ejecución: {{date}}",
       "repositoryFallback": "Repositorio",
       "moreRepositories": "+{{count}} más",
-      "runningNow": "En curso"
+      "runningNow": "En curso",
+      "repositoryCountPartial": "{{enabled}} de {{total}} repositorios",
+      "skippedRepositoriesTooltip": "Omitidos en las ejecuciones: {{names}}",
+      "skippedLabel": "Omitidos",
+      "clickToResumeRepository": "Reanudar copias en {{name}}"
     },
     "statuses": {
       "unknown": "Desconocido",
@@ -1458,7 +1462,9 @@
       "repositoryCreateFailed": "No se pudo crear el repositorio",
       "multiRepositoryRequiresPro": "Varios repositorios en un plan de copia requieren Pro",
       "selectSourceConnection": "Selecciona un cliente remoto antes de explorar rutas de origen",
-      "scriptCreateFailed": "Failed to create generated script"
+      "scriptCreateFailed": "No se pudo crear el script generado",
+      "repositoryToggled": "Repositorio actualizado",
+      "repositoryToggleFailed": "No se pudo actualizar el repositorio"
     },
     "sourceChooser": {
       "summaryTitle": "Backup source",
@@ -4424,7 +4430,11 @@
     "moveUp": "Subir",
     "moveDown": "Bajar",
     "remove": "Eliminar",
-    "searchOrAddMore": "Buscar o agregar más..."
+    "searchOrAddMore": "Buscar o agregar más...",
+    "skipped": "Omitido",
+    "skip": "Omitir en las ejecuciones",
+    "resume": "Reanudar copias",
+    "lastEnabled": "Al menos un repositorio debe permanecer activado"
   },
   "wizard": {
     "steps": {
