@@ -61,14 +61,16 @@ ACTIVE_AGENT_STATUSES = {"queued", "claimed", "cancel_requested", "running"}
 ACTIVE_REPOSITORY_WIPE_STATUSES = {"pending", "running"}
 ACTIVE_OPERATION_STATUSES = {"queued", "running"}
 
-# Kinds that moved to `operations` in phase 5, mapped to the admission
-# operation they used to be recorded as. Grows as phases 6 to 8 migrate more.
-MAINTENANCE_OPERATION_KINDS = {
+# Kinds that moved to `operations`, mapped to the admission operation they
+# used to be recorded as. Started with phase 5's maintenance kinds; backup
+# joined in phase 8.
+MIGRATED_OPERATION_KINDS = {
     "check": OPERATION_CHECK,
     "restore_check": OPERATION_RESTORE_CHECK,
     "compact": OPERATION_COMPACT,
     "prune": OPERATION_PRUNE,
     "delete_archive": OPERATION_DELETE_ARCHIVE,
+    "backup": OPERATION_BACKUP,
 }
 
 REPOSITORY_OPERATION_ACTIVE_KEY = "backend.errors.jobs.repositoryOperationActive"
@@ -287,7 +289,7 @@ def list_active_repository_work(
         db.query(Operation)
         .filter(
             Operation.repository_id == repository.id,
-            Operation.kind.in_(tuple(MAINTENANCE_OPERATION_KINDS)),
+            Operation.kind.in_(tuple(MIGRATED_OPERATION_KINDS)),
             Operation.status.in_(ACTIVE_OPERATION_STATUSES),
         )
         .all()
@@ -295,7 +297,7 @@ def list_active_repository_work(
         active.append(
             _active_work(
                 repository,
-                MAINTENANCE_OPERATION_KINDS[op.kind],
+                MIGRATED_OPERATION_KINDS[op.kind],
                 Operation.__tablename__,
                 op,
                 status=legacy_status(op.status),
@@ -443,7 +445,7 @@ def ensure_repository_admission(
 
 
 def count_active_manual_backup_jobs(db: Session) -> int:
-    return (
+    legacy = (
         db.query(BackupJob)
         .filter(
             BackupJob.scheduled_job_id.is_(None),
@@ -453,6 +455,17 @@ def count_active_manual_backup_jobs(db: Session) -> int:
         )
         .count()
     )
+    operations = (
+        db.query(Operation)
+        .filter(
+            Operation.kind == "backup",
+            Operation.status.in_(tuple(ACTIVE_OPERATION_STATUSES)),
+            Operation.scheduled_job_id.is_(None),
+            Operation.backup_plan_run_id.is_(None),
+        )
+        .count()
+    )
+    return legacy + operations
 
 
 def get_manual_backup_limit(db: Session) -> int:
@@ -477,7 +490,7 @@ def ensure_manual_backup_capacity(db: Session) -> None:
 
 
 def count_active_scheduled_backup_jobs(db: Session) -> int:
-    return (
+    legacy = (
         db.query(BackupJob)
         .filter(
             BackupJob.scheduled_job_id.isnot(None),
@@ -485,6 +498,16 @@ def count_active_scheduled_backup_jobs(db: Session) -> int:
         )
         .count()
     )
+    operations = (
+        db.query(Operation)
+        .filter(
+            Operation.kind == "backup",
+            Operation.status.in_(tuple(ACTIVE_OPERATION_STATUSES)),
+            Operation.scheduled_job_id.isnot(None),
+        )
+        .count()
+    )
+    return legacy + operations
 
 
 def get_scheduled_backup_limit(db: Session) -> int:

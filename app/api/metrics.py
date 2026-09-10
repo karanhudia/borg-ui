@@ -25,6 +25,7 @@ from app.database.models import (
     SystemSettings,
     ScheduledJob,
 )
+from app.services.operations.backup_facade import latest_backup_job_for_repository
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
@@ -240,12 +241,7 @@ async def get_metrics(
         lines.append("# TYPE borg_backup_last_job_success gauge")
 
         for repo in repositories:
-            last_job = (
-                db.query(BackupJob)
-                .filter(BackupJob.repository == repo.path)
-                .order_by(BackupJob.created_at.desc())
-                .first()
-            )
+            last_job = latest_backup_job_for_repository(db, repo)
 
             if last_job:
                 success = (
@@ -264,15 +260,8 @@ async def get_metrics(
         lines.append("# TYPE borg_backup_last_duration_seconds gauge")
 
         for repo in repositories:
-            last_job = (
-                db.query(BackupJob)
-                .filter(
-                    BackupJob.repository == repo.path,
-                    BackupJob.started_at.isnot(None),
-                    BackupJob.completed_at.isnot(None),
-                )
-                .order_by(BackupJob.completed_at.desc())
-                .first()
+            last_job = latest_backup_job_for_repository(
+                db, repo, order="completed", require_timestamps=True
             )
 
             if last_job and last_job.started_at and last_job.completed_at:
@@ -288,14 +277,11 @@ async def get_metrics(
         lines.append("# TYPE borg_backup_last_original_size_bytes gauge")
 
         for repo in repositories:
-            last_job = (
-                db.query(BackupJob)
-                .filter(
-                    BackupJob.repository == repo.path,
-                    BackupJob.status.in_(["completed", "completed_with_warnings"]),
-                )
-                .order_by(BackupJob.completed_at.desc())
-                .first()
+            last_job = latest_backup_job_for_repository(
+                db,
+                repo,
+                statuses=("completed", "completed_with_warnings"),
+                order="completed",
             )
 
             if last_job:
@@ -310,14 +296,11 @@ async def get_metrics(
         lines.append("# TYPE borg_backup_last_deduplicated_size_bytes gauge")
 
         for repo in repositories:
-            last_job = (
-                db.query(BackupJob)
-                .filter(
-                    BackupJob.repository == repo.path,
-                    BackupJob.status.in_(["completed", "completed_with_warnings"]),
-                )
-                .order_by(BackupJob.completed_at.desc())
-                .first()
+            last_job = latest_backup_job_for_repository(
+                db,
+                repo,
+                statuses=("completed", "completed_with_warnings"),
+                order="completed",
             )
 
             if last_job:

@@ -157,6 +157,56 @@ def _is_operation_only_kind(job_type: str, job_models: dict) -> bool:
     )
 
 
+def _running_backup_log_response(job_id: int, offset: int, limit: int) -> dict:
+    """The live view of a backup that is still running: the service's
+    in-memory tail, or a waiting message while it has produced nothing yet.
+    Shared by the operation branch and the legacy branch (phase 8)."""
+    log_buffer, buffer_exists = backup_service.get_log_buffer(job_id, tail_lines=500)
+    logger.info(
+        "Retrieved log buffer for running backup",
+        job_id=job_id,
+        buffer_exists=buffer_exists,
+        buffer_length=len(log_buffer),
+        buffer_type=type(log_buffer).__name__,
+    )
+    if buffer_exists and len(log_buffer) > 0:
+        return {
+            "lines": [
+                {"line_number": i + 1, "content": line}
+                for i, line in enumerate(log_buffer)
+            ],
+            "total_lines": len(log_buffer),
+            # Always show the tail for a running job.
+            "has_more": False,
+        }
+    if offset > 0:
+        return {"lines": [], "total_lines": 0, "has_more": False}
+    if buffer_exists:
+        # The borg command started and has not written its first line yet.
+        lines = [
+            "Backup is running...",
+            "",
+            "Processing started, waiting for first log output...",
+            "",
+            "Note: Showing last 500 lines from in-memory buffer. Full logs not saved to disk.",
+        ]
+    else:
+        lines = [
+            "Backup is currently running...",
+            "",
+            "Waiting for logs...",
+            "",
+            "Note: Showing last 500 lines from in-memory buffer. Full logs not saved to disk.",
+        ]
+    return {
+        "lines": [
+            {"line_number": i + 1, "content": line} for i, line in enumerate(lines)
+        ],
+        "total_lines": len(lines),
+        "has_more": False,
+    }
+
+
 def _operation_log_sources(db: Session, job_type: str, op) -> dict:
     """How an operation-only kind's logs are read and policy-gated.
 
@@ -173,6 +223,26 @@ def _operation_log_sources(db: Session, job_type: str, op) -> dict:
             "file_path": getattr(job, "log_file_path", None),
             "exit_code": job.exit_code,
             "text": _format_package_install_logs(job),
+        }
+    if job_type == "backup":
+        from app.services.operations.backup_facade import (
+            BackupJobFacade,
+            backup_job_has_logs,
+        )
+        from app.services.repository_executor import get_agent_job_for_backup
+
+        job = BackupJobFacade(db, op) if isinstance(op, Operation) else op
+        text = _read_operation_log(op)
+        if job.execution_mode == "agent":
+            agent_job = get_agent_job_for_backup(db, job)
+            if agent_job is not None:
+                text = "\n".join(_get_agent_log_lines(db, agent_job.id)) or text
+        return {
+            "output_text": [job.logs, job.error_message],
+            "file_path": getattr(op, "log_file_path", None),
+            "exit_code": None,
+            "text": text,
+            "has_logs": backup_job_has_logs(db, job),
         }
     return {
         "output_text": [getattr(op, "logs", None), op.error_message],
@@ -228,7 +298,9 @@ def _read_operation_log(op: Operation) -> str:
         return getattr(op, "logs", "") or ""
     try:
         with open(log_file_path, "r", encoding="utf-8", errors="replace") as fh:
-            return fh.read()
+            # A trailing newline terminates the last line rather than starting
+            # an empty one, so the line count matches what a file reader sees.
+            return fh.read().rstrip("\n")
     except OSError:
         return ""
 
@@ -319,6 +391,7 @@ _MIGRATED_LEGACY_MODELS = {
     "wipe": RepositoryWipeJob,
     "package": PackageInstallJob,
     "restore": RestoreJob,
+    "backup": BackupJob,
 }
 
 
@@ -488,6 +561,25 @@ def _apply_legacy_activity_shape(
             file_path=op.log_file_path,
             exit_code=job.exit_code,
         )
+        return
+    if op.kind == "backup":
+        from app.services.operations.backup_facade import (
+            BackupJobFacade,
+            backup_job_has_logs,
+        )
+
+        job = BackupJobFacade(db, op)
+        item["triggered_by"] = job.triggered_by
+        item["backup_plan_id"] = job.backup_plan_id
+        item["archive_name"] = job.archive_name
+        item["archive_pruned_at"] = job.archive_pruned_at
+        item["has_logs"] = backup_job_has_logs(db, job, log_save_policy=log_save_policy)
+        if job.scheduled_job_id:
+            scheduled_job = db.get(ScheduledJob, job.scheduled_job_id)
+            item["schedule_name"] = scheduled_job.name if scheduled_job else None
+        if job.backup_plan_id:
+            plan = db.get(BackupPlan, job.backup_plan_id)
+            item["backup_plan_name"] = plan.name if plan else None
         return
     if op.kind != "rclone_sync":
         return
@@ -1284,19 +1376,31 @@ async def get_job_logs(
 
     # Map job type to model
     job_models = {
-        "backup": BackupJob,
         "script_execution": ScriptExecution,
     }
 
     if _is_operation_only_kind(job_type, job_models):
         op = _get_operation_or_404(db, job_type, job_id, current_user)
+        if (
+            job_type == "backup"
+            and op.status == "running"
+            and op.execution_mode != "agent"
+        ):
+            # An agent backup streams its `agent_job_logs` lines instead; the
+            # in-memory buffer below belongs to the server's own borg process.
+            return _running_backup_log_response(job_id, offset, limit)
         sources = _operation_log_sources(db, job_type, op)
-        if not job_has_logs_by_policy(
-            op,
-            get_log_save_policy(db),
-            output_text=sources["output_text"],
-            file_path=sources["file_path"],
-            exit_code=sources["exit_code"],
+        # A backup answers for itself, since agent log lines count toward the
+        # policy exactly as the legacy branch's `_backup_job_has_logs` had it.
+        if not sources.get(
+            "has_logs",
+            job_has_logs_by_policy(
+                op,
+                get_log_save_policy(db),
+                output_text=sources["output_text"],
+                file_path=sources["file_path"],
+                exit_code=sources["exit_code"],
+            ),
         ):
             raise _no_logs_available_exception()
         return _paginate_log_text(sources["text"], offset, limit)
@@ -1451,68 +1555,7 @@ async def get_job_logs(
     # For running jobs without log files (backup, check, compact), show progress message
     if job.status == "running":
         if job_type == "backup":
-            # For running backups, try to get log buffer (last 500 lines)
-            log_buffer, buffer_exists = backup_service.get_log_buffer(
-                job_id, tail_lines=500
-            )
-
-            logger.info(
-                "Retrieved log buffer for running backup",
-                job_id=job_id,
-                buffer_exists=buffer_exists,
-                buffer_length=len(log_buffer),
-                buffer_type=type(log_buffer).__name__,
-            )
-
-            # Check if buffer exists (True means buffer was created, even if empty)
-            # Empty buffer means backup started but no logs output yet
-            if buffer_exists:
-                if len(log_buffer) > 0:
-                    # Return last 500 lines from in-memory buffer
-                    response = {
-                        "lines": [
-                            {"line_number": i + 1, "content": line}
-                            for i, line in enumerate(log_buffer)
-                        ],
-                        "total_lines": len(log_buffer),
-                        "has_more": False,  # Always show tail for running jobs
-                    }
-                    logger.info(
-                        "Returning log buffer data",
-                        job_id=job_id,
-                        lines_count=len(response["lines"]),
-                        first_line=log_buffer[0] if log_buffer else None,
-                    )
-                    return response
-                else:
-                    # Buffer exists but empty - backup command started, waiting for first output
-                    if offset > 0:
-                        return {"lines": [], "total_lines": 0, "has_more": False}
-                    logger.info(
-                        "Buffer exists but empty, returning processing message",
-                        job_id=job_id,
-                    )
-                    lines = [
-                        "Backup is running...",
-                        "",
-                        "Processing started, waiting for first log output...",
-                        "",
-                        "Note: Showing last 500 lines from in-memory buffer. Full logs not saved to disk.",
-                    ]
-            else:
-                # Buffer not created yet - backup job hasn't started borg command
-                if offset > 0:
-                    return {"lines": [], "total_lines": 0, "has_more": False}
-                logger.info(
-                    "Buffer not created yet, returning waiting message", job_id=job_id
-                )
-                lines = [
-                    "Backup is currently running...",
-                    "",
-                    "Waiting for logs...",
-                    "",
-                    "Note: Showing last 500 lines from in-memory buffer. Full logs not saved to disk.",
-                ]
+            return _running_backup_log_response(job_id, offset, limit)
         elif job_type in ["check", "restore_check", "compact"]:
             # Check/compact show progress message
             progress_msg = getattr(job, "progress_message", None)
@@ -1608,7 +1651,6 @@ async def download_job_logs(
     """Download logs for a specific job as a file."""
     # Map job type to model
     job_models = {
-        "backup": BackupJob,
         "script_execution": ScriptExecution,
     }
 
@@ -1617,12 +1659,17 @@ async def download_job_logs(
         # Same policy gate as the paginated route above, so a download cannot
         # serve logs the log view reports as absent.
         sources = _operation_log_sources(db, job_type, op)
-        if not job_has_logs_by_policy(
-            op,
-            get_log_save_policy(db),
-            output_text=sources["output_text"],
-            file_path=sources["file_path"],
-            exit_code=sources["exit_code"],
+        # A backup answers for itself, since agent log lines count toward the
+        # policy exactly as the legacy branch's `_backup_job_has_logs` had it.
+        if not sources.get(
+            "has_logs",
+            job_has_logs_by_policy(
+                op,
+                get_log_save_policy(db),
+                output_text=sources["output_text"],
+                file_path=sources["file_path"],
+                exit_code=sources["exit_code"],
+            ),
         ):
             raise _no_logs_available_exception()
         if op.status in ("running", "installing"):
@@ -1821,7 +1868,6 @@ async def delete_job(
 
     # Map job type to model
     job_models = {
-        "backup": BackupJob,
         "script_execution": ScriptExecution,
     }
 

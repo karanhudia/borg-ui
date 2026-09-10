@@ -10,7 +10,6 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.database.models import (
-    AgentJob,
     AgentMachine,
     BackupJob,
     BackupPlan,
@@ -20,6 +19,7 @@ from app.database.models import (
     BackupPlanScript,
     LicensingState,
     Operation,
+    OperationBackupDetails,
     Repository,
     Script,
     ScriptExecution,
@@ -31,6 +31,38 @@ from app.database.models import (
 )
 from app.core.security import get_password_hash
 from app.services.backup_plan_execution_service import backup_plan_execution_service
+from app.services.operations.backup_facade import (
+    SERVICE_PARAMS,
+    BackupJobFacade,
+    resolve_backup_job,
+)
+
+
+def _plan_backup_seam(fake_execute_backup):
+    """Phase 8: the plan runner enqueues a backup operation and waits for the
+    runner instead of calling `execute_backup` itself. These tests keep their
+    fakes; this hands one the operation id, the repository path, and the
+    inputs that used to arrive as keyword arguments and now live in the
+    operation's params."""
+
+    async def _wait(db, operation_id, **_ignored):
+        operation = db.get(Operation, operation_id)
+        repository = db.get(Repository, operation.repository_id)
+        # `create_backup_operation` drops None so a service default is not
+        # shadowed; the fakes were written against `execute_backup`, which
+        # received every keyword, so fill the gaps back in.
+        stored = operation.params or {}
+        params = {key: stored.get(key) for key in SERVICE_PARAMS}
+        params.update(
+            {key: value for key, value in stored.items() if key != "executor"}
+        )
+        await fake_execute_backup(operation_id, repository.path, db, **params)
+        db.expire_all()
+        return db.get(Operation, operation_id).status
+
+    return _wait
+
+
 from app.services.schedule_availability import AvailabilityDecision
 
 
@@ -2792,6 +2824,70 @@ class TestBackupPlanRoutes:
         assert body["run"]["repositories"][0]["backup_job"]["status"] == "cancelled"
         assert body["processes_terminated"] == 1
 
+    def test_cancel_backup_plan_run_cancels_an_operation_backed_child(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Phase 8 children are operations, so the cancel has to reach the
+        runner rather than the legacy backup_jobs row."""
+        from app.database.models import Operation, OperationBackupDetails
+
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        create_response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload([repo.id]),
+            headers=admin_headers,
+        )
+        plan_id = create_response.json()["id"]
+        run = BackupPlanRun(
+            backup_plan_id=plan_id,
+            trigger="manual",
+            status="running",
+            created_at=datetime.utcnow(),
+        )
+        test_db.add(run)
+        test_db.flush()
+        operation = Operation(
+            repository_id=repo.id,
+            kind="backup",
+            category="backup",
+            status="running",
+            trigger="plan",
+            priority=0,
+            run_id="plan-run-1",
+            backup_plan_run_id=run.id,
+            params={"executor": "server"},
+            started_at=datetime.utcnow(),
+            created_at=datetime.utcnow(),
+        )
+        test_db.add(operation)
+        test_db.flush()
+        test_db.add(OperationBackupDetails(operation_id=operation.id))
+        test_db.add(
+            BackupPlanRunRepository(
+                backup_plan_run_id=run.id,
+                repository_id=repo.id,
+                backup_operation_id=operation.id,
+                status="running",
+            )
+        )
+        test_db.commit()
+
+        with patch(
+            "app.services.backup_plan_execution_service.operation_runner.request_cancel",
+            new=AsyncMock(return_value=True),
+        ) as request_cancel:
+            response = test_client.post(
+                f"/api/backup-plans/runs/{run.id}/cancel", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        request_cancel.assert_awaited_once_with(operation.id)
+        body = response.json()
+        assert body["run"]["status"] == "cancelled"
+        assert body["run"]["repositories"][0]["status"] == "cancelled"
+        assert body["cancelled_backup_jobs"] == 1
+        assert body["processes_terminated"] == 1
+
     def test_cancel_backup_plan_run_preserves_completed_children(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -3117,14 +3213,14 @@ class TestBackupPlanRoutes:
             assert kwargs["exclude_patterns_override"] == ["*.tmp"]
             assert kwargs["compression_override"] == "zstd,3"
             assert kwargs["skip_hooks"] is True
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.backup_service.execute_backup",
-            side_effect=fake_execute_backup,
+            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
 
@@ -3151,14 +3247,14 @@ class TestBackupPlanRoutes:
         async def fake_execute_backup(job_id, repository, db, **kwargs):
             assert repository == repo.path
             assert kwargs["archive_name"] == "Monthly-Plan-Primary-Repo"
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.backup_service.execute_backup",
-            side_effect=fake_execute_backup,
+            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
 
@@ -3207,56 +3303,44 @@ class TestBackupPlanRoutes:
             exclude_patterns=json.dumps(["*.tmp"]),
         )
 
-        async def fake_wait_for_agent_job(
-            db, agent_job_id, backup_job_id, is_cancelled
-        ):
-            assert not is_cancelled()
-            backup_job = db.query(BackupJob).filter_by(id=backup_job_id).one()
-            backup_job.status = "completed"
-            backup_job.completed_at = datetime.utcnow()
-            backup_job.progress = 100
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            assert kwargs["source_directories"] == ["/srv/project"]
+            assert kwargs["exclude_patterns_override"] == ["*.tmp"]
+            job = resolve_backup_job(db, job_id)
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            job.progress = 100
             db.commit()
-            return "completed"
 
-        with (
-            patch(
-                "app.services.backup_plan_execution_service.backup_service.execute_backup",
-                new_callable=AsyncMock,
-            ) as execute_backup,
-            patch(
-                "app.services.backup_plan_execution_service.wait_for_agent_backup_job",
-                side_effect=fake_wait_for_agent_job,
-                create=True,
-            ) as wait_for_agent_job,
-            patch(
-                "app.services.backup_plan_execution_service.dispatch_agent_job_best_effort",
-                new_callable=AsyncMock,
-            ) as dispatch_agent_job,
+        with patch(
+            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
 
-        execute_backup.assert_not_awaited()
-        dispatch_agent_job.assert_awaited_once()
-        wait_for_agent_job.assert_awaited_once()
-        backup_job = (
-            test_db.query(BackupJob)
+        # Phase 8: the plan runner enqueues an agent backup; the runner's
+        # executor owns the agent job and its payload.
+        operation = (
+            test_db.query(Operation)
             .filter(
-                BackupJob.backup_plan_run_id == run.id,
-                BackupJob.repository_id == repo.id,
+                Operation.kind == "backup",
+                Operation.backup_plan_run_id == run.id,
+                Operation.repository_id == repo.id,
             )
             .one()
         )
-        agent_job = (
-            test_db.query(AgentJob)
-            .filter(AgentJob.backup_job_id == backup_job.id)
+        details = test_db.get(OperationBackupDetails, operation.id)
+        assert operation.params["executor"] == "agent"
+        assert operation.execution_mode == "agent"
+        assert details.route_strategy == "agent_direct"
+        assert repo.source_directories is None
+        assert test_db.query(BackupJob).count() == 0
+        link = (
+            test_db.query(BackupPlanRunRepository)
+            .filter(BackupPlanRunRepository.backup_plan_run_id == run.id)
             .one()
         )
-        assert backup_job.execution_mode == "agent"
-        assert backup_job.route_strategy == "agent_direct"
-        assert agent_job.agent_machine_id == agent.id
-        assert repo.source_directories is None
-        assert agent_job.payload["backup"]["source_paths"] == ["/srv/project"]
-        assert agent_job.payload["backup"]["exclude_patterns"] == ["*.tmp"]
+        assert link.backup_operation_id == operation.id
         test_db.refresh(run)
         assert run.status == "completed"
 
@@ -3291,15 +3375,18 @@ class TestBackupPlanRoutes:
         )
 
         with patch(
-            "app.services.backup_plan_execution_service.backup_service.execute_backup",
+            "app.services.backup_plan_execution_service.wait_for_backup_operation",
             new_callable=AsyncMock,
-        ) as execute_backup:
+        ) as wait_for_backup:
             await backup_plan_execution_service.execute_run(run.id)
 
-        execute_backup.assert_not_awaited()
+        wait_for_backup.assert_not_awaited()
         assert (
-            test_db.query(BackupJob)
-            .filter(BackupJob.backup_plan_run_id == run.id)
+            test_db.query(Operation)
+            .filter(
+                Operation.kind == "backup",
+                Operation.backup_plan_run_id == run.id,
+            )
             .count()
             == 0
         )
@@ -3332,7 +3419,7 @@ class TestBackupPlanRoutes:
             assert kwargs["source_directories"] == ["/home/tester/project"]
             assert kwargs["source_ssh_connection_id"] == source_connection.id
             assert kwargs["exclude_patterns_override"] == ["node_modules"]
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             assert job.source_ssh_connection_id == source_connection.id
             assert job.backup_plan_id is not None
             assert job.backup_plan_run_id == run.id
@@ -3341,13 +3428,21 @@ class TestBackupPlanRoutes:
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.backup_service.execute_backup",
-            side_effect=fake_execute_backup,
+            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
 
         test_db.expire_all()
-        backup_job = test_db.query(BackupJob).filter_by(backup_plan_run_id=run.id).one()
+        backup_job = BackupJobFacade(
+            test_db,
+            test_db.query(Operation)
+            .filter(
+                Operation.kind == "backup",
+                Operation.backup_plan_run_id == run.id,
+            )
+            .one(),
+        )
         run = test_db.query(BackupPlanRun).filter_by(id=run.id).one()
         assert run.status == "completed"
         assert backup_job.source_ssh_connection_id == source_connection.id
@@ -3385,7 +3480,7 @@ class TestBackupPlanRoutes:
         )
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             assert job.route_strategy == "remote_direct"
             assert job.execution_mode == "remote_ssh"
             assert job.source_ssh_connection_id == source_connection.id
@@ -3396,13 +3491,21 @@ class TestBackupPlanRoutes:
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.backup_service.execute_backup",
-            side_effect=fake_execute_backup,
+            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
 
         test_db.expire_all()
-        backup_job = test_db.query(BackupJob).filter_by(backup_plan_run_id=run.id).one()
+        backup_job = BackupJobFacade(
+            test_db,
+            test_db.query(Operation)
+            .filter(
+                Operation.kind == "backup",
+                Operation.backup_plan_run_id == run.id,
+            )
+            .one(),
+        )
         assert backup_job.route_strategy == "remote_direct"
         assert backup_job.execution_mode == "remote_ssh"
 
@@ -3453,7 +3556,7 @@ class TestBackupPlanRoutes:
         )
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             assert job.source_ssh_connection_id == source_connection.id
             assert kwargs["source_ssh_connection_id"] == source_connection.id
             assert kwargs["source_locations"] == [
@@ -3469,16 +3572,19 @@ class TestBackupPlanRoutes:
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.backup_service.execute_backup",
-            side_effect=fake_execute_backup,
+            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
 
         test_db.expire_all()
         jobs = {
-            job.repository_id: job
-            for job in test_db.query(BackupJob)
-            .filter_by(backup_plan_run_id=run.id)
+            operation.repository_id: BackupJobFacade(test_db, operation)
+            for operation in test_db.query(Operation)
+            .filter(
+                Operation.kind == "backup",
+                Operation.backup_plan_run_id == run.id,
+            )
             .all()
         }
         assert jobs[direct_repo.id].route_strategy == "remote_direct"
@@ -3507,7 +3613,7 @@ class TestBackupPlanRoutes:
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
             calls.append(("backup", repository))
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
@@ -3519,8 +3625,8 @@ class TestBackupPlanRoutes:
                 side_effect=fake_plan_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.backup_service.execute_backup",
-                side_effect=fake_execute_backup,
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -3593,7 +3699,7 @@ class TestBackupPlanRoutes:
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
             calls.append(("backup", repository, None))
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
@@ -3605,8 +3711,8 @@ class TestBackupPlanRoutes:
                 side_effect=fake_plan_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.backup_service.execute_backup",
-                side_effect=fake_execute_backup,
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -3654,7 +3760,7 @@ class TestBackupPlanRoutes:
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
             calls.append(("backup", repository, None))
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
@@ -3666,8 +3772,8 @@ class TestBackupPlanRoutes:
                 side_effect=fake_plan_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.backup_service.execute_backup",
-                side_effect=fake_execute_backup,
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -3724,7 +3830,7 @@ class TestBackupPlanRoutes:
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
             calls.append(("backup", repository, None))
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
@@ -3736,8 +3842,8 @@ class TestBackupPlanRoutes:
                 side_effect=fake_plan_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.backup_service.execute_backup",
-                side_effect=fake_execute_backup,
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -3797,8 +3903,8 @@ class TestBackupPlanRoutes:
                 side_effect=fake_plan_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.backup_service.execute_backup",
-                side_effect=fake_execute_backup,
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -3840,7 +3946,7 @@ class TestBackupPlanRoutes:
             }
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
@@ -3851,8 +3957,8 @@ class TestBackupPlanRoutes:
                 side_effect=fake_execute_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.backup_service.execute_backup",
-                side_effect=fake_execute_backup,
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -3938,7 +4044,7 @@ class TestBackupPlanRoutes:
             }
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
@@ -3949,8 +4055,8 @@ class TestBackupPlanRoutes:
                 side_effect=fake_execute_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.backup_service.execute_backup",
-                side_effect=fake_execute_backup,
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -4094,7 +4200,7 @@ class TestBackupPlanRoutes:
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
             calls.append(("backup", repository))
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
@@ -4105,8 +4211,8 @@ class TestBackupPlanRoutes:
                 side_effect=fake_execute_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.backup_service.execute_backup",
-                side_effect=fake_execute_backup,
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -4249,7 +4355,7 @@ class TestBackupPlanRoutes:
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
             calls.append(("backup", repository))
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
@@ -4260,8 +4366,8 @@ class TestBackupPlanRoutes:
                 side_effect=fake_execute_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.backup_service.execute_backup",
-                side_effect=fake_execute_backup,
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -4375,7 +4481,7 @@ class TestBackupPlanRoutes:
             }
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
@@ -4392,8 +4498,8 @@ class TestBackupPlanRoutes:
                 create=True,
             ),
             patch(
-                "app.services.backup_plan_execution_service.backup_service.execute_backup",
-                side_effect=fake_execute_backup,
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -4428,7 +4534,7 @@ class TestBackupPlanRoutes:
                 side_effect=fake_plan_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.backup_service.execute_backup",
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
                 backup_mock,
             ),
         ):
@@ -4462,7 +4568,7 @@ class TestBackupPlanRoutes:
             return True, None
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
@@ -4474,8 +4580,8 @@ class TestBackupPlanRoutes:
                 side_effect=fake_plan_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.backup_service.execute_backup",
-                side_effect=fake_execute_backup,
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -4502,15 +4608,15 @@ class TestBackupPlanRoutes:
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
             executed_repositories.append(repository)
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "failed"
             job.error_message = "backup failed"
             job.completed_at = datetime.utcnow()
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.backup_service.execute_backup",
-            side_effect=fake_execute_backup,
+            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
 
@@ -4537,7 +4643,7 @@ class TestBackupPlanRoutes:
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
             executed_repositories.append(repository)
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             if repository == repo_a.path:
                 job.status = "failed"
                 job.error_message = "backup failed"
@@ -4547,8 +4653,8 @@ class TestBackupPlanRoutes:
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.backup_service.execute_backup",
-            side_effect=fake_execute_backup,
+            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
 
@@ -4583,15 +4689,15 @@ class TestBackupPlanRoutes:
             max_seen = max(max_seen, active_count)
             execution_order.append(repository)
             await asyncio.sleep(0.01)
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
             active_count -= 1
 
         with patch(
-            "app.services.backup_plan_execution_service.backup_service.execute_backup",
-            side_effect=fake_execute_backup,
+            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
 
@@ -4612,7 +4718,7 @@ class TestBackupPlanRoutes:
         )
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
@@ -4624,8 +4730,8 @@ class TestBackupPlanRoutes:
 
         with (
             patch(
-                "app.services.backup_plan_execution_service.backup_service.execute_backup",
-                side_effect=fake_execute_backup,
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
             ),
             patch.object(
                 backup_plan_execution_service,
@@ -4638,7 +4744,15 @@ class TestBackupPlanRoutes:
         test_db.expire_all()
         run = test_db.query(BackupPlanRun).filter_by(id=run.id).one()
         child = run.repositories[0]
-        backup_job = test_db.query(BackupJob).filter_by(backup_plan_run_id=run.id).one()
+        backup_job = BackupJobFacade(
+            test_db,
+            test_db.query(Operation)
+            .filter(
+                Operation.kind == "backup",
+                Operation.backup_plan_run_id == run.id,
+            )
+            .one(),
+        )
         assert child.status == "completed_with_warnings"
         assert backup_job.maintenance_status == "prune_failed"
         assert run.status == "completed_with_warnings"
@@ -4657,7 +4771,7 @@ class TestBackupPlanRoutes:
         )
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
@@ -4696,8 +4810,8 @@ class TestBackupPlanRoutes:
 
         with (
             patch(
-                "app.services.backup_plan_execution_service.backup_service.execute_backup",
-                side_effect=fake_execute_backup,
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
             ),
             patch(
                 "app.services.backup_plan_execution_service.BorgRouter",
@@ -4708,7 +4822,15 @@ class TestBackupPlanRoutes:
 
         test_db.expire_all()
         run = test_db.query(BackupPlanRun).filter_by(id=run.id).one()
-        backup_job = test_db.query(BackupJob).filter_by(backup_plan_run_id=run.id).one()
+        backup_job = BackupJobFacade(
+            test_db,
+            test_db.query(Operation)
+            .filter(
+                Operation.kind == "backup",
+                Operation.backup_plan_run_id == run.id,
+            )
+            .one(),
+        )
         check_job = (
             test_db.query(Operation)
             .filter_by(repository_id=repo.id, kind="check")
@@ -4747,7 +4869,7 @@ class TestBackupPlanRoutes:
         )
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             plan_run = db.query(BackupPlanRun).filter_by(id=run.id).one()
@@ -4765,8 +4887,8 @@ class TestBackupPlanRoutes:
         maintenance_mock = AsyncMock(return_value="completed")
         with (
             patch(
-                "app.services.backup_plan_execution_service.backup_service.execute_backup",
-                side_effect=fake_execute_backup,
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
             ),
             patch.object(
                 backup_plan_execution_service,
@@ -4780,7 +4902,15 @@ class TestBackupPlanRoutes:
         test_db.expire_all()
         run = test_db.query(BackupPlanRun).filter_by(id=run.id).one()
         child = run.repositories[0]
-        backup_job = test_db.query(BackupJob).filter_by(backup_plan_run_id=run.id).one()
+        backup_job = BackupJobFacade(
+            test_db,
+            test_db.query(Operation)
+            .filter(
+                Operation.kind == "backup",
+                Operation.backup_plan_run_id == run.id,
+            )
+            .one(),
+        )
         assert run.status == "cancelled"
         assert child.status == "cancelled"
         assert backup_job.maintenance_status is None
@@ -4852,14 +4982,14 @@ class TestBackupPlanRoutes:
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
             assert kwargs["compression_override"] == "zstd,19"
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.backup_service.execute_backup",
-            side_effect=fake_execute_backup,
+            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
 
@@ -4884,14 +5014,14 @@ class TestBackupPlanRoutes:
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
             assert kwargs["upload_ratelimit_kib"] == 768
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.backup_service.execute_backup",
-            side_effect=fake_execute_backup,
+            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
 
@@ -4916,14 +5046,14 @@ class TestBackupPlanRoutes:
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
             assert kwargs["upload_ratelimit_kib"] == 1024
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.backup_service.execute_backup",
-            side_effect=fake_execute_backup,
+            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
 
@@ -4955,14 +5085,14 @@ class TestBackupPlanRoutes:
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
             assert kwargs["upload_ratelimit_kib"] == 2048
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.backup_service.execute_backup",
-            side_effect=fake_execute_backup,
+            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
 
@@ -5017,7 +5147,7 @@ class TestBackupPlanRoutes:
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
             assert kwargs["upload_ratelimit_kib"] == 512
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
@@ -5028,8 +5158,8 @@ class TestBackupPlanRoutes:
                 FixedDateTime,
             ),
             patch(
-                "app.services.backup_plan_execution_service.backup_service.execute_backup",
-                side_effect=fake_execute_backup,
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -5078,7 +5208,7 @@ class TestBackupPlanRoutes:
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
             assert kwargs["upload_ratelimit_kib"] is None
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
@@ -5089,8 +5219,8 @@ class TestBackupPlanRoutes:
                 FixedDateTime,
             ),
             patch(
-                "app.services.backup_plan_execution_service.backup_service.execute_backup",
-                side_effect=fake_execute_backup,
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -5147,15 +5277,15 @@ class TestBackupPlanRoutes:
             ]
             assert kwargs["source_ssh_connection_id"] is None
             assert kwargs["source_locations"] == source_locations
-            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job = resolve_backup_job(db, job_id)
             assert job.source_ssh_connection_id is None
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.backup_service.execute_backup",
-            side_effect=fake_execute_backup,
+            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
 

@@ -5250,7 +5250,8 @@ async def delete_repository(
             )
 
         # 2. Set repository path to NULL (preserve historical backup jobs)
-        # Note: BackupJob stores repository path (string), not repository_id (int)
+        # Note: BackupJob stores repository path (string), not repository_id (int).
+        # Legacy rows only: a backup operation cascades with the repository.
         backup_jobs = (
             db.query(BackupJob).filter(BackupJob.repository == repository.path).all()
         )

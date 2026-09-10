@@ -2602,3 +2602,80 @@ class TestActivityPackageOperations:
         body = "".join(line["content"] for line in response.json()["lines"])
         assert response.status_code == 200, response.json()
         assert "legacy output" in body
+
+
+class TestRunningAgentBackupLogs:
+    """A running agent backup streams its `agent_job_logs` lines (phase 8)."""
+
+    def test_running_agent_backup_returns_agent_log_lines(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import (
+            AgentJob,
+            AgentJobLog,
+            AgentMachine,
+            Operation,
+            OperationBackupDetails,
+            Repository,
+        )
+
+        _set_log_save_policy(test_db, "all_jobs")
+        repository = Repository(
+            name="Running Agent Backup Repo",
+            path="/tmp/running-agent-backup-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repository)
+        test_db.flush()
+        operation = Operation(
+            repository_id=repository.id,
+            kind="backup",
+            category="backup",
+            status="running",
+            trigger="manual",
+            priority=0,
+            run_id="run-agent-1",
+            execution_mode="agent",
+            started_at=datetime.now(),
+        )
+        test_db.add(operation)
+        test_db.flush()
+        test_db.add(OperationBackupDetails(operation_id=operation.id))
+        machine = AgentMachine(
+            agent_id="agent-running-1",
+            name="agent-running",
+            token_hash="hash",
+            token_prefix="prefix",
+            status="online",
+        )
+        test_db.add(machine)
+        test_db.flush()
+        agent_job = AgentJob(
+            agent_machine_id=machine.id,
+            operation_id=operation.id,
+            job_type="backup",
+            status="running",
+            payload={},
+        )
+        test_db.add(agent_job)
+        test_db.flush()
+        test_db.add(
+            AgentJobLog(
+                agent_job_id=agent_job.id,
+                sequence=1,
+                stream="stdout",
+                message="agent backup in progress",
+                created_at=datetime.now(),
+            )
+        )
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/activity/backup/{operation.id}/logs",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        contents = [line["content"] for line in response.json()["lines"]]
+        assert "agent backup in progress" in contents

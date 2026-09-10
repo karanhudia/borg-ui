@@ -11,7 +11,6 @@ from typing import List, Dict, Any, Optional
 from app.database.database import get_db
 from app.database.models import (
     User,
-    BackupJob,
     BackupPlan,
     BackupPlanRepository,
     Repository,
@@ -26,6 +25,10 @@ from app.database.models import (
 )
 from app.core.security import get_current_user
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
+from app.services.operations.backup_facade import (
+    backup_jobs_started_since,
+    recent_backup_jobs,
+)
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
@@ -548,9 +551,7 @@ def get_recent_jobs(db: Session, limit: int = 10) -> List[Dict[str, Any]]:
     """Get recent backup jobs"""
     try:
         log_save_policy = get_log_save_policy(db)
-        jobs = (
-            db.query(BackupJob).order_by(BackupJob.started_at.desc()).limit(limit).all()
-        )
+        jobs = recent_backup_jobs(db, limit)
         job_list = []
 
         for job in jobs:
@@ -892,9 +893,7 @@ async def get_dashboard_overview(
 
         # Calculate backup success rate (last 30 days)
         thirty_days_ago = now - timedelta(days=30)
-        recent_jobs = (
-            db.query(BackupJob).filter(BackupJob.started_at >= thirty_days_ago).all()
-        )
+        recent_jobs = backup_jobs_started_since(db, thirty_days_ago)
 
         # Only count terminal jobs — running/pending skew the rate and don't match passed+failed
         terminal_jobs = [j for j in recent_jobs if j.status in ("completed", "failed")]
@@ -1034,9 +1033,7 @@ async def get_dashboard_overview(
 
         # Get activity for the last 14 days — matches the timeline window exactly
         fourteen_days_ago = now - timedelta(days=14)
-        recent_backups = (
-            db.query(BackupJob).filter(BackupJob.started_at >= fourteen_days_ago).all()
-        )
+        recent_backups = backup_jobs_started_since(db, fourteen_days_ago)
         recent_checks = (
             db.query(CheckJob).filter(CheckJob.started_at >= fourteen_days_ago).all()
         )

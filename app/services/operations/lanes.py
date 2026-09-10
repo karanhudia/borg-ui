@@ -91,6 +91,20 @@ def write_maintenance_running(db: Session, repository_id: int) -> bool:
         .first()
     ):
         return True
+    from app.database.models import OperationBackupDetails
+
+    if (
+        db.query(OperationBackupDetails.operation_id)
+        .join(Operation, Operation.id == OperationBackupDetails.operation_id)
+        .filter(
+            Operation.repository_id == repository_id,
+            OperationBackupDetails.maintenance_status.in_(
+                _LEGACY_MAINTENANCE_BACKUP_STATUSES
+            ),
+        )
+        .first()
+    ):
+        return True
     # Same statuses the admission treats as active: a maintenance job is
     # created pending and refuses listings from that moment on, before it
     # has started (seen live: 409 against a pending prune two seconds after

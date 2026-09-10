@@ -277,7 +277,6 @@ class TestProcessUtils:
 
         # Setup query chain
         query_results = [
-            [mock_backup_job],  # stale backup maintenance jobs
             [mock_backup_job],  # running backup jobs
             [],  # running restore jobs
             [],  # running check jobs
@@ -297,10 +296,24 @@ class TestProcessUtils:
             mock_query.first.return_value = None
             return mock_query
 
-        mock_db.query.side_effect = [build_query(result) for result in query_results]
+        queued = [build_query(result) for result in query_results]
 
-        # Execute
-        with patch("app.utils.process_utils.is_process_alive", return_value=False):
+        def next_query(*_args, **_kwargs):
+            # Phase 8 changed how many queries this path makes; anything past
+            # the scripted ones is an empty result rather than a StopIteration.
+            return queued.pop(0) if queued else build_query([])
+
+        mock_db.query.side_effect = next_query
+
+        # Execute. Phase 8 reads the maintenance sweep through the union
+        # helper, so it no longer comes off the mock query chain.
+        with (
+            patch("app.utils.process_utils.is_process_alive", return_value=False),
+            patch(
+                "app.utils.process_utils.backup_jobs_in_maintenance",
+                return_value=[mock_backup_job],
+            ),
+        ):
             cleanup_orphaned_jobs(mock_db)
 
         # Verify backup job was marked failed
@@ -345,7 +358,6 @@ class TestProcessUtils:
         stale_backup_job.error_message = None
 
         query_results = [
-            [stale_backup_job],  # stale backup maintenance jobs
             [],  # running backup jobs
             [],  # running restore jobs
             [],  # running check jobs
@@ -364,7 +376,12 @@ class TestProcessUtils:
 
         mock_db.query.side_effect = [build_query(result) for result in query_results]
 
-        cleanup_orphaned_jobs(mock_db)
+        # Phase 8 reads the maintenance sweep through the union helper.
+        with patch(
+            "app.utils.process_utils.backup_jobs_in_maintenance",
+            return_value=[stale_backup_job],
+        ):
+            cleanup_orphaned_jobs(mock_db)
 
         assert stale_backup_job.status == "failed"
         assert stale_backup_job.maintenance_status == "prune_failed"

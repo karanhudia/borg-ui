@@ -32,6 +32,7 @@ from app.database.models import (
     RestoreJob,
     Repository,
 )
+from app.services.operations.backup_facade import backup_jobs_in_maintenance
 from app.utils.backup_maintenance import (
     COMPLETED_BACKUP_STATUSES,
     RUNNING_BACKUP_MAINTENANCE_FAILURES,
@@ -195,13 +196,7 @@ def _mark_stale_backup_maintenance_failed(db: Session, now: datetime) -> int:
     This handles stale backup rows even when the corresponding maintenance
     child job row is already gone or no longer marked as running.
     """
-    stale_backup_jobs = (
-        db.query(BackupJob)
-        .filter(
-            BackupJob.maintenance_status.in_(list(RUNNING_BACKUP_MAINTENANCE_FAILURES)),
-        )
-        .all()
-    )
+    stale_backup_jobs = backup_jobs_in_maintenance(db)
 
     normalized_count = 0
     for backup_job in stale_backup_jobs:
@@ -309,13 +304,7 @@ def reconcile_stale_backup_maintenance(
     now = _strip_tz(now or datetime.utcnow())
     cutoff = now - reap_after
 
-    stuck = (
-        db.query(BackupJob)
-        .filter(
-            BackupJob.maintenance_status.in_(list(RUNNING_BACKUP_MAINTENANCE_FAILURES)),
-        )
-        .all()
-    )
+    stuck = backup_jobs_in_maintenance(db)
 
     reaped = 0
     for backup_job in stuck:
@@ -601,7 +590,10 @@ def cleanup_orphaned_jobs(db: Session):
     now = datetime.utcnow()
     stale_backup_jobs = _mark_stale_backup_maintenance_failed(db, now)
 
-    # Find backup jobs that were owned by in-memory tasks before restart.
+    # Backup rows written before phase 8 moved backup to `operations`. New
+    # work is recovered by OperationRunner.recover_on_startup (spec 7.6),
+    # which fails them the same way, since a backup records no pid. Empty
+    # after the first restart past the upgrade; goes away in phase 9.
     active_backup_jobs = (
         db.query(BackupJob).filter(BackupJob.status.in_(ACTIVE_JOB_STATUSES)).all()
     )

@@ -4,10 +4,10 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database.models import BackupJob, BackupPlanRun, Repository
+from app.services.operations.backup_facade import backup_jobs_for_archive_names
 from app.utils.datetime_utils import parse_borg_archive_time
 
 
@@ -87,17 +87,7 @@ def enrich_archives_with_backup_metadata(
     if not archive_names:
         return archives
 
-    repository_filters = []
-    if getattr(repository, "id", None) is not None:
-        repository_filters.append(BackupJob.repository_id == repository.id)
-    if getattr(repository, "path", None):
-        repository_filters.append(BackupJob.repository == repository.path)
-
-    query = db.query(BackupJob).filter(BackupJob.archive_name.in_(archive_names))
-    if repository_filters:
-        query = query.filter(or_(*repository_filters))
-
-    jobs = query.order_by(BackupJob.id.desc()).all()
+    jobs = backup_jobs_for_archive_names(db, repository, archive_names)
     if not jobs:
         return archives
 

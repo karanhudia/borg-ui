@@ -178,6 +178,18 @@ class AgentJob(Base):
         nullable=True,
         index=True,
     )
+    # Phase 8: the backup this job transports, when the backup is an
+    # operation. `backup_job_id` stays for rows written before the phase.
+    operation_id = Column(
+        Integer,
+        ForeignKey("operations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    # Set once, by the first start report that wins the claim, and never
+    # cleared: a requeue resets `started_at`, so only this marker can tell a
+    # reconnect apart from a genuine first start.
+    start_notified_at = Column(DateTime, nullable=True)
     job_type = Column(String, nullable=False)
     status = Column(String, default="queued", index=True, nullable=False)
     payload = Column(JSON, nullable=False)
@@ -1238,6 +1250,9 @@ class BackupPlanRunRepository(Base):
     backup_job_id = Column(
         Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
     )
+    backup_operation_id = Column(
+        Integer, ForeignKey("operations.id", ondelete="SET NULL"), nullable=True
+    )
     status = Column(String, default="pending", nullable=False)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
@@ -1246,6 +1261,7 @@ class BackupPlanRunRepository(Base):
     backup_plan_run = relationship("BackupPlanRun", back_populates="repositories")
     repository = relationship("Repository")
     backup_job = relationship("BackupJob")
+    backup_operation = relationship("Operation")
 
 
 class CheckJob(Base):
@@ -1602,6 +1618,77 @@ class OperationRestoreDetails(Base):
     restore_speed = Column(Float, default=0.0)
     nfiles = Column(Integer, default=0)
     current_file = Column(Text, nullable=True)
+
+
+class OperationBackupDetails(Base):
+    """Backup-specific columns for an `operations` row. Spec section 6.2.
+
+    `archive_pruned_at` is not in the spec's list: the legacy column was
+    added after the spec was written (migration a5b7c9d1e3f2) and the routes
+    return it. `progress` and `progress_percent` are both
+    `operations.progress_percent`; `logs` is the operation's log file;
+    `backup_plan_id` is derived from `operations.backup_plan_run_id`. The
+    three retry ids are unqualified job ids (Appendix B): a retry of a row
+    written before phase 8 names a `backup_jobs` id, so they carry no
+    foreign key.
+    """
+
+    __tablename__ = "operation_backup_details"
+
+    operation_id = Column(
+        Integer,
+        ForeignKey("operations.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    archive_name = Column(String, nullable=True)
+    archive_pruned_at = Column(DateTime, nullable=True)
+    original_size = Column(BigInteger, default=0)
+    compressed_size = Column(BigInteger, default=0)
+    deduplicated_size = Column(BigInteger, default=0)
+    nfiles = Column(Integer, default=0)
+    current_file = Column(Text, nullable=True)
+    backup_speed = Column(Float, default=0.0)
+    total_expected_size = Column(BigInteger, default=0)
+    estimated_time_remaining = Column(Integer, default=0)
+    route_strategy = Column(String, nullable=True)
+    source_ssh_connection_id = Column(
+        Integer, ForeignKey("ssh_connections.id", ondelete="SET NULL"), nullable=True
+    )
+    remote_process_pid = Column(Integer, nullable=True)
+    remote_hostname = Column(String, nullable=True)
+    retry_original_job_id = Column(Integer, nullable=True)
+    retry_source_job_id = Column(Integer, nullable=True)
+    retry_attempt = Column(Integer, default=1, nullable=False)
+    retry_requested_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_requested_at = Column(DateTime, nullable=True)
+    maintenance_status = Column(String, nullable=True)
+
+
+class OperationBackupRetryLineage(Base):
+    """The retry audit row `BackupJobRetryLineage` kept, for backups that are
+    operations. The three ids are unqualified job ids like the details row's
+    retry columns, so they carry no foreign key; retention drops rows by
+    `requested_at` as it does for the legacy table."""
+
+    __tablename__ = "operation_backup_retry_lineage"
+    __table_args__ = (
+        UniqueConstraint(
+            "created_operation_id", name="uq_operation_backup_retry_created"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    original_job_id = Column(Integer, nullable=True, index=True)
+    retry_source_job_id = Column(Integer, nullable=True, index=True)
+    attempt_number = Column(Integer, nullable=False)
+    requested_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    requested_at = Column(DateTime, default=utc_now, nullable=False)
+    created_operation_id = Column(Integer, nullable=True, index=True)
+    request_snapshot = Column(JSON, nullable=False)
 
 
 class Archive(Base):
@@ -2261,6 +2348,12 @@ class ScriptExecution(Base):
         nullable=True,
         index=True,
     )  # NULL for standalone runs
+    operation_id = Column(
+        Integer,
+        ForeignKey("operations.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     backup_plan_id = Column(
         Integer,
         ForeignKey("backup_plans.id", ondelete="SET NULL"),

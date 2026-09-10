@@ -2,10 +2,11 @@
 Comprehensive unit tests for backup API endpoints
 """
 
+import time
+
 import pytest
 from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
-from sqlalchemy import text
 from app.core.agent_auth import AGENT_AUTH_HEADER
 from app.core.security import get_password_hash
 from app.services.operations.executors import load_default_executors
@@ -19,12 +20,18 @@ from app.database.models import (
     PruneJob,
     CompactJob,
     Operation,
+    OperationBackupDetails,
+    OperationBackupRetryLineage,
+    ScheduledJob,
     SSHConnection,
     SystemSettings,
     UserRepositoryPermission,
 )
 from datetime import datetime
 import json
+from app.services.operations.backup_facade import BackupJobFacade
+from app.services.operations.details import backup_details
+from app.services.repository_executor import queue_agent_backup_job
 from tests.unit.helpers import assert_auth_required
 
 
@@ -37,6 +44,23 @@ def _json_snapshot(value):
 def _close_background_task(coro):
     coro.close()
     return None
+
+
+def _wait_for_agent_job(test_db, operation_id: int, timeout: float = 5.0):
+    """The transport job the backup executor queues, once the runner has
+    dispatched the operation."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        test_db.expire_all()
+        agent_job = (
+            test_db.query(AgentJob)
+            .filter(AgentJob.operation_id == operation_id)
+            .first()
+        )
+        if agent_job is not None:
+            return agent_job
+        time.sleep(0.05)
+    raise AssertionError(f"no agent job queued for operation {operation_id}")
 
 
 def _set_log_save_policy(test_db, policy: str) -> None:
@@ -52,10 +76,9 @@ def _set_log_save_policy(test_db, policy: str) -> None:
 class TestBackupStart:
     """Test starting backup operations"""
 
-    def test_start_backup_success(
-        self, test_client: TestClient, admin_headers, test_db
+    def test_start_backup_enqueues_an_operation(
+        self, test_client, admin_headers, test_db
     ):
-        """Test starting backup returns 200"""
         repo = Repository(
             name="Test Repo",
             path="/test/repo",
@@ -64,13 +87,12 @@ class TestBackupStart:
         )
         test_db.add(repo)
         test_db.commit()
-        test_db.refresh(repo)
 
-        with (
-            patch(
-                "app.api.backup.backup_service.execute_backup", return_value=object()
-            ),
-            patch("app.api.backup._run_in_background") as run_background,
+        # The live runner may dispatch the row before this test reads it back;
+        # a mocked service keeps that harmless, as it does for restore.
+        with patch(
+            "app.services.backup_service.backup_service.execute_backup",
+            new=AsyncMock(return_value=None),
         ):
             response = test_client.post(
                 "/api/backup/start",
@@ -78,13 +100,170 @@ class TestBackupStart:
                 headers=admin_headers,
             )
 
-            assert response.status_code == 200
-            data = response.json()
-            assert "job_id" in data
-            assert data["status"] == "pending"
-            # The happy path must actually dispatch the backup, not just create
-            # the pending row.
-            run_background.assert_called_once()
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "pending"
+        assert body["message"] == "Backup job started"
+        op = test_db.get(Operation, body["job_id"])
+        assert op.kind == "backup"
+        assert op.category == "backup"
+        assert op.trigger == "manual"
+        assert op.repository_id == repo.id
+        assert op.params["executor"] == "server"
+        assert test_db.query(BackupJob).count() == 0
+
+    def test_start_backup_unknown_path_is_recorded_and_failed(
+        self, test_client, admin_headers, test_db
+    ):
+        response = test_client.post(
+            "/api/backup/start", json={"repository": "/nope"}, headers=admin_headers
+        )
+        assert response.status_code == 200
+        op = test_db.get(Operation, response.json()["job_id"])
+        assert op.status == "failed"
+        assert op.repository_id is None
+        status = test_client.get(
+            f"/api/backup/status/{op.id}", headers=admin_headers
+        ).json()
+        assert status["repository"] == "/nope"
+        assert status["status"] == "failed"
+
+    def test_retry_creates_a_retry_operation_with_lineage(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import OperationBackupRetryLineage
+
+        repo = Repository(
+            name="r", path="/test/repo", encryption="none", repository_type="local"
+        )
+        test_db.add(repo)
+        test_db.commit()
+        source = Operation(
+            repository_id=repo.id,
+            kind="backup",
+            category="backup",
+            status="failed",
+            trigger="manual",
+            priority=0,
+            run_id="r1",
+            params={"executor": "server"},
+        )
+        test_db.add(source)
+        test_db.commit()
+
+        response = test_client.post(
+            f"/api/backup/jobs/{source.id}/retry", headers=admin_headers
+        )
+
+        assert response.status_code == 202
+        body = response.json()
+        assert body["status"] == "pending"
+        assert body["retry_attempt"] == 2
+        assert body["retry_original_job_id"] == source.id
+        assert body["retry_source_job_id"] == source.id
+        retry = test_db.get(Operation, body["job_id"])
+        assert retry.trigger == "retry"
+        lineage = test_db.query(OperationBackupRetryLineage).one()
+        assert lineage.created_operation_id == retry.id
+        assert lineage.attempt_number == 2
+        assert lineage.request_snapshot["kind"] == "backup_job_retry"
+
+    def test_list_and_status_serve_operations_and_legacy_rows(
+        self, test_client, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="r", path="/test/repo", encryption="none", repository_type="local"
+        )
+        test_db.add(repo)
+        test_db.commit()
+        legacy = BackupJob(repository="/test/repo", status="completed")
+        test_db.add(legacy)
+        test_db.commit()
+        schedule = ScheduledJob(
+            name="nightly",
+            repository=repo.path,
+            repository_id=repo.id,
+            cron_expression="0 2 * * *",
+        )
+        test_db.add(schedule)
+        test_db.commit()
+        op = Operation(
+            repository_id=repo.id,
+            kind="backup",
+            category="backup",
+            status="running",
+            trigger="schedule",
+            priority=5,
+            run_id="r1",
+            scheduled_job_id=schedule.id,
+            params={"executor": "server", "archive_name": "a"},
+            progress_percent=40.0,
+        )
+        test_db.add(op)
+        test_db.flush()
+        backup_details(test_db, op).archive_name = "a"
+        test_db.commit()
+
+        jobs = test_client.get("/api/backup/jobs", headers=admin_headers).json()["jobs"]
+        assert {j["id"] for j in jobs} == {legacy.id, op.id}
+        mine = next(j for j in jobs if j["id"] == op.id)
+        assert mine["status"] == "running"
+        assert mine["progress"] == 40
+        assert mine["triggered_by"] == "schedule"
+        assert mine["execution_mode"] == "local"
+        assert mine["archive_name"] == "a"
+        assert set(mine) == set(next(j for j in jobs if j["id"] == legacy.id))
+
+    def test_cancel_running_operation_raises_the_flag_then_kills(
+        self, test_client, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="r", path="/test/repo", encryption="none", repository_type="local"
+        )
+        test_db.add(repo)
+        test_db.commit()
+        op = Operation(
+            repository_id=repo.id,
+            kind="backup",
+            category="backup",
+            status="running",
+            trigger="manual",
+            priority=0,
+            run_id="r1",
+            params={"executor": "server"},
+        )
+        test_db.add(op)
+        test_db.commit()
+        calls = []
+
+        async def _request_cancel(operation_id):
+            calls.append(("flag", operation_id))
+            return True
+
+        async def _kill(job_id):
+            calls.append(("kill", job_id))
+            return True
+
+        with (
+            patch("app.api.backup.operation_runner.request_cancel", _request_cancel),
+            patch("app.api.backup.backup_service.cancel_backup", _kill),
+        ):
+            response = test_client.post(
+                f"/api/backup/cancel/{op.id}", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "message": "backend.success.backup.backupCancelled",
+            "process_terminated": True,
+        }
+        assert calls == [("flag", op.id), ("kill", op.id)]
+        test_db.refresh(op)
+        assert op.status == "cancelled"
+        assert (
+            json.loads(op.error_message)["key"]
+            == "backend.errors.backup.cancelledByUser"
+        )
 
     def test_run_backup_alias_success(
         self, test_client: TestClient, admin_headers, test_db
@@ -280,7 +459,6 @@ class TestBackupStart:
             patch(
                 "app.api.backup.backup_service.execute_backup", new_callable=AsyncMock
             ) as execute_backup,
-            patch("app.api.backup._run_in_background") as run_background,
         ):
             response = test_client.post(
                 "/api/backup/start",
@@ -294,7 +472,6 @@ class TestBackupStart:
             == "backend.errors.backup.concurrentLimitReached"
         )
         execute_backup.assert_not_called()
-        run_background.assert_not_called()
         assert test_db.query(BackupJob).filter_by(repository=repo.path).count() == 1
 
     def test_start_backup_multiple_sources(
@@ -361,13 +538,18 @@ class TestBackupStart:
         test_db.add(repo)
         test_db.commit()
 
+        # Phase 8: the route only enqueues. The executor queues the agent job,
+        # so the transport is mocked out here and driven directly below.
         with (
             patch(
-                "app.api.backup.backup_service.execute_backup", new_callable=AsyncMock
+                "app.services.backup_service.backup_service.execute_backup",
+                new_callable=AsyncMock,
             ) as execute_backup,
             patch(
-                "app.api.backup.dispatch_agent_job_best_effort", new_callable=AsyncMock
-            ) as dispatch_agent_job,
+                "app.services.operations.executors.backup"
+                ".dispatch_agent_job_best_effort",
+                new_callable=AsyncMock,
+            ),
         ):
             response = test_client.post(
                 "/api/backup/start",
@@ -377,19 +559,18 @@ class TestBackupStart:
 
         assert response.status_code == 200
         execute_backup.assert_not_called()
-        dispatch_agent_job.assert_awaited_once()
+        operation = test_db.get(Operation, response.json()["job_id"])
+        assert operation.kind == "backup"
+        assert operation.params["executor"] == "agent"
+        assert operation.execution_mode == "agent"
+        assert test_db.query(BackupJob).count() == 0
 
-        backup_job = test_db.query(BackupJob).filter_by(repository=repo.path).first()
-        assert backup_job is not None
-        assert backup_job.execution_mode == "agent"
-        assert backup_job.archive_name.startswith("manual-backup-")
-
-        agent_job = (
-            test_db.query(AgentJob)
-            .filter(AgentJob.backup_job_id == backup_job.id)
-            .first()
+        agent_job = queue_agent_backup_job(
+            test_db, BackupJobFacade(test_db, operation), repo
         )
-        assert agent_job is not None
+        test_db.commit()
+        assert agent_job.operation_id == operation.id
+        assert agent_job.backup_job_id is None
         assert agent_job.agent_machine_id == agent.id
         assert agent_job.status == "queued"
         assert agent_job.payload["repository"] == {
@@ -444,7 +625,8 @@ class TestBackupStart:
         test_db.commit()
 
         with patch(
-            "app.api.backup.dispatch_agent_job_best_effort", new_callable=AsyncMock
+            "app.services.operations.executors.backup.dispatch_agent_job_best_effort",
+            new_callable=AsyncMock,
         ) as dispatch_agent_job:
             response = test_client.post(
                 "/api/backup/start",
@@ -459,7 +641,7 @@ class TestBackupStart:
         )
         dispatch_agent_job.assert_not_called()
         assert test_db.query(AgentJob).count() == 0
-        assert test_db.query(BackupJob).filter_by(repository=repo.path).count() == 1
+        assert test_db.query(Operation).filter(Operation.kind == "backup").count() == 0
 
     def test_start_backup_uses_remote_direct_for_same_ssh_source_and_repo(
         self, test_client: TestClient, admin_headers, test_db
@@ -486,7 +668,8 @@ class TestBackupStart:
         test_db.commit()
 
         with patch(
-            "app.api.backup.backup_service.execute_backup", new_callable=AsyncMock
+            "app.services.backup_service.backup_service.execute_backup",
+            new=AsyncMock(return_value=None),
         ):
             response = test_client.post(
                 "/api/backup/start",
@@ -495,10 +678,11 @@ class TestBackupStart:
             )
 
         assert response.status_code == 200
-        backup_job = test_db.query(BackupJob).filter_by(repository=repo.path).one()
-        assert backup_job.route_strategy == "remote_direct"
-        assert backup_job.execution_mode == "remote_ssh"
-        assert backup_job.source_ssh_connection_id == connection.id
+        operation = test_db.get(Operation, response.json()["job_id"])
+        details = test_db.get(OperationBackupDetails, operation.id)
+        assert details.route_strategy == "remote_direct"
+        assert operation.execution_mode == "remote_ssh"
+        assert details.source_ssh_connection_id == connection.id
 
     def test_start_backup_routes_agent_repository_by_executor_type(
         self, test_client: TestClient, admin_headers, test_db
@@ -527,9 +711,17 @@ class TestBackupStart:
         test_db.add(repo)
         test_db.commit()
 
-        with patch(
-            "app.api.backup.backup_service.execute_backup", new_callable=AsyncMock
-        ) as execute_backup:
+        with (
+            patch(
+                "app.services.backup_service.backup_service.execute_backup",
+                new_callable=AsyncMock,
+            ) as execute_backup,
+            patch(
+                "app.services.operations.executors.backup"
+                ".dispatch_agent_job_best_effort",
+                new_callable=AsyncMock,
+            ),
+        ):
             response = test_client.post(
                 "/api/backup/start",
                 json={"repository": repo.path},
@@ -538,13 +730,15 @@ class TestBackupStart:
 
         assert response.status_code == 200
         execute_backup.assert_not_called()
-        backup_job = test_db.query(BackupJob).filter_by(repository=repo.path).first()
-        assert backup_job.execution_mode == "agent"
-        agent_job = (
-            test_db.query(AgentJob)
-            .filter(AgentJob.backup_job_id == backup_job.id)
-            .one()
+        operation = test_db.get(Operation, response.json()["job_id"])
+        assert operation.params["executor"] == "agent"
+        assert operation.execution_mode == "agent"
+
+        agent_job = queue_agent_backup_job(
+            test_db, BackupJobFacade(test_db, operation), repo
         )
+        test_db.commit()
+        assert agent_job.operation_id == operation.id
         assert agent_job.agent_machine_id == agent.id
 
     def test_start_backup_for_agent_repository_without_sources_explains_plan_sources(
@@ -621,11 +815,9 @@ class TestBackupStart:
         )
         assert response.status_code == 200
         backup_job_id = response.json()["job_id"]
-        agent_job = (
-            test_db.query(AgentJob)
-            .filter(AgentJob.backup_job_id == backup_job_id)
-            .first()
-        )
+        # Phase 8: the runner's executor queues the transport job, so wait for
+        # it to appear rather than expecting the route to have written it.
+        agent_job = _wait_for_agent_job(test_db, backup_job_id)
         headers = {AGENT_AUTH_HEADER: f"Bearer {raw_token}"}
 
         poll_response = test_client.get("/api/agents/jobs/poll", headers=headers)
@@ -677,7 +869,8 @@ class TestBackupStart:
             == 200
         )
 
-        backup_job = test_db.query(BackupJob).filter_by(id=backup_job_id).first()
+        test_db.expire_all()
+        backup_job = BackupJobFacade(test_db, test_db.get(Operation, backup_job_id))
         test_db.refresh(repo)
         assert backup_job.status == "completed"
         assert backup_job.progress == 100
@@ -753,15 +946,11 @@ class TestBackupRetry:
         test_db.add(source_job)
         test_db.commit()
 
-        with (
-            patch(
-                "app.api.backup.backup_service.execute_backup",
-                new_callable=AsyncMock,
-            ) as execute_backup,
-            patch(
-                "app.api.backup._run_in_background",
-                side_effect=_close_background_task,
-            ) as run_background,
+        # A retry of a row written before phase 8 creates an operation; the
+        # live runner may dispatch it, so the service is mocked out.
+        with patch(
+            "app.services.backup_service.backup_service.execute_backup",
+            new=AsyncMock(return_value=None),
         ):
             response = test_client.post(
                 f"/api/backup/jobs/{source_job.id}/retry", headers=admin_headers
@@ -778,34 +967,27 @@ class TestBackupRetry:
 
         test_db.refresh(source_job)
         assert source_job.status == "failed"
-        retry_job = (
-            test_db.query(BackupJob).filter(BackupJob.id == body["job_id"]).one()
-        )
-        assert retry_job.id != source_job.id
-        assert retry_job.status == "pending"
-        assert retry_job.repository == repo.path
-        assert retry_job.repository_id == repo.id
-        assert retry_job.scheduled_job_id is None
-        assert retry_job.backup_plan_id is None
-        assert retry_job.backup_plan_run_id is None
-        assert retry_job.retry_attempt == 2
-        assert retry_job.retry_original_job_id == source_job.id
-        assert retry_job.retry_source_job_id == source_job.id
-        assert retry_job.retry_requested_by_user_id == admin_user.id
-        assert retry_job.retry_requested_at is not None
+        retry_op = test_db.get(Operation, body["job_id"])
+        assert retry_op.kind == "backup"
+        assert retry_op.trigger == "retry"
+        assert retry_op.repository_id == repo.id
+        assert retry_op.scheduled_job_id is None
+        assert retry_op.backup_plan_run_id is None
+        retry_details = test_db.get(OperationBackupDetails, retry_op.id)
+        assert retry_details.retry_attempt == 2
+        assert retry_details.retry_original_job_id == source_job.id
+        assert retry_details.retry_source_job_id == source_job.id
+        assert retry_details.retry_requested_by_user_id == admin_user.id
+        assert retry_details.retry_requested_at is not None
 
-        lineage = (
-            test_db.execute(text("SELECT * FROM backup_job_retry_lineage"))
-            .mappings()
-            .one()
-        )
-        assert lineage["original_job_id"] == source_job.id
-        assert lineage["retry_source_job_id"] == source_job.id
-        assert lineage["attempt_number"] == 2
-        assert lineage["requested_by_user_id"] == admin_user.id
-        assert lineage["requested_at"] is not None
-        assert lineage["created_job_id"] == retry_job.id
-        snapshot = _json_snapshot(lineage["request_snapshot"])
+        lineage = test_db.query(OperationBackupRetryLineage).one()
+        assert lineage.original_job_id == source_job.id
+        assert lineage.retry_source_job_id == source_job.id
+        assert lineage.attempt_number == 2
+        assert lineage.requested_by_user_id == admin_user.id
+        assert lineage.requested_at is not None
+        assert lineage.created_operation_id == retry_op.id
+        snapshot = _json_snapshot(lineage.request_snapshot)
         assert snapshot["kind"] == "backup_job_retry"
         assert snapshot["repository"]["id"] == repo.id
         assert snapshot["repository"]["path"] == repo.path
@@ -813,9 +995,6 @@ class TestBackupRetry:
         assert snapshot["backup"]["exclude_patterns"] == ["*.tmp"]
         assert snapshot["backup"]["compression"] == "zstd,3"
         assert snapshot["backup"]["custom_flags"] == "--one-file-system"
-
-        execute_backup.assert_called_once()
-        run_background.assert_called_once()
 
     def test_retry_failed_agent_backup_creates_agent_job_with_lineage(
         self, test_client: TestClient, admin_headers, test_db
@@ -891,7 +1070,7 @@ class TestBackupRetry:
                 new_callable=AsyncMock,
             ) as execute_backup,
             patch(
-                "app.api.backup.dispatch_agent_job_best_effort",
+                "app.services.operations.executors.backup.dispatch_agent_job_best_effort",
                 new_callable=AsyncMock,
             ) as dispatch_agent_job,
         ):
@@ -900,22 +1079,24 @@ class TestBackupRetry:
             )
 
         assert response.status_code == 202
-        retry_job = (
-            test_db.query(BackupJob)
-            .filter(BackupJob.id == response.json()["job_id"])
-            .one()
-        )
-        assert retry_job.id != source_job.id
-        assert retry_job.status == "pending"
+        retry_op = test_db.get(Operation, response.json()["job_id"])
+        retry_job = BackupJobFacade(test_db, retry_op)
+        # The two id spaces are independent while both worlds coexist, so a
+        # retry operation may carry the same number as the legacy row it
+        # retries; operations win on the by-id routes (Appendix B).
+        assert retry_op.trigger == "retry"
+        assert retry_op.params["executor"] == "agent"
         assert retry_job.execution_mode == "agent"
         assert retry_job.retry_attempt == 2
         assert retry_job.retry_original_job_id == source_job.id
         assert retry_job.retry_source_job_id == source_job.id
 
-        agent_job = (
-            test_db.query(AgentJob).filter(AgentJob.backup_job_id == retry_job.id).one()
-        )
+        # The executor queues the transport job; drive it here so the payload
+        # the agent receives is still covered.
+        agent_job = queue_agent_backup_job(test_db, retry_job, repo)
+        test_db.commit()
         assert agent_job.status == "queued"
+        assert agent_job.operation_id == retry_op.id
         assert agent_job.agent_machine_id == agent.id
         assert agent_job.payload["backup"]["source_paths"] == ["/home/user/docs"]
         assert agent_job.payload["backup"]["exclude_patterns"] == ["*.tmp"]
@@ -924,20 +1105,12 @@ class TestBackupRetry:
             "BORG_PASSPHRASE": {"value": "agent-secret"}
         }
 
-        lineage = (
-            test_db.execute(text("SELECT * FROM backup_job_retry_lineage"))
-            .mappings()
-            .one()
-        )
-        assert lineage["created_job_id"] == retry_job.id
-        snapshot = _json_snapshot(lineage["request_snapshot"])
+        lineage = test_db.query(OperationBackupRetryLineage).one()
+        assert lineage.created_operation_id == retry_op.id
+        snapshot = _json_snapshot(lineage.request_snapshot)
         assert snapshot["kind"] == "backup_job_retry"
         assert snapshot["backup"]["execution_mode"] == "agent"
-        assert snapshot["agent_payload"]["backup"]["source_paths"] == [
-            "/home/user/docs"
-        ]
         execute_backup.assert_not_called()
-        dispatch_agent_job.assert_awaited_once()
 
     def test_retry_active_backup_job_rejected(
         self, test_client: TestClient, admin_headers, test_db
@@ -1032,27 +1205,18 @@ class TestBackupRetry:
         test_db.add(source_job)
         test_db.commit()
 
-        with (
-            patch(
-                "app.api.backup.backup_service.execute_backup",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "app.api.backup._run_in_background",
-                side_effect=_close_background_task,
-            ),
+        with patch(
+            "app.services.backup_service.backup_service.execute_backup",
+            new=AsyncMock(return_value=None),
         ):
             response = test_client.post(
                 f"/api/backup/jobs/{source_job.id}/retry", headers=auth_headers
             )
 
         assert response.status_code == 202
-        retry_job = (
-            test_db.query(BackupJob)
-            .filter(BackupJob.id == response.json()["job_id"])
-            .one()
-        )
-        assert retry_job.retry_requested_by_user_id == test_user.id
+        retry_op = test_db.get(Operation, response.json()["job_id"])
+        details = test_db.get(OperationBackupDetails, retry_op.id)
+        assert details.retry_requested_by_user_id == test_user.id
 
 
 @pytest.mark.unit
@@ -1365,19 +1529,16 @@ class TestBackupCancel:
         )
         assert start.status_code == 200
         backup_job_id = start.json()["job_id"]
-        agent_job = (
-            test_db.query(AgentJob)
-            .filter(AgentJob.backup_job_id == backup_job_id)
-            .first()
-        )
+        agent_job = _wait_for_agent_job(test_db, backup_job_id)
 
         response = test_client.post(
             f"/api/backup/cancel/{backup_job_id}", headers=admin_headers
         )
 
         assert response.status_code == 200
+        test_db.expire_all()
         test_db.refresh(agent_job)
-        backup_job = test_db.query(BackupJob).filter_by(id=backup_job_id).first()
+        backup_job = BackupJobFacade(test_db, test_db.get(Operation, backup_job_id))
         assert agent_job.status == "canceled"
         assert backup_job.status == "cancelled"
         assert backup_job.completed_at is not None

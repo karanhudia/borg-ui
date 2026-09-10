@@ -23,6 +23,7 @@ from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg_errors import is_borg_warning_exit_code
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
+from app.services.operations.backup_facade import resolve_backup_job
 from app.services.notification_service import notification_service
 from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.ssh_utils import (
@@ -123,7 +124,7 @@ class RemoteBackupService:
         db = SessionLocal()
         try:
             # Update job status
-            job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+            job = resolve_backup_job(db, job_id)
             if not job:
                 raise Exception(f"Backup job {job_id} not found")
 
@@ -216,7 +217,7 @@ class RemoteBackupService:
                 result = {**result, "success": True, "warning": True, "error": None}
 
             # Update final job status
-            job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+            job = resolve_backup_job(db, job_id)
             if result["success"]:
                 if resolved_name:
                     archive_name = resolved_name
@@ -270,7 +271,7 @@ class RemoteBackupService:
             )
 
             # Update job status
-            job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+            job = resolve_backup_job(db, job_id)
             if job:
                 job.status = "failed"
                 job.error_message = str(e)
@@ -580,7 +581,7 @@ class RemoteBackupService:
                 self.running_processes[job_id] = process
 
                 # Track PID on remote host (if possible to extract from output)
-                job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+                job = resolve_backup_job(db, job_id)
                 if job and process.pid:
                     job.remote_process_pid = process.pid
                     db.commit()
@@ -697,7 +698,7 @@ class RemoteBackupService:
     async def _update_progress_from_json(self, job_id: int, data: dict, db: Session):
         """Update job progress from Borg JSON output"""
         try:
-            job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+            job = resolve_backup_job(db, job_id)
             if not job:
                 return
 
@@ -870,7 +871,7 @@ class RemoteBackupService:
                 # Update job status
                 db = SessionLocal()
                 try:
-                    job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+                    job = resolve_backup_job(db, job_id)
                     if job:
                         job.status = "failed"
                         job.error_message = "Backup cancelled by user"

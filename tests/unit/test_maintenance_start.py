@@ -238,6 +238,36 @@ def test_inline_maintenance_starts_running_so_the_runner_leaves_it_alone(
     assert op.started_at is not None
 
 
+def test_start_inline_maintenance_can_join_a_run(db, repository):
+    from app.services.operations.maintenance_start import start_inline_maintenance
+
+    parent = Operation(
+        repository_id=repository.id,
+        kind="backup",
+        category="backup",
+        status="completed",
+        trigger="plan",
+        priority=0,
+        run_id="run-9",
+    )
+    db.add(parent)
+    db.commit()
+
+    child = start_inline_maintenance(
+        db,
+        repository,
+        "prune",
+        params={},
+        user_id=None,
+        run_id="run-9",
+        depends_on_id=parent.id,
+    )
+
+    assert child.run_id == "run-9"
+    assert child.depends_on_id == parent.id
+    assert child.status == "running"
+
+
 def test_finish_inline_enqueues_the_followup_chain(db, repository):
     from app.services.operations.executors import load_default_executors
     from app.services.operations.maintenance_start import (
