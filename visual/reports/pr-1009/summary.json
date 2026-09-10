@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-09-10T12:53:52.439Z",
+  "generatedAt": "2026-09-10T13:01:40.371Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1009 visual report",
-    "commitSha": "6bb3b99f4dc8",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34477914207"
+    "commitSha": "e139d14933e0",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34479216416"
   },
   "totals": {
     "baseline": 758,
-    "actual": 766,
+    "actual": 768,
     "compared": 758,
     "changed": 4,
-    "added": 8,
+    "added": 10,
     "removed": 0,
     "unchanged": 754
   },
@@ -117,6 +117,14 @@
     {
       "fileName": "remote-machines-remotemachinecard--restricted-shell--mobile.png",
       "actualPath": "images/actual/remote-machines-remotemachinecard--restricted-shell--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-remotemachinecard--restricted-shell-dark--mobile.png",
+      "actualPath": "images/actual/remote-machines-remotemachinecard--restricted-shell-dark--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-remotemachinecard--restricted-shell-dark.png",
+      "actualPath": "images/actual/remote-machines-remotemachinecard--restricted-shell-dark.png"
     },
     {
       "fileName": "remote-machines-remotemachinecard--restricted-shell.png",
