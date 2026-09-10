@@ -110,6 +110,11 @@ export default function RemoteMachineCard({
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const accent = getStatusAccent(machine.status)
+  // df cannot run on a Borg-only key, so storage refresh is a dead end there.
+  const isRestricted = Boolean(machine.shell_restricted)
+  const refreshStorageTooltip = isRestricted
+    ? t('remoteMachineCard.restricted.tooltip')
+    : t('remoteMachine.refreshStorage')
 
   const iconBtnSx = {
     width: { xs: 40, sm: 34 },
@@ -429,20 +434,24 @@ export default function RemoteMachineCard({
             <Typography noWrap sx={{ fontSize: '0.75rem', color: 'text.disabled', flex: 1 }}>
               {t('remoteMachine.noStorageInfo')}
             </Typography>
-            <Tooltip title={t('remoteMachine.refreshStorage')} arrow>
-              <IconButton
-                aria-label={t('remoteMachine.refreshStorage')}
-                onClick={() => onRefreshStorage(machine)}
-                sx={{
-                  width: { xs: 36, sm: 30 },
-                  height: { xs: 36, sm: 30 },
-                  flexShrink: 0,
-                  color: 'text.disabled',
-                  '&:hover': { color: 'text.secondary' },
-                }}
-              >
-                <RefreshCw size={14} />
-              </IconButton>
+            <Tooltip title={refreshStorageTooltip} arrow>
+              {/* span keeps the tooltip reachable while the button is disabled */}
+              <span>
+                <IconButton
+                  aria-label={t('remoteMachine.refreshStorage')}
+                  onClick={() => onRefreshStorage(machine)}
+                  disabled={isRestricted}
+                  sx={{
+                    width: { xs: 36, sm: 30 },
+                    height: { xs: 36, sm: 30 },
+                    flexShrink: 0,
+                    color: 'text.disabled',
+                    '&:hover': { color: 'text.secondary' },
+                  }}
+                >
+                  <RefreshCw size={14} />
+                </IconButton>
+              </span>
             </Tooltip>
           </Box>
         )}
@@ -555,15 +564,18 @@ export default function RemoteMachineCard({
                 <Network size={16} />
               </IconButton>
             </Tooltip>
-            <Tooltip title={t('remoteMachine.actions.refreshStorage')} arrow>
-              <IconButton
-                size="small"
-                aria-label={t('remoteMachine.actions.refreshStorage')}
-                onClick={() => onRefreshStorage(machine)}
-                sx={coloredIconBtnSx('info')}
-              >
-                <RefreshCw size={16} />
-              </IconButton>
+            <Tooltip title={refreshStorageTooltip} arrow>
+              <span>
+                <IconButton
+                  size="small"
+                  aria-label={t('remoteMachine.actions.refreshStorage')}
+                  onClick={() => onRefreshStorage(machine)}
+                  disabled={isRestricted}
+                  sx={coloredIconBtnSx('info')}
+                >
+                  <RefreshCw size={16} />
+                </IconButton>
+              </span>
             </Tooltip>
             {onVerifyHostKey && (
               <Tooltip title={t('remoteMachineCard.hostKey.action')} arrow>

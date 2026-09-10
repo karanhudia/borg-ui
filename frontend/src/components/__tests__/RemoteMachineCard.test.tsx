@@ -118,6 +118,9 @@ describe('RemoteMachineCard', () => {
         />
       )
       expect(screen.getByText('Borg only')).toBeInTheDocument()
+      const refreshButtons = screen.getAllByRole('button', { name: /refresh storage/i })
+      expect(refreshButtons.length).toBeGreaterThan(0)
+      refreshButtons.forEach((button) => expect(button).toBeDisabled())
     })
 
     it('hides the Borg-only badge when the shell is not restricted', () => {
