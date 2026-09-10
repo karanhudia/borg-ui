@@ -89,3 +89,31 @@ def compute_agent_upgrade_status(
     # land here: the endpoint is not running the string we serve, so it is
     # treated as behind. Reinstalling it is harmless.
     return OUTDATED
+
+
+def borg_pin_satisfied(
+    *, desired: Optional[str], reported: Optional[list] = None
+) -> bool:
+    """Whether the Borg major an endpoint is pinned to is one it reports.
+
+    No pin is satisfied by anything: an endpoint that tracks whatever is
+    installed has nothing to wait for.
+
+    A pin and no reported binaries is not satisfied. Silence is not success:
+    the endpoint has told us nothing to compare, and clearing an upgrade on it
+    would report a Borg move that may not have happened. The upgrade timeout
+    (spec section 7.1) is what resolves that case, honestly, as failed.
+
+    The reported list arrives from an agent heartbeat, so anything in it may be
+    malformed and must not raise: an entry that is not a mapping with a major
+    simply does not match.
+    """
+    if not desired:
+        return True
+    for entry in reported or []:
+        if not isinstance(entry, dict):
+            continue
+        major = entry.get("major")
+        if major is not None and str(major) == str(desired):
+            return True
+    return False

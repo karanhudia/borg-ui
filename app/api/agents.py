@@ -27,6 +27,7 @@ from app.core.agent_auth import (
     resolve_agent_from_token,
 )
 from app.core.agent_constants import DEFAULT_AGENT_POLL_INTERVAL_SECONDS
+from app.core.agent_versions import borg_pin_satisfied
 from app.core.borg_errors import is_borg_warning_exit_code
 from app.core.security import get_password_hash, verify_password
 from app.database.database import get_db
@@ -151,12 +152,21 @@ def resolve_agent_upgrade(agent: AgentMachine) -> None:
     target version. The agent can be killed before its acknowledgement reaches
     the server, and the timeout is a guess by construction, so the version the
     endpoint actually reports outranks either.
+
+    The target has two halves once an endpoint carries a Borg pin. A Borg only
+    change leaves `agent_version` alone, so matching on it would resolve such
+    an upgrade on the endpoint's next heartbeat, before the reinstall had done
+    anything. The caller must therefore have already stored this heartbeat's
+    `borg_versions`, or the pin is read against the previous report.
     """
     if agent.upgrade_state not in ("requested", "failed"):
         return
     if (
         agent.upgrade_target_version
         and agent.agent_version == agent.upgrade_target_version
+        and borg_pin_satisfied(
+            desired=agent.desired_borg_version, reported=agent.borg_versions
+        )
     ):
         agent.upgrade_state = "idle"
         agent.upgrade_error = None
@@ -1388,11 +1398,13 @@ async def heartbeat(
     now = _now_utc()
     current_agent.hostname = payload.hostname or current_agent.hostname
     current_agent.agent_version = payload.agent_version or current_agent.agent_version
-    resolve_agent_upgrade(current_agent)
     current_agent.timezone = (
         _validated_timezone(payload.timezone) or current_agent.timezone
     )
     current_agent.borg_versions = payload.borg_versions
+    # After borg_versions: an endpoint with a Borg pin is only up to date once
+    # this heartbeat's binaries include the pinned major.
+    resolve_agent_upgrade(current_agent)
     current_agent.capabilities = payload.capabilities
     current_agent.last_error = payload.last_error
     current_agent.status = "online"
@@ -1457,11 +1469,13 @@ async def session(websocket: WebSocket, db: Session = Depends(get_db)):
         now = _now_utc()
         current_agent.hostname = hello.hostname or current_agent.hostname
         current_agent.agent_version = hello.agent_version or current_agent.agent_version
-        resolve_agent_upgrade(current_agent)
         current_agent.timezone = (
             _validated_timezone(hello.timezone) or current_agent.timezone
         )
         current_agent.borg_versions = hello.borg_versions
+        # After borg_versions: an endpoint with a Borg pin is only up to date
+        # once this report's binaries include the pinned major.
+        resolve_agent_upgrade(current_agent)
         current_agent.capabilities = hello.capabilities
         current_agent.status = "online"
         current_agent.last_error = None
