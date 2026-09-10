@@ -122,10 +122,10 @@ ENV APP_VERSION=${APP_VERSION}
 ARG PYTHON_VERSION
 
 # Docker image metadata
-LABEL org.opencontainers.image.title="Borg Web UI"
+LABEL org.opencontainers.image.title="Borg UI"
 LABEL org.opencontainers.image.description="A lightweight web interface for Borg backup management"
 LABEL org.opencontainers.image.version="${APP_VERSION}"
-LABEL org.opencontainers.image.vendor="Borg Web UI"
+LABEL org.opencontainers.image.vendor="Borg UI"
 LABEL org.opencontainers.image.url="https://github.com/karanhudia/borg-ui"
 LABEL org.opencontainers.image.documentation="https://github.com/karanhudia/borg-ui/blob/main/README.md"
 LABEL org.opencontainers.image.source="https://github.com/karanhudia/borg-ui"

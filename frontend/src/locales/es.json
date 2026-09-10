@@ -69,7 +69,7 @@
     }
   },
   "login": {
-    "title": "Borg Web UI",
+    "title": "Borg UI",
     "subtitle": "Introduce tus credenciales para continuar",
     "username": "Usuario",
     "password": "Contraseña",

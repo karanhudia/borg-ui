@@ -164,7 +164,7 @@ logger = structlog.get_logger()
 
 # Create FastAPI app
 app = FastAPI(
-    title="Borg Web UI",
+    title="Borg UI",
     description="A lightweight web interface for Borg backup management",
     version=get_runtime_app_version(),
     docs_url="/api/docs",
@@ -247,7 +247,7 @@ app.include_router(v2_router, prefix="/api/v2")  # Borg 2 versioned API
 @app.on_event("startup")
 async def startup_event():
     """Initialize application on startup"""
-    logger.info("Starting Borg Web UI")
+    logger.info("Starting Borg UI")
     _log_insecure_no_auth_warning()
     _log_proxy_auth_security_warnings()
 
@@ -500,13 +500,13 @@ async def startup_event():
     app.state.background_tasks.append(task6)
     logger.info("Job history retention scheduler started")
 
-    logger.info("Borg Web UI started successfully")
+    logger.info("Borg UI started successfully")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on application shutdown"""
-    logger.info("Shutting down Borg Web UI")
+    logger.info("Shutting down Borg UI")
 
     global licensing_refresh_task
     if licensing_refresh_task:
@@ -555,7 +555,7 @@ async def root():
     if _cached_index_html is not None:
         return HTMLResponse(content=_cached_index_html)
     return HTMLResponse(
-        content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>"
+        content="<h1>Borg UI</h1><p>Frontend not built yet. Please run the build process.</p>"
     )
 
 
@@ -581,7 +581,7 @@ async def catch_all(full_path: str):
     if _cached_index_html is not None:
         return HTMLResponse(content=_cached_index_html)
     return HTMLResponse(
-        content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>"
+        content="<h1>Borg UI</h1><p>Frontend not built yet. Please run the build process.</p>"
     )
 
 
@@ -595,7 +595,7 @@ async def health_check():
 async def api_info():
     """API information endpoint"""
     return {
-        "name": "Borg Web UI API",
+        "name": "Borg UI API",
         "version": get_runtime_app_version(),
         "docs": "/api/docs",
         "status": "running",

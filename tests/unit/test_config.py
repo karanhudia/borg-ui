@@ -40,7 +40,7 @@ def test_settings_environment():
     settings = Settings()
 
     assert settings.environment is not None
-    assert settings.app_name == "Borg Web UI"
+    assert settings.app_name == "Borg UI"
 
 
 @pytest.mark.unit

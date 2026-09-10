@@ -82,7 +82,7 @@ class Settings(BaseSettings):
     """Application settings"""
 
     # Application settings
-    app_name: str = "Borg Web UI"
+    app_name: str = "Borg UI"
     debug: bool = False
     environment: str = "production"  # Default to production for safety
 

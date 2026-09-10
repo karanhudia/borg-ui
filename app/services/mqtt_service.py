@@ -1,5 +1,5 @@
 """
-MQTT service for Borg Web UI.
+MQTT service for Borg UI.
 
 Home Assistant sensor state is always published from database state so that:
 - state can be fully reconstructed from DB records

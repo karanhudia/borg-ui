@@ -1,6 +1,6 @@
-# Borg Web UI - Frontend
+# Borg UI - Frontend
 
-React frontend for the Borg Web UI application.
+React frontend for the Borg UI application.
 
 ## Development
 
