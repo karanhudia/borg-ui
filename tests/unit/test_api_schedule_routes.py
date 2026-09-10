@@ -6,7 +6,6 @@ from fastapi.testclient import TestClient
 
 import app.api.schedule as schedule_api
 from app.database.models import (
-    BackupJob,
     BackupPlan,
     BackupPlanRepository,
     Repository,
@@ -15,13 +14,13 @@ from app.database.models import (
     Operation,
     OperationBackupDetails,
     OperationRcloneDetails,
-    RcloneSyncJob,
     ScheduledJob,
     ScheduledJobRepository,
     SSHConnection,
 )
 from app.services.operations.backup_facade import BackupJobFacade
 from app.services.rclone_service import RcloneCommandResult
+from tests.utils.operations import seed_job_operation
 
 
 class _FixedDateTime(datetime):
@@ -307,12 +306,13 @@ class TestScheduleRouteContracts:
         self, test_client: TestClient, admin_headers, test_db
     ):
         schedule = _create_schedule(test_db, "Delete Me", repository="/repos/delete-me")
-        backup_job = BackupJob(
+        backup_job = seed_job_operation(
+            test_db,
+            "backup",
             repository="/repos/delete-me",
             status="completed",
             scheduled_job_id=schedule.id,
         )
-        test_db.add(backup_job)
         test_db.commit()
         test_db.refresh(backup_job)
 
@@ -458,7 +458,6 @@ class TestScheduleRouteContracts:
         assert details.route_strategy == "remote_direct"
         assert operation.execution_mode == "remote_ssh"
         assert details.source_ssh_connection_id == connection.id
-        assert test_db.query(BackupJob).count() == 0
 
     @pytest.mark.asyncio
     async def test_multi_repo_schedule_applies_backup_route_metadata(
@@ -512,7 +511,6 @@ class TestScheduleRouteContracts:
         assert details.route_strategy == "remote_direct"
         assert operation.execution_mode == "remote_ssh"
         assert details.source_ssh_connection_id == connection.id
-        assert test_db.query(BackupJob).count() == 0
 
     @pytest.mark.asyncio
     async def test_multi_repo_schedule_closes_the_prune_operation_when_the_step_raises(
@@ -740,7 +738,9 @@ class TestScheduleRouteContracts:
             )
         )
         test_db.add(
-            BackupJob(
+            seed_job_operation(
+                test_db,
+                "backup",
                 repository=repo.path,
                 repository_id=repo.id,
                 status="running",
@@ -838,7 +838,6 @@ class TestScheduleRouteContracts:
         assert details.operation == "sync"
         assert details.direction == "primary_to_remote"
         assert details.scheduled_for == now.replace(tzinfo=None) - timedelta(minutes=5)
-        assert test_db.query(RcloneSyncJob).count() == 0
 
     def test_dispatch_scheduled_rclone_mirror_queues_one_run_per_slot(
         self, test_db, monkeypatch

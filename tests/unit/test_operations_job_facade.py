@@ -6,13 +6,7 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import (
-    Base,
-    CheckJob,
-    Operation,
-    Repository,
-    RestoreCheckJob,
-)
+from app.database.models import Base, Operation, Repository
 from app.services.operations.job_facade import (
     MAINTENANCE_KINDS,
     MaintenanceJobFacade,
@@ -235,23 +229,8 @@ def test_resolve_prefers_an_operation_of_the_right_kind(db, repository):
 
 def test_resolve_ignores_an_operation_of_another_kind(db, repository):
     op = _operation(db, repository, kind="prune")
-    legacy = CheckJob(id=op.id, repository_id=repository.id, status="completed")
-    db.add(legacy)
-    db.commit()
 
-    resolved = resolve_maintenance_job(db, op.id, "check")
-
-    assert isinstance(resolved, CheckJob)
-
-
-def test_resolve_falls_back_to_the_legacy_row(db, repository):
-    legacy = CheckJob(repository_id=repository.id, status="completed")
-    db.add(legacy)
-    db.commit()
-
-    resolved = resolve_maintenance_job(db, legacy.id, "check")
-
-    assert isinstance(resolved, CheckJob)
+    assert resolve_maintenance_job(db, op.id, "check") is None
 
 
 def test_resolve_returns_none_when_nothing_matches(db):
@@ -303,46 +282,6 @@ def test_claim_running_rejects_an_already_started_running_operation(db, reposito
     assert op.started_at == first_started
 
 
-def test_claim_running_still_claims_a_legacy_row(db, repository):
-    legacy = CheckJob(repository_id=repository.id, status="pending")
-    db.add(legacy)
-    db.commit()
-    started = datetime(2026, 9, 6, 12, 0, 0)
-
-    assert claim_running(db, legacy.id, "check", started) == 1
-    db.commit()
-    db.refresh(legacy)
-    assert legacy.status == "running"
-
-
-def test_claim_running_claims_a_manually_started_legacy_row_once(db, repository):
-    """A legacy row can also be pre-set to "running" with no `started_at`
-    before the service claims it, same as a manual-start Operation."""
-    legacy = CheckJob(repository_id=repository.id, status="running")
-    db.add(legacy)
-    db.commit()
-    started = datetime(2026, 9, 6, 12, 0, 0)
-
-    assert claim_running(db, legacy.id, "check", started) == 1
-    db.commit()
-    db.refresh(legacy)
-    assert legacy.started_at == started
-
-
-def test_claim_running_rejects_an_already_started_legacy_row(db, repository):
-    """A second claim on a legacy row that already has `started_at` set
-    must not also report success."""
-    legacy = CheckJob(repository_id=repository.id, status="running")
-    db.add(legacy)
-    db.commit()
-    first_started = datetime(2026, 9, 6, 12, 0, 0)
-    assert claim_running(db, legacy.id, "check", first_started) == 1
-    db.commit()
-
-    second_started = datetime(2026, 9, 6, 12, 5, 0)
-    assert claim_running(db, legacy.id, "check", second_started) == 0
-
-
 def test_stats_live_in_the_operation_result(db, repository):
     """A service's `job.stats = ...` (a Borg 2 compact's statistics) lands
     in `result["stats"]`, next to what the executor puts there, instead of
@@ -366,36 +305,6 @@ def test_stats_live_in_the_operation_result(db, repository):
     assert job.stats is None
 
 
-def _twin_rows(db, repository):
-    """An operation and a legacy check row sharing one id, on two different
-    repositories: the two id spaces are independent sequences."""
-    from datetime import datetime
-
-    other = Repository(name="other", path="/repo/other", borg_version=1)
-    db.add(other)
-    db.commit()
-    operation = Operation(
-        kind="check",
-        category="maintenance",
-        status="running",
-        repository_id=repository.id,
-        run_id="run-twin",
-        created_at=datetime(2026, 9, 1),
-    )
-    db.add(operation)
-    db.flush()
-    legacy = CheckJob(
-        id=operation.id,
-        repository_id=other.id,
-        repository_path=other.path,
-        status="completed",
-        created_at=datetime(2026, 8, 1),
-    )
-    db.add(legacy)
-    db.commit()
-    return operation, legacy, other
-
-
 def _payload(job_id, **maintenance_extra):
     return {
         "job_kind": "repository.check",
@@ -405,41 +314,42 @@ def _payload(job_id, **maintenance_extra):
     }
 
 
-def test_resolve_agent_job_follows_the_table_marker(db, repository):
-    operation, legacy, _ = _twin_rows(db, repository)
+def test_resolve_agent_job_takes_the_operation_the_payload_names(db, repository):
+    op = _operation(db, repository)
 
-    as_operation = resolve_agent_maintenance_job(
-        db, _payload(operation.id, table="operations")
+    job = resolve_agent_maintenance_job(db, _payload(op.id, table="operations"))
+
+    assert isinstance(job, MaintenanceJobFacade)
+    assert job.id == op.id
+
+
+def test_resolve_agent_job_needs_the_operations_marker(db, repository):
+    """A job queued before the collapse names an id from a table that is gone
+    (or names no table at all, from before the marker existed); the copy it
+    became has another id, so nothing is resolved rather than an unrelated
+    operation that happens to hold that id."""
+    op = _operation(db, repository)
+
+    assert resolve_agent_maintenance_job(db, _payload(op.id)) is None
+    assert (
+        resolve_agent_maintenance_job(db, _payload(op.id, table="check_jobs")) is None
     )
-    as_legacy = resolve_agent_maintenance_job(
-        db, _payload(operation.id, table="check_jobs")
-    )
-
-    assert isinstance(as_operation, MaintenanceJobFacade)
-    assert as_operation.id == operation.id
-    assert as_legacy is legacy
-    assert resolve_agent_maintenance_job(db, _payload(operation.id, table="x")) is None
+    assert resolve_agent_maintenance_job(db, _payload(op.id, table="x")) is None
 
 
-def test_resolve_agent_job_breaks_a_table_less_tie_by_repository(db, repository):
-    operation, legacy, other = _twin_rows(db, repository)
+def test_resolve_agent_job_checks_the_payloads_repository(db, repository):
+    other = Repository(name="other", path="/repo/other", borg_version=1)
+    db.add(other)
+    db.commit()
+    op = _operation(db, repository)
 
-    payload = _payload(operation.id)
-    payload["repository"] = {"id": other.id, "path": other.path}
-    assert resolve_agent_maintenance_job(db, payload) is legacy
-
+    payload = _payload(op.id, table="operations")
     payload["repository"] = {"id": repository.id, "path": repository.path}
-    assert resolve_agent_maintenance_job(db, payload).id == operation.id
+    assert resolve_agent_maintenance_job(db, payload).id == op.id
 
-    # a repository neither row belongs to: nothing, never another
-    # repository's row
-    payload["repository"] = {"id": other.id + repository.id + 1, "path": "/x"}
+    # a row of another repository is never the one this job reports on
+    payload["repository"] = {"id": other.id, "path": other.path}
     assert resolve_agent_maintenance_job(db, payload) is None
-
-    # no repository in the payload: the operation, as before the marker
-    assert isinstance(
-        resolve_agent_maintenance_job(db, _payload(operation.id)), MaintenanceJobFacade
-    )
 
 
 def test_resolve_agent_job_rejects_bad_shapes(db, repository):
@@ -456,114 +366,68 @@ def test_resolve_agent_job_rejects_bad_shapes(db, repository):
     assert resolve_agent_maintenance_job(db, _payload(1), kinds=("prune",)) is None
 
 
-def test_started_since_unions_both_tables_newest_first(db, repository):
+def test_started_since_reads_one_kind_newest_first(db, repository):
     since = datetime(2026, 9, 1)
-    old = CheckJob(
-        repository_id=repository.id,
-        repository_path=repository.path,
-        status="completed",
-        started_at=datetime(2026, 8, 30),
-    )
-    legacy = CheckJob(
-        repository_id=repository.id,
-        repository_path=repository.path,
-        status="completed",
-        started_at=datetime(2026, 9, 2),
-    )
-    db.add_all([old, legacy])
-    db.commit()
+    too_old = _operation(db, repository, status="completed")
+    too_old.started_at = datetime(2026, 8, 30)
     op = _operation(db, repository, status="completed")
     op.started_at = datetime(2026, 9, 3)
+    newer = _operation(db, repository, status="completed")
+    newer.started_at = datetime(2026, 9, 5)
     unrelated = _operation(db, repository, kind="prune", status="completed")
     unrelated.started_at = datetime(2026, 9, 4)
     db.commit()
 
     jobs = maintenance_jobs_started_since(db, "check", since)
 
-    assert [(type(job).__name__, job.id) for job in jobs] == [
-        ("MaintenanceJobFacade", op.id),
-        ("CheckJob", legacy.id),
-    ]
+    assert [job.id for job in jobs] == [newer.id, op.id]
+    assert all(isinstance(job, MaintenanceJobFacade) for job in jobs)
     assert jobs[0].repository_path == repository.path
 
 
-def test_latest_by_repository_takes_the_newer_row_from_either_table(db):
+def test_latest_by_repository_takes_the_newest_row_of_each(db):
     ops_repo = Repository(name="ops", path="/repo/ops", borg_version=1)
-    legacy_repo = Repository(name="legacy", path="/repo/legacy", borg_version=1)
+    busy_repo = Repository(name="busy", path="/repo/busy", borg_version=1)
     idle_repo = Repository(name="idle", path="/repo/idle", borg_version=1)
-    db.add_all([ops_repo, legacy_repo, idle_repo])
-    db.commit()
-    db.add_all(
-        [
-            RestoreCheckJob(
-                repository_id=ops_repo.id,
-                repository_path=ops_repo.path,
-                status="completed",
-                created_at=datetime(2026, 9, 1),
-            ),
-            RestoreCheckJob(
-                repository_id=legacy_repo.id,
-                repository_path=legacy_repo.path,
-                status="failed",
-                created_at=datetime(2026, 9, 5),
-            ),
-            RestoreCheckJob(
-                repository_id=legacy_repo.id,
-                repository_path=legacy_repo.path,
-                status="completed",
-                created_at=datetime(2026, 9, 4),
-            ),
-        ]
-    )
+    db.add_all([ops_repo, busy_repo, idle_repo])
     db.commit()
     newer = _operation(db, ops_repo, kind="restore_check", status="failed")
     newer.created_at = datetime(2026, 9, 2)
-    older = _operation(db, legacy_repo, kind="restore_check", status="completed")
-    older.created_at = datetime(2026, 9, 3)
+    older = _operation(db, ops_repo, kind="restore_check", status="completed")
+    older.created_at = datetime(2026, 9, 1)
+    latest_failure = _operation(db, busy_repo, kind="restore_check", status="failed")
+    latest_failure.created_at = datetime(2026, 9, 5)
+    earlier = _operation(db, busy_repo, kind="restore_check", status="completed")
+    earlier.created_at = datetime(2026, 9, 4)
     db.commit()
 
     latest = latest_maintenance_jobs_by_repository(
-        db, "restore_check", [ops_repo.id, legacy_repo.id, idle_repo.id]
+        db, "restore_check", [ops_repo.id, busy_repo.id, idle_repo.id]
     )
 
-    assert set(latest) == {ops_repo.id, legacy_repo.id}
-    assert isinstance(latest[ops_repo.id], MaintenanceJobFacade)
+    assert set(latest) == {ops_repo.id, busy_repo.id}
+    assert all(isinstance(job, MaintenanceJobFacade) for job in latest.values())
     assert latest[ops_repo.id].id == newer.id
-    assert isinstance(latest[legacy_repo.id], RestoreCheckJob)
-    assert latest[legacy_repo.id].status == "failed"
+    assert latest[busy_repo.id].id == latest_failure.id
     assert latest_maintenance_jobs_by_repository(db, "restore_check", []) == {}
 
 
-def test_latest_by_repository_gives_a_tie_to_the_operation(db, repository):
+def test_latest_by_repository_breaks_a_tie_on_the_newer_row(db, repository):
     when = datetime(2026, 9, 6)
-    db.add(
-        RestoreCheckJob(
-            repository_id=repository.id,
-            repository_path=repository.path,
-            status="failed",
-            created_at=when,
-        )
-    )
-    db.commit()
-    op = _operation(db, repository, kind="restore_check", status="completed")
-    op.created_at = when
+    first = _operation(db, repository, kind="restore_check", status="failed")
+    first.created_at = when
+    second = _operation(db, repository, kind="restore_check", status="completed")
+    second.created_at = when
     db.commit()
 
     latest = latest_maintenance_jobs_by_repository(db, "restore_check", [repository.id])
 
-    assert isinstance(latest[repository.id], MaintenanceJobFacade)
-    assert latest[repository.id].id == op.id
+    assert latest[repository.id].id == second.id
 
 
 def test_latest_by_repository_reports_the_live_row_or_the_last_verdict(db, repository):
-    failed = RestoreCheckJob(
-        repository_id=repository.id,
-        repository_path=repository.path,
-        status="failed",
-        created_at=datetime(2026, 9, 6),
-    )
-    db.add(failed)
-    db.commit()
+    failed = _operation(db, repository, kind="restore_check", status="failed")
+    failed.created_at = datetime(2026, 9, 6)
     queued = _operation(db, repository, kind="restore_check", status="queued")
     queued.created_at = datetime(2026, 9, 7)
     running = _operation(db, repository, kind="restore_check", status="running")
@@ -577,21 +441,12 @@ def test_latest_by_repository_reports_the_live_row_or_the_last_verdict(db, repos
 
     assert live[repository.id].id == running.id
     assert live[repository.id].status == "running"
-    assert isinstance(verdicts[repository.id], RestoreCheckJob)
     assert verdicts[repository.id].id == failed.id
 
 
 def test_latest_by_repository_has_no_verdict_for_a_first_run_still_queued(
     db, repository
 ):
-    pending = RestoreCheckJob(
-        repository_id=repository.id,
-        repository_path=repository.path,
-        status="pending",
-        created_at=datetime(2026, 9, 6),
-    )
-    db.add(pending)
-    db.commit()
     queued = _operation(db, repository, kind="restore_check", status="queued")
     queued.created_at = datetime(2026, 9, 7)
     db.commit()
@@ -606,28 +461,6 @@ def test_latest_by_repository_has_no_verdict_for_a_first_run_still_queued(
         )
         == {}
     )
-
-
-def test_latest_by_repository_survives_a_legacy_row_without_created_at(db, repository):
-    db.add(
-        RestoreCheckJob(
-            repository_id=repository.id,
-            repository_path=repository.path,
-            status="failed",
-        )
-    )
-    db.commit()
-    # rows written before the column existed carry NULL; force it past the default
-    db.query(RestoreCheckJob).update({"created_at": None})
-    db.commit()
-    assert db.query(RestoreCheckJob.created_at).scalar() is None
-    op = _operation(db, repository, kind="restore_check", status="completed")
-    op.created_at = datetime(2026, 9, 7)
-    db.commit()
-
-    latest = latest_maintenance_jobs_by_repository(db, "restore_check", [repository.id])
-
-    assert latest[repository.id].id == op.id
 
 
 def test_readers_name_an_unknown_kind(db, repository):
@@ -667,25 +500,3 @@ def test_needs_backup_is_written_as_a_skip_and_read_back(db, repository):
     other = _operation(db, repository, kind="restore_check", status="skipped")
     other.skip_reason = "dependency_failed"
     assert MaintenanceJobFacade(db, other).status == "skipped"
-
-
-def test_latest_by_repository_counts_a_legacy_row_without_status_as_settled(
-    db, repository
-):
-    db.add(
-        RestoreCheckJob(
-            repository_id=repository.id,
-            repository_path=repository.path,
-            created_at=datetime(2026, 9, 6),
-        )
-    )
-    db.commit()
-    db.query(RestoreCheckJob).update({"status": None})
-    db.commit()
-
-    live = latest_maintenance_jobs_by_repository(db, "restore_check", [repository.id])
-    verdicts = latest_maintenance_jobs_by_repository(
-        db, "restore_check", [repository.id], settled=True
-    )
-
-    assert live[repository.id].id == verdicts[repository.id].id

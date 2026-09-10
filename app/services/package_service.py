@@ -12,7 +12,7 @@ from datetime import datetime
 import structlog
 from sqlalchemy.orm import Session
 
-from app.database.models import InstalledPackage, Operation, PackageInstallJob
+from app.database.models import InstalledPackage, Operation
 from app.services.operations.enqueue import enqueue
 from app.services.operations.package_facade import (
     PackageInstallFacade,
@@ -193,13 +193,12 @@ class PackageInstallService:
             db.close()
 
     def get_job_status(self, db: Session, job_id: int):
-        """Get the current status of a job. Operations first, then a
-        pre-phase-6 legacy row."""
+        """Get the current status of a job."""
         return resolve_package_job(db, job_id)
 
     def get_running_jobs(self, db: Session) -> list:
         """Get all currently running/pending jobs"""
-        jobs = [
+        return [
             PackageInstallFacade(db, op)
             for op in db.query(Operation)
             .filter(
@@ -208,13 +207,6 @@ class PackageInstallService:
             )
             .all()
         ]
-        # Pre-phase-6 rows only; goes away with the table in phase 9.
-        jobs.extend(
-            db.query(PackageInstallJob)
-            .filter(PackageInstallJob.status.in_(["pending", "installing"]))
-            .all()
-        )
-        return jobs
 
 
 # Global service instance

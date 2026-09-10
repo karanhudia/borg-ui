@@ -1,9 +1,48 @@
 import json
+import tempfile
+from pathlib import Path
+
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock, Mock
 from app.services.backup_service import BackupService
+
+
+# Where a mocked job's log file goes. pytest owns the directory and cleans it
+# up; the module-level default only matters if a test calls the helper without
+# the fixture, which nothing does.
+_mock_log_dir: Path | None = None
+
+
+@pytest.fixture(autouse=True)
+def _mock_log_directory(tmp_path_factory):
+    global _mock_log_dir
+    _mock_log_dir = tmp_path_factory.mktemp("mock-backup-log")
+    yield
+    _mock_log_dir = None
+
+
+def _mock_backup_job(**fields):
+    """A stand-in for the backup the service drives.
+
+    These tests run against a mocked session, so there is no operation to wrap
+    in a facade; the service only reads and writes attributes, which a mock
+    accepts. `resolve_backup_job` is patched to hand this back.
+
+    `log_file_path` is a real temporary file unless the caller says otherwise:
+    where the facade does the wrapping, its `logs` setter writes that path,
+    and a mock's attribute would resolve to a directory under the repository
+    root.
+    """
+    job = MagicMock()
+    if "log_file_path" not in fields:
+        directory = _mock_log_dir or Path(tempfile.mkdtemp())
+        fields["log_file_path"] = str(directory / "operation.log")
+    for name, value in fields.items():
+        setattr(job, name, value)
+    return job
+
+
 from app.database.models import (
-    BackupJob,
     Operation,
     Repository,
     RepositoryStorage,
@@ -194,15 +233,11 @@ async def test_execute_backup_command(
         passphrase="secret",
         mode="full",
     )
-    job = BackupJob(id=job_id, status="pending")
+    job = _mock_backup_job(id=job_id, status="pending")
 
     def query_side_effect(model):
         m = MagicMock()
         if model == Operation:
-            # These mock-session tests drive legacy BackupJob rows; phase 8's
-            # resolve_backup_job() asks for an operation of the same id first.
-            m.filter.return_value.first.return_value = None
-        elif model == BackupJob:
             m.filter.return_value.first.return_value = job
         elif model == Repository:
             m.filter.return_value.first.return_value = repo
@@ -298,16 +333,12 @@ async def test_execute_backup_passes_repository_stable_sshfs_root_to_source_prep
         username="backup-a",
         port=22,
     )
-    job = BackupJob(id=job_id, status="pending")
+    job = _mock_backup_job(id=job_id, status="pending")
     stable_root = "/tmp/borg-ui/sshfs-cache/repository-7"
 
     def query_side_effect(model):
         m = MagicMock()
         if model == Operation:
-            # These mock-session tests drive legacy BackupJob rows; phase 8's
-            # resolve_backup_job() asks for an operation of the same id first.
-            m.filter.return_value.first.return_value = None
-        elif model == BackupJob:
             m.filter.return_value.first.return_value = job
         elif model == Repository:
             m.filter.return_value.first.return_value = repo
@@ -379,7 +410,7 @@ async def test_execute_backup_hooks(backup_service_fixture, mock_db_session, tmp
         pre_backup_script="echo pre",
         post_backup_script="echo post",
     )
-    job = BackupJob(id=job_id, status="pending")
+    job = _mock_backup_job(id=job_id, status="pending")
 
     mock_db_session.query.return_value.filter.return_value.first.return_value = job
 
@@ -387,10 +418,6 @@ async def test_execute_backup_hooks(backup_service_fixture, mock_db_session, tmp
     def query_side_effect(model):
         m = MagicMock()
         if model == Operation:
-            # These mock-session tests drive legacy BackupJob rows; phase 8's
-            # resolve_backup_job() asks for an operation of the same id first.
-            m.filter.return_value.first.return_value = None
-        elif model == BackupJob:
             m.filter.return_value.first.return_value = job
         elif model == Repository:
             m.filter.return_value.first.return_value = repo
@@ -470,15 +497,11 @@ async def test_execute_backup_runs_post_hook_on_cancel_as_failure(
         source_directories=f'["{source_path}"]',
         post_backup_script="echo post",
     )
-    job = BackupJob(id=job_id, status="cancelled")
+    job = _mock_backup_job(id=job_id, status="cancelled")
 
     def query_side_effect(model):
         m = MagicMock()
         if model == Operation:
-            # These mock-session tests drive legacy BackupJob rows; phase 8's
-            # resolve_backup_job() asks for an operation of the same id first.
-            m.filter.return_value.first.return_value = None
-        elif model == BackupJob:
             m.filter.return_value.first.return_value = job
         elif model == Repository:
             m.filter.return_value.first.return_value = repo
@@ -863,10 +886,6 @@ def _make_skip_query_side_effect(job, repo):
     def query_side_effect(model):
         m = MagicMock()
         if model == Operation:
-            # These mock-session tests drive legacy BackupJob rows; phase 8's
-            # resolve_backup_job() asks for an operation of the same id first.
-            m.filter.return_value.first.return_value = None
-        elif model == BackupJob:
             m.filter.return_value.first.return_value = job
         elif model == Repository:
             m.filter.return_value.first.return_value = repo
@@ -885,10 +904,6 @@ def _make_execute_query_side_effect(job, repo):
     def query_side_effect(model):
         m = MagicMock()
         if model == Operation:
-            # These mock-session tests drive legacy BackupJob rows; phase 8's
-            # resolve_backup_job() asks for an operation of the same id first.
-            m.filter.return_value.first.return_value = None
-        elif model == BackupJob:
             m.filter.return_value.first.return_value = job
         elif model == Repository:
             m.filter.return_value.first.return_value = repo
@@ -915,7 +930,7 @@ async def test_sync_rclone_after_borg_preserves_existing_borg_warning(
         sync_policy="after_success",
         sync_status="pending",
     )
-    job = BackupJob(
+    job = _mock_backup_job(
         id=19,
         status="completed_with_warnings",
         error_message=json.dumps(
@@ -960,7 +975,7 @@ async def test_execute_backup_uses_rclone_sync_failure_for_hooks_and_notificatio
         source_directories=f'["{source_path}"]',
         compression="lz4",
     )
-    job = BackupJob(id=job_id, status="pending")
+    job = _mock_backup_job(id=job_id, status="pending")
     mock_db_session.query.side_effect = _make_execute_query_side_effect(job, repo)
 
     mock_process = AsyncMock()
@@ -1045,7 +1060,7 @@ async def test_execute_backup_post_hook_failure_sends_single_failure_notificatio
         source_directories='["/data"]',
         compression="lz4",
     )
-    job = BackupJob(id=job_id, status="pending")
+    job = _mock_backup_job(id=job_id, status="pending")
     mock_db_session.query.side_effect = _make_execute_query_side_effect(job, repo)
 
     mock_process = AsyncMock()
@@ -1120,7 +1135,7 @@ async def test_pre_backup_inline_script_failure_skips_when_flag_set(
         pre_backup_script="exit 1",
         skip_on_hook_failure=True,
     )
-    job = BackupJob(id=job_id, status="pending")
+    job = _mock_backup_job(id=job_id, status="pending")
     mock_db_session.query.side_effect = _make_skip_query_side_effect(job, repo)
 
     inline_failure = {
@@ -1176,7 +1191,7 @@ async def test_pre_backup_inline_script_failure_fails_job_when_skip_flag_off(
         skip_on_hook_failure=False,
         continue_on_hook_failure=False,
     )
-    job = BackupJob(id=job_id, status="pending")
+    job = _mock_backup_job(id=job_id, status="pending")
     mock_db_session.query.side_effect = _make_skip_query_side_effect(job, repo)
 
     inline_failure = {
@@ -1223,7 +1238,7 @@ async def test_pre_backup_library_should_skip_signal_skips_job(
         path="/backups/repo",
         source_directories='["/data"]',
     )
-    job = BackupJob(id=job_id, status="pending")
+    job = _mock_backup_job(id=job_id, status="pending")
     mock_db_session.query.side_effect = _make_skip_query_side_effect(job, repo)
 
     library_skip = {
@@ -1307,7 +1322,7 @@ async def test_execute_backup_delegates_remote_ssh_job(
         exclude_patterns='["*.tmp"]',
         compression="lz4",
     )
-    job = BackupJob(
+    job = _mock_backup_job(
         id=job_id,
         status="pending",
         execution_mode="remote_ssh",
@@ -1315,15 +1330,22 @@ async def test_execute_backup_delegates_remote_ssh_job(
     )
     mock_db_session.query.side_effect = _make_execute_query_side_effect(job, repo)
 
-    with patch(
-        "app.services.remote_backup_service.remote_backup_service.execute_remote_backup",
-        new=AsyncMock(),
-    ) as mock_remote_execute:
+    with (
+        # Without this the real facade wraps the mocked operation and reads
+        # the connection id from an unconfigured details row, so the test
+        # would pass while forwarding a mock instead of 77.
+        patch("app.services.backup_service.resolve_backup_job", return_value=job),
+        patch(
+            "app.services.remote_backup_service.remote_backup_service.execute_remote_backup",
+            new=AsyncMock(),
+        ) as mock_remote_execute,
+    ):
         await backup_service_fixture.execute_backup(
             job_id, repo.path, db=mock_db_session
         )
 
     mock_remote_execute.assert_awaited_once()
+    assert mock_remote_execute.await_args.kwargs["source_ssh_connection_id"] == 77
     assert job.status == "pending"
 
 
@@ -1341,7 +1363,7 @@ async def test_execute_backup_resolves_grouped_source_locations(
         compression="lz4",
         mode="full",
     )
-    job = BackupJob(id=job_id, status="pending")
+    job = _mock_backup_job(id=job_id, status="pending")
     source_a = SSHConnection(
         id=11,
         host="server-a.example",
@@ -1380,10 +1402,6 @@ async def test_execute_backup_resolves_grouped_source_locations(
     def query_side_effect(model):
         m = MagicMock()
         if model == Operation:
-            # These mock-session tests drive legacy BackupJob rows; phase 8's
-            # resolve_backup_job() asks for an operation of the same id first.
-            m.filter.return_value.first.return_value = None
-        elif model == BackupJob:
             m.filter.return_value.first.return_value = job
         elif model == Repository:
             m.filter.return_value.first.return_value = repo
@@ -1483,7 +1501,7 @@ async def test_execute_backup_rejects_missing_or_invalid_source_directories(
         source_directories=source_directories,
         compression="lz4",
     )
-    job = BackupJob(id=job_id, status="pending")
+    job = _mock_backup_job(id=job_id, status="pending")
     mock_db_session.query.side_effect = _make_execute_query_side_effect(job, repo)
 
     notifications = MagicMock()
@@ -1517,7 +1535,7 @@ async def test_execute_backup_rejects_observe_mode(
         mode="observe",
         compression="lz4",
     )
-    job = BackupJob(id=job_id, status="pending")
+    job = _mock_backup_job(id=job_id, status="pending")
     mock_db_session.query.side_effect = _make_execute_query_side_effect(job, repo)
 
     with (
@@ -1546,15 +1564,11 @@ async def test_empty_source_paths_failure_sends_notification(
         name="Repo",
         source_directories='["ssh://backup@gone.example:22/data"]',
     )
-    job = BackupJob(id=job_id, status="pending")
+    job = _mock_backup_job(id=job_id, status="pending")
 
     def query_side_effect(model):
         m = MagicMock()
         if model == Operation:
-            # These mock-session tests drive legacy BackupJob rows; phase 8's
-            # resolve_backup_job() asks for an operation of the same id first.
-            m.filter.return_value.first.return_value = None
-        elif model == BackupJob:
             m.filter.return_value.first.return_value = job
         elif model == Repository:
             m.filter.return_value.first.return_value = repo

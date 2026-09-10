@@ -130,7 +130,7 @@ class CompactV2Service:
             return False
 
     async def execute_compact(self, job_id: int, repository_id: int, _db=None):
-        """Execute borg2 compact with progress streaming into a CompactJob record."""
+        """Execute borg2 compact with progress streaming into the operation."""
         db = SessionLocal()
         temp_key_file = None
 

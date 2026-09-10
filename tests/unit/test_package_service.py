@@ -4,9 +4,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import InstalledPackage, Operation, PackageInstallJob
+from app.database.models import InstalledPackage, Operation
 from app.services.operations.package_facade import PackageInstallFacade
 from app.services.package_service import PackageInstallService
+from tests.utils.operations import seed_job_operation
 
 
 def _install_operation(db_session, package, *, status="queued", run_id="run-1"):
@@ -62,7 +63,6 @@ async def test_start_install_job_queues_an_operation_without_spawning(
     assert operation.category == "system"
     assert operation.repository_id is None
     assert operation.params == {"package_id": installed_package.id}
-    assert db_session.query(PackageInstallJob).count() == 0
     mock_create_task.assert_not_called()
 
 
@@ -213,8 +213,12 @@ def test_get_job_status_returns_an_operation_backed_job(db_session, installed_pa
 @pytest.mark.unit
 def test_get_job_status_still_returns_a_pre_phase_6_row(db_session, installed_package):
     service = PackageInstallService()
-    job = PackageInstallJob(package_id=installed_package.id, status="installing")
-    db_session.add(job)
+    job = seed_job_operation(
+        db_session,
+        "package_install",
+        package_id=installed_package.id,
+        status="installing",
+    )
     db_session.commit()
     db_session.refresh(job)
 
@@ -230,16 +234,8 @@ def test_get_running_jobs_filters_pending_and_installing(db_session, installed_p
     _install_operation(db_session, installed_package, status="queued", run_id="a")
     _install_operation(db_session, installed_package, status="running", run_id="b")
     _install_operation(db_session, installed_package, status="completed", run_id="c")
-    # A pre-phase-6 row in flight is still reported.
-    db_session.add(
-        PackageInstallJob(package_id=installed_package.id, status="installing")
-    )
     db_session.commit()
 
     jobs = service.get_running_jobs(db_session)
 
-    assert sorted(job.status for job in jobs) == [
-        "installing",
-        "installing",
-        "pending",
-    ]
+    assert sorted(job.status for job in jobs) == ["installing", "pending"]

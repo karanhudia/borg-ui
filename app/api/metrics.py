@@ -17,18 +17,76 @@ import structlog
 from app.database.database import get_db
 from app.database.models import (
     Repository,
-    BackupJob,
-    RestoreJob,
-    CheckJob,
-    CompactJob,
-    PruneJob,
+    Operation,
     SystemSettings,
     ScheduledJob,
 )
 from app.services.operations.backup_facade import latest_backup_job_for_repository
+from app.services.operations.job_facade import legacy_status
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
+
+# The Prometheus families below predate `operations` and their consumers parse
+# the legacy status words, so `queued` is reported as `pending` (the same
+# translation the HTTP routes make).
+_ACTIVE_STATUSES = ("queued", "running")
+
+
+def _counts_by_status(db: Session, kind: str) -> list[tuple[str, int]]:
+    """Operation counts of one kind per legacy status word."""
+    counts: dict[str, int] = {}
+    rows = (
+        db.query(Operation.status, func.count(Operation.id))
+        .filter(Operation.kind == kind)
+        .group_by(Operation.status)
+        .all()
+    )
+    for status, count in rows:
+        word = legacy_status(status)
+        counts[word] = counts.get(word, 0) + count
+    return sorted(counts.items())
+
+
+def _counts_by_repository(db: Session, kind: str) -> list[tuple[str, str, int]]:
+    """Operation counts of one kind per repository name and legacy status."""
+    counts: dict[tuple[str, str], int] = {}
+    rows = (
+        db.query(Repository.name, Operation.status, func.count(Operation.id))
+        .join(Repository, Operation.repository_id == Repository.id)
+        .filter(Operation.kind == kind)
+        .group_by(Repository.name, Operation.status)
+        .all()
+    )
+    for repo_name, status, count in rows:
+        key = (repo_name, legacy_status(status))
+        counts[key] = counts.get(key, 0) + count
+    return [(name, status, count) for (name, status), count in sorted(counts.items())]
+
+
+def _last_finished(db: Session, kind: str, repository_id: int):
+    """The newest operation of one kind that both started and finished."""
+    return (
+        db.query(Operation)
+        .filter(
+            Operation.kind == kind,
+            Operation.repository_id == repository_id,
+            Operation.started_at.isnot(None),
+            Operation.completed_at.isnot(None),
+        )
+        .order_by(Operation.completed_at.desc())
+        .first()
+    )
+
+
+def _active_count(db: Session, kind: str) -> int:
+    return (
+        db.query(func.count(Operation.id))
+        .filter(Operation.kind == kind, Operation.status.in_(_ACTIVE_STATUSES))
+        .scalar()
+    )
+
+
 router = APIRouter(tags=["metrics"])
 
 
@@ -197,42 +255,20 @@ async def get_metrics(
         )
         lines.append("# TYPE borg_backup_jobs_total gauge")
 
-        # Create a mapping of repo path to name for consistent labeling
-        repo_path_to_name = {repo.path: repo.name for repo in repositories}
-
-        backup_status_counts = (
-            db.query(
-                BackupJob.repository,
-                BackupJob.status,
-                func.count(BackupJob.id).label("count"),
+        for repo_name, status, count in _counts_by_repository(db, "backup"):
+            lines.append(
+                f'borg_backup_jobs_total{{repository="{repo_name}",status="{status}"}} {count}'
             )
-            .group_by(BackupJob.repository, BackupJob.status)
-            .all()
-        )
-
-        # Separate active repository jobs from orphaned jobs
-        orphaned_jobs = []
-        for repo_path, status, count in backup_status_counts:
-            if repo_path in repo_path_to_name:
-                # Active repository - use repository name
-                repo_name = repo_path_to_name[repo_path]
-                lines.append(
-                    f'borg_backup_jobs_total{{repository="{repo_name}",status="{status}"}} {count}'
-                )
-            else:
-                # Orphaned job - repository no longer exists
-                orphaned_jobs.append((repo_path, status, count))
         lines.append("")
 
-        # Show orphaned jobs separately for visibility
+        # Always empty since the job tables collapsed into `operations`: an
+        # operation cascades with its repository, so a job for a deleted
+        # repository cannot exist. The family is kept so existing dashboards
+        # keep parsing.
         lines.append(
             "# HELP borg_backup_orphaned_jobs_total Backup jobs for deleted/renamed repositories"
         )
         lines.append("# TYPE borg_backup_orphaned_jobs_total gauge")
-        for repo_path, status, count in orphaned_jobs:
-            lines.append(
-                f'borg_backup_orphaned_jobs_total{{repository_path="{repo_path}",status="{status}"}} {count}'
-            )
         lines.append("")
 
         lines.append(
@@ -315,13 +351,7 @@ async def get_metrics(
         )
         lines.append("# TYPE borg_restore_jobs_total gauge")
 
-        restore_status_counts = (
-            db.query(RestoreJob.status, func.count(RestoreJob.id).label("count"))
-            .group_by(RestoreJob.status)
-            .all()
-        )
-
-        for status, count in restore_status_counts:
+        for status, count in _counts_by_status(db, "restore"):
             lines.append(f'borg_restore_jobs_total{{status="{status}"}} {count}')
         lines.append("")
 
@@ -331,16 +361,7 @@ async def get_metrics(
         )
         lines.append("# TYPE borg_check_jobs_total gauge")
 
-        check_status_counts = (
-            db.query(
-                Repository.name, CheckJob.status, func.count(CheckJob.id).label("count")
-            )
-            .join(Repository, CheckJob.repository_id == Repository.id)
-            .group_by(Repository.name, CheckJob.status)
-            .all()
-        )
-
-        for repo_name, status, count in check_status_counts:
+        for repo_name, status, count in _counts_by_repository(db, "check"):
             lines.append(
                 f'borg_check_jobs_total{{repository="{repo_name}",status="{status}"}} {count}'
             )
@@ -352,16 +373,7 @@ async def get_metrics(
         lines.append("# TYPE borg_check_last_duration_seconds gauge")
 
         for repo in repositories:
-            last_job = (
-                db.query(CheckJob)
-                .filter(
-                    CheckJob.repository_id == repo.id,
-                    CheckJob.started_at.isnot(None),
-                    CheckJob.completed_at.isnot(None),
-                )
-                .order_by(CheckJob.completed_at.desc())
-                .first()
-            )
+            last_job = _last_finished(db, "check", repo.id)
 
             if last_job and last_job.started_at and last_job.completed_at:
                 duration = (last_job.completed_at - last_job.started_at).total_seconds()
@@ -376,18 +388,7 @@ async def get_metrics(
         )
         lines.append("# TYPE borg_compact_jobs_total gauge")
 
-        compact_status_counts = (
-            db.query(
-                Repository.name,
-                CompactJob.status,
-                func.count(CompactJob.id).label("count"),
-            )
-            .join(Repository, CompactJob.repository_id == Repository.id)
-            .group_by(Repository.name, CompactJob.status)
-            .all()
-        )
-
-        for repo_name, status, count in compact_status_counts:
+        for repo_name, status, count in _counts_by_repository(db, "compact"):
             lines.append(
                 f'borg_compact_jobs_total{{repository="{repo_name}",status="{status}"}} {count}'
             )
@@ -399,16 +400,7 @@ async def get_metrics(
         lines.append("# TYPE borg_compact_last_duration_seconds gauge")
 
         for repo in repositories:
-            last_job = (
-                db.query(CompactJob)
-                .filter(
-                    CompactJob.repository_id == repo.id,
-                    CompactJob.started_at.isnot(None),
-                    CompactJob.completed_at.isnot(None),
-                )
-                .order_by(CompactJob.completed_at.desc())
-                .first()
-            )
+            last_job = _last_finished(db, "compact", repo.id)
 
             if last_job and last_job.started_at and last_job.completed_at:
                 duration = (last_job.completed_at - last_job.started_at).total_seconds()
@@ -423,16 +415,7 @@ async def get_metrics(
         )
         lines.append("# TYPE borg_prune_jobs_total gauge")
 
-        prune_status_counts = (
-            db.query(
-                Repository.name, PruneJob.status, func.count(PruneJob.id).label("count")
-            )
-            .join(Repository, PruneJob.repository_id == Repository.id)
-            .group_by(Repository.name, PruneJob.status)
-            .all()
-        )
-
-        for repo_name, status, count in prune_status_counts:
+        for repo_name, status, count in _counts_by_repository(db, "prune"):
             lines.append(
                 f'borg_prune_jobs_total{{repository="{repo_name}",status="{status}"}} {count}'
             )
@@ -470,39 +453,19 @@ async def get_metrics(
         )
         lines.append("# TYPE borg_ui_active_jobs gauge")
 
-        active_backups = (
-            db.query(func.count(BackupJob.id))
-            .filter(BackupJob.status.in_(["pending", "running"]))
-            .scalar()
-        )
+        active_backups = _active_count(db, "backup")
         lines.append(f'borg_ui_active_jobs{{type="backup"}} {active_backups}')
 
-        active_restores = (
-            db.query(func.count(RestoreJob.id))
-            .filter(RestoreJob.status.in_(["pending", "running"]))
-            .scalar()
-        )
+        active_restores = _active_count(db, "restore")
         lines.append(f'borg_ui_active_jobs{{type="restore"}} {active_restores}')
 
-        active_checks = (
-            db.query(func.count(CheckJob.id))
-            .filter(CheckJob.status.in_(["pending", "running"]))
-            .scalar()
-        )
+        active_checks = _active_count(db, "check")
         lines.append(f'borg_ui_active_jobs{{type="check"}} {active_checks}')
 
-        active_compacts = (
-            db.query(func.count(CompactJob.id))
-            .filter(CompactJob.status.in_(["pending", "running"]))
-            .scalar()
-        )
+        active_compacts = _active_count(db, "compact")
         lines.append(f'borg_ui_active_jobs{{type="compact"}} {active_compacts}')
 
-        active_prunes = (
-            db.query(func.count(PruneJob.id))
-            .filter(PruneJob.status.in_(["pending", "running"]))
-            .scalar()
-        )
+        active_prunes = _active_count(db, "prune")
         lines.append(f'borg_ui_active_jobs{{type="prune"}} {active_prunes}')
 
         lines.append("")

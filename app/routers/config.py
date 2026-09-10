@@ -163,7 +163,7 @@ async def import_borgmatic_config(
             # Update repository stats for newly created repositories (non-blocking - don't fail import)
             if not dry_run and combined_result["repositories_created"] > 0:
                 from app.database.models import Repository
-                from app.core.borg_router import BorgRouter
+                from app.services.operations.enqueue import enqueue_chain
                 import structlog
 
                 logger = structlog.get_logger()
@@ -177,11 +177,20 @@ async def import_borgmatic_config(
                 )
                 for repo in repositories:
                     try:
-                        await BorgRouter(repo).update_stats(db)
+                        enqueue_chain(
+                            db,
+                            ["stats", "archive_sync"],
+                            repository_id=repo.id,
+                            trigger="manual",
+                        )
                     except Exception as e:
-                        # Log but don't fail the import - stats can be updated later
+                        # Log but don't fail the import - stats can be updated later.
+                        # The rollback comes first: the failed enqueue may have
+                        # left this session's transaction unusable, and every
+                        # later repository in the loop shares it.
+                        db.rollback()
                         logger.warning(
-                            "Failed to update repository stats after import",
+                            "Failed to enqueue repository stats after import",
                             repository=repo.name,
                             error=str(e),
                         )
@@ -200,7 +209,7 @@ async def import_borgmatic_config(
             # Update repository stats for newly created repositories (non-blocking - don't fail import)
             if not dry_run and result.get("repositories_created", 0) > 0:
                 from app.database.models import Repository
-                from app.core.borg_router import BorgRouter
+                from app.services.operations.enqueue import enqueue_chain
                 import structlog
 
                 logger = structlog.get_logger()
@@ -214,11 +223,20 @@ async def import_borgmatic_config(
                 )
                 for repo in repositories:
                     try:
-                        await BorgRouter(repo).update_stats(db)
+                        enqueue_chain(
+                            db,
+                            ["stats", "archive_sync"],
+                            repository_id=repo.id,
+                            trigger="manual",
+                        )
                     except Exception as e:
-                        # Log but don't fail the import - stats can be updated later
+                        # Log but don't fail the import - stats can be updated later.
+                        # The rollback comes first: the failed enqueue may have
+                        # left this session's transaction unusable, and every
+                        # later repository in the loop shares it.
+                        db.rollback()
                         logger.warning(
-                            "Failed to update repository stats after import",
+                            "Failed to enqueue repository stats after import",
                             repository=repo.name,
                             error=str(e),
                         )

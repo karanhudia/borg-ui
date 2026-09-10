@@ -7,15 +7,13 @@ which one it is lives in `details.operation`, per spec 6.2. The legacy
 `import` and mapped back here: the frontend switches on it
 (`RunningCloudStorageJobsSection.tsx`). The initial sync is the only rclone
 operation with that trigger, so the mapping round trips exactly.
-
-Deleted in phase 9 with the legacy table.
 """
 
 from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
-from app.database.models import Operation, RcloneSyncJob
+from app.database.models import Operation
 from app.services.operations.details import rclone_details
 
 LEGACY_TO_TRIGGER = {"initial": "import", "manual": "manual", "schedule": "schedule"}
@@ -136,27 +134,17 @@ def rclone_activity_type(job: Any) -> str:
 
 def resolve_rclone_job(
     db: Session, job_id: int, *, operation: Optional[str] = None
-) -> Any:
-    """The job a mirror caller should drive for `job_id`.
-
-    Operations win, so new work runs on the new table. Ids that belong to a
-    row written before this phase fall back to the legacy table, which keeps
-    Activity's log routes working for history.
-    """
+) -> Optional["RcloneSyncFacade"]:
+    """The job a mirror caller should drive for `job_id`, or None when no
+    rclone operation has the id or its sub-type is not the one asked for."""
     row = (
         db.query(Operation)
         .filter(Operation.id == job_id, Operation.kind == "rclone_sync")
         .first()
     )
-    if row is not None:
-        facade = RcloneSyncFacade(db, row)
-        # A sub-type mismatch falls through rather than answering "not found":
-        # the two tables number their rows independently, so operation 7 being
-        # a sync says nothing about whether legacy row 7 is the hydrate the
-        # caller asked for.
-        if operation is None or facade.operation == operation:
-            return facade
-    query = db.query(RcloneSyncJob).filter(RcloneSyncJob.id == job_id)
-    if operation is not None:
-        query = query.filter(RcloneSyncJob.operation == operation)
-    return query.first()
+    if row is None:
+        return None
+    facade = RcloneSyncFacade(db, row)
+    if operation is not None and facade.operation != operation:
+        return None
+    return facade

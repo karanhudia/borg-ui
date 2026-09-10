@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient
 from unittest.mock import patch
 
 from app.database.models import (
-    BackupJob,
     Operation,
     OperationBackupDetails,
     Repository,
@@ -473,7 +472,6 @@ class TestScheduleRunNow:
         assert details.route_strategy == "remote_direct"
         assert operation.execution_mode == "remote_ssh"
         assert details.source_ssh_connection_id == connection.id
-        assert test_db.query(BackupJob).count() == 0
 
 
 @pytest.mark.unit

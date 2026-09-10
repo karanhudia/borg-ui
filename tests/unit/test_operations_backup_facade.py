@@ -7,7 +7,6 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.database.models import (
-    BackupJob,
     BackupPlan,
     BackupPlanRun,
     Base,
@@ -146,19 +145,11 @@ def test_logs_go_to_the_operation_log_file(db, repository, log_dir):
     assert job.logs == "line one\nline two"
 
 
-def test_resolve_prefers_the_operation_and_falls_back_to_legacy(db, repository):
-    # The two tables number their rows independently, and an operation wins a
-    # shared id (Appendix B). The legacy row therefore takes an explicit id
-    # past the operation's, so the fallback branch is exercised every run
-    # rather than only when the two sequences happen to diverge.
+def test_resolve_returns_none_for_an_unknown_id(db, repository):
     op = _backup_operation(db, repository)
-    legacy = BackupJob(id=op.id + 500, repository="/repo/nas", status="completed")
-    db.add(legacy)
-    db.commit()
 
     assert isinstance(resolve_backup_job(db, op.id), BackupJobFacade)
-    assert resolve_backup_job(db, legacy.id + 1000) is None
-    assert resolve_backup_job(db, legacy.id) is legacy
+    assert resolve_backup_job(db, op.id + 1000) is None
 
 
 def test_create_backup_operation_records_route_and_params(db, repository):
@@ -217,13 +208,9 @@ async def test_wait_for_backup_operation_returns_the_legacy_word(db, repository)
     )
 
 
-def test_list_backup_jobs_unions_both_tables_newest_first(db, repository):
-    old = BackupJob(
-        repository="/repo/nas",
-        status="completed",
-        created_at=datetime(2026, 9, 1),
-    )
-    db.add(old)
+def test_list_backup_jobs_newest_first(db, repository):
+    old = _backup_operation(db, repository, status="completed")
+    old.created_at = datetime(2026, 9, 1)
     db.commit()
     op = _backup_operation(db, repository, status="completed")
     op.created_at = datetime(2026, 9, 9)
@@ -238,15 +225,11 @@ def test_list_backup_jobs_unions_both_tables_newest_first(db, repository):
 
 def test_started_since_archive_names_and_per_repository_helpers(db, repository):
     now = datetime.utcnow()
-    legacy = BackupJob(
-        repository="/repo/nas",
-        repository_id=repository.id,
-        status="completed",
-        archive_name="nas-old",
-        started_at=now - timedelta(days=3),
-        created_at=now - timedelta(days=3),
-    )
-    db.add(legacy)
+    legacy = _backup_operation(db, repository, status="completed")
+    legacy.started_at = now - timedelta(days=3)
+    legacy.created_at = now - timedelta(days=3)
+    legacy.completed_at = now - timedelta(days=3)
+    BackupJobFacade(db, legacy).archive_name = "nas-old"
     db.commit()
     op = _backup_operation(db, repository, status="running")
     op.started_at = now - timedelta(hours=1)

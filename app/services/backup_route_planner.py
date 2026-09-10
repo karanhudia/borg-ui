@@ -2,14 +2,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 from app.database.models import Repository
 from app.services.repository_executor import EXECUTOR_AGENT, repository_executor_type
 from app.utils.source_locations import decode_source_locations
-
-if TYPE_CHECKING:
-    from app.database.models import BackupJob
 
 
 @dataclass(frozen=True)
@@ -211,9 +208,7 @@ def source_locations_for_repository(repository: Repository) -> list[dict[str, An
     )
 
 
-def apply_repository_route_to_backup_job(
-    backup_job: "BackupJob", repository: Repository
-) -> None:
+def apply_repository_route_to_backup_job(backup_job, repository: Repository) -> None:
     source_locations = source_locations_for_repository(repository)
     route = plan_repository_route(repository, source_locations)
     if not route.supported:

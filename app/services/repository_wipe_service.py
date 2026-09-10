@@ -12,16 +12,9 @@ from app.config import settings
 from app.core.borg_router import BorgRouter
 from app.database.database import SessionLocal
 from app.database.models import (
-    BackupJob,
-    CheckJob,
-    CompactJob,
-    DeleteArchiveJob,
     Operation,
-    PruneJob,
     Repository,
     RepositoryWipeJob,
-    RestoreCheckJob,
-    RestoreJob,
     User,
     utc_now,
 )
@@ -39,11 +32,8 @@ from app.utils.datetime_utils import serialize_borg_archive_time, serialize_date
 
 logger = structlog.get_logger()
 
-RUNNING_STATUSES = ("pending", "running")
-
-# Kinds whose queued or running operation blocks a wipe. `restore` is here
-# because the legacy check blocked on a running RestoreJob; `rclone_sync` is
-# not, because it takes the rclone lock scope, not the repository lane
+# Kinds whose queued or running operation blocks a wipe. `rclone_sync` is
+# not here, because it takes the rclone lock scope, not the repository lane
 # (spec 7.2), and mirrors a repository nobody is writing to.
 CONFLICTING_KINDS = (
     "backup",
@@ -187,10 +177,7 @@ class RepositoryWipeService:
     ) -> None:
         """Refuse to preview or wipe while other work holds the repository.
 
-        Operations first: phases 5 and 6 moved every exclusive kind onto that
-        table, and a queued row counts, because the runner will start it. The
-        legacy queries below only ever see a row a pre-upgrade install left
-        active; they go away with the tables in phase 9.
+        A queued row counts, because the runner will start it.
         """
         repo_id = repository.id
 
@@ -212,42 +199,6 @@ class RepositoryWipeService:
             raise HTTPException(
                 status_code=409,
                 detail={"key": "backend.errors.repo.wipeAlreadyRunning"},
-            )
-
-        legacy_models = (
-            BackupJob,
-            CheckJob,
-            CompactJob,
-            PruneJob,
-            RestoreCheckJob,
-            DeleteArchiveJob,
-        )
-        for model in legacy_models:
-            if (
-                db.query(model.id)
-                .filter(
-                    model.repository_id == repo_id, model.status.in_(RUNNING_STATUSES)
-                )
-                .first()
-            ):
-                raise HTTPException(
-                    status_code=409,
-                    detail={"key": "backend.errors.repo.operationAlreadyRunning"},
-                )
-
-        # Pre-phase-7 restore rows; new restores are `restore` operations and
-        # already counted in CONFLICTING_KINDS above.
-        if (
-            db.query(RestoreJob.id)
-            .filter(
-                RestoreJob.repository == repository.path,
-                RestoreJob.status.in_(RUNNING_STATUSES),
-            )
-            .first()
-        ):
-            raise HTTPException(
-                status_code=409,
-                detail={"key": "backend.errors.repo.operationAlreadyRunning"},
             )
 
     async def create_preview(
@@ -559,6 +510,31 @@ class RepositoryWipeService:
                 error=str(exc),
             )
 
+    def resolve_job_or_preview(
+        self, db: Session, repository: Repository, job_id: int
+    ) -> Any:
+        """The wipe execution operation with this id, or the preview row that
+        has it.
+
+        Previews are the only rows left in `repository_wipe_jobs`, and they
+        keep their own id sequence, so a caller holding a preview id (the
+        status and cancel routes take whichever id the client was given)
+        cannot be answered by the operations facade alone. The operation wins
+        the ambiguity, but only for this repository: an operation of another
+        repository with the same id would otherwise win and be rejected by
+        the caller's repository check, leaving a valid preview unreachable."""
+        job = resolve_wipe_job(db, job_id)
+        if job is not None and job.repository_id == repository.id:
+            return job
+        return (
+            db.query(RepositoryWipeJob)
+            .filter(
+                RepositoryWipeJob.id == job_id,
+                RepositoryWipeJob.repository_id == repository.id,
+            )
+            .first()
+        )
+
     def cancel_preview(
         self,
         db: Session,
@@ -567,7 +543,7 @@ class RepositoryWipeService:
         *,
         job_id: int,
     ) -> dict[str, Any]:
-        job = resolve_wipe_job(db, job_id)
+        job = self.resolve_job_or_preview(db, repository, job_id)
         if not job or job.repository_id != repository.id:
             raise HTTPException(
                 status_code=404,

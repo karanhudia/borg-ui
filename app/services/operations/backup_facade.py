@@ -4,8 +4,7 @@ backup-job attribute surface, and the one place every backup is created.
 `backup_service`, `remote_backup_service`, the backup routes, the agent
 transport, the scheduler and the plan runner drive a backup through a fixed
 set of attributes. Phase 8 moves the row to `operations` without rewriting
-them: `resolve_backup_job()` hands them this facade for new work and the real
-`BackupJob` for an id written before this phase.
+them: `resolve_backup_job()` hands them this facade.
 
 Translations, all in one place:
 - `status`: the legacy word `pending` is the operations word `queued`.
@@ -17,11 +16,9 @@ Translations, all in one place:
   writes when it kept its own file is dropped, since the row already names
   the file.
 - `repository` is the path of `repository_id`, or `params["repository"]`
-  for the one legacy case with no repository (an unknown path submitted to
-  the manual start route, recorded and failed at once).
+  for the one case with no repository (an unknown path submitted to the
+  manual start route, recorded and failed at once).
 - `backup_plan_id` is read through `backup_plan_run_id`.
-
-Deleted in phase 9 with the legacy table.
 """
 
 import asyncio
@@ -30,11 +27,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 
-from sqlalchemy import func, nullslast, or_
+from sqlalchemy import func, nullslast
 from sqlalchemy.orm import Session
 
 from app.database.models import (
-    BackupJob,
     BackupPlanRun,
     Operation,
     OperationBackupDetails,
@@ -84,7 +80,7 @@ AGENT_PARAMS = {
     "upload_ratelimit_kib": "upload_ratelimit_kib",
 }
 
-# The same three words the legacy readers match on, kept in one place.
+# The same three words every maintenance reader matches on, in one place.
 RUNNING_MAINTENANCE_WORDS = tuple(RUNNING_BACKUP_MAINTENANCE_FAILURES)
 
 _LEGACY_TO_OPERATION_MODE = {"local": "server"}
@@ -271,47 +267,39 @@ class BackupJobFacade:
 
 
 def is_backup_operation(job: Any) -> bool:
+    """True for every job `resolve_backup_job` returns, since phase 9 left
+    one table. Callers keep asking, so the question keeps an answer."""
     return isinstance(job, BackupJobFacade)
 
 
-def resolve_backup_job(db: Session, job_id: int) -> Any:
-    """The job a backup caller should drive for `job_id`. Operations win;
-    ids from before this phase fall back to the legacy table."""
+def resolve_backup_job(db: Session, job_id: int) -> Optional[BackupJobFacade]:
+    """The job a backup caller should drive for `job_id`, or None when no
+    backup operation has the id."""
     operation = (
         db.query(Operation)
         .filter(Operation.id == job_id, Operation.kind == "backup")
         .first()
     )
-    if operation is not None:
-        return BackupJobFacade(db, operation)
-    return db.query(BackupJob).filter(BackupJob.id == job_id).first()
+    if operation is None:
+        return None
+    return BackupJobFacade(db, operation)
 
 
 def refresh_backup_job(db: Session, job: Any) -> None:
-    """`db.refresh(job)` for either shape: a facade refreshes its two rows."""
-    if is_backup_operation(job):
-        db.refresh(job.operation)
-        db.refresh(job.details)
-    else:
-        db.refresh(job)
+    """`db.refresh(job)`: a facade refreshes its two rows."""
+    db.refresh(job.operation)
+    db.refresh(job.details)
 
 
 def admission_ignore_for(job: Any):
     from app.services.job_admission import ignore_active_job
 
-    table = (
-        Operation.__tablename__ if is_backup_operation(job) else BackupJob.__tablename__
-    )
-    return ignore_active_job(table, job.id)
+    return ignore_active_job(Operation.__tablename__, job.id)
 
 
 def backup_job_link_columns(db: Session, job_id: Optional[int]) -> dict:
     """Which link column a row pointing at backup `job_id` should fill."""
-    if job_id is None:
-        return {"backup_job_id": None, "operation_id": None}
-    if is_backup_operation(resolve_backup_job(db, job_id)):
-        return {"backup_job_id": None, "operation_id": job_id}
-    return {"backup_job_id": job_id, "operation_id": None}
+    return {"operation_id": job_id}
 
 
 def create_backup_operation(
@@ -436,11 +424,10 @@ def backup_job_has_logs(
     return False
 
 
-# -- union queries --------------------------------------------------------
+# -- readers --------------------------------------------------------------
 #
-# Each helper reads both tables and merges in Python. Both cuts rank by the
-# same key the merge uses (the phase 7 lesson: cutting a source by id while
-# merging by timestamp drops rows wherever the two orders disagree).
+# One table since phase 9, so each helper is a single query whose ordering and
+# limit the route contracts still depend on.
 
 
 def _sort_key(attr: str):
@@ -468,16 +455,11 @@ def list_backup_jobs(
     repository_path: Optional[str] = None,
 ) -> list:
     ops = _operations_query(db)
-    legacy = db.query(BackupJob)
     if scheduled_only:
         ops = ops.filter(Operation.scheduled_job_id.isnot(None))
-        legacy = legacy.filter(BackupJob.scheduled_job_id.isnot(None))
     elif manual_only:
         ops = ops.filter(
             Operation.scheduled_job_id.is_(None), Operation.backup_plan_run_id.is_(None)
-        )
-        legacy = legacy.filter(
-            BackupJob.scheduled_job_id.is_(None), BackupJob.backup_plan_id.is_(None)
         )
     if repository_path:
         repository = (
@@ -486,64 +468,39 @@ def list_backup_jobs(
         ops = ops.filter(
             Operation.repository_id == (repository.id if repository else -1)
         )
-        legacy = legacy.filter(BackupJob.repository == repository_path)
-    jobs = _facades(
+    return _facades(
         db,
         ops.order_by(Operation.created_at.desc(), Operation.id.desc())
         .limit(limit)
         .all(),
-    ) + list(
-        legacy.order_by(BackupJob.created_at.desc(), BackupJob.id.desc())
-        .limit(limit)
-        .all()
     )
-    jobs.sort(key=_sort_key("created_at"), reverse=True)
-    return jobs[:limit]
 
 
 def backup_jobs_started_since(
     db: Session, since, *, until=None, limit: Optional[int] = None
 ) -> list:
     ops = _operations_query(db).filter(Operation.started_at >= since)
-    legacy = db.query(BackupJob).filter(BackupJob.started_at >= since)
     if until is not None:
         ops = ops.filter(Operation.started_at <= until)
-        legacy = legacy.filter(BackupJob.started_at <= until)
     ops = ops.order_by(Operation.started_at.desc(), Operation.id.desc())
-    legacy = legacy.order_by(BackupJob.started_at.desc(), BackupJob.id.desc())
     if limit is not None:
         ops = ops.limit(limit)
-        legacy = legacy.limit(limit)
-    jobs = _facades(db, ops.all()) + list(legacy.all())
-    jobs.sort(key=_sort_key("started_at"), reverse=True)
-    return jobs[:limit] if limit is not None else jobs
+    return _facades(db, ops.all())
 
 
 def recent_backup_jobs(db: Session, limit: int) -> list:
-    """The newest backups by start time, both tables, with queued rows kept.
+    """The newest backups by start time, with queued rows kept.
 
     A queued backup has no `started_at`; it sorts last here rather than being
-    filtered out, which is what the single unfiltered legacy query did.
+    filtered out.
     """
-
-    def key(job):
-        return (getattr(job, "started_at", None) or datetime.min, job.id)
-
-    ops = (
+    return _facades(
+        db,
         _operations_query(db)
         .order_by(nullslast(Operation.started_at.desc()), Operation.id.desc())
         .limit(limit)
-        .all()
+        .all(),
     )
-    legacy = (
-        db.query(BackupJob)
-        .order_by(nullslast(BackupJob.started_at.desc()), BackupJob.id.desc())
-        .limit(limit)
-        .all()
-    )
-    jobs = _facades(db, ops) + list(legacy)
-    jobs.sort(key=key, reverse=True)
-    return jobs[:limit]
 
 
 def latest_backup_job_for_repository(
@@ -555,28 +512,18 @@ def latest_backup_job_for_repository(
     require_timestamps: bool = False,
 ) -> Any:
     ops = _operations_query(db).filter(Operation.repository_id == repository.id)
-    legacy = db.query(BackupJob).filter(BackupJob.repository == repository.path)
     if statuses is not None:
         ops = ops.filter(Operation.status.in_(tuple(statuses)))
-        legacy = legacy.filter(BackupJob.status.in_(tuple(statuses)))
     if order == "completed":
         if require_timestamps:
             ops = ops.filter(
                 Operation.started_at.isnot(None), Operation.completed_at.isnot(None)
             )
-            legacy = legacy.filter(
-                BackupJob.started_at.isnot(None), BackupJob.completed_at.isnot(None)
-            )
         ops = ops.order_by(Operation.completed_at.desc(), Operation.id.desc())
-        legacy = legacy.order_by(BackupJob.completed_at.desc(), BackupJob.id.desc())
     else:
         ops = ops.order_by(Operation.created_at.desc(), Operation.id.desc())
-        legacy = legacy.order_by(BackupJob.created_at.desc(), BackupJob.id.desc())
-    candidates = _facades(db, ops.limit(1).all()) + list(legacy.limit(1).all())
-    if not candidates:
-        return None
-    attr = "completed_at" if order == "completed" else "created_at"
-    return max(candidates, key=_sort_key(attr))
+    candidates = _facades(db, ops.limit(1).all())
+    return candidates[0] if candidates else None
 
 
 def backup_jobs_for_archive_names(db: Session, repository: Repository, names) -> list:
@@ -594,16 +541,7 @@ def backup_jobs_for_archive_names(db: Session, repository: Repository, names) ->
         )
         .all()
     )
-    filters = [BackupJob.archive_name.in_(names)]
-    owners = []
-    if getattr(repository, "id", None) is not None:
-        owners.append(BackupJob.repository_id == repository.id)
-    if getattr(repository, "path", None):
-        owners.append(BackupJob.repository == repository.path)
-    if owners:
-        filters.append(or_(*owners))
-    legacy = db.query(BackupJob).filter(*filters).all()
-    jobs = _facades(db, ops) + list(legacy)
+    jobs = _facades(db, ops)
     jobs.sort(key=_sort_key("created_at"), reverse=True)
     return jobs
 
@@ -611,7 +549,7 @@ def backup_jobs_for_archive_names(db: Session, repository: Repository, names) ->
 def newest_per_group(db: Session, model, group_column, order_column, filters) -> list:
     """The newest row of each group, ranked in SQL. Only the winners are
     loaded, so a caller reading one row per repository does not materialize
-    every backup ever taken (the window query the legacy path used)."""
+    every backup ever taken."""
     ranked = (
         db.query(
             model.id.label("row_id"),
@@ -634,26 +572,18 @@ def newest_per_group(db: Session, model, group_column, order_column, filters) ->
 
 
 def latest_backup_jobs_by_repository(db: Session, *, running: bool = False) -> dict:
-    """Newest (or newest running) backup per repository path, both tables."""
+    """Newest (or newest running) backup per repository path."""
     op_filters = [Operation.kind == "backup", Operation.repository_id.isnot(None)]
-    legacy_filters = [BackupJob.repository.isnot(None)]
     if running:
         op_filters.append(Operation.status == "running")
-        legacy_filters.append(BackupJob.status == "running")
         op_order = func.coalesce(Operation.started_at, Operation.created_at)
-        legacy_order = func.coalesce(BackupJob.started_at, BackupJob.created_at)
         attr = "started_at"
     else:
         op_order = Operation.created_at
-        legacy_order = BackupJob.created_at
         attr = "created_at"
-    # Operations group by repository_id and legacy rows by path; a repository
-    # owns one path, so the two rankings meet on the same key below.
     candidates = _facades(
         db,
         newest_per_group(db, Operation, Operation.repository_id, op_order, op_filters),
-    ) + newest_per_group(
-        db, BackupJob, BackupJob.repository, legacy_order, legacy_filters
     )
     result: dict = {}
     for job in candidates:
@@ -675,33 +605,30 @@ def newest_backup_job(
     """`terminal_statuses` narrows what counts as finished. A caller that
     reports the last backup outcome passes its own set, since the operations
     vocabulary counts `skipped` as terminal and a skipped run is not an
-    outcome the legacy readers ever saw."""
+    outcome the routes ever reported."""
     ops = _operations_query(db)
-    legacy = db.query(BackupJob)
     attr = "created_at"
     if running:
         ops = ops.filter(Operation.status == "running")
-        legacy = legacy.filter(BackupJob.status == "running")
         attr = "started_at"
     elif terminal:
         words = tuple(terminal_statuses or TERMINAL_STATUSES)
         ops = ops.filter(Operation.status.in_(words))
-        legacy = legacy.filter(BackupJob.status.in_(words))
         attr = "completed_at"
     column = {
         "created_at": Operation.created_at,
         "started_at": Operation.started_at,
         "completed_at": Operation.completed_at,
     }[attr]
-    legacy_column = getattr(BackupJob, attr)
     candidates = _facades(
         db, ops.order_by(column.desc(), Operation.id.desc()).limit(1).all()
-    ) + list(legacy.order_by(legacy_column.desc(), BackupJob.id.desc()).limit(1).all())
-    return max(candidates, key=_sort_key(attr)) if candidates else None
+    )
+    return candidates[0] if candidates else None
 
 
 def backup_jobs_in_maintenance(db: Session) -> list:
-    ops = (
+    return _facades(
+        db,
         _operations_query(db)
         .join(
             OperationBackupDetails, OperationBackupDetails.operation_id == Operation.id
@@ -709,11 +636,5 @@ def backup_jobs_in_maintenance(db: Session) -> list:
         .filter(
             OperationBackupDetails.maintenance_status.in_(RUNNING_MAINTENANCE_WORDS)
         )
-        .all()
+        .all(),
     )
-    legacy = (
-        db.query(BackupJob)
-        .filter(BackupJob.maintenance_status.in_(RUNNING_MAINTENANCE_WORDS))
-        .all()
-    )
-    return _facades(db, ops) + list(legacy)

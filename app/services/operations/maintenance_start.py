@@ -17,22 +17,16 @@ from sqlalchemy.orm import Session
 
 from app.database.models import Operation, Repository
 from app.services.operations.enqueue import enqueue
-from app.services.operations.job_facade import LEGACY_MODELS, MAINTENANCE_KINDS
+from app.services.operations.job_facade import MAINTENANCE_KINDS
 
 logger = structlog.get_logger()
 
 ACTIVE_STATUSES = ("queued", "running")
 
-# A pre-phase-5 install can restart mid-run and leave a legacy row in one of
-# these statuses; nothing writes new rows to these tables, so this is only
-# ever a row from before the upgrade. Deleted in phase 9 with the tables.
-_LEGACY_ACTIVE_STATUSES = ("pending", "running")
-
 
 def active_maintenance_operation(db: Session, repository_id: int, kind: str) -> Any:
-    """The active `Operation` for this repository and kind, or the active
-    legacy row a pre-phase-5 install left running, if either exists."""
-    operation = (
+    """The active `Operation` for this repository and kind, if one exists."""
+    return (
         db.query(Operation)
         .filter(
             Operation.repository_id == repository_id,
@@ -42,21 +36,6 @@ def active_maintenance_operation(db: Session, repository_id: int, kind: str) -> 
         .order_by(Operation.id.desc())
         .first()
     )
-    if operation is not None:
-        return operation
-    model = LEGACY_MODELS.get(kind)
-    if model is None:
-        return None
-    legacy = (
-        db.query(model)
-        .filter(
-            model.repository_id == repository_id,
-            model.status.in_(_LEGACY_ACTIVE_STATUSES),
-        )
-        .order_by(model.id.desc())
-        .first()
-    )
-    return legacy
 
 
 def start_maintenance(
@@ -93,8 +72,7 @@ def active_delete_for_archive(
     db: Session, repository_id: int, archive_name: str
 ) -> Any:
     """Deletes are rejected per archive, not per repository: two different
-    archives may be removed at once, the same one may not. Also sees a
-    legacy `DeleteArchiveJob` row a pre-phase-5 install left active."""
+    archives may be removed at once, the same one may not."""
     candidates = (
         db.query(Operation)
         .filter(
@@ -107,19 +85,6 @@ def active_delete_for_archive(
     for candidate in candidates:
         if (candidate.params or {}).get("archive_name") == archive_name:
             return candidate
-    model = LEGACY_MODELS.get("delete_archive")
-    if model is not None:
-        legacy = (
-            db.query(model)
-            .filter(
-                model.repository_id == repository_id,
-                model.archive_name == archive_name,
-                model.status.in_(_LEGACY_ACTIVE_STATUSES),
-            )
-            .first()
-        )
-        if legacy is not None:
-            return legacy
     return None
 
 
@@ -269,9 +234,7 @@ async def fail_inline_maintenance(
         # an inline caller created is ours to close.
         if operation.status != "running":
             return False
-        if has_active_agent_job_for(
-            db, kind, operation_id, table=Operation.__tablename__
-        ):
+        if has_active_agent_job_for(db, kind, operation_id):
             return False
         await commit_with_retry(
             db,

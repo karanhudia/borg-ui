@@ -5,7 +5,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.database.models import Repository, RepositoryWipeJob, SystemSettings
+from app.database.models import Repository, SystemSettings
+from tests.utils.operations import seed_job_operation
 
 
 def _create_repository(test_db, *, name: str = "Primary") -> Repository:
@@ -150,7 +151,9 @@ class TestRepositoryWipeApi:
         self, test_client: TestClient, admin_headers, test_db
     ):
         repo = _create_repository(test_db)
-        job = RepositoryWipeJob(
+        job = seed_job_operation(
+            test_db,
+            "wipe",
             repository_id=repo.id,
             repository_path=repo.path,
             repository_name=repo.name,
@@ -165,7 +168,6 @@ class TestRepositoryWipeApi:
             progress=100,
             has_logs=False,
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -191,7 +193,9 @@ class TestRepositoryWipeApi:
         repo = _create_repository(test_db)
         log_file = tmp_path / "wipe.log"
         log_file.write_text("successful wipe log", encoding="utf-8")
-        job = RepositoryWipeJob(
+        job = seed_job_operation(
+            test_db,
+            "wipe",
             repository_id=repo.id,
             repository_path=repo.path,
             repository_name=repo.name,
@@ -207,7 +211,6 @@ class TestRepositoryWipeApi:
             log_file_path=str(log_file),
             has_logs=True,
         )
-        test_db.add(job)
         test_db.commit()
 
         response = test_client.get(
@@ -229,7 +232,9 @@ class TestRepositoryWipeApi:
             test_db.add(settings)
         settings.log_save_policy = "failed_only"
         repo = _create_repository(test_db)
-        job = RepositoryWipeJob(
+        job = seed_job_operation(
+            test_db,
+            "wipe",
             repository_id=repo.id,
             repository_path=repo.path,
             repository_name=repo.name,
@@ -244,7 +249,6 @@ class TestRepositoryWipeApi:
             progress=40,
             error_message="Repository wipe failed before log file creation",
         )
-        test_db.add(job)
         test_db.commit()
 
         response = test_client.get(
@@ -423,30 +427,6 @@ class TestRepositoryWipeOperations:
         assert body["archive_count"] == 4
         assert body["archive_fingerprint"] == "sha256:abc"
         assert body["archives"] == [{"identity": "a"}]
-
-    def test_wipe_job_route_still_serves_a_pre_phase_6_row(
-        self, test_client: TestClient, admin_headers, test_db
-    ):
-        repo = _create_repository(test_db)
-        job = RepositoryWipeJob(
-            repository_id=repo.id,
-            status="completed",
-            phase="completed",
-            archive_count=2,
-            archive_manifest_json="[]",
-            protected_archives_json="[]",
-        )
-        test_db.add(job)
-        test_db.commit()
-        test_db.refresh(job)
-
-        response = test_client.get(
-            f"/api/repositories/{repo.id}/wipe-jobs/{job.id}",
-            headers=admin_headers,
-        )
-
-        assert response.status_code == 200
-        assert response.json()["status"] == "completed"
 
     def test_cancelling_a_queued_wipe_operation_cancels_the_operation(
         self, test_client: TestClient, admin_headers, test_db

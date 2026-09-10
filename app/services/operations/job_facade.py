@@ -8,25 +8,17 @@ facade instead of the legacy model, and every attribute write lands on the
 operation's own columns (spec 6.1). Kind-specific inputs live in
 `operations.params`, since spec 6.2 gives these kinds no extension table.
 
-Deleted in phase 9 with the legacy tables, at which point the services can
-read `Operation` directly.
+Kept after phase 9 as that surface; retiring it is a service-by-service
+refactor, not a migration step.
 """
 
 from datetime import datetime
 from typing import Any, Iterable, Optional
 
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
-from app.database.models import (
-    CheckJob,
-    CompactJob,
-    DeleteArchiveJob,
-    Operation,
-    PruneJob,
-    Repository,
-    RestoreCheckJob,
-)
+from app.database.models import Operation, Repository
 from app.services.operations.backup_facade import newest_per_group
 
 MAINTENANCE_KINDS: tuple[str, ...] = (
@@ -36,14 +28,6 @@ MAINTENANCE_KINDS: tuple[str, ...] = (
     "delete_archive",
     "restore_check",
 )
-
-LEGACY_MODELS: dict[str, Any] = {
-    "check": CheckJob,
-    "prune": PruneJob,
-    "compact": CompactJob,
-    "delete_archive": DeleteArchiveJob,
-    "restore_check": RestoreCheckJob,
-}
 
 # The inputs each kind carries in `operations.params` (spec 6.2). A service
 # reading anything outside its own tuple is a bug, so the facade raises
@@ -340,24 +324,19 @@ class MaintenanceJobFacade:
         return params.get(name)
 
 
-def resolve_maintenance_job(db: Session, job_id: int, kind: str) -> Any:
-    """The job a maintenance service should drive for `job_id`.
-
-    Operations win, so new work runs on the new table. Ids that belong to a
-    row written before this phase fall back to the legacy table, which keeps
-    the job status routes and the agent callbacks working for history.
-    """
+def resolve_maintenance_job(
+    db: Session, job_id: int, kind: str
+) -> Optional["MaintenanceJobFacade"]:
+    """The job a maintenance service should drive for `job_id`, or None when
+    no operation of that kind has the id."""
     operation = (
         db.query(Operation)
         .filter(Operation.id == job_id, Operation.kind == kind)
         .first()
     )
-    if operation is not None:
-        return MaintenanceJobFacade(db, operation)
-    model = LEGACY_MODELS.get(kind)
-    if model is None:
+    if operation is None:
         return None
-    return db.query(model).filter(model.id == job_id).first()
+    return MaintenanceJobFacade(db, operation)
 
 
 def resolve_agent_maintenance_job(
@@ -366,14 +345,12 @@ def resolve_agent_maintenance_job(
     """The maintenance job an agent job's payload names, or None; only for
     the `kinds` the caller handles.
 
-    The payload's `operation.maintenance_job` carries `kind`, `id` and, for
-    every job queued since the marker exists, `table`. The `operations` ids
-    and the legacy ``*_jobs`` ids are separate sequences, so the table is
-    what tells them apart. A payload without it predates the marker and may
-    name either; the payload's repository decides (the row of the same
-    repository, an operation first, and nothing when neither row is that
-    repository's), and a payload without a repository takes the operation,
-    as before.
+    The payload's `operation.maintenance_job` carries `kind`, `id` and, since
+    phase 5, `table`. `operations` is the only table left, so the marker must
+    name it: a payload naming another table, or carrying none at all, was
+    written before the collapse and names an id from a dropped sequence, which
+    cannot be mapped to the operation the copy became. Such a payload resolves
+    to nothing rather than to an unrelated row that happens to hold that id.
     """
     if not isinstance(payload, dict):
         return None
@@ -394,35 +371,21 @@ def resolve_agent_maintenance_job(
         return None
     if job_id <= 0:
         return None
-    table = maintenance.get("table")
+    if maintenance.get("table") != Operation.__tablename__:
+        return None
     operation = (
         db.query(Operation)
         .filter(Operation.id == job_id, Operation.kind == kind)
         .first()
     )
-    if table == Operation.__tablename__:
-        return MaintenanceJobFacade(db, operation) if operation is not None else None
-    model = LEGACY_MODELS[kind]
-    if table and table != model.__tablename__:
+    if operation is None:
         return None
-    legacy = db.query(model).filter(model.id == job_id).first()
-    if table:
-        return legacy
     repository = payload.get("repository")
     repository_id = repository.get("id") if isinstance(repository, dict) else None
-    candidates = [
-        candidate
-        for candidate in (
-            MaintenanceJobFacade(db, operation) if operation is not None else None,
-            legacy,
-        )
-        if candidate is not None
-    ]
-    if repository_id is not None:
+    if repository_id is not None and operation.repository_id != repository_id:
         # a row of another repository is never the one this job reports on
-        matching = [c for c in candidates if c.repository_id == repository_id]
-        return matching[0] if matching else None
-    return candidates[0] if candidates else None
+        return None
+    return MaintenanceJobFacade(db, operation)
 
 
 def refresh_job(db: Session, job: Any) -> None:
@@ -436,43 +399,23 @@ def refresh_job(db: Session, job: Any) -> None:
 def claim_running(db: Session, job_id: int, kind: str, started_at: datetime) -> int:
     """Conditionally mark the job running, returning the number of rows
     claimed. The v2 services use this shape so two dispatches of the same id
-    cannot both start work. A manual-start route (or a test simulating one,
-    for either an Operation or a legacy row) pre-sets the row to "running"
+    cannot both start work. A manual-start route (or a test simulating one)
+    pre-sets the row to "running"
     with no `started_at` before this ever runs, so "running" alone isn't
     "already claimed" - only a "running" row that already has a `started_at`
     is, and matching it here would let two concurrent claims both report
     success."""
-    operation = (
-        db.query(Operation)
-        .filter(Operation.id == job_id, Operation.kind == kind)
-        .first()
-    )
-    if operation is not None:
-        return (
-            db.query(Operation)
-            .filter(
-                Operation.id == job_id,
-                or_(
-                    Operation.status == "queued",
-                    and_(
-                        Operation.status == "running",
-                        Operation.started_at.is_(None),
-                    ),
-                ),
-            )
-            .update(
-                {"status": "running", "started_at": started_at},
-                synchronize_session=False,
-            )
-        )
-    model = LEGACY_MODELS[kind]
     return (
-        db.query(model)
+        db.query(Operation)
         .filter(
-            model.id == job_id,
+            Operation.id == job_id,
+            Operation.kind == kind,
             or_(
-                model.status == "pending",
-                and_(model.status == "running", model.started_at.is_(None)),
+                Operation.status == "queued",
+                and_(
+                    Operation.status == "running",
+                    Operation.started_at.is_(None),
+                ),
             ),
         )
         .update(
@@ -483,71 +426,47 @@ def claim_running(db: Session, job_id: int, kind: str, started_at: datetime) -> 
 
 
 def maintenance_jobs_started_since(db: Session, kind: str, since: datetime) -> list:
-    """Every `kind` job started at or after `since`, from both tables, newest
-    first. A reader of recent history (the dashboard timeline) sees the
-    operations rows this phase writes and the legacy rows written before it,
-    until phase 9 drops the legacy table (spec section 14)."""
-    model = _legacy_model(kind)
+    """Every `kind` job started at or after `since`, newest first, for a reader
+    of recent history (the dashboard timeline)."""
+    _require_maintenance_kind(kind)
     operations = (
         db.query(Operation)
         .filter(Operation.kind == kind, Operation.started_at >= since)
         .all()
     )
     jobs = [MaintenanceJobFacade(db, operation) for operation in operations]
-    jobs.extend(db.query(model).filter(model.started_at >= since).all())
     jobs.sort(key=lambda job: (job.started_at, job.id), reverse=True)
     return jobs
 
 
-# A row still waiting for its verdict. `pending` is the legacy word for
-# `queued` (spec 6.3); every other status is an outcome, `skipped` included,
-# since its reason says what kept the run from happening.
-UNSETTLED_STATUSES: frozenset[str] = frozenset({"pending", "queued", "running"})
+# A row still waiting for its verdict. Every other status is an outcome,
+# `skipped` included, since its reason says what kept the run from happening.
+UNSETTLED_STATUSES: frozenset[str] = frozenset({"queued", "running"})
 
 
-def _legacy_model(kind: str):
-    model = LEGACY_MODELS.get(kind)
-    if model is None:
+def _require_maintenance_kind(kind: str) -> None:
+    if kind not in MAINTENANCE_KINDS:
         raise ValueError(f"Not a maintenance kind: {kind!r}")
-    return model
 
 
 def latest_maintenance_jobs_by_repository(
     db: Session, kind: str, repository_ids: list[int], *, settled: bool = False
 ) -> dict[int, Any]:
-    """The newest `kind` row of each repository, from both tables. Newest by
-    creation, as the legacy max-id lookup was; an operation wins a tie, since
-    it is the row still being written.
+    """The newest `kind` row of each repository. Newest by creation, as the
+    legacy max-id lookup was.
 
     With `settled`, only rows that reached a verdict count: a queued run can
     wait hours for a runner slot and must not hide the failure before it, so
     a health reading asks for the verdict separately from the live row."""
     if not repository_ids:
         return {}
-    model = _legacy_model(kind)
-    legacy_filters = [model.repository_id.in_(repository_ids)]
+    _require_maintenance_kind(kind)
     op_filters = [Operation.kind == kind, Operation.repository_id.in_(repository_ids)]
     if settled:
-        # a legacy status column is nullable; NULL is not "still waiting"
-        legacy_filters.append(
-            or_(model.status.is_(None), model.status.notin_(UNSETTLED_STATUSES))
-        )
         op_filters.append(Operation.status.notin_(UNSETTLED_STATUSES))
-    result: dict[int, Any] = {}
-    for job in newest_per_group(
-        db,
-        model,
-        model.repository_id,
-        func.coalesce(model.created_at, datetime.min),
-        legacy_filters,
-    ):
-        result[job.repository_id] = job
-    for operation in newest_per_group(
-        db, Operation, Operation.repository_id, Operation.created_at, op_filters
-    ):
-        current = result.get(operation.repository_id)
-        if current is None or operation.created_at >= (
-            current.created_at or datetime.min
-        ):
-            result[operation.repository_id] = MaintenanceJobFacade(db, operation)
-    return result
+    return {
+        operation.repository_id: MaintenanceJobFacade(db, operation)
+        for operation in newest_per_group(
+            db, Operation, Operation.repository_id, Operation.created_at, op_filters
+        )
+    }

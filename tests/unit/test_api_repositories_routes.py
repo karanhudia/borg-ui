@@ -9,17 +9,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api import repositories as repositories_api
-from app.services.storage_usage import SOURCE_BORG1_CACHE_STATS, SizeResult
+from tests.utils.operations import seed_job_operation
 from app.database.models import (
     AgentMachine,
-    BackupJob,
     BackupPlan,
     BackupPlanRun,
-    CheckJob,
-    CompactJob,
-    PruneJob,
     Repository,
-    RepositoryWipeJob,
     SSHConnection,
     SystemSettings,
     UserRepositoryPermission,
@@ -114,21 +109,27 @@ class TestRepositoryRouteContracts:
         repo = _create_repo(test_db, "Repo", "/repos/main")
         test_db.add_all(
             [
-                CheckJob(
+                seed_job_operation(
+                    test_db,
+                    "check",
                     repository_id=repo.id,
                     status="running",
                     progress=35,
                     progress_message="Checking segments",
                     started_at=datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc),
                 ),
-                CompactJob(
+                seed_job_operation(
+                    test_db,
+                    "compact",
                     repository_id=repo.id,
                     status="running",
                     progress=60,
                     progress_message="Compacting",
                     started_at=datetime(2026, 1, 1, 12, 5, tzinfo=timezone.utc),
                 ),
-                PruneJob(
+                seed_job_operation(
+                    test_db,
+                    "prune",
                     repository_id=repo.id,
                     status="running",
                     started_at=datetime(2026, 1, 1, 12, 10, tzinfo=timezone.utc),
@@ -152,7 +153,9 @@ class TestRepositoryRouteContracts:
         self, test_client: TestClient, admin_headers, test_db
     ):
         repo = _create_repo(test_db, "Repo", "/repos/main")
-        wipe_job = RepositoryWipeJob(
+        wipe_job = seed_job_operation(
+            test_db,
+            "wipe",
             repository_id=repo.id,
             repository_path=repo.path,
             repository_name=repo.name,
@@ -166,7 +169,6 @@ class TestRepositoryRouteContracts:
             progress_message="Deleting repository archives",
             started_at=datetime(2026, 1, 1, 12, 15, tzinfo=timezone.utc),
         )
-        test_db.add(wipe_job)
         test_db.commit()
 
         response = test_client.get(
@@ -187,13 +189,14 @@ class TestRepositoryRouteContracts:
         repo = _create_repo(test_db, "Repo", "/repos/main")
         log_path = tmp_path / "check.log"
         log_path.write_text("first line\nsecond line\n", encoding="utf-8")
-        job = CheckJob(
+        job = seed_job_operation(
+            test_db,
+            "check",
             repository_id=repo.id,
             status="completed",
             log_file_path=str(log_path),
             has_logs=True,
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -211,13 +214,14 @@ class TestRepositoryRouteContracts:
         repo = _create_repo(test_db, "Repo", "/repos/main")
         log_path = tmp_path / "compact.log"
         log_path.write_text("compact output\n", encoding="utf-8")
-        job = CompactJob(
+        job = seed_job_operation(
+            test_db,
+            "compact",
             repository_id=repo.id,
             status="completed",
             log_file_path=str(log_path),
             has_logs=True,
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -235,13 +239,14 @@ class TestRepositoryRouteContracts:
         repo = _create_repo(test_db, "Repo", "/repos/main")
         log_path = tmp_path / "prune.log"
         log_path.write_text("prune output\n", encoding="utf-8")
-        job = PruneJob(
+        job = seed_job_operation(
+            test_db,
+            "prune",
             repository_id=repo.id,
             status="completed",
             log_file_path=str(log_path),
             has_logs=True,
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -493,107 +498,6 @@ class TestRepositoryHelperContracts:
         assert normalized[0]["time"] == "not-a-timestamp"
 
     @pytest.mark.asyncio
-    async def test_update_repository_stats_updates_archive_count_size_and_last_backup(
-        self, test_db
-    ):
-        repo = _create_repo(
-            test_db, "Repo", "/repos/main", passphrase="secret", bypass_lock=False
-        )
-        settings = SystemSettings(bypass_lock_on_list=True)
-        test_db.add(settings)
-        test_db.commit()
-
-        list_payload = {
-            "success": True,
-            "stdout": '{"archives":[{"name":"old","time":"2024-01-01T10:00:00"},{"name":"new","time":"2024-02-01T12:00:00Z"}]}',
-        }
-        with (
-            patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None),
-            patch.object(
-                repositories_api.BorgRouter,
-                "list_archives",
-                AsyncMock(return_value=list_payload["stdout"]),
-            ) as mock_list,
-            patch.object(
-                repositories_api,
-                "measure_repository_size",
-                AsyncMock(
-                    return_value=SizeResult(
-                        bytes=2097152,
-                        source=SOURCE_BORG1_CACHE_STATS,
-                        last_modified=datetime(2024, 2, 1, 12, 30),
-                    )
-                ),
-            ) as mock_size,
-        ):
-            success = await repositories_api.update_repository_stats(repo, test_db)
-
-        assert success is True
-        assert repo.archive_count == 2
-        assert repo.total_size == "2.00 MB"
-        assert repo.total_size_source == SOURCE_BORG1_CACHE_STATS
-        assert repo.borg_last_modified == datetime(2024, 2, 1, 12, 30)
-        assert repo.last_backup == datetime(2024, 2, 1, 12, 0)
-        mock_list.assert_awaited_once()
-        # TZ=UTC is pinned inside the wrapper methods (mocked away here);
-        # test_borg_wrapper / test_borg2 cover the pin itself.
-        assert mock_list.await_args.kwargs["env"]["BORG_PASSPHRASE"] == "secret"
-        assert mock_size.await_args.kwargs["use_bypass_lock"] is True
-        assert mock_size.await_args.kwargs["env"]["BORG_PASSPHRASE"] == "secret"
-
-    @pytest.mark.asyncio
-    async def test_update_repository_stats_delegates_to_agent(self, test_db):
-        repo = _create_repo(
-            test_db, "Agent Repo", "sftp://host:23/./m3s/m3s01", passphrase="secret"
-        )
-
-        list_stdout = (
-            '{"archives":['
-            '{"name":"m3s01","id":"a1","time":"2024-02-01T12:00:00Z"},'
-            '{"name":"m3s01","id":"a2","time":"2024-01-01T10:00:00"}]}'
-        )
-        # Borg 1 repo-info carries repo-level dedup size in cache.stats.
-        rinfo_stdout = (
-            '{"encryption":{"mode":"repokey-aes-ocb"},'
-            '"cache":{"stats":{"unique_csize":2097152}},'
-            '"repository":{"last_modified":"2024-02-01T12:30:00+00:00"}}'
-        )
-        wait_returns = [
-            {"success": True, "stdout": list_stdout},
-            {"success": True, "stdout": rinfo_stdout},
-        ]
-
-        async def fake_wait(db, job_id, **kwargs):
-            return wait_returns.pop(0)
-
-        with (
-            patch("app.api.repositories.is_agent_executor", return_value=True),
-            patch(
-                "app.services.repository_executor.queue_agent_repository_operation_job",
-                return_value=SimpleNamespace(id=1),
-            ) as mock_queue,
-            patch(
-                "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
-                new=AsyncMock(),
-            ),
-            patch(
-                "app.services.repository_executor.wait_for_agent_repository_operation_job",
-                new=fake_wait,
-            ),
-        ):
-            success = await repositories_api.update_repository_stats(repo, test_db)
-
-        assert success is True
-        assert repo.archive_count == 2
-        assert repo.encryption == "repokey-aes-ocb"
-        assert repo.total_size == "2.00 MB"
-        assert repo.total_size_source == "borg1_cache_stats"
-        assert repo.borg_last_modified == datetime(2024, 2, 1, 12, 30)
-        assert repo.last_backup == datetime(2024, 2, 1, 12, 0)
-        job_kinds = [c.kwargs["job_kind"] for c in mock_queue.call_args_list]
-        assert job_kinds == ["repository.list_archives", "repository.rinfo"]
-
-    @pytest.mark.asyncio
     async def test_borg1_repo_on_a_capable_agent_falls_back_to_disk_usage(
         self, test_db
     ):
@@ -641,7 +545,10 @@ class TestRepositoryHelperContracts:
                 new=fake_wait,
             ),
         ):
-            assert await repositories_api.update_repository_stats(repo, test_db) is True
+            assert (
+                await repositories_api._update_agent_repository_stats(repo, test_db)
+                is True
+            )
         assert repo.total_size == "4.00 KB" and repo.total_size_source == "storage_used"
         assert [c.kwargs["job_kind"] for c in mock_queue.call_args_list][-2:] == [
             "repository.storage_usage",
@@ -695,7 +602,10 @@ class TestRepositoryHelperContracts:
                 "app.services.repository_executor.cancel_unclaimed_agent_repository_job"
             ) as cancel_unclaimed,
         ):
-            assert await repositories_api.update_repository_stats(repo, test_db) is True
+            assert (
+                await repositories_api._update_agent_repository_stats(repo, test_db)
+                is True
+            )
         cancel_unclaimed.assert_called_once_with(test_db, 1)
 
     def _agent(self, test_db, capabilities):
@@ -713,319 +623,6 @@ class TestRepositoryHelperContracts:
         test_db.commit()
         test_db.refresh(agent)
         return agent
-
-    @pytest.mark.asyncio
-    async def test_update_repository_stats_prefers_agent_storage_usage(self, test_db):
-        """A 0.1.4 agent measures a Borg 2 store URL read-only and labels the
-        source (#936); the server takes that over du."""
-        agent = self._agent(test_db, ["repository.rinfo", "repository.storage_usage"])
-        repo = _create_repo(
-            test_db,
-            "Agent Repo",
-            "rest://borg@h/store/repo",
-            borg_version=2,
-            agent_machine_id=agent.id,
-        )
-        wait_returns = [
-            {"success": True, "stdout": '{"archives":[]}'},
-            {
-                "success": True,
-                "stdout": '{"repository":{"last_modified":"2026-09-06T08:57:17+00:00"}}',
-            },
-            {
-                "return_code": 0,
-                "stdout": '{"bytes": 301284, "objects": 4, "source": "borg2_index"}',
-                "data": {"bytes": 301284, "objects": 4, "source": "borg2_index"},
-            },
-        ]
-
-        async def fake_wait(db, job_id, **kwargs):
-            return wait_returns.pop(0)
-
-        with (
-            patch("app.api.repositories.is_agent_executor", return_value=True),
-            patch(
-                "app.services.repository_executor.queue_agent_repository_operation_job",
-                return_value=SimpleNamespace(id=1),
-            ) as mock_queue,
-            patch(
-                "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
-                new=AsyncMock(),
-            ),
-            patch(
-                "app.services.repository_executor.wait_for_agent_repository_operation_job",
-                new=fake_wait,
-            ),
-        ):
-            assert await repositories_api.update_repository_stats(repo, test_db) is True
-
-        assert repo.total_size == "294.22 KB"
-        assert repo.total_size_source == "borg2_index"
-        assert repo.borg_last_modified == datetime(2026, 9, 6, 8, 57, 17)
-        job_kinds = [c.kwargs["job_kind"] for c in mock_queue.call_args_list]
-        assert job_kinds == [
-            "repository.list_archives",
-            "repository.rinfo",
-            "repository.storage_usage",
-        ]
-        # the agent gets the same budget the server waits for
-        usage_call = mock_queue.call_args_list[2]
-        assert usage_call.kwargs["operation"]["timeout_seconds"] > 0
-
-    @pytest.mark.asyncio
-    async def test_update_repository_stats_falls_back_to_disk_usage_for_old_agents(
-        self, test_db
-    ):
-        agent = self._agent(test_db, ["repository.rinfo", "repository.disk_usage"])
-        repo = _create_repo(
-            test_db,
-            "Old Agent Repo",
-            "/srv/repo",
-            borg_version=2,
-            agent_machine_id=agent.id,
-        )
-        repo.total_size = "keep"
-        test_db.commit()
-        wait_returns = [
-            {"success": True, "stdout": '{"archives":[]}'},
-            {"success": True, "stdout": "{}"},
-            {"return_code": 0, "stdout": "4096\t/srv/repo\n"},
-        ]
-
-        async def fake_wait(db, job_id, **kwargs):
-            return wait_returns.pop(0)
-
-        with (
-            patch("app.api.repositories.is_agent_executor", return_value=True),
-            patch(
-                "app.services.repository_executor.queue_agent_repository_operation_job",
-                return_value=SimpleNamespace(id=1),
-            ) as mock_queue,
-            patch(
-                "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
-                new=AsyncMock(),
-            ),
-            patch(
-                "app.services.repository_executor.wait_for_agent_repository_operation_job",
-                new=fake_wait,
-            ),
-        ):
-            assert await repositories_api.update_repository_stats(repo, test_db) is True
-
-        assert repo.total_size == "4.00 KB" and repo.total_size_source == "storage_used"
-        assert [c.kwargs["job_kind"] for c in mock_queue.call_args_list][-1] == (
-            "repository.disk_usage"
-        )
-
-    @pytest.mark.asyncio
-    async def test_update_repository_stats_keeps_size_when_the_agent_cannot_measure(
-        self, test_db
-    ):
-        agent = self._agent(test_db, ["repository.rinfo", "repository.storage_usage"])
-        repo = _create_repo(
-            test_db,
-            "Unmeasurable",
-            "rest://borg@h/r",
-            borg_version=2,
-            agent_machine_id=agent.id,
-        )
-        repo.total_size = "keep"
-        repo.total_size_source = "borg2_index"
-        test_db.commit()
-        wait_returns = [
-            {"success": True, "stdout": '{"archives":[]}'},
-            {"success": True, "stdout": "{}"},
-            {
-                "return_code": 0,
-                "stdout": '{"bytes": null, "objects": null, "source": null, "reason": "unsupported_scheme"}',
-                "data": {
-                    "bytes": None,
-                    "objects": None,
-                    "source": None,
-                    "reason": "unsupported_scheme",
-                },
-            },
-        ]
-
-        async def fake_wait(db, job_id, **kwargs):
-            return wait_returns.pop(0)
-
-        with (
-            patch("app.api.repositories.is_agent_executor", return_value=True),
-            patch(
-                "app.services.repository_executor.queue_agent_repository_operation_job",
-                return_value=SimpleNamespace(id=1),
-            ),
-            patch(
-                "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
-                new=AsyncMock(),
-            ),
-            patch(
-                "app.services.repository_executor.wait_for_agent_repository_operation_job",
-                new=fake_wait,
-            ),
-        ):
-            assert await repositories_api.update_repository_stats(repo, test_db) is True
-
-        assert repo.total_size == "keep" and repo.total_size_source == "borg2_index"
-
-    @pytest.mark.asyncio
-    async def test_update_repository_stats_accepts_router_archive_lists(self, test_db):
-        repo = _create_repo(
-            test_db, "Repo", "/repos/main", passphrase="secret", bypass_lock=False
-        )
-
-        archives = [
-            {"name": "old", "time": "2024-01-01T10:00:00"},
-            {"name": "new", "time": "2024-02-01T12:00:00Z"},
-        ]
-        with (
-            patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None),
-            patch.object(
-                repositories_api.BorgRouter,
-                "list_archives",
-                AsyncMock(return_value=archives),
-            ) as mock_list,
-            patch.object(
-                repositories_api.borg,
-                "_execute_command",
-                AsyncMock(
-                    return_value={
-                        "success": True,
-                        "stdout": '{"cache":{"stats":{"unique_csize": 1024}}}',
-                        "stderr": "",
-                        "return_code": 0,
-                    }
-                ),
-            ),
-        ):
-            success = await repositories_api.update_repository_stats(repo, test_db)
-
-        assert success is True
-        assert repo.archive_count == 2
-        assert repo.last_backup == datetime(2024, 2, 1, 12, 0)
-        mock_list.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_update_repository_stats_chooses_latest_archive_by_utc_instant(
-        self, test_db
-    ):
-        repo = _create_repo(test_db, "Repo", "/repos/main")
-
-        archives = [
-            {"name": "lexically-later", "time": "2024-02-01T15:30:00Z"},
-            {"name": "actually-later", "time": "2024-02-01T11:00:00-05:00"},
-        ]
-        with (
-            patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None),
-            patch.object(
-                repositories_api.BorgRouter,
-                "list_archives",
-                AsyncMock(return_value=archives),
-            ),
-            patch.object(
-                repositories_api,
-                "measure_repository_size",
-                AsyncMock(return_value=SizeResult()),
-            ),
-        ):
-            success = await repositories_api.update_repository_stats(repo, test_db)
-
-        assert success is True
-        assert repo.last_backup == datetime(2024, 2, 1, 16, 0)
-
-    @pytest.mark.asyncio
-    async def test_update_repository_stats_returns_false_on_unexpected_exception(
-        self, test_db
-    ):
-        repo = _create_repo(test_db, "Repo", "/repos/main")
-
-        with patch.object(
-            repositories_api.BorgRouter,
-            "list_archives",
-            AsyncMock(side_effect=RuntimeError("boom")),
-        ):
-            success = await repositories_api.update_repository_stats(repo, test_db)
-
-        assert success is False
-
-    @pytest.mark.asyncio
-    async def test_update_repository_stats_uses_remote_path_and_ssh_key_env(
-        self, test_db
-    ):
-        repo = Repository(
-            name="Remote Repo",
-            path="ssh://borg@example.com:22/backups/main",
-            encryption="none",
-            repository_type="ssh",
-            remote_path="/usr/local/bin/borg1",
-            passphrase="remote-secret",
-        )
-        test_db.add(repo)
-        test_db.commit()
-        test_db.refresh(repo)
-
-        with (
-            patch(
-                "app.api.repositories.resolve_repo_ssh_key_file",
-                return_value="/tmp/test.key",
-            ),
-            patch.object(
-                repositories_api.BorgRouter,
-                "list_archives",
-                AsyncMock(return_value='{"archives": []}'),
-            ) as mock_list,
-            patch.object(
-                repositories_api,
-                "measure_repository_size",
-                AsyncMock(
-                    return_value=SizeResult(bytes=1024, source=SOURCE_BORG1_CACHE_STATS)
-                ),
-            ) as mock_size,
-            patch("app.api.repositories.os.path.exists", return_value=False),
-        ):
-            success = await repositories_api.update_repository_stats(repo, test_db)
-
-        assert success is True
-        mock_list.assert_awaited_once()
-        assert mock_size.await_args.kwargs["env"]["BORG_RSH"].startswith("ssh ")
-        assert not mock_size.await_args.kwargs["use_bypass_lock"]
-
-    @pytest.mark.asyncio
-    async def test_update_repository_stats_formats_v2_total_size_from_the_measurement(
-        self, test_db
-    ):
-        repo = _create_repo(test_db, "Repo V2", "/repos/v2-main", borg_version=2)
-
-        with (
-            patch(
-                "app.api.repositories.resolve_repo_ssh_key_file",
-                return_value="/tmp/test.key",
-            ),
-            patch.object(
-                repositories_api.BorgRouter,
-                "list_archives",
-                AsyncMock(
-                    return_value=[{"name": "new", "start": "2024-02-01T12:00:00Z"}]
-                ),
-            ) as mock_list,
-            patch.object(
-                repositories_api,
-                "measure_repository_size",
-                AsyncMock(return_value=SizeResult(bytes=4096, source="borg2_index")),
-            ) as mock_size,
-            patch("app.api.repositories.os.path.exists", return_value=False),
-        ):
-            success = await repositories_api.update_repository_stats(repo, test_db)
-
-        assert success is True
-        assert repo.archive_count == 1
-        assert repo.total_size == "4.00 KB"
-        assert repo.total_size_source == "borg2_index"
-        assert repo.last_backup == datetime(2024, 2, 1, 12, 0)
-        mock_list.assert_awaited_once()
-        mock_size.assert_awaited_once()
-        assert mock_size.await_args.args[0] is repo
 
     @pytest.mark.asyncio
     async def test_repo_metadata_routes_serialize_borg_commands_per_repository(
@@ -1129,7 +726,9 @@ class TestRepositoryHelperContracts:
         test_db.add(run)
         test_db.flush()
         test_db.add(
-            BackupJob(
+            seed_job_operation(
+                test_db,
+                "backup",
                 repository=repo.path,
                 repository_id=repo.id,
                 backup_plan_id=plan.id,

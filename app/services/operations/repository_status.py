@@ -29,18 +29,12 @@ from app.database.models import (
     Archive,
     BackupPlan,
     BackupPlanRepository,
-    DeleteArchiveJob,
     Operation,
     Repository,
-    RepositoryWipeJob,
     ScheduledJob,
     ScheduledJobRepository,
 )
 from app.services.operations import anomalies
-from app.services.operations.legacy_status import (
-    latest_legacy_success_by_repository,
-    latest_legacy_terminal,
-)
 from app.services.operations.vocab import SUCCESS_STATUSES
 
 TERMINAL = ("completed", "completed_with_warnings", "failed", "cancelled")
@@ -99,8 +93,8 @@ def _operations(db: Session, repository_id: int, spec: dict):
 
 
 def job_evidence(db: Session, repository_id: int, cell: str, spec: dict) -> CellStatus:
-    """The newest terminal job row for a cell, operations first, legacy
-    tables until phase 9 removes them; plus whether one is running."""
+    """The newest terminal operation for a cell, plus whether one is
+    running."""
     q = _operations(db, repository_id, spec)
     running = q.filter(Operation.status == "running").first() is not None
     # a running prune preview still shows as running; a finished one is no
@@ -120,13 +114,6 @@ def job_evidence(db: Session, repository_id: int, cell: str, spec: dict) -> Cell
             latest.status,
             latest.completed_at,
             "operations",
-        )
-    legacy = latest_legacy_terminal(db, repository_id, cell)
-    if legacy and (result.completed_at is None or legacy[1] > result.completed_at):
-        result.status, result.completed_at, result.source = (
-            legacy[0],
-            legacy[1],
-            "legacy",
         )
     return result
 
@@ -215,9 +202,9 @@ def _listing_criterion(model):
     )
 
 
-# Borg UI's own archive removals besides prune: `delete_archive` and (phase
-# 6) `wipe` run as operations, before that as DeleteArchiveJob and
-# RepositoryWipeJob rows; a wipe preview is still a RepositoryWipeJob row.
+# Borg UI's own archive removals besides prune: `delete_archive` and `wipe`
+# run as operations. A wipe preview is a `repository_wipe_jobs` row and
+# removes nothing, so it is no evidence here.
 # Any of these that started may have removed archives whatever its final
 # status: a deletion cancelled or failed after Borg dropped the manifest
 # entry still removed the archive, a wipe that failed half-way is recorded
@@ -303,16 +290,15 @@ def explained_listings_by_repository(
     db: Session, candidates: dict[int, list[datetime]]
 ) -> dict[int, set[datetime]]:
     """The listings whose removals Borg UI itself caused: for each deletion
-    (a `delete_archive` operation or legacy job, a wipe that started its
-    delete phase), the first listing at or after it that reported removed
+    (a `delete_archive` or `wipe` operation that started), the first listing at or after it that reported removed
     archives is the one that reported them gone. Not merely the first
     listing: a sync already in flight when the deletion ran listed the
     archive as still present and reports nothing, and the one after it is
     the one that must not read as a prune. Bounded to the candidates
     (newest first per repository): a deletion after the newest one
     explains nothing in the window, one up to the removal listing that
-    precedes the oldest explains a listing outside it. One query per deletion
-    table, each with a correlated minimum."""
+    precedes the oldest explains a listing outside it. One query with a
+    correlated minimum."""
     listing = aliased(Operation)
     result: dict[int, set[datetime]] = {}
     since = _removal_listing_before_by_repository(
@@ -333,44 +319,29 @@ def explained_listings_by_repository(
             ]
         )
 
-    sources = (
-        (
-            Operation,
-            and_(
-                Operation.kind.in_(DELETION_KINDS),
-                Operation.status.in_(TERMINAL),
-                Operation.started_at.isnot(None),
-            ),
-        ),
-        (
-            DeleteArchiveJob,
-            and_(
-                DeleteArchiveJob.status.in_(TERMINAL),
-                # the reaper stamps a never-queued job failed with no start
-                DeleteArchiveJob.started_at.isnot(None),
-            ),
-        ),
-        (RepositoryWipeJob, RepositoryWipeJob.started_at.isnot(None)),
+    done = and_(
+        Operation.kind.in_(DELETION_KINDS),
+        Operation.status.in_(TERMINAL),
+        Operation.started_at.isnot(None),
     )
-    for model, done in sources:
-        first_listing = (
-            db.query(func.min(listing.completed_at))
-            .filter(
-                listing.repository_id == model.repository_id,
-                _removal_criterion(db, listing),
-                listing.completed_at >= model.completed_at,
-            )
-            .correlate(model)
-            .scalar_subquery()
+    first_listing = (
+        db.query(func.min(listing.completed_at))
+        .filter(
+            listing.repository_id == Operation.repository_id,
+            _removal_criterion(db, listing),
+            listing.completed_at >= Operation.completed_at,
         )
-        rows = (
-            db.query(model.repository_id, first_listing)
-            .filter(done, model.completed_at.isnot(None), window(model))
-            .all()
-        )
-        for repository_id, listed_at in rows:
-            if listed_at is not None:
-                result.setdefault(repository_id, set()).add(listed_at)
+        .correlate(Operation)
+        .scalar_subquery()
+    )
+    rows = (
+        db.query(Operation.repository_id, first_listing)
+        .filter(done, Operation.completed_at.isnot(None), window(Operation))
+        .all()
+    )
+    for repository_id, listed_at in rows:
+        if listed_at is not None:
+            result.setdefault(repository_id, set()).add(listed_at)
     return result
 
 
@@ -637,11 +608,10 @@ def _latest_success_by_repository(
 
 def last_runs(db: Session, repositories: Iterable[Repository]) -> dict[int, LastRuns]:
     """`Last prune` and `Last index` for the repository card's metadata row,
-    computed once per page in eight queries (five more per extra page of
-    removal listings, up to REMOVAL_PAGES): prune operations, legacy prune
-    jobs, index operations, the newest listings that reported removed
-    archives, the removal listing before each window, and the deletions
-    (operations, legacy delete jobs, wipes) that explain some of them.
+    computed once per page (with more per extra page of removal listings, up
+    to REMOVAL_PAGES): prune operations, index operations, the newest listings
+    that reported removed archives, the removal listing before each window,
+    and the deletion operations that explain some of them.
 
     Prune follows `prune_cell`'s precedence with successful runs only: the
     newest listing that saw archives disappear without a Borg UI deletion
@@ -658,16 +628,10 @@ def last_runs(db: Session, repositories: Iterable[Repository]) -> dict[int, Last
     prune_ops = _latest_success_by_repository(
         db, ids, and_(Operation.kind == "prune", _not_dry_run())
     )
-    prune_legacy = latest_legacy_success_by_repository(db, ids, "prune")
     index_ops = _latest_success_by_repository(db, ids, Operation.category == "index")
     removals = prune_removal_evidence(db, ids)
     for repository_id in ids:
-        candidates = [
-            at
-            for at in (prune_ops.get(repository_id), prune_legacy.get(repository_id))
-            if at is not None
-        ]
-        job = max(candidates) if candidates else None
+        job = prune_ops.get(repository_id)
         removed_at = removals.get(repository_id)
         if removed_at is not None and (job is None or removed_at >= job):
             result[repository_id].last_prune = removed_at

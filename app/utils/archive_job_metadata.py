@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
-from app.database.models import BackupJob, BackupPlanRun, Repository
+from app.database.models import BackupPlanRun, Repository
 from app.services.operations.backup_facade import backup_jobs_for_archive_names
 from app.utils.datetime_utils import parse_borg_archive_time
 
@@ -40,7 +40,7 @@ def _parse_archive_time(archive: dict) -> Optional[datetime]:
     return parse_borg_archive_time(value, timezone_name="UTC")
 
 
-def _job_times(job: BackupJob) -> list[datetime]:
+def _job_times(job) -> list[datetime]:
     times = []
     for value in (job.started_at, job.completed_at, job.created_at):
         if isinstance(value, datetime):
@@ -48,15 +48,13 @@ def _job_times(job: BackupJob) -> list[datetime]:
     return times
 
 
-def _select_job_for_archive(
-    jobs: list[BackupJob], archive_time: Optional[datetime]
-) -> Optional[BackupJob]:
+def _select_job_for_archive(jobs: list, archive_time: Optional[datetime]):
     if not jobs:
         return None
     if archive_time is None:
         return jobs[0]
 
-    def sort_key(job: BackupJob) -> tuple[float, int]:
+    def sort_key(job) -> tuple[float, int]:
         times = _job_times(job)
         if not times:
             return (float("inf"), -(job.id or 0))
@@ -68,7 +66,7 @@ def _select_job_for_archive(
     return min(jobs, key=sort_key)
 
 
-def _trigger_for_job(job: BackupJob, plan_runs_by_id: dict[int, BackupPlanRun]) -> str:
+def _trigger_for_job(job, plan_runs_by_id: dict[int, BackupPlanRun]) -> str:
     if job.backup_plan_run_id:
         plan_run = plan_runs_by_id.get(job.backup_plan_run_id)
         if plan_run and plan_run.trigger:

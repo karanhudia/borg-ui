@@ -20,14 +20,12 @@ from app.core.security import decrypt_secret
 from app.database.database import SessionLocal
 from app.database.models import (
     AgentMachine,
-    BackupJob,
     BackupPlan,
     BackupPlanRepository,
     BackupPlanScript,
     BackupPlanRun,
     BackupPlanRunRetryLineage,
     BackupPlanRunRepository,
-    Operation,
     Repository,
     Script,
     ScriptExecution,
@@ -40,7 +38,6 @@ from app.services.operations.maintenance_start import (
     finish_inline_maintenance,
     start_inline_maintenance,
 )
-from app.services.backup_service import backup_service
 from app.services.backup_plan_policy import evaluate_backup_plan_access
 from app.services.backup_route_planner import (
     execution_mode_for_route,
@@ -49,7 +46,6 @@ from app.services.backup_route_planner import (
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
 from app.services.job_admission import OPERATION_BACKUP, ensure_repository_admission
 from app.services.repository_executor import (
-    cancel_agent_backup_job,
     is_agent_executor,
     queue_agent_script_job,
     wait_for_agent_script_job,
@@ -762,7 +758,7 @@ class BackupPlanExecutionService:
             db.query(BackupPlanRun)
             .options(
                 joinedload(BackupPlanRun.repositories).joinedload(
-                    BackupPlanRunRepository.backup_job
+                    BackupPlanRunRepository.backup_operation
                 )
             )
             .filter(BackupPlanRun.id == run_id)
@@ -796,11 +792,11 @@ class BackupPlanExecutionService:
             }:
                 continue
 
+            # Every child's backup is an operation. The runner owns the kill,
+            # so raise its flag and let the executor's watcher do the rest
+            # (spec 7.7); the plan's own waiter would only get there on its
+            # next poll, and not at all if this backend restarted.
             if child.backup_operation_id:
-                # Phase 8 children are operations. The runner owns the kill, so
-                # raise its flag and let the executor's watcher do the rest
-                # (spec 7.7); the plan's own waiter would only get there on its
-                # next poll, and not at all if this backend restarted.
                 job = resolve_backup_job(db, child.backup_operation_id)
                 if job is not None and job.status not in TERMINAL_STATUSES:
                     was_running = job.status == "running"
@@ -810,32 +806,6 @@ class BackupPlanExecutionService:
                     ):
                         processes_terminated += 1
                     cancelled_backup_jobs += 1
-                child.status = "cancelled"
-                child.completed_at = now
-                child.error_message = CANCELLED_MESSAGE
-                cancelled_repositories += 1
-                continue
-
-            job = child.backup_job
-            if job and job.execution_mode == "agent":
-                cancel_agent_backup_job(db, job, now=now)
-                cancelled_backup_jobs += 1
-            elif job and job.status == "running":
-                process_killed = await backup_service.cancel_backup(job.id)
-                if process_killed:
-                    processes_terminated += 1
-                job.status = "cancelled"
-                job.completed_at = now
-                job.error_message = CANCELLED_MESSAGE
-                cancelled_backup_jobs += 1
-            elif job and job.maintenance_status in {"running_prune", "running_compact"}:
-                if await self._cancel_running_maintenance(db, job):
-                    processes_terminated += 1
-            elif job and job.status in {"pending"}:
-                job.status = "cancelled"
-                job.completed_at = now
-                job.error_message = CANCELLED_MESSAGE
-                cancelled_backup_jobs += 1
 
             child.status = "cancelled"
             child.completed_at = now
@@ -849,78 +819,6 @@ class BackupPlanExecutionService:
             "processes_terminated": processes_terminated,
             "already_terminal": False,
         }
-
-    async def _cancel_running_maintenance(
-        self, db: Session, backup_job: BackupJob
-    ) -> bool:
-        repo = (
-            db.query(Repository)
-            .filter(
-                (Repository.id == backup_job.repository_id)
-                | (Repository.path == backup_job.repository)
-            )
-            .first()
-        )
-        if not repo:
-            return False
-
-        if backup_job.maintenance_status == "running_prune":
-            maintenance_job = (
-                db.query(Operation)
-                .filter(
-                    Operation.repository_id == repo.id,
-                    Operation.kind == "prune",
-                    Operation.status == "running",
-                )
-                .order_by(Operation.id.desc())
-                .first()
-            )
-            if not maintenance_job:
-                return False
-            if getattr(repo, "borg_version", 1) == 2:
-                from app.services.v2.prune_service import prune_v2_service
-
-                process_killed = await prune_v2_service.cancel_prune(maintenance_job.id)
-            else:
-                from app.services.prune_service import prune_service
-
-                process_killed = await prune_service.cancel_prune(maintenance_job.id)
-            maintenance_job.status = "cancelled"
-            maintenance_job.completed_at = datetime.utcnow()
-            backup_job.maintenance_status = "prune_failed"
-            return process_killed
-
-        if backup_job.maintenance_status == "running_compact":
-            maintenance_job = (
-                db.query(Operation)
-                .filter(
-                    Operation.repository_id == repo.id,
-                    Operation.kind == "compact",
-                    Operation.status == "running",
-                )
-                .order_by(Operation.id.desc())
-                .first()
-            )
-            if not maintenance_job:
-                return False
-            if getattr(repo, "borg_version", 1) == 2:
-                from app.services.v2.compact_service import compact_v2_service
-
-                process_killed = await compact_v2_service.cancel_compact(
-                    maintenance_job.id
-                )
-            else:
-                from app.services.compact_service import compact_service
-
-                process_killed = await compact_service.cancel_compact(
-                    maintenance_job.id
-                )
-            maintenance_job.status = "cancelled"
-            maintenance_job.completed_at = datetime.utcnow()
-            backup_job.maintenance_status = "compact_failed"
-            return process_killed
-
-        return False
 
     def start_run(self, db: Session, plan: BackupPlan, *, trigger: str) -> int:
         enabled_links = [
@@ -1001,7 +899,12 @@ class BackupPlanExecutionService:
             ),
         )
         for child in source_children:
-            backup_status = child.backup_job.status if child.backup_job else None
+            child_backup = (
+                resolve_backup_job(db, child.backup_operation_id)
+                if child.backup_operation_id
+                else None
+            )
+            backup_status = child_backup.status if child_backup else None
             failed = child.status == "failed" or backup_status == "failed"
             if not failed or child.repository_id is None:
                 continue

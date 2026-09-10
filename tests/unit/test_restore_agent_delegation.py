@@ -214,8 +214,6 @@ class _FakeDB:
 
     def query(self, model):
         name = getattr(model, "__name__", "")
-        if name == "RestoreJob":
-            return _FakeQuery(self._restore_job)
         if name == "AgentJob":
             return _FakeQuery(self._agent_job)
         return _FakeQuery(None)
@@ -261,6 +259,14 @@ async def test_await_agent_restore_fails_when_never_claimed(monkeypatch):
         restore_service_module,
         "time",
         SimpleNamespace(monotonic=lambda: next(clock)),
+    )
+
+    # The restore is resolved through the facade; this test drives the wait
+    # loop, so the resolution is stubbed to the fake row it writes to.
+    monkeypatch.setattr(
+        restore_service_module,
+        "resolve_restore_job",
+        lambda session, job_id: restore_job,
     )
 
     service = RestoreService()

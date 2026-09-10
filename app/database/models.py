@@ -172,14 +172,7 @@ class AgentJob(Base):
     agent_machine_id = Column(
         Integer, ForeignKey("agent_machines.id", ondelete="CASCADE"), nullable=False
     )
-    backup_job_id = Column(
-        Integer,
-        ForeignKey("backup_jobs.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    # Phase 8: the backup this job transports, when the backup is an
-    # operation. `backup_job_id` stays for rows written before the phase.
+    # Phase 8: the backup this job transports.
     operation_id = Column(
         Integer,
         ForeignKey("operations.id", ondelete="SET NULL"),
@@ -655,31 +648,6 @@ class RepositoryStorage(Base):
     rclone_remote = relationship("RcloneRemote", back_populates="storages")
 
 
-class RcloneSyncJob(Base):
-    __tablename__ = "rclone_sync_jobs"
-
-    id = Column(Integer, primary_key=True, index=True)
-    repository_id = Column(
-        Integer,
-        ForeignKey("repositories.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    direction = Column(String, nullable=False)
-    operation = Column(String, default="sync", nullable=False)
-    status = Column(String, default="pending", nullable=False)
-    triggered_by = Column(String, default="manual", nullable=False)
-    scheduled_for = Column(DateTime, nullable=True)
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-    bytes_transferred = Column(BigInteger, nullable=True)
-    files_transferred = Column(Integer, nullable=True)
-    log_path = Column(String, nullable=True)
-    log_text = Column(Text, nullable=True)
-    error_text = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=utc_now, nullable=False)
-
-
 class Configuration(Base):
     __tablename__ = "configurations"
 
@@ -693,173 +661,6 @@ class Configuration(Base):
     validation_warnings = Column(Text, nullable=True)  # JSON string of warnings
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
-
-
-class BackupJob(Base):
-    __tablename__ = "backup_jobs"
-    __table_args__ = (Index("idx_backup_jobs_source_ssh", "source_ssh_connection_id"),)
-
-    id = Column(Integer, primary_key=True, index=True)
-    repository = Column(String)  # Repository path/name
-    repository_id = Column(
-        Integer, ForeignKey("repositories.id", ondelete="SET NULL"), nullable=True
-    )
-    backup_plan_id = Column(
-        Integer, ForeignKey("backup_plans.id", ondelete="SET NULL"), nullable=True
-    )
-    backup_plan_run_id = Column(
-        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
-    )
-    status = Column(
-        String, default="pending"
-    )  # pending, running, completed, completed_with_warnings, failed
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-    progress = Column(Integer, default=0)
-    error_message = Column(Text, nullable=True)
-    logs = Column(Text, nullable=True)  # Full logs (stored after completion)
-    log_file_path = Column(String, nullable=True)  # Path to streaming log file
-    scheduled_job_id = Column(
-        Integer, ForeignKey("scheduled_jobs.id"), nullable=True
-    )  # NULL for manual backups
-
-    # Detailed progress fields from Borg JSON output
-    original_size = Column(BigInteger, default=0)  # Original uncompressed size in bytes
-    compressed_size = Column(BigInteger, default=0)  # Compressed size in bytes
-    deduplicated_size = Column(BigInteger, default=0)  # Deduplicated size in bytes
-    nfiles = Column(Integer, default=0)  # Number of files processed
-    current_file = Column(Text, nullable=True)  # Current file being processed
-    progress_percent = Column(Float, default=0.0)  # Progress percentage
-    backup_speed = Column(Float, default=0.0)  # Current backup speed in MB/s
-    total_expected_size = Column(
-        BigInteger, default=0
-    )  # Total size of source directories (calculated before backup)
-    estimated_time_remaining = Column(Integer, default=0)  # Estimated seconds remaining
-
-    # Archive name created by this backup
-    archive_name = Column(
-        String, nullable=True
-    )  # Name of the archive created (e.g., "manual-backup-2024-04-13T10:30:00")
-    # Set when the archive this run created was pruned or deleted. The row
-    # stays: it is the record that the backup ran, and it falls with
-    # cleanup_retention_days like every other job row.
-    archive_pruned_at = Column(DateTime, nullable=True)
-
-    # Maintenance status tracking
-    maintenance_status = Column(
-        String, nullable=True
-    )  # null, "running_prune", "prune_completed", "prune_failed", "running_compact", "compact_completed", "compact_failed", "maintenance_completed"
-
-    # Remote backup execution
-    execution_mode = Column(String, default="local")  # "local" or "remote_ssh"
-    route_strategy = Column(String, nullable=True)
-    source_ssh_connection_id = Column(
-        Integer, ForeignKey("ssh_connections.id"), nullable=True
-    )  # SSH connection for remote execution
-    remote_process_pid = Column(Integer, nullable=True)  # PID on remote host
-    remote_hostname = Column(String, nullable=True)  # Remote hostname for reference
-
-    # Retry lineage metadata. Original attempts default to attempt 1; retry
-    # attempts point at the original and immediate source rows.
-    retry_original_job_id = Column(
-        Integer,
-        ForeignKey("backup_jobs.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    retry_source_job_id = Column(
-        Integer,
-        ForeignKey("backup_jobs.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    retry_attempt = Column(Integer, default=1, nullable=False)
-    retry_requested_by_user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
-    )
-    retry_requested_at = Column(DateTime, nullable=True)
-
-    created_at = Column(DateTime, default=utc_now)
-
-
-class BackupJobRetryLineage(Base):
-    __tablename__ = "backup_job_retry_lineage"
-    __table_args__ = (
-        UniqueConstraint("created_job_id", name="uq_backup_job_retry_created_job"),
-    )
-
-    id = Column(Integer, primary_key=True, index=True)
-    original_job_id = Column(
-        Integer,
-        ForeignKey("backup_jobs.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    retry_source_job_id = Column(
-        Integer,
-        ForeignKey("backup_jobs.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    attempt_number = Column(Integer, nullable=False)
-    requested_by_user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
-    )
-    requested_at = Column(DateTime, default=utc_now, nullable=False)
-    created_job_id = Column(
-        Integer,
-        ForeignKey("backup_jobs.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    request_snapshot = Column(JSON, nullable=False)
-
-
-class RestoreJob(Base):
-    __tablename__ = "restore_jobs"
-
-    id = Column(Integer, primary_key=True, index=True)
-    repository = Column(String)  # Repository path
-    archive = Column(String)  # Archive name
-    destination = Column(String)  # Restore destination path
-    status = Column(
-        String, default="pending"
-    )  # pending, running, completed, failed, cancelled
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-    progress = Column(Integer, default=0)
-    error_message = Column(Text, nullable=True)
-    logs = Column(Text, nullable=True)  # Full logs (stored after completion)
-
-    # Progress tracking fields
-    nfiles = Column(Integer, default=0)  # Number of files restored
-    current_file = Column(Text, nullable=True)  # Current file being restored
-    progress_percent = Column(Float, default=0.0)  # Progress percentage
-
-    # Speed and ETA tracking (similar to backup jobs)
-    original_size = Column(BigInteger, default=0)  # Total bytes to restore
-    restored_size = Column(BigInteger, default=0)  # Bytes restored so far
-    restore_speed = Column(Float, default=0.0)  # Current restore speed in MB/s
-    estimated_time_remaining = Column(Integer, default=0)  # Estimated seconds remaining
-
-    # Remote restore fields
-    destination_type = Column(String(50), default="local")  # 'local' or 'ssh'
-    destination_connection_id = Column(
-        Integer, ForeignKey("ssh_connections.id"), nullable=True
-    )
-    destination_connection = relationship(
-        "SSHConnection", foreign_keys=[destination_connection_id]
-    )
-    execution_mode = Column(
-        String(50), default="local_to_local"
-    )  # 'local_to_local', 'ssh_to_local', 'local_to_ssh'
-    temp_extraction_path = Column(
-        String(255), nullable=True
-    )  # For local→SSH two-phase restore
-    destination_hostname = Column(String(255), nullable=True)  # For display purposes
-    repository_type = Column(String(50), default="local")  # 'local' or 'ssh'
-
-    created_at = Column(DateTime, default=utc_now)
 
 
 class ScheduledJob(Base):
@@ -1251,9 +1052,6 @@ class BackupPlanRunRepository(Base):
         nullable=True,
         index=True,
     )
-    backup_job_id = Column(
-        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
-    )
     backup_operation_id = Column(
         Integer, ForeignKey("operations.id", ondelete="SET NULL"), nullable=True
     )
@@ -1264,183 +1062,14 @@ class BackupPlanRunRepository(Base):
 
     backup_plan_run = relationship("BackupPlanRun", back_populates="repositories")
     repository = relationship("Repository")
-    backup_job = relationship("BackupJob")
     backup_operation = relationship("Operation")
 
 
-class CheckJob(Base):
-    __tablename__ = "check_jobs"
-
-    id = Column(Integer, primary_key=True, index=True)
-    repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
-    repository_path = Column(
-        String, nullable=True
-    )  # Captured at job creation for display even if repo is deleted
-    status = Column(
-        String, default="pending"
-    )  # pending, running, completed, failed, cancelled
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-    progress = Column(Integer, default=0)  # 0-100 percentage
-    progress_message = Column(
-        String, nullable=True
-    )  # Current progress message (e.g., "Checking segments 25%")
-    error_message = Column(Text, nullable=True)
-    logs = Column(
-        Text, nullable=True
-    )  # Deprecated: kept for backwards compatibility, use log_file_path instead
-    log_file_path = Column(String, nullable=True)  # Path to log file on disk
-    has_logs = Column(Boolean, default=False)  # Flag indicating if logs are available
-    max_duration = Column(
-        Integer, nullable=True
-    )  # Maximum duration in seconds (for partial checks)
-    extra_flags = Column(Text, nullable=True)  # Extra command-line flags for borg check
-    process_pid = Column(Integer, nullable=True)  # Container PID for orphan detection
-    process_start_time = Column(
-        BigInteger, nullable=True
-    )  # Process start time in jiffies for PID uniqueness
-    scheduled_check = Column(
-        Boolean, default=False, nullable=False
-    )  # True if triggered by scheduler, False if manual
-    created_at = Column(DateTime, default=utc_now)
-
-
-class RestoreCheckJob(Base):
-    __tablename__ = "restore_check_jobs"
-    __table_args__ = (
-        Index("idx_restore_check_jobs_repository_id", "repository_id"),
-        Index("idx_restore_check_jobs_status", "status"),
-    )
-
-    id = Column(Integer, primary_key=True, index=True)
-    repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
-    repository_path = Column(
-        String, nullable=True
-    )  # Captured at job creation for display even if repo is deleted
-    archive_name = Column(
-        String, nullable=True
-    )  # Archive selected for verification, usually the latest archive
-    status = Column(
-        String, default="pending"
-    )  # pending, running, completed, completed_with_warnings, needs_backup, failed, cancelled
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-    progress = Column(Integer, default=0)  # 0-100 percentage
-    progress_message = Column(
-        String, nullable=True
-    )  # Current progress message (e.g., "Restoring archive to temp dir")
-    error_message = Column(Text, nullable=True)
-    logs = Column(
-        Text, nullable=True
-    )  # Deprecated: kept for backwards compatibility, use log_file_path instead
-    log_file_path = Column(String, nullable=True)  # Path to log file on disk
-    has_logs = Column(Boolean, default=False)  # Flag indicating if logs are available
-    probe_paths = Column(
-        Text, nullable=True
-    )  # JSON array of paths restored for verification
-    full_archive = Column(
-        Boolean, default=False, nullable=False
-    )  # Whether the verification extracted the full archive
-    process_pid = Column(Integer, nullable=True)  # Container PID for orphan detection
-    process_start_time = Column(
-        BigInteger, nullable=True
-    )  # Process start time in jiffies for PID uniqueness
-    scheduled_restore_check = Column(
-        Boolean, default=False, nullable=False
-    )  # True if triggered by scheduler, False if manual
-    created_at = Column(DateTime, default=utc_now)
-
-
-class CompactJob(Base):
-    __tablename__ = "compact_jobs"
-
-    id = Column(Integer, primary_key=True, index=True)
-    repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
-    repository_path = Column(
-        String, nullable=True
-    )  # Captured at job creation for display even if repo is deleted
-    status = Column(
-        String, default="pending"
-    )  # pending, running, completed, failed, cancelled
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-    progress = Column(Integer, default=0)  # 0-100 percentage
-    progress_message = Column(
-        String, nullable=True
-    )  # Current progress message (e.g., "Compacting segments 50%")
-    error_message = Column(Text, nullable=True)
-    logs = Column(
-        Text, nullable=True
-    )  # Deprecated: kept for backwards compatibility, use log_file_path instead
-    log_file_path = Column(String, nullable=True)  # Path to log file on disk
-    has_logs = Column(Boolean, default=False)  # Flag indicating if logs are available
-    scheduled_compact = Column(
-        Boolean, default=False, nullable=False
-    )  # True if triggered by scheduler, False if manual
-    process_pid = Column(Integer, nullable=True)  # Container PID for orphan detection
-    process_start_time = Column(
-        BigInteger, nullable=True
-    )  # Process start time in jiffies for PID uniqueness
-    created_at = Column(DateTime, default=utc_now)
-
-
-class PruneJob(Base):
-    __tablename__ = "prune_jobs"
-
-    id = Column(Integer, primary_key=True, index=True)
-    repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
-    repository_path = Column(
-        String, nullable=True
-    )  # Captured at job creation for display even if repo is deleted
-    status = Column(
-        String, default="pending"
-    )  # pending, running, completed, failed, cancelled
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-    error_message = Column(Text, nullable=True)
-    logs = Column(
-        Text, nullable=True
-    )  # Deprecated: kept for backwards compatibility, use log_file_path instead
-    log_file_path = Column(String, nullable=True)  # Path to log file on disk
-    has_logs = Column(Boolean, default=False)  # Flag indicating if logs are available
-    scheduled_prune = Column(
-        Boolean, default=False, nullable=False
-    )  # True if triggered by scheduler, False if manual
-    created_at = Column(DateTime, default=utc_now)
-
-
-class DeleteArchiveJob(Base):
-    __tablename__ = "delete_archive_jobs"
-
-    id = Column(Integer, primary_key=True, index=True)
-    repository_id = Column(
-        Integer, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False
-    )
-    repository_path = Column(
-        String, nullable=True
-    )  # Captured at job creation for display even if repo is deleted
-    archive_name = Column(String, nullable=False)  # Name of the archive being deleted
-    status = Column(
-        String, default="pending"
-    )  # pending, running, completed, failed, cancelled
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-    progress = Column(Integer, default=0)  # 0-100 percentage
-    progress_message = Column(String, nullable=True)  # Current progress message
-    error_message = Column(Text, nullable=True)
-    logs = Column(
-        Text, nullable=True
-    )  # Deprecated: kept for backwards compatibility, use log_file_path instead
-    log_file_path = Column(String, nullable=True)  # Path to log file on disk
-    has_logs = Column(Boolean, default=False)  # Flag indicating if logs are available
-    process_pid = Column(Integer, nullable=True)  # Container PID for orphan detection
-    process_start_time = Column(
-        BigInteger, nullable=True
-    )  # Process start time in jiffies for PID uniqueness
-    created_at = Column(DateTime, default=utc_now)
-
-
 class RepositoryWipeJob(Base):
+    """The wipe preview store since section 13 phase 6. Executed wipes are
+    `operations` rows; phase 9 moved the rows written before phase 6 there and
+    this table holds `previewed` rows only."""
+
     __tablename__ = "repository_wipe_jobs"
     __table_args__ = (
         Index("idx_repository_wipe_jobs_repository_id", "repository_id"),
@@ -1671,7 +1300,7 @@ class OperationBackupDetails(Base):
 
 
 class OperationBackupRetryLineage(Base):
-    """The retry audit row `BackupJobRetryLineage` kept, for backups that are
+    """The retry audit row the legacy backup table kept, for backups that are
     operations. The three ids are unqualified job ids like the details row's
     retry columns, so they carry no foreign key; retention drops rows by
     `requested_at` as it does for the legacy table."""
@@ -2173,39 +1802,8 @@ class InstalledPackage(Base):
     created_at = Column(DateTime, default=utc_now, nullable=False)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
-    # Cascade delete install jobs when package is deleted
-    install_jobs = relationship(
-        "PackageInstallJob", cascade="all, delete-orphan", passive_deletes=True
-    )
-
     def __repr__(self):
         return f"<InstalledPackage(id={self.id}, name='{self.name}', status='{self.status}')>"
-
-
-class PackageInstallJob(Base):
-    __tablename__ = "package_install_jobs"
-
-    id = Column(Integer, primary_key=True, index=True)
-    package_id = Column(
-        Integer, ForeignKey("installed_packages.id", ondelete="CASCADE"), nullable=False
-    )
-    status = Column(
-        String, default="pending", nullable=False
-    )  # pending, installing, completed, failed
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-    exit_code = Column(Integer, nullable=True)
-    stdout = Column(Text, nullable=True)
-    stderr = Column(Text, nullable=True)
-    error_message = Column(Text, nullable=True)
-    process_pid = Column(Integer, nullable=True)  # Container PID for orphan detection
-    process_start_time = Column(
-        BigInteger, nullable=True
-    )  # Process start time in jiffies for PID uniqueness
-    created_at = Column(DateTime, default=utc_now, nullable=False)
-
-    def __repr__(self):
-        return f"<PackageInstallJob(id={self.id}, package_id={self.package_id}, status='{self.status}')>"
 
 
 class Script(Base):
@@ -2346,12 +1944,6 @@ class ScriptExecution(Base):
         nullable=True,
         index=True,
     )  # NULL for standalone runs
-    backup_job_id = Column(
-        Integer,
-        ForeignKey("backup_jobs.id", ondelete="CASCADE"),
-        nullable=True,
-        index=True,
-    )  # NULL for standalone runs
     operation_id = Column(
         Integer,
         ForeignKey("operations.id", ondelete="CASCADE"),
@@ -2408,7 +2000,6 @@ class ScriptExecution(Base):
     # Relationships
     script = relationship("Script", back_populates="executions")
     repository = relationship("Repository")
-    backup_job = relationship("BackupJob")
     backup_plan = relationship("BackupPlan", back_populates="script_executions")
     backup_plan_run = relationship("BackupPlanRun", back_populates="script_executions")
 

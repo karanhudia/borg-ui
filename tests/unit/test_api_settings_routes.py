@@ -4,7 +4,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api import settings as settings_api
-from app.database.models import LicensingState, Repository, SystemSettings, User
+from app.database.models import (
+    LicensingState,
+    Operation,
+    Repository,
+    SystemSettings,
+    User,
+)
 
 
 def _set_plan(test_db, plan: str) -> None:
@@ -657,3 +663,74 @@ class TestCacheSettingsContracts:
         assert log_storage["usage_percent"] == 25
         assert log_storage["file_count"] == 4
         assert log_storage["files_by_type"] == {"backup": 2, "restore": 2}
+
+
+class TestBackgroundStatsRefresh:
+    @pytest.mark.asyncio
+    async def test_one_failed_enqueue_does_not_stop_the_rest(self, test_db):
+        """`enqueue_chain` commits, so a failure leaves the session unusable
+        until it is rolled back. Without that, the next repository's query
+        raises and every repository after the first is silently skipped."""
+        repos = []
+        for name in ("first", "second"):
+            repo = Repository(
+                name=f"Stats {name}",
+                path=f"/repos/stats-{name}",
+                encryption="none",
+                compression="lz4",
+                repository_type="local",
+            )
+            test_db.add(repo)
+            repos.append(repo)
+        test_db.commit()
+        ids = [repo.id for repo in repos]
+        enqueued: list[int] = []
+
+        def enqueue_chain(db, kinds, *, repository_id, trigger):
+            if repository_id == ids[0]:
+                # A doomed transaction, which is what a failed commit inside
+                # `enqueue_chain` leaves behind (`kind` is NOT NULL).
+                db.add(Operation(category="maintenance", run_id="doomed"))
+                db.flush()
+            enqueued.append(repository_id)
+
+        with (
+            patch("app.database.database.SessionLocal", return_value=test_db),
+            patch(
+                "app.services.operations.enqueue.enqueue_chain",
+                side_effect=enqueue_chain,
+            ),
+            patch.object(test_db, "close"),
+        ):
+            await settings_api._run_stats_refresh_background(ids, "tester")
+
+        assert enqueued == [ids[1]]
+
+    @pytest.mark.asyncio
+    async def test_the_refresh_timestamp_is_left_to_the_stats_executor(self, test_db):
+        """The frontend reads `last_stats_refresh` as the signal that the
+        statistics themselves are new, so enqueueing must not write it."""
+        repo = Repository(
+            name="Stats timestamp",
+            path="/repos/stats-timestamp",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        settings_row = test_db.query(SystemSettings).first()
+        if settings_row is None:
+            settings_row = SystemSettings()
+            test_db.add(settings_row)
+        settings_row.last_stats_refresh = None
+        test_db.commit()
+
+        with (
+            patch("app.database.database.SessionLocal", return_value=test_db),
+            patch("app.services.operations.enqueue.enqueue_chain"),
+            patch.object(test_db, "close"),
+        ):
+            await settings_api._run_stats_refresh_background([repo.id], "tester")
+
+        test_db.refresh(settings_row)
+        assert settings_row.last_stats_refresh is None

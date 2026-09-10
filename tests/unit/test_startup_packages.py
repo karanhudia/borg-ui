@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import create_engine, text
 
-from app.database.models import Base, InstalledPackage, PackageInstallJob
+from app.database.models import Base, InstalledPackage
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -31,9 +31,19 @@ def startup_packages():
 @pytest.fixture()
 def engine(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path}/test.db")
+    from app.database.models import Operation
+
     Base.metadata.create_all(
-        engine, tables=[InstalledPackage.__table__, PackageInstallJob.__table__]
+        engine, tables=[InstalledPackage.__table__, Operation.__table__]
     )
+    return engine
+
+
+@pytest.fixture()
+def engine_without_operations(tmp_path):
+    """A pre-phase-1 database: the packages table and nothing else."""
+    engine = create_engine(f"sqlite:///{tmp_path}/legacy.db")
+    Base.metadata.create_all(engine, tables=[InstalledPackage.__table__])
     return engine
 
 
@@ -128,7 +138,6 @@ def test_packages_with_an_in_flight_install_operation_are_skipped(
         engine,
         tables=[
             InstalledPackage.__table__,
-            PackageInstallJob.__table__,
             Operation.__table__,
         ],
     )
@@ -176,7 +185,6 @@ def test_a_completed_install_operation_does_not_block_a_reinstall(
         engine,
         tables=[
             InstalledPackage.__table__,
-            PackageInstallJob.__table__,
             Operation.__table__,
         ],
     )
@@ -213,10 +221,11 @@ def test_a_completed_install_operation_does_not_block_a_reinstall(
 
 
 def test_a_database_without_the_operations_table_still_works(
-    startup_packages, engine, monkeypatch
+    startup_packages, engine_without_operations, monkeypatch
 ):
     """A pre-phase-1 database has no operations table; the check degrades to
     the legacy one rather than crashing the boot."""
+    engine = engine_without_operations
     _seed_package(engine, "pending")
     monkeypatch.setattr(startup_packages, "engine", engine)
     monkeypatch.setattr(startup_packages, "_database_absent", lambda: False)

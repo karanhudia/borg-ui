@@ -36,10 +36,8 @@ async def _fail_orphaned_maintenance_job(
 
     The caller created the row before dispatch; left alone it stays active
     with no work behind it and blocks the repository via admission control.
-    Since phase 5 that row is an `operations` row (a legacy ``*_jobs`` row
-    only on a pre-upgrade install), so the lookup goes through the facade
-    rather than the legacy tables: by legacy id the operation is never found,
-    or an unrelated old row is, and the operation stays `running` for good.
+    The lookup goes through the facade, which is the shape the rest of the
+    maintenance path drives the operation through.
     """
     from app.database.models import utc_now
     from app.services.operations.events import broadcast_operation_updated
@@ -55,8 +53,8 @@ async def _fail_orphaned_maintenance_job(
         # before dispatch, so the rollback cannot lose it.
         db.rollback()
         job = resolve_maintenance_job(db, maintenance_job_id, maintenance_kind)
-        # The facade speaks the legacy vocabulary (`queued` reads as `pending`),
-        # so one check covers both shapes.
+        # The facade speaks the legacy vocabulary, so `queued` reads as
+        # `pending` here.
         if job is not None and job.status in ("pending", "running"):
             job.status = "failed"
             job.error_message = job.error_message or _queue_failure_message(error)
@@ -495,16 +493,6 @@ class BorgRouter:
             env=env,
             timeout=timeout,
         )
-
-    async def update_stats(self, db: Session) -> bool:
-        """Refresh archive count and size stats for this repository.
-
-        v2: computes on-disk size via du and persists to repository.total_size.
-        v1: delegates to the existing update_repository_stats helper.
-        """
-        from app.api.repositories import update_repository_stats
-
-        return await update_repository_stats(self.repo, db)
 
     def _is_agent(self) -> bool:
         """Whether this repository is executed by a managed agent.

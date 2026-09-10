@@ -2,52 +2,68 @@
 
 Borg UI runs long operations as background jobs. Jobs keep the UI responsive while Borg commands run inside the container.
 
+Every job is a row in the `operations` table. There is one job table and one
+id space.
+
 ## Job Lifecycle
 
-Most jobs follow the same lifecycle:
+An operation moves through the status words of the operations vocabulary:
 
 ```text
-pending -> running -> completed
-pending -> running -> failed
-pending -> running -> cancelled
+queued -> running -> completed
+queued -> running -> completed_with_warnings
+queued -> running -> failed
+queued -> running -> cancelled
+queued -> skipped
 ```
 
-Job records store status, timestamps, progress, errors, and log file references.
+The HTTP routes answer `pending` where the row says `queued`, because that is
+the word their clients have always read. Every other word is the same on both
+sides.
+
+Operation rows store status, trigger, priority, timestamps, progress, errors,
+and the path of the job's log file. Kind-specific columns live on an extension
+table (`operation_backup_details`, `operation_restore_details`,
+`operation_wipe_details`, `operation_rclone_details`); the kinds without one
+keep their inputs in `operations.params`.
 
 ## Main Job Types
 
-| Job type | Purpose |
-| --- | --- |
-| Backup | Run Borg create for a repository |
-| Restore | Extract files from an archive |
-| Check | Verify repository/archive integrity |
-| Compact | Free unused repository space |
-| Prune | Apply retention policy |
-| Archive delete | Delete an archive |
-| Restore check | Verify that selected paths can be restored |
-| Repository wipe | Delete every archive in a repository |
-| Cloud mirror sync | Copy a repository to (or from) an rclone remote |
-| Package install | Install an OS package on the server |
+| Kind | Category | Exclusive | Purpose |
+| --- | --- | --- | --- |
+| `import_connect` | import | no | Connect an existing repository |
+| `backup` | backup | yes | Run Borg create for a repository |
+| `restore` | restore | no | Extract files from an archive |
+| `restore_check` | restore | no | Verify that selected paths can be restored |
+| `check` | maintenance | yes | Verify repository/archive integrity |
+| `prune` | maintenance | yes | Apply retention policy |
+| `compact` | maintenance | yes | Free unused repository space |
+| `delete_archive` | maintenance | yes | Delete an archive |
+| `wipe` | maintenance | yes | Delete every archive in a repository |
+| `rclone_sync` | mirror | no | Copy a repository to (or from) an rclone remote |
+| `package_install` | system | no | Install an OS package on the server |
+| `stats` | index | no | Refresh a repository's size and archive count |
+| `archive_sync` | index | no | Refresh the persisted archive list |
+| `history_index` | index | yes | Index an archive's file history |
+| `history_merge` | index | no | Fold indexed history into the series |
 
-Schedules are configuration records. When a schedule fires, it creates backup/check/restore-check jobs.
+An exclusive kind holds its repository's lane: only one of them runs against a
+repository at a time.
 
-Repository wipe, cloud mirror sync and hydrate, and package install are
-`operations` rows too (kinds `wipe`, `rclone_sync`, `package_install`).
-`repository_wipe_jobs`, `rclone_sync_jobs`, and `package_install_jobs` are
-legacy tables now: they hold history written before the migration and nothing
-writes new rows to them, with one exception. A wipe preview is not a unit of
-work, so it is still written to `repository_wipe_jobs`; only the confirmed
-wipe becomes an operation, and it names the preview it was confirmed from in
-`params.preview_id`. A job id resolves against `operations` first and falls
-back to its legacy table, so old links keep working.
+Schedules are configuration records. When a schedule fires, it enqueues backup,
+check, or restore-check operations.
+
+A wipe preview is not a unit of work, so it is the one thing still written to
+`repository_wipe_jobs`; only the confirmed wipe becomes an operation, and it
+names the preview it was confirmed from in `params.preview_id`.
 
 ## Backup Jobs
 
-As of section 13 phase 8 of the operations spec, a backup is a row in the
-`operations` table (kind `backup`, category `backup`, exclusive) with its
-backup columns on `operation_backup_details`: archive name and sizes, the
-live progress fields, the route strategy and source SSH connection, the
-remote host, the retry lineage columns, and the maintenance status.
+A backup is a row in the `operations` table (kind `backup`, category
+`backup`, exclusive) with its backup columns on `operation_backup_details`:
+archive name and sizes, the live progress fields, the route strategy and
+source SSH connection, the remote host, the retry lineage columns, and the
+maintenance status.
 
 Every creation site enqueues through `create_backup_operation`: `POST
 /api/backup/start` and its `/run` alias, the retry route, the single and
@@ -88,23 +104,19 @@ Post-backup prune, compact and check are child operations in the backup's
 run, and `maintenance_status` on the details row mirrors them
 (`running_prune` while the child prune runs, and so on).
 
-Backup rows written before phase 8 stay in `backup_jobs` and are served by
-the same routes, which resolve an id against `operations` first, until phase
-9 deletes the table.
-
 ## Restore Jobs
 
-As of section 13 phase 7 of the operations spec, a restore is a row in the
-`operations` table (kind `restore`, category `restore`) with its restore
-columns on `operation_restore_details`: archive, destination, destination
-type and SSH connection, repository type, and the live byte and file counts.
+A restore is a row in the `operations` table (kind `restore`, category
+`restore`) with its restore columns on `operation_restore_details`: archive,
+destination, destination type and SSH connection, repository type, and the
+live byte and file counts.
 `POST /api/restore/start` enqueues the row; the operations runner dispatches
 it. Restore is not exclusive (Borg allows concurrent reads), so it runs
 beside a backup or check on the same repository rather than waiting for the
 lane, exactly as it did before the migration.
 
 The restore service keeps its three execution paths and drives the row
-through a facade that presents the legacy attribute surface:
+through a facade that presents the attribute surface it was written against:
 
 - local destination: `borg extract` in the container, progress parsed from
   `--log-json`
@@ -119,9 +131,7 @@ cancel), and marks the row `cancelled`; the executor keeps that verdict even
 when the service records the killed process's exit afterwards.
 
 Restore logs are the operation's log file, written once at the end from the
-captured output. Rows written before phase 7 stay in `restore_jobs` and are
-served by the same routes until retention drops them; the table is deleted
-in phase 9.
+captured output.
 
 Notifications can be sent for restore success or failure.
 
@@ -197,12 +207,6 @@ Use them carefully:
 
 Do not interrupt maintenance unless necessary.
 
-Pre-phase-5 installs still have history in `check_jobs`, `prune_jobs`,
-`compact_jobs`, `delete_archive_jobs`, and `restore_check_jobs`. The status
-and list routes serve operations first and fall back to those tables by id,
-so old links and activity rows keep resolving. The tables themselves are
-deleted in a later phase.
-
 ## Logs
 
 Job logs are written to disk and referenced from the database.
@@ -247,40 +251,24 @@ apart.
 
 ## Restart Cleanup
 
-On application startup, Borg UI checks for jobs that were left in `running` states by a container restart or crash.
+On application startup, Borg UI checks for work left in `running` states by a
+container restart or crash.
 
-Startup cleanup currently covers:
+The operations runner does the recovery: it requeues index rows and fails the
+rest unless their recorded process is still alive (see "Operations runner"),
+including a local lock-break attempt for a repository whose lock a dead
+process left behind. For a local check or compact, Borg UI attempts to break
+the repository lock; for a remote repository it does not, because the remote
+Borg process may still be running.
 
-- backup rows in their legacy table, written by an install that has not
-  restarted since upgrading to phase 8
-- restore rows in their legacy table, written by an install that has not
-  restarted since upgrading to phase 7
-- check, restore-check, prune, and compact rows in their legacy tables,
-  written by an install that has not restarted since upgrading to phase 5
+Two sweeps run beside it, for state that is not an operation:
 
-Backup, check, prune, compact, restore-check, and restore now run as
-operations, and new
-work in that shape is recovered by the operations runner on startup
-(requeue index rows, fail the rest unless their process is still alive; see
-"Operations runner"), including a local lock-break attempt equivalent to
-the one this sweep makes. The five legacy-table branches below stay only to
-resolve a running row a pre-upgrade process left behind; each query is
-empty on any install that has restarted since the upgrade, and the branches
-are deleted with the tables in a later phase.
-
-What happens:
-
-- running legacy backup rows are marked `failed`
-- running legacy restore rows are marked `failed`
-- running legacy prune rows are marked `failed`
-- running legacy check, restore-check, and compact rows are marked `failed` when their recorded process is no longer alive
-- backups left in `running_prune` or `running_compact` maintenance states are marked `failed`, with maintenance state changed to `prune_failed` or `compact_failed`; the sweep covers both the legacy column and the details row
-- orphaned legacy prune and compact rows update the related backup maintenance state when possible
-
-For local check and compact jobs, Borg UI attempts to break the repository lock after detecting an orphaned process. For remote repositories, it does not automatically break the lock because the remote Borg process may still be running.
-
-Archive-delete and package-install jobs are not part of this startup orphan-job
-cleanup path.
+- a backup left in a `running_prune`, `running_compact` or `running_check`
+  maintenance state is marked `failed`, with the maintenance state changed to
+  `prune_failed`, `compact_failed` or `check_failed`, unless its child
+  operation is genuinely still running
+- a backup plan run left `pending` or `running` is finalised from the states
+  of its children
 
 One mirror case is handled before recovery runs: an initial cloud mirror sync
 (trigger `import`) left `running` by a restart is put back to `queued` rather
@@ -289,17 +277,6 @@ a lock and wrong for `rclone sync`, which is itself a reconciliation and safe
 to re-run. The requeue happens earlier in startup than
 `OperationRunner.recover_on_startup`, so recovery sees a queued row and leaves
 it alone.
-
-## Stale Scheduled Checks
-
-Scheduled check jobs have an additional stale-job cleanup in the scheduled-check dispatcher.
-
-The dispatcher marks these scheduled checks as `failed`:
-
-- `pending` scheduled checks older than 15 minutes
-- `running` scheduled checks older than 15 minutes when the recorded process is no longer alive
-
-This prevents stale scheduled checks from permanently consuming scheduled-check concurrency slots.
 
 ## Deleting Job Entries
 
@@ -315,7 +292,8 @@ The delete endpoint supports these job types:
 - prune
 - package install
 
-Deleting a job entry removes the database row and tries to delete the associated log file when the job has a `log_file_path`.
+Each of those is an operation: deleting the entry removes the `operations` row
+and tries to delete the log file it names.
 
 It does not delete Borg repositories, backup archives, or restored files. Archive deletion is a separate archive operation.
 
@@ -360,7 +338,7 @@ Rules:
   After 20 deferrals it fails with "repository still busy".
 - Follow-ups are created automatically when an operation succeeds. An
   import enqueues stats and archive listing. A backup that completes through
-  the legacy backup paths (server or agent) enqueues the `backup` chain the
+  a backup executor (server or agent) enqueues the `backup` chain the
   same way, so the archive index and `last_backup` follow within a runner
   tick instead of waiting for the next reconcile run. Only a queued
   `archive_sync` with no dependency or an already satisfied dependency
@@ -480,3 +458,16 @@ Current notification event groups include:
 - schedule failure
 
 See [Notifications](../notifications).
+
+## Upgrading from a release before the operations runner
+
+The first start after the upgrade copies every legacy job row into
+`operations`: backups, restores, checks, restore checks, compacts, prunes,
+archive deletes, executed wipes, mirror syncs, and package installs, with
+their extension rows and the retry lineage. Copied rows get new ids, and the
+`agent_jobs`, `script_executions` and `backup_plan_run_repositories` links are
+rewritten to them. Log text a legacy row kept inline becomes the operation's
+log file. A row whose repository had already been deleted is not copied, since
+an operation's repository is a real foreign key. Nine of the ten job tables
+are then dropped; `repository_wipe_jobs` stays behind as the preview store,
+its executed rows having moved to `operations` and only its previews left.

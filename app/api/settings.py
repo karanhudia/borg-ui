@@ -1195,9 +1195,12 @@ async def update_system_settings(
 
 
 async def _run_stats_refresh_background(repo_ids: list, username: str):
-    """Background task to refresh stats for all repositories"""
-    from app.core.borg_router import BorgRouter
+    """Background task to refresh stats for all repositories.
+
+    The refresh is the `stats` and `archive_sync` index chain (spec 8.1, 8.2),
+    which the operations runner executes; this only enqueues it."""
     from app.database.database import SessionLocal
+    from app.services.operations.enqueue import enqueue_chain
 
     db = SessionLocal()
     try:
@@ -1209,12 +1212,19 @@ async def _run_stats_refresh_background(repo_ids: list, username: str):
             if not repo:
                 continue
             try:
-                result = await BorgRouter(repo).update_stats(db)
-                if result:
-                    success_count += 1
-                else:
-                    error_count += 1
+                enqueue_chain(
+                    db,
+                    ["stats", "archive_sync"],
+                    repository_id=repo.id,
+                    trigger="manual",
+                )
+                success_count += 1
             except Exception as e:
+                # `enqueue_chain` commits, so a failed commit leaves this
+                # session unusable: without the rollback the next
+                # repository's query raises and the rest of the list is
+                # never enqueued.
+                db.rollback()
                 logger.error(
                     "Error refreshing stats for repository",
                     repo_id=repo.id,
@@ -1223,16 +1233,14 @@ async def _run_stats_refresh_background(repo_ids: list, username: str):
                 )
                 error_count += 1
 
-        # Update last_stats_refresh timestamp
-        settings = db.query(SystemSettings).first()
-        if settings:
-            settings.last_stats_refresh = datetime.utcnow()
-            db.commit()
-
+        # `last_stats_refresh` is not written here: the frontend reads it as
+        # the signal that statistics have actually been refreshed, and the
+        # `stats` executor sets it when the work finishes. Writing it at
+        # enqueue time would stop the polling and show the old sizes as new.
         logger.info(
-            "Background stats refresh completed",
+            "Background stats refresh enqueued",
             user=username,
-            success=success_count,
+            enqueued=success_count,
             errors=error_count,
         )
     except Exception as e:

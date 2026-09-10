@@ -13,9 +13,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 from app.database.models import (
-    CompactJob,
     Operation,
-    PruneJob,
     Repository,
     ScheduledJob,
     ScheduledJobRepository,
@@ -28,6 +26,27 @@ from tests.integration.helpers import (
 )
 from tests.utils.borg import make_borg_test_env
 from tests.utils.borg import create_registered_local_repository
+
+
+def _latest_scheduled(db, repository_id, kind):
+    """The newest scheduled operation of one kind on a repository.
+
+    The scheduled flag lives in `operations.params` (spec 6.2), which is a JSON
+    column, so the match happens in Python.
+    """
+    from app.database.models import Operation
+    from app.services.operations.job_facade import MaintenanceJobFacade
+
+    flag = f"scheduled_{kind}"
+    for row in (
+        db.query(Operation)
+        .filter(Operation.kind == kind, Operation.repository_id == repository_id)
+        .order_by(Operation.id.desc())
+        .all()
+    ):
+        if (row.params or {}).get(flag):
+            return MaintenanceJobFacade(db, row)
+    return None
 
 
 def _create_registered_borg_repo(test_db, borg_binary, tmp_path, name: str, slug: str):
@@ -779,24 +798,8 @@ class TestMultiRepositorySchedules:
         compact_job = None
         while datetime.now() < deadline:
             test_db.expire_all()
-            prune_job = (
-                test_db.query(PruneJob)
-                .filter(
-                    PruneJob.repository_id == repo.id,
-                    PruneJob.scheduled_prune.is_(True),
-                )
-                .order_by(PruneJob.id.desc())
-                .first()
-            )
-            compact_job = (
-                test_db.query(CompactJob)
-                .filter(
-                    CompactJob.repository_id == repo.id,
-                    CompactJob.scheduled_compact.is_(True),
-                )
-                .order_by(CompactJob.id.desc())
-                .first()
-            )
+            prune_job = _latest_scheduled(test_db, repo.id, "prune")
+            compact_job = _latest_scheduled(test_db, repo.id, "compact")
             if (
                 prune_job
                 and compact_job

@@ -5,7 +5,10 @@ import pytest
 import json
 import shlex
 
-from app.database.models import BackupJob, Repository, SSHConnection, SSHKey
+from app.database.models import Operation, Repository, SSHConnection, SSHKey
+from app.services.operations.backup_facade import resolve_backup_job
+from app.services.operations.details import backup_details
+from tests.utils.operations import seed_job_operation
 from app.services.remote_backup_service import (
     RemoteBackupService,
     _collapse_carriage_returns,
@@ -30,17 +33,19 @@ def _remote_entities(test_db):
         remote_path="/usr/lib/borg/borg",
         compression="lz4",
     )
-    job = BackupJob(
-        repository=repository.path,
+    test_db.add_all([connection, repository])
+    test_db.flush()
+    job = seed_job_operation(
+        test_db,
+        "backup",
+        repository_id=repository.id,
         status="pending",
         execution_mode="remote_ssh",
         route_strategy="remote_direct",
         total_expected_size=1000,
     )
-    test_db.add_all([connection, repository, job])
-    test_db.flush()
     repository.connection_id = connection.id
-    job.source_ssh_connection_id = connection.id
+    backup_details(test_db, job).source_ssh_connection_id = connection.id
     test_db.commit()
     test_db.refresh(connection)
     test_db.refresh(repository)
@@ -280,7 +285,7 @@ async def test_execute_remote_backup_supports_legacy_repository_urls_without_bac
         compression="lz4",
     )
 
-    job = test_db.query(BackupJob).filter(BackupJob.id == job_id).one()
+    job = resolve_backup_job(test_db, job_id)
     assert result["success"] is True
     assert job.status == "completed"
     assert job.archive_name == "docker-host.example-2026-08-20T11:18:00"
@@ -314,14 +319,14 @@ async def test_execute_ssh_command_uses_public_key_only_authentication_options(
         ssh_key_id=42,
     )
     ssh_key = MagicMock(spec=SSHKey)
-    job = MagicMock(spec=BackupJob)
+    job = MagicMock()
     db = MagicMock()
 
     def query_side_effect(model):
         query = MagicMock()
         if model == SSHKey:
             query.filter.return_value.first.return_value = ssh_key
-        elif model == BackupJob:
+        elif model == Operation:
             query.filter.return_value.first.return_value = job
         return query
 
@@ -454,7 +459,7 @@ async def test_execute_remote_backup_keeps_completed_status_when_success_notific
         source_paths=["/var/lib/docker/volumes/app"],
     )
 
-    job = test_db.query(BackupJob).filter(BackupJob.id == job_id).one()
+    job = resolve_backup_job(test_db, job_id)
     assert result["success"] is True
     assert job.status == "completed"
     assert job.error_message is None
@@ -495,7 +500,7 @@ async def test_execute_remote_backup_records_failure_on_same_job_row(
         source_paths=["/var/lib/docker/volumes/app"],
     )
 
-    job = test_db.query(BackupJob).filter(BackupJob.id == job_id).one()
+    job = resolve_backup_job(test_db, job_id)
     assert result["success"] is False
     assert job.status == "failed"
     assert job.completed_at is not None
@@ -562,7 +567,7 @@ async def test_execute_remote_backup_keeps_failed_status_when_failure_notificati
         source_paths=["/var/lib/docker/volumes/app"],
     )
 
-    job = test_db.query(BackupJob).filter(BackupJob.id == job_id).one()
+    job = resolve_backup_job(test_db, job_id)
     assert result["success"] is False
     assert job.status == "failed"
     assert job.error_message == "Remote backup failed with exit code 2"
@@ -571,8 +576,12 @@ async def test_execute_remote_backup_keeps_failed_status_when_failure_notificati
 @pytest.mark.asyncio
 async def test_update_progress_from_json_only_sets_percent_with_known_total(test_db):
     service = RemoteBackupService()
-    job_without_total = BackupJob(repository="/repo", status="running")
-    job_with_total = BackupJob(
+    job_without_total = seed_job_operation(
+        test_db, "backup", repository="/repo", status="running"
+    )
+    job_with_total = seed_job_operation(
+        test_db,
+        "backup",
         repository="/repo",
         status="running",
         total_expected_size=1000,
@@ -603,14 +612,16 @@ async def test_update_progress_from_json_only_sets_percent_with_known_total(test
 
     test_db.refresh(job_without_total)
     test_db.refresh(job_with_total)
-    assert job_without_total.original_size == 500
-    assert job_without_total.compressed_size == 250
-    assert job_without_total.deduplicated_size == 125
-    assert job_without_total.nfiles == 7
-    assert job_without_total.progress == 0
-    assert job_without_total.progress_percent == 0.0
-    assert job_with_total.progress == 50
-    assert job_with_total.progress_percent == 50.0
+    without_total = resolve_backup_job(test_db, job_without_total.id)
+    with_total = resolve_backup_job(test_db, job_with_total.id)
+    assert without_total.original_size == 500
+    assert without_total.compressed_size == 250
+    assert without_total.deduplicated_size == 125
+    assert without_total.nfiles == 7
+    assert without_total.progress == 0
+    assert without_total.progress_percent == 0.0
+    assert with_total.progress == 50
+    assert with_total.progress_percent == 50.0
 
 
 @pytest.mark.asyncio
@@ -649,7 +660,7 @@ async def test_execute_remote_backup_records_warning_exit_as_completed_with_warn
         source_paths=["/var/lib/docker/volumes/app"],
     )
 
-    job = test_db.query(BackupJob).filter(BackupJob.id == job_id).one()
+    job = resolve_backup_job(test_db, job_id)
     assert result["success"] is True
     assert job.status == "completed_with_warnings"
     assert job.progress == 100
@@ -677,14 +688,14 @@ async def test_execute_ssh_command_reports_transport_facts_only(monkeypatch):
         ssh_key_id=42,
     )
     ssh_key = MagicMock(spec=SSHKey)
-    job = MagicMock(spec=BackupJob)
+    job = MagicMock()
     db = MagicMock()
 
     def query_side_effect(model):
         query = MagicMock()
         if model == SSHKey:
             query.filter.return_value.first.return_value = ssh_key
-        elif model == BackupJob:
+        elif model == Operation:
             query.filter.return_value.first.return_value = job
         return query
 
@@ -761,7 +772,7 @@ async def test_execute_remote_backup_treats_shell_127_as_failure(test_db, monkey
         source_paths=["/var/lib/docker/volumes/app"],
     )
 
-    job = test_db.query(BackupJob).filter(BackupJob.id == job_id).one()
+    job = resolve_backup_job(test_db, job_id)
     assert result["success"] is False
     assert job.status == "failed"
     assert job.archive_name is None
@@ -831,14 +842,14 @@ async def test_execute_ssh_command_collapses_progress_and_names_the_failure_caus
         id=7, host="truenas.example", username="backup", port=2222, ssh_key_id=42
     )
     ssh_key = MagicMock(spec=SSHKey)
-    job = MagicMock(spec=BackupJob)
+    job = MagicMock()
     db = MagicMock()
 
     def query_side_effect(model):
         query = MagicMock()
         if model == SSHKey:
             query.filter.return_value.first.return_value = ssh_key
-        elif model == BackupJob:
+        elif model == Operation:
             query.filter.return_value.first.return_value = job
         return query
 
@@ -896,14 +907,14 @@ async def test_execute_ssh_command_redacts_the_failure_cause_before_truncating(
         id=7, host="truenas.example", username="backup", port=2222, ssh_key_id=42
     )
     ssh_key = MagicMock(spec=SSHKey)
-    job = MagicMock(spec=BackupJob)
+    job = MagicMock()
     db = MagicMock()
 
     def query_side_effect(model):
         query = MagicMock()
         if model == SSHKey:
             query.filter.return_value.first.return_value = ssh_key
-        elif model == BackupJob:
+        elif model == Operation:
             query.filter.return_value.first.return_value = job
         return query
 
@@ -1001,11 +1012,12 @@ async def test_failed_remote_backup_stores_redacted_transcript_in_log_file(
         source_paths=["/var/lib/docker/volumes/app"],
     )
 
-    job = test_db.query(BackupJob).filter(BackupJob.id == job_id).one()
+    job = resolve_backup_job(test_db, job_id)
     assert job.status == "failed"
     assert job.log_file_path and job.log_file_path.startswith(str(tmp_path))
-    assert job.logs.startswith("Logs saved to: backup_job_")
     content = open(job.log_file_path).read()
+    # `logs` reads through the file the row names (spec 6.1).
+    assert job.logs == content
     assert content.startswith("$ BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes ")
     assert "BORG_PASSPHRASE=***" in content
     # neither the command line nor a shell echoing it may leak the value
@@ -1021,8 +1033,9 @@ async def test_failed_remote_backup_stores_redacted_transcript_in_log_file(
 async def test_successful_remote_backup_keeps_transcript_in_job_row_per_policy(
     test_db, monkeypatch, tmp_path
 ):
-    """Default policy keeps no file for a clean success; the transcript still
-    lands in the job row so the Activity view has something to show."""
+    """Default policy keeps no per-job file in the service's log directory for
+    a clean success; the transcript still lands in the operation's own log
+    file, which is where the Activity view reads it (spec 6.1)."""
     connection, repository, job = _remote_entities(test_db)
     service = RemoteBackupService()
     log_dir = tmp_path / "logs"
@@ -1052,10 +1065,10 @@ async def test_successful_remote_backup_keeps_transcript_in_job_row_per_policy(
         source_paths=["/var/lib/docker/volumes/app"],
     )
 
-    job = test_db.query(BackupJob).filter(BackupJob.id == job_id).one()
+    job = resolve_backup_job(test_db, job_id)
     assert job.status == "completed"
-    assert job.log_file_path is None
     assert list(log_dir.iterdir()) == []
+    assert job.log_file_path.endswith(f"operation_{job_id}.log")
     assert job.logs.startswith("$ BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes ")
     assert stats in job.logs
 
@@ -1074,14 +1087,14 @@ async def test_execute_ssh_command_never_returns_or_logs_the_passphrase(monkeypa
         id=7, host="truenas.example", username="backup", port=2222, ssh_key_id=42
     )
     ssh_key = MagicMock(spec=SSHKey)
-    job = MagicMock(spec=BackupJob)
+    job = MagicMock()
     db = MagicMock()
 
     def query_side_effect(model):
         query = MagicMock()
         if model == SSHKey:
             query.filter.return_value.first.return_value = ssh_key
-        elif model == BackupJob:
+        elif model == Operation:
             query.filter.return_value.first.return_value = job
         return query
 

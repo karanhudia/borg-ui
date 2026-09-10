@@ -58,29 +58,18 @@ from app.services.log_policy import DEFAULT_LOG_SAVE_POLICY, LOG_SAVE_POLICIES
 from app.database.models import (
     AgentJob,
     AgentJobLog,
-    BackupJob,
-    BackupJobRetryLineage,
+    AvailabilityScheduleSkip,
+    BackupPlanRun,
     Operation,
     OperationBackupDetails,
     OperationBackupRetryLineage,
-    BackupPlanRun,
-    AvailabilityScheduleSkip,
-    CheckJob,
-    CompactJob,
-    DeleteArchiveJob,
-    PackageInstallJob,
-    PruneJob,
-    RcloneSyncJob,
+    OperationRcloneDetails,
+    OperationWipeDetails,
     Repository,
     RepositoryWipeJob,
-    RestoreCheckJob,
-    RestoreJob,
     ScriptExecution,
     SystemSettings,
     utc_now,
-    Operation,
-    OperationRcloneDetails,
-    OperationWipeDetails,
 )
 
 logger = structlog.get_logger()
@@ -96,18 +85,11 @@ DEFAULT_CLEANUP_RETENTION_DAYS = 90
 # of job record, including plan runs and script executions. Deleting a plan
 # run cascades its run-repository links and hook executions at the DB level.
 # (model, inline log columns cleared at log_retention_days)
+# `repository_wipe_jobs` holds wipe previews only since phase 9, and a preview
+# expires with the rest of the history.
 _JOB_TABLES = (
     (AgentJob, ()),
-    (BackupJob, ("logs",)),
-    (RestoreJob, ("logs",)),
-    (CheckJob, ("logs",)),
-    (RestoreCheckJob, ("logs",)),
-    (CompactJob, ("logs",)),
-    (PruneJob, ("logs",)),
-    (DeleteArchiveJob, ("logs",)),
     (RepositoryWipeJob, ("logs",)),
-    (RcloneSyncJob, ("log_text",)),
-    (PackageInstallJob, ("stdout", "stderr")),
     (ScriptExecution, ("stdout", "stderr")),
     (BackupPlanRun, ()),
     (AvailabilityScheduleSkip, ()),
@@ -116,26 +98,18 @@ _JOB_TABLES = (
 
 
 def _prune_job_for(db: Session, payload: Any) -> Any:
-    """The prune job an agent job's payload names: an `operations` row (a
-    facade) or a legacy `prune_jobs` row, as the payload's table marker and
-    repository say. Only prunes are of interest here."""
+    """The prune operation an agent job's payload names, as a facade. Only
+    prunes are of interest here."""
     from app.services.operations.job_facade import resolve_agent_maintenance_job
 
     return resolve_agent_maintenance_job(db, payload, kinds=("prune",))
 
 
 def _store_prune_log(prune_job: Any, full_log: str) -> None:
-    """Write the complete agent log onto the prune job. A legacy row keeps
-    it in its `logs` column; an operation keeps only its log file, and the
-    facade's setter never overwrites an existing file (that protects a
-    service's captured output from a later marker), so the repair writes
-    the file itself."""
-    from app.services.operations.job_facade import MaintenanceJobFacade
-
-    if not isinstance(prune_job, MaintenanceJobFacade):
-        prune_job.logs = full_log
-        prune_job.has_logs = True
-        return
+    """Write the complete agent log onto the prune job. An operation keeps
+    only its log file, and the facade's setter never overwrites an existing
+    file (that protects a service's captured output from a later marker), so
+    the repair writes the file itself."""
     from pathlib import Path
 
     from app.services.operations.runner import operation_log_path
@@ -349,7 +323,17 @@ def purge_operation_log_files(db: Session, filters) -> int:
         db.commit()
         # Unlinked only once the column is cleared, so a failed commit never
         # leaves a surviving row pointing at a vanished file.
-        for _id, path in rows:
+        # A path is not unique: the phase 9 copy preserved whatever file each
+        # legacy row named, so two operations can point at one file. Unlink
+        # only what no surviving operation still names.
+        paths = {path for _id, path in rows}
+        still_named = {
+            row[0]
+            for row in db.query(Operation.log_file_path)
+            .filter(Operation.log_file_path.in_(paths))
+            .all()
+        }
+        for path in paths - still_named:
             try:
                 Path(path).unlink(missing_ok=True)
             except OSError:
@@ -408,11 +392,6 @@ def purge_job_rows(db: Session, cutoff) -> int:
     # jobs of their era are gone the husks serve nothing. Same window.
     total += _delete_chunked(
         db,
-        BackupJobRetryLineage,
-        (BackupJobRetryLineage.requested_at < cutoff,),
-    )
-    total += _delete_chunked(
-        db,
         OperationBackupRetryLineage,
         (OperationBackupRetryLineage.requested_at < cutoff,),
     )
@@ -456,8 +435,7 @@ def mark_jobs_of_pruned_archives(
     Log content is untouched here; log_retention_days and the save policy
     handle it like for any other job.
 
-    Jobs belong to the repository by id or, for rows written before the id
-    column existed, by path. `created_before` is when the prune or delete
+    `created_before` is when the prune or delete
     started, on the server clock, compared with the job's server-set
     `created_at`: Borg 1 lets a name be reused once its archive is gone, so
     a job created once the prune was under way made a different archive and
@@ -476,33 +454,14 @@ def mark_jobs_of_pruned_archives(
     if repository is None or int(getattr(repository, "borg_version", 1) or 1) == 2:
         return 0
 
-    owner = BackupJob.repository_id == repository_id
-    if repository.path:
-        # older rows carry the path only, some with a trailing slash
-        owner = or_(
-            owner,
-            func.rtrim(BackupJob.repository, "/") == repository.path.rstrip("/"),
-        )
-    filters = [owner, BackupJob.archive_pruned_at.is_(None)]
-    if created_before is not None:
-        created = func.coalesce(
-            BackupJob.created_at, BackupJob.started_at, BackupJob.completed_at
-        )
-        filters.append(created <= created_before)
     pruned_at = pruned_at or utc_now()
 
     marked = 0
     # one transaction per chunk, like the module's deletes
     for start in range(0, len(names), CHUNK_SIZE):
         chunk = names[start : start + CHUNK_SIZE]
-        marked += (
-            db.query(BackupJob)
-            .filter(*filters, BackupJob.archive_name.in_(chunk))
-            .update({BackupJob.archive_pruned_at: pruned_at}, synchronize_session=False)
-        )
-        # The same stamp on the operations side (phase 8). An operation always
-        # carries repository_id, so the path fallback the legacy rows need
-        # does not apply.
+        # An operation always carries repository_id, so no path fallback is
+        # needed to find the backups of this repository.
         operation_ids = [
             row.operation_id
             for row in db.query(OperationBackupDetails.operation_id)

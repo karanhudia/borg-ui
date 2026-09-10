@@ -17,7 +17,7 @@ from urllib.parse import urlparse
 import structlog
 from sqlalchemy.orm import Session
 
-from app.database.models import BackupJob, Repository, SSHConnection, SSHKey
+from app.database.models import Repository, SSHConnection, SSHKey
 from app.utils.borg_env import effective_repository_remote_path
 from app.database.database import SessionLocal
 from app.config import settings
@@ -282,9 +282,7 @@ class RemoteBackupService:
         finally:
             db.close()
 
-    def _store_job_logs(
-        self, db: Session, job: BackupJob, command: str, result: dict
-    ) -> None:
+    def _store_job_logs(self, db: Session, job, command: str, result: dict) -> None:
         """Keep the remote borg output the way the local path keeps its own.
 
         The transcript is the redacted command, borg's stderr and its --json
@@ -328,7 +326,7 @@ class RemoteBackupService:
     async def _send_completion_notification(
         self,
         db: Session,
-        job: BackupJob,
+        job,
         repository: Repository,
         archive_name: str,
     ) -> None:

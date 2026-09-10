@@ -6,15 +6,14 @@ import pytest
 from sqlalchemy.orm import sessionmaker
 
 from app.database.models import (
-    CheckJob,
-    CompactJob,
-    DeleteArchiveJob,
     Operation,
     Repository,
 )
 from app.services.v2.check_service import CheckV2Service
 from app.services.v2.compact_service import CompactV2Service
 from app.services.v2.delete_archive_service import DeleteArchiveV2Service
+from app.services.operations.job_facade import resolve_maintenance_job
+from tests.utils.operations import seed_job_operation
 
 
 class AsyncLineStream:
@@ -81,8 +80,9 @@ class TestCheckV2Service:
     async def test_execute_check_marks_missing_repository_failed(
         self, db_session, testing_session_local, tmp_path
     ):
-        job = CheckJob(repository_id=999, status="running")
-        db_session.add(job)
+        job = seed_job_operation(
+            db_session, "check", repository_id=999, status="running"
+        )
         db_session.commit()
         db_session.refresh(job)
 
@@ -93,7 +93,7 @@ class TestCheckV2Service:
             await service.execute_check(job.id, 999)
 
         verification = testing_session_local()
-        refreshed = verification.query(CheckJob).filter(CheckJob.id == job.id).first()
+        refreshed = resolve_maintenance_job(verification, job.id, "check")
         assert refreshed.status == "failed"
         assert "Repository not found" in refreshed.error_message
         verification.close()
@@ -103,8 +103,12 @@ class TestCheckV2Service:
     async def test_execute_check_skips_terminal_jobs(
         self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
     ):
-        job = CheckJob(repository_id=borg_v2_repo_for_services.id, status="completed")
-        db_session.add(job)
+        job = seed_job_operation(
+            db_session,
+            "check",
+            repository_id=borg_v2_repo_for_services.id,
+            status="completed",
+        )
         db_session.commit()
         db_session.refresh(job)
 
@@ -126,8 +130,12 @@ class TestCheckV2Service:
     async def test_execute_check_completes_and_persists_logs(
         self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
     ):
-        job = CheckJob(repository_id=borg_v2_repo_for_services.id, status="running")
-        db_session.add(job)
+        job = seed_job_operation(
+            db_session,
+            "check",
+            repository_id=borg_v2_repo_for_services.id,
+            status="running",
+        )
         db_session.commit()
         db_session.refresh(job)
 
@@ -167,9 +175,7 @@ class TestCheckV2Service:
             await service.execute_check(job.id, borg_v2_repo_for_services.id)
 
         verification = testing_session_local()
-        refreshed_job = (
-            verification.query(CheckJob).filter(CheckJob.id == job.id).first()
-        )
+        refreshed_job = resolve_maintenance_job(verification, job.id, "check")
         refreshed_repo = (
             verification.query(Repository)
             .filter(Repository.id == borg_v2_repo_for_services.id)
@@ -192,8 +198,12 @@ class TestCheckV2Service:
         # The check scheduler creates jobs as pending without started_at; the
         # service must record the execution start itself or the job stays
         # invisible to every started_at-based view (dashboard activity feed).
-        job = CheckJob(repository_id=borg_v2_repo_for_services.id, status="pending")
-        db_session.add(job)
+        job = seed_job_operation(
+            db_session,
+            "check",
+            repository_id=borg_v2_repo_for_services.id,
+            status="pending",
+        )
         db_session.commit()
         db_session.refresh(job)
 
@@ -223,9 +233,7 @@ class TestCheckV2Service:
             await service.execute_check(job.id, borg_v2_repo_for_services.id)
 
         verification = testing_session_local()
-        refreshed_job = (
-            verification.query(CheckJob).filter(CheckJob.id == job.id).first()
-        )
+        refreshed_job = resolve_maintenance_job(verification, job.id, "check")
         assert refreshed_job.status == "completed"
         assert refreshed_job.started_at is not None
         verification.close()
@@ -238,8 +246,12 @@ class TestCheckV2Service:
         # A cancellation can land between the service's status guard and its
         # start claim; the claim's status predicate must lose that race and
         # never start borg on the cancelled job.
-        job = CheckJob(repository_id=borg_v2_repo_for_services.id, status="pending")
-        db_session.add(job)
+        job = seed_job_operation(
+            db_session,
+            "check",
+            repository_id=borg_v2_repo_for_services.id,
+            status="pending",
+        )
         db_session.commit()
         db_session.refresh(job)
 
@@ -250,7 +262,7 @@ class TestCheckV2Service:
         async def cancel_then_commit(db, **kwargs):
             if kwargs.get("action") == "borg2_check_start":
                 other = testing_session_local()
-                other.query(CheckJob).filter(CheckJob.id == job.id).update(
+                other.query(Operation).filter(Operation.id == job.id).update(
                     {"status": "cancelled"}
                 )
                 other.commit()
@@ -276,9 +288,7 @@ class TestCheckV2Service:
 
         spawn.assert_not_called()
         verification = testing_session_local()
-        refreshed_job = (
-            verification.query(CheckJob).filter(CheckJob.id == job.id).first()
-        )
+        refreshed_job = resolve_maintenance_job(verification, job.id, "check")
         assert refreshed_job.status == "cancelled"
         assert refreshed_job.started_at is None
         verification.close()
@@ -288,12 +298,13 @@ class TestCheckV2Service:
     async def test_execute_check_uses_partial_check_flags_when_max_duration_is_set(
         self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
     ):
-        job = CheckJob(
+        job = seed_job_operation(
+            db_session,
+            "check",
             repository_id=borg_v2_repo_for_services.id,
             status="running",
             max_duration=3600,
         )
-        db_session.add(job)
         db_session.commit()
         db_session.refresh(job)
 
@@ -338,9 +349,7 @@ class TestCheckV2Service:
         assert "3600" in cmd
 
         verification = testing_session_local()
-        refreshed_job = (
-            verification.query(CheckJob).filter(CheckJob.id == job.id).first()
-        )
+        refreshed_job = resolve_maintenance_job(verification, job.id, "check")
         assert (
             refreshed_job.progress_message
             == "Partial repository check completed successfully"
@@ -352,13 +361,14 @@ class TestCheckV2Service:
     async def test_execute_check_appends_extra_flags(
         self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
     ):
-        job = CheckJob(
+        job = seed_job_operation(
+            db_session,
+            "check",
             repository_id=borg_v2_repo_for_services.id,
             status="running",
             max_duration=0,
             extra_flags="--verify-data --save-space",
         )
-        db_session.add(job)
         db_session.commit()
         db_session.refresh(job)
 
@@ -394,8 +404,12 @@ class TestCheckV2Service:
     async def test_execute_check_sets_warning_state(
         self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
     ):
-        job = CheckJob(repository_id=borg_v2_repo_for_services.id, status="running")
-        db_session.add(job)
+        job = seed_job_operation(
+            db_session,
+            "check",
+            repository_id=borg_v2_repo_for_services.id,
+            status="running",
+        )
         db_session.commit()
         db_session.refresh(job)
 
@@ -423,7 +437,7 @@ class TestCheckV2Service:
             await service.execute_check(job.id, borg_v2_repo_for_services.id)
 
         verification = testing_session_local()
-        refreshed = verification.query(CheckJob).filter(CheckJob.id == job.id).first()
+        refreshed = resolve_maintenance_job(verification, job.id, "check")
         assert refreshed.status == "completed_with_warnings"
         assert "warnings" in refreshed.error_message
         verification.close()
@@ -435,8 +449,9 @@ class TestCompactV2Service:
     async def test_execute_compact_marks_missing_repository_failed(
         self, db_session, testing_session_local, tmp_path
     ):
-        job = CompactJob(repository_id=999, status="running")
-        db_session.add(job)
+        job = seed_job_operation(
+            db_session, "compact", repository_id=999, status="running"
+        )
         db_session.commit()
         db_session.refresh(job)
 
@@ -449,9 +464,7 @@ class TestCompactV2Service:
             await service.execute_compact(job.id, 999)
 
         verification = testing_session_local()
-        refreshed = (
-            verification.query(CompactJob).filter(CompactJob.id == job.id).first()
-        )
+        refreshed = resolve_maintenance_job(verification, job.id, "compact")
         assert refreshed.status == "failed"
         assert "Repository not found" in refreshed.error_message
         verification.close()
@@ -461,8 +474,12 @@ class TestCompactV2Service:
     async def test_execute_compact_completes_with_two_phase_progress(
         self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
     ):
-        job = CompactJob(repository_id=borg_v2_repo_for_services.id, status="running")
-        db_session.add(job)
+        job = seed_job_operation(
+            db_session,
+            "compact",
+            repository_id=borg_v2_repo_for_services.id,
+            status="running",
+        )
         db_session.commit()
         db_session.refresh(job)
 
@@ -516,9 +533,7 @@ class TestCompactV2Service:
             await service.execute_compact(job.id, borg_v2_repo_for_services.id)
 
         verification = testing_session_local()
-        refreshed = (
-            verification.query(CompactJob).filter(CompactJob.id == job.id).first()
-        )
+        refreshed = resolve_maintenance_job(verification, job.id, "compact")
         refreshed_repo = (
             verification.query(Repository)
             .filter(Repository.id == borg_v2_repo_for_services.id)
@@ -711,8 +726,12 @@ class TestCompactV2Service:
     ):
         # Same contract as the check service: jobs dispatched as pending must
         # get started_at from the service itself.
-        job = CompactJob(repository_id=borg_v2_repo_for_services.id, status="pending")
-        db_session.add(job)
+        job = seed_job_operation(
+            db_session,
+            "compact",
+            repository_id=borg_v2_repo_for_services.id,
+            status="pending",
+        )
         db_session.commit()
         db_session.refresh(job)
 
@@ -743,9 +762,7 @@ class TestCompactV2Service:
             await service.execute_compact(job.id, borg_v2_repo_for_services.id)
 
         verification = testing_session_local()
-        refreshed = (
-            verification.query(CompactJob).filter(CompactJob.id == job.id).first()
-        )
+        refreshed = resolve_maintenance_job(verification, job.id, "compact")
         assert refreshed.status == "completed"
         assert refreshed.started_at is not None
         verification.close()
@@ -757,8 +774,12 @@ class TestCompactV2Service:
     ):
         # Same race as the check service: a cancellation landing between the
         # status guard and the start claim must win.
-        job = CompactJob(repository_id=borg_v2_repo_for_services.id, status="pending")
-        db_session.add(job)
+        job = seed_job_operation(
+            db_session,
+            "compact",
+            repository_id=borg_v2_repo_for_services.id,
+            status="pending",
+        )
         db_session.commit()
         db_session.refresh(job)
 
@@ -769,7 +790,7 @@ class TestCompactV2Service:
         async def cancel_then_commit(db, **kwargs):
             if kwargs.get("action") == "borg2_compact_start":
                 other = testing_session_local()
-                other.query(CompactJob).filter(CompactJob.id == job.id).update(
+                other.query(Operation).filter(Operation.id == job.id).update(
                     {"status": "cancelled"}
                 )
                 other.commit()
@@ -797,9 +818,7 @@ class TestCompactV2Service:
 
         spawn.assert_not_called()
         verification = testing_session_local()
-        refreshed = (
-            verification.query(CompactJob).filter(CompactJob.id == job.id).first()
-        )
+        refreshed = resolve_maintenance_job(verification, job.id, "compact")
         assert refreshed.status == "cancelled"
         assert refreshed.started_at is None
         verification.close()
@@ -809,8 +828,12 @@ class TestCompactV2Service:
     async def test_execute_compact_sets_warning_state(
         self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
     ):
-        job = CompactJob(repository_id=borg_v2_repo_for_services.id, status="running")
-        db_session.add(job)
+        job = seed_job_operation(
+            db_session,
+            "compact",
+            repository_id=borg_v2_repo_for_services.id,
+            status="running",
+        )
         db_session.commit()
         db_session.refresh(job)
 
@@ -841,9 +864,7 @@ class TestCompactV2Service:
             await service.execute_compact(job.id, borg_v2_repo_for_services.id)
 
         verification = testing_session_local()
-        refreshed = (
-            verification.query(CompactJob).filter(CompactJob.id == job.id).first()
-        )
+        refreshed = resolve_maintenance_job(verification, job.id, "compact")
         refreshed_repo = (
             verification.query(Repository)
             .filter(Repository.id == borg_v2_repo_for_services.id)
@@ -861,8 +882,13 @@ class TestDeleteArchiveV2Service:
     async def test_execute_delete_marks_missing_repository_failed(
         self, db_session, testing_session_local, tmp_path
     ):
-        job = DeleteArchiveJob(repository_id=999, archive_name="old", status="pending")
-        db_session.add(job)
+        job = seed_job_operation(
+            db_session,
+            "delete_archive",
+            repository_id=999,
+            archive_name="old",
+            status="pending",
+        )
         db_session.commit()
         db_session.refresh(job)
 
@@ -875,11 +901,7 @@ class TestDeleteArchiveV2Service:
             await service.execute_delete(job.id, 999, "old")
 
         verification = testing_session_local()
-        refreshed = (
-            verification.query(DeleteArchiveJob)
-            .filter(DeleteArchiveJob.id == job.id)
-            .first()
-        )
+        refreshed = resolve_maintenance_job(verification, job.id, "delete_archive")
         assert refreshed.status == "failed"
         assert refreshed.error_message == "Repository not found"
         verification.close()
@@ -889,13 +911,14 @@ class TestDeleteArchiveV2Service:
     async def test_execute_delete_fails_when_archive_delete_fails(
         self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
     ):
-        job = DeleteArchiveJob(
+        job = seed_job_operation(
+            db_session,
+            "delete_archive",
             repository_id=borg_v2_repo_for_services.id,
             repository_path=borg_v2_repo_for_services.path,
             archive_name="old",
             status="pending",
         )
-        db_session.add(job)
         db_session.commit()
         db_session.refresh(job)
 
@@ -915,11 +938,7 @@ class TestDeleteArchiveV2Service:
             await service.execute_delete(job.id, borg_v2_repo_for_services.id, "old")
 
         verification = testing_session_local()
-        refreshed = (
-            verification.query(DeleteArchiveJob)
-            .filter(DeleteArchiveJob.id == job.id)
-            .first()
-        )
+        refreshed = resolve_maintenance_job(verification, job.id, "delete_archive")
         assert refreshed.status == "failed"
         assert refreshed.error_message == "cannot delete"
         verification.close()
@@ -929,13 +948,14 @@ class TestDeleteArchiveV2Service:
     async def test_execute_delete_completes_even_if_compact_warns(
         self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
     ):
-        job = DeleteArchiveJob(
+        job = seed_job_operation(
+            db_session,
+            "delete_archive",
             repository_id=borg_v2_repo_for_services.id,
             repository_path=borg_v2_repo_for_services.path,
             archive_name="old",
             status="pending",
         )
-        db_session.add(job)
         db_session.commit()
         db_session.refresh(job)
 
@@ -959,11 +979,7 @@ class TestDeleteArchiveV2Service:
             await service.execute_delete(job.id, borg_v2_repo_for_services.id, "old")
 
         verification = testing_session_local()
-        refreshed = (
-            verification.query(DeleteArchiveJob)
-            .filter(DeleteArchiveJob.id == job.id)
-            .first()
-        )
+        refreshed = resolve_maintenance_job(verification, job.id, "delete_archive")
         assert refreshed.status == "completed"
         assert refreshed.progress == 100
         verification.close()

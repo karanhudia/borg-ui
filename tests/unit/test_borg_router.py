@@ -1,4 +1,3 @@
-from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 import json
@@ -9,36 +8,6 @@ from fastapi import HTTPException
 from sqlalchemy.exc import OperationalError
 
 from app.core.borg_router import BorgRouter
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_update_stats_delegates_to_v2_repository_helper(db_session):
-    repo = SimpleNamespace(borg_version=2)
-
-    with patch(
-        "app.api.repositories.update_repository_stats",
-        new=AsyncMock(return_value=True),
-    ) as mock_update:
-        result = await BorgRouter(repo).update_stats(db_session)
-
-    assert result is True
-    mock_update.assert_awaited_once_with(repo, db_session)
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_update_stats_delegates_to_v1_repository_helper(db_session):
-    repo = SimpleNamespace(borg_version=1)
-
-    with patch(
-        "app.api.repositories.update_repository_stats",
-        new=AsyncMock(return_value=False),
-    ) as mock_update:
-        result = await BorgRouter(repo).update_stats(db_session)
-
-    assert result is False
-    mock_update.assert_awaited_once_with(repo, db_session)
 
 
 @pytest.mark.unit
@@ -107,15 +76,14 @@ async def test_run_agent_maintenance_translates_http_errors_for_background_flows
 
 
 @pytest.mark.parametrize(
-    "maintenance_kind, job_kind, model_name, extra",
+    "maintenance_kind, job_kind, params",
     [
-        ("prune", "repository.prune", "PruneJob", {}),
-        ("compact", "repository.compact", "CompactJob", {}),
-        ("check", "repository.check", "CheckJob", {}),
+        ("prune", "repository.prune", {}),
+        ("compact", "repository.compact", {}),
+        ("check", "repository.check", {}),
         (
             "delete_archive",
             "repository.delete_archive",
-            "DeleteArchiveJob",
             {"archive_name": "arch-1"},
         ),
     ],
@@ -123,7 +91,7 @@ async def test_run_agent_maintenance_translates_http_errors_for_background_flows
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_run_agent_maintenance_fails_the_job_when_queue_fails(
-    db_session, maintenance_kind, job_kind, model_name, extra
+    db_session, maintenance_kind, job_kind, params
 ):
     # If the agent job cannot even be queued (e.g. database is locked), the
     # already-created maintenance *_job must be failed closed so it does not
@@ -131,30 +99,28 @@ async def test_run_agent_maintenance_fails_the_job_when_queue_fails(
     # the session's transaction, so the fail-closed helper has to recover it and
     # still persist 'failed' -- exercise the real helper against a real row, not
     # a mock that would hide that defect. Parameterized across every maintenance
-    # kind so a wrong entry in the kind->model mapping cannot slip through.
+    # kind so a wrong kind cannot slip through.
     from datetime import datetime
 
-    import app.database.models as models_mod
-    from app.database.models import PruneJob, Repository
+    from app.database.models import Operation, Repository
+    from tests.utils.operations import seed_job_operation
 
-    model = getattr(models_mod, model_name)
     repo_row = Repository(
-        name=f"Locked {model_name}",
+        name=f"Locked {maintenance_kind}",
         path=f"/repos/locked-{maintenance_kind}",
         encryption="none",
         repository_type="local",
     )
     db_session.add(repo_row)
     db_session.flush()
-    job = model(
+    job = seed_job_operation(
+        db_session,
+        maintenance_kind,
         repository_id=repo_row.id,
-        repository_path=repo_row.path,
         status="pending",
         created_at=datetime.utcnow(),
-        **extra,
+        **params,
     )
-    db_session.add(job)
-    db_session.commit()
     job_id = job.id
 
     repo = SimpleNamespace(borg_version=2, id=repo_row.id, executor_type="agent")
@@ -165,8 +131,8 @@ async def test_run_agent_maintenance_fails_the_job_when_queue_fails(
         # failed commit) leaves it requiring a rollback before any further query
         # can run -- exactly the state the fail-closed helper must recover from.
         try:
-            db_session.add(PruneJob(repository_path="/x", status="pending"))
-            db_session.flush()  # repository_id is NOT NULL -> IntegrityError
+            db_session.add(Operation(kind="prune", category="maintenance"))
+            db_session.flush()  # status/run_id are NOT NULL -> IntegrityError
         except Exception:
             pass
         raise RuntimeError("database is locked")
@@ -187,7 +153,7 @@ async def test_run_agent_maintenance_fails_the_job_when_queue_fails(
 
     # The real _fail_orphaned_maintenance_job ran despite the doomed transaction
     # and persisted the failed state.
-    refreshed = db_session.query(model).get(job_id)
+    refreshed = db_session.get(Operation, job_id)
     assert refreshed.status == "failed"
     assert refreshed.completed_at is not None
     assert refreshed.error_message
@@ -1130,14 +1096,11 @@ async def test_prune_delegates_to_v2_service():
 async def test_run_agent_maintenance_fails_the_operation_when_queue_is_refused(
     db_session, maintenance_kind, job_kind, extra
 ):
-    # Since phase 5 the maintenance job is an `operations` row the caller
-    # created `running` (post-backup prune/compact/check). When admission
-    # refuses the agent job, that row - not a legacy *_jobs row - must be
-    # failed, or it counts as active work and blocks every backup of the
-    # repository until a restart. A legacy row that happens to share the id
-    # (the two id spaces are independent) must stay untouched.
+    # The maintenance job is an `operations` row the caller created `running`
+    # (post-backup prune/compact/check). When admission refuses the agent
+    # job, that row must be failed, or it counts as active work and blocks
+    # every backup of the repository until a restart.
     from app.database.models import Operation, Repository
-    from app.services.operations.job_facade import LEGACY_MODELS
     from app.services.operations.maintenance_start import (
         active_maintenance_operation,
         start_inline_maintenance,
@@ -1158,18 +1121,6 @@ async def test_run_agent_maintenance_fails_the_operation_when_queue_is_refused(
     )
     operation_id = operation.id
     repository_id = repo_row.id
-    legacy_model = LEGACY_MODELS[maintenance_kind]
-    legacy = legacy_model(
-        id=operation_id,
-        repository_id=repository_id,
-        repository_path=repo_row.path,
-        status="completed",
-        created_at=datetime.utcnow(),
-        **extra,
-    )
-    db_session.add(legacy)
-    db_session.commit()
-
     repo = SimpleNamespace(borg_version=1, id=repository_id, executor_type="agent")
     refused = HTTPException(
         status_code=409,
@@ -1212,7 +1163,6 @@ async def test_run_agent_maintenance_fails_the_operation_when_queue_is_refused(
         stored.error_message
         == "agent job could not be queued: list_archives is active on the repository"
     )
-    assert db_session.get(legacy_model, operation_id).status == "completed"
     # Nothing is left that admission would count as active maintenance.
     assert (
         active_maintenance_operation(db_session, repository_id, maintenance_kind)

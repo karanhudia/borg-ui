@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_runtime_app_version
 from app.database.database import SessionLocal
-from app.database.models import BackupJob, MQTTSyncState, Repository
+from app.database.models import MQTTSyncState, Repository
 from app.services.operations.backup_facade import (
     latest_backup_jobs_by_repository,
     newest_backup_job,
@@ -577,8 +577,8 @@ class RepositoryStatePublisher:
         self,
         repository: Repository,
         failed_repository_ids: Set[int],
-        latest_jobs_by_repository: Dict[str, BackupJob],
-        running_jobs_by_repository: Dict[str, BackupJob],
+        latest_jobs_by_repository: Dict[str, Any],
+        running_jobs_by_repository: Dict[str, Any],
     ) -> bool:
         """Publish all per-repository state topics from repository table."""
         try:
@@ -1424,8 +1424,8 @@ class MQTTService:
         self,
         repository: Repository,
         failed_repository_ids: Set[int],
-        latest_jobs_by_repository: Dict[str, BackupJob],
-        running_jobs_by_repository: Dict[str, BackupJob],
+        latest_jobs_by_repository: Dict[str, Any],
+        running_jobs_by_repository: Dict[str, Any],
     ) -> bool:
         """Publish all per-repository state topics from repository table."""
         return self._repository_state_publisher.publish_repository_data(
@@ -1441,15 +1441,11 @@ class MQTTService:
         """Return repository IDs whose latest backup job failed."""
         return self._job_query_service.fetch_failed_repositories(db, path_to_id)
 
-    def _fetch_latest_backup_jobs_by_repository(
-        self, db: Session
-    ) -> Dict[str, BackupJob]:
+    def _fetch_latest_backup_jobs_by_repository(self, db: Session) -> Dict[str, Any]:
         """Return latest backup job row per repository path."""
         return self._job_query_service.fetch_latest_backup_jobs_by_repository(db)
 
-    def _fetch_running_backup_jobs_by_repository(
-        self, db: Session
-    ) -> Dict[str, BackupJob]:
+    def _fetch_running_backup_jobs_by_repository(self, db: Session) -> Dict[str, Any]:
         """Return latest running backup job row per repository path."""
         return self._job_query_service.fetch_running_backup_jobs_by_repository(db)
 

@@ -6,19 +6,13 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import or_, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database.models import (
     AgentJob,
-    BackupJob,
-    CheckJob,
-    CompactJob,
     Operation,
-    PruneJob,
     Repository,
-    RepositoryWipeJob,
-    RestoreCheckJob,
     SystemSettings,
 )
 
@@ -55,15 +49,12 @@ OPERATION_CLASS_REPOSITORY_OBSERVE = "repository_observe"
 DEFAULT_MANUAL_BACKUP_LIMIT = 1
 DEFAULT_SCHEDULED_BACKUP_LIMIT = 2
 
-ACTIVE_BACKUP_STATUSES = {"pending", "running"}
 ACTIVE_MAINTENANCE_STATUSES = {"pending", "running"}
 ACTIVE_AGENT_STATUSES = {"queued", "claimed", "cancel_requested", "running"}
-ACTIVE_REPOSITORY_WIPE_STATUSES = {"pending", "running"}
 ACTIVE_OPERATION_STATUSES = {"queued", "running"}
 
-# Kinds that moved to `operations`, mapped to the admission operation they
-# used to be recorded as. Started with phase 5's maintenance kinds; backup
-# joined in phase 8.
+# Every kind admission watches, mapped to the admission operation it is
+# recorded as.
 MIGRATED_OPERATION_KINDS = {
     "check": OPERATION_CHECK,
     "restore_check": OPERATION_RESTORE_CHECK,
@@ -71,6 +62,7 @@ MIGRATED_OPERATION_KINDS = {
     "prune": OPERATION_PRUNE,
     "delete_archive": OPERATION_DELETE_ARCHIVE,
     "backup": OPERATION_BACKUP,
+    "wipe": OPERATION_REPOSITORY_WIPE,
 }
 
 REPOSITORY_OPERATION_ACTIVE_KEY = "backend.errors.jobs.repositoryOperationActive"
@@ -131,13 +123,6 @@ AGENT_JOB_KIND_OPERATIONS = {
     "repository.rclone_sync": OPERATION_RCLONE_SYNC,
 }
 
-MAINTENANCE_MODEL_OPERATIONS = {
-    CheckJob: OPERATION_CHECK,
-    RestoreCheckJob: OPERATION_RESTORE_CHECK,
-    CompactJob: OPERATION_COMPACT,
-    PruneJob: OPERATION_PRUNE,
-}
-
 
 @dataclass(frozen=True)
 class ActiveRepositoryWork:
@@ -171,13 +156,6 @@ def operation_for_agent_job_kind(job_kind: str) -> str:
         return AGENT_JOB_KIND_OPERATIONS[job_kind]
     except KeyError as exc:
         raise ValueError(f"Unsupported agent repository operation: {job_kind}") from exc
-
-
-def operation_for_maintenance_model(job_model: type[Any]) -> str:
-    try:
-        return MAINTENANCE_MODEL_OPERATIONS[job_model]
-    except KeyError as exc:
-        raise ValueError(f"Unsupported maintenance job model: {job_model}") from exc
 
 
 def ignore_active_job(
@@ -232,13 +210,6 @@ def lock_backup_capacity_scope(db: Session) -> None:
     db.query(SystemSettings).order_by(SystemSettings.id.asc()).with_for_update().first()
 
 
-def _repository_backup_filter(repository: Repository):
-    filters = [BackupJob.repository == repository.path]
-    if repository.id is not None:
-        filters.append(BackupJob.repository_id == repository.id)
-    return or_(*filters)
-
-
 def _active_work(
     repository: Repository,
     operation: str,
@@ -267,22 +238,9 @@ def list_active_repository_work(
     """Return persisted active work for a repository grouped by operation class."""
     active: list[ActiveRepositoryWork] = []
 
-    backup_jobs = (
-        db.query(BackupJob)
-        .filter(
-            _repository_backup_filter(repository),
-            BackupJob.status.in_(ACTIVE_BACKUP_STATUSES),
-        )
-        .all()
-    )
-    active.extend(
-        _active_work(repository, OPERATION_BACKUP, BackupJob.__tablename__, job)
-        for job in backup_jobs
-    )
-
-    # Migrated kinds live in `operations` (spec section 13 phase 5). Admission
-    # must still see them, or break_lock and wipe would run alongside a check
-    # or a prune that is holding the borg lock.
+    # Every kind lives in `operations`. Admission must see them, or break_lock
+    # and wipe would run alongside a check or a prune that is holding the borg
+    # lock.
     from app.services.operations.job_facade import legacy_status
 
     for op in (
@@ -303,45 +261,6 @@ def list_active_repository_work(
                 status=legacy_status(op.status),
             )
         )
-
-    for op in (
-        db.query(Operation)
-        .filter(
-            Operation.repository_id == repository.id,
-            Operation.kind == "wipe",
-            Operation.status.in_(ACTIVE_OPERATION_STATUSES),
-        )
-        .all()
-    ):
-        active.append(
-            _active_work(
-                repository,
-                OPERATION_REPOSITORY_WIPE,
-                Operation.__tablename__,
-                op,
-                status=legacy_status(op.status),
-            )
-        )
-
-    # Legacy rows only: nothing writes repository_wipe_jobs execution rows
-    # after phase 6. Goes away with the table in phase 9.
-    wipe_jobs = (
-        db.query(RepositoryWipeJob)
-        .filter(
-            RepositoryWipeJob.repository_id == repository.id,
-            RepositoryWipeJob.status.in_(ACTIVE_REPOSITORY_WIPE_STATUSES),
-        )
-        .all()
-    )
-    active.extend(
-        _active_work(
-            repository,
-            OPERATION_REPOSITORY_WIPE,
-            RepositoryWipeJob.__tablename__,
-            job,
-        )
-        for job in wipe_jobs
-    )
 
     agent_jobs = (
         db.query(AgentJob)
@@ -445,17 +364,7 @@ def ensure_repository_admission(
 
 
 def count_active_manual_backup_jobs(db: Session) -> int:
-    legacy = (
-        db.query(BackupJob)
-        .filter(
-            BackupJob.scheduled_job_id.is_(None),
-            BackupJob.backup_plan_id.is_(None),
-            BackupJob.backup_plan_run_id.is_(None),
-            BackupJob.status.in_(ACTIVE_BACKUP_STATUSES),
-        )
-        .count()
-    )
-    operations = (
+    return (
         db.query(Operation)
         .filter(
             Operation.kind == "backup",
@@ -465,7 +374,6 @@ def count_active_manual_backup_jobs(db: Session) -> int:
         )
         .count()
     )
-    return legacy + operations
 
 
 def get_manual_backup_limit(db: Session) -> int:
@@ -490,15 +398,7 @@ def ensure_manual_backup_capacity(db: Session) -> None:
 
 
 def count_active_scheduled_backup_jobs(db: Session) -> int:
-    legacy = (
-        db.query(BackupJob)
-        .filter(
-            BackupJob.scheduled_job_id.isnot(None),
-            BackupJob.status.in_(ACTIVE_BACKUP_STATUSES),
-        )
-        .count()
-    )
-    operations = (
+    return (
         db.query(Operation)
         .filter(
             Operation.kind == "backup",
@@ -507,7 +407,6 @@ def count_active_scheduled_backup_jobs(db: Session) -> int:
         )
         .count()
     )
-    return legacy + operations
 
 
 def get_scheduled_backup_limit(db: Session) -> int:

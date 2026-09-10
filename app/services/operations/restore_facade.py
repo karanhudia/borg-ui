@@ -3,8 +3,7 @@ restore-job attribute surface.
 
 `restore_service` and the restore routes drive a job through a fixed set of
 attributes. Phase 7 moves the row to `operations` without rewriting them:
-`resolve_restore_job()` hands them this facade for new work and the real
-`RestoreJob` for an id written before this phase.
+`resolve_restore_job()` hands them this facade.
 
 Three legacy columns have no column of their own here. `progress` (an int) is
 `operations.progress_percent`; `estimated_time_remaining` is arithmetic over
@@ -12,17 +11,15 @@ the sizes and the speed, exactly the arithmetic the service performs before
 assigning it; `logs`, which the service builds once at the end, goes to the
 operation's log file (spec 6.1), which the Activity log routes and log
 retention already read and expire.
-
-Deleted in phase 9 with the legacy table.
 """
 
 import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from app.database.models import Operation, Repository, RestoreJob
+from app.database.models import Operation, Repository
 from app.services.operations.details import restore_details
 
 CANCELLED_BY_USER = json.dumps({"key": "backend.errors.restore.cancelledByUser"})
@@ -218,34 +215,23 @@ class RestoreJobFacade:
         self.operation.log_file_path = str(path)
 
 
-def resolve_restore_job(db: Session, job_id: int) -> Any:
-    """The job a restore caller should drive for `job_id`.
-
-    Operations win, so new work runs on the new table. Ids that belong to a
-    row written before this phase fall back to the legacy table, which keeps
-    the status and cancel routes working for history.
-    """
+def resolve_restore_job(db: Session, job_id: int) -> Optional["RestoreJobFacade"]:
+    """The job a restore caller should drive for `job_id`, or None when no
+    restore operation has the id."""
     operation = (
         db.query(Operation)
         .filter(Operation.id == job_id, Operation.kind == "restore")
         .first()
     )
-    if operation is not None:
-        return RestoreJobFacade(db, operation)
-    return db.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+    if operation is None:
+        return None
+    return RestoreJobFacade(db, operation)
 
 
 def list_restore_jobs(db: Session, limit: int) -> list:
-    """The newest `limit` restore jobs across both tables, newest first, for
-    the list route. Each table contributes its own newest `limit` rows, then
-    the merge cuts to `limit`, so the answer is exact either way.
-
-    Both cuts rank by `created_at`, the same key the merge below uses. Ranking
-    a source by id instead would drop a row the merge would have kept wherever
-    a table's id order and its `created_at` order disagree, which two restores
-    started concurrently can produce: `created_at` is stamped in Python at
-    flush time and the id is assigned at insert. The id is the tie-break, so
-    rows sharing a timestamp still come back in a stable order."""
+    """The newest `limit` restore jobs, newest first, for the list route.
+    The id is the tie-break, so rows sharing a timestamp still come back in a
+    stable order."""
     operations = (
         db.query(Operation)
         .filter(Operation.kind == "restore")
@@ -253,12 +239,4 @@ def list_restore_jobs(db: Session, limit: int) -> list:
         .limit(limit)
         .all()
     )
-    legacy = (
-        db.query(RestoreJob)
-        .order_by(RestoreJob.created_at.desc(), RestoreJob.id.desc())
-        .limit(limit)
-        .all()
-    )
-    jobs = [RestoreJobFacade(db, op) for op in operations] + list(legacy)
-    jobs.sort(key=lambda job: job.created_at, reverse=True)
-    return jobs[:limit]
+    return [RestoreJobFacade(db, op) for op in operations]

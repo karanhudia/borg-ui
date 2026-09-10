@@ -16,12 +16,12 @@ from sqlalchemy.orm import Session
 from app.api.schedule import execute_multi_repo_schedule
 from tests.utils.operations import operations_runner_for
 from app.database.models import (
-    BackupJob,
     Operation,
     ScheduledJob,
     ScheduledJobRepository,
 )
 from app.services.backup_service import backup_service
+from tests.utils.operations import seed_job_operation
 from tests.utils.borg import (
     create_registered_local_repository,
     get_latest_archive_name,
@@ -60,12 +60,13 @@ class TestMultiSourceBackupIntegration:
             borg_env=borg_env,
         )
 
-        job = BackupJob(
+        job = seed_job_operation(
+            test_db,
+            "backup",
             repository=repo.path,
             status="pending",
             created_at=datetime.now(timezone.utc),
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 

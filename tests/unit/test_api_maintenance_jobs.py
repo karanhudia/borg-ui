@@ -7,8 +7,9 @@ from app.api.maintenance_jobs import (
     serialize_job_status,
     serialize_job_summary,
 )
-from app.database.models import CheckJob, Operation, Repository
+from app.database.models import Operation, Repository
 from app.services.operations.job_facade import MaintenanceJobFacade
+from tests.utils.operations import seed_job_operation
 
 
 def _create_repo(test_db, name="Repo", path="/repos/main"):
@@ -28,26 +29,36 @@ class TestMaintenanceJobsHelpers:
         log_path = tmp_path / "check.log"
         log_path.write_text("from file\n", encoding="utf-8")
 
-        file_job = CheckJob(
-            repository_id=repo.id, log_file_path=str(log_path), logs="legacy"
+        file_job = seed_job_operation(
+            test_db,
+            "check",
+            repository_id=repo.id,
+            log_file_path=str(log_path),
+            logs="legacy",
         )
-        legacy_job = CheckJob(repository_id=repo.id, logs="legacy only")
+        legacy_job = seed_job_operation(
+            test_db, "check", repository_id=repo.id, logs="legacy only"
+        )
 
         assert read_job_logs(file_job, log_save_policy="all_jobs") == "from file\n"
         assert read_job_logs(legacy_job, log_save_policy="all_jobs") == "legacy only"
 
     def test_serialize_job_helpers_include_requested_fields(self, test_db):
         repo = _create_repo(test_db)
-        job = CheckJob(
-            repository_id=repo.id,
-            status="completed",
-            started_at=datetime(2026, 1, 1, 12, 0, 0),
-            completed_at=datetime(2026, 1, 1, 12, 5, 0),
-            progress=100,
-            progress_message="done",
-            error_message=None,
-            logs="line 1",
-            has_logs=True,
+        job = MaintenanceJobFacade(
+            test_db,
+            seed_job_operation(
+                test_db,
+                "check",
+                repository_id=repo.id,
+                status="completed",
+                started_at=datetime(2026, 1, 1, 12, 0, 0),
+                completed_at=datetime(2026, 1, 1, 12, 5, 0),
+                progress=100,
+                progress_message="done",
+                error_message=None,
+                logs="line 1",
+            ),
         )
 
         status_payload = serialize_job_status(
@@ -73,7 +84,9 @@ class TestMaintenanceJobsHelpers:
 
     def test_serialize_job_helpers_apply_log_save_policy(self, test_db):
         repo = _create_repo(test_db)
-        job = CheckJob(
+        job = seed_job_operation(
+            test_db,
+            "check",
             repository_id=repo.id,
             status="completed",
             started_at=datetime(2026, 1, 1, 12, 0, 0),
@@ -100,7 +113,9 @@ class TestMaintenanceJobsHelpers:
 
     def test_serialize_job_helpers_keep_running_logs_visible(self, test_db):
         repo = _create_repo(test_db)
-        job = CheckJob(
+        job = seed_job_operation(
+            test_db,
+            "check",
             repository_id=repo.id,
             status="running",
             started_at=datetime(2026, 1, 1, 12, 0, 0),

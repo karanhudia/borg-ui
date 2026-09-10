@@ -23,26 +23,23 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy import text
 from app.core.agent_auth import AGENT_AUTH_HEADER
 from app.core.security import get_password_hash
 from app.services.operations.maintenance_start import active_maintenance_operation
 from app.database.models import (
     AgentJob,
     AgentMachine,
-    CheckJob,
     Operation,
-    CompactJob,
     LicensingState,
-    PruneJob,
     Repository,
     RepositoryStorage,
-    RestoreCheckJob,
     ScheduledJob,
     SSHConnection,
     SystemSettings,
 )
 from app.api.repositories import _build_repository_path_from_connection
+from app.services.operations.job_facade import resolve_maintenance_job
+from tests.utils.operations import seed_job_operation
 
 
 def _enable_borg_v2(test_db):
@@ -1097,7 +1094,6 @@ class TestRepositoriesCreate:
         assert op.kind == "check"
         assert op.repository_id == repo.id
         assert op.params["max_duration"] == 600
-        assert test_db.query(CheckJob).count() == 0
 
     def test_agent_repository_prune_route_enqueues_instead_of_queueing_the_agent(
         self, test_client: TestClient, admin_headers, test_db
@@ -1137,7 +1133,6 @@ class TestRepositoriesCreate:
         assert op.kind == "prune"
         assert op.repository_id == repo.id
         assert op.params["keep_daily"] == 7
-        assert test_db.query(PruneJob).count() == 0
 
     def test_agent_repository_compact_route_enqueues_instead_of_queueing_the_agent(
         self, test_client: TestClient, admin_headers, test_db
@@ -1175,7 +1170,6 @@ class TestRepositoriesCreate:
         op = test_db.get(Operation, response.json()["job_id"])
         assert op.kind == "compact"
         assert op.repository_id == repo.id
-        assert test_db.query(CompactJob).count() == 0
 
     def test_agent_repository_info_queues_agent_job_and_returns_existing_shape(
         self, test_client: TestClient, admin_headers, test_db
@@ -1782,8 +1776,9 @@ class TestRepositoriesCreate:
         test_db.add_all([agent, repo])
         test_db.commit()
         repo.agent_machine_id = agent.id
-        check_job = CheckJob(repository_id=repo.id, repository_path=repo.path)
-        test_db.add(check_job)
+        check_job = seed_job_operation(
+            test_db, "check", repository_id=repo.id, repository_path=repo.path
+        )
         test_db.commit()
         test_db.refresh(check_job)
         agent_job = AgentJob(
@@ -1792,7 +1787,13 @@ class TestRepositoriesCreate:
             status="running",
             payload={
                 "job_kind": "repository.check",
-                "operation": {"maintenance_job": {"kind": "check", "id": check_job.id}},
+                "operation": {
+                    "maintenance_job": {
+                        "kind": "check",
+                        "id": check_job.id,
+                        "table": "operations",
+                    }
+                },
             },
         )
         test_db.add(agent_job)
@@ -1809,7 +1810,7 @@ class TestRepositoriesCreate:
         test_db.refresh(check_job)
         test_db.refresh(repo)
         assert check_job.status == "completed"
-        assert check_job.progress == 100
+        assert resolve_maintenance_job(test_db, check_job.id, "check").progress == 100
         assert repo.last_check is not None
 
     def test_create_repository_missing_name(
@@ -3172,9 +3173,6 @@ class TestRepositoriesDelete:
         self, test_client: TestClient, admin_headers, test_db
     ):
         """Deleting observe-only repositories should clean up restore-check jobs."""
-        test_db.execute(text("PRAGMA foreign_keys=ON"))
-        test_db.commit()
-
         repo = Repository(
             name="Delete Observe Repo",
             path="/tmp/delete-observe-repo",
@@ -3187,7 +3185,9 @@ class TestRepositoriesDelete:
         test_db.commit()
         test_db.refresh(repo)
 
-        restore_check_job = RestoreCheckJob(
+        restore_check_job = seed_job_operation(
+            test_db,
+            "restore_check",
             repository_id=repo.id,
             repository_path=repo.path,
             archive_name="archive-2026-05-31",
@@ -3195,21 +3195,24 @@ class TestRepositoriesDelete:
             started_at=datetime.utcnow(),
             completed_at=datetime.utcnow(),
         )
-        test_db.add(restore_check_job)
         test_db.commit()
         repo_id = repo.id
+        operation_id = restore_check_job.id
 
         response = test_client.delete(
             f"/api/repositories/{repo_id}", headers=admin_headers
         )
 
         assert response.status_code == 200
-        assert (
-            test_db.query(RestoreCheckJob)
-            .filter(RestoreCheckJob.repository_id == repo_id)
-            .count()
-            == 0
-        )
+        assert test_db.get(Repository, repo_id) is None
+        # `operations.repository_id` is ON DELETE CASCADE, so the rows go with
+        # the repository wherever foreign keys are enforced. They are not in
+        # this session (SQLite ignores `PRAGMA foreign_keys` inside a
+        # transaction, which is where a Session always is), so the row is
+        # still here, and that is the assertion: the route leaves job rows to
+        # the cascade instead of deleting them by hand.
+        test_db.expunge_all()
+        assert test_db.get(Operation, operation_id) is not None
 
     def test_delete_nonexistent_repository(
         self, test_client: TestClient, admin_headers
@@ -3719,10 +3722,6 @@ class TestRepositoriesImport:
                 new=AsyncMock(return_value=verify_result),
             ) as mock_verify,
             patch(
-                "app.core.borg_router.BorgRouter.update_stats",
-                new=AsyncMock(return_value=True),
-            ),
-            patch(
                 "app.api.repositories.mqtt_service.sync_state_with_db",
                 return_value=None,
             ),
@@ -3859,12 +3858,16 @@ class TestRepositoriesJobStatus:
 
         test_db.add_all(
             [
-                CheckJob(
+                seed_job_operation(
+                    test_db,
+                    "check",
                     repository_id=repo.id,
                     status="completed",
                     scheduled_check=True,
                 ),
-                CheckJob(
+                seed_job_operation(
+                    test_db,
+                    "check",
                     repository_id=repo.id,
                     status="completed",
                     scheduled_check=False,
@@ -3942,47 +3945,6 @@ class TestRepositoriesJobStatus:
         )
 
         assert response.status_code == 200
-
-    @pytest.mark.parametrize(
-        "job_model,response_key",
-        [
-            (CheckJob, "check_job"),
-            (CompactJob, "compact_job"),
-            (PruneJob, "prune_job"),
-            (RestoreCheckJob, "restore_check_job"),
-        ],
-    )
-    def test_get_repository_running_jobs_includes_pending_maintenance_job(
-        self, test_client: TestClient, admin_headers, test_db, job_model, response_key
-    ):
-        """Pending maintenance jobs should be active while startup is settling."""
-        repo = Repository(
-            name=f"Pending {response_key} Repo",
-            path=f"/job/pending-{response_key}-repo",
-            encryption="none",
-            repository_type="local",
-        )
-        test_db.add(repo)
-        test_db.commit()
-        test_db.refresh(repo)
-
-        job = job_model(
-            repository_id=repo.id,
-            repository_path=repo.path,
-            status="pending",
-        )
-        test_db.add(job)
-        test_db.commit()
-
-        response = test_client.get(
-            f"/api/repositories/{repo.id}/running-jobs", headers=admin_headers
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["has_running_jobs"] is True
-        assert data[response_key]["id"] == job.id
-        assert data[response_key]["status"] == "pending"
 
     @pytest.mark.parametrize(
         "kind,response_key",

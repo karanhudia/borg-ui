@@ -5,7 +5,7 @@ import psutil
 import structlog
 from dataclasses import dataclass, fields
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional
 
 from app.database.database import get_db
 from app.database.models import (
@@ -15,7 +15,6 @@ from app.database.models import (
     Repository,
     ScheduledJob,
     ScheduledJobRepository,
-    RestoreCheckJob,
     SSHConnection,
     SystemSettings,
 )
@@ -40,6 +39,7 @@ from app.utils.schedule_time import (
 
 logger = structlog.get_logger()
 router = APIRouter()
+
 
 RESTORE_CHECK_WARNING_DAYS = 14
 RESTORE_CHECK_CRITICAL_DAYS = 30
@@ -179,9 +179,8 @@ def classify_day_age(days: int, warning_days: int, critical_days: int) -> str:
     return "healthy"
 
 
-# A restore check row from either table (spec section 14): the legacy model
-# until phase 9, the facade over an `operations` row since phase 5.
-LatestRestoreCheck = Union[RestoreCheckJob, MaintenanceJobFacade]
+# A restore check row, as the facade over its `operations` row.
+LatestRestoreCheck = MaintenanceJobFacade
 
 
 def build_restore_check_health(
@@ -1083,8 +1082,6 @@ async def get_dashboard_overview(
         # Get activity for the last 14 days — matches the timeline window exactly
         fourteen_days_ago = now - timedelta(days=14)
         recent_backups = backup_jobs_started_since(db, fourteen_days_ago)
-        # Maintenance kinds live in `operations` since phase 5 and in their
-        # legacy tables before it; the timeline reads both (spec section 14).
         recent_maintenance = [
             (kind, label, maintenance_jobs_started_since(db, kind, fourteen_days_ago))
             for kind, label in (

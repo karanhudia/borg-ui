@@ -6,8 +6,10 @@ from unittest.mock import AsyncMock, Mock, call, patch
 import pytest
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import Repository, RestoreJob, SSHConnection
+from app.database.models import Repository, SSHConnection
 from app.services.restore_service import RestoreService
+from app.services.operations.restore_facade import resolve_restore_job
+from tests.utils.operations import seed_job_operation
 
 
 class AsyncReadStream:
@@ -97,16 +99,18 @@ def restore_repository(db_session):
 
 @pytest.fixture
 def restore_job(db_session, restore_repository, tmp_path):
-    job = RestoreJob(
+    """The restore the service drives, through the facade that carries the
+    attribute surface it reads (`repository`, `archive`, `destination`)."""
+    job = seed_job_operation(
+        db_session,
+        "restore",
         repository=restore_repository.path,
         archive="archive-1",
         destination=str(tmp_path / "restore-target"),
         status="pending",
     )
-    db_session.add(job)
     db_session.commit()
-    db_session.refresh(job)
-    return job
+    return resolve_restore_job(db_session, job.id)
 
 
 @pytest.fixture
@@ -233,11 +237,7 @@ class TestRestoreServiceRouting:
             )
 
         verification = testing_session_local()
-        refreshed = (
-            verification.query(RestoreJob)
-            .filter(RestoreJob.id == restore_job.id)
-            .first()
-        )
+        refreshed = resolve_restore_job(verification, restore_job.id)
         assert refreshed.status == "failed"
         assert "unsupportedExecutionMode" in refreshed.error_message
         verification.close()
@@ -316,11 +316,7 @@ class TestRestoreServiceExecution:
             )
 
         verification = testing_session_local()
-        refreshed = (
-            verification.query(RestoreJob)
-            .filter(RestoreJob.id == restore_job.id)
-            .first()
-        )
+        refreshed = resolve_restore_job(verification, restore_job.id)
         assert refreshed.status == "failed"
         assert "failedCreateDestinationDir" in refreshed.error_message
         verification.close()
@@ -373,11 +369,7 @@ class TestRestoreServiceExecution:
             )
 
         verification = testing_session_local()
-        refreshed = (
-            verification.query(RestoreJob)
-            .filter(RestoreJob.id == restore_job.id)
-            .first()
-        )
+        refreshed = resolve_restore_job(verification, restore_job.id)
         assert refreshed.status == "completed"
         assert refreshed.progress == 100
         assert refreshed.progress_percent == 100.0
@@ -573,11 +565,7 @@ class TestRestoreServiceExecution:
             )
 
         verification = testing_session_local()
-        refreshed = (
-            verification.query(RestoreJob)
-            .filter(RestoreJob.id == restore_job.id)
-            .first()
-        )
+        refreshed = resolve_restore_job(verification, restore_job.id)
         assert refreshed.status == "failed"
         assert "restoreFailedZeroFilesPermission" in refreshed.error_message
         notification_mock.send_restore_failure.assert_awaited_once()
@@ -631,11 +619,7 @@ class TestRestoreServiceExecution:
             )
 
         verification = testing_session_local()
-        refreshed = (
-            verification.query(RestoreJob)
-            .filter(RestoreJob.id == restore_job.id)
-            .first()
-        )
+        refreshed = resolve_restore_job(verification, restore_job.id)
         assert refreshed.status == "completed_with_warnings"
         assert "restoreCompletedWithWarnings" in refreshed.error_message
         notification_mock.send_restore_success.assert_awaited_once()
@@ -676,11 +660,7 @@ class TestRestoreServiceExecution:
             )
 
         verification = testing_session_local()
-        refreshed = (
-            verification.query(RestoreJob)
-            .filter(RestoreJob.id == restore_job.id)
-            .first()
-        )
+        refreshed = resolve_restore_job(verification, restore_job.id)
         assert refreshed.status == "failed"
         assert "restoreFailedExitCode" in refreshed.error_message
         notification_mock.send_restore_failure.assert_awaited_once()
@@ -744,7 +724,6 @@ class TestRestoreServiceExecution:
         assert details.restored_size == 10
         assert details.nfiles == 1
         assert details.current_file == "docs/report.txt"
-        assert verification.query(RestoreJob).count() == 0
         notification_mock.send_restore_success.assert_awaited_once()
 
     @pytest.mark.unit

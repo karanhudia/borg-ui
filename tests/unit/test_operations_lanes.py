@@ -2,15 +2,9 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import (
-    BackupJob,
-    Base,
-    CheckJob,
-    PruneJob,
-    Repository,
-    SystemSettings,
-)
+from app.database.models import Base, Repository, SystemSettings
 from app.services.operations import lanes
+from app.services.operations.details import backup_details
 from app.services.operations.enqueue import enqueue
 
 
@@ -83,23 +77,10 @@ def test_exclusive_does_not_block_other_repo(db, repo, settings):
 
 
 @pytest.mark.unit
-def test_legacy_running_backup_blocks_lane(db, repo, settings):
-    db.add(
-        BackupJob(repository=repo.path, repository_id=repo.id, status="running_prune")
-    )
-    db.commit()
-    assert lanes.legacy_running_exclusive(db, repo.id) is True
-    op = enqueue(db, "history_index", repository_id=repo.id)
-    assert lanes.can_start(db, op, settings) is False
-
-
-@pytest.mark.unit
-def test_legacy_completed_check_does_not_block(db, repo, settings):
-    db.add(
-        CheckJob(repository_id=repo.id, repository_path=repo.path, status="completed")
-    )
-    db.commit()
-    assert lanes.legacy_running_exclusive(db, repo.id) is False
+def test_a_running_backup_operation_blocks_the_lane(db, repo, settings):
+    _running(db, "backup", repo)
+    check = enqueue(db, "check", repository_id=repo.id)
+    assert lanes.can_start(db, check, settings) is False
 
 
 @pytest.mark.unit
@@ -191,8 +172,8 @@ def test_bypass_does_not_start_a_listing_while_write_maintenance_runs(
     op = enqueue(db, "archive_sync", repository_id=repo.id, trigger="followup")
 
     # a running backup is what bypass is for: the listing may start
-    backup = BackupJob(repository=repo.path, repository_id=repo.id, status="running")
-    db.add(backup)
+    backup = _running(db, "backup", repo)
+    details = backup_details(db, backup)
     db.commit()
     assert lanes.write_maintenance_running(db, repo.id) is False
     assert lanes.can_start(db, op, settings) is True
@@ -200,11 +181,11 @@ def test_bypass_does_not_start_a_listing_while_write_maintenance_runs(
     # the plan moved on to prune: same backup row, its maintenance_status
     # (status stays a backup status)
     backup.status = "completed"
-    backup.maintenance_status = "running_prune"
+    details.maintenance_status = "running_prune"
     db.commit()
     assert lanes.write_maintenance_running(db, repo.id) is True
     assert lanes.can_start(db, op, settings) is False
-    backup.maintenance_status = "prune_completed"
+    details.maintenance_status = "prune_completed"
     db.commit()
     assert lanes.write_maintenance_running(db, repo.id) is False
 
@@ -216,19 +197,7 @@ def test_bypass_does_not_start_a_listing_while_write_maintenance_runs(
     db.commit()
     assert lanes.can_start(db, op, settings) is True
 
-    # a legacy prune job row on its own: pending counts (admission refuses
-    # listings from creation on), running too
-    prune = PruneJob(repository_id=repo.id, status="pending")
-    db.add(prune)
-    db.commit()
-    assert lanes.can_start(db, op, settings) is False
-    prune.status = "running"
-    db.commit()
-    assert lanes.can_start(db, op, settings) is False
-
     # a running compact operation on its own
-    prune.status = "completed"
-    db.commit()
     compact = _running(db, "compact", repo)
     assert lanes.can_start(db, op, settings) is False
     compact.status = "completed"

@@ -4,7 +4,6 @@ import pytest
 
 from app.database.models import (
     Operation,
-    PruneJob,
     Repository,
     ScriptExecution,
     UserRepositoryPermission,
@@ -38,17 +37,11 @@ class TestActivityUnion:
         assert body[0]["status"] == "queued"
         assert body[0]["repository"] == "r"
 
-    def test_legacy_and_operations_merge_ordered_by_time(
-        self, test_client, test_db, admin_headers
-    ):
+    def test_two_operations_ordered_by_time(self, test_client, test_db, admin_headers):
         repo = _repo(test_db)
-        old = PruneJob(
-            repository_id=repo.id,
-            repository_path=repo.path,
-            status="completed",
-            started_at=utc_now() - timedelta(hours=2),
-        )
-        test_db.add(old)
+        old = enqueue(test_db, "prune", repository_id=repo.id)
+        old.status = "completed"
+        old.started_at = utc_now() - timedelta(hours=2)
         test_db.commit()
         op = enqueue(test_db, "import_connect", repository_id=repo.id, trigger="import")
         op.status = "completed"
@@ -180,27 +173,16 @@ class TestActivityUnion:
         ).json()
         assert [i["type"] for i in body] == ["stats"]
 
-    def test_trigger_filter_applies_to_legacy_rows(
+    def test_trigger_filter_applies_to_every_source(
         self, test_client, test_db, admin_headers
     ):
         repo = _repo(test_db)
-        test_db.add(
-            PruneJob(
-                repository_id=repo.id,
-                repository_path=repo.path,
-                status="completed",
-                started_at=utc_now(),
-                scheduled_prune=True,
-            )
-        )
-        test_db.add(
-            PruneJob(
-                repository_id=repo.id,
-                repository_path=repo.path,
-                status="completed",
-                started_at=utc_now(),
-            )
-        )
+        scheduled = enqueue(test_db, "prune", repository_id=repo.id, trigger="schedule")
+        scheduled.status = "completed"
+        scheduled.started_at = utc_now()
+        manual = enqueue(test_db, "prune", repository_id=repo.id)
+        manual.status = "completed"
+        manual.started_at = utc_now()
         test_db.commit()
         body = test_client.get(
             "/api/activity/recent?trigger=schedule", headers=admin_headers
@@ -332,13 +314,9 @@ class TestActivityUnion:
         test_db.commit()
         test_db.refresh(other)
 
-        old = PruneJob(
-            repository_id=mine.id,
-            repository_path=mine.path,
-            status="completed",
-            started_at=utc_now() - timedelta(hours=5),
-        )
-        test_db.add(old)
+        old = enqueue(test_db, "prune", repository_id=mine.id)
+        old.status = "completed"
+        old.started_at = utc_now() - timedelta(hours=5)
         test_db.commit()
         mine_op = enqueue(test_db, "import_connect", repository_id=mine.id)
         mine_op.status = "completed"

@@ -4,8 +4,10 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import Repository, RestoreCheckJob
+from app.database.models import Repository
 from app.services.restore_check_service import RestoreCheckService
+from app.services.operations.job_facade import resolve_maintenance_job
+from tests.utils.operations import seed_job_operation
 
 
 class FakeRestoreCheckProcess:
@@ -71,13 +73,14 @@ def restore_check_repository(db_session):
 
 @pytest.fixture
 def restore_check_job(db_session, restore_check_repository):
-    job = RestoreCheckJob(
+    job = seed_job_operation(
+        db_session,
+        "restore_check",
         repository_id=restore_check_repository.id,
         repository_path=restore_check_repository.path,
         status="pending",
         full_archive=True,
     )
-    db_session.add(job)
     db_session.commit()
     db_session.refresh(job)
     return job
@@ -115,7 +118,9 @@ async def test_restore_check_success_without_borg_output_saves_summary_logs(
         )
 
     verification = testing_session_local()
-    refreshed_job = verification.get(RestoreCheckJob, restore_check_job.id)
+    refreshed_job = resolve_maintenance_job(
+        verification, restore_check_job.id, "restore_check"
+    )
 
     assert refreshed_job.status == "completed"
     assert refreshed_job.has_logs is True
@@ -165,7 +170,9 @@ async def test_restore_check_warning_exit_completes_with_warnings(
         )
 
     verification = testing_session_local()
-    refreshed_job = verification.get(RestoreCheckJob, restore_check_job.id)
+    refreshed_job = resolve_maintenance_job(
+        verification, restore_check_job.id, "restore_check"
+    )
     refreshed_repo = verification.get(Repository, restore_check_repository.id)
 
     assert refreshed_job.status == "completed_with_warnings"
@@ -209,7 +216,9 @@ async def test_restore_check_error_exit_still_fails(
         )
 
     verification = testing_session_local()
-    refreshed_job = verification.get(RestoreCheckJob, restore_check_job.id)
+    refreshed_job = resolve_maintenance_job(
+        verification, restore_check_job.id, "restore_check"
+    )
     refreshed_repo = verification.get(Repository, restore_check_repository.id)
 
     assert refreshed_job.status == "failed"
@@ -270,13 +279,14 @@ async def test_restore_check_canary_missing_payload_needs_backup_and_saves_logs(
     db_session,
     restore_check_repository,
 ):
-    job = RestoreCheckJob(
+    job = seed_job_operation(
+        db_session,
+        "restore_check",
         repository_id=restore_check_repository.id,
         repository_path=restore_check_repository.path,
         status="pending",
         full_archive=False,
     )
-    db_session.add(job)
     db_session.commit()
     db_session.refresh(job)
 
@@ -303,7 +313,7 @@ async def test_restore_check_canary_missing_payload_needs_backup_and_saves_logs(
         await service.execute_restore_check(job.id, restore_check_repository.id)
 
     verification = testing_session_local()
-    refreshed_job = verification.get(RestoreCheckJob, job.id)
+    refreshed_job = resolve_maintenance_job(verification, job.id, "restore_check")
     refreshed_repo = verification.get(Repository, restore_check_repository.id)
 
     assert refreshed_job.status == "needs_backup"
@@ -325,13 +335,14 @@ async def test_restore_check_canary_without_archives_saves_actionable_logs(
     db_session,
     restore_check_repository,
 ):
-    job = RestoreCheckJob(
+    job = seed_job_operation(
+        db_session,
+        "restore_check",
         repository_id=restore_check_repository.id,
         repository_path=restore_check_repository.path,
         status="pending",
         full_archive=False,
     )
-    db_session.add(job)
     db_session.commit()
     db_session.refresh(job)
 
@@ -352,7 +363,7 @@ async def test_restore_check_canary_without_archives_saves_actionable_logs(
         await service.execute_restore_check(job.id, restore_check_repository.id)
 
     verification = testing_session_local()
-    refreshed_job = verification.get(RestoreCheckJob, job.id)
+    refreshed_job = resolve_maintenance_job(verification, job.id, "restore_check")
 
     assert refreshed_job.status == "needs_backup"
     assert refreshed_job.progress == 100
@@ -447,13 +458,14 @@ async def test_borg2_restore_check_extracts_by_aid_selector(
     db_session.add(repo)
     db_session.commit()
     db_session.refresh(repo)
-    job = RestoreCheckJob(
+    job = seed_job_operation(
+        db_session,
+        "restore_check",
         repository_id=repo.id,
         repository_path=repo.path,
         status="pending",
         full_archive=True,
     )
-    db_session.add(job)
     db_session.commit()
     db_session.refresh(job)
 
@@ -481,7 +493,7 @@ async def test_borg2_restore_check_extracts_by_aid_selector(
         await service.execute_restore_check(job.id, repo.id)
 
     verification = testing_session_local()
-    refreshed_job = verification.get(RestoreCheckJob, job.id)
+    refreshed_job = resolve_maintenance_job(verification, job.id, "restore_check")
 
     # The newest archive of the series, addressed by id - never by the name.
     assert FakeBorg2SeriesRouter.captured_extract_archives == ["aid:ef56gh78ab12cd34"]

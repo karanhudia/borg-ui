@@ -25,13 +25,9 @@ from app.database.database import get_db
 from app.database.models import AgentMachine, Repository, User
 from app.services.agent_artifact_relay import agent_artifact_relay
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
-from app.services.delete_archive_service import delete_archive_service
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.operations.enqueue import enqueue
-from app.services.operations.job_facade import (
-    MaintenanceJobFacade,
-    resolve_maintenance_job,
-)
+from app.services.operations.job_facade import resolve_maintenance_job
 from app.services.operations.maintenance_start import active_delete_for_archive
 from app.services.repository_executor import (
     is_agent_executor,
@@ -674,12 +670,10 @@ async def cancel_delete_job(
         repo = db.query(Repository).filter(Repository.id == job.repository_id).first()
         if repo:
             check_repo_access(db, current_user, repo, "operator")
-        if isinstance(job, MaintenanceJobFacade):
-            from app.services.operations.runner import operation_runner
+        # The runner owns the kill and writes the terminal status (spec 7.7).
+        from app.services.operations.runner import operation_runner
 
-            await operation_runner.request_cancel(job_id)
-        else:
-            await delete_archive_service.cancel_delete(job_id, db)
+        await operation_runner.request_cancel(job_id)
         return {"message": "backend.success.archives.deletionCancelled"}
     except HTTPException:
         raise

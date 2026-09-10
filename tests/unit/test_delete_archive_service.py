@@ -4,7 +4,10 @@ from unittest.mock import AsyncMock, mock_open, patch
 
 import pytest
 
-from app.database.models import BackupJob, DeleteArchiveJob, Repository
+from app.database.models import Repository
+from app.services.operations.job_facade import resolve_maintenance_job
+from app.database.models import OperationBackupDetails
+from tests.utils.operations import seed_job_operation
 from app.services.delete_archive_service import (
     DeleteArchiveService,
     get_process_start_time,
@@ -67,8 +70,15 @@ def test_get_process_start_time_returns_zero_on_error():
 async def test_execute_delete_marks_missing_repository_failed(
     delete_service, db_session_commit
 ):
-    job = DeleteArchiveJob(repository_id=999, archive_name="daily-1", status="pending")
-    db_session_commit.add(job)
+    # No repository: `operations.repository_id` is a real foreign key, so the
+    # "repository is gone" case is a row that names none.
+    job = seed_job_operation(
+        db_session_commit,
+        "delete_archive",
+        repository_id=None,
+        archive_name="daily-1",
+        status="pending",
+    )
     db_session_commit.commit()
     db_session_commit.refresh(job)
     job_id = job.id
@@ -79,11 +89,7 @@ async def test_execute_delete_marks_missing_repository_failed(
     ):
         await delete_service.execute_delete(job_id, 999, "daily-1")
 
-    refreshed = (
-        db_session_commit.query(DeleteArchiveJob)
-        .filter(DeleteArchiveJob.id == job_id)
-        .first()
-    )
+    refreshed = resolve_maintenance_job(db_session_commit, job_id, "delete_archive")
     assert refreshed.status == "failed"
     assert "Repository not found" in refreshed.error_message
     assert refreshed.completed_at is not None
@@ -101,12 +107,20 @@ async def test_execute_delete_completes_and_persists_logs(
     db_session_commit.commit()
     db_session_commit.refresh(repo)
 
-    job = DeleteArchiveJob(
-        repository_id=repo.id, archive_name="daily-1", status="pending"
+    job = seed_job_operation(
+        db_session_commit,
+        "delete_archive",
+        repository_id=repo.id,
+        archive_name="daily-1",
+        status="pending",
     )
     # the backup that created the archive: its row must survive the delete
-    backup = BackupJob(
-        repository_id=repo.id, status="completed", archive_name="daily-1"
+    backup = seed_job_operation(
+        db_session_commit,
+        "backup",
+        repository_id=repo.id,
+        status="completed",
+        archive_name="daily-1",
     )
     db_session_commit.add_all([job, backup])
     db_session_commit.commit()
@@ -131,16 +145,12 @@ async def test_execute_delete_completes_and_persists_logs(
     ):
         await delete_service.execute_delete(job_id, repo.id, "daily-1")
 
-    refreshed = (
-        db_session_commit.query(DeleteArchiveJob)
-        .filter(DeleteArchiveJob.id == job_id)
-        .first()
-    )
+    refreshed = resolve_maintenance_job(db_session_commit, job_id, "delete_archive")
     assert refreshed.status == "completed"
     assert refreshed.progress == 100
     assert refreshed.has_logs is True
     assert refreshed.log_file_path is not None
-    backup_row = db_session_commit.get(BackupJob, backup_id)
+    backup_row = db_session_commit.get(OperationBackupDetails, backup_id)
     assert backup_row is not None and backup_row.archive_pruned_at is not None
 
 
@@ -156,8 +166,12 @@ async def test_execute_delete_marks_warning_exit_codes(
     db_session_commit.commit()
     db_session_commit.refresh(repo)
 
-    job = DeleteArchiveJob(
-        repository_id=repo.id, archive_name="daily-1", status="pending"
+    job = seed_job_operation(
+        db_session_commit,
+        "delete_archive",
+        repository_id=repo.id,
+        archive_name="daily-1",
+        status="pending",
     )
     db_session_commit.add(job)
     db_session_commit.commit()
@@ -182,11 +196,7 @@ async def test_execute_delete_marks_warning_exit_codes(
     ):
         await delete_service.execute_delete(job_id, repo.id, "daily-1")
 
-    refreshed = (
-        db_session_commit.query(DeleteArchiveJob)
-        .filter(DeleteArchiveJob.id == job_id)
-        .first()
-    )
+    refreshed = resolve_maintenance_job(db_session_commit, job_id, "delete_archive")
     assert refreshed.status == "completed_with_warnings"
     assert "exit code 100" in refreshed.error_message
 
@@ -194,13 +204,14 @@ async def test_execute_delete_marks_warning_exit_codes(
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_cancel_delete_marks_running_job_cancelled(delete_service, db_session):
-    job = DeleteArchiveJob(
+    job = seed_job_operation(
+        db_session,
+        "delete_archive",
         repository_id=1,
         archive_name="daily-1",
         status="running",
         started_at=datetime.utcnow(),
     )
-    db_session.add(job)
     db_session.commit()
     db_session.refresh(job)
 

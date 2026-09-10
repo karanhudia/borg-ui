@@ -37,7 +37,7 @@ def _resolve_source_connection(
 
     Checks two places because the connection is stored differently by mode:
     - SSHFS pull mode:      repository.source_ssh_connection_id
-    - Remote SSH push mode: BackupJob.source_ssh_connection_id
+    - Remote SSH push mode: the backup's source_ssh_connection_id
 
     Returns the SSHConnection or None if the backup is local.
     """
@@ -155,7 +155,7 @@ class ScriptLibraryExecutor:
             repository_id: Repository ID
             hook_type: 'pre-backup' or 'post-backup'
             backup_result: 'success', 'failure', 'warning' (required for post-backup)
-            backup_job_id: BackupJob ID for execution tracking
+            backup_job_id: backup operation id for execution tracking
 
         Returns:
             Dict with execution results:

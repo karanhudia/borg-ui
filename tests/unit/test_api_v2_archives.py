@@ -7,12 +7,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.database.models import (
-    DeleteArchiveJob,
     LicensingState,
     Repository,
     SystemSettings,
 )
 from app.services.archive_browse_service import parse_archive_items
+from tests.utils.operations import seed_job_operation
 
 
 def _enable_borg_v2(test_db, *, fast_browse=False):
@@ -1031,7 +1031,6 @@ class TestV2ArchiveRoutes:
         assert op.kind == "delete_archive"
         assert op.params["archive_name"] == "archive-1"
         assert op.repository_id == repo.id
-        assert test_db.query(DeleteArchiveJob).count() == 0
 
     def test_delete_archive_rejects_duplicate_running_job(
         self, test_client: TestClient, admin_headers, test_db
@@ -1067,7 +1066,9 @@ class TestV2ArchiveRoutes:
         settings.log_save_policy = "all_jobs"
         log_file = tmp_path / "delete.log"
         log_file.write_text("archive deleted")
-        job = DeleteArchiveJob(
+        job = seed_job_operation(
+            test_db,
+            "delete_archive",
             repository_id=1,
             repository_path="/tmp/v2-archive-repo",
             archive_name="archive-1",
@@ -1077,7 +1078,6 @@ class TestV2ArchiveRoutes:
             log_file_path=str(log_file),
             has_logs=True,
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -1101,7 +1101,9 @@ class TestV2ArchiveRoutes:
         settings.log_save_policy = "failed_only"
         log_file = tmp_path / "delete.log"
         log_file.write_text("archive deleted", encoding="utf-8")
-        job = DeleteArchiveJob(
+        job = seed_job_operation(
+            test_db,
+            "delete_archive",
             repository_id=1,
             repository_path="/tmp/v2-archive-repo",
             archive_name="archive-1",
@@ -1111,7 +1113,6 @@ class TestV2ArchiveRoutes:
             log_file_path=str(log_file),
             has_logs=True,
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 

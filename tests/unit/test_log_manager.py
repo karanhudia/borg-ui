@@ -13,7 +13,6 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 
 from app.services.log_manager import LogManager, log_manager
-from app.database.models import BackupJob, RestoreJob
 
 
 @pytest.fixture
@@ -139,73 +138,37 @@ class TestGetRunningJobLogPaths:
 
         assert result == set()
 
-    def test_running_backup_job(self, log_manager_with_temp_dir):
-        """Should return log path for running backup job"""
+    def test_running_operation(self, log_manager_with_temp_dir):
+        """Should return the log path of a running operation"""
         mock_db = Mock()
-
-        running_backup = Mock(spec=BackupJob)
-        running_backup.log_file_path = "/data/logs/backup_job_1.log"
-        running_backup.status = "running"
-
-        # Mock query chain
-        def mock_query(model):
-            query_mock = Mock()
-            if model == BackupJob:
-                query_mock.filter.return_value.all.return_value = [running_backup]
-            else:
-                query_mock.filter.return_value.all.return_value = []
-            return query_mock
-
-        mock_db.query = mock_query
+        running = Mock()
+        running.log_file_path = "/data/logs/operation_1.log"
+        running.status = "running"
+        mock_db.query.return_value.filter.return_value.all.return_value = [running]
 
         result = log_manager_with_temp_dir.get_running_job_log_paths(mock_db)
 
-        assert "/data/logs/backup_job_1.log" in result
+        assert "/data/logs/operation_1.log" in result
 
-    def test_multiple_running_jobs(self, log_manager_with_temp_dir):
-        """Should return all running job log paths"""
+    def test_multiple_running_operations(self, log_manager_with_temp_dir):
+        """Should return every running operation's log path"""
         mock_db = Mock()
-
-        running_backup = Mock(spec=BackupJob)
-        running_backup.log_file_path = "/data/logs/backup_job_1.log"
-
-        running_restore = Mock(spec=RestoreJob)
-        running_restore.log_file_path = "/data/logs/restore_job_1.log"
-
-        def mock_query(model):
-            query_mock = Mock()
-            if model == BackupJob:
-                query_mock.filter.return_value.all.return_value = [running_backup]
-            elif model == RestoreJob:
-                query_mock.filter.return_value.all.return_value = [running_restore]
-            else:
-                query_mock.filter.return_value.all.return_value = []
-            return query_mock
-
-        mock_db.query = mock_query
+        backup = Mock(log_file_path="/data/logs/operation_1.log")
+        restore = Mock(log_file_path="/data/logs/operation_2.log")
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            backup,
+            restore,
+        ]
 
         result = log_manager_with_temp_dir.get_running_job_log_paths(mock_db)
 
-        assert len(result) == 2
-        assert "/data/logs/backup_job_1.log" in result
-        assert "/data/logs/restore_job_1.log" in result
+        assert result == {"/data/logs/operation_1.log", "/data/logs/operation_2.log"}
 
-    def test_job_without_log_path(self, log_manager_with_temp_dir):
-        """Should handle jobs without log_file_path attribute"""
+    def test_operation_without_log_path(self, log_manager_with_temp_dir):
+        """Should handle an operation with no log file"""
         mock_db = Mock()
-
-        running_job = Mock(spec=BackupJob)
-        running_job.log_file_path = None  # No log file
-
-        def mock_query(model):
-            query_mock = Mock()
-            if model == BackupJob:
-                query_mock.filter.return_value.all.return_value = [running_job]
-            else:
-                query_mock.filter.return_value.all.return_value = []
-            return query_mock
-
-        mock_db.query = mock_query
+        running = Mock(log_file_path=None)
+        mock_db.query.return_value.filter.return_value.all.return_value = [running]
 
         result = log_manager_with_temp_dir.get_running_job_log_paths(mock_db)
 
@@ -381,22 +344,12 @@ class TestCleanupLogsCombined:
         """Should protect running job logs in combined cleanup"""
         large_content = "X" * (1024 * 1024)  # 1 MB
 
-        # Create running job
-        running_job = Mock(spec=BackupJob)
+        # A running operation whose log must survive
         protected_log = create_test_log_file("running.log", large_content, age_days=40)
-        running_job.log_file_path = str(protected_log)
+        running_job = Mock(log_file_path=str(protected_log))
 
         mock_db = Mock()
-
-        def mock_query(model):
-            query_mock = Mock()
-            if model == BackupJob:
-                query_mock.filter.return_value.all.return_value = [running_job]
-            else:
-                query_mock.filter.return_value.all.return_value = []
-            return query_mock
-
-        mock_db.query = mock_query
+        mock_db.query.return_value.filter.return_value.all.return_value = [running_job]
 
         # Create non-protected old log
         create_test_log_file("old.log", large_content, age_days=40)

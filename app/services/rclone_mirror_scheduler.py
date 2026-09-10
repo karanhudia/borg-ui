@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from app.database.models import (
     Operation,
     OperationRcloneDetails,
-    RcloneSyncJob,
     Repository,
     RepositoryStorage,
 )
@@ -59,7 +58,7 @@ def _scheduled_job_exists(
 ) -> bool:
     """True when this repository already has a mirror run for this slot, so a
     second scheduler tick does not enqueue a duplicate."""
-    exists = (
+    return (
         db.query(Operation.id)
         .join(
             OperationRcloneDetails,
@@ -70,18 +69,6 @@ def _scheduled_job_exists(
             Operation.kind == "rclone_sync",
             Operation.trigger == "schedule",
             OperationRcloneDetails.scheduled_for == scheduled_for,
-        )
-        .first()
-    )
-    if exists is not None:
-        return True
-    # Pre-phase-6 rows only; goes away with the table in phase 9.
-    return (
-        db.query(RcloneSyncJob.id)
-        .filter(
-            RcloneSyncJob.repository_id == repository_id,
-            RcloneSyncJob.triggered_by == "schedule",
-            RcloneSyncJob.scheduled_for == scheduled_for,
         )
         .first()
         is not None

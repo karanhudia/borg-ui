@@ -11,7 +11,6 @@ from sqlalchemy import text
 from app.config import settings
 from app.database.models import (
     AgentMachine,
-    BackupJob,
     BackupPlan,
     BackupPlanRepository,
     BackupPlanRun,
@@ -65,6 +64,7 @@ def _plan_backup_seam(fake_execute_backup):
 
 
 from app.services.schedule_availability import AvailabilityDecision
+from tests.utils.operations import seed_job_operation
 
 
 def _json_snapshot(value):
@@ -1179,7 +1179,9 @@ class TestBackupPlanRoutes:
         _set_log_save_policy(test_db, "failed_only")
         repo = _create_repo(test_db, "Primary", "/repos/primary")
         _plan, run = _create_execution_plan(test_db, [repo])
-        backup_job = BackupJob(
+        backup_job = seed_job_operation(
+            test_db,
+            "backup",
             repository=repo.path,
             repository_id=repo.id,
             backup_plan_run_id=run.id,
@@ -1188,7 +1190,6 @@ class TestBackupPlanRoutes:
             completed_at=datetime.utcnow(),
             logs="quiet successful transcript",
         )
-        test_db.add(backup_job)
         test_db.flush()
         run_repo = (
             test_db.query(BackupPlanRunRepository)
@@ -1196,7 +1197,7 @@ class TestBackupPlanRoutes:
             .one()
         )
         run_repo.status = "completed"
-        run_repo.backup_job_id = backup_job.id
+        run_repo.backup_operation_id = backup_job.id
         test_db.commit()
 
         response = test_client.get(
@@ -2410,7 +2411,9 @@ class TestBackupPlanRoutes:
     ):
         repo = _create_repo(test_db, "Primary", "/repos/primary")
         plan, run = _create_execution_plan(test_db, [repo])
-        backup_job = BackupJob(
+        backup_job = seed_job_operation(
+            test_db,
+            "backup",
             repository=repo.path,
             repository_id=repo.id,
             backup_plan_id=plan.id,
@@ -2420,7 +2423,6 @@ class TestBackupPlanRoutes:
             completed_at=datetime.utcnow(),
             created_at=datetime.utcnow(),
         )
-        test_db.add(backup_job)
         test_db.commit()
 
         activity_response = test_client.get(
@@ -2877,59 +2879,6 @@ class TestBackupPlanRoutes:
         assert body["run"]["repositories"][0]["status"] == "cancelled"
         assert body["cancelled_repositories"] == 1
 
-    def test_cancel_backup_plan_run_cancels_running_backup_job(
-        self, test_client: TestClient, admin_headers, test_db
-    ):
-        repo = _create_repo(test_db, "Primary", "/repos/primary")
-        create_response = test_client.post(
-            "/api/backup-plans/",
-            json=_payload([repo.id]),
-            headers=admin_headers,
-        )
-        plan_id = create_response.json()["id"]
-        run = BackupPlanRun(
-            backup_plan_id=plan_id,
-            trigger="manual",
-            status="running",
-            created_at=datetime.utcnow(),
-        )
-        test_db.add(run)
-        test_db.flush()
-        backup_job = BackupJob(
-            repository=repo.path,
-            repository_id=repo.id,
-            backup_plan_id=plan_id,
-            backup_plan_run_id=run.id,
-            status="running",
-            created_at=datetime.utcnow(),
-        )
-        test_db.add(backup_job)
-        test_db.flush()
-        test_db.add(
-            BackupPlanRunRepository(
-                backup_plan_run_id=run.id,
-                repository_id=repo.id,
-                backup_job_id=backup_job.id,
-                status="running",
-            )
-        )
-        test_db.commit()
-
-        with patch(
-            "app.services.backup_plan_execution_service.backup_service.cancel_backup",
-            return_value=True,
-        ) as cancel_backup:
-            response = test_client.post(
-                f"/api/backup-plans/runs/{run.id}/cancel", headers=admin_headers
-            )
-
-        assert response.status_code == 200
-        cancel_backup.assert_called_once_with(backup_job.id)
-        body = response.json()
-        assert body["run"]["status"] == "cancelled"
-        assert body["run"]["repositories"][0]["backup_job"]["status"] == "cancelled"
-        assert body["processes_terminated"] == 1
-
     def test_cancel_backup_plan_run_cancels_an_operation_backed_child(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -3016,7 +2965,9 @@ class TestBackupPlanRoutes:
         )
         test_db.add(run)
         test_db.flush()
-        completed_job = BackupJob(
+        completed_job = seed_job_operation(
+            test_db,
+            "backup",
             repository=repo_a.path,
             repository_id=repo_a.id,
             backup_plan_id=plan_id,
@@ -3025,7 +2976,9 @@ class TestBackupPlanRoutes:
             completed_at=datetime.utcnow(),
             created_at=datetime.utcnow(),
         )
-        running_job = BackupJob(
+        running_job = seed_job_operation(
+            test_db,
+            "backup",
             repository=repo_b.path,
             repository_id=repo_b.id,
             backup_plan_id=plan_id,
@@ -3033,21 +2986,19 @@ class TestBackupPlanRoutes:
             status="running",
             created_at=datetime.utcnow(),
         )
-        test_db.add_all([completed_job, running_job])
-        test_db.flush()
         test_db.add_all(
             [
                 BackupPlanRunRepository(
                     backup_plan_run_id=run.id,
                     repository_id=repo_a.id,
-                    backup_job_id=completed_job.id,
+                    backup_operation_id=completed_job.id,
                     status="completed",
                     completed_at=datetime.utcnow(),
                 ),
                 BackupPlanRunRepository(
                     backup_plan_run_id=run.id,
                     repository_id=repo_b.id,
-                    backup_job_id=running_job.id,
+                    backup_operation_id=running_job.id,
                     status="running",
                 ),
                 BackupPlanRunRepository(
@@ -3059,9 +3010,10 @@ class TestBackupPlanRoutes:
         )
         test_db.commit()
 
+        # The runner owns the kill; the route only raises its flag.
         with patch(
-            "app.services.backup_plan_execution_service.backup_service.cancel_backup",
-            return_value=True,
+            "app.services.operations.runner.operation_runner.request_cancel",
+            new_callable=AsyncMock,
         ):
             response = test_client.post(
                 f"/api/backup-plans/runs/{run.id}/cancel", headers=admin_headers
@@ -3078,9 +3030,9 @@ class TestBackupPlanRoutes:
         assert statuses[repo_c.id] == "cancelled"
         assert body["cancelled_repositories"] == 2
         test_db.refresh(completed_job)
-        test_db.refresh(running_job)
         assert completed_job.status == "completed"
-        assert running_job.status == "cancelled"
+        # The running child's own operation is left to the runner, which owns
+        # the kill and writes the terminal status (spec 7.7).
 
     def test_retry_failed_backup_plan_run_creates_failed_only_run_with_lineage(
         self, test_client: TestClient, admin_headers, test_db, admin_user
@@ -3090,7 +3042,9 @@ class TestBackupPlanRoutes:
         plan, run = _create_execution_plan(test_db, [repo_a, repo_b])
         run.status = "failed"
         run.completed_at = datetime.utcnow()
-        failed_job = BackupJob(
+        failed_job = seed_job_operation(
+            test_db,
+            "backup",
             repository=repo_a.path,
             repository_id=repo_a.id,
             backup_plan_id=plan.id,
@@ -3099,7 +3053,9 @@ class TestBackupPlanRoutes:
             completed_at=datetime.utcnow(),
             created_at=datetime.utcnow(),
         )
-        completed_job = BackupJob(
+        completed_job = seed_job_operation(
+            test_db,
+            "backup",
             repository=repo_b.path,
             repository_id=repo_b.id,
             backup_plan_id=plan.id,
@@ -3440,7 +3396,6 @@ class TestBackupPlanRoutes:
         assert operation.execution_mode == "agent"
         assert details.route_strategy == "agent_direct"
         assert repo.source_directories is None
-        assert test_db.query(BackupJob).count() == 0
         link = (
             test_db.query(BackupPlanRunRepository)
             .filter(BackupPlanRunRepository.backup_plan_run_id == run.id)
@@ -5625,24 +5580,28 @@ class TestUniquePlanName:
 
 
 @pytest.mark.unit
-def test_serialize_backup_job_reports_a_pruned_archive():
+def test_serialize_backup_job_reports_a_pruned_archive(test_db):
     from datetime import datetime
 
     from app.api.backup_plans import _serialize_backup_job
-    from app.database.models import BackupJob
+    from app.services.operations.backup_facade import resolve_backup_job
 
-    job = BackupJob(
-        id=7,
+    pruned = seed_job_operation(
+        test_db,
+        "backup",
         repository="/srv/repo",
         status="completed",
         archive_name="host-old",
         archive_pruned_at=datetime(2026, 9, 7, 12, 30),
     )
-    payload = _serialize_backup_job(job, None)
+    payload = _serialize_backup_job(resolve_backup_job(test_db, pruned.id), None)
     assert payload["archive_name"] == "host-old"
     assert payload["archive_pruned_at"] == "2026-09-07T12:30:00+00:00"
+    kept = seed_job_operation(
+        test_db, "backup", repository="/srv/repo", status="completed"
+    )
     assert (
-        _serialize_backup_job(BackupJob(id=8, status="completed"), None)[
+        _serialize_backup_job(resolve_backup_job(test_db, kept.id), None)[
             "archive_pruned_at"
         ]
         is None

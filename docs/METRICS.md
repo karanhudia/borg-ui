@@ -82,7 +82,7 @@ Repository metrics:
 Backup metrics:
 
 - `borg_backup_jobs_total`
-- `borg_backup_orphaned_jobs_total`
+- `borg_backup_orphaned_jobs_total` (always empty since the job tables collapsed into `operations`; kept so existing dashboards keep parsing)
 - `borg_backup_last_job_success`
 - `borg_backup_last_duration_seconds`
 - `borg_backup_last_original_size_bytes`

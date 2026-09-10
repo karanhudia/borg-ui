@@ -7,7 +7,8 @@ from fastapi.testclient import TestClient
 from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
-from app.database.models import InstalledPackage, PackageInstallJob
+from app.database.models import InstalledPackage
+from tests.utils.operations import seed_job_operation
 
 
 @pytest.mark.unit
@@ -132,7 +133,12 @@ class TestPackagesAPI:
         test_db.commit()
         test_db.refresh(package)
 
-        job = PackageInstallJob(id=99, package_id=package.id, status="installing")
+        job = seed_job_operation(
+            test_db,
+            "package_install",
+            package_id=package.id,
+            status="installing",
+        )
 
         with patch(
             "app.api.packages.package_service.start_install_job",
@@ -144,7 +150,7 @@ class TestPackagesAPI:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["job_id"] == 99
+        assert data["job_id"] == job.id
         assert data["status"] == "installing"
         start_job.assert_awaited_once()
 
@@ -163,8 +169,9 @@ class TestPackagesAPI:
         test_db.commit()
         test_db.refresh(package)
 
-        existing_job = PackageInstallJob(package_id=package.id, status="pending")
-        test_db.add(existing_job)
+        existing_job = seed_job_operation(
+            test_db, "package_install", package_id=package.id, status="pending"
+        )
         test_db.commit()
         test_db.refresh(existing_job)
 
@@ -287,7 +294,9 @@ class TestPackagesAPI:
         test_db.commit()
         test_db.refresh(package)
 
-        job = PackageInstallJob(
+        job = seed_job_operation(
+            test_db,
+            "package_install",
             package_id=package.id,
             status="installing",
             started_at=datetime(2026, 4, 27, 3, 0, 6),
@@ -296,7 +305,6 @@ class TestPackagesAPI:
             stdout="",
             stderr="",
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -329,12 +337,16 @@ class TestPackagesAPI:
         test_db.commit()
         test_db.refresh(package)
 
-        job1 = PackageInstallJob(
+        job1 = seed_job_operation(
+            test_db,
+            "package_install",
             package_id=package.id,
             status="completed",
             started_at=datetime(2026, 4, 27, 3, 0, 6),
         )
-        job2 = PackageInstallJob(package_id=package.id, status="failed")
+        job2 = seed_job_operation(
+            test_db, "package_install", package_id=package.id, status="failed"
+        )
         test_db.add_all([job1, job2])
         test_db.commit()
 
@@ -396,7 +408,6 @@ class TestPackageInstallOperations:
         assert response.json()["job_id"] == operation.id
         assert operation.kind == "package_install"
         assert operation.params == {"package_id": package.id}
-        assert test_db.query(PackageInstallJob).count() == 0
 
     def test_install_returns_the_in_flight_operation_instead_of_a_second_one(
         self, test_client: TestClient, admin_headers, test_db
@@ -442,14 +453,21 @@ class TestPackageInstallOperations:
         assert body["stdout"] == "installed"
         assert body["stderr"] == ""
 
-    def test_job_status_still_serves_a_pre_phase_6_row(
+    def test_job_status_serves_a_row_seeded_from_the_legacy_columns(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        """The legacy table is gone; a caller that used to seed one of its
+        rows seeds the operation it became, and the route still answers with
+        the words and the output the row carried."""
         package = self._package(test_db, name="tree")
-        job = PackageInstallJob(
-            package_id=package.id, status="completed", exit_code=0, stdout="legacy out"
+        job = seed_job_operation(
+            test_db,
+            "package_install",
+            package_id=package.id,
+            status="completed",
+            exit_code=0,
+            stdout="legacy out",
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -462,19 +480,20 @@ class TestPackageInstallOperations:
         assert body["status"] == "completed"
         assert body["stdout"] == "legacy out"
 
-    def test_job_list_unions_operations_and_legacy_rows(
+    def test_job_list_returns_every_package_install_operation(
         self, test_client: TestClient, admin_headers, test_db
     ):
         package = self._package(test_db, name="ncdu")
         op = self._operation(test_db, package, status="completed")
-        legacy = PackageInstallJob(package_id=package.id, status="failed")
-        test_db.add(legacy)
+        other = seed_job_operation(
+            test_db, "package_install", package_id=package.id, status="failed"
+        )
         test_db.commit()
-        test_db.refresh(legacy)
+        test_db.refresh(other)
 
         response = test_client.get("/api/packages/jobs", headers=admin_headers)
 
         body = response.json()
         assert response.status_code == 200
         assert {item["status"] for item in body} == {"completed", "failed"}
-        assert {item["id"] for item in body} == {op.id, legacy.id}
+        assert {item["id"] for item in body} == {op.id, other.id}

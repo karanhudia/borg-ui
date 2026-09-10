@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import structlog
 
-from app.database.models import DeleteArchiveJob, Repository
+from app.database.models import Repository
 from app.database.database import SessionLocal
 from app.core.borg2 import borg2
 from app.config import settings
@@ -183,11 +183,7 @@ class DeleteArchiveV2Service:
                 "Borg2 delete archive service error", job_id=job_id, error=str(e)
             )
             try:
-                job = (
-                    db.query(DeleteArchiveJob)
-                    .filter(DeleteArchiveJob.id == job_id)
-                    .first()
-                )
+                job = resolve_maintenance_job(db, job_id, "delete_archive")
                 if job:
                     completed_at = datetime.now(timezone.utc)
 

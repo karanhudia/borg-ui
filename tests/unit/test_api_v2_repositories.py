@@ -16,7 +16,6 @@ from app.api.v2 import repositories as repositories_v2_api
 from app.core.borg2 import BORG2_ENCRYPTION_MODES
 from app.config import settings
 from app.database.models import (
-    BackupJob,
     BackupPlan,
     BackupPlanRun,
     LicensingState,
@@ -24,6 +23,7 @@ from app.database.models import (
     SystemSettings,
 )
 from app.database.models import SSHConnection, SSHKey
+from tests.utils.operations import seed_job_operation
 
 
 def _enable_borg_v2(test_db, **settings):
@@ -1171,7 +1171,9 @@ class TestV2RepositoryRoutes:
         test_db.add(run)
         test_db.flush()
         test_db.add(
-            BackupJob(
+            seed_job_operation(
+                test_db,
+                "backup",
                 repository=repo.path,
                 repository_id=repo.id,
                 backup_plan_id=plan.id,

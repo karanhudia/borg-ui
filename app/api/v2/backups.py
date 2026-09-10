@@ -262,7 +262,7 @@ async def compact_repository(
 ):
     """Compact a Borg 2 repository to reclaim disk space (non-blocking).
 
-    Creates a CompactJob record so the frontend can poll progress via the existing
+    Creates a compact operation so the frontend can poll progress via the existing
     GET /repositories/{id}/running-jobs endpoint — no frontend changes required.
     """
     if not current_user.is_admin:
@@ -304,7 +304,7 @@ async def check_repository(
 ):
     """Start a Borg 2 repository integrity check (non-blocking).
 
-    Creates a CheckJob record so the frontend can poll progress via the existing
+    Creates a check operation so the frontend can poll progress via the existing
     GET /repositories/check-jobs/{job_id} and GET /repositories/{id}/running-jobs
     endpoints — no frontend changes required.
     """
