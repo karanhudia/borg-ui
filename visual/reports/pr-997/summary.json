@@ -1,21 +1,39 @@
 {
-  "generatedAt": "2026-09-10T05:47:35.559Z",
+  "generatedAt": "2026-09-10T07:12:19.937Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #997 visual report",
-    "commitSha": "2867de8789de",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34441540722"
+    "commitSha": "7aae1a66bb0d",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34447785839"
   },
   "totals": {
     "baseline": 734,
     "actual": 752,
     "compared": 734,
-    "changed": 10,
+    "changed": 11,
     "added": 18,
     "removed": 0,
-    "unchanged": 724
+    "unchanged": 723
   },
   "changed": [
+    {
+      "fileName": "components-plangate--with-preview.png",
+      "baselinePath": "images/baseline/components-plangate--with-preview.png",
+      "actualPath": "images/actual/components-plangate--with-preview.png",
+      "diffPath": "images/diff/components-plangate--with-preview.png",
+      "diffPixels": 907259,
+      "totalPixels": 1024000,
+      "diffRatio": 0.8859951171875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
     {
       "fileName": "managed-agents-agentupgradebanner--mixed-targets--mobile.png",
       "baselinePath": "images/baseline/managed-agents-agentupgradebanner--mixed-targets--mobile.png",
@@ -1493,9 +1511,6 @@
     },
     {
       "fileName": "components-plangate--with-preview--mobile.png"
-    },
-    {
-      "fileName": "components-plangate--with-preview.png"
     },
     {
       "fileName": "components-planinfodrawer--community-upgrade-drawer--mobile.png"
