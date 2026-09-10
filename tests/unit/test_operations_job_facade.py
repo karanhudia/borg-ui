@@ -13,6 +13,7 @@ from app.services.operations.job_facade import (
     claim_running,
     legacy_status,
     operation_status,
+    resolve_agent_maintenance_job,
     resolve_maintenance_job,
 )
 
@@ -355,3 +356,93 @@ def test_stats_live_in_the_operation_result(db, repository):
     job.stats = None
     assert op.result == {"logs": True}
     assert job.stats is None
+
+
+def _twin_rows(db, repository):
+    """An operation and a legacy check row sharing one id, on two different
+    repositories: the two id spaces are independent sequences."""
+    from datetime import datetime
+
+    other = Repository(name="other", path="/repo/other", borg_version=1)
+    db.add(other)
+    db.commit()
+    operation = Operation(
+        kind="check",
+        category="maintenance",
+        status="running",
+        repository_id=repository.id,
+        run_id="run-twin",
+        created_at=datetime(2026, 9, 1),
+    )
+    db.add(operation)
+    db.flush()
+    legacy = CheckJob(
+        id=operation.id,
+        repository_id=other.id,
+        repository_path=other.path,
+        status="completed",
+        created_at=datetime(2026, 8, 1),
+    )
+    db.add(legacy)
+    db.commit()
+    return operation, legacy, other
+
+
+def _payload(job_id, **maintenance_extra):
+    return {
+        "job_kind": "repository.check",
+        "operation": {
+            "maintenance_job": {"kind": "check", "id": job_id, **maintenance_extra}
+        },
+    }
+
+
+def test_resolve_agent_job_follows_the_table_marker(db, repository):
+    operation, legacy, _ = _twin_rows(db, repository)
+
+    as_operation = resolve_agent_maintenance_job(
+        db, _payload(operation.id, table="operations")
+    )
+    as_legacy = resolve_agent_maintenance_job(
+        db, _payload(operation.id, table="check_jobs")
+    )
+
+    assert isinstance(as_operation, MaintenanceJobFacade)
+    assert as_operation.id == operation.id
+    assert as_legacy is legacy
+    assert resolve_agent_maintenance_job(db, _payload(operation.id, table="x")) is None
+
+
+def test_resolve_agent_job_breaks_a_table_less_tie_by_repository(db, repository):
+    operation, legacy, other = _twin_rows(db, repository)
+
+    payload = _payload(operation.id)
+    payload["repository"] = {"id": other.id, "path": other.path}
+    assert resolve_agent_maintenance_job(db, payload) is legacy
+
+    payload["repository"] = {"id": repository.id, "path": repository.path}
+    assert resolve_agent_maintenance_job(db, payload).id == operation.id
+
+    # a repository neither row belongs to: nothing, never another
+    # repository's row
+    payload["repository"] = {"id": other.id + repository.id + 1, "path": "/x"}
+    assert resolve_agent_maintenance_job(db, payload) is None
+
+    # no repository in the payload: the operation, as before the marker
+    assert isinstance(
+        resolve_agent_maintenance_job(db, _payload(operation.id)), MaintenanceJobFacade
+    )
+
+
+def test_resolve_agent_job_rejects_bad_shapes(db, repository):
+    assert resolve_agent_maintenance_job(db, None) is None
+    assert (
+        resolve_agent_maintenance_job(db, {"operation": {"maintenance_job": []}})
+        is None
+    )
+    assert resolve_agent_maintenance_job(db, _payload("not-a-number")) is None
+    assert resolve_agent_maintenance_job(db, _payload(0)) is None
+    payload = _payload(1)
+    payload["operation"]["maintenance_job"]["kind"] = "wipe"
+    assert resolve_agent_maintenance_job(db, payload) is None
+    assert resolve_agent_maintenance_job(db, _payload(1), kinds=("prune",)) is None

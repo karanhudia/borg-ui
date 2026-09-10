@@ -4160,6 +4160,11 @@
       "testing": "Probando",
       "unknown": "Desconocido"
     },
+    "restricted": {
+      "label": "Solo Borg",
+      "tooltip": "El shell remoto está restringido a Borg. La navegación y la información de almacenamiento no están disponibles en esta conexión.",
+      "storage": "Almacenamiento no disponible (solo Borg)"
+    },
     "storage": "Almacenamiento",
     "mountPoint": "Punto de montaje",
     "actions": {

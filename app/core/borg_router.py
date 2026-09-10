@@ -19,44 +19,51 @@ from app.utils.borg_env import effective_repository_remote_path
 logger = structlog.get_logger()
 
 
-def _fail_orphaned_maintenance_job(
-    db: Session, maintenance_kind: str, maintenance_job_id: int
+def _queue_failure_message(error: BaseException) -> str:
+    """The cause of a refused dispatch, for the row it leaves behind."""
+    from app.services.operations.maintenance_start import failure_text
+
+    return f"agent job could not be queued: {failure_text(error)}"
+
+
+async def _fail_orphaned_maintenance_job(
+    db: Session,
+    maintenance_kind: str,
+    maintenance_job_id: int,
+    error: BaseException,
 ) -> None:
-    """Mark a maintenance ``*_job`` failed when its agent job could not be queued.
+    """Fail the maintenance job whose agent job could not be queued.
 
-    Without this the row stays 'pending' with no backing work and blocks the
-    repository via admission control until a reaper eventually clears it.
+    The caller created the row before dispatch; left alone it stays active
+    with no work behind it and blocks the repository via admission control.
+    Since phase 5 that row is an `operations` row (a legacy ``*_jobs`` row
+    only on a pre-upgrade install), so the lookup goes through the facade
+    rather than the legacy tables: by legacy id the operation is never found,
+    or an unrelated old row is, and the operation stays `running` for good.
     """
-    from datetime import datetime
+    from app.database.models import utc_now
+    from app.services.operations.events import broadcast_operation_updated
+    from app.services.operations.job_facade import (
+        MaintenanceJobFacade,
+        resolve_maintenance_job,
+    )
 
-    from app.database.models import CheckJob, CompactJob, DeleteArchiveJob, PruneJob
-
-    models = {
-        "check": CheckJob,
-        "compact": CompactJob,
-        "prune": PruneJob,
-        "delete_archive": DeleteArchiveJob,
-    }
-    model = models.get(maintenance_kind)
-    if model is None:
-        return
     try:
         # The failed queue attempt (e.g. "database is locked") may have left this
         # session's transaction unusable, which would make the query below raise
         # and skip the update. Reset it first; the row was committed by the caller
         # before dispatch, so the rollback cannot lose it.
         db.rollback()
-        job = db.query(model).filter(model.id == maintenance_job_id).first()
+        job = resolve_maintenance_job(db, maintenance_job_id, maintenance_kind)
+        # The facade speaks the legacy vocabulary (`queued` reads as `pending`),
+        # so one check covers both shapes.
         if job is not None and job.status in ("pending", "running"):
             job.status = "failed"
-            if hasattr(job, "error_message"):
-                job.error_message = (
-                    job.error_message
-                    or "agent job could not be queued (dispatch failed)"
-                )
-            if hasattr(job, "completed_at"):
-                job.completed_at = job.completed_at or datetime.utcnow()
+            job.error_message = job.error_message or _queue_failure_message(error)
+            job.completed_at = job.completed_at or utc_now()
             db.commit()
+            if isinstance(job, MaintenanceJobFacade):
+                await broadcast_operation_updated(job.operation, db)
     except Exception:
         db.rollback()
 
@@ -562,13 +569,16 @@ class BorgRouter:
                     maintenance_job_kind=maintenance_kind,
                     maintenance_job_id=maintenance_job_id,
                 )
-            except Exception:
-                # The maintenance *_job row was created by the caller before this
-                # runs. If we cannot even queue the agent job (e.g. database is
-                # locked), no agent job will ever update it -> it would stay
-                # 'pending' forever and block the repo via admission. Fail it
-                # closed so it never orphans, then propagate the error.
-                _fail_orphaned_maintenance_job(db, maintenance_kind, maintenance_job_id)
+            except Exception as exc:
+                # The maintenance job row was created by the caller before this
+                # runs. If we cannot even queue the agent job (a refused
+                # admission, a locked database), no agent job will ever update
+                # it -> it would stay active forever and block the repo via
+                # admission. Fail it closed so it never orphans, then propagate
+                # the error.
+                await _fail_orphaned_maintenance_job(
+                    db, maintenance_kind, maintenance_job_id, exc
+                )
                 raise
             await dispatch_agent_job_best_effort(
                 db, agent_job, repository_id=repository.id
@@ -581,8 +591,11 @@ class BorgRouter:
             # post-backup flows that have no HTTP context. Translate to a plain
             # error so background maintenance doesn't surface an HTTP-specific
             # exception; the linked maintenance job already records the detail.
-            detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
-            raise RuntimeError(f"agent {maintenance_kind} failed: {detail}") from exc
+            from app.services.operations.maintenance_start import detail_text
+
+            raise RuntimeError(
+                f"agent {maintenance_kind} failed: {detail_text(exc.detail)}"
+            ) from exc
         finally:
             db.close()
 

@@ -141,6 +141,28 @@ against the backup row holding the lane in `running_prune`. An inline
 operation still gets a real row and the same follow-up chain a
 runner-dispatched one would get, just without the runner's queueing.
 
+The caller of an inline operation owns its terminal status. When the step
+raises instead of writing one (an agent job refused by admission because
+the backup's follow-up listing still holds the repository, a locked
+database), the caller closes the row as `failed` with the cause
+(`fail_inline_maintenance`) and the plan's or schedule's run records the
+failed step; the agent path does the same for the operation itself when
+its job cannot be queued. A row a live agent job is still carrying is not
+closed: the caller's wait may have given up on a prune the agent is still
+running (or one still queued for an offline agent, which holds the
+repository through admission on its own), and the agent's report closes
+it. A step that returns with the
+row still `running` (a service bug) is closed by `finish_inline_maintenance`
+with that reason. A `running` operation nobody
+closes counts as active write work and would refuse every backup of the
+repository until the next restart, so the agent job reaper also fails,
+once a minute, a `running` inline maintenance operation recorded as
+agent-executed (`execution_mode`, which only `start_inline_maintenance`
+sets for these kinds; a runner-dispatched operation is the runner's task
+and ends with it) that is older than a few minutes and has no live agent
+job behind it. Server-side operations are not reaped at runtime: a prune
+records no pid, so nothing there proves the row dead.
+
 A Borg 2 compact runs with `--stats` under `BORG_UNITS=raw` (the server
 adds `--info`, the level Borg prints the lines on there). The repository
 statistics Borg 2 reports only there ("Repository size is N B in M

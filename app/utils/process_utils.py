@@ -344,27 +344,56 @@ _ORPHAN_MAINTENANCE_MODELS = (
 )
 
 
-def _has_active_agent_job_for(
-    db: Session, maintenance_kind: str, maintenance_job_id: int
-) -> bool:
-    """True if a live agent job exists for this maintenance ``*_job``."""
+def active_agent_maintenance_jobs(db: Session) -> set[tuple[str, str, int]]:
+    """The `(table, kind, id)` of every maintenance job a live agent job is
+    carrying, read once so a reap pass can check many rows against it.
+    `operations` ids and the legacy `*_jobs` ids are separate sequences. A
+    payload that names no table predates the marker and may refer to
+    either (a pre-phase-5 legacy row, or an operation queued by the build
+    before this one), so it counts for both: an ambiguous reference keeps
+    a row alive rather than reaping a live one."""
+    from app.services.operations.job_facade import LEGACY_MODELS
+
     active = (
-        db.query(AgentJob)
+        db.query(AgentJob.payload)
         .filter(
             AgentJob.job_type == "repository",
             AgentJob.status.in_(_ACTIVE_AGENT_STATUSES),
         )
         .all()
     )
-    for agent_job in active:
-        payload = agent_job.payload if isinstance(agent_job.payload, dict) else {}
-        maintenance_job = (payload.get("operation") or {}).get("maintenance_job") or {}
-        if (
-            maintenance_job.get("kind") == maintenance_kind
-            and maintenance_job.get("id") == maintenance_job_id
-        ):
-            return True
-    return False
+    refs: set[tuple[str, str, int]] = set()
+    for (payload,) in active:
+        operation = payload.get("operation") if isinstance(payload, dict) else None
+        maintenance_job = (
+            operation.get("maintenance_job") if isinstance(operation, dict) else None
+        )
+        if not isinstance(maintenance_job, dict):
+            continue
+        kind, job_id = maintenance_job.get("kind"), maintenance_job.get("id")
+        if not kind or job_id is None:
+            continue
+        table = maintenance_job.get("table")
+        if table:
+            refs.add((table, kind, job_id))
+            continue
+        refs.add((Operation.__tablename__, kind, job_id))
+        model = LEGACY_MODELS.get(kind)
+        if model is not None:
+            refs.add((model.__tablename__, kind, job_id))
+    return refs
+
+
+def has_active_agent_job_for(
+    db: Session, maintenance_kind: str, maintenance_job_id: int, *, table: str
+) -> bool:
+    """True if a live agent job exists for this maintenance job: an
+    `operations` row or a legacy ``*_job``, as `table` says."""
+    return (
+        table,
+        maintenance_kind,
+        maintenance_job_id,
+    ) in active_agent_maintenance_jobs(db)
 
 
 def reconcile_orphaned_maintenance_jobs(
@@ -399,7 +428,7 @@ def reconcile_orphaned_maintenance_jobs(
         for job_id, created_at, repository_id in candidates:
             if created_at is not None and _strip_tz(created_at) > cutoff:
                 continue  # too fresh; its agent job may be queued a moment later
-            if _has_active_agent_job_for(db, kind, job_id):
+            if has_active_agent_job_for(db, kind, job_id, table=model.__tablename__):
                 continue  # dispatched, waiting for the agent
             # Fail closed with a guarded UPDATE: it only touches a row that is
             # STILL 'pending', so a concurrent dispatch that has meanwhile moved
@@ -427,7 +456,7 @@ def reconcile_orphaned_maintenance_jobs(
             # been queued between the check above and this UPDATE (status was
             # still 'pending' then). If so, preserve the dispatched job by
             # reverting rather than committing a spurious 'failed'.
-            if _has_active_agent_job_for(db, kind, job_id):
+            if has_active_agent_job_for(db, kind, job_id, table=model.__tablename__):
                 db.rollback()
                 continue
             db.commit()
@@ -438,6 +467,121 @@ def reconcile_orphaned_maintenance_jobs(
                 job_id=job_id,
                 repository_id=repository_id,
             )
+
+    return reaped
+
+
+def reconcile_orphaned_maintenance_operations(
+    db: Session,
+    *,
+    now: Optional[datetime] = None,
+    reap_after: timedelta = MAINTENANCE_RECONCILE_AFTER,
+    reaped_operation_ids: Optional[list[int]] = None,
+) -> int:
+    """Fail `running` maintenance operations of agent-executed repositories
+    that no agent job is working on.
+
+    A caller that runs maintenance inline (post-backup prune, compact, check)
+    creates the operation `running` and hands it to the agent; when the agent
+    job is refused or lost, only that caller could close the row. If it does
+    not, the operation counts as active write work and every backup of the
+    repository is refused until a restart. Startup recovery applies this
+    rule to every row; at runtime it is safe only where liveness is provable,
+    which is the agent case: the agent job carries the operation's id, so a
+    `running` operation with no live agent job has nothing behind it. The
+    executor is read from the row (`execution_mode`, recorded when the
+    inline operation was created), not from the repository's current
+    setting. A server-side operation is left alone: the Borg process runs
+    in this process, a prune records no pid, and the runner's own tasks
+    carry no marker on the row. The age guard covers the moment between
+    creating the row and queueing its agent job. The ids of the rows it
+    failed are appended to `reaped_operation_ids` (when given) so the caller,
+    which runs this in a worker thread, can broadcast the change from the
+    event loop.
+    """
+    from app.services.operations.job_facade import MAINTENANCE_KINDS
+    from app.services.operations.runner import operation_runner
+
+    now = _strip_tz(now or datetime.utcnow())
+    cutoff = now - reap_after
+
+    candidates = (
+        db.query(
+            Operation.id,
+            Operation.kind,
+            Operation.repository_id,
+            Operation.started_at,
+            Operation.created_at,
+        )
+        .filter(
+            Operation.kind.in_(MAINTENANCE_KINDS),
+            Operation.status == "running",
+            Operation.execution_mode == "agent",
+            Operation.process_pid.is_(None),
+        )
+        .all()
+    )
+    if not candidates:
+        return 0
+    live = active_agent_maintenance_jobs(db)
+    reaped = 0
+    for operation_id, kind, repository_id, started_at, created_at in candidates:
+        started = started_at or created_at
+        if started is not None and _strip_tz(started) > cutoff:
+            continue  # its agent job may be queued a moment later
+        if operation_id in operation_runner.running_tasks:
+            continue  # the runner is executing it in this process
+        if (Operation.__tablename__, kind, operation_id) in live:
+            continue  # dispatched, the agent is on it
+        # Guarded UPDATE, same shape as the legacy pass above: only a row that
+        # is still `running` is touched, so a caller that closed it meanwhile
+        # keeps its own terminal status. A locked database on one row must
+        # not end the pass for the others.
+        try:
+            updated = (
+                db.query(Operation)
+                .filter(Operation.id == operation_id, Operation.status == "running")
+                .update(
+                    {
+                        Operation.status: "failed",
+                        Operation.error_message: func.coalesce(
+                            Operation.error_message,
+                            "orphaned: no agent job is working on this operation",
+                        ),
+                        Operation.completed_at: func.coalesce(
+                            Operation.completed_at, now
+                        ),
+                    },
+                    synchronize_session=False,
+                )
+            )
+            if not updated:
+                db.rollback()  # closed by its caller between the read and the update
+                continue
+            if has_active_agent_job_for(
+                db, kind, operation_id, table=Operation.__tablename__
+            ):
+                db.rollback()  # queued between the read and the update
+                continue
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            logger.warning(
+                "Could not reap an orphaned maintenance operation",
+                operation_id=operation_id,
+                kind=kind,
+                error=str(exc),
+            )
+            continue
+        reaped += 1
+        if reaped_operation_ids is not None:
+            reaped_operation_ids.append(operation_id)
+        logger.info(
+            "Reaped orphaned running maintenance operation",
+            operation_id=operation_id,
+            kind=kind,
+            repository_id=repository_id,
+        )
 
     return reaped
 

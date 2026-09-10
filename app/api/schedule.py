@@ -24,6 +24,7 @@ from app.core.borg_router import BorgRouter
 from app.core.security import get_current_user, check_repo_access
 from app.config import settings
 from app.services.operations.maintenance_start import (
+    fail_inline_maintenance,
     finish_inline_maintenance,
     start_inline_maintenance,
 )
@@ -2348,6 +2349,10 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
             # Run prune/compact if enabled and backup succeeded
             refresh_backup_job(db, backup_job)
             if backup_job.status in ["completed", "completed_with_warnings"]:
+                # A prune step that raised leaves the repository in a state the
+                # next step cannot rely on: its agent may still be pruning (the
+                # wait gave up), so compact is skipped for this run.
+                maintenance_aborted = False
                 # Run prune if enabled
                 if scheduled_job.run_prune_after:
                     prune_job = None
@@ -2410,12 +2415,11 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                     except Exception as e:
                         # Ensure maintenance_status is always cleared even if commit fails
                         try:
+                            # Close the prune operation if it was created; it
+                            # rolls the session back, so it goes first.
+                            if prune_job is not None:
+                                await fail_inline_maintenance(db, prune_job, e)
                             backup_job.maintenance_status = "prune_failed"
-                            # Update the prune operation if it was created
-                            if prune_job:
-                                prune_job.status = "failed"
-                                prune_job.completed_at = datetime.now(timezone.utc)
-                                prune_job.error_message = str(e)
                             db.commit()
                         except Exception as commit_error:
                             logger.error(
@@ -2423,12 +2427,14 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                             )
                             # If commit fails, at least clear the running status in memory
                             backup_job.maintenance_status = None
+                        maintenance_aborted = True
                         logger.error(
                             "Scheduled prune failed", repository=repo.path, error=str(e)
                         )
 
                 # Run compact if enabled
-                if scheduled_job.run_compact_after:
+                if scheduled_job.run_compact_after and not maintenance_aborted:
+                    compact_job = None
                     try:
                         logger.info("Running scheduled compact", repository=repo.path)
                         compact_job = start_inline_maintenance(
@@ -2467,24 +2473,20 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                                 error=compact_job.error_message,
                             )
                     except Exception as e:
-                        backup_job.maintenance_status = "compact_failed"
-                        # Update CompactJob record if it was created
+                        # Ensure maintenance_status is always cleared even if commit fails
                         try:
-                            if "compact_job" in locals():
-                                db.refresh(compact_job)
-                                if compact_job.status not in [
-                                    "failed",
-                                    "cancelled",
-                                    "completed",
-                                ]:
-                                    compact_job.status = "failed"
-                                    compact_job.completed_at = datetime.now(
-                                        timezone.utc
-                                    )
-                                    compact_job.error_message = str(e)
-                        except:
-                            pass
-                        db.commit()
+                            # Close the compact operation if it was created; it
+                            # rolls the session back, so it goes first.
+                            if compact_job is not None:
+                                await fail_inline_maintenance(db, compact_job, e)
+                            backup_job.maintenance_status = "compact_failed"
+                            db.commit()
+                        except Exception as commit_error:
+                            logger.error(
+                                "Failed to update compact status",
+                                error=str(commit_error),
+                            )
+                            backup_job.maintenance_status = None
                         logger.error(
                             "Scheduled compact failed",
                             repository=repo.path,
@@ -2611,6 +2613,10 @@ async def execute_scheduled_backup_with_maintenance(
             )
             return
 
+        # A prune step that raised leaves the repository in a state the next
+        # step cannot rely on: its agent may still be pruning (the wait gave
+        # up), so compact is skipped for this run.
+        maintenance_aborted = False
         # Run prune if enabled
         if scheduled_job.run_prune_after:
             prune_job = None
@@ -2683,12 +2689,11 @@ async def execute_scheduled_backup_with_maintenance(
             except Exception as e:
                 # Ensure maintenance_status is always cleared even if commit fails
                 try:
+                    # Close the prune operation if it was created; it rolls
+                    # the session back, so it goes first.
+                    if prune_job is not None:
+                        await fail_inline_maintenance(db, prune_job, e)
                     backup_job.maintenance_status = "prune_failed"
-                    # Update the prune operation if it was created
-                    if prune_job:
-                        prune_job.status = "failed"
-                        prune_job.completed_at = datetime.now(timezone.utc)
-                        prune_job.error_message = str(e)
                     db.commit()
                 except Exception as commit_error:
                     logger.error(
@@ -2696,16 +2701,16 @@ async def execute_scheduled_backup_with_maintenance(
                     )
                     # If commit fails, at least clear the running status in memory
                     backup_job.maintenance_status = None
+                maintenance_aborted = True
                 logger.error(
                     "Failed to run scheduled prune",
                     scheduled_job_id=scheduled_job_id,
                     error=str(e),
                 )
 
-        # Run compact if enabled (only after successful prune or if prune not enabled)
-        if scheduled_job.run_compact_after and (
-            scheduled_job.run_prune_after or not scheduled_job.run_prune_after
-        ):
+        # Run compact if enabled, unless the prune step raised
+        if scheduled_job.run_compact_after and not maintenance_aborted:
+            compact_job = None
             try:
                 logger.info(
                     "Running scheduled compact",
@@ -2754,24 +2759,20 @@ async def execute_scheduled_backup_with_maintenance(
                     )
 
             except Exception as e:
-                backup_job.maintenance_status = "compact_failed"
-
-                # Update CompactJob record if it was created
+                # Ensure maintenance_status is always cleared even if commit fails
                 try:
-                    if "compact_job" in locals():
-                        db.refresh(compact_job)
-                        if compact_job.status not in [
-                            "failed",
-                            "cancelled",
-                            "completed",
-                        ]:
-                            compact_job.status = "failed"
-                            compact_job.completed_at = datetime.now(timezone.utc)
-                            compact_job.error_message = str(e)
-                except:
-                    pass
-
-                db.commit()
+                    # Close the compact operation if it was created; it rolls
+                    # the session back, so it goes first.
+                    if compact_job is not None:
+                        await fail_inline_maintenance(db, compact_job, e)
+                    backup_job.maintenance_status = "compact_failed"
+                    db.commit()
+                except Exception as commit_error:
+                    logger.error(
+                        "Failed to update compact status", error=str(commit_error)
+                    )
+                    # If commit fails, at least clear the running status in memory
+                    backup_job.maintenance_status = None
                 logger.error(
                     "Failed to run scheduled compact",
                     scheduled_job_id=scheduled_job_id,

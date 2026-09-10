@@ -8,7 +8,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Awaitable, Callable, Optional
 
 import structlog
 from fastapi import HTTPException
@@ -35,6 +35,8 @@ from app.database.models import (
     SSHKey,
 )
 from app.services.operations.maintenance_start import (
+    fail_inline_maintenance,
+    failure_text,
     finish_inline_maintenance,
     start_inline_maintenance,
 )
@@ -2094,11 +2096,59 @@ class BackupPlanExecutionService:
                 error=str(exc),
             )
             self._mark_repository_failed(
-                run_id, repository_context.repository_id, str(exc)
+                run_id, repository_context.repository_id, failure_text(exc)
             )
             return "failed"
         finally:
             db.close()
+
+    async def _run_inline_maintenance(
+        self,
+        db: Session,
+        backup_job: Any,
+        operation: Operation,
+        run_id: int,
+        step: Callable[[], Awaitable[Any]],
+    ) -> None:
+        """Drive one inline maintenance operation to a terminal status.
+
+        The router writes the status itself when the step runs. When it
+        raises instead (an agent job refused by admission, a lost database),
+        the operation the plan created `running` would otherwise stay that
+        way and block the repository until the next restart: it is closed
+        with the cause unless an agent is still working on it, the backup's
+        maintenance state records the failed step, and the error propagates
+        so the repository's run ends failed with that cause, as it did
+        before, instead of starting the next step on a repository whose
+        state is unknown."""
+        operation_id, kind = operation.id, operation.kind
+        try:
+            await step()
+        except Exception as exc:
+            closed = await fail_inline_maintenance(db, operation, exc)
+            try:
+                backup_job.maintenance_status = f"{kind}_failed"
+                db.commit()
+            except Exception as commit_error:
+                # the cause below must reach the run, not this commit's error
+                db.rollback()
+                logger.warning(
+                    "Could not record the failed maintenance step",
+                    run_id=run_id,
+                    operation_id=operation_id,
+                    error=str(commit_error),
+                )
+            logger.error(
+                "Backup plan maintenance step failed",
+                run_id=run_id,
+                operation_id=operation_id,
+                kind=kind,
+                operation_closed=closed,
+                error=str(exc),
+            )
+            raise
+        db.refresh(operation)
+        finish_inline_maintenance(db, operation)
 
     async def _run_maintenance(
         self,
@@ -2133,19 +2183,23 @@ class BackupPlanExecutionService:
             )
             backup_job.maintenance_status = "running_prune"
             db.commit()
-            await BorgRouter(repo).prune(
-                job_id=prune_job.id,
-                keep_hourly=context.prune_keep_hourly,
-                keep_daily=context.prune_keep_daily,
-                keep_weekly=context.prune_keep_weekly,
-                keep_monthly=context.prune_keep_monthly,
-                keep_quarterly=context.prune_keep_quarterly,
-                keep_yearly=context.prune_keep_yearly,
-                dry_run=False,
-                keep_within=context.prune_keep_within,
+            await self._run_inline_maintenance(
+                db,
+                backup_job,
+                prune_job,
+                run_id,
+                lambda: BorgRouter(repo).prune(
+                    job_id=prune_job.id,
+                    keep_hourly=context.prune_keep_hourly,
+                    keep_daily=context.prune_keep_daily,
+                    keep_weekly=context.prune_keep_weekly,
+                    keep_monthly=context.prune_keep_monthly,
+                    keep_quarterly=context.prune_keep_quarterly,
+                    keep_yearly=context.prune_keep_yearly,
+                    dry_run=False,
+                    keep_within=context.prune_keep_within,
+                ),
             )
-            db.refresh(prune_job)
-            finish_inline_maintenance(db, prune_job)
             if self._is_run_cancelled(run_id):
                 return "cancelled"
             if prune_job.status == "completed":
@@ -2169,9 +2223,13 @@ class BackupPlanExecutionService:
             )
             backup_job.maintenance_status = "running_compact"
             db.commit()
-            await BorgRouter(repo).compact(compact_job.id)
-            db.refresh(compact_job)
-            finish_inline_maintenance(db, compact_job)
+            await self._run_inline_maintenance(
+                db,
+                backup_job,
+                compact_job,
+                run_id,
+                lambda: BorgRouter(repo).compact(compact_job.id),
+            )
             if self._is_run_cancelled(run_id):
                 return "cancelled"
             if compact_job.status == "completed":
@@ -2199,9 +2257,13 @@ class BackupPlanExecutionService:
             )
             backup_job.maintenance_status = "running_check"
             db.commit()
-            await BorgRouter(repo).check(check_job.id)
-            db.refresh(check_job)
-            finish_inline_maintenance(db, check_job)
+            await self._run_inline_maintenance(
+                db,
+                backup_job,
+                check_job,
+                run_id,
+                lambda: BorgRouter(repo).check(check_job.id),
+            )
             if self._is_run_cancelled(run_id):
                 return "cancelled"
             if check_job.status == "completed":
