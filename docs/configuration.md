@@ -20,7 +20,7 @@ Most configuration is available in the UI under Settings. Use environment variab
 | `DATA_DIR` | `/data` | App database, logs, SSH material, generated secret |
 | `BORG_CACHE_DIR` | `/home/borg/.cache/borg` | Borg files/chunks cache directory. Keep the matching volume persistent for backup performance |
 | `SECRET_KEY` | generated | JWT/session signing key. Auto-generated into `/data/.secret_key` if omitted |
-| `INITIAL_ADMIN_PASSWORD` | `admin123` | Password for the first `admin` user |
+| `INITIAL_ADMIN_PASSWORD` | `admin123` | Password for the first `admin` user, used on first start only. Empty or whitespace-only counts as unset; surrounding whitespace is dropped |
 | `LOG_LEVEL` | `INFO` | Backend log level |
 | `LOCAL_MOUNT_POINTS` | `/local` | Comma-separated container paths shown as local mounts in the file browser |
 | `BASE_PATH` | empty | Sub-path deployment, for example `/borg-ui` |

@@ -701,10 +701,23 @@ async def create_first_user():
         user_count = db.query(User).count()
         if user_count == 0:
             # Create default admin user
-            # Use environment variable if set, otherwise use default
+            # Use environment variable if set, otherwise use default. A
+            # template with a blank password field (the Unraid template, a
+            # Compose file with `${INITIAL_ADMIN_PASSWORD:-}`) sets the
+            # variable to an empty string; that must not create an admin with
+            # an empty password, so empty or whitespace-only reads as unset.
+            # Surrounding whitespace is dropped from a real value too (an env
+            # file's trailing space would otherwise lock the operator out of
+            # an admin nobody can reset without a user), and said so.
             import os
 
-            default_password = os.getenv("INITIAL_ADMIN_PASSWORD", "admin123")
+            configured = os.getenv("INITIAL_ADMIN_PASSWORD", "")
+            default_password = configured.strip() or "admin123"
+            if configured.strip() and configured != configured.strip():
+                logger.warning(
+                    "Surrounding whitespace dropped from INITIAL_ADMIN_PASSWORD",
+                    username="admin",
+                )
             hashed_password = get_password_hash(default_password)
 
             admin_user = User(
