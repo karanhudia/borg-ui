@@ -5041,7 +5041,9 @@
     "copyToClipboard": "Copy to clipboard",
     "copied": "Copied!",
     "commandCopied": "Command copied to clipboard",
-    "copyFailed": "Failed to copy to clipboard"
+    "copyFailed": "Failed to copy to clipboard",
+    "remoteServeCommand": "Remote command (for restricted keys)",
+    "remoteServeCommandDesc": "Borg runs this on the repository host. A forced-command wrapper in authorized_keys must accept it."
   },
   "cronBuilderComponent": {
     "runEvery": "Run every",
@@ -5788,7 +5790,7 @@
         "adminAccessRequired": "Admin access required",
         "cannotEnableAsBackupSource": "Cannot enable as backup source: {{error}}",
         "connectionTestFailed": "SSH connection test failed: {{error}}",
-        "failedCollectStorage": "Failed to collect storage information",
+        "failedCollectStorage": "Storage information is unavailable: the remote shell does not allow df. Borg backups are not affected.",
         "failedGenerateKey": "Failed to generate SSH key: {{error}}",
         "invalidKeyType": "Invalid key type. Must be one of: {{types}}",
         "invalidPrivateKeyFormat": "Invalid private key format",
@@ -6052,6 +6054,7 @@
         "connectionDeleted": "SSH connection deleted successfully",
         "connectionTestFailed": "SSH connection test failed",
         "connectionTestSuccess": "SSH connection test successful",
+        "connectionTestSuccessRestricted": "SSH connection works. The remote shell is restricted to Borg, so browsing and storage information are unavailable.",
         "connectionUpdated": "SSH connection updated successfully",
         "sshKeyCreated": "SSH key created successfully",
         "sshKeyDeleted": "SSH key deleted successfully",

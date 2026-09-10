@@ -141,6 +141,9 @@ export default function CommandPreview({
   }
 
   const remotePathFlag = remotePath ? `--remote-path ${remotePath} ` : ''
+  // What the repository host's forced-command wrapper has to accept.
+  const remoteServeCommand =
+    repositoryLocation === 'ssh' ? `${remotePath || 'borg'} serve --umask=077` : ''
 
   // Generate init command
   const initCommand = generateBorgInitCommand({
@@ -392,6 +395,33 @@ export default function CommandPreview({
             }}
           >
             {t('commandPreview.initRepositoryDesc')}
+          </Typography>
+        </Box>
+      )}
+
+      {remoteServeCommand && (
+        <Box sx={{ mb: 2 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'primary.main',
+              fontWeight: 600,
+              mb: 0.5,
+              display: 'block',
+            }}
+          >
+            {t('commandPreview.remoteServeCommand')}
+          </Typography>
+          <CopyableCommandBox command={remoteServeCommand} />
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              mt: 0.5,
+              display: 'block',
+            }}
+          >
+            {t('commandPreview.remoteServeCommandDesc')}
           </Typography>
         </Box>
       )}

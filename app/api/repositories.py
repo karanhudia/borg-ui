@@ -52,7 +52,7 @@ from app.services.operations.enqueue import enqueue, wake_runner
 from app.services.operations.rclone_facade import RcloneSyncFacade
 from app.services.operations.repository_status import LastRuns, last_runs
 from app.core.authorization import authorize_request
-from app.core.security import get_current_user, check_repo_access, decrypt_secret
+from app.core.security import get_current_user, check_repo_access
 from app.core.borg import BorgInterface
 from app.core.borg_router import BorgRouter
 from app.core.borg_errors import is_lock_error
@@ -117,7 +117,6 @@ from app.services.rclone_repository_service import (
     normalize_rclone_relative_path,
     rclone_repository_service,
 )
-from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.datetime_utils import (
     parse_borg_archive_time,
     serialize_borg_archive_time,
@@ -146,7 +145,6 @@ from app.utils.borg_env import (
 )
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,  # noqa: F401
-    ssh_key_auth_args,
 )  # Backward-compatible patch target for tests
 
 logger = structlog.get_logger()
@@ -5881,89 +5879,6 @@ async def get_repository_statistics(
         raise HTTPException(
             status_code=500, detail={"key": "backend.errors.repo.failedToGetStatistics"}
         )
-
-
-async def check_remote_borg_installation(
-    host: str, username: str, port: int, ssh_key_id: int
-) -> Dict[str, Any]:
-    """Check if borg is installed on remote machine"""
-    temp_key_file = None
-    try:
-        logger.info(
-            "Checking remote borg installation", host=host, username=username, port=port
-        )
-
-        # Get SSH key from database
-        from app.database.models import SSHKey
-        from app.database.database import get_db
-        import tempfile
-
-        db = next(get_db())
-        ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
-        if not ssh_key:
-            return {"success": False, "error": "SSH key not found", "has_borg": False}
-
-        # Decrypt private key
-        private_key = decrypt_secret(ssh_key.private_key)
-
-        # Ensure private key ends with newline
-        if not private_key.endswith("\n"):
-            private_key += "\n"
-
-        # Create temporary key file
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-            f.write(private_key)
-            temp_key_file = f.name
-
-        os.chmod(temp_key_file, 0o600)
-
-        # Check for borg
-        borg_cmd = [
-            "ssh",
-            *ssh_key_auth_args(temp_key_file),
-            *host_key_ssh_opts(None),
-            "-o",
-            "ConnectTimeout=10",
-            "-p",
-            str(port),
-            f"{username}@{host}",
-            "which borg",
-        ]
-
-        borg_process = await asyncio.create_subprocess_exec(
-            *borg_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        borg_stdout, borg_stderr = await asyncio.wait_for(
-            borg_process.communicate(), timeout=15
-        )
-        has_borg = borg_process.returncode == 0
-
-        logger.info("Remote borg check completed", host=host, has_borg=has_borg)
-
-        return {
-            "success": True,
-            "has_borg": has_borg,
-            "borg_path": borg_stdout.decode().strip() if has_borg else None,
-        }
-
-    except asyncio.TimeoutError:
-        logger.error("Remote borg check timed out", host=host)
-        return {
-            "success": False,
-            "error": "Connection timeout while checking remote borg installation",
-            "has_borg": False,
-        }
-    except Exception as e:
-        logger.error(
-            "Failed to check remote borg installation", host=host, error=str(e)
-        )
-        return {"success": False, "error": str(e), "has_borg": False}
-    finally:
-        if temp_key_file and os.path.exists(temp_key_file):
-            try:
-                os.unlink(temp_key_file)
-            except Exception as e:
-                logger.warning("Failed to clean up temp SSH key", error=str(e))
 
 
 async def verify_existing_repository(

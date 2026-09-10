@@ -57,6 +57,36 @@ describe('CommandPreview', () => {
       expect(screen.getByText(/borg create/)).toBeInTheDocument()
     })
 
+    it('shows the remote serve command for SSH repositories', () => {
+      const { rerender } = render(
+        <CommandPreview
+          mode="create"
+          repositoryLocation="ssh"
+          repositoryPath="/backups/repo"
+          host="repo.example"
+          username="borg"
+          repositoryMode="full"
+          dataSource="local"
+        />
+      )
+      expect(screen.getByText('Remote command (for restricted keys)')).toBeInTheDocument()
+      expect(screen.getByText('borg serve --umask=077')).toBeInTheDocument()
+
+      rerender(
+        <CommandPreview
+          mode="create"
+          repositoryLocation="ssh"
+          repositoryPath="/backups/repo"
+          host="repo.example"
+          username="borg"
+          remotePath="/usr/local/bin/borg"
+          repositoryMode="full"
+          dataSource="local"
+        />
+      )
+      expect(screen.getByText('/usr/local/bin/borg serve --umask=077')).toBeInTheDocument()
+    })
+
     it('renders borg2 init and backup commands for Borg 2 repositories', () => {
       render(
         <CommandPreview

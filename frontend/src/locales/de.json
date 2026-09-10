@@ -5041,7 +5041,9 @@
     "copyToClipboard": "In Zwischenablage kopieren",
     "copied": "Kopiert!",
     "commandCopied": "Befehl in die Zwischenablage kopiert",
-    "copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen"
+    "copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen",
+    "remoteServeCommand": "Remote-Befehl (für eingeschränkte Schlüssel)",
+    "remoteServeCommandDesc": "Borg führt dies auf dem Repository-Host aus. Ein forced-command-Wrapper in authorized_keys muss ihn akzeptieren."
   },
   "cronBuilderComponent": {
     "runEvery": "Alle",
@@ -5788,7 +5790,7 @@
         "adminAccessRequired": "Administratorzugriff erforderlich",
         "cannotEnableAsBackupSource": "Kann nicht als Sicherungsquelle aktiviert werden: {{error}}",
         "connectionTestFailed": "SSH-Verbindungstest fehlgeschlagen: {{error}}",
-        "failedCollectStorage": "Speicherinformationen konnten nicht gesammelt werden",
+        "failedCollectStorage": "Speicherinformationen nicht verfügbar: Die Remote-Shell erlaubt kein df. Borg-Backups sind nicht betroffen.",
         "failedGenerateKey": "SSH-Schlüssel konnte nicht generiert werden: {{error}}",
         "invalidKeyType": "Ungültiger Schlüsseltyp. Muss einer der folgenden sein: {{types}}",
         "invalidPrivateKeyFormat": "Ungültiges Format des privaten Schlüssels",
@@ -6052,6 +6054,7 @@
         "connectionDeleted": "SSH-Verbindung erfolgreich gelöscht",
         "connectionTestFailed": "SSH-Verbindungstest fehlgeschlagen",
         "connectionTestSuccess": "SSH-Verbindungstest erfolgreich",
+        "connectionTestSuccessRestricted": "SSH-Verbindung funktioniert. Die Remote-Shell ist auf Borg beschränkt, daher sind Durchsuchen und Speicherinformationen nicht verfügbar.",
         "connectionUpdated": "SSH-Verbindung erfolgreich aktualisiert",
         "sshKeyCreated": "SSH-Schlüssel erfolgreich erstellt",
         "sshKeyDeleted": "SSH-Schlüssel erfolgreich gelöscht",
