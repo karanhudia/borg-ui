@@ -83,6 +83,15 @@ Mounts do not survive container restarts.
 
 FUSE is not available to the container. Check `/dev/fuse`, `SYS_ADMIN`, and AppArmor settings.
 
+### fusermount3: mount failed: Permission denied
+
+On Ubuntu 25.04 and newer, the host's own AppArmor profile for `fusermount3`
+restricts where FUSE filesystems may be mounted, and the container's
+`apparmor:unconfined` does not lift it. Confirm with
+`apparmor="DENIED" ... info="failed mntpnt match"` in `dmesg`, and see
+[Optional FUSE Access](installation#optional-fuse-access) for the host-side
+drop-in.
+
 ### Mount is busy
 
 Close shells, file browsers, or processes using the mounted path, then unmount again.

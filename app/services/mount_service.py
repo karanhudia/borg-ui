@@ -39,6 +39,21 @@ from app.utils.ssh_utils import ssh_key_auth_args, sshfs_key_auth_options
 
 logger = structlog.get_logger()
 
+# Ubuntu 25.04+ ships an enforced AppArmor profile on the setuid fusermount3
+# binary that only permits FUSE mount targets under a handful of roots (/tmp/**/
+# among them). Mounting under DATA_DIR is denied there with "failed mntpnt match",
+# so the SSHFS cache lives under /tmp. The path stays stable per repository, which
+# is what the borg files cache needs (see #681).
+SSHFS_CACHE_BASE = "/tmp/borg-ui/sshfs-cache"
+
+
+def stable_sshfs_temp_root(repository_id: int | None) -> str | None:
+    """Per-repository SSHFS mount root, stable across runs."""
+    if repository_id is None:
+        return None
+    return os.path.join(SSHFS_CACHE_BASE, f"repository-{repository_id}")
+
+
 NO_FUSE_SUPPORT_MARKERS = (
     "no fuse support",
     "borg mount not available",
@@ -214,16 +229,21 @@ class MountService:
         try:
             import glob
 
-            # Find all legacy /tmp roots and repository-stable cache roots.
+            # Legacy /tmp roots, the current cache root, and the DATA_DIR root
+            # used before the move to /tmp (kept so upgrades leave nothing behind).
+            stable_cache_parents = [
+                Path(SSHFS_CACHE_BASE),
+                Path(settings.data_dir) / "sshfs-cache",
+            ]
             temp_dirs = list(
                 dict.fromkeys(
                     [
                         *glob.glob("/tmp/sshfs_mount_*"),
-                        *glob.glob(
-                            str(
-                                Path(settings.data_dir) / "sshfs-cache" / "repository-*"
-                            )
-                        ),
+                        *[
+                            path
+                            for parent in stable_cache_parents
+                            for path in glob.glob(str(parent / "repository-*"))
+                        ],
                     ]
                 )
             )
@@ -235,12 +255,11 @@ class MountService:
                     tracked_temp_roots.add(mount_info.temp_root)
 
             active_mount_points = self._get_active_mount_points()
-            stable_cache_parent = Path(settings.data_dir) / "sshfs-cache"
 
             def is_stable_cache_root(temp_dir: str) -> bool:
                 temp_path = Path(temp_dir)
                 return (
-                    temp_path.parent == stable_cache_parent
+                    temp_path.parent in stable_cache_parents
                     and temp_path.name.startswith("repository-")
                 )
 

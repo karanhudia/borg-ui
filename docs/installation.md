@@ -396,6 +396,26 @@ container's privileges noticeably - Remote Direct Backups need neither. See
 [Mounting Archives](mounting) and
 [Remote Machines](ssh-keys#remote-source-backups).
 
+On Ubuntu 25.04 and newer, `apparmor:unconfined` on the container is not the
+whole story: the host ships an enforced AppArmor profile attached to the setuid
+`fusermount3` binary itself, which only permits FUSE mount targets under a few
+roots (`/tmp`, `/mnt`, `/media`, the user's home). Borg UI mounts SSHFS sources
+under `/tmp/borg-ui/sshfs-cache/`, which is allowed. If you mount archives or
+SSHFS sources somewhere else and see
+`fusermount3: mount failed: Permission denied` with
+`apparmor="DENIED" ... info="failed mntpnt match"` in the host's kernel log, add
+a drop-in for your path instead of editing the shipped profile:
+
+```
+# /etc/apparmor.d/local/fusermount3
+mount fstype={fuse,fuse.*} options=(nosuid,nodev) options in (ro,rw,noatime,dirsync,nodiratime,noexec,sync) -> /your/mount/base/**/,
+umount /your/mount/base/**/,
+```
+
+Then reload it with `sudo apparmor_parser -r /etc/apparmor.d/fusermount3`. The
+drop-in survives package updates. `sudo aa-complain fusermount3` is the quicker
+alternative, at the cost of dropping enforcement for all FUSE mounts.
+
 ## Docker Run
 
 For a quick test:
