@@ -1757,9 +1757,7 @@ export function AgentList({
                     }}
                   >
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      {onUpgradeMany &&
-                      agent.self_upgrade_supported === true &&
-                      agent.upgrade_status === 'outdated' ? (
+                      {onUpgradeMany && canUpgradeNow(agent) ? (
                         <Checkbox
                           size="small"
                           sx={{ p: 0.25, mr: 0.25 }}

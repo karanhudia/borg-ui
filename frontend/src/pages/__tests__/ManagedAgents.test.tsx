@@ -1481,6 +1481,11 @@ describe('AgentList fleet upgrades', () => {
     expect(screen.queryByRole('checkbox', { name: /select manual/i })).toBeNull()
   })
 
+  it('does not offer selection on an endpoint already waiting for a wave', () => {
+    renderList([outdated({ name: 'waiting', upgrade_state: 'queued' })], vi.fn())
+    expect(screen.queryByRole('checkbox', { name: /select waiting/i })).toBeNull()
+  })
+
   it('upgrades every selected endpoint in one request', async () => {
     const onUpgradeMany = vi.fn()
     renderList(
