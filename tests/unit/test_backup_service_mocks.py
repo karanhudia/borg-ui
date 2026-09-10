@@ -1,4 +1,7 @@
 import json
+import tempfile
+from pathlib import Path
+
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock, Mock
 from app.services.backup_service import BackupService
@@ -10,8 +13,14 @@ def _mock_backup_job(**fields):
     These tests run against a mocked session, so there is no operation to wrap
     in a facade; the service only reads and writes attributes, which a mock
     accepts. `resolve_backup_job` is patched to hand this back.
+
+    `log_file_path` is a real temporary file unless the caller says otherwise:
+    where the facade does the wrapping, its `logs` setter writes that path,
+    and a mock's attribute would resolve to a directory under the repository
+    root.
     """
     job = MagicMock()
+    fields.setdefault("log_file_path", str(Path(tempfile.mkdtemp()) / "operation.log"))
     for name, value in fields.items():
         setattr(job, name, value)
     return job
