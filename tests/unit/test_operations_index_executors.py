@@ -329,7 +329,8 @@ async def test_run_stats_agent_repository_leaves_size_alone_when_unmeasurable(
         index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
     )
 
-    async def fake_update(repository, session):
+    async def fake_update(repository, session, **kwargs):
+        assert kwargs == {"raise_busy": True}
         return True
 
     monkeypatch.setattr(
@@ -1002,7 +1003,8 @@ async def test_run_stats_refreshes_agent_repository_through_the_agent(
         index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
     )
 
-    async def fake_update(repository, session):
+    async def fake_update(repository, session, **kwargs):
+        assert kwargs == {"raise_busy": True}
         repository.total_size = "5.0 GB"
         session.commit()
         return True
@@ -1024,7 +1026,8 @@ async def test_run_stats_fails_when_agent_refresh_fails(db, repo, monkeypatch):
         index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
     )
 
-    async def fake_update(repository, session):
+    async def fake_update(repository, session, **kwargs):
+        assert kwargs == {"raise_busy": True}
         return False
 
     monkeypatch.setattr(
@@ -1032,6 +1035,33 @@ async def test_run_stats_fails_when_agent_refresh_fails(db, repo, monkeypatch):
     )
     outcome = await index_exec.run_stats(_ctx(db, repo, kind="stats"))
     assert outcome.status == "failed"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_stats_lets_the_repository_busy_refusal_reach_the_runner(
+    db, repo, monkeypatch
+):
+    """The admission's 409 is not a failure of the refresh: the runner defers
+    the operation on it, so the executor must not turn it into a verdict."""
+    from fastapi import HTTPException
+
+    monkeypatch.setattr(index_exec, "is_agent_executor", lambda repository: True)
+    refusal = HTTPException(
+        status_code=409,
+        detail={"key": "backend.errors.jobs.repositoryOperationActive"},
+    )
+
+    async def fake_update(repository, session, **kwargs):
+        assert kwargs["raise_busy"] is True
+        raise refusal
+
+    monkeypatch.setattr(
+        "app.api.repositories._update_agent_repository_stats", fake_update
+    )
+    with pytest.raises(HTTPException) as raised:
+        await index_exec.run_stats(_ctx(db, repo, kind="stats"))
+    assert raised.value is refusal
 
 
 @pytest.mark.unit
@@ -1091,3 +1121,213 @@ async def test_mqtt_failure_does_not_fail_operation(db, repo, monkeypatch):
     ):
         outcome = await index_exec.run_archive_sync(_ctx(db, repo))
     assert outcome.status == "completed"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_stats_raises_the_real_refusal_and_writes_nothing(
+    db, repo, monkeypatch
+):
+    """Composition: the list's refusal comes out of the real helper, through
+    run_stats, with the repository row untouched, so the runner's deferral
+    retries a refresh that has not half-happened."""
+    from fastapi import HTTPException
+
+    repo.executor_type = "agent"
+    repo.archive_count = 7
+    repo.total_size = "3.0 GB"
+    db.commit()
+    monkeypatch.setattr(index_exec, "is_agent_executor", lambda repository: True)
+    refusal = HTTPException(
+        status_code=409,
+        detail={"key": "backend.errors.jobs.repositoryOperationActive"},
+    )
+
+    def queue(session, repository, **kwargs):
+        raise refusal
+
+    with (
+        patch(
+            "app.services.repository_executor.queue_agent_repository_operation_job",
+            side_effect=queue,
+        ),
+        patch(
+            "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+            new=AsyncMock(),
+        ),
+        pytest.raises(HTTPException) as raised,
+    ):
+        await index_exec.run_stats(_ctx(db, repo, kind="stats"))
+    assert raised.value is refusal
+    db.refresh(repo)
+    assert (repo.archive_count, repo.total_size) == (7, "3.0 GB")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_stats_keeps_a_later_refusal_and_the_listing(db, repo, monkeypatch):
+    """The refusal lands on repo-info, after the agent paid for the listing:
+    not raised, since a deferral would repeat the listing; the count is
+    written and only the size is left as it was."""
+    from fastapi import HTTPException
+
+    repo.executor_type = "agent"
+    repo.archive_count = 7
+    repo.total_size = "3.0 GB"
+    db.commit()
+    monkeypatch.setattr(index_exec, "is_agent_executor", lambda repository: True)
+    refusal = HTTPException(
+        status_code=409,
+        detail={"key": "backend.errors.jobs.repositoryOperationActive"},
+    )
+
+    def queue(session, repository, **kwargs):
+        if kwargs["job_kind"] == "repository.rinfo":
+            raise refusal
+        return SimpleNamespace(id=1)
+
+    listing = json.dumps(
+        [
+            {"name": "a1", "time": "2026-09-01T01:00:00"},
+            {"name": "a2", "time": "2026-09-02T01:00:00"},
+        ]
+    )
+    with (
+        patch(
+            "app.services.repository_executor.queue_agent_repository_operation_job",
+            side_effect=queue,
+        ),
+        patch(
+            "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+            new=AsyncMock(),
+        ),
+        patch(
+            "app.services.repository_executor.wait_for_agent_repository_operation_job",
+            new=AsyncMock(return_value={"return_code": 0, "stdout": listing}),
+        ),
+        patch.object(index_exec, "_publish_mqtt_state"),
+    ):
+        outcome = await index_exec.run_stats(_ctx(db, repo, kind="stats"))
+    assert outcome.status == "completed"
+    db.refresh(repo)
+    assert (repo.archive_count, repo.total_size) == (2, "3.0 GB")
+
+
+def _agent_for(db, repo, *capabilities):
+    from app.core.security import get_password_hash
+    from app.database.models import AgentMachine
+
+    agent = AgentMachine(
+        name="m",
+        agent_id="agt_index",
+        token_hash=get_password_hash("t"),
+        token_prefix="t",
+        status="online",
+        capabilities=list(capabilities),
+    )
+    db.add(agent)
+    db.commit()
+    repo.executor_type = "agent"
+    repo.execution_target = "agent"
+    repo.agent_machine_id = agent.id
+    db.commit()
+    return agent
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("taken", [False, True])
+async def test_agent_listing_abandons_only_a_job_no_agent_took(
+    db, repo, monkeypatch, taken
+):
+    """A queued list job nobody waits for is the duplicate every later list
+    (stats, the next sync) is refused for, so the sync cancels it before it
+    reports the timeout. A job the agent claimed is left to the agent, or
+    to the reaper if the agent is gone."""
+    from fastapi import HTTPException
+
+    from app.database.models import AgentJob
+    from app.services.job_admission import ensure_repository_admission
+
+    _agent_for(db, repo, "repository.list_archives")
+    monkeypatch.setattr(index_exec, "is_agent_executor", lambda repository: True)
+
+    async def fake_wait(db_, job_id, **kwargs):
+        if taken:
+            job = db_.get(AgentJob, job_id)
+            job.status = "claimed"
+            db_.commit()
+        raise HTTPException(status_code=504, detail="timed out")
+
+    monkeypatch.setattr(
+        "app.services.repository_executor.wait_for_agent_repository_operation_job",
+        fake_wait,
+    )
+    monkeypatch.setattr(
+        "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+        AsyncMock(return_value=True),
+    )
+    with pytest.raises(HTTPException) as raised:
+        await index_exec.list_archives_for_repository(db, repo, {})
+    assert raised.value.status_code == 504
+    db.expire_all()
+    job = db.query(AgentJob).one()
+    if taken:
+        assert job.status == "claimed"
+        with pytest.raises(HTTPException):
+            ensure_repository_admission(db, repo, "repository.list_archives")
+    else:
+        assert job.status == "canceled"
+        ensure_repository_admission(db, repo, "repository.list_archives")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_agent_listing_reports_the_timeout_when_the_cancel_fails(
+    db, repo, monkeypatch
+):
+    """The cancel's own database failure is rolled back and logged, not
+    raised: the caller leaves with the timeout it came with, the job stays
+    queued, and the session is usable for the runner's own verdict."""
+    from fastapi import HTTPException
+    from sqlalchemy.exc import OperationalError
+
+    from app.database.models import AgentJob
+
+    _agent_for(db, repo, "repository.list_archives")
+    monkeypatch.setattr(index_exec, "is_agent_executor", lambda repository: True)
+
+    async def fake_wait(db_, job_id, **kwargs):
+        raise HTTPException(status_code=504, detail="timed out")
+
+    monkeypatch.setattr(
+        "app.services.repository_executor.wait_for_agent_repository_operation_job",
+        fake_wait,
+    )
+    monkeypatch.setattr(
+        "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+        AsyncMock(return_value=True),
+    )
+    engine = db.get_bind()
+
+    def locked(conn, cursor, statement, parameters, context, executemany):
+        # the cancel's UPDATE hits a locked database at the DBAPI layer
+        if statement.lstrip().upper().startswith("UPDATE AGENT_JOBS"):
+            raise OperationalError(
+                statement, parameters, Exception("database is locked")
+            )
+
+    event.listen(engine, "before_cursor_execute", locked)
+    try:
+        with pytest.raises(HTTPException) as raised:
+            await index_exec.list_archives_for_repository(db, repo, {})
+    finally:
+        event.remove(engine, "before_cursor_execute", locked)
+    assert raised.value.status_code == 504
+    db.expire_all()
+    assert db.query(AgentJob).one().status == "queued"
+    # the session is usable: the runner writes its verdict through it next
+    repo.total_size = "1.0 GB"
+    db.commit()
+    db.expire_all()
+    assert db.get(type(repo), repo.id).total_size == "1.0 GB"
