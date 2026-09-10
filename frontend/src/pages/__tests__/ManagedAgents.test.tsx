@@ -562,6 +562,29 @@ describe('ManagedAgents', () => {
     expect(onRevoke).toHaveBeenCalledWith(agent)
   })
 
+  it('shows a pending Borg pin on the card', () => {
+    const agent = buildAgent({
+      desired_borg_version: '2',
+      borg_versions: [{ major: 1, version: '1.4.0' }],
+    })
+
+    renderWithProviders(
+      <AgentList
+        agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        onRunDiagnostics={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+
+    expect(screen.getByText(/borg 2 pending/i)).toBeInTheDocument()
+  })
+
   it('opens managed-agent diagnostics from an agent card and runs a session check', async () => {
     const user = userEvent.setup()
     const agent = buildAgent({

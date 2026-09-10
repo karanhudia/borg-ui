@@ -9,7 +9,9 @@ from app.database.models import AgentMachine
 from app.services.agent_job_reaper import reap_stale_agent_upgrades
 
 
-def _requested(test_db, *, reported, requested_at):
+def _requested(
+    test_db, *, reported, requested_at, desired_borg=None, borg_versions=None
+):
     agent = AgentMachine(
         name="endpoint",
         agent_id="agt_recon",
@@ -17,6 +19,8 @@ def _requested(test_db, *, reported, requested_at):
         token_prefix="borgui_agent_secret"[:20],
         status="online",
         agent_version=reported,
+        desired_borg_version=desired_borg,
+        borg_versions=borg_versions,
         upgrade_state="requested",
         upgrade_requested_at=requested_at,
         upgrade_target_version="0.1.3",
@@ -135,3 +139,86 @@ def test_the_reaper_loses_the_race_to_a_concurrent_success(test_db):
     refreshed = test_db.query(AgentMachine).filter(AgentMachine.id == agent.id).one()
     assert refreshed.upgrade_state == "idle"
     assert refreshed.upgrade_error is None
+
+
+def test_an_unsatisfied_borg_pin_leaves_it_requested(test_db):
+    """A Borg only change does not move agent_version, so without this the
+    upgrade resolves on the next heartbeat and an operator is told the Borg
+    move succeeded before the reinstall has run."""
+    agent = _requested(
+        test_db,
+        reported="0.1.3",
+        requested_at=datetime.now(timezone.utc),
+        desired_borg="2",
+        borg_versions=[{"major": 1, "version": "1.4.0", "path": "/usr/local/bin/borg"}],
+    )
+
+    resolve_agent_upgrade(agent)
+
+    assert agent.upgrade_state == "requested"
+
+
+def test_a_satisfied_borg_pin_clears_the_upgrade(test_db):
+    agent = _requested(
+        test_db,
+        reported="0.1.3",
+        requested_at=datetime.now(timezone.utc),
+        desired_borg="2",
+        borg_versions=[
+            {"major": 1, "version": "1.4.0", "path": "/usr/local/bin/borg"},
+            {"major": 2, "version": "2.0.0b14", "path": "/usr/local/bin/borg2"},
+        ],
+    )
+
+    resolve_agent_upgrade(agent)
+
+    assert agent.upgrade_state == "idle"
+    assert agent.upgrade_requested_at is None
+
+
+def test_a_borg_pin_with_no_reported_binaries_leaves_it_requested(test_db):
+    """Silence is not success. An endpoint that reports no Borg at all has not
+    installed the pinned one, and the timeout is what resolves it."""
+    agent = _requested(
+        test_db,
+        reported="0.1.3",
+        requested_at=datetime.now(timezone.utc),
+        desired_borg="2",
+        borg_versions=None,
+    )
+
+    resolve_agent_upgrade(agent)
+
+    assert agent.upgrade_state == "requested"
+
+
+def test_an_unpinned_endpoint_still_resolves_on_the_agent_version_alone(test_db):
+    """The normal case must not start depending on reported Borg binaries."""
+    agent = _requested(
+        test_db,
+        reported="0.1.2",
+        requested_at=datetime.now(timezone.utc),
+        borg_versions=None,
+    )
+    agent.agent_version = "0.1.3"
+
+    resolve_agent_upgrade(agent)
+
+    assert agent.upgrade_state == "idle"
+
+
+def test_the_agent_version_still_has_to_match_a_satisfied_borg_pin(test_db):
+    """Both halves of the target, not either."""
+    agent = _requested(
+        test_db,
+        reported="0.1.2",
+        requested_at=datetime.now(timezone.utc),
+        desired_borg="2",
+        borg_versions=[
+            {"major": 2, "version": "2.0.0b14", "path": "/usr/local/bin/borg2"}
+        ],
+    )
+
+    resolve_agent_upgrade(agent)
+
+    assert agent.upgrade_state == "requested"

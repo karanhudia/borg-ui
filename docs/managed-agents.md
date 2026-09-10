@@ -207,8 +207,20 @@ to a version this server can actually serve, because the installer installs
 from this server and nowhere else. A pinned endpoint upgrades to its pin rather
 than to the version the server serves.
 
-The Borg choice is recorded now and takes effect in a later release, once an
-upgrade can change the installed Borg version.
+The Borg choice takes effect at that endpoint's next upgrade. Pinning Borg 2
+on an endpoint running Borg 1 does not change anything by itself: press
+Upgrade on the row, and the reinstall installs the pinned major version. The
+row shows "Borg 2 pending" until the endpoint reports it.
+
+A Borg pin outranks how the endpoint was installed. An endpoint installed with
+`--skip-borg-install` still gets the pinned version, and an endpoint that took
+Borg 1 from distribution packages gets a pinned Borg 2 from this server's
+static binaries, because no distribution ships Borg 2.
+
+Because the upgrade is only complete once the endpoint reports the pinned
+major version, a Borg pin that cannot be installed shows up as a failed
+upgrade once the timeout elapses, rather than as a success that changed
+nothing.
 
 The same pin is available through the API:
 
@@ -224,6 +236,10 @@ This is an admin endpoint. `$TOKEN` is an API token for an admin account; see
 `desired_agent_version` to clear the pin and track the server
 again. You can only pin to a version this server can actually serve, because
 the installer installs from this server and nowhere else.
+
+`desired_borg_version` takes `"1"`, `"2"`, or `null` to leave whatever is
+installed alone. It is applied by the next upgrade of that endpoint, not by
+this call.
 
 ## Server URL and Localhost
 

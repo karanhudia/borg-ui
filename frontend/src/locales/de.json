@@ -459,9 +459,15 @@
         "trackServer": "Server folgen",
         "borgVersionLabel": "Borg-Version",
         "leaveAsInstalled": "Wie installiert lassen",
-        "borgHint": "Die Borg-Auswahl wird jetzt gespeichert und von einer späteren Version angewendet, sobald Aktualisierungen die installierte Borg-Version ändern können.",
+        "borgHint": "Die Borg-Auswahl wird beim nächsten Upgrade dieses Endpunkts angewendet.",
         "save": "Speichern",
         "unavailableVersion": "{{version}} (wird nicht mehr ausgeliefert)"
+      },
+      "borgPin": {
+        "active": "Borg {{version}}",
+        "activeTooltip": "Auf Borg {{version}} festgelegt, und dieser Endpunkt meldet diese Version.",
+        "pending": "Borg {{version}} ausstehend",
+        "pendingTooltip": "Auf Borg {{version}} festgelegt, aber dieser Endpunkt meldet die Version noch nicht. Das nächste Upgrade installiert sie."
       }
     },
     "installCommand": {

@@ -2,15 +2,20 @@ import asyncio
 import hashlib
 import os
 import re
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import structlog
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session
 
 from app.api.borg_binaries import binary_table
 from app.core.borg import BorgInterface
 from app.core.borg2 import Borg2Interface
+from app.database.database import get_db
+from app.database.models import AgentMachine
 
 logger = structlog.get_logger()
 
@@ -32,11 +37,15 @@ set -euo pipefail
 
 # BEGIN server-provided pinning
 # Replaced when this script is served by a Borg UI instance, which fills in the
-# Borg versions it runs and the checksums of the matching static binaries.
+# Borg versions it runs, the checksums of the matching static binaries, and the
+# pins of the endpoint that asked for the script.
 PINNED_BORG1_VERSION=""
 PINNED_BORG2_VERSION=""
 PINNED_BORG_BINARIES=""
 PINNED_AGENT_VERSION=""
+# The Borg major version this endpoint is pinned to in the UI, or empty to
+# leave whatever is installed alone. Read by apply_pinned_borg_version below.
+PINNED_DESIRED_BORG_VERSION=""
 # END server-provided pinning
 
 SERVER=""
@@ -260,6 +269,52 @@ elif [[ -z "${SERVER}" || -z "${TOKEN}" || -z "${AGENT_NAME}" ]]; then
   usage >&2
   exit 2
 fi
+
+# A server that knows which endpoint is asking resolves that endpoint's pins
+# into the block at the top of this script (installer_pins_for_agent in
+# app/api/agent_installer.py). The pinned Borg version has to beat two things
+# that describe how this endpoint was installed rather than what it should
+# run: the --borg-version the upgrade helper passes from upgrade.conf, and
+# reinstall mode's skip-by-default above. Without that precedence a Borg
+# choice made in the UI could never reach an endpoint.
+#
+# Setting BORG_VERSION_SET and clearing SKIP_BORG_INSTALL is also what makes
+# the choice stick: write_upgrade_conf then records BORG_INSTALL_MODE from
+# BORG_VERSION, so this endpoint's own record follows the pin.
+apply_pinned_borg_version() {
+  if [[ -z "${PINNED_DESIRED_BORG_VERSION}" ]]; then
+    return 0
+  fi
+
+  # The server drops anything but 1 or 2 before serving it. Repeated here
+  # because this script is also runnable straight from the repository, and a
+  # value that reaches the case below unmatched would skip Borg silently.
+  case "${PINNED_DESIRED_BORG_VERSION}" in
+    1 | 2) ;;
+    *)
+      echo "Ignoring unusable pinned Borg version" \
+        "'${PINNED_DESIRED_BORG_VERSION}'." >&2
+      return 0
+      ;;
+  esac
+
+  BORG_VERSION="${PINNED_DESIRED_BORG_VERSION}"
+  BORG_VERSION_SET="1"
+  SKIP_BORG_INSTALL="0"
+
+  if [[ "${BORG_VERSION}" == "2" && "${BORG_SOURCE}" == "distro" ]]; then
+    # install_borg2 exits when the source is distro, which would fail this
+    # whole reinstall and lose the agent upgrade with it. The pin is explicit,
+    # so prefer the server's static binaries over refusing.
+    BORG_SOURCE="server"
+    echo "No distribution ships Borg 2, so the pinned Borg 2 comes from the" \
+      "server's binaries."
+  fi
+
+  echo "This endpoint is pinned to Borg ${BORG_VERSION}."
+}
+
+apply_pinned_borg_version
 
 resolve_user_group_home() {
   local username="$1"
@@ -1083,12 +1138,80 @@ def agent_package_version() -> str | None:
     return parts[1] if len(parts) >= 2 else None
 
 
-def render_installer_script() -> str:
-    """Pin the installer to the versions this server runs.
+# A pin is interpolated into a block the endpoint executes as root, and it
+# arrives from the database rather than from a filename on this server. One
+# conservative shape for anything that claims to be a version: no quotes, no
+# spaces, no shell metacharacters, and short enough to be a version rather
+# than a payload.
+_SAFE_PIN = re.compile(r"^[A-Za-z0-9._+-]{1,64}$")
+
+
+@dataclass(frozen=True)
+class InstallerPins:
+    """The versions the script served to one endpoint pins.
+
+    `agent_version` of None means track the wheel this server serves.
+    `desired_borg_version` of None means leave the installed Borg alone.
+    """
+
+    agent_version: Optional[str] = None
+    desired_borg_version: Optional[str] = None
+
+
+def installer_pins_for_agent(db: Session, agent_id: Optional[str]) -> InstallerPins:
+    """One endpoint's pins, or the unpinned defaults.
+
+    An unknown agent_id is deliberately not an error. This is the public
+    install endpoint: first-time enrollment has no agent row yet, and
+    answering differently for a known and an unknown id would make the route a
+    probe for which agent ids exist.
+
+    Both values are whitelisted here, at the boundary between the database and
+    a root-executed script, rather than trusted from the PUT route that wrote
+    them. That route validates, but a row can predate a validation rule or be
+    edited by hand, and the cost of the check is a regex.
+    """
+    if not agent_id:
+        return InstallerPins()
+
+    agent = db.query(AgentMachine).filter(AgentMachine.agent_id == agent_id).first()
+    if agent is None:
+        return InstallerPins()
+
+    agent_version = agent.desired_agent_version
+    if agent_version is not None and not _SAFE_PIN.match(agent_version):
+        logger.warning(
+            "agent_installer_pin_refused",
+            agent_id=agent_id,
+            field="desired_agent_version",
+        )
+        agent_version = None
+
+    borg_version = agent.desired_borg_version
+    if borg_version not in ("1", "2"):
+        if borg_version:
+            logger.warning(
+                "agent_installer_pin_refused",
+                agent_id=agent_id,
+                field="desired_borg_version",
+            )
+        borg_version = None
+
+    return InstallerPins(agent_version=agent_version, desired_borg_version=borg_version)
+
+
+def render_installer_script(pins: Optional[InstallerPins] = None) -> str:
+    """Pin the installer to the versions this server runs and this endpoint
+    wants.
 
     Only the delimited block at the top of the script is rewritten. The rest is
     served verbatim, so the script in the repository stays the script that runs.
+
+    `pins` default to unpinned, which is first-time enrollment and every
+    request that names no agent: the served wheel and no Borg override, which
+    is what this function pinned for every caller before phase 5.
     """
+    pins = pins or InstallerPins()
     versions = {
         "1": _installed_borg_version(BorgInterface, "borg1"),
         "2": _installed_borg_version(Borg2Interface, "borg2"),
@@ -1101,7 +1224,9 @@ def render_installer_script() -> str:
             f'PINNED_BORG1_VERSION="{versions["1"] or ""}"',
             f'PINNED_BORG2_VERSION="{versions["2"] or ""}"',
             f'PINNED_BORG_BINARIES="{binary_table(versions)}"',
-            f'PINNED_AGENT_VERSION="{agent_package_version() or ""}"',
+            f'PINNED_AGENT_VERSION="'
+            f'{pins.agent_version or agent_package_version() or ""}"',
+            f'PINNED_DESIRED_BORG_VERSION="{pins.desired_borg_version or ""}"',
             PINNING_END,
         ]
     )
@@ -1112,26 +1237,37 @@ def render_installer_script() -> str:
 
 
 @router.get("/agent/install.sh")
-async def get_agent_installer() -> Response:
+async def get_agent_installer(
+    agent_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+) -> Response:
     # render_installer_script runs `borg --version` (a blocking subprocess) and
     # touches the filesystem, so it is offloaded to a worker thread rather than run
-    # on the event loop of this public endpoint.
-    script = await asyncio.to_thread(render_installer_script)
+    # on the event loop of this public endpoint. The pins are resolved before that
+    # hand-off: an InstallerPins is plain strings, so no ORM object bound to this
+    # request's session is touched from the worker thread.
+    pins = installer_pins_for_agent(db, agent_id)
+    script = await asyncio.to_thread(render_installer_script, pins)
     return Response(content=script, media_type="text/x-shellscript")
 
 
 @router.get("/agent/install.sh.sha256")
-async def get_agent_installer_checksum() -> Response:
+async def get_agent_installer_checksum(
+    agent_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+) -> Response:
     """The SHA256 of the script this server serves at /agent/install.sh.
 
     The self-upgrade helper runs the downloaded script as root, so it verifies
     the download against this before executing anything. Rendered through the
-    same function as the script itself, so the two agree for as long as the
-    server's pinned versions do not change between the helper's two requests.
-    A server restarted into a new release in that window makes the helper refuse
-    and retry later, which is the direction to fail in.
+    same function as the script itself, for the same endpoint, so the two agree
+    for as long as the server's pinned versions and that endpoint's pins do not
+    change between the helper's two requests. A server restarted into a new
+    release in that window, or a pin changed in it, makes the helper refuse and
+    retry later, which is the direction to fail in.
     """
-    script = await asyncio.to_thread(render_installer_script)
+    pins = installer_pins_for_agent(db, agent_id)
+    script = await asyncio.to_thread(render_installer_script, pins)
     digest = hashlib.sha256(script.encode("utf-8")).hexdigest()
     return Response(content=f"{digest}\n", media_type="text/plain")
 

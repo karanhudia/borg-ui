@@ -70,6 +70,7 @@ import DiagnosticsTcpTargetFields from '../components/shared/DiagnosticsTcpTarge
 import AddAgentDialog from './managed-agents/AddAgentDialog'
 import AgentBulkUpgradeBar from './managed-agents/AgentBulkUpgradeBar'
 import AgentUpgradeBanner from './managed-agents/AgentUpgradeBanner'
+import AgentBorgVersionChip from './managed-agents/AgentBorgVersionChip'
 import AgentManualUpgradeChip from './managed-agents/AgentManualUpgradeChip'
 import AgentUpgradeChip from './managed-agents/AgentUpgradeChip'
 import AgentPinControl from './managed-agents/AgentPinControl'
@@ -1827,6 +1828,10 @@ export function AgentList({
                           pinnedVersion={agent.desired_agent_version}
                         />
                       )}
+                      <AgentBorgVersionChip
+                        desiredBorgVersion={agent.desired_borg_version}
+                        borgVersions={agent.borg_versions}
+                      />
                       {agent.self_upgrade_supported === false && <AgentManualUpgradeChip />}
                       {agent.upgrade_state ? (
                         <AgentUpgradeStateChip

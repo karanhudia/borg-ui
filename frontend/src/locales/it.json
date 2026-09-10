@@ -459,9 +459,15 @@
         "trackServer": "Segui il server",
         "borgVersionLabel": "Versione Borg",
         "leaveAsInstalled": "Lascia come installata",
-        "borgHint": "La scelta di Borg viene registrata ora e applicata da una versione successiva, quando gli aggiornamenti potranno cambiare la versione di Borg installata.",
+        "borgHint": "La scelta di Borg viene applicata al prossimo aggiornamento di questo endpoint.",
         "save": "Salva",
         "unavailableVersion": "{{version}} (non più distribuita)"
+      },
+      "borgPin": {
+        "active": "Borg {{version}}",
+        "activeTooltip": "Fissato a Borg {{version}}, la versione che questo endpoint segnala.",
+        "pending": "Borg {{version}} in attesa",
+        "pendingTooltip": "Fissato a Borg {{version}}, ma questo endpoint non segnala ancora quella versione. Il prossimo aggiornamento la installerà."
       }
     },
     "installCommand": {

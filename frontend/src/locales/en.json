@@ -459,9 +459,15 @@
         "trackServer": "Track server",
         "borgVersionLabel": "Borg version",
         "leaveAsInstalled": "Leave as installed",
-        "borgHint": "The Borg choice is recorded now and applied by a later release, once upgrades can change the installed Borg version.",
+        "borgHint": "The Borg choice applies at the next upgrade of this endpoint.",
         "save": "Save",
         "unavailableVersion": "{{version}} (no longer served)"
+      },
+      "borgPin": {
+        "active": "Borg {{version}}",
+        "activeTooltip": "Pinned to Borg {{version}}, which this endpoint reports.",
+        "pending": "Borg {{version}} pending",
+        "pendingTooltip": "Pinned to Borg {{version}}, which this endpoint does not report yet. The next upgrade installs it."
       }
     },
     "installCommand": {
