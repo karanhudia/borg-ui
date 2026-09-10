@@ -25,7 +25,9 @@ logger = structlog.get_logger()
 # the way the legacy services did from inside their own bodies.
 _LAST_DONE_COLUMN = {"check": "last_check", "compact": "last_compact"}
 
-_TERMINAL = ("completed", "completed_with_warnings", "failed", "cancelled")
+# The row's words once a service is done. The facade writes the restore
+# check's legacy `needs_backup` as `skipped` with that reason (spec 6.3).
+_TERMINAL = ("completed", "completed_with_warnings", "failed", "cancelled", "skipped")
 _CANCEL_POLL_SECONDS = 1.0
 
 
@@ -113,6 +115,12 @@ async def _run(
         # cancelled itself when it sees its own flag set. Report the failure
         # shape and let the runner have the last word.
         return Outcome(status="failed", error_message=job.error_message or "cancelled")
+    if status == "skipped":
+        return Outcome(
+            status="skipped",
+            skip_reason=operation.skip_reason,
+            error_message=job.error_message,
+        )
     return Outcome(status="failed", error_message=job.error_message)
 
 

@@ -13,11 +13,13 @@ from app.api.dashboard import (
     SystemMetrics,
     build_full_repository_health,
     build_observe_repository_health,
+    build_restore_check_health,
     format_bytes,
     get_recent_jobs,
     parse_size_to_bytes,
 )
 from app.database.models import (
+    Operation,
     BackupJob,
     BackupPlan,
     BackupPlanRepository,
@@ -306,6 +308,27 @@ class TestDashboardHelpers:
     def test_parse_size_to_bytes(self, size_string, expected):
         assert parse_size_to_bytes(size_string) == expected
 
+    def test_maintenance_repository_name_falls_back_from_id_to_path(self):
+        from types import SimpleNamespace
+
+        from app.api.dashboard import _maintenance_repository_name
+
+        names = {"/srv/backups/full": "Full Repo"}
+        ids = {7: "Full Repo"}
+
+        def name(repository_id, path):
+            return _maintenance_repository_name(
+                SimpleNamespace(repository_id=repository_id, repository_path=path),
+                names,
+                ids,
+            )
+
+        assert name(7, "/elsewhere") == "Full Repo"
+        assert name(None, "/srv/backups/full") == "Full Repo"
+        assert name(99, "/srv/backups/full/") == "Full Repo"
+        assert name(None, "/mnt/orphan/") == "orphan"
+        assert name(None, None) == "Unknown"
+
     @pytest.mark.parametrize(
         "size_value, expected",
         [
@@ -439,6 +462,142 @@ class TestDashboardHelpers:
         assert health["dimension_health"]["restore"] == "warning"
         assert health["latest_restore_check_status"] == "needs_backup"
         assert any("Run a backup" in warning for warning in health["warnings"])
+
+    def test_full_repository_health_keeps_the_verdict_while_a_run_is_live(self):
+        now = datetime.utcnow()
+        repo = Repository(
+            id=7,
+            name="Restore Running Repo",
+            path="/srv/backups/restore-running",
+            last_backup=now - timedelta(hours=1),
+            last_check=now - timedelta(hours=1),
+            last_compact=now - timedelta(hours=1),
+            last_restore_check=now - timedelta(days=5),
+            restore_check_cron_expression="0 4 * * *",
+        )
+        failed = RestoreCheckJob(
+            repository_id=7,
+            repository_path=repo.path,
+            status="failed",
+            error_message="Canary manifest not found",
+            started_at=now - timedelta(days=1),
+        )
+        running = RestoreCheckJob(
+            repository_id=7,
+            repository_path=repo.path,
+            status="running",
+            started_at=now - timedelta(minutes=10),
+        )
+
+        health = build_full_repository_health(repo, now, running, last_verdict=failed)
+
+        assert health["latest_restore_check_status"] == "running"
+        assert health["dimension_health"]["restore"] == "critical"
+        assert health["health_status"] == "critical"
+        assert "Restore check failed: Canary manifest not found" in health["warnings"]
+
+    def test_restore_check_health_takes_the_newer_of_column_and_verdict(self):
+        now = datetime.utcnow()
+        repo = Repository(
+            id=7,
+            name="Stale Column Repo",
+            path="/srv/backups/stale-column",
+            last_restore_check=now - timedelta(days=40),
+            restore_check_cron_expression="0 4 * * *",
+        )
+        completed = RestoreCheckJob(
+            repository_id=7,
+            repository_path=repo.path,
+            status="completed",
+            completed_at=now - timedelta(days=1),
+        )
+
+        health = build_restore_check_health(repo, now, completed)
+
+        assert health["dimension"] == "healthy"
+        assert health["warning"] is None
+
+    def test_restore_check_health_names_the_reason_of_another_skip(self):
+        from types import SimpleNamespace
+
+        now = datetime.utcnow()
+        repo = Repository(
+            id=7,
+            name="Dependent Repo",
+            path="/srv/backups/dependent",
+            last_restore_check=now - timedelta(days=1),
+            restore_check_cron_expression="0 4 * * *",
+        )
+        verdict = SimpleNamespace(
+            status="skipped",
+            skip_reason="dependency_failed",
+            error_message=None,
+            completed_at=now - timedelta(hours=1),
+        )
+
+        health = build_restore_check_health(repo, now, verdict)
+
+        assert health["dimension"] == "warning"
+        assert health["warning"] == "Restore check skipped: dependency failed"
+
+    def test_restore_check_health_ignores_a_live_run_behind_a_completed_verdict(
+        self,
+    ):
+        now = datetime.utcnow()
+        repo = Repository(
+            id=7,
+            name="Quiet Repo",
+            path="/srv/backups/quiet",
+            last_restore_check=None,
+            restore_check_cron_expression="0 4 * * *",
+        )
+        completed = RestoreCheckJob(
+            repository_id=7,
+            repository_path=repo.path,
+            status="completed",
+            completed_at=now - timedelta(days=2),
+        )
+        running = RestoreCheckJob(
+            repository_id=7, repository_path=repo.path, status="running"
+        )
+
+        health = build_restore_check_health(repo, now, running, last_verdict=completed)
+
+        assert health["dimension"] == "healthy"
+        assert health["latest_status"] == "running"
+
+    def test_observe_repository_health_keeps_the_verdict_while_a_run_is_live(self):
+        now = datetime.utcnow()
+        repo = Repository(
+            id=9,
+            name="Observe Running Repo",
+            path="/srv/backups/observe-running",
+            mode="observe",
+            archive_count=4,
+            last_backup=now - timedelta(hours=1),
+            last_check=now - timedelta(hours=1),
+            last_restore_check=now - timedelta(days=3),
+            restore_check_cron_expression="0 4 * * *",
+        )
+        failed = RestoreCheckJob(
+            repository_id=9,
+            repository_path=repo.path,
+            status="failed",
+            error_message="Probe path missing",
+            started_at=now - timedelta(days=1),
+        )
+        pending = RestoreCheckJob(
+            repository_id=9, repository_path=repo.path, status="pending"
+        )
+
+        health = build_observe_repository_health(
+            repo, now, pending, last_verdict=failed
+        )
+
+        assert health["health_status"] == "critical"
+        assert health["latest_restore_check_status"] == "pending"
+        assert health["latest_restore_check_error"] == "Probe path missing"
+        assert "Restore check failed: Probe path missing" in health["warnings"]
 
     def test_observe_repository_health_includes_restore_check_signal(self):
         now = datetime.utcnow()
@@ -921,6 +1080,190 @@ class TestDashboardScheduleAndOverview:
         )
         assert data["system_metrics"]["cpu_usage"] == 12.5
         assert data["last_updated"].endswith("+00:00")
+
+    def test_dashboard_overview_reads_maintenance_operations(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+    ):
+        """Check, prune, compact and restore check are `operations` rows since
+        phase 5; the timeline and the restore health signal read them next
+        to the rows the legacy tables still hold."""
+        now = datetime.now(timezone.utc)
+        repo = Repository(
+            name="Ops Repo",
+            path="/srv/backups/ops",
+            repository_type="local",
+            mode="full",
+        )
+        empty = Repository(
+            name="Empty Repo",
+            path="/srv/backups/empty",
+            repository_type="local",
+            mode="full",
+            restore_check_cron_expression="0 4 * * *",
+        )
+        test_db.add_all([repo, empty])
+        test_db.commit()
+
+        def operation(kind, *, status, started, error=None):
+            return Operation(
+                repository_id=repo.id,
+                kind=kind,
+                category="restore" if kind == "restore_check" else "maintenance",
+                status=status,
+                trigger="manual",
+                priority=0,
+                run_id="run-ops",
+                created_at=started,
+                started_at=started,
+                completed_at=started + timedelta(minutes=5),
+                error_message=error,
+            )
+
+        test_db.add_all(
+            [
+                operation("check", status="completed", started=now - timedelta(days=1)),
+                operation(
+                    "compact", status="completed", started=now - timedelta(days=2)
+                ),
+                operation(
+                    "prune",
+                    status="failed",
+                    started=now - timedelta(days=3),
+                    error="prune failed",
+                ),
+                operation(
+                    "restore_check",
+                    status="failed",
+                    started=now - timedelta(hours=1),
+                    error="Canary manifest not found",
+                ),
+                # newer, but still waiting for a slot (shown as the legacy word
+                # "pending"): in the feed, not the latest verdict
+                operation(
+                    "restore_check", status="queued", started=now - timedelta(minutes=5)
+                ),
+                # outside the timeline window
+                operation(
+                    "prune", status="completed", started=now - timedelta(days=20)
+                ),
+                # the restore check's "run a backup first" verdict, as the
+                # facade writes it (spec 6.3)
+                Operation(
+                    repository_id=empty.id,
+                    kind="restore_check",
+                    category="restore",
+                    status="skipped",
+                    skip_reason="needs_backup",
+                    trigger="manual",
+                    priority=0,
+                    run_id="run-empty",
+                    created_at=now - timedelta(days=13),
+                    started_at=now - timedelta(days=13),
+                    completed_at=now - timedelta(days=13) + timedelta(minutes=1),
+                    error_message="Run a backup, then run this restore check again",
+                ),
+                # no repository left to name it after
+                Operation(
+                    repository_id=None,
+                    kind="check",
+                    category="maintenance",
+                    status="completed",
+                    trigger="manual",
+                    priority=0,
+                    run_id="run-orphan",
+                    created_at=now - timedelta(days=6),
+                    started_at=now - timedelta(days=6),
+                    completed_at=now - timedelta(days=6) + timedelta(minutes=5),
+                ),
+                # a legacy row without a status (nullable column) is still named
+                CheckJob(
+                    repository_id=repo.id,
+                    repository_path=repo.path,
+                    started_at=now - timedelta(days=12),
+                    completed_at=now - timedelta(days=12) + timedelta(minutes=5),
+                ),
+                # a legacy row from before the migration is still read
+                PruneJob(
+                    repository_id=repo.id,
+                    repository_path=repo.path,
+                    status="completed",
+                    started_at=now - timedelta(days=4),
+                    completed_at=now - timedelta(days=4) + timedelta(minutes=5),
+                ),
+                # older than the restore check operation, so it is not the latest
+                RestoreCheckJob(
+                    repository_id=repo.id,
+                    repository_path=repo.path,
+                    status="completed",
+                    created_at=now - timedelta(days=2, hours=6),
+                    started_at=now - timedelta(days=2, hours=6),
+                    completed_at=now - timedelta(days=2, hours=5),
+                ),
+            ]
+        )
+        test_db.commit()
+        test_db.query(CheckJob).filter(
+            CheckJob.started_at == now - timedelta(days=12)
+        ).update({"status": None})
+        test_db.commit()
+
+        metrics = SystemMetrics(
+            cpu_usage=1.0,
+            cpu_count=1,
+            memory_usage=1.0,
+            memory_total=1,
+            memory_available=1,
+            disk_usage=1.0,
+            disk_total=1,
+            disk_free=1,
+            uptime=1,
+        )
+        with patch("app.api.dashboard.get_system_metrics", return_value=metrics):
+            response = test_client.get("/api/dashboard/overview", headers=admin_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert [
+            (item["type"], item["status"], item["repository"])
+            for item in data["activity_feed"]
+        ] == [
+            ("restore_check", "pending", "Ops Repo"),
+            ("restore_check", "failed", "Ops Repo"),
+            ("check", "completed", "Ops Repo"),
+            ("compact", "completed", "Ops Repo"),
+            ("restore_check", "completed", "Ops Repo"),
+            ("prune", "failed", "Ops Repo"),
+            ("prune", "completed", "Ops Repo"),
+            ("check", "completed", "Unknown"),
+            ("check", "unknown", "Ops Repo"),
+            ("restore_check", "needs_backup", "Empty Repo"),
+        ]
+        failed_prune = data["activity_feed"][5]
+        assert failed_prune["message"] == "Prune failed"
+        assert failed_prune["error"] == "prune failed"
+        needs_backup = data["activity_feed"][-1]
+        assert needs_backup["message"] == "Restore check needs backup"
+        assert (
+            needs_backup["error"] == "Run a backup, then run this restore check again"
+        )
+        health = {item["name"]: item for item in data["repository_health"]}["Ops Repo"]
+        # the queued run is the live status, the failed one the verdict
+        assert health["latest_restore_check_status"] == "pending"
+        assert health["latest_restore_check_error"] == "Canary manifest not found"
+        assert health["dimension_health"]["restore"] == "critical"
+        assert "Restore check failed: Canary manifest not found" in health["warnings"]
+        empty_health = {item["name"]: item for item in data["repository_health"]}[
+            "Empty Repo"
+        ]
+        assert empty_health["latest_restore_check_status"] == "needs_backup"
+        assert empty_health["dimension_health"]["restore"] == "warning"
+        assert (
+            "Run a backup, then run this restore check again"
+            in empty_health["warnings"]
+        )
 
     def test_dashboard_overview_uses_configured_backup_health_thresholds(
         self,

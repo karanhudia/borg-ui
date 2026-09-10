@@ -15,7 +15,7 @@ read `Operation` directly.
 from datetime import datetime
 from typing import Any, Iterable, Optional
 
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.database.models import (
@@ -27,6 +27,7 @@ from app.database.models import (
     Repository,
     RestoreCheckJob,
 )
+from app.services.operations.backup_facade import newest_per_group
 
 MAINTENANCE_KINDS: tuple[str, ...] = (
     "check",
@@ -83,10 +84,12 @@ _BOOLEAN_PARAMS = frozenset(
     }
 )
 
-# Only "pending" differs between the two vocabularies (spec 6.3); every other
-# legacy word is already an operations word.
-_LEGACY_TO_OPERATION = {"pending": "queued"}
+# The words that differ between the two vocabularies (spec 6.3). The restore
+# check's `needs_backup` is `skipped` with that reason on an operation; the
+# facade's status property carries the reason both ways.
+_LEGACY_TO_OPERATION = {"pending": "queued", "needs_backup": "skipped"}
 _OPERATION_TO_LEGACY = {"queued": "pending"}
+NEEDS_BACKUP = "needs_backup"
 
 
 def operation_status(status: str) -> str:
@@ -155,11 +158,18 @@ class MaintenanceJobFacade:
 
     @property
     def status(self) -> str:
+        if (
+            self.operation.status == "skipped"
+            and self.operation.skip_reason == NEEDS_BACKUP
+        ):
+            return NEEDS_BACKUP
         return legacy_status(self.operation.status)
 
     @status.setter
     def status(self, value: str) -> None:
         self.operation.status = operation_status(value)
+        if value == NEEDS_BACKUP:
+            self.operation.skip_reason = NEEDS_BACKUP
 
     @property
     def started_at(self):
@@ -184,6 +194,16 @@ class MaintenanceJobFacade:
     @error_message.setter
     def error_message(self, value) -> None:
         self.operation.error_message = value
+
+    @property
+    def skip_reason(self):
+        """Why a `skipped` operation did not run (spec 6.3); a legacy row has
+        no such column, its `needs_backup` status carries the reason."""
+        return self.operation.skip_reason
+
+    @skip_reason.setter
+    def skip_reason(self, value) -> None:
+        self.operation.skip_reason = value
 
     # -- progress ----------------------------------------------------------
 
@@ -460,3 +480,74 @@ def claim_running(db: Session, job_id: int, kind: str, started_at: datetime) -> 
             synchronize_session=False,
         )
     )
+
+
+def maintenance_jobs_started_since(db: Session, kind: str, since: datetime) -> list:
+    """Every `kind` job started at or after `since`, from both tables, newest
+    first. A reader of recent history (the dashboard timeline) sees the
+    operations rows this phase writes and the legacy rows written before it,
+    until phase 9 drops the legacy table (spec section 14)."""
+    model = _legacy_model(kind)
+    operations = (
+        db.query(Operation)
+        .filter(Operation.kind == kind, Operation.started_at >= since)
+        .all()
+    )
+    jobs = [MaintenanceJobFacade(db, operation) for operation in operations]
+    jobs.extend(db.query(model).filter(model.started_at >= since).all())
+    jobs.sort(key=lambda job: (job.started_at, job.id), reverse=True)
+    return jobs
+
+
+# A row still waiting for its verdict. `pending` is the legacy word for
+# `queued` (spec 6.3); every other status is an outcome, `skipped` included,
+# since its reason says what kept the run from happening.
+UNSETTLED_STATUSES: frozenset[str] = frozenset({"pending", "queued", "running"})
+
+
+def _legacy_model(kind: str):
+    model = LEGACY_MODELS.get(kind)
+    if model is None:
+        raise ValueError(f"Not a maintenance kind: {kind!r}")
+    return model
+
+
+def latest_maintenance_jobs_by_repository(
+    db: Session, kind: str, repository_ids: list[int], *, settled: bool = False
+) -> dict[int, Any]:
+    """The newest `kind` row of each repository, from both tables. Newest by
+    creation, as the legacy max-id lookup was; an operation wins a tie, since
+    it is the row still being written.
+
+    With `settled`, only rows that reached a verdict count: a queued run can
+    wait hours for a runner slot and must not hide the failure before it, so
+    a health reading asks for the verdict separately from the live row."""
+    if not repository_ids:
+        return {}
+    model = _legacy_model(kind)
+    legacy_filters = [model.repository_id.in_(repository_ids)]
+    op_filters = [Operation.kind == kind, Operation.repository_id.in_(repository_ids)]
+    if settled:
+        # a legacy status column is nullable; NULL is not "still waiting"
+        legacy_filters.append(
+            or_(model.status.is_(None), model.status.notin_(UNSETTLED_STATUSES))
+        )
+        op_filters.append(Operation.status.notin_(UNSETTLED_STATUSES))
+    result: dict[int, Any] = {}
+    for job in newest_per_group(
+        db,
+        model,
+        model.repository_id,
+        func.coalesce(model.created_at, datetime.min),
+        legacy_filters,
+    ):
+        result[job.repository_id] = job
+    for operation in newest_per_group(
+        db, Operation, Operation.repository_id, Operation.created_at, op_filters
+    ):
+        current = result.get(operation.repository_id)
+        if current is None or operation.created_at >= (
+            current.created_at or datetime.min
+        ):
+            result[operation.repository_id] = MaintenanceJobFacade(db, operation)
+    return result
