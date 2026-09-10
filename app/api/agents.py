@@ -35,7 +35,6 @@ from app.database.models import (
     AgentJob,
     AgentJobLog,
     AgentMachine,
-    BackupJob,
     Operation,
     Repository,
 )
@@ -43,10 +42,7 @@ from app.services.operations.backup_facade import (
     BackupJobFacade,
     is_backup_operation,
 )
-from app.services.operations.job_facade import (
-    LEGACY_MODELS,
-    resolve_maintenance_job,
-)
+from app.services.operations.job_facade import resolve_maintenance_job
 from app.services.agent_artifact_relay import agent_artifact_relay
 from app.services.agent_connection_manager import (
     AgentConnection,
@@ -381,7 +377,7 @@ def _is_terminal_backup_status(status_value: Optional[str]) -> bool:
 # one on reconnect re-runs it for nobody (and, for an extract, re-breaks the agent
 # session). Everything NOT listed here is treated as durable and retried:
 # backups, maintenance ops (check/prune/compact), and rclone_sync (which owns a
-# persistent RcloneSyncJob record and also runs automatically after backups).
+# persistent mirror operation and also runs automatically after backups).
 # Allowlist, not blocklist, so an unknown/new job kind defaults to the safe side
 # (retry) rather than being silently dropped.
 REQUEST_SCOPED_REPOSITORY_JOB_KINDS = frozenset(
@@ -460,12 +456,10 @@ def _normalize_agent_timestamp(value: Optional[datetime]) -> datetime:
 
 
 def _get_linked_backup_job(job: AgentJob, db: Session) -> Any:
-    if job.operation_id:
-        operation = db.get(Operation, job.operation_id)
-        return BackupJobFacade(db, operation) if operation is not None else None
-    if not job.backup_job_id:
+    if not job.operation_id:
         return None
-    return db.query(BackupJob).filter(BackupJob.id == job.backup_job_id).first()
+    operation = db.get(Operation, job.operation_id)
+    return BackupJobFacade(db, operation) if operation is not None else None
 
 
 def _collect_agent_logs(job: AgentJob, db: Session) -> str:
@@ -575,7 +569,7 @@ def _is_factor(value) -> bool:
     )
 
 
-def _sync_backup_progress(agent_job: AgentJob, backup_job: BackupJob) -> None:
+def _sync_backup_progress(agent_job: AgentJob, backup_job) -> None:
     for field_name in (
         "progress_percent",
         "current_file",
@@ -680,15 +674,8 @@ def _get_repository_operation_job(agent_job: AgentJob, db: Session) -> Any | Non
 
 
 def _maintenance_kind(operation_job: Any) -> Optional[str]:
-    """The kind of a maintenance row, whether it is an operation-backed facade
-    (which knows its own kind) or a pre-phase-5 legacy row."""
-    kind = getattr(operation_job, "kind", None)
-    if kind:
-        return kind
-    for name, model in LEGACY_MODELS.items():
-        if isinstance(operation_job, model):
-            return name
-    return None
+    """The kind of a maintenance row, which its facade knows."""
+    return getattr(operation_job, "kind", None)
 
 
 def _sync_repository_operation_progress(agent_job: AgentJob, db: Session) -> None:
@@ -789,7 +776,7 @@ def _mark_agent_job_claimed(job: AgentJob, *, now: Optional[datetime] = None) ->
 
 def _mark_agent_job_started(
     job: AgentJob, db: Session, *, started_at: Optional[datetime] = None
-) -> Optional[BackupJob]:
+) -> Any:
     """Returns the linked backup job when this start report is its first one,
     so the caller can send the backup-start notification exactly once (a
     requeued job that reconnects does not notify again)."""

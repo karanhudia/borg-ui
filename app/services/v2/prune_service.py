@@ -9,7 +9,7 @@ import structlog
 from app.config import settings
 from app.core.borg2 import _get_borg2_binary, borg2
 from app.database.database import SessionLocal
-from app.database.models import PruneJob, Repository
+from app.database.models import Repository
 from app.services.operations.job_facade import (
     claim_running,
     refresh_job,
@@ -98,7 +98,7 @@ class PruneV2Service:
         _db=None,
         keep_within: str | None = None,
     ):
-        """Execute borg2 prune and persist results to the shared PruneJob model."""
+        """Execute borg2 prune and persist results to the prune operation."""
         db = SessionLocal()
         temp_key_file = None
         try:
@@ -274,7 +274,7 @@ class PruneV2Service:
         except Exception as e:
             logger.error("Borg2 prune service error", job_id=job_id, error=str(e))
             try:
-                job = db.query(PruneJob).filter(PruneJob.id == job_id).first()
+                job = resolve_maintenance_job(db, job_id, "prune")
                 if job:
                     completed_at = datetime.now(timezone.utc)
 

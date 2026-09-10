@@ -8,9 +8,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from datetime import datetime, timedelta, timezone
 
 from app.database.models import (
-    BackupJob,
     AvailabilityScheduleSkip,
-    CheckJob,
     Operation,
     Repository,
     ScheduledJob,
@@ -25,6 +23,7 @@ from app.services.mqtt_sync_scheduler import (
 from app.services.schedule_availability import AvailabilityDecision
 from app.api import schedule as schedule_api
 from app.api.schedule import check_scheduled_jobs, dispatch_due_scheduled_backups
+from tests.utils.operations import seed_job_operation
 
 
 @pytest.mark.unit
@@ -585,7 +584,9 @@ async def test_shared_scheduler_counts_active_scheduled_backup_jobs_from_db(
     db_session.add_all([active_schedule, due_schedule])
     db_session.flush()
     db_session.add(
-        BackupJob(
+        seed_job_operation(
+            db_session,
+            "backup",
             repository=repo.path,
             repository_id=repo.id,
             status="pending",
@@ -671,7 +672,9 @@ async def test_shared_scheduler_dispatch_limits_scheduled_checks(db_session):
 
     db_session.flush()
     db_session.add(
-        CheckJob(
+        seed_job_operation(
+            db_session,
+            "check",
             repository_id=repos[0].id,
             status="running",
             scheduled_check=True,
@@ -681,87 +684,51 @@ async def test_shared_scheduler_dispatch_limits_scheduled_checks(db_session):
 
     await run_due_scheduled_checks(db_session, datetime.utcnow())
 
-    # One legacy scheduled check is already running, so a limit of two leaves
-    # room for exactly one more.
-    enqueued = db_session.query(Operation).filter(Operation.kind == "check").all()
+    # One scheduled check is already running, so a limit of two leaves room
+    # for exactly one more.
+    enqueued = (
+        db_session.query(Operation)
+        .filter(Operation.kind == "check", Operation.status == "queued")
+        .all()
+    )
     assert len(enqueued) == 1
 
 
 @pytest.mark.unit
-@pytest.mark.asyncio
-async def test_check_scheduler_cleans_stale_pending_checks_before_capacity_check(
-    db_session,
-):
-    db_session.add(SystemSettings(max_concurrent_scheduled_checks=1))
+def test_active_scheduled_checks_count_queued_not_finished(db_session):
+    """The dispatcher's capacity check counts the scheduled checks that are
+    waiting or running, and nothing that has finished."""
+    from app.services.check_scheduler import count_active_scheduled_check_jobs
+    from tests.utils.operations import seed_job_operation as _seed
+
     repo = Repository(
-        name="Repo",
-        path="/tmp/repo",
+        name="Counted",
+        path="/tmp/counted",
         encryption="none",
         compression="lz4",
         repository_type="local",
-        check_cron_expression="0 2 * * *",
-        next_scheduled_check=datetime.utcnow() - timedelta(minutes=1),
     )
     db_session.add(repo)
     db_session.flush()
-
-    stale_job = CheckJob(
+    now = datetime.utcnow()
+    _seed(
+        db_session,
+        "check",
         repository_id=repo.id,
-        repository_path=repo.path,
         status="pending",
         scheduled_check=True,
-        created_at=datetime.utcnow() - timedelta(hours=1),
     )
-    db_session.add(stale_job)
-    db_session.commit()
-
-    await run_due_scheduled_checks(db_session, datetime.utcnow())
-
-    db_session.refresh(stale_job)
-    assert stale_job.status == "failed"
-    assert stale_job.completed_at is not None
-    # The stale legacy row freed the only slot, so one check is enqueued.
-    assert db_session.query(Operation).filter(Operation.kind == "check").count() == 1
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_check_scheduler_cleans_stale_running_checks_before_capacity_check(
-    db_session,
-):
-    db_session.add(SystemSettings(max_concurrent_scheduled_checks=1))
-    repo = Repository(
-        name="Repo",
-        path="/tmp/repo",
-        encryption="none",
-        compression="lz4",
-        repository_type="local",
-        check_cron_expression="0 2 * * *",
-        next_scheduled_check=datetime.utcnow() - timedelta(minutes=1),
-    )
-    db_session.add(repo)
-    db_session.flush()
-
-    stale_job = CheckJob(
+    assert count_active_scheduled_check_jobs(db_session, now) == 1
+    _seed(
+        db_session,
+        "check",
         repository_id=repo.id,
-        repository_path=repo.path,
-        status="running",
+        status="completed",
         scheduled_check=True,
-        started_at=datetime.utcnow() - timedelta(hours=1),
-        created_at=datetime.utcnow() - timedelta(hours=1),
-        process_pid=999999,
-        process_start_time=123,
     )
-    db_session.add(stale_job)
-    db_session.commit()
-
-    await run_due_scheduled_checks(db_session, datetime.utcnow())
-
-    db_session.refresh(stale_job)
-    assert stale_job.status == "failed"
-    assert stale_job.completed_at is not None
-    # The stale legacy row freed the only slot, so one check is enqueued.
-    assert db_session.query(Operation).filter(Operation.kind == "check").count() == 1
+    assert count_active_scheduled_check_jobs(db_session, now) == 1
+    _seed(db_session, "check", repository_id=repo.id, status="pending")
+    assert count_active_scheduled_check_jobs(db_session, now) == 1
 
 
 @pytest.mark.unit

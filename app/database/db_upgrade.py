@@ -152,24 +152,37 @@ def _engine(url: str, *, disposable: bool = False) -> Engine:
     return engine
 
 
-def _upgrade_to_head(url: str, engine: Engine | None = None) -> None:
-    """Build the baseline schema.
+# The last revision whose schema still holds the legacy job tables. A
+# pre-Alembic database is transferred onto this revision, not onto head, so
+# the collapse revision (c9d0e1f2a3b4) folds its job history into
+# `operations` instead of the transfer silently skipping tables head no
+# longer has.
+PRE_COLLAPSE_REVISION = "b8c9d0e1f2a3"
+
+
+def _upgrade_to(url: str, revision: str, engine: Engine | None = None) -> None:
+    """Apply revisions up to `revision` (`"head"` for all of them).
 
     With an engine, the migration runs on its connection rather than one alembic
     opens for itself -- otherwise the target's pragmas would not apply to the
     schema build, which is 48 tables and 131 indexes and the slowest part of an
     upgrade over NFS.
     """
-    log.info("applying database migrations up to head")
+    log.info("applying database migrations up to %s", revision)
     config = _alembic_config(url)
     if engine is None:
-        command.upgrade(config, "head")
+        command.upgrade(config, revision)
         return
 
     with engine.connect() as connection:
         config.attributes["connection"] = connection
-        command.upgrade(config, "head")
+        command.upgrade(config, revision)
         connection.commit()
+
+
+def _upgrade_to_head(url: str, engine: Engine | None = None) -> None:
+    """Build the baseline schema. See `_upgrade_to`."""
+    _upgrade_to(url, "head", engine)
 
 
 def _has_legacy_schema(engine: Engine) -> bool:
@@ -450,10 +463,17 @@ def alembic_init(
     source_engine = create_engine(_sqlite_url(catch_up_path))
     target_engine = _engine(target_url, disposable=not to_postgres)
     try:
-        _upgrade_to_head(target_url, target_engine)
+        # Not head: the transfer can only copy a table the target has, and head
+        # no longer has the legacy job tables. It stops at the last revision
+        # that does, and the collapse revision below folds the rows it received
+        # into `operations`.
+        _upgrade_to(target_url, PRE_COLLAPSE_REVISION, target_engine)
 
         report = _transfer(source_engine, target_engine)
         report.target_url = _safe_url(target_url)
+
+        # The transferred legacy job rows are folded into `operations` here.
+        _upgrade_to_head(target_url, target_engine)
 
         if to_postgres:
             report.sequences_reset = _reset_sequences(target_engine)
@@ -501,13 +521,20 @@ def _transfer(source: Engine, target: Engine) -> UpgradeReport:
     log.info("transferring rows")
     reflected = MetaData()
     reflected.reflect(bind=source)
+    # The target's own schema, not the models': the target stands on
+    # PRE_COLLAPSE_REVISION, which still has the legacy job tables the models
+    # no longer declare, and those rows are exactly what must come across.
+    target_meta = MetaData()
+    target_meta.reflect(bind=target)
 
     with source.connect() as src, target.begin() as dst:
         deferred: list[tuple] = []
 
         # sorted_tables is topological: parents before children, which is what
         # Postgres requires -- it checks every foreign key at insert time.
-        for table in Base.metadata.sorted_tables:
+        for table in target_meta.sorted_tables:
+            if table.name == "alembic_version":
+                continue
             source_table = reflected.tables.get(table.name)
             if source_table is None:
                 continue
@@ -603,7 +630,10 @@ def _orphan_columns(src, table, common: list[str]) -> dict[str, int]:
             continue
         parent_table = fk.column.table.name
         parent_col = fk.column.name
-        if parent_table not in [t.name for t in Base.metadata.sorted_tables]:
+        # The join below reads the source, so the parent has to exist there.
+        # Reflection gives the target's foreign keys, and the source is an older
+        # schema that may not have the table the target points at.
+        if not inspect(src).has_table(parent_table):
             continue
         n = src.execute(
             text(

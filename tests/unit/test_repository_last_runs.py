@@ -11,11 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.database.models import (
     Base,
-    DeleteArchiveJob,
     Operation,
-    PruneJob,
     Repository,
-    RepositoryWipeJob,
     SystemSettings,
     utc_now,
 )
@@ -70,11 +67,15 @@ def _op(
     return op
 
 
-def _prune_job(test_db, repo, completed_at, status="completed"):
-    test_db.add(
-        PruneJob(repository_id=repo.id, status=status, completed_at=completed_at)
-    )
+def _wipe(test_db, repo, *, status, started_at=None, completed_at=None):
+    """A wipe operation with its details row, the shape phase 6 gave wipes."""
+    from app.services.operations.details import wipe_details
+
+    op = _op(test_db, repo, "wipe", completed_at, status=status, started=False)
+    op.started_at = started_at
+    wipe_details(test_db, op)
     test_db.commit()
+    return op
 
 
 @pytest.mark.unit
@@ -88,11 +89,11 @@ class TestLastRuns:
     def test_empty_page(self, test_db):
         assert last_runs(test_db, []) == {}
 
-    def test_prune_from_operations_and_legacy_newest_wins(self, test_db):
+    def test_prune_newest_completion_wins(self, test_db):
         repo = _repo(test_db)
         now = utc_now().replace(tzinfo=None)
         _op(test_db, repo, "prune", now - timedelta(days=5))
-        _prune_job(test_db, repo, now - timedelta(days=2))
+        _op(test_db, repo, "prune", now - timedelta(days=2))
         assert last_runs(test_db, [repo])[repo.id].last_prune == now - timedelta(days=2)
         _op(test_db, repo, "prune", now - timedelta(days=1))
         assert last_runs(test_db, [repo])[repo.id].last_prune == now - timedelta(days=1)
@@ -104,7 +105,7 @@ class TestLastRuns:
         now = utc_now().replace(tzinfo=None)
         _op(test_db, repo, "prune", now - timedelta(days=5))
         _op(test_db, repo, "prune", now - timedelta(days=1), status="failed")
-        _prune_job(test_db, repo, now - timedelta(hours=1), status="cancelled")
+        _op(test_db, repo, "prune", now - timedelta(hours=1), status="cancelled")
         _op(test_db, repo, "archive_sync", now - timedelta(days=3))
         _op(test_db, repo, "stats", now - timedelta(hours=2), status="failed")
         runs = last_runs(test_db, [repo])
@@ -192,20 +193,18 @@ class TestLastRuns:
         assert last_runs(test_db, [repo])[repo.id].last_prune is None
 
     def test_a_wipe_explains_the_removal(self, test_db):
-        """A wipe is a RepositoryWipeJob row, not an operation (until phase
-        6); the listing that reports every archive gone is not a prune."""
+        """The listing that reports every archive gone after a wipe is not a
+        prune."""
         repo = _repo(test_db)
         now = utc_now().replace(tzinfo=None)
         _op(test_db, repo, "archive_sync", now - timedelta(days=2))
-        test_db.add(
-            RepositoryWipeJob(
-                repository_id=repo.id,
-                status="completed",
-                started_at=now - timedelta(days=1, hours=2),
-                completed_at=now - timedelta(days=1, hours=1),
-            )
+        _wipe(
+            test_db,
+            repo,
+            status="completed",
+            started_at=now - timedelta(days=1, hours=2),
+            completed_at=now - timedelta(days=1, hours=1),
         )
-        test_db.commit()
         _op(
             test_db,
             repo,
@@ -220,14 +219,7 @@ class TestLastRuns:
         its delete phase; the cron prune's listing after it still counts."""
         repo = _repo(test_db)
         now = utc_now().replace(tzinfo=None)
-        test_db.add(
-            RepositoryWipeJob(
-                repository_id=repo.id,
-                status="cancelled",
-                completed_at=now - timedelta(hours=2),
-            )
-        )
-        test_db.commit()
+        _wipe(test_db, repo, status="cancelled", completed_at=now - timedelta(hours=2))
         _op(
             test_db,
             repo,
@@ -238,30 +230,6 @@ class TestLastRuns:
         assert last_runs(test_db, [repo])[repo.id].last_prune == now - timedelta(
             hours=1
         )
-
-    def test_a_legacy_delete_job_explains_the_removal(self, test_db):
-        """Deletes before phase 5 wrote DeleteArchiveJob rows; consulted
-        like every other legacy table until phase 9."""
-        repo = _repo(test_db)
-        now = utc_now().replace(tzinfo=None)
-        test_db.add(
-            DeleteArchiveJob(
-                repository_id=repo.id,
-                archive_name="old-archive",
-                status="completed",
-                started_at=now - timedelta(hours=2, minutes=1),
-                completed_at=now - timedelta(hours=2),
-            )
-        )
-        test_db.commit()
-        _op(
-            test_db,
-            repo,
-            "archive_sync",
-            now - timedelta(hours=1),
-            result={"removed_archive_ids": [1]},
-        )
-        assert last_runs(test_db, [repo])[repo.id].last_prune is None
 
     def test_a_queued_deletion_cancelled_before_its_turn_explains_nothing(
         self, test_db
@@ -319,20 +287,19 @@ class TestLastRuns:
         )
         assert last_runs(test_db, [repo])[repo.id].last_prune is None
 
-    def test_a_reaped_legacy_delete_job_explains_nothing(self, test_db):
-        """The reaper stamps a never-queued DeleteArchiveJob failed with a
-        completion but no start; it removed nothing."""
+    def test_a_reaped_delete_operation_explains_nothing(self, test_db):
+        """The reaper stamps a never-queued delete failed with a completion
+        but no start; it removed nothing."""
         repo = _repo(test_db)
         now = utc_now().replace(tzinfo=None)
-        test_db.add(
-            DeleteArchiveJob(
-                repository_id=repo.id,
-                archive_name="never-ran",
-                status="failed",
-                completed_at=now - timedelta(hours=2),
-            )
+        _op(
+            test_db,
+            repo,
+            "delete_archive",
+            now - timedelta(hours=2),
+            status="failed",
+            started=False,
         )
-        test_db.commit()
         _op(
             test_db,
             repo,
@@ -500,7 +467,7 @@ class TestLastRuns:
         a, b, other = _repo(test_db, "a"), _repo(test_db, "b"), _repo(test_db, "c")
         now = utc_now().replace(tzinfo=None)
         _op(test_db, a, "prune", now - timedelta(days=1))
-        _prune_job(test_db, b, now - timedelta(days=3))
+        _op(test_db, b, "prune", now - timedelta(days=3))
         _op(test_db, b, "stats", now - timedelta(hours=1))
         _op(test_db, other, "prune", now)
         _op(test_db, other, "archive_sync", now)

@@ -15,10 +15,6 @@ from app.database.models import (
     AgentJobLog,
     AgentMachine,
     Repository,
-    BackupJob,
-    CheckJob,
-    PruneJob,
-    CompactJob,
     Operation,
     OperationBackupDetails,
     OperationBackupRetryLineage,
@@ -33,6 +29,8 @@ from app.services.operations.backup_facade import BackupJobFacade
 from app.services.operations.details import backup_details
 from app.services.repository_executor import queue_agent_backup_job
 from tests.unit.helpers import assert_auth_required
+from app.services.operations.backup_facade import resolve_backup_job
+from tests.utils.operations import seed_job_operation
 
 
 def _json_snapshot(value):
@@ -137,7 +135,6 @@ class TestBackupStart:
         assert op.trigger == "manual"
         assert op.repository_id == repo.id
         assert op.params["executor"] == "server"
-        assert test_db.query(BackupJob).count() == 0
 
     def test_start_backup_unknown_path_is_recorded_and_failed(
         self, test_client, admin_headers, test_db
@@ -195,25 +192,23 @@ class TestBackupStart:
         assert lineage.attempt_number == 2
         assert lineage.request_snapshot["kind"] == "backup_job_retry"
 
-    def test_list_and_status_serve_operations_and_legacy_rows(
+    def test_list_and_status_serve_backup_operations(
         self, test_client, admin_headers, test_db
     ):
         repo = Repository(
             name="r", path="/test/repo", encryption="none", repository_type="local"
         )
-        test_db.add(repo)
-        test_db.commit()
-        legacy = BackupJob(repository="/test/repo", status="completed")
-        test_db.add(legacy)
-        test_db.commit()
         schedule = ScheduledJob(
             name="nightly",
             repository=repo.path,
-            repository_id=repo.id,
             cron_expression="0 2 * * *",
         )
-        test_db.add(schedule)
+        test_db.add_all([repo, schedule])
         test_db.commit()
+        schedule.repository_id = repo.id
+        manual = seed_job_operation(
+            test_db, "backup", repository="/test/repo", status="completed"
+        )
         op = Operation(
             repository_id=repo.id,
             kind="backup",
@@ -232,14 +227,15 @@ class TestBackupStart:
         test_db.commit()
 
         jobs = test_client.get("/api/backup/jobs", headers=admin_headers).json()["jobs"]
-        assert {j["id"] for j in jobs} == {legacy.id, op.id}
+        assert {j["id"] for j in jobs} == {manual.id, op.id}
         mine = next(j for j in jobs if j["id"] == op.id)
         assert mine["status"] == "running"
         assert mine["progress"] == 40
         assert mine["triggered_by"] == "schedule"
         assert mine["execution_mode"] == "local"
         assert mine["archive_name"] == "a"
-        assert set(mine) == set(next(j for j in jobs if j["id"] == legacy.id))
+        # Every row answers with the same keys.
+        assert set(mine) == set(next(j for j in jobs if j["id"] == manual.id))
 
     def test_cancel_running_operation_raises_the_flag_then_kills(
         self, test_client, admin_headers, test_db
@@ -474,7 +470,9 @@ class TestBackupStart:
         )
         test_db.flush()
         test_db.add(
-            BackupJob(
+            seed_job_operation(
+                test_db,
+                "backup",
                 repository=repo.path,
                 repository_id=repo.id,
                 status="pending",
@@ -499,7 +497,12 @@ class TestBackupStart:
             == "backend.errors.backup.concurrentLimitReached"
         )
         execute_backup.assert_not_called()
-        assert test_db.query(BackupJob).filter_by(repository=repo.path).count() == 1
+        assert (
+            test_db.query(Operation)
+            .filter(Operation.kind == "backup", Operation.repository_id == repo.id)
+            .count()
+            == 1
+        )
 
     def test_start_backup_multiple_sources(
         self, test_client: TestClient, admin_headers, test_db
@@ -590,14 +593,12 @@ class TestBackupStart:
         assert operation.kind == "backup"
         assert operation.params["executor"] == "agent"
         assert operation.execution_mode == "agent"
-        assert test_db.query(BackupJob).count() == 0
 
         agent_job = queue_agent_backup_job(
             test_db, BackupJobFacade(test_db, operation), repo
         )
         test_db.commit()
         assert agent_job.operation_id == operation.id
-        assert agent_job.backup_job_id is None
         assert agent_job.agent_machine_id == agent.id
         assert agent_job.status == "queued"
         assert agent_job.payload["repository"] == {
@@ -643,7 +644,9 @@ class TestBackupStart:
         )
         test_db.flush()
         test_db.add(
-            BackupJob(
+            seed_job_operation(
+                test_db,
+                "backup",
                 repository=repo.path,
                 repository_id=repo.id,
                 status="running",
@@ -668,7 +671,8 @@ class TestBackupStart:
         )
         dispatch_agent_job.assert_not_called()
         assert test_db.query(AgentJob).count() == 0
-        assert test_db.query(Operation).filter(Operation.kind == "backup").count() == 0
+        # Only the running backup this test seeded as the conflict.
+        assert test_db.query(Operation).filter(Operation.kind == "backup").count() == 1
 
     def test_start_backup_uses_remote_direct_for_same_ssh_source_and_repo(
         self, test_client: TestClient, admin_headers, test_db
@@ -955,7 +959,9 @@ class TestBackupRetry:
         )
         test_db.add(repo)
         test_db.flush()
-        source_job = BackupJob(
+        source_job = seed_job_operation(
+            test_db,
+            "backup",
             repository=repo.path,
             repository_id=repo.id,
             status="failed",
@@ -965,7 +971,6 @@ class TestBackupRetry:
             execution_mode="local",
             created_at=datetime.utcnow(),
         )
-        test_db.add(source_job)
         test_db.commit()
 
         # A retry of a row written before phase 8 creates an operation; the
@@ -1046,7 +1051,9 @@ class TestBackupRetry:
         )
         test_db.add(repo)
         test_db.flush()
-        source_job = BackupJob(
+        source_job = seed_job_operation(
+            test_db,
+            "backup",
             repository=repo.path,
             repository_id=repo.id,
             status="failed",
@@ -1056,12 +1063,11 @@ class TestBackupRetry:
             archive_name="manual-backup-source",
             created_at=datetime.utcnow(),
         )
-        test_db.add(source_job)
         test_db.flush()
         test_db.add(
             AgentJob(
                 agent_machine_id=agent.id,
-                backup_job_id=source_job.id,
+                operation_id=source_job.id,
                 job_type="backup",
                 status="failed",
                 payload={
@@ -1145,7 +1151,9 @@ class TestBackupRetry:
         )
         test_db.add(repo)
         test_db.flush()
-        source_job = BackupJob(
+        source_job = seed_job_operation(
+            test_db,
+            "backup",
             repository=repo.path,
             repository_id=repo.id,
             status="running",
@@ -1153,7 +1161,6 @@ class TestBackupRetry:
             execution_mode="local",
             created_at=datetime.utcnow(),
         )
-        test_db.add(source_job)
         test_db.commit()
 
         response = test_client.post(
@@ -1167,7 +1174,7 @@ class TestBackupRetry:
         )
         test_db.refresh(source_job)
         assert source_job.status == "running"
-        assert test_db.query(BackupJob).count() == 1
+        assert test_db.query(Operation).filter(Operation.kind == "backup").count() == 1
 
     def test_retry_backup_job_requires_operator_access(
         self, test_client: TestClient, auth_headers, test_db
@@ -1180,7 +1187,9 @@ class TestBackupRetry:
         )
         test_db.add(repo)
         test_db.flush()
-        source_job = BackupJob(
+        source_job = seed_job_operation(
+            test_db,
+            "backup",
             repository=repo.path,
             repository_id=repo.id,
             status="failed",
@@ -1188,7 +1197,6 @@ class TestBackupRetry:
             execution_mode="local",
             created_at=datetime.utcnow(),
         )
-        test_db.add(source_job)
         test_db.commit()
 
         response = test_client.post(
@@ -1196,7 +1204,7 @@ class TestBackupRetry:
         )
 
         assert response.status_code == 403
-        assert test_db.query(BackupJob).count() == 1
+        assert test_db.query(Operation).filter(Operation.kind == "backup").count() == 1
 
     def test_retry_backup_job_allows_repository_operator(
         self, test_client: TestClient, auth_headers, test_db, test_user
@@ -1216,7 +1224,9 @@ class TestBackupRetry:
                 role="operator",
             )
         )
-        source_job = BackupJob(
+        source_job = seed_job_operation(
+            test_db,
+            "backup",
             repository=repo.path,
             repository_id=repo.id,
             status="cancelled",
@@ -1224,7 +1234,6 @@ class TestBackupRetry:
             execution_mode="local",
             created_at=datetime.utcnow(),
         )
-        test_db.add(source_job)
         test_db.commit()
 
         with patch(
@@ -1266,13 +1275,14 @@ class TestBackupJobs:
         self, test_client: TestClient, admin_headers, test_db
     ):
         """Test listing backup jobs returns jobs"""
-        job = BackupJob(
+        job = seed_job_operation(
+            test_db,
+            "backup",
             repository="/test/repo",
             status="completed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
         )
-        test_db.add(job)
         test_db.commit()
 
         response = test_client.get("/api/backup/jobs", headers=admin_headers)
@@ -1307,33 +1317,32 @@ class TestBackupJobs:
             encryption="none",
             repository_type="local",
         )
-        matching_manual_job = BackupJob(
+        test_db.add_all([primary_repo, secondary_repo])
+        test_db.flush()
+        matching_manual_job = seed_job_operation(
+            test_db,
+            "backup",
             repository=primary_repo.path,
             status="completed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
         )
-        other_manual_job = BackupJob(
+        other_manual_job = seed_job_operation(
+            test_db,
+            "backup",
             repository=secondary_repo.path,
             status="completed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
         )
-        scheduled_job = BackupJob(
+        scheduled_job = seed_job_operation(
+            test_db,
+            "backup",
             repository=primary_repo.path,
             status="completed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
             scheduled_job_id=123,
-        )
-        test_db.add_all(
-            [
-                primary_repo,
-                secondary_repo,
-                matching_manual_job,
-                other_manual_job,
-                scheduled_job,
-            ]
         )
         test_db.commit()
 
@@ -1370,14 +1379,15 @@ class TestBackupStatus:
         self, test_client: TestClient, admin_headers, test_db
     ):
         """Test getting backup status returns 200"""
-        job = BackupJob(
+        job = seed_job_operation(
+            test_db,
+            "backup",
             repository="/test/repo",
             status="running",
             started_at=datetime.now(),
             execution_mode="remote_ssh",
             route_strategy="remote_direct",
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -1401,7 +1411,11 @@ class TestBackupStatus:
             repository_type="local",
             borg_version=2,
         )
-        job = BackupJob(
+        test_db.add(repo)
+        test_db.flush()
+        job = seed_job_operation(
+            test_db,
+            "backup",
             repository=repo.path,
             status="running",
             started_at=datetime.now(),
@@ -1412,7 +1426,6 @@ class TestBackupStatus:
             deduplicated_size=256,
             nfiles=3,
         )
-        test_db.add_all([repo, job])
         test_db.commit()
         test_db.refresh(job)
 
@@ -1437,7 +1450,11 @@ class TestBackupStatus:
             repository_type="local",
             borg_version=1,
         )
-        job = BackupJob(
+        test_db.add(repo)
+        test_db.flush()
+        job = seed_job_operation(
+            test_db,
+            "backup",
             repository=repo.path,
             status="running",
             started_at=datetime.now(),
@@ -1448,7 +1465,6 @@ class TestBackupStatus:
             deduplicated_size=256,
             nfiles=3,
         )
-        test_db.add_all([repo, job])
         test_db.commit()
 
         response = test_client.get("/api/backup/jobs", headers=admin_headers)
@@ -1498,10 +1514,13 @@ class TestBackupCancel:
         self, test_client: TestClient, admin_headers, test_db
     ):
         """Test cancelling backup returns 200"""
-        job = BackupJob(
-            repository="/test/repo", status="running", started_at=datetime.now()
+        job = seed_job_operation(
+            test_db,
+            "backup",
+            repository="/test/repo",
+            status="running",
+            started_at=datetime.now(),
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -1586,13 +1605,14 @@ class TestBackupCancel:
         self, test_client: TestClient, admin_headers, test_db
     ):
         """Test cancelling completed backup returns 400"""
-        job = BackupJob(
+        job = seed_job_operation(
+            test_db,
+            "backup",
             repository="/test/repo",
             status="completed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -1612,24 +1632,28 @@ class TestBackupCancel:
             repository_type="local",
             borg_version=1,
         )
-        job = BackupJob(
+        test_db.add(repo)
+        test_db.flush()
+        job = seed_job_operation(
+            test_db,
+            "backup",
             repository=repo.path,
             status="completed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
             maintenance_status="running_prune",
         )
-        test_db.add_all([repo, job])
         test_db.commit()
         test_db.refresh(repo)
         test_db.refresh(job)
 
-        prune_job = PruneJob(
+        prune_job = seed_job_operation(
+            test_db,
+            "prune",
             repository_id=repo.id,
             repository_path=repo.path,
             status="running",
         )
-        test_db.add(prune_job)
         test_db.commit()
         test_db.refresh(prune_job)
 
@@ -1645,7 +1669,7 @@ class TestBackupCancel:
         test_db.refresh(job)
         test_db.refresh(prune_job)
         assert job.status == "completed"
-        assert job.maintenance_status == "prune_failed"
+        assert resolve_backup_job(test_db, job.id).maintenance_status == "prune_failed"
         assert prune_job.status == "cancelled"
         mock_cancel.assert_awaited_once_with(prune_job.id)
 
@@ -1659,24 +1683,28 @@ class TestBackupCancel:
             repository_type="local",
             borg_version=1,
         )
-        job = BackupJob(
+        test_db.add(repo)
+        test_db.flush()
+        job = seed_job_operation(
+            test_db,
+            "backup",
             repository=repo.path,
             status="completed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
             maintenance_status="running_compact",
         )
-        test_db.add_all([repo, job])
         test_db.commit()
         test_db.refresh(repo)
         test_db.refresh(job)
 
-        compact_job = CompactJob(
+        compact_job = seed_job_operation(
+            test_db,
+            "compact",
             repository_id=repo.id,
             repository_path=repo.path,
             status="running",
         )
-        test_db.add(compact_job)
         test_db.commit()
         test_db.refresh(compact_job)
 
@@ -1692,7 +1720,9 @@ class TestBackupCancel:
         test_db.refresh(job)
         test_db.refresh(compact_job)
         assert job.status == "completed"
-        assert job.maintenance_status == "compact_failed"
+        assert (
+            resolve_backup_job(test_db, job.id).maintenance_status == "compact_failed"
+        )
         assert compact_job.status == "cancelled"
         mock_cancel.assert_awaited_once_with(compact_job.id)
 
@@ -1706,24 +1736,28 @@ class TestBackupCancel:
             repository_type="local",
             borg_version=1,
         )
-        job = BackupJob(
+        test_db.add(repo)
+        test_db.flush()
+        job = seed_job_operation(
+            test_db,
+            "backup",
             repository=repo.path,
             status="completed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
             maintenance_status="running_check",
         )
-        test_db.add_all([repo, job])
         test_db.commit()
         test_db.refresh(repo)
         test_db.refresh(job)
 
-        check_job = CheckJob(
+        check_job = seed_job_operation(
+            test_db,
+            "check",
             repository_id=repo.id,
             repository_path=repo.path,
             status="running",
         )
-        test_db.add(check_job)
         test_db.commit()
         test_db.refresh(check_job)
 
@@ -1735,7 +1769,7 @@ class TestBackupCancel:
         test_db.refresh(job)
         test_db.refresh(check_job)
         assert job.status == "completed"
-        assert job.maintenance_status == "check_failed"
+        assert resolve_backup_job(test_db, job.id).maintenance_status == "check_failed"
         assert check_job.status == "cancelled"
         assert check_job.completed_at is not None
 
@@ -1749,14 +1783,17 @@ class TestBackupCancel:
             repository_type="local",
             borg_version=1,
         )
-        job = BackupJob(
+        test_db.add(repo)
+        test_db.flush()
+        job = seed_job_operation(
+            test_db,
+            "backup",
             repository=repo.path,
             status="completed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
             maintenance_status="running_check",
         )
-        test_db.add_all([repo, job])
         test_db.commit()
         test_db.refresh(job)
 
@@ -1767,7 +1804,7 @@ class TestBackupCancel:
         assert response.status_code == 200
         test_db.refresh(job)
         assert job.status == "completed"
-        assert job.maintenance_status == "check_failed"
+        assert resolve_backup_job(test_db, job.id).maintenance_status == "check_failed"
 
     def test_cancel_backup_unauthorized(self, test_client: TestClient):
         """Test cancelling backup without auth returns 403"""
@@ -1792,14 +1829,15 @@ class TestBackupLogs:
     ):
         """Test downloading backup logs accepts standard bearer auth."""
         _set_log_save_policy(test_db, "all_jobs")
-        job = BackupJob(
+        job = seed_job_operation(
+            test_db,
+            "backup",
             repository="/test/repo",
             status="completed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
             logs="downloadable backup log",
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -1824,14 +1862,15 @@ class TestBackupLogs:
         self, test_client: TestClient, admin_headers, test_db
     ):
         """Test downloading logs with no log content returns 404."""
-        job = BackupJob(
+        job = seed_job_operation(
+            test_db,
+            "backup",
             repository="/test/repo",
             status="completed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
             log_file_path=None,  # No log file
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -1856,14 +1895,15 @@ class TestBackupLogs:
         _set_log_save_policy(test_db, "all_jobs")
         monkeypatch.setattr(config.settings, "disable_authentication", True)
 
-        job = BackupJob(
+        job = seed_job_operation(
+            test_db,
+            "backup",
             repository="/test/repo",
             status="completed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
             logs="proxy mode logs",
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -1899,14 +1939,15 @@ class TestBackupLogs:
         expected_has_logs,
     ):
         _set_log_save_policy(test_db, policy)
-        job = BackupJob(
+        job = seed_job_operation(
+            test_db,
+            "backup",
             repository="/test/repo",
             status=job_status,
             started_at=datetime.now(),
             completed_at=datetime.now(),
             logs=logs,
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -1953,18 +1994,19 @@ class TestBackupLogs:
         )
         test_db.add(agent)
         test_db.flush()
-        backup_job = BackupJob(
+        backup_job = seed_job_operation(
+            test_db,
+            "backup",
             repository="/agent/repo",
             status="completed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
             execution_mode="agent",
         )
-        test_db.add(backup_job)
         test_db.flush()
         agent_job = AgentJob(
             agent_machine_id=agent.id,
-            backup_job_id=backup_job.id,
+            operation_id=backup_job.id,
             job_type="backup.create",
             status="completed",
             payload={},
@@ -2016,18 +2058,19 @@ class TestBackupLogs:
         )
         test_db.add(agent)
         test_db.flush()
-        backup_job = BackupJob(
+        backup_job = seed_job_operation(
+            test_db,
+            "backup",
             repository="/agent/repo",
             status="completed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
             execution_mode="agent",
         )
-        test_db.add(backup_job)
         test_db.flush()
         agent_job = AgentJob(
             agent_machine_id=agent.id,
-            backup_job_id=backup_job.id,
+            operation_id=backup_job.id,
             job_type="backup.create",
             status="completed",
             payload={},
@@ -2067,13 +2110,14 @@ class TestBackupLogs:
         self, test_client: TestClient, admin_headers, test_db
     ):
         """Test streaming backup logs returns 200"""
-        job = BackupJob(
+        job = seed_job_operation(
+            test_db,
+            "backup",
             repository="/test/repo",
             status="running",
             started_at=datetime.now(),
             log_file_path="/tmp/backup_1.log",
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 

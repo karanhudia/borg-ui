@@ -14,8 +14,6 @@ so they are stored as their nearest spec status and reconstructed from
 | --- | --- | --- |
 | `completed_compaction_failed` | `completed_with_warnings` | `compact_failed` |
 | `failed_partial` | `failed` | `delete_failed_partial` |
-
-Deleted in phase 9 with the legacy table.
 """
 
 from pathlib import Path
@@ -23,13 +21,10 @@ from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
-from app.database.models import Operation, Repository, RepositoryWipeJob
+from app.database.models import Operation, Repository
 from app.services.operations.details import wipe_details
 
 ACTIVE_STATUSES = ("queued", "running")
-# A pre-phase-6 install can restart mid-run and leave one of these behind.
-# Nothing writes them any more; the tuple goes away in phase 9.
-_LEGACY_ACTIVE_STATUSES = ("pending", "running")
 
 PHASE_COMPACT_FAILED = "compact_failed"
 PHASE_DELETE_FAILED_PARTIAL = "delete_failed_partial"
@@ -208,28 +203,24 @@ class WipeJobFacade:
         return None
 
 
-def resolve_wipe_job(db: Session, job_id: int) -> Any:
-    """The job a wipe caller should drive for `job_id`.
-
-    Operations win, so new work runs on the new table. Ids that belong to a
-    row written before this phase fall back to the legacy table, which keeps
-    the wipe status route working for history and for previews.
-    """
+def resolve_wipe_job(db: Session, job_id: int) -> Optional["WipeJobFacade"]:
+    """The job a wipe caller should drive for `job_id`, or None when no wipe
+    operation has the id. Previews live in `repository_wipe_jobs` and are
+    resolved through the wipe service, not here."""
     operation = (
         db.query(Operation)
         .filter(Operation.id == job_id, Operation.kind == "wipe")
         .first()
     )
-    if operation is not None:
-        return WipeJobFacade(db, operation)
-    return db.query(RepositoryWipeJob).filter(RepositoryWipeJob.id == job_id).first()
+    if operation is None:
+        return None
+    return WipeJobFacade(db, operation)
 
 
 def active_wipe_operation(db: Session, repository_id: int) -> Any:
-    """Queued or running wipe work on this repository, operations first, then
-    a legacy row a pre-phase-6 install left active. A `previewed` legacy row is
-    deliberately not active: a preview holds no lock and blocks nothing."""
-    operation = (
+    """Queued or running wipe work on this repository. A preview is
+    deliberately not active: it holds no lock and blocks nothing."""
+    return (
         db.query(Operation)
         .filter(
             Operation.repository_id == repository_id,
@@ -237,16 +228,5 @@ def active_wipe_operation(db: Session, repository_id: int) -> Any:
             Operation.status.in_(ACTIVE_STATUSES),
         )
         .order_by(Operation.id.desc())
-        .first()
-    )
-    if operation is not None:
-        return operation
-    return (
-        db.query(RepositoryWipeJob)
-        .filter(
-            RepositoryWipeJob.repository_id == repository_id,
-            RepositoryWipeJob.status.in_(_LEGACY_ACTIVE_STATUSES),
-        )
-        .order_by(RepositoryWipeJob.id.desc())
         .first()
     )

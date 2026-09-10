@@ -24,22 +24,23 @@ from unittest.mock import AsyncMock, patch
 from app.database.models import (
     Repository,
     ScheduledJob,
-    BackupJob,
     Script,
     RepositoryScript,
     ScheduledJobRepository,
 )
 from app.api.schedule import execute_multi_repo_schedule
 from tests.utils.operations import operations_runner_for
+from app.services.operations.backup_facade import resolve_backup_job
+from tests.utils.operations import seed_job_operation
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
 class TestBackupJobTimestamps:
-    """Test that BackupJob records are created with valid timestamps (Bug #2)"""
+    """Test that backup operations are created with valid timestamps (Bug #2)"""
 
     async def test_single_repo_schedule_creates_timestamp(self, db_session: Session):
-        """Test that single-repo scheduled jobs create BackupJob with valid created_at"""
+        """Test that single-repo scheduled jobs create a backup operation with a valid created_at"""
         # Setup: Create repository
         repo = Repository(
             name="Test Repo",
@@ -88,17 +89,18 @@ class TestBackupJobTimestamps:
             job = jobs[0]
 
             # Create backup job (simulating what check_scheduled_jobs does)
-            backup_job = BackupJob(
+            backup_job = seed_job_operation(
+                db_session,
+                "backup",
                 repository=repo.path,
                 status="pending",
                 scheduled_job_id=job.id,
                 created_at=datetime.now(timezone.utc),  # This is the fix
             )
-            db_session.add(backup_job)
             db_session.commit()
             db_session.refresh(backup_job)
 
-        # Verify: BackupJob has valid timestamp
+        # Verify: the backup operation has a valid timestamp
         assert backup_job.created_at is not None, "created_at should not be NULL"
         assert isinstance(backup_job.created_at, datetime), (
             "created_at should be datetime"
@@ -111,7 +113,7 @@ class TestBackupJobTimestamps:
         )
 
     async def test_multi_repo_schedule_creates_timestamps(self, db_session: Session):
-        """Test that multi-repo scheduled jobs create BackupJob with valid created_at for all repos"""
+        """Test that multi-repo scheduled jobs create a backup operation with a valid created_at for all repos"""
         # Setup: Create multiple repositories
         repos = []
         for i in range(3):
@@ -156,13 +158,14 @@ class TestBackupJobTimestamps:
             # Execute: Manually create backup jobs (simulating execute_multi_repo_schedule)
             backup_jobs = []
             for repo in repos:
-                backup_job = BackupJob(
+                backup_job = seed_job_operation(
+                    db_session,
+                    "backup",
                     repository=repo.path,
                     status="pending",
                     scheduled_job_id=schedule.id,
                     created_at=datetime.now(timezone.utc),  # This is the fix
                 )
-                db_session.add(backup_job)
                 backup_jobs.append(backup_job)
             db_session.commit()
             for job in backup_jobs:
@@ -172,13 +175,13 @@ class TestBackupJobTimestamps:
         assert len(backup_jobs) == 3
         for i, backup_job in enumerate(backup_jobs):
             assert backup_job.created_at is not None, (
-                f"BackupJob {i} created_at should not be NULL"
+                f"backup operation {i} created_at should not be NULL"
             )
             assert isinstance(backup_job.created_at, datetime)
             # Verify not "56 years ago" (Unix epoch 1970)
             # The main bug was NULL timestamps showing as "56 years ago"
             assert backup_job.created_at.year >= 2024, (
-                f"BackupJob {i} should have current year (>=2024), not {backup_job.created_at.year}"
+                f"backup operation {i} should have current year (>=2024), not {backup_job.created_at.year}"
             )
 
 
@@ -306,7 +309,7 @@ class TestRepositoryInlineScripts:
             self, job_id, repository_path, db, archive_name=None, **kwargs
         ):
             # Simulate successful backup (self is the BackupService instance)
-            backup_job = db.query(BackupJob).filter_by(id=job_id).first()
+            backup_job = resolve_backup_job(db, job_id)
             if backup_job:
                 backup_job.status = "completed"
                 backup_job.nfiles = 10
@@ -757,7 +760,7 @@ class TestCombinedScenarios:
             else:
                 job_id = kwargs.get("job_id")
             if job_id:
-                backup_job = db_session.query(BackupJob).filter_by(id=job_id).first()
+                backup_job = resolve_backup_job(db_session, job_id)
                 if backup_job:
                     backup_job.status = "completed"
                     db_session.commit()
@@ -810,13 +813,14 @@ class TestDatabaseSessionManagement:
         db_session.commit()
         db_session.refresh(repo)
 
-        # Create a BackupJob in one "session context"
-        backup_job = BackupJob(
+        # Create a backup operation in one "session context"
+        backup_job = seed_job_operation(
+            db_session,
+            "backup",
             repository=repo.path,
             status="pending",
             created_at=datetime.now(timezone.utc),
         )
-        db_session.add(backup_job)
         db_session.commit()
         db_session.refresh(backup_job)
 
@@ -826,10 +830,12 @@ class TestDatabaseSessionManagement:
         # The bug was that get_db() didn't properly initialize, causing detached instances
 
         # Read it back
-        retrieved_job = db_session.query(BackupJob).filter_by(id=job_id).first()
+        retrieved_job = resolve_backup_job(db_session, job_id)
 
         # Verify: Job exists and has timestamp
-        assert retrieved_job is not None, "BackupJob should exist in database"
+        assert retrieved_job is not None, (
+            "the backup operation should exist in database"
+        )
         assert retrieved_job.created_at is not None, "created_at should be persisted"
         assert retrieved_job.status == "pending"
 
@@ -859,19 +865,20 @@ class TestDatabaseSessionManagement:
         # Create BackupJobs for all repos (simulating multi-repo schedule)
         job_ids = []
         for repo in repos:
-            backup_job = BackupJob(
+            backup_job = seed_job_operation(
+                db_session,
+                "backup",
                 repository=repo.path,
                 status="pending",
                 created_at=datetime.now(timezone.utc),
             )
-            db_session.add(backup_job)
             db_session.commit()
             db_session.refresh(backup_job)
             job_ids.append(backup_job.id)
 
         # Verify: All jobs can be read back without detached instance errors
         for job_id in job_ids:
-            job = db_session.query(BackupJob).filter_by(id=job_id).first()
+            job = resolve_backup_job(db_session, job_id)
             assert job is not None
             assert job.created_at is not None
             assert isinstance(job.created_at, datetime)

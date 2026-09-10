@@ -1,5 +1,4 @@
 import os
-from datetime import datetime
 from typing import Any, Optional
 
 from fastapi import HTTPException
@@ -50,8 +49,7 @@ def get_maintenance_job_with_repository(
     not_found_key: str,
     required_role: str = "viewer",
 ):
-    """Resolve a maintenance job id to an operation, or to the legacy row it
-    belonged to before phase 5. Deleted in phase 9."""
+    """Resolve a maintenance job id to its operation."""
     from app.services.operations.job_facade import resolve_maintenance_job
 
     job = resolve_maintenance_job(db, job_id, kind)
@@ -77,10 +75,9 @@ def get_repository_maintenance_jobs(
     limit: int = 10,
     required_role: str = "viewer",
 ) -> list[Any]:
-    """Operations for this kind, plus the legacy rows written before phase 5,
-    newest first. Deleted in phase 9."""
+    """The newest operations of this kind on the repository, newest first."""
     from app.database.models import Operation
-    from app.services.operations.job_facade import LEGACY_MODELS, MaintenanceJobFacade
+    from app.services.operations.job_facade import MaintenanceJobFacade
 
     repository = get_repository_with_access_or_empty(
         db, current_user, repo_id, required_role=required_role
@@ -95,21 +92,7 @@ def get_repository_maintenance_jobs(
         .limit(limit)
         .all()
     )
-    rows: list[Any] = [MaintenanceJobFacade(db, op) for op in operations]
-
-    model = LEGACY_MODELS[kind]
-    rows.extend(
-        db.query(model)
-        .filter(model.repository_id == repo_id)
-        .order_by(model.id.desc())
-        .limit(limit)
-        .all()
-    )
-    rows.sort(
-        key=lambda row: row.created_at or row.started_at or datetime.min,
-        reverse=True,
-    )
-    return rows[:limit]
+    return [MaintenanceJobFacade(db, op) for op in operations]
 
 
 def job_has_logs_for_policy(

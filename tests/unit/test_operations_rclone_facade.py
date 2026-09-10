@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import Base, Operation, RcloneSyncJob, Repository
+from app.database.models import Base, Operation, Repository
 from app.services.operations.details import rclone_details
 from app.services.operations.rclone_facade import (
     RcloneSyncFacade,
@@ -135,22 +135,3 @@ def test_resolve_filters_on_the_details_operation(db, repository):
     assert resolve_rclone_job(db, op.id, operation="sync") is not None
     assert resolve_rclone_job(db, op.id, operation="hydrate") is None
     assert resolve_rclone_job(db, 9999) is None
-
-
-def test_resolve_falls_back_to_a_legacy_row_of_the_asked_for_operation(db, repository):
-    """The two tables number their rows independently, so an operation that is
-    a sync must not hide a legacy hydrate that happens to share its id."""
-    op = _rclone_operation(db, repository, status="completed")
-    legacy = RcloneSyncJob(
-        repository_id=repository.id,
-        direction="cache_to_remote",
-        operation="hydrate",
-        status="completed",
-        triggered_by="manual",
-    )
-    db.add(legacy)
-    db.commit()
-
-    assert legacy.id == op.id
-    assert resolve_rclone_job(db, legacy.id, operation="hydrate") is legacy
-    assert resolve_rclone_job(db, op.id, operation="sync").id == op.id

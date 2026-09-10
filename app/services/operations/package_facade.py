@@ -8,8 +8,6 @@ split never depends on what apt printed, and `GET /api/packages/jobs/{id}`
 keeps returning `stdout` and `stderr` apart.
 
 The kind is category `system` with a null `repository_id` (spec 6.3).
-
-Deleted in phase 9 with the legacy table.
 """
 
 import re
@@ -18,7 +16,7 @@ from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
-from app.database.models import Operation, PackageInstallJob
+from app.database.models import Operation
 
 # First line of a log file this module wrote. The lengths are in characters
 # of the decoded text, which is what the file holds after the newline.
@@ -26,8 +24,6 @@ _HEADER_PREFIX = "BORG-UI PACKAGE OUTPUT v1"
 _HEADER = re.compile(rf"^{re.escape(_HEADER_PREFIX)} stdout=(\d+) stderr=(\d+)\n")
 
 ACTIVE_STATUSES = ("queued", "running")
-# Pre-phase-6 rows only; goes away with the table in phase 9.
-_LEGACY_ACTIVE_STATUSES = ("pending", "installing")
 
 _TO_OPERATION = {"pending": "queued", "installing": "running"}
 _TO_LEGACY = {"queued": "pending", "running": "installing"}
@@ -172,17 +168,17 @@ class PackageInstallFacade:
         return "\n".join(part for part in (stdout, stderr) if part)
 
 
-def resolve_package_job(db: Session, job_id: int) -> Any:
-    """The job a package caller should drive for `job_id`. Operations win; an
-    id written before this phase falls back to the legacy table."""
+def resolve_package_job(db: Session, job_id: int) -> Optional["PackageInstallFacade"]:
+    """The job a package caller should drive for `job_id`, or None when no
+    package install operation has the id."""
     operation = (
         db.query(Operation)
         .filter(Operation.id == job_id, Operation.kind == "package_install")
         .first()
     )
-    if operation is not None:
-        return PackageInstallFacade(db, operation)
-    return db.query(PackageInstallJob).filter(PackageInstallJob.id == job_id).first()
+    if operation is None:
+        return None
+    return PackageInstallFacade(db, operation)
 
 
 def active_package_install(db: Session, package_id: int) -> Any:
@@ -203,11 +199,4 @@ def active_package_install(db: Session, package_id: int) -> Any:
     ):
         if (operation.params or {}).get("package_id") == package_id:
             return PackageInstallFacade(db, operation)
-    return (
-        db.query(PackageInstallJob)
-        .filter(
-            PackageInstallJob.package_id == package_id,
-            PackageInstallJob.status.in_(_LEGACY_ACTIVE_STATUSES),
-        )
-        .first()
-    )
+    return None

@@ -10,10 +10,11 @@ from app.database.models import (
     Operation,
     OperationRestoreDetails,
     Repository,
-    RestoreJob,
     SystemSettings,
 )
 from tests.unit.helpers import assert_auth_required
+from app.services.operations.restore_facade import resolve_restore_job
+from tests.utils.operations import seed_job_operation
 
 
 def _set_log_save_policy(test_db, policy: str) -> None:
@@ -392,7 +393,6 @@ class TestRestoreStart:
         assert details.destination == "/restore/target"
         assert details.destination_type == "local"
         assert details.repository_type == "local"
-        assert test_db.query(RestoreJob).count() == 0
 
     def test_start_restore_records_the_ssh_destination_on_the_details_row(
         self, test_client: TestClient, admin_headers, test_db
@@ -506,8 +506,13 @@ class TestRestoreStart:
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
-        legacy = RestoreJob(
-            repository=repo.path, archive="old", destination="/x", status="completed"
+        legacy = seed_job_operation(
+            test_db,
+            "restore",
+            repository=repo.path,
+            archive="old",
+            destination="/x",
+            status="completed",
         )
         op = Operation(
             repository_id=repo.id,
@@ -709,13 +714,14 @@ class TestRestoreJobs:
         test_db.commit()
         test_db.refresh(repo)
 
-        job = RestoreJob(
+        job = seed_job_operation(
+            test_db,
+            "restore",
             repository=repo.path,
             archive="test-archive",
             destination="/restore/target",
             status="running",
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -733,7 +739,7 @@ class TestRestoreJobs:
         mock_cancel.assert_awaited_once_with(job.id)
 
         test_db.expire_all()
-        refreshed = test_db.query(RestoreJob).filter(RestoreJob.id == job.id).first()
+        refreshed = resolve_restore_job(test_db, job.id)
         assert refreshed.status == "cancelled"
         assert refreshed.completed_at is not None
 
@@ -753,13 +759,14 @@ class TestRestoreJobs:
         test_db.commit()
         test_db.refresh(repo)
 
-        job = RestoreJob(
+        job = seed_job_operation(
+            test_db,
+            "restore",
             repository=repo.path,
             archive="test-archive",
             destination="/restore/target",
             status="completed",
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -791,11 +798,12 @@ class TestRestoreSpeedAndETA:
         self, test_client: TestClient, admin_headers, test_db
     ):
         """Test that restore job API responses include speed and ETA fields"""
-        from app.database.models import RestoreJob
         from datetime import datetime, timezone
 
         # Create a running restore job with speed and ETA
-        job = RestoreJob(
+        job = seed_job_operation(
+            test_db,
+            "restore",
             repository="/test/repo",
             archive="test-archive",
             destination="/test/dest",
@@ -804,12 +812,13 @@ class TestRestoreSpeedAndETA:
             nfiles=100,
             current_file="/test/file.txt",
             progress_percent=45.5,
-            original_size=10485760,  # 10 MB
-            restored_size=4767744,  # ~4.5 MB
+            # The ETA is derived from what is left and the speed (phase 7), so
+            # the sizes below are the 135 seconds this asserts: 1670 MiB left
+            # at 12.34 MB/s.
+            original_size=1755889664,
+            restored_size=4767744,
             restore_speed=12.34,  # MB/s
-            estimated_time_remaining=135,  # seconds
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -833,7 +842,6 @@ class TestRestoreSpeedAndETA:
         self, test_client: TestClient, admin_headers, test_db
     ):
         """Test that restore jobs list includes speed and ETA fields"""
-        from app.database.models import RestoreJob
         from datetime import datetime, timezone
 
         # Create restore jobs with different states
@@ -860,8 +868,7 @@ class TestRestoreSpeedAndETA:
         ]
 
         for job_data in jobs_data:
-            job = RestoreJob(**job_data)
-            test_db.add(job)
+            job = seed_job_operation(test_db, "restore", **job_data)
         test_db.commit()
 
         # Get jobs list
@@ -882,15 +889,15 @@ class TestRestoreSpeedAndETA:
         self, test_client: TestClient, admin_headers, test_db
     ):
         """Test that restore speed defaults to 0.0 when not set"""
-        from app.database.models import RestoreJob
 
-        job = RestoreJob(
+        job = seed_job_operation(
+            test_db,
+            "restore",
             repository="/test/repo",
             archive="test-archive",
             destination="/test/dest",
             status="pending",
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -908,10 +915,11 @@ class TestRestoreSpeedAndETA:
         self, test_client: TestClient, admin_headers, test_db
     ):
         """Test that ETA is 0 when restore speed is 0"""
-        from app.database.models import RestoreJob
         from datetime import datetime, timezone
 
-        job = RestoreJob(
+        job = seed_job_operation(
+            test_db,
+            "restore",
             repository="/test/repo",
             archive="test-archive",
             destination="/test/dest",
@@ -922,7 +930,6 @@ class TestRestoreSpeedAndETA:
             restore_speed=0.0,  # No speed yet
             estimated_time_remaining=0,
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -939,10 +946,11 @@ class TestRestoreSpeedAndETA:
         self, test_client: TestClient, admin_headers, test_db
     ):
         """Test that completed restore jobs preserve final speed"""
-        from app.database.models import RestoreJob
         from datetime import datetime, timezone
 
-        job = RestoreJob(
+        job = seed_job_operation(
+            test_db,
+            "restore",
             repository="/test/repo",
             archive="test-archive",
             destination="/test/dest",
@@ -955,7 +963,6 @@ class TestRestoreSpeedAndETA:
             estimated_time_remaining=0,
             progress_percent=100.0,
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -979,11 +986,12 @@ class TestRestoreJobLogs:
         self, test_client: TestClient, admin_headers, test_db
     ):
         """Test that /api/restore/jobs endpoint includes logs field"""
-        from app.database.models import RestoreJob
         from datetime import datetime, timezone
 
         _set_log_save_policy(test_db, "all_jobs")
-        job = RestoreJob(
+        job = seed_job_operation(
+            test_db,
+            "restore",
             repository="/test/repo",
             archive="test-archive",
             destination="/test/dest",
@@ -992,7 +1000,6 @@ class TestRestoreJobLogs:
             completed_at=datetime.now(timezone.utc),
             logs="Test log line 1\nTest log line 2\nRestore completed",
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -1007,17 +1014,18 @@ class TestRestoreJobLogs:
         our_job = next((j for j in data["jobs"] if j["id"] == job.id), None)
         assert our_job is not None
         assert "logs" in our_job
-        assert our_job["logs"] == job.logs
+        assert our_job["logs"] == resolve_restore_job(test_db, job.id).logs
 
     def test_restore_job_status_includes_logs(
         self, test_client: TestClient, admin_headers, test_db
     ):
         """Test that /api/restore/status/{id} endpoint includes logs field"""
-        from app.database.models import RestoreJob
         from datetime import datetime, timezone
 
         _set_log_save_policy(test_db, "all_jobs")
-        job = RestoreJob(
+        job = seed_job_operation(
+            test_db,
+            "restore",
             repository="/test/repo",
             archive="test-archive",
             destination="/test/dest",
@@ -1026,7 +1034,6 @@ class TestRestoreJobLogs:
             completed_at=datetime.now(timezone.utc),
             logs="Detailed restore logs here\nProgress: 100%\nSuccess",
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -1037,7 +1044,7 @@ class TestRestoreJobLogs:
         assert response.status_code == 200
         data = response.json()
         assert "logs" in data
-        assert data["logs"] == job.logs
+        assert data["logs"] == resolve_restore_job(test_db, job.id).logs
 
     def test_restore_logs_follow_log_save_policy(
         self, test_client: TestClient, admin_headers, test_db
@@ -1045,7 +1052,9 @@ class TestRestoreJobLogs:
         from datetime import datetime, timezone
 
         _set_log_save_policy(test_db, "failed_only")
-        job = RestoreJob(
+        job = seed_job_operation(
+            test_db,
+            "restore",
             repository="/test/repo",
             archive="test-archive",
             destination="/test/dest",
@@ -1054,7 +1063,6 @@ class TestRestoreJobLogs:
             completed_at=datetime.now(timezone.utc),
             logs="successful restore log",
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -1074,11 +1082,14 @@ class TestRestoreJobLogs:
     def test_restore_jobs_with_null_logs(
         self, test_client: TestClient, admin_headers, test_db
     ):
-        """Test that jobs with null logs return null in API"""
-        from app.database.models import RestoreJob
+        """A running restore has written no log file yet, so its `logs` reads
+        as empty text rather than null: the operation keeps its log in a file
+        (spec 6.1), not in a nullable column."""
         from datetime import datetime, timezone
 
-        job = RestoreJob(
+        job = seed_job_operation(
+            test_db,
+            "restore",
             repository="/test/repo",
             archive="test-archive",
             destination="/test/dest",
@@ -1086,7 +1097,6 @@ class TestRestoreJobLogs:
             started_at=datetime.now(timezone.utc),
             logs=None,  # No logs yet for running job
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -1096,17 +1106,18 @@ class TestRestoreJobLogs:
         data = response.json()
         our_job = next((j for j in data["jobs"] if j["id"] == job.id), None)
         assert our_job is not None
-        assert our_job["logs"] is None
+        assert our_job["logs"] == ""
 
     def test_restore_jobs_with_empty_logs(
         self, test_client: TestClient, admin_headers, test_db
     ):
         """Test that jobs with empty string logs return empty string"""
-        from app.database.models import RestoreJob
         from datetime import datetime, timezone
 
         _set_log_save_policy(test_db, "all_jobs")
-        job = RestoreJob(
+        job = seed_job_operation(
+            test_db,
+            "restore",
             repository="/test/repo",
             archive="test-archive",
             destination="/test/dest",
@@ -1115,7 +1126,6 @@ class TestRestoreJobLogs:
             completed_at=datetime.now(timezone.utc),
             logs="",  # Empty logs
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
@@ -1132,7 +1142,6 @@ class TestRestoreJobLogs:
         self, test_client: TestClient, admin_headers, test_db
     ):
         """Test that multiline logs are preserved correctly"""
-        from app.database.models import RestoreJob
         from datetime import datetime, timezone
 
         _set_log_save_policy(test_db, "all_jobs")
@@ -1145,7 +1154,9 @@ Progress: 75%
 Progress: 100%
 Restore completed successfully"""
 
-        job = RestoreJob(
+        job = seed_job_operation(
+            test_db,
+            "restore",
             repository="/test/repo",
             archive="test-archive",
             destination="/test/dest",
@@ -1154,7 +1165,6 @@ Restore completed successfully"""
             completed_at=datetime.now(timezone.utc),
             logs=multiline_logs,
         )
-        test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 

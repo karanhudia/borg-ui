@@ -2,11 +2,9 @@ from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
+from tests.utils.operations import seed_job_operation
 
 from app.database.models import (
-    CheckJob,
-    CompactJob,
-    PruneJob,
     Repository,
     SystemSettings,
 )
@@ -36,7 +34,9 @@ class TestMaintenanceJobApiIntegration:
         repo = _create_repo(test_db)
         test_db.add_all(
             [
-                CheckJob(
+                seed_job_operation(
+                    test_db,
+                    "check",
                     repository_id=repo.id,
                     status="running",
                     progress=25,
@@ -44,14 +44,18 @@ class TestMaintenanceJobApiIntegration:
                     has_logs=True,
                     started_at=datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc),
                 ),
-                CompactJob(
+                seed_job_operation(
+                    test_db,
+                    "compact",
                     repository_id=repo.id,
                     status="completed",
                     progress=100,
                     progress_message="done",
                     started_at=datetime(2026, 1, 1, 12, 10, tzinfo=timezone.utc),
                 ),
-                PruneJob(
+                seed_job_operation(
+                    test_db,
+                    "prune",
                     repository_id=repo.id,
                     status="failed",
                     error_message="prune failed",
@@ -94,19 +98,25 @@ class TestMaintenanceJobApiIntegration:
         compact_log.write_text("compact streamed\n", encoding="utf-8")
         prune_log.write_text("prune streamed\n", encoding="utf-8")
 
-        check_job = CheckJob(
+        check_job = seed_job_operation(
+            test_db,
+            "check",
             repository_id=repo.id,
             status="completed",
             log_file_path=str(check_log),
             has_logs=True,
         )
-        compact_job = CompactJob(
+        compact_job = seed_job_operation(
+            test_db,
+            "compact",
             repository_id=repo.id,
             status="completed",
             log_file_path=str(compact_log),
             has_logs=True,
         )
-        prune_job = PruneJob(
+        prune_job = seed_job_operation(
+            test_db,
+            "prune",
             repository_id=repo.id,
             status="completed",
             log_file_path=str(prune_log),

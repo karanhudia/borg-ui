@@ -7,7 +7,6 @@ Provides a unified view of all operations (backups, restores, checks, compacts, 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
-from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import Any, List, Optional
 from datetime import datetime
@@ -20,20 +19,11 @@ from app.database.database import get_db
 from app.database.models import (
     AgentJob,
     AgentJobLog,
-    BackupJob,
     BackupPlan,
     BackupPlanRun,
     AvailabilityScheduleSkip,
-    RestoreJob,
-    CheckJob,
-    CompactJob,
-    PruneJob,
-    RestoreCheckJob,
-    PackageInstallJob,
     Repository,
-    RcloneSyncJob,
     InstalledPackage,
-    RepositoryWipeJob,
     Operation,
     ScheduledJob,
     ScriptExecution,
@@ -51,10 +41,10 @@ logger = structlog.get_logger()
 router = APIRouter(prefix="/api/activity", tags=["activity"])
 
 
-def _get_agent_job_for_backup(db: Session, backup_job_id: int) -> Optional[AgentJob]:
+def _get_agent_job_for_backup(db: Session, operation_id: int) -> Optional[AgentJob]:
     return (
         db.query(AgentJob)
-        .filter(AgentJob.backup_job_id == backup_job_id)
+        .filter(AgentJob.operation_id == operation_id)
         .order_by(AgentJob.id.desc())
         .first()
     )
@@ -147,20 +137,23 @@ def operation_kind_for_activity_type(job_type: str) -> str:
 
 
 def _is_operation_only_kind(job_type: str, job_models: dict) -> bool:
-    """True for kinds that live only in the operations table in this phase.
-    Kinds that still have a legacy table keep resolving that table here; the
-    /api/operations routes serve their operations rows by id."""
+    """True for the kinds the generic operation branch can serve, which since
+    phase 9 is every kind except script executions and the two mirror names.
+
+    A mirror keeps its own branch below: its log text lives in two columns of
+    the spec 6.2 details row (`log_text` and `error_text`), not in the
+    operation's log file, and its routes answer a placeholder line while the
+    sync is queued."""
     return (
-        operation_kind_for_activity_type(job_type) in op_vocab.KINDS
-        and job_type not in job_models
+        job_type not in job_models
         and job_type not in RCLONE_ACTIVITY_OPERATIONS
+        and operation_kind_for_activity_type(job_type) in op_vocab.KINDS
     )
 
 
 def _running_backup_log_response(job_id: int, offset: int, limit: int) -> dict:
     """The live view of a backup that is still running: the service's
-    in-memory tail, or a waiting message while it has produced nothing yet.
-    Shared by the operation branch and the legacy branch (phase 8)."""
+    in-memory tail, or a waiting message while it has produced nothing yet."""
     log_buffer, buffer_exists = backup_service.get_log_buffer(job_id, tail_lines=500)
     logger.info(
         "Retrieved log buffer for running backup",
@@ -212,12 +205,12 @@ def _operation_log_sources(db: Session, job_type: str, op) -> dict:
 
     `package` keeps the two-stream shape its route contract promises: the
     facade parses them back out of the operation's log file (spec 6.2 gives
-    the kind no extension table), and a pre-phase-6 row still has its columns.
+    the kind no extension table).
     """
     if job_type == "package":
         from app.services.operations.package_facade import PackageInstallFacade
 
-        job = PackageInstallFacade(db, op) if isinstance(op, Operation) else op
+        job = PackageInstallFacade(db, op)
         return {
             "output_text": [job.stdout, job.stderr, job.error_message],
             "file_path": getattr(job, "log_file_path", None),
@@ -231,7 +224,7 @@ def _operation_log_sources(db: Session, job_type: str, op) -> dict:
         )
         from app.services.repository_executor import get_agent_job_for_backup
 
-        job = BackupJobFacade(db, op) if isinstance(op, Operation) else op
+        job = BackupJobFacade(db, op)
         text = _read_operation_log(op)
         if job.execution_mode == "agent":
             agent_job = get_agent_job_for_backup(db, job)
@@ -245,8 +238,8 @@ def _operation_log_sources(db: Session, job_type: str, op) -> dict:
             "has_logs": backup_job_has_logs(db, job),
         }
     return {
-        "output_text": [getattr(op, "logs", None), op.error_message],
-        "file_path": getattr(op, "log_file_path", None),
+        "output_text": [op.error_message],
+        "file_path": op.log_file_path,
         "exit_code": None,
         "text": _read_operation_log(op),
     }
@@ -261,18 +254,6 @@ def _get_operation_or_404(
         .filter(Operation.id == job_id, Operation.kind == kind)
         .first()
     )
-    if op is None:
-        # A kind migrated in phases 5 to 8 still has history in its old table
-        # until phase 9 deletes it. Those rows carry the same status, error,
-        # and log-path attributes every branch below reads.
-        from app.services.operations.job_facade import LEGACY_MODELS
-
-        # Phase 6 and 7 kinds keep their own legacy tables until phase 9 too.
-        legacy_model = LEGACY_MODELS.get(job_type) or _MIGRATED_LEGACY_MODELS.get(
-            job_type
-        )
-        if legacy_model is not None:
-            op = db.query(legacy_model).filter(legacy_model.id == job_id).first()
     if not op:
         raise HTTPException(
             status_code=404,
@@ -281,9 +262,8 @@ def _get_operation_or_404(
                 "params": {"jobType": job_type},
             },
         )
-    # A legacy fallback row need not carry a repository (package installs do
-    # not), so this reads defensively rather than by attribute.
-    if current_user is not None and getattr(op, "repository_id", None) is not None:
+    # A package install carries no repository, so the check is conditional.
+    if current_user is not None and op.repository_id is not None:
         repo = db.get(Repository, op.repository_id)
         if repo is not None:
             check_repo_access(db, current_user, repo, "viewer")
@@ -291,11 +271,9 @@ def _get_operation_or_404(
 
 
 def _read_operation_log(op: Operation) -> str:
-    # A legacy fallback row kept a text mirror of the log on the row itself,
-    # and a pre-phase-7 restore row has no log_file_path column at all.
-    log_file_path = getattr(op, "log_file_path", None)
+    log_file_path = op.log_file_path
     if not log_file_path:
-        return getattr(op, "logs", "") or ""
+        return ""
     try:
         with open(log_file_path, "r", encoding="utf-8", errors="replace") as fh:
             # A trailing newline terminates the last line rather than starting
@@ -384,16 +362,6 @@ RCLONE_ACTIVITY_OPERATIONS = {
     "rclone_hydrate": "hydrate",
 }
 
-# Legacy tables for the kinds phases 6 and 7 migrated, keyed by Activity type
-# name. `app.services.operations.job_facade.LEGACY_MODELS` covers the phase 5
-# kinds.
-_MIGRATED_LEGACY_MODELS = {
-    "wipe": RepositoryWipeJob,
-    "package": PackageInstallJob,
-    "restore": RestoreJob,
-    "backup": BackupJob,
-}
-
 
 def _no_logs_available_exception() -> HTTPException:
     return HTTPException(
@@ -402,7 +370,7 @@ def _no_logs_available_exception() -> HTTPException:
     )
 
 
-def _format_rclone_job_logs(job: RcloneSyncJob) -> str:
+def _format_rclone_job_logs(job) -> str:
     parts = []
     if job.log_text:
         parts.append(job.log_text)
@@ -411,7 +379,7 @@ def _format_rclone_job_logs(job: RcloneSyncJob) -> str:
     return "\n".join(parts)
 
 
-def _format_package_install_logs(job: PackageInstallJob) -> str:
+def _format_package_install_logs(job) -> str:
     lines = [f"PACKAGE: Package #{job.package_id}", f"STATUS: {job.status}"]
     if job.exit_code is not None:
         lines.append(f"EXIT CODE: {job.exit_code}")
@@ -515,21 +483,15 @@ def _text_download_response(log_text: str, *, filename: str) -> FileResponse:
         raise e
 
 
-_LEGACY_CATEGORY_BY_TYPE = {
-    "package": "system",
-    "script_execution": "system",
-}
-
-
-def _legacy_category(item_type: str) -> str:
+def _category_for_non_operation_type(item_type: str) -> str:
+    """The category of an Activity item that is not an operation: a script
+    execution or an availability skip."""
     if item_type in op_vocab.KINDS:
         return op_vocab.category_for(item_type)
-    if item_type in RCLONE_ACTIVITY_OPERATIONS:
-        return "mirror"
-    return _LEGACY_CATEGORY_BY_TYPE.get(item_type, "system")
+    return "system"
 
 
-def _legacy_trigger(item: dict) -> str:
+def _trigger_for_non_operation_item(item: dict) -> str:
     if item.get("backup_plan_run_id"):
         return "plan"
     return "schedule" if item.get("triggered_by") == "schedule" else "manual"
@@ -763,90 +725,7 @@ async def list_recent_activity(
     # belong to no single repository, so a repository view drops them.
     repository_scoped = repository_id is not None
 
-    # Fetch backup jobs
-    if not job_type or job_type == "backup":
-        # Filter in SQL, before the limit: "status=failed" must return the
-        # newest failed jobs, not the failed jobs among the newest rows.
-        backup_query = db.query(BackupJob)
-        if scoped_repository is not None:
-            # Older rows carry the path, newer ones the id.
-            backup_query = backup_query.filter(
-                or_(
-                    BackupJob.repository_id == scoped_repository.id,
-                    BackupJob.repository == scoped_repository.path,
-                )
-            )
-        if status:
-            backup_query = backup_query.filter(BackupJob.status == status)
-        backup_jobs = (
-            backup_query.order_by(BackupJob.started_at.desc()).limit(limit).all()
-        )
-        for job in backup_jobs:
-            # Get repository name from path
-            repo = (
-                db.query(Repository).filter(Repository.path == job.repository).first()
-            )
-            repo_name = repo.name if repo else job.repository
-
-            # Determine trigger type
-            triggered_by = (
-                "backup_plan"
-                if job.backup_plan_id
-                else "schedule"
-                if job.scheduled_job_id
-                else "manual"
-            )
-
-            # Get schedule name if this is a scheduled backup
-            schedule_name = None
-            if job.scheduled_job_id:
-                scheduled_job = (
-                    db.query(ScheduledJob)
-                    .filter(ScheduledJob.id == job.scheduled_job_id)
-                    .first()
-                )
-                if scheduled_job:
-                    schedule_name = scheduled_job.name
-            backup_plan_name = None
-            if job.backup_plan_id:
-                backup_plan = (
-                    db.query(BackupPlan)
-                    .filter(BackupPlan.id == job.backup_plan_id)
-                    .first()
-                )
-                if backup_plan:
-                    backup_plan_name = backup_plan.name
-
-            activities.append(
-                {
-                    "id": job.id,
-                    "type": "backup",
-                    "status": job.status,
-                    "started_at": job.started_at,
-                    "completed_at": job.completed_at,
-                    "error_message": job.error_message,
-                    "repository": repo_name,
-                    "repository_path": job.repository,  # Always include the path
-                    "log_file_path": job.log_file_path,
-                    "triggered_by": triggered_by,
-                    "schedule_id": job.scheduled_job_id,
-                    "schedule_name": schedule_name,
-                    "backup_plan_id": job.backup_plan_id,
-                    "backup_plan_run_id": job.backup_plan_run_id,
-                    "backup_plan_name": backup_plan_name,
-                    "archive_name": job.archive_name,
-                    "archive_pruned_at": job.archive_pruned_at,
-                    "package_name": None,
-                    "has_logs": job_has_logs_by_policy(
-                        job,
-                        log_save_policy,
-                        output_text=[job.logs, job.error_message],
-                        file_path=job.log_file_path,
-                    ),
-                }
-            )
-
-    # Availability Plan skips are plan-run records, not BackupJobs: Borg was never
+    # Availability Plan skips are plan-run records, not backups: Borg was never
     # invoked, so they must be added independently to Activity.
     if (
         (not job_type or job_type == "availability_check")
@@ -921,298 +800,6 @@ async def list_recent_activity(
                 }
             )
 
-    # Restore rows written before phase 7 moved restore to `operations`. New
-    # restores come through _operation_activity_items; this query is empty
-    # once retention has dropped the last legacy row and goes away with the
-    # table in phase 9.
-    if not job_type or job_type == "restore":
-        restore_query = db.query(RestoreJob)
-        if scoped_repository is not None:
-            restore_query = restore_query.filter(
-                RestoreJob.repository == scoped_repository.path
-            )
-        if status:
-            restore_query = restore_query.filter(RestoreJob.status == status)
-        restore_jobs = (
-            restore_query.order_by(RestoreJob.started_at.desc()).limit(limit).all()
-        )
-        for job in restore_jobs:
-            # Get repository name from path
-            repo = (
-                db.query(Repository).filter(Repository.path == job.repository).first()
-            )
-            repo_name = repo.name if repo else job.repository
-
-            activities.append(
-                {
-                    "id": job.id,
-                    "type": "restore",
-                    "status": job.status,
-                    "started_at": job.started_at,
-                    "completed_at": job.completed_at,
-                    "error_message": job.error_message,
-                    "repository": repo_name,
-                    "repository_path": job.repository,  # Always include the path
-                    "log_file_path": None,  # Restore jobs store logs in DB, not file
-                    "triggered_by": "manual",  # Restore jobs are always manual
-                    "schedule_id": None,
-                    "archive_name": job.archive,
-                    "package_name": None,
-                    "has_logs": job_has_logs_by_policy(
-                        job,
-                        log_save_policy,
-                        output_text=[job.logs, job.error_message],
-                    ),
-                }
-            )
-
-    # Fetch check jobs
-    if not job_type or job_type == "check":
-        check_query = db.query(CheckJob)
-        if repository_id is not None:
-            check_query = check_query.filter(CheckJob.repository_id == repository_id)
-        if status:
-            check_query = check_query.filter(CheckJob.status == status)
-        check_jobs = check_query.order_by(CheckJob.id.desc()).limit(limit).all()
-        for job in check_jobs:
-            # Get repository name from repository_id, with fallback to stored path
-            repo = (
-                db.query(Repository).filter(Repository.id == job.repository_id).first()
-            )
-            repo_name = repo.name if repo else f"Repository #{job.repository_id}"
-            repo_path = repo.path if repo else job.repository_path
-            triggered_by = (
-                "schedule" if getattr(job, "scheduled_check", False) else "manual"
-            )
-
-            activities.append(
-                {
-                    "id": job.id,
-                    "type": "check",
-                    "status": job.status,
-                    "started_at": job.started_at,
-                    "completed_at": job.completed_at,
-                    "error_message": job.error_message,
-                    "repository": repo_name,
-                    "repository_path": repo_path,
-                    "log_file_path": getattr(job, "log_file_path", None),
-                    "triggered_by": triggered_by,
-                    "schedule_id": None,
-                    "archive_name": None,
-                    "package_name": None,
-                    "has_logs": job_has_logs_by_policy(
-                        job,
-                        log_save_policy,
-                        output_text=[
-                            getattr(job, "logs", None),
-                            job.error_message,
-                        ],
-                        file_path=getattr(job, "log_file_path", None),
-                    ),
-                    "_sort_at": job.started_at or job.created_at,
-                }
-            )
-
-    # Fetch restore check jobs
-    if not job_type or job_type == "restore_check":
-        restore_check_query = db.query(RestoreCheckJob)
-        if repository_id is not None:
-            restore_check_query = restore_check_query.filter(
-                RestoreCheckJob.repository_id == repository_id
-            )
-        if status:
-            restore_check_query = restore_check_query.filter(
-                RestoreCheckJob.status == status
-            )
-        restore_check_jobs = (
-            restore_check_query.order_by(RestoreCheckJob.id.desc()).limit(limit).all()
-        )
-        for job in restore_check_jobs:
-            repo = (
-                db.query(Repository).filter(Repository.id == job.repository_id).first()
-            )
-            repo_name = repo.name if repo else f"Repository #{job.repository_id}"
-            repo_path = repo.path if repo else job.repository_path
-            triggered_by = (
-                "schedule"
-                if getattr(job, "scheduled_restore_check", False)
-                else "manual"
-            )
-
-            activities.append(
-                {
-                    "id": job.id,
-                    "type": "restore_check",
-                    "status": job.status,
-                    "started_at": job.started_at,
-                    "completed_at": job.completed_at,
-                    "error_message": job.error_message,
-                    "repository": repo_name,
-                    "repository_path": repo_path,
-                    "log_file_path": getattr(job, "log_file_path", None),
-                    "triggered_by": triggered_by,
-                    "schedule_id": None,
-                    "archive_name": job.archive_name,
-                    "package_name": None,
-                    "has_logs": job_has_logs_by_policy(
-                        job,
-                        log_save_policy,
-                        output_text=[
-                            getattr(job, "logs", None),
-                            job.error_message,
-                        ],
-                        file_path=getattr(job, "log_file_path", None),
-                    ),
-                    "_sort_at": job.started_at or job.created_at,
-                }
-            )
-
-    # Fetch compact jobs
-    if not job_type or job_type == "compact":
-        compact_query = db.query(CompactJob)
-        if repository_id is not None:
-            compact_query = compact_query.filter(
-                CompactJob.repository_id == repository_id
-            )
-        if status:
-            compact_query = compact_query.filter(CompactJob.status == status)
-        compact_jobs = (
-            compact_query.order_by(CompactJob.started_at.desc()).limit(limit).all()
-        )
-        for job in compact_jobs:
-            # Get repository name from repository_id, with fallback to stored path
-            repo = (
-                db.query(Repository).filter(Repository.id == job.repository_id).first()
-            )
-            repo_name = repo.name if repo else f"Repository #{job.repository_id}"
-            repo_path = repo.path if repo else job.repository_path
-
-            # Determine trigger type based on scheduled_compact field
-            triggered_by = (
-                "schedule" if getattr(job, "scheduled_compact", False) else "manual"
-            )
-
-            activities.append(
-                {
-                    "id": job.id,
-                    "type": "compact",
-                    "status": job.status,
-                    "started_at": job.started_at,
-                    "completed_at": job.completed_at,
-                    "error_message": job.error_message,
-                    "repository": repo_name,
-                    "repository_path": repo_path,
-                    "log_file_path": getattr(job, "log_file_path", None),
-                    "triggered_by": triggered_by,
-                    "schedule_id": None,
-                    "archive_name": None,
-                    "package_name": None,
-                    "has_logs": job_has_logs_by_policy(
-                        job,
-                        log_save_policy,
-                        output_text=[
-                            getattr(job, "logs", None),
-                            job.error_message,
-                        ],
-                        file_path=getattr(job, "log_file_path", None),
-                    ),
-                }
-            )
-
-    # Fetch prune jobs
-    if not job_type or job_type == "prune":
-        prune_query = db.query(PruneJob)
-        if repository_id is not None:
-            prune_query = prune_query.filter(PruneJob.repository_id == repository_id)
-        if status:
-            prune_query = prune_query.filter(PruneJob.status == status)
-        prune_jobs = prune_query.order_by(PruneJob.started_at.desc()).limit(limit).all()
-        for job in prune_jobs:
-            # Get repository name from repository_id, with fallback to stored path
-            repo = (
-                db.query(Repository).filter(Repository.id == job.repository_id).first()
-            )
-            repo_name = repo.name if repo else f"Repository #{job.repository_id}"
-            repo_path = repo.path if repo else job.repository_path
-
-            # Determine trigger type based on scheduled_prune field
-            triggered_by = (
-                "schedule" if getattr(job, "scheduled_prune", False) else "manual"
-            )
-
-            activities.append(
-                {
-                    "id": job.id,
-                    "type": "prune",
-                    "status": job.status,
-                    "started_at": job.started_at,
-                    "completed_at": job.completed_at,
-                    "error_message": job.error_message,
-                    "repository": repo_name,
-                    "repository_path": repo_path,
-                    "log_file_path": getattr(job, "log_file_path", None),
-                    "triggered_by": triggered_by,
-                    "schedule_id": None,
-                    "archive_name": None,
-                    "package_name": None,
-                    "has_logs": job_has_logs_by_policy(
-                        job,
-                        log_save_policy,
-                        output_text=[
-                            getattr(job, "logs", None),
-                            job.error_message,
-                        ],
-                        file_path=getattr(job, "log_file_path", None),
-                    ),
-                }
-            )
-
-    # Fetch package install jobs
-    if (not job_type or job_type == "package") and not repository_scoped:
-        package_query = db.query(PackageInstallJob)
-        if status:
-            package_query = package_query.filter(PackageInstallJob.status == status)
-        package_jobs = (
-            package_query.order_by(PackageInstallJob.started_at.desc())
-            .limit(limit)
-            .all()
-        )
-        for job in package_jobs:
-            # Get package name from package_id
-            package = (
-                db.query(InstalledPackage)
-                .filter(InstalledPackage.id == job.package_id)
-                .first()
-            )
-            package_name = package.name if package else f"Package #{job.package_id}"
-
-            activities.append(
-                {
-                    "id": job.id,
-                    "type": "package",
-                    "status": job.status,
-                    "started_at": job.started_at,
-                    "completed_at": job.completed_at,
-                    "error_message": job.error_message,
-                    "repository": None,
-                    "log_file_path": getattr(job, "log_file_path", None),
-                    "triggered_by": "manual",  # Package jobs are always manual
-                    "schedule_id": None,
-                    "archive_name": None,
-                    "package_name": package_name,
-                    "has_logs": job_has_logs_by_policy(
-                        job,
-                        log_save_policy,
-                        output_text=[
-                            getattr(job, "stdout", None),
-                            getattr(job, "stderr", None),
-                            job.error_message,
-                        ],
-                        file_path=getattr(job, "log_file_path", None),
-                    ),
-                }
-            )
-
     # Fetch script executions
     # Script executions name their repository, so a repository-scoped view
     # keeps the ones that ran against it instead of dropping the source.
@@ -1269,61 +856,14 @@ async def list_recent_activity(
                 }
             )
 
-    if not job_type or job_type in RCLONE_ACTIVITY_OPERATIONS:
-        operations = (
-            [RCLONE_ACTIVITY_OPERATIONS[job_type]]
-            if job_type in RCLONE_ACTIVITY_OPERATIONS
-            else list(RCLONE_ACTIVITY_OPERATIONS.values())
-        )
-        rclone_query = db.query(RcloneSyncJob).filter(
-            RcloneSyncJob.operation.in_(operations)
-        )
-        if repository_id is not None:
-            rclone_query = rclone_query.filter(
-                RcloneSyncJob.repository_id == repository_id
-            )
-        if status:
-            rclone_query = rclone_query.filter(RcloneSyncJob.status == status)
-        rclone_jobs = rclone_query.order_by(RcloneSyncJob.id.desc()).limit(limit).all()
-        for job in rclone_jobs:
-            repo = (
-                db.query(Repository).filter(Repository.id == job.repository_id).first()
-            )
-            repo_name = repo.name if repo else f"Repository #{job.repository_id}"
-            repo_path = repo.path if repo else None
-            activity_type = (
-                "rclone_hydrate" if job.operation == "hydrate" else "rclone_sync"
-            )
-            activities.append(
-                {
-                    "id": job.id,
-                    "type": activity_type,
-                    "status": job.status,
-                    "started_at": job.started_at,
-                    "completed_at": job.completed_at,
-                    "error_message": job.error_text,
-                    "repository": repo_name,
-                    "repository_path": repo_path,
-                    "log_file_path": job.log_path,
-                    "triggered_by": job.triggered_by,
-                    "schedule_id": None,
-                    "archive_name": None,
-                    "package_name": None,
-                    "has_logs": job_has_logs_by_policy(
-                        job,
-                        log_save_policy,
-                        output_text=[job.log_text, job.error_text],
-                        file_path=job.log_path,
-                    ),
-                    "_sort_at": job.started_at or job.created_at,
-                }
-            )
-
-    # Derive the operations axes for legacy rows so the new filters apply to
-    # both worlds, then union in operations rows (spec 9.3).
+    # The non-operation sources (availability skips and script executions)
+    # carry no operations axes of their own, so derive them before the filters
+    # apply, then union in the operations rows (spec 9.3).
     for activity in activities:
-        activity.setdefault("category", _legacy_category(activity["type"]))
-        activity.setdefault("trigger", _legacy_trigger(activity))
+        activity.setdefault(
+            "category", _category_for_non_operation_type(activity["type"])
+        )
+        activity.setdefault("trigger", _trigger_for_non_operation_item(activity))
         activity.setdefault("followups", [])
     if category:
         activities = [a for a in activities if a["category"] in category]
@@ -1930,7 +1470,8 @@ async def delete_job(
                     error=str(e),
                 )
         try:
-            db.delete(job)
+            # `job` is the facade; the row it presents is the operation.
+            db.delete(db.get(Operation, job.id))
             db.commit()
             logger.info(
                 f"Deleted {job_type} job {job_id} by admin user",

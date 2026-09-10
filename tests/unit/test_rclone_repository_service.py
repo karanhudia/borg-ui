@@ -6,7 +6,6 @@ from app.database.models import (
     AgentMachine,
     Repository,
     RepositoryStorage,
-    RcloneSyncJob,
     RcloneRemote,
 )
 from app.services.rclone_repository_service import (
@@ -791,7 +790,6 @@ async def test_sync_repository_writes_an_operation_and_its_details(db_session):
     assert details.operation == "sync"
     assert details.direction == "primary_to_remote"
     assert details.log_text == "copied 2 files"
-    assert db_session.query(RcloneSyncJob).count() == 0
 
 
 @pytest.mark.unit

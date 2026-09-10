@@ -8,7 +8,6 @@ from app.database.models import (
     Base,
     InstalledPackage,
     Operation,
-    PackageInstallJob,
 )
 from app.services.operations.package_facade import (
     PackageInstallFacade,
@@ -158,11 +157,8 @@ def test_a_log_written_by_something_else_reads_as_stdout(db, logs_dir):
     assert job.stderr == ""
 
 
-def test_resolve_prefers_operations_then_falls_back_to_the_legacy_row(db):
+def test_resolve_returns_none_for_an_unknown_id(db):
     op = _install_operation(db)
-    legacy = PackageInstallJob(package_id=_package(db).id, status="completed")
-    db.add(legacy)
-    db.commit()
 
     assert isinstance(resolve_package_job(db, op.id), PackageInstallFacade)
     assert resolve_package_job(db, 9999) is None
@@ -178,12 +174,3 @@ def test_active_package_install_matches_on_the_params_package_id(db):
     op.status = "completed"
     db.commit()
     assert active_package_install(db, 3) is None
-
-
-def test_active_package_install_sees_a_pre_phase_6_row(db):
-    package = _package(db)
-    legacy = PackageInstallJob(package_id=package.id, status="installing")
-    db.add(legacy)
-    db.commit()
-
-    assert active_package_install(db, package.id) is legacy

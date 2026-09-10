@@ -1,14 +1,13 @@
 from datetime import datetime, timedelta
 
 import pytest
+from tests.utils.operations import seed_job_operation
 
 from app.database.models import (
     Archive,
     BackupPlan,
     BackupPlanRepository,
-    PruneJob,
     ArchiveChange,
-    BackupJob,
     LicensingState,
     Operation,
     Repository,
@@ -270,27 +269,27 @@ def _cells(test_client, admin_headers, repo, route="status"):
 
 @pytest.mark.unit
 class TestRepositoryStatus:
-    def test_cells_from_operations_and_legacy(
+    def test_cells_from_the_operations_of_each_kind(
         self, test_client, test_db, admin_headers
     ):
-        """With no archives the job rows are the only evidence (as before)."""
+        """With no archives the operations are the only evidence."""
         repo = _repo(test_db)
         now = utc_now()
         _op(test_db, repo, "prune", completed_at=now - timedelta(days=20))
         _op(test_db, repo, "archive_sync", completed_at=now - timedelta(hours=1))
         _op(test_db, repo, "check", status="running")
-        test_db.add(
-            BackupJob(
-                repository_id=repo.id,
-                status="completed",
-                completed_at=now - timedelta(days=3),
-            )
+        seed_job_operation(
+            test_db,
+            "backup",
+            repository_id=repo.id,
+            status="completed",
+            completed_at=now - timedelta(days=3),
         )
         test_db.commit()
         body, cells = _cells(test_client, admin_headers, repo)
         assert set(cells) == {"backup", "check", "prune", "compact", "index"}
         assert (
-            cells["backup"]["source"] == "legacy"
+            cells["backup"]["source"] == "operations"
             and cells["backup"]["status"] == "completed"
         )
         assert cells["prune"]["threshold_days"] == 14
@@ -306,11 +305,18 @@ class TestRepositoryStatus:
     ):
         """Phase 5 moved check to `operations`; a migrated kind's first run
         must take over its status cell with no route change."""
-        from app.database.models import CheckJob
 
         repo = _repo(test_db)
         old = utc_now() - timedelta(days=10)
-        test_db.add(CheckJob(repository_id=repo.id, status="failed", completed_at=old))
+        test_db.add(
+            seed_job_operation(
+                test_db,
+                "check",
+                repository_id=repo.id,
+                status="failed",
+                completed_at=old,
+            )
+        )
         _op(test_db, repo, "check", completed_at=old + timedelta(hours=1))
         test_db.commit()
 
@@ -331,7 +337,9 @@ class TestRepositoryStatus:
         newest = _archive(test_db, repo, "a2", 5)
         _archive(test_db, repo, "a1", 1)
         test_db.add(
-            BackupJob(
+            seed_job_operation(
+                test_db,
+                "backup",
                 repository_id=repo.id,
                 status="completed",
                 completed_at=datetime(2026, 8, 14, 8, 45),
@@ -489,7 +497,9 @@ class TestRepositoryStatus:
         )
         sync.result = {"listed": 19, "removed_archive_ids": [99]}
         test_db.add(
-            PruneJob(
+            seed_job_operation(
+                test_db,
+                "prune",
                 repository_id=repo.id,
                 status="completed",
                 completed_at=datetime(2026, 8, 14, 8, 45),

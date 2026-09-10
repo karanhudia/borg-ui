@@ -11,15 +11,14 @@ from app.database.database import get_db
 from app.database.models import (
     AgentJobLog,
     User,
-    BackupJob,
     BackupPlan,
+    Operation,
     OperationBackupRetryLineage,
     Repository,
-    CheckJob,
-    PruneJob,
-    CompactJob,
 )
-from app.config import settings
+from pathlib import Path
+
+from app.utils.backup_maintenance import MAINTENANCE_STATUS_KIND
 from app.core.security import (
     get_current_user,
     get_current_download_user,
@@ -43,6 +42,7 @@ from app.services.operations.backup_facade import (
     resolve_backup_job,
 )
 from app.services.operations.enqueue import wake_runner
+from app.services.operations.job_facade import MaintenanceJobFacade
 from app.services.operations.runner import operation_runner
 from app.services.repository_executor import (
     cancel_agent_backup_job,
@@ -67,7 +67,7 @@ def _get_job_repository(
     return db.query(Repository).filter(Repository.path == repository_path).first()
 
 
-def _get_backup_job_repository(db: Session, job: BackupJob) -> Optional[Repository]:
+def _get_backup_job_repository(db: Session, job) -> Optional[Repository]:
     if job.repository_id:
         repo = db.query(Repository).filter(Repository.id == job.repository_id).first()
         if repo:
@@ -75,46 +75,33 @@ def _get_backup_job_repository(db: Session, job: BackupJob) -> Optional[Reposito
     return _get_job_repository(db, job.repository)
 
 
-def _resolve_backup_log_file(job: BackupJob):
-    from pathlib import Path
-
-    if getattr(job, "log_file_path", None):
+def _resolve_backup_log_file(job):
+    if job.log_file_path:
         log_file = Path(job.log_file_path)
         if log_file.exists():
             return log_file
-
-    if job.logs and job.logs.startswith("Logs saved to:"):
-        log_filename = job.logs.replace("Logs saved to: ", "").strip()
-        log_file = Path(settings.data_dir) / "logs" / log_filename
-        if log_file.exists():
-            return log_file
-
     return None
 
 
 def _get_running_maintenance_job(
     db: Session,
-    backup_job: BackupJob,
+    backup_job,
     maintenance_status: Optional[str],
 ):
-    if maintenance_status == "running_prune":
-        job_model = PruneJob
-    elif maintenance_status == "running_compact":
-        job_model = CompactJob
-    elif maintenance_status == "running_check":
-        job_model = CheckJob
-    else:
+    kind = MAINTENANCE_STATUS_KIND.get(maintenance_status or "")
+    if kind is None or backup_job.repository_id is None:
         return None
-
-    return (
-        db.query(job_model)
+    operation = (
+        db.query(Operation)
         .filter(
-            job_model.repository_path == backup_job.repository,
-            job_model.status == "running",
+            Operation.kind == kind,
+            Operation.repository_id == backup_job.repository_id,
+            Operation.status == "running",
         )
-        .order_by(job_model.id.desc())
+        .order_by(Operation.id.desc())
         .first()
     )
+    return MaintenanceJobFacade(db, operation) if operation is not None else None
 
 
 def _decode_json_list(value) -> list:
@@ -129,7 +116,7 @@ def _decode_json_list(value) -> list:
     return decoded if isinstance(decoded, list) else []
 
 
-def _agent_job_logs_response(db: Session, backup_job: BackupJob, offset: int) -> dict:
+def _agent_job_logs_response(db: Session, backup_job, offset: int) -> dict:
     agent_job = get_agent_job_for_backup(db, backup_job)
     if not agent_job:
         return {
@@ -160,7 +147,7 @@ def _agent_job_logs_response(db: Session, backup_job: BackupJob, offset: int) ->
     }
 
 
-def _empty_backup_log_response(job: BackupJob) -> dict[str, Any]:
+def _empty_backup_log_response(job) -> dict[str, Any]:
     return {
         "job_id": job.id,
         "status": job.status,
@@ -202,7 +189,7 @@ def _get_backup_plan_name(db: Session, backup_plan_id: Optional[int]) -> Optiona
     return plan.name if plan else None
 
 
-def _retry_metadata(job: BackupJob) -> dict[str, Any]:
+def _retry_metadata(job) -> dict[str, Any]:
     return {
         "retry_attempt": job.retry_attempt or 1,
         "retry_original_job_id": job.retry_original_job_id,
@@ -212,7 +199,7 @@ def _retry_metadata(job: BackupJob) -> dict[str, Any]:
     }
 
 
-def _backup_retry_response(job: BackupJob) -> dict[str, Any]:
+def _backup_retry_response(job) -> dict[str, Any]:
     return {
         "job_id": job.id,
         "status": job.status,
@@ -221,7 +208,7 @@ def _backup_retry_response(job: BackupJob) -> dict[str, Any]:
     }
 
 
-def _ensure_backup_retry_supported(source_job: BackupJob) -> None:
+def _ensure_backup_retry_supported(source_job) -> None:
     if source_job.status not in RETRYABLE_BACKUP_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -245,8 +232,8 @@ def _ensure_backup_retry_supported(source_job: BackupJob) -> None:
 
 def _backup_retry_request_snapshot(
     *,
-    source_job: BackupJob,
-    retry_job: BackupJob,
+    source_job,
+    retry_job,
     repo: Repository,
 ) -> dict[str, Any]:
     source_directories = _decode_json_list(repo.source_directories)
@@ -287,7 +274,7 @@ def _backup_retry_request_snapshot(
     return snapshot
 
 
-async def _cancel_running_maintenance_job(db: Session, backup_job: BackupJob):
+async def _cancel_running_maintenance_job(db: Session, backup_job):
     failure_status = RUNNING_BACKUP_MAINTENANCE_FAILURES.get(
         backup_job.maintenance_status or ""
     )
@@ -793,41 +780,22 @@ async def download_backup_logs(
                 detail={"key": "backend.errors.backup.noLogsAvailable"},
             )
 
-        # Handle file-based logs
-        if job.logs.startswith("Logs saved to:"):
-            log_filename = job.logs.replace("Logs saved to: ", "").strip()
-            log_file = _resolve_backup_log_file(job)
-
-            if log_file is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail={
-                        "key": "backend.errors.backup.logFileNotFound",
-                        "params": {"filename": log_filename},
-                    },
-                )
-
-            # Return file as download
-            return FileResponse(
-                path=str(log_file),
-                filename=f"backup_job_{job_id}_logs.txt",
-                media_type="text/plain",
+        # A backup's logs are its log file (spec 6.1).
+        log_file = _resolve_backup_log_file(job)
+        if log_file is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "key": "backend.errors.backup.logFileNotFound",
+                    "params": {"filename": Path(job.log_file_path or "").name},
+                },
             )
-        else:
-            # Legacy: logs stored in database - create temp file
-            import tempfile
 
-            temp_file = tempfile.NamedTemporaryFile(
-                mode="w", delete=False, suffix=".txt"
-            )
-            temp_file.write(job.logs or "")
-            temp_file.close()
-
-            return FileResponse(
-                path=temp_file.name,
-                filename=f"backup_job_{job_id}_logs.txt",
-                media_type="text/plain",
-            )
+        return FileResponse(
+            path=str(log_file),
+            filename=f"backup_job_{job_id}_logs.txt",
+            media_type="text/plain",
+        )
 
     except HTTPException:
         raise
@@ -875,77 +843,54 @@ async def stream_backup_logs(
                 "has_more": False,
             }
 
-        # Check if logs point to a file
-        if job.logs.startswith("Logs saved to:"):
-            # Parse file path from logs field
-            log_filename = job.logs.replace("Logs saved to: ", "").strip()
-            log_file = _resolve_backup_log_file(job)
-
-            if log_file is not None:
-                # Read log file and return lines
-                try:
-                    log_content = log_file.read_text()
-                    log_lines = log_content.split("\n")
-
-                    # Apply offset for streaming
-                    lines_to_return = log_lines[offset:]
-                    formatted_lines = [
-                        {"line_number": offset + i + 1, "content": line}
-                        for i, line in enumerate(lines_to_return)
-                    ]
-
-                    return {
-                        "job_id": job.id,
-                        "status": job.status,
-                        "lines": formatted_lines,
-                        "total_lines": len(log_lines),
-                        "has_more": False,
-                    }
-                except Exception as e:
-                    logger.error(
-                        "Failed to read log file", log_file=str(log_file), error=str(e)
-                    )
-                    return {
-                        "job_id": job.id,
-                        "status": job.status,
-                        "lines": [
-                            {
-                                "line_number": 1,
-                                "content": f"Error reading log file: {str(e)}",
-                            }
-                        ],
-                        "total_lines": 1,
-                        "has_more": False,
-                    }
-            else:
-                return {
-                    "job_id": job.id,
-                    "status": job.status,
-                    "lines": [
-                        {
-                            "line_number": 1,
-                            "content": f"Log file not found: {log_filename}",
-                        }
-                    ],
-                    "total_lines": 1,
-                    "has_more": False,
-                }
-        else:
-            # Legacy: logs stored in database (shouldn't happen with new code)
-            log_lines = job.logs.split("\n") if job.logs else []
-            lines_to_return = log_lines[offset:]
-            formatted_lines = [
-                {"line_number": offset + i + 1, "content": line}
-                for i, line in enumerate(lines_to_return)
-            ]
-
+        # A backup's logs are its log file (spec 6.1).
+        log_file = _resolve_backup_log_file(job)
+        if log_file is None:
             return {
                 "job_id": job.id,
                 "status": job.status,
-                "lines": formatted_lines,
-                "total_lines": len(log_lines),
+                "lines": [
+                    {
+                        "line_number": 1,
+                        "content": (
+                            f"Log file not found: {Path(job.log_file_path or '').name}"
+                        ),
+                    }
+                ],
+                "total_lines": 1,
                 "has_more": False,
             }
+        try:
+            log_content = log_file.read_text()
+        except Exception as e:
+            logger.error(
+                "Failed to read log file", log_file=str(log_file), error=str(e)
+            )
+            return {
+                "job_id": job.id,
+                "status": job.status,
+                "lines": [
+                    {
+                        "line_number": 1,
+                        "content": f"Error reading log file: {str(e)}",
+                    }
+                ],
+                "total_lines": 1,
+                "has_more": False,
+            }
+        log_lines = log_content.split("\n")
+        lines_to_return = log_lines[offset:]
+        formatted_lines = [
+            {"line_number": offset + i + 1, "content": line}
+            for i, line in enumerate(lines_to_return)
+        ]
+        return {
+            "job_id": job.id,
+            "status": job.status,
+            "lines": formatted_lines,
+            "total_lines": len(log_lines),
+            "has_more": False,
+        }
 
     except Exception as e:
         logger.error("Failed to stream backup logs", error=str(e), job_id=job_id)

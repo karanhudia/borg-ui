@@ -6,12 +6,14 @@ setval, so the sequence step can only ever be proven against Postgres.
 """
 
 import os
+from datetime import datetime
 
 import pytest
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
 from app.database.database import Base
+from app.database.legacy_job_tables import create_legacy_job_tables
 from app.database.db_upgrade import (
     _TRANSFORM_SENTINELS,
     _catch_up_source,
@@ -19,13 +21,39 @@ from app.database.db_upgrade import (
     _unresolved_transforms,
     alembic_init,
 )
-from app.database.models import BackupJob, BackupPlanRun, BackupPlanRunRepository
+from app.database.models import BackupPlanRun, BackupPlanRunRepository
 from app.database.models import Repository, User
 
 POSTGRES_URL = os.getenv("BORG_TEST_POSTGRES_URL")
 requires_postgres = pytest.mark.skipif(
     not POSTGRES_URL, reason="BORG_TEST_POSTGRES_URL is not set"
 )
+
+
+def _add_legacy_job_schema(engine):
+    """The job schema a pre-cut database had.
+
+    The models lost the legacy job tables and the three link columns in phase
+    9, so a database built from `Base.metadata` alone is not what the frozen
+    pre-Alembic ladder expects to find. The frozen definitions put them back.
+    """
+    with engine.begin() as conn:
+        create_legacy_job_tables(conn)
+        for table in (
+            "agent_jobs",
+            "script_executions",
+            "backup_plan_run_repositories",
+        ):
+            conn.execute(
+                text(
+                    f"ALTER TABLE {table} ADD COLUMN backup_job_id INTEGER "
+                    "REFERENCES backup_jobs(id)"
+                )
+            )
+        for table in ("agent_jobs", "script_executions"):
+            conn.execute(
+                text(f"CREATE INDEX ix_{table}_backup_job_id ON {table}(backup_job_id)")
+            )
 
 
 def _legacy_db(path, populate=None, extra_columns=()):
@@ -37,6 +65,7 @@ def _legacy_db(path, populate=None, extra_columns=()):
     """
     engine = create_engine(f"sqlite:///{path}")
     Base.metadata.create_all(engine)
+    _add_legacy_job_schema(engine)
     with engine.begin() as conn:
         for table, column, ddl in extra_columns:
             conn.execute(text(f'ALTER TABLE "{table}" ADD COLUMN "{column}" {ddl}'))
@@ -151,15 +180,18 @@ def test_a_row_pointing_at_a_deleted_row_is_kept_and_its_pointer_cleared(tmp_pat
             )
         )
         s.flush()
-        # backup_job_id 999 never existed: exactly what an install collects while
-        # foreign keys are silently switched off.
-        s.add(
-            BackupPlanRunRepository(
-                backup_plan_run_id=1, repository_id=1, backup_job_id=999
-            )
-        )
+        s.add(BackupPlanRunRepository(backup_plan_run_id=1, repository_id=1))
 
     _legacy_db(db, populate)
+    # backup_job_id 999 never existed: exactly what an install collects while
+    # foreign keys are silently switched off. The column is a raw one now, since
+    # phase 9 took it off the model.
+    engine = create_engine(f"sqlite:///{db}")
+    with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE backup_plan_run_repositories SET backup_job_id = 999")
+        )
+    engine.dispose()
 
     report = alembic_init(db)
 
@@ -171,7 +203,7 @@ def test_a_row_pointing_at_a_deleted_row_is_kept_and_its_pointer_cleared(tmp_pat
 
     session = _open(db)
     row = session.query(BackupPlanRunRepository).one()
-    assert row.backup_job_id is None
+    assert row.backup_operation_id is None
     assert row.repository_id == 1
     session.close()
 
@@ -188,8 +220,12 @@ def test_a_self_reference_pointing_forward_survives(tmp_path):
 
     def populate(s):
         s.add(Repository(id=1, name="r", path="/srv/r"))
-        s.add(BackupJob(id=1, repository="r", status="failed", retry_source_job_id=2))
-        s.add(BackupJob(id=2, repository="r", status="completed"))
+        s.add(
+            BackupPlanRun(
+                id=1, trigger="manual", status="failed", retry_source_run_id=2
+            )
+        )
+        s.add(BackupPlanRun(id=2, trigger="manual", status="completed"))
 
     _legacy_db(db, populate)
 
@@ -197,8 +233,8 @@ def test_a_self_reference_pointing_forward_survives(tmp_path):
 
     assert report.action == "transferred"
     session = _open(db)
-    assert session.get(BackupJob, 1).retry_source_job_id == 2
-    assert session.get(BackupJob, 2).retry_source_job_id is None
+    assert session.get(BackupPlanRun, 1).retry_source_run_id == 2
+    assert session.get(BackupPlanRun, 2).retry_source_run_id is None
     session.close()
 
 
@@ -564,3 +600,49 @@ def test_sentinel_columns_are_absent_from_the_baseline():
         assert column not in baseline.get(table, set()), (
             f"{table}.{column} is a sentinel but still exists in the baseline"
         )
+
+
+@pytest.mark.unit
+def test_legacy_job_rows_reach_operations_through_the_transfer(tmp_path, monkeypatch):
+    """A v2.2.x database has backup_jobs and friends; the transfer must land
+    them at the pre-collapse revision so the collapse copies them."""
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+    from app.database import legacy_job_tables as legacy
+    from app.database.models import Operation
+
+    db = tmp_path / "borg.db"
+
+    def populate(s):
+        s.add(Repository(id=1, name="r", path="/srv/r"))
+
+    _legacy_db(db, populate)
+    engine = create_engine(f"sqlite:///{db}")
+    with engine.begin() as conn:
+        conn.execute(
+            legacy.backup_jobs.insert().values(
+                id=1,
+                repository="/srv/r",
+                repository_id=1,
+                status="completed",
+                created_at=datetime(2026, 1, 1),
+            )
+        )
+        conn.execute(
+            legacy.check_jobs.insert().values(
+                id=1,
+                repository_id=1,
+                status="failed",
+                created_at=datetime(2026, 1, 1),
+            )
+        )
+    engine.dispose()
+
+    report = alembic_init(db)
+
+    assert report.action == "transferred"
+    session = _open(db)
+    kinds = sorted(op.kind for op in session.query(Operation).all())
+    assert kinds == ["backup", "check"]
+    session.close()
+    with create_engine(f"sqlite:///{db}").connect() as conn:
+        assert "backup_jobs" not in inspect(conn).get_table_names()

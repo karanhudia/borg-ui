@@ -6,6 +6,8 @@ import pytest
 from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
+from tests.utils.operations import seed_job_operation
 
 from app.api.dashboard import (
     DashboardHealthThresholds,
@@ -18,14 +20,9 @@ from app.api.dashboard import (
     parse_size_to_bytes,
 )
 from app.database.models import (
-    BackupJob,
     BackupPlan,
     BackupPlanRepository,
-    CheckJob,
-    CompactJob,
-    PruneJob,
     Repository,
-    RestoreCheckJob,
     ScheduledJob,
     SSHConnection,
     SystemSettings,
@@ -397,12 +394,12 @@ class TestDashboardHelpers:
             last_restore_check=now - timedelta(days=1),
             restore_check_cron_expression="0 4 * * *",
         )
-        job = RestoreCheckJob(
-            repository_id=7,
-            repository_path=repo.path,
+        job = SimpleNamespace(
+            id=1,
             status="failed",
             error_message="Canary manifest not found",
             started_at=now - timedelta(minutes=30),
+            completed_at=None,
         )
 
         health = build_full_repository_health(repo, now, job)
@@ -425,12 +422,12 @@ class TestDashboardHelpers:
             last_restore_check=None,
             restore_check_cron_expression="0 4 * * *",
         )
-        job = RestoreCheckJob(
-            repository_id=8,
-            repository_path=repo.path,
+        job = SimpleNamespace(
+            id=1,
             status="needs_backup",
             error_message="Run a backup, then run this restore check again.",
             started_at=now - timedelta(minutes=30),
+            completed_at=None,
         )
 
         health = build_full_repository_health(repo, now, job)
@@ -453,12 +450,12 @@ class TestDashboardHelpers:
             last_restore_check=None,
             restore_check_cron_expression="0 4 * * *",
         )
-        job = RestoreCheckJob(
-            repository_id=9,
-            repository_path=repo.path,
+        job = SimpleNamespace(
+            id=1,
             status="failed",
             error_message="Probe path missing",
             started_at=now - timedelta(minutes=30),
+            completed_at=None,
         )
 
         health = build_observe_repository_health(repo, now, job)
@@ -474,33 +471,47 @@ class TestDashboardHelpers:
         settings_query = MagicMock()
         settings_query.first.return_value = SystemSettings(log_save_policy="all_jobs")
         jobs = [
-            BackupJob(
+            SimpleNamespace(
                 id=1,
                 repository="/srv/backups/full",
+                repository_id=None,
                 status="completed",
                 started_at=now - timedelta(hours=1),
                 completed_at=now - timedelta(minutes=30),
                 progress=100,
                 scheduled_job_id=9,
+                backup_plan_run_id=None,
                 log_file_path="/tmp/job.log",
+                logs="",
+                error_message=None,
+                archive_name=None,
+                archive_pruned_at=None,
+                execution_mode="server",
             ),
-            BackupJob(
+            SimpleNamespace(
                 id=2,
                 repository="/srv/backups/manual",
+                repository_id=None,
                 status="failed",
                 started_at=now - timedelta(hours=2),
                 completed_at=now - timedelta(hours=2, minutes=5),
                 progress=42,
+                scheduled_job_id=None,
+                backup_plan_run_id=None,
+                log_file_path=None,
+                logs="borg output",
                 error_message="boom",
-                logs="legacy logs",
+                archive_name=None,
+                archive_pruned_at=None,
+                execution_mode="server",
             ),
         ]
 
         db = MagicMock()
         db.query.side_effect = [settings_query]
 
-        # Phase 8: the recent list is the union of both backup tables, read
-        # through the facade helper; this test covers the item shape.
+        # The recent list comes from the facade helper; this test covers the
+        # item shape.
         with patch("app.api.dashboard.recent_backup_jobs", return_value=jobs):
             result = get_recent_jobs(db, limit=2)
 
@@ -517,7 +528,9 @@ class TestDashboardHelpers:
             test_db.add(settings)
         settings.log_save_policy = "failed_only"
         now = datetime.now(timezone.utc)
-        success_job = BackupJob(
+        success_job = seed_job_operation(
+            test_db,
+            "backup",
             repository="/srv/backups/success",
             status="completed",
             started_at=now,
@@ -525,7 +538,9 @@ class TestDashboardHelpers:
             progress=100,
             logs="successful log",
         )
-        failed_job = BackupJob(
+        failed_job = seed_job_operation(
+            test_db,
+            "backup",
             repository="/srv/backups/failed",
             status="failed",
             started_at=now - timedelta(minutes=5),
@@ -783,7 +798,9 @@ class TestDashboardScheduleAndOverview:
 
         test_db.add_all(
             [
-                BackupJob(
+                seed_job_operation(
+                    test_db,
+                    "backup",
                     repository=full_repo.path,
                     status="completed",
                     started_at=now - timedelta(days=2),
@@ -793,7 +810,9 @@ class TestDashboardScheduleAndOverview:
                     # its archive was pruned since: the run still counts
                     archive_pruned_at=now - timedelta(days=1),
                 ),
-                BackupJob(
+                seed_job_operation(
+                    test_db,
+                    "backup",
                     repository=full_repo.path,
                     status="failed",
                     started_at=now - timedelta(days=1),
@@ -801,28 +820,36 @@ class TestDashboardScheduleAndOverview:
                     progress=80,
                     error_message="backup failed",
                 ),
-                CheckJob(
+                seed_job_operation(
+                    test_db,
+                    "check",
                     repository_id=full_repo.id,
                     repository_path=full_repo.path,
                     status="completed",
                     started_at=now - timedelta(days=3),
                     completed_at=now - timedelta(days=3, minutes=15),
                 ),
-                CompactJob(
+                seed_job_operation(
+                    test_db,
+                    "compact",
                     repository_id=full_repo.id,
                     repository_path=full_repo.path,
                     status="completed",
                     started_at=now - timedelta(days=4),
                     completed_at=now - timedelta(days=4, minutes=20),
                 ),
-                PruneJob(
+                seed_job_operation(
+                    test_db,
+                    "prune",
                     repository_id=full_repo.id,
                     repository_path=full_repo.path,
                     status="completed",
                     started_at=now - timedelta(days=5),
                     completed_at=now - timedelta(days=5, minutes=5),
                 ),
-                RestoreCheckJob(
+                seed_job_operation(
+                    test_db,
+                    "restore_check",
                     repository_id=full_repo.id,
                     repository_path=full_repo.path,
                     status="failed",

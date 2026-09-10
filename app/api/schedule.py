@@ -7,11 +7,11 @@ import asyncio
 
 from app.database.database import get_db, SessionLocal
 from app.database.models import (
+    Operation,
     User,
     ScheduledJob,
     ScheduledJobRepository,
     AvailabilityScheduleSkip,
-    BackupJob,
     Repository,
     Script,
     RepositoryScript,
@@ -1436,13 +1436,8 @@ async def delete_scheduled_job(
             )
         _require_schedule_access(db, current_user, job, "operator")
 
-        # Step 1: Set scheduled_job_id to NULL for all backup jobs linked to this schedule
-        # This preserves backup history while breaking the link
-        from app.database.models import BackupJob, Operation
-
-        db.query(BackupJob).filter_by(scheduled_job_id=job_id).update(
-            {"scheduled_job_id": None}, synchronize_session=False
-        )
+        # Step 1: Set scheduled_job_id to NULL for every backup linked to this
+        # schedule. This preserves backup history while breaking the link.
         db.query(Operation).filter_by(scheduled_job_id=job_id).update(
             {"scheduled_job_id": None}, synchronize_session=False
         )
@@ -2468,7 +2463,7 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                             )
                     except Exception as e:
                         backup_job.maintenance_status = "compact_failed"
-                        # Update CompactJob record if it was created
+                        # Update the compact operation if it was created
                         try:
                             if "compact_job" in locals():
                                 db.refresh(compact_job)
@@ -2756,7 +2751,7 @@ async def execute_scheduled_backup_with_maintenance(
             except Exception as e:
                 backup_job.maintenance_status = "compact_failed"
 
-                # Update CompactJob record if it was created
+                # Update the compact operation if it was created
                 try:
                     if "compact_job" in locals():
                         db.refresh(compact_job)
@@ -2960,13 +2955,14 @@ async def dispatch_due_scheduled_backups(
         try:
             if job.schedule_mode == "availability":
                 last_success = (
-                    db.query(BackupJob.completed_at)
+                    db.query(Operation.completed_at)
                     .filter(
-                        BackupJob.scheduled_job_id == job.id,
-                        BackupJob.status.in_(["completed", "completed_with_warnings"]),
-                        BackupJob.completed_at.isnot(None),
+                        Operation.kind == "backup",
+                        Operation.scheduled_job_id == job.id,
+                        Operation.status.in_(["completed", "completed_with_warnings"]),
+                        Operation.completed_at.isnot(None),
                     )
-                    .order_by(BackupJob.completed_at.desc())
+                    .order_by(Operation.completed_at.desc())
                     .first()
                 )
                 if last_success and job.min_success_interval_minutes:

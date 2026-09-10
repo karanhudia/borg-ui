@@ -5,8 +5,10 @@ import pytest
 from sqlalchemy.orm import sessionmaker
 
 from app.core.borg2 import borg2
-from app.database.models import PruneJob, Repository
+from app.database.models import Repository
 from app.services.v2.prune_service import PruneV2Service
+from app.services.operations.job_facade import resolve_maintenance_job
+from tests.utils.operations import seed_job_operation
 
 
 @pytest.mark.unit
@@ -25,8 +27,13 @@ async def test_execute_prune_marks_job_complete_and_updates_repo(db_engine):
     session.commit()
     session.refresh(repo)
 
-    job = PruneJob(repository_id=repo.id, repository_path=repo.path, status="pending")
-    session.add(job)
+    job = seed_job_operation(
+        session,
+        "prune",
+        repository_id=repo.id,
+        repository_path=repo.path,
+        status="pending",
+    )
     session.commit()
     session.refresh(job)
     repo_id = repo.id
@@ -60,7 +67,7 @@ async def test_execute_prune_marks_job_complete_and_updates_repo(db_engine):
         await service.execute_prune(job_id, repo_id, 0, 7, 4, 6, 0, 1, dry_run=False)
 
     verification = testing_session_local()
-    refreshed_job = verification.query(PruneJob).filter(PruneJob.id == job_id).first()
+    refreshed_job = resolve_maintenance_job(verification, job_id, "prune")
 
     assert refreshed_job.status == "completed"
     assert refreshed_job.completed_at is not None
@@ -84,8 +91,13 @@ async def test_execute_prune_marks_job_failed_on_borg_error(db_engine):
     session.commit()
     session.refresh(repo)
 
-    job = PruneJob(repository_id=repo.id, repository_path=repo.path, status="pending")
-    session.add(job)
+    job = seed_job_operation(
+        session,
+        "prune",
+        repository_id=repo.id,
+        repository_path=repo.path,
+        status="pending",
+    )
     session.commit()
     session.refresh(job)
     repo_id = repo.id
@@ -119,7 +131,7 @@ async def test_execute_prune_marks_job_failed_on_borg_error(db_engine):
         await service.execute_prune(job_id, repo_id, 0, 7, 4, 6, 0, 1, dry_run=True)
 
     verification = testing_session_local()
-    refreshed_job = verification.query(PruneJob).filter(PruneJob.id == job_id).first()
+    refreshed_job = resolve_maintenance_job(verification, job_id, "prune")
 
     assert refreshed_job.status == "failed"
     assert refreshed_job.error_message == "boom"

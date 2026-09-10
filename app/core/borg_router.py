@@ -22,40 +22,33 @@ logger = structlog.get_logger()
 def _fail_orphaned_maintenance_job(
     db: Session, maintenance_kind: str, maintenance_job_id: int
 ) -> None:
-    """Mark a maintenance ``*_job`` failed when its agent job could not be queued.
+    """Mark a maintenance operation failed when its agent job could not be
+    queued.
 
-    Without this the row stays 'pending' with no backing work and blocks the
+    Without this the row stays queued with no backing work and blocks the
     repository via admission control until a reaper eventually clears it.
     """
     from datetime import datetime
 
-    from app.database.models import CheckJob, CompactJob, DeleteArchiveJob, PruneJob
+    from app.database.models import Operation
 
-    models = {
-        "check": CheckJob,
-        "compact": CompactJob,
-        "prune": PruneJob,
-        "delete_archive": DeleteArchiveJob,
-    }
-    model = models.get(maintenance_kind)
-    if model is None:
-        return
     try:
         # The failed queue attempt (e.g. "database is locked") may have left this
         # session's transaction unusable, which would make the query below raise
         # and skip the update. Reset it first; the row was committed by the caller
         # before dispatch, so the rollback cannot lose it.
         db.rollback()
-        job = db.query(model).filter(model.id == maintenance_job_id).first()
-        if job is not None and job.status in ("pending", "running"):
+        job = db.get(Operation, maintenance_job_id)
+        if (
+            job is not None
+            and job.kind == maintenance_kind
+            and job.status in ("queued", "running")
+        ):
             job.status = "failed"
-            if hasattr(job, "error_message"):
-                job.error_message = (
-                    job.error_message
-                    or "agent job could not be queued (dispatch failed)"
-                )
-            if hasattr(job, "completed_at"):
-                job.completed_at = job.completed_at or datetime.utcnow()
+            job.error_message = (
+                job.error_message or "agent job could not be queued (dispatch failed)"
+            )
+            job.completed_at = job.completed_at or datetime.utcnow()
             db.commit()
     except Exception:
         db.rollback()
@@ -488,16 +481,6 @@ class BorgRouter:
             env=env,
             timeout=timeout,
         )
-
-    async def update_stats(self, db: Session) -> bool:
-        """Refresh archive count and size stats for this repository.
-
-        v2: computes on-disk size via du and persists to repository.total_size.
-        v1: delegates to the existing update_repository_stats helper.
-        """
-        from app.api.repositories import update_repository_stats
-
-        return await update_repository_stats(self.repo, db)
 
     def _is_agent(self) -> bool:
         """Whether this repository is executed by a managed agent.

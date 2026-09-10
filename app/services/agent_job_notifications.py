@@ -26,9 +26,7 @@ from sqlalchemy.orm import Session
 
 from app.database.models import (
     AgentJob,
-    BackupJob,
     BackupPlan,
-    CheckJob,
     Repository,
     ScheduledJob,
 )
@@ -39,8 +37,15 @@ logger = structlog.get_logger()
 
 def orm_identity_id(obj: Any) -> Optional[int]:
     """Primary key from the ORM identity map - no database access, so it is
-    safe to call on an expired object inside an exception handler."""
-    identity = sa_inspect(obj).identity
+    safe to call on an expired object inside an exception handler.
+
+    A backup arrives as the facade over its operation, which is not a mapped
+    object; the row it presents is, so that is what gets inspected."""
+    mapped = getattr(obj, "operation", obj)
+    try:
+        identity = sa_inspect(mapped).identity
+    except Exception:
+        return None
     return identity[0] if identity else None
 
 
@@ -52,7 +57,7 @@ def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
     return value.astimezone(timezone.utc)
 
 
-def backup_job_label(db: Session, backup_job: BackupJob) -> Optional[str]:
+def backup_job_label(db: Session, backup_job) -> Optional[str]:
     """Plan or schedule name for notification titles, if any."""
     if backup_job.backup_plan_id:
         plan = (
@@ -74,7 +79,7 @@ def backup_job_label(db: Session, backup_job: BackupJob) -> Optional[str]:
 
 
 async def notify_backup_job_started(
-    db: Session, agent_job: AgentJob, backup_job: BackupJob
+    db: Session, agent_job: AgentJob, backup_job
 ) -> None:
     """Send the backup-start notification for an agent backup job."""
     try:
@@ -102,7 +107,7 @@ async def notify_backup_job_started(
         )
 
 
-async def notify_backup_job_finished(db: Session, backup_job: BackupJob) -> None:
+async def notify_backup_job_finished(db: Session, backup_job) -> None:
     """Send the success/warning/failure notification for a finished backup job.
 
     Statuses without a server-side notification (e.g. cancelled) are skipped.
@@ -161,7 +166,7 @@ async def notify_backup_job_finished(db: Session, backup_job: BackupJob) -> None
         )
 
 
-async def notify_check_job_finished(db: Session, check_job: CheckJob) -> None:
+async def notify_check_job_finished(db: Session, check_job) -> None:
     """Send the check success/failure notification for a finished check job.
 
     A check that completed with warnings still verified the repository and is

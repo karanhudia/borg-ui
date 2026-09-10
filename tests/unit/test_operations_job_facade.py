@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import Base, CheckJob, Operation, Repository
+from app.database.models import Base, Operation, Repository
 from app.services.operations.job_facade import (
     MAINTENANCE_KINDS,
     MaintenanceJobFacade,
@@ -226,23 +226,8 @@ def test_resolve_prefers_an_operation_of_the_right_kind(db, repository):
 
 def test_resolve_ignores_an_operation_of_another_kind(db, repository):
     op = _operation(db, repository, kind="prune")
-    legacy = CheckJob(id=op.id, repository_id=repository.id, status="completed")
-    db.add(legacy)
-    db.commit()
 
-    resolved = resolve_maintenance_job(db, op.id, "check")
-
-    assert isinstance(resolved, CheckJob)
-
-
-def test_resolve_falls_back_to_the_legacy_row(db, repository):
-    legacy = CheckJob(repository_id=repository.id, status="completed")
-    db.add(legacy)
-    db.commit()
-
-    resolved = resolve_maintenance_job(db, legacy.id, "check")
-
-    assert isinstance(resolved, CheckJob)
+    assert resolve_maintenance_job(db, op.id, "check") is None
 
 
 def test_resolve_returns_none_when_nothing_matches(db):
@@ -292,46 +277,6 @@ def test_claim_running_rejects_an_already_started_running_operation(db, reposito
     db.commit()
     db.refresh(op)
     assert op.started_at == first_started
-
-
-def test_claim_running_still_claims_a_legacy_row(db, repository):
-    legacy = CheckJob(repository_id=repository.id, status="pending")
-    db.add(legacy)
-    db.commit()
-    started = datetime(2026, 9, 6, 12, 0, 0)
-
-    assert claim_running(db, legacy.id, "check", started) == 1
-    db.commit()
-    db.refresh(legacy)
-    assert legacy.status == "running"
-
-
-def test_claim_running_claims_a_manually_started_legacy_row_once(db, repository):
-    """A legacy row can also be pre-set to "running" with no `started_at`
-    before the service claims it, same as a manual-start Operation."""
-    legacy = CheckJob(repository_id=repository.id, status="running")
-    db.add(legacy)
-    db.commit()
-    started = datetime(2026, 9, 6, 12, 0, 0)
-
-    assert claim_running(db, legacy.id, "check", started) == 1
-    db.commit()
-    db.refresh(legacy)
-    assert legacy.started_at == started
-
-
-def test_claim_running_rejects_an_already_started_legacy_row(db, repository):
-    """A second claim on a legacy row that already has `started_at` set
-    must not also report success."""
-    legacy = CheckJob(repository_id=repository.id, status="running")
-    db.add(legacy)
-    db.commit()
-    first_started = datetime(2026, 9, 6, 12, 0, 0)
-    assert claim_running(db, legacy.id, "check", first_started) == 1
-    db.commit()
-
-    second_started = datetime(2026, 9, 6, 12, 5, 0)
-    assert claim_running(db, legacy.id, "check", second_started) == 0
 
 
 def test_stats_live_in_the_operation_result(db, repository):

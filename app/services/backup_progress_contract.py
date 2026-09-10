@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from app.database.models import BackupJob, Repository
+from app.database.models import Repository
 
 BACKUP_PROGRESS_FIELDS_BY_VERSION: dict[int, tuple[str, ...]] = {
     1: (
@@ -54,9 +54,7 @@ def get_backup_progress_fields(repo: Optional[Repository]) -> tuple[str, ...]:
     )
 
 
-def serialize_backup_progress_details(
-    job: BackupJob, repo: Optional[Repository]
-) -> dict:
+def serialize_backup_progress_details(job, repo: Optional[Repository]) -> dict:
     supported_fields = set(get_backup_progress_fields(repo))
     progress_details = {
         "current_file": job.current_file or "",

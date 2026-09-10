@@ -27,7 +27,7 @@ For a new setup, follow the sidebar in this order:
 | Sidebar area | Tab | Use it for |
 | --- | --- | --- |
 | Main | Dashboard | Check repository health, recent activity, backup freshness, restore-check status, and setup-gap actions for backup plans, cloud storage, remote clients, and verification. |
-| Main | Activity | Review job history, live or recent logs, failures, and completed backup, restore, check, prune, compact, script, or package work. |
+| Main | Activity | Review job history as operations: queued, running, and finished work with follow-up index steps nested under their parent, live or recent logs, and failures. |
 | Infrastructure | Remote Machines | Add SSH-connected machines for remote repositories, remote backup sources, and SSH restore destinations. |
 | Infrastructure | Remote Clients | Register other Borg UI client servers, check health and version compatibility from this server, and route selected requests to a remote client. Visible to admins; management requires Pro or Enterprise. |
 | Infrastructure | Managed Agents | Enroll and manage Borg UI agents on remote machines. |

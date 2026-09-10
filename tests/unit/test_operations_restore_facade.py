@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import Base, Operation, Repository, RestoreJob
+from app.database.models import Base, Operation, Repository
 from app.services.operations.details import restore_details
 from app.services.operations.restore_facade import (
     RestoreJobFacade,
@@ -162,40 +162,25 @@ def test_unknown_attributes_raise(db, repository):
         job.no_such_column
 
 
-def test_resolve_prefers_operations_then_falls_back_to_the_legacy_row(db, repository):
+def test_resolve_returns_none_for_an_unknown_id(db, repository):
     op = _restore_operation(db, repository)
-    # Distinct ids on purpose: on a fresh database both tables start at 1, and
-    # a shared id would resolve to the operation and never exercise the legacy
-    # branch this test is about.
-    legacy = RestoreJob(
-        id=op.id + 1000, repository=repository.path, archive="old", status="completed"
-    )
-    db.add(legacy)
-    db.commit()
 
     assert isinstance(resolve_restore_job(db, op.id), RestoreJobFacade)
-    assert resolve_restore_job(db, legacy.id) is legacy
     assert resolve_restore_job(db, 9999) is None
 
 
-def test_list_restore_jobs_unions_both_tables_newest_first(db, repository):
+def test_list_restore_jobs_newest_first(db, repository):
     from datetime import datetime, timedelta
 
     base = datetime(2026, 9, 8, 12, 0, 0)
-    old = RestoreJob(
-        repository=repository.path, archive="a", status="completed", created_at=base
+    old = _restore_operation(db, repository, params={"archive_name": "a", "paths": []})
+    old.created_at = base
+    newer = _restore_operation(
+        db, repository, params={"archive_name": "b", "paths": []}
     )
-    db.add(old)
-    db.commit()
-    op = _restore_operation(db, repository)
-    op.created_at = base + timedelta(minutes=5)
-    newer_legacy = RestoreJob(
-        repository=repository.path,
-        archive="b",
-        status="completed",
-        created_at=base + timedelta(minutes=10),
-    )
-    db.add(newer_legacy)
+    newer.created_at = base + timedelta(minutes=10)
+    middle = _restore_operation(db, repository)
+    middle.created_at = base + timedelta(minutes=5)
     db.commit()
 
     jobs = list_restore_jobs(db, limit=2)
@@ -206,27 +191,20 @@ def test_list_restore_jobs_unions_both_tables_newest_first(db, repository):
 
 
 def test_list_restore_jobs_limits_each_source_by_created_at_not_id(db, repository):
-    """The merge ranks by created_at, so each source has to cut by created_at
-    too. Cutting by id drops the newer row whenever a source's id order and
-    its created_at order disagree."""
+    """The list ranks by created_at, so the cut has to use created_at too.
+    Cutting by id drops the newer row whenever id order and created_at order
+    disagree."""
     from datetime import datetime, timedelta
 
     base = datetime(2026, 9, 8, 12, 0, 0)
-    older_but_higher_id = RestoreJob(
-        repository=repository.path,
-        archive="stale",
-        status="completed",
-        created_at=base,
+    newer_but_lower_id = _restore_operation(
+        db, repository, params={"archive_name": "fresh", "paths": []}
     )
-    newer_but_lower_id = RestoreJob(
-        repository=repository.path,
-        archive="fresh",
-        status="completed",
-        created_at=base + timedelta(minutes=10),
+    older_but_higher_id = _restore_operation(
+        db, repository, params={"archive_name": "stale", "paths": []}
     )
-    db.add(newer_but_lower_id)
-    db.commit()
-    db.add(older_but_higher_id)
+    newer_but_lower_id.created_at = base + timedelta(minutes=10)
+    older_but_higher_id.created_at = base
     db.commit()
     assert newer_but_lower_id.id < older_but_higher_id.id
 

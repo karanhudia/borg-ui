@@ -4654,7 +4654,7 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/api/activity/recent?limit=200&job_type=backup&status=",
+              "raw": "{{base_url}}/api/activity/recent?limit=200&job_type=backup&status=&category=backup&trigger=manual&repository_id=&collapse_runs=true",
               "host": [
                 "{{base_url}}"
               ],
@@ -4675,6 +4675,22 @@
                 {
                   "key": "status",
                   "value": ""
+                },
+                {
+                  "key": "category",
+                  "value": "backup"
+                },
+                {
+                  "key": "trigger",
+                  "value": "manual"
+                },
+                {
+                  "key": "repository_id",
+                  "value": ""
+                },
+                {
+                  "key": "collapse_runs",
+                  "value": "true"
                 }
               ]
             },
@@ -7285,6 +7301,289 @@
               }
             },
             "description": "Backend route: `POST /api/repositories/{repo_id}/rebuild`\n\nSource: `app/api/archive_index.py`"
+          }
+        }
+      ]
+    },
+    {
+      "name": "25. Operations",
+      "item": [
+        {
+          "name": "List Operations",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/operations/?repository_id=&category=backup&kind=backup&status=running&trigger=manual&run_id=&since=&limit=100&cursor=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "operations"
+              ],
+              "query": [
+                {
+                  "key": "repository_id",
+                  "value": ""
+                },
+                {
+                  "key": "category",
+                  "value": "backup"
+                },
+                {
+                  "key": "kind",
+                  "value": "backup"
+                },
+                {
+                  "key": "status",
+                  "value": "running"
+                },
+                {
+                  "key": "trigger",
+                  "value": "manual"
+                },
+                {
+                  "key": "run_id",
+                  "value": ""
+                },
+                {
+                  "key": "since",
+                  "value": ""
+                },
+                {
+                  "key": "limit",
+                  "value": "100"
+                },
+                {
+                  "key": "cursor",
+                  "value": ""
+                }
+              ]
+            },
+            "description": "List operations, newest first, filtered by any of the parameters.\n\nBackend route: `GET /api/operations/`\n\nSource: `app/api/operations.py`"
+          }
+        },
+        {
+          "name": "Get Queue",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/operations/queue",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "operations",
+                "queue"
+              ]
+            },
+            "description": "What is running and waiting right now, with the concurrency limits in force.\n\nBackend route: `GET /api/operations/queue`\n\nSource: `app/api/operations.py`"
+          }
+        },
+        {
+          "name": "Repositories Hub",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/operations/repositories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "operations",
+                "repositories"
+              ]
+            },
+            "description": "One row per repository the user may see, with the state of its derived data.\n\nBackend route: `GET /api/operations/repositories`\n\nSource: `app/api/operations.py`"
+          }
+        },
+        {
+          "name": "Repository Hub Detail",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/operations/repositories/{{repository_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "operations",
+                "repositories",
+                "{{repository_id}}"
+              ]
+            },
+            "description": "The archives behind a row's failed and truncated counts, newest first.\n\nBackend route: `GET /api/operations/repositories/{{repository_id}}`\n\nSource: `app/api/operations.py`"
+          }
+        },
+        {
+          "name": "Reconcile Now",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/operations/reconcile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "operations",
+                "reconcile"
+              ]
+            },
+            "description": "Run the reconcile tick now instead of waiting for the interval.\n\nBackend route: `POST /api/operations/reconcile`\n\nSource: `app/api/operations.py`"
+          }
+        },
+        {
+          "name": "Pause Background Work",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/operations/pause",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "operations",
+                "pause"
+              ]
+            },
+            "description": "Stop dispatching follow-up and reconcile work.\n\nBackend route: `POST /api/operations/pause`\n\nSource: `app/api/operations.py`"
+          }
+        },
+        {
+          "name": "Resume Background Work",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/operations/resume",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "operations",
+                "resume"
+              ]
+            },
+            "description": "Dispatch follow-up and reconcile work again.\n\nBackend route: `POST /api/operations/resume`\n\nSource: `app/api/operations.py`"
+          }
+        },
+        {
+          "name": "Update Limits",
+          "request": {
+            "method": "PUT",
+            "url": {
+              "raw": "{{base_url}}/api/operations/limits",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "operations",
+                "limits"
+              ]
+            },
+            "description": "Change the concurrency limits.\n\nBackend route: `PUT /api/operations/limits`\n\nSource: `app/api/operations.py`",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"max_concurrent_backups\": 1,\n  \"max_concurrent_scheduled_backups\": 2,\n  \"max_concurrent_scheduled_checks\": 4,\n  \"index_workers\": 2\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Operation",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/operations/{{operation_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "operations",
+                "{{operation_id}}"
+              ]
+            },
+            "description": "One operation with its kind-specific detail.\n\nBackend route: `GET /api/operations/{{operation_id}}`\n\nSource: `app/api/operations.py`"
+          }
+        },
+        {
+          "name": "Cancel Operation",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/operations/{{operation_id}}/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "operations",
+                "{{operation_id}}",
+                "cancel"
+              ]
+            },
+            "description": "Ask the runner to cancel the operation.\n\nBackend route: `POST /api/operations/{{operation_id}}/cancel`\n\nSource: `app/api/operations.py`"
+          }
+        },
+        {
+          "name": "Get Operation Logs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/operations/{{operation_id}}/logs?offset=0&limit=500",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "operations",
+                "{{operation_id}}",
+                "logs"
+              ],
+              "query": [
+                {
+                  "key": "offset",
+                  "value": "0"
+                },
+                {
+                  "key": "limit",
+                  "value": "500"
+                }
+              ]
+            },
+            "description": "Paginated log lines.\n\nBackend route: `GET /api/operations/{{operation_id}}/logs`\n\nSource: `app/api/operations.py`"
+          }
+        },
+        {
+          "name": "Download Operation Logs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/operations/{{operation_id}}/logs/download",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "operations",
+                "{{operation_id}}",
+                "logs",
+                "download"
+              ]
+            },
+            "description": "The operation's log file as a download.\n\nBackend route: `GET /api/operations/{{operation_id}}/logs/download`\n\nSource: `app/api/operations.py`"
           }
         }
       ]

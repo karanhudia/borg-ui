@@ -1182,14 +1182,13 @@ class TestSSHConnectionDelete:
         self, test_client: TestClient, test_db, admin_headers
     ):
         """Deleting an SSH connection must succeed even when backup_jobs,
-        restore_jobs, repositories, and scheduled_jobs still reference it.
+        operation details rows, repositories, and scheduled_jobs still
+        reference it.
         All FK columns must be NULLed before the DELETE so no constraint fires.
         """
         from app.database.models import (
             SSHConnection,
             Repository,
-            BackupJob,
-            RestoreJob,
             ScheduledJob,
         )
 
@@ -1208,22 +1207,6 @@ class TestSSHConnectionDelete:
         )
         test_db.add(repo)
 
-        backup_job = BackupJob(
-            repository="/tmp/ssh-repo",
-            status="completed",
-            source_ssh_connection_id=conn_id,
-        )
-        test_db.add(backup_job)
-
-        restore_job = RestoreJob(
-            repository="/tmp/ssh-repo",
-            archive="test-archive",
-            destination="/tmp/restore",
-            status="completed",
-            destination_connection_id=conn_id,
-        )
-        test_db.add(restore_job)
-
         scheduled_job = ScheduledJob(
             name="test-schedule",
             cron_expression="0 2 * * *",
@@ -1232,9 +1215,25 @@ class TestSSHConnectionDelete:
         test_db.add(scheduled_job)
         test_db.commit()
 
-        from app.database.models import Operation, OperationRestoreDetails
-        from app.services.operations.details import restore_details
+        from app.database.models import (
+            Operation,
+            OperationBackupDetails,
+            OperationRestoreDetails,
+        )
+        from app.services.operations.details import backup_details, restore_details
 
+        backup_op = Operation(
+            repository_id=repo.id,
+            kind="backup",
+            category="backup",
+            status="completed",
+            trigger="manual",
+            priority=0,
+            run_id="run-ssh-delete-backup",
+        )
+        test_db.add(backup_op)
+        test_db.flush()
+        backup_details(test_db, backup_op).source_ssh_connection_id = conn_id
         restore_op = Operation(
             repository_id=repo.id,
             kind="restore",
@@ -1250,8 +1249,7 @@ class TestSSHConnectionDelete:
         test_db.commit()
 
         repo_id = repo.id
-        backup_job_id = backup_job.id
-        restore_job_id = restore_job.id
+        backup_op_id = backup_op.id
         restore_op_id = restore_op.id
         scheduled_job_id = scheduled_job.id
 
@@ -1274,17 +1272,9 @@ class TestSSHConnectionDelete:
         assert repo_after.connection_id is None
         assert repo_after.source_ssh_connection_id is None
 
-        backup_after = (
-            test_db.query(BackupJob).filter(BackupJob.id == backup_job_id).first()
-        )
+        backup_after = test_db.get(OperationBackupDetails, backup_op_id)
         assert backup_after is not None
         assert backup_after.source_ssh_connection_id is None
-
-        restore_after = (
-            test_db.query(RestoreJob).filter(RestoreJob.id == restore_job_id).first()
-        )
-        assert restore_after is not None
-        assert restore_after.destination_connection_id is None
 
         details_after = test_db.get(OperationRestoreDetails, restore_op_id)
         assert details_after is not None

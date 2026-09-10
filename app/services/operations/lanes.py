@@ -5,19 +5,12 @@ from typing import Iterable, Optional
 from sqlalchemy.orm import Session
 
 from app.database.models import (
-    BackupJob,
-    CheckJob,
-    CompactJob,
-    DeleteArchiveJob,
     Operation,
-    PruneJob,
+    OperationBackupDetails,
     Repository,
-    RepositoryWipeJob,
     SystemSettings,
 )
 from app.services.operations.vocab import INDEX_KINDS, KINDS, is_exclusive
-
-LEGACY_RUNNING_STATUSES = ("running", "running_prune", "running_compact")
 
 _EXCLUSIVE_KINDS = tuple(k for k, spec in KINDS.items() if spec.exclusive)
 
@@ -36,42 +29,19 @@ def _setting(settings: Optional[SystemSettings], name: str):
     return _DEFAULTS[name] if value is None else value
 
 
-def legacy_running_exclusive(db: Session, repository_id: int) -> bool:
-    """True while a legacy job table shows exclusive work running on the
-    repository. Deleted in phase 9 once every kind lives in operations."""
-    if (
-        db.query(BackupJob.id)
-        .filter(
-            BackupJob.repository_id == repository_id,
-            BackupJob.status.in_(LEGACY_RUNNING_STATUSES),
-        )
-        .first()
-    ):
-        return True
-    for model in (CheckJob, PruneJob, CompactJob, DeleteArchiveJob, RepositoryWipeJob):
-        if (
-            db.query(model.id)
-            .filter(model.repository_id == repository_id, model.status == "running")
-            .first()
-        ):
-            return True
-    return False
-
-
 # Kinds the job admission classes as repository writes: their agent and
 # server jobs are refused with 409 while one of them runs, so a listing
 # started under bypass_lock would fail instead of reading past a lock.
 _WRITE_MAINTENANCE_KINDS = ("prune", "compact", "delete_archive", "wipe")
-_WRITE_MAINTENANCE_MODELS = (PruneJob, CompactJob, DeleteArchiveJob, RepositoryWipeJob)
-_LEGACY_MAINTENANCE_BACKUP_STATUSES = ("running_prune", "running_compact")
+_MAINTENANCE_BACKUP_STATUSES = ("running_prune", "running_compact")
 
 
 def write_maintenance_running(db: Session, repository_id: int) -> bool:
     """True while prune, compact, delete or wipe is queued or running on
-    the repository, as an operation, a legacy job row, or a backup job in
-    its maintenance phase (`maintenance_status`, the scheduler's post-backup
-    prune and compact). Unlike a running backup, these are not something
-    a listing can bypass: admission refuses the listing outright."""
+    the repository, as an operation or as a backup in its maintenance phase
+    (`maintenance_status`, the scheduler's post-backup prune and compact).
+    Unlike a running backup, these are not something a listing can bypass:
+    admission refuses the listing outright."""
     if (
         db.query(Operation.id)
         .filter(
@@ -82,46 +52,15 @@ def write_maintenance_running(db: Session, repository_id: int) -> bool:
         .first()
     ):
         return True
-    if (
-        db.query(BackupJob.id)
-        .filter(
-            BackupJob.repository_id == repository_id,
-            BackupJob.maintenance_status.in_(_LEGACY_MAINTENANCE_BACKUP_STATUSES),
-        )
-        .first()
-    ):
-        return True
-    from app.database.models import OperationBackupDetails
-
-    if (
+    return (
         db.query(OperationBackupDetails.operation_id)
         .join(Operation, Operation.id == OperationBackupDetails.operation_id)
         .filter(
             Operation.repository_id == repository_id,
-            OperationBackupDetails.maintenance_status.in_(
-                _LEGACY_MAINTENANCE_BACKUP_STATUSES
-            ),
+            OperationBackupDetails.maintenance_status.in_(_MAINTENANCE_BACKUP_STATUSES),
         )
         .first()
-    ):
-        return True
-    # Same statuses the admission treats as active: a maintenance job is
-    # created pending and refuses listings from that moment on, before it
-    # has started (seen live: 409 against a pending prune two seconds after
-    # the backup completed).
-    from app.services.job_admission import ACTIVE_MAINTENANCE_STATUSES
-
-    for model in _WRITE_MAINTENANCE_MODELS:
-        if (
-            db.query(model.id)
-            .filter(
-                model.repository_id == repository_id,
-                model.status.in_(tuple(ACTIVE_MAINTENANCE_STATUSES)),
-            )
-            .first()
-        ):
-            return True
-    return False
+    ) is not None
 
 
 def running_exclusive_operation(
@@ -140,9 +79,7 @@ def running_exclusive_operation(
 def lane_free(
     db: Session, repository_id: int, *, exclude_id: Optional[int] = None
 ) -> bool:
-    if running_exclusive_operation(db, repository_id, exclude_id=exclude_id):
-        return False
-    return not legacy_running_exclusive(db, repository_id)
+    return not running_exclusive_operation(db, repository_id, exclude_id=exclude_id)
 
 
 def running_count(

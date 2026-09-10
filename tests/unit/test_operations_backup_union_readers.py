@@ -1,4 +1,4 @@
-"""Phase 8: every reader of the backup history sees both tables."""
+"""Every reader of the backup history reads `operations`."""
 
 from datetime import datetime, timedelta
 
@@ -7,7 +7,6 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.database.models import (
-    BackupJob,
     Base,
     Operation,
     OperationBackupDetails,
@@ -45,20 +44,27 @@ def repository(db):
 
 
 def _pair(db, repository, *, archive="nas-new", legacy_archive="nas-old"):
-    """One legacy row and one operation, the operation the newer of the two."""
+    """Two backup operations, the second the newer of the two."""
     now = datetime.utcnow()
-    legacy = BackupJob(
-        repository=repository.path,
+    older = Operation(
         repository_id=repository.id,
+        kind="backup",
+        category="backup",
         status="completed",
-        archive_name=legacy_archive,
-        original_size=1,
-        deduplicated_size=1,
+        trigger="manual",
+        priority=0,
+        run_id="run-0",
+        params={"executor": "server"},
         started_at=now - timedelta(days=2),
         completed_at=now - timedelta(days=2),
         created_at=now - timedelta(days=2),
     )
-    db.add(legacy)
+    db.add(older)
+    db.flush()
+    older_details = backup_details(db, older)
+    older_details.archive_name = legacy_archive
+    older_details.original_size = 1
+    older_details.deduplicated_size = 1
     operation = Operation(
         repository_id=repository.id,
         kind="backup",
@@ -79,10 +85,10 @@ def _pair(db, repository, *, archive="nas-new", legacy_archive="nas-old"):
     details.original_size = 10
     details.deduplicated_size = 5
     db.commit()
-    return legacy, operation
+    return older, operation
 
 
-def test_mqtt_reads_both_tables(db, repository):
+def test_mqtt_reads_the_newest_operation(db, repository):
     from app.services.mqtt_service import BackupJobQueryService
 
     legacy, operation = _pair(db, repository)
@@ -133,7 +139,7 @@ def test_started_since_covers_dashboard_and_monitoring(db, repository):
     assert [job.archive_name for job in jobs] == ["nas-new", "nas-old"]
 
 
-def test_archive_metadata_enriches_from_both_tables(db, repository):
+def test_archive_metadata_enriches_from_the_backup_operations(db, repository):
     from app.utils.archive_job_metadata import enrich_archives_with_backup_metadata
 
     _pair(db, repository)
@@ -158,7 +164,7 @@ def test_retention_marks_and_purges_operation_rows(db, repository):
     assert mark_jobs_of_pruned_archives(db, repository.id, ["nas-new", "nas-old"]) == 2
     db.expire_all()
     assert db.get(OperationBackupDetails, operation.id).archive_pruned_at is not None
-    assert db.get(BackupJob, legacy.id).archive_pruned_at is not None
+    assert db.get(OperationBackupDetails, legacy.id).archive_pruned_at is not None
 
     db.add(
         OperationBackupRetryLineage(
@@ -175,9 +181,10 @@ def test_retention_marks_and_purges_operation_rows(db, repository):
 
 
 def test_deleting_an_operation_takes_its_details_row(db, repository):
-    _legacy, operation = _pair(db, repository)
+    older, operation = _pair(db, repository)
 
     db.delete(operation)
+    db.delete(older)
     db.commit()
 
     assert db.query(OperationBackupDetails).count() == 0
@@ -214,22 +221,13 @@ def test_stale_maintenance_sweep_covers_details_rows(db, repository):
     )
 
 
-def test_latest_by_repository_loads_only_the_newest_row_per_table(db, repository):
+def test_latest_by_repository_loads_only_the_newest_row(db, repository):
     """The newest row per repository is picked in SQL, so a long history is
     not materialized on every MQTT sync."""
     from app.services.operations.backup_facade import latest_backup_jobs_by_repository
 
     now = datetime.utcnow()
     for index in range(5):
-        db.add(
-            BackupJob(
-                repository=repository.path,
-                repository_id=repository.id,
-                status="completed",
-                archive_name=f"legacy-{index}",
-                created_at=now - timedelta(days=10 + index),
-            )
-        )
         operation = Operation(
             repository_id=repository.id,
             kind="backup",
@@ -259,9 +257,9 @@ def test_latest_by_repository_loads_only_the_newest_row_per_table(db, repository
         event.remove(db.get_bind(), "before_cursor_execute", _record)
 
     assert latest[repository.path].archive_name == "op-0"
-    # Two ranked reads (one per table), neither a plain scan of the history.
+    # One ranked read, not a plain scan of the history.
     ranked = [statement for statement in loaded if "row_number" in statement.lower()]
-    assert len(ranked) == 2
+    assert len(ranked) == 1
 
 
 def test_mqtt_last_backup_ignores_a_skipped_operation(db, repository):
@@ -324,18 +322,14 @@ def test_recent_backup_jobs_keeps_a_queued_backup(db, repository):
 
 
 @pytest.mark.asyncio
-async def test_reaped_notifications_resolve_the_table_they_came_from(
+async def test_reaped_notifications_resolve_the_operations_they_name(
     db, repository, monkeypatch
 ):
-    """The two tables number rows independently and `resolve_backup_job` gives
-    operations precedence, so a reaped legacy row must not notify about an
-    operation that happens to share its id."""
+    """The reaper hands `_notify_reaped_backup_jobs` the ids of the backup
+    operations it failed, and each notifies about its own run."""
     from app.services.agent_job_reaper import _notify_reaped_backup_jobs
 
-    legacy, operation = _pair(db, repository)
-    # On a fresh database the two sequences both start at 1, which is the
-    # collision this test is about.
-    assert legacy.id == operation.id
+    older, operation = _pair(db, repository)
 
     seen = []
 
@@ -349,7 +343,8 @@ async def test_reaped_notifications_resolve_the_table_they_came_from(
     )
     monkeypatch.setattr("app.services.agent_job_reaper.SessionLocal", lambda: db)
 
-    await _notify_reaped_backup_jobs([("backup_jobs", legacy.id)])
-    await _notify_reaped_backup_jobs([("operations", operation.id)])
+    older_id, operation_id = older.id, operation.id
+    await _notify_reaped_backup_jobs([older_id])
+    await _notify_reaped_backup_jobs([operation_id])
 
     assert seen == ["nas-old", "nas-new"]

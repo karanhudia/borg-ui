@@ -4,11 +4,9 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import Base, Operation, Repository, RepositoryWipeJob
+from app.database.models import Base, Operation, Repository
 from app.services.operations.wipe_facade import (
     WipeJobFacade,
-    active_wipe_operation,
-    resolve_wipe_job,
 )
 
 
@@ -106,33 +104,3 @@ def test_preview_snapshot_reads_from_the_details_row(db, repository):
     assert reread.archive_count == 4
     assert reread.archive_fingerprint == "sha256:abc"
     assert reread.run_compact is False
-
-
-def test_resolve_prefers_operations_then_falls_back_to_the_legacy_row(db, repository):
-    op = _wipe_operation(db, repository)
-    # Distinct ids on purpose: on a fresh database both tables start at 1, and
-    # a shared id would resolve to the operation and never exercise the legacy
-    # branch this test is about.
-    legacy = RepositoryWipeJob(
-        id=op.id + 1000, repository_id=repository.id, status="previewed"
-    )
-    db.add(legacy)
-    db.commit()
-
-    assert isinstance(resolve_wipe_job(db, op.id), WipeJobFacade)
-    assert resolve_wipe_job(db, legacy.id) is legacy
-    assert resolve_wipe_job(db, 9999) is None
-
-
-def test_active_wipe_operation_sees_queued_work_and_legacy_running_rows(db, repository):
-    assert active_wipe_operation(db, repository.id) is None
-
-    op = _wipe_operation(db, repository)
-    assert active_wipe_operation(db, repository.id) is op
-
-    op.status = "completed"
-    db.commit()
-    legacy = RepositoryWipeJob(repository_id=repository.id, status="running")
-    db.add(legacy)
-    db.commit()
-    assert active_wipe_operation(db, repository.id) is legacy

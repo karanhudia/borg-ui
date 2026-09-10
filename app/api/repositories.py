@@ -18,13 +18,9 @@ from app.database.database import get_db, SessionLocal
 from app.database.models import (
     AgentJob,
     AgentMachine,
-    CheckJob,
-    CompactJob,
     DEFAULT_HISTORY_INDEX_EXCLUDES,
     Operation,
-    PruneJob,
     RcloneRemote,
-    RcloneSyncJob,
     Repository,
     RepositoryStorage,
     ScheduledJob,
@@ -104,8 +100,6 @@ from app.services.repository_info_sync import sync_archive_stats_from_info
 from app.services.storage_usage import (
     SOURCE_BORG1_CACHE_STATS,
     SOURCE_STORAGE_USED,
-    SizeResult,
-    measure_repository_size,
 )
 from app.services.repository_command_lock import run_serialized_repository_command
 from app.services.rclone_repository_service import (
@@ -1069,146 +1063,6 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
         return False
 
 
-async def update_repository_stats(repository: Repository, db: Session) -> bool:
-    """
-    Update the archive count and repository size stats by querying Borg.
-    Returns True if successful, False otherwise.
-    """
-    if is_agent_executor(repository):
-        return await _update_agent_repository_stats(repository, db)
-
-    temp_key_file = None
-    try:
-        # Check system-wide bypass_lock_on_list setting
-        from app.database.models import SystemSettings
-
-        system_settings = db.query(SystemSettings).first()
-        use_bypass_lock = repository.bypass_lock or (
-            system_settings and system_settings.bypass_lock_on_list
-        )
-        env, temp_key_file = _prepare_repository_borg_env(repository, db)
-
-        router = BorgRouter(repository)
-
-        # Get archive list and count
-        archives = await router.list_archives(env=env)
-
-        archive_count = 0
-        total_size = None
-        last_backup_time = None
-
-        try:
-            if isinstance(archives, str):
-                archives_data = json.loads(archives)
-                archives = (
-                    archives_data.get("archives", [])
-                    if isinstance(archives_data, dict)
-                    else archives_data
-                )
-
-            if isinstance(archives, list):
-                archive_count = len(archives)
-
-                archive_times = []
-                for archive in archives:
-                    archive_time = archive.get("time")
-                    if archive_time is None:
-                        archive_time = archive.get("start")
-                    if archive_time is None:
-                        continue
-
-                    try:
-                        # Wrapper listings run under TZ=UTC, so borg rendered
-                        # these timestamps in UTC - not server-local.
-                        parsed_time = _parse_borg_archive_time(
-                            archive_time, timezone_name="UTC"
-                        )
-                    except ValueError as te:
-                        logger.warning(
-                            "Failed to parse archive timestamp",
-                            repository=repository.name,
-                            timestamp=archive_time,
-                            error=str(te),
-                        )
-                        continue
-
-                    if parsed_time:
-                        archive_times.append(parsed_time)
-
-                if archive_times:
-                    last_backup_time = max(archive_times)
-        except json.JSONDecodeError as e:
-            logger.error(
-                "Failed to parse archive list JSON",
-                repository=repository.name,
-                error=str(e),
-                stdout=str(archives)[:200],
-            )
-
-        # Get timeouts from DB settings (with fallback to config)
-        timeouts = get_operation_timeouts(db)
-
-        # The same source order as the `stats` operation, so the two writers
-        # of total_size agree on the quantity and label it the same way.
-        try:
-            measured = await measure_repository_size(
-                repository,
-                env=env,
-                temp_key_file=temp_key_file,
-                info_timeout=timeouts["info_timeout"],
-                use_bypass_lock=bool(use_bypass_lock),
-            )
-        except Exception as e:
-            logger.warning(
-                "Failed to get repository size",
-                repository=repository.name,
-                error=str(e),
-            )
-            measured = SizeResult()
-        if measured.bytes:
-            total_size = format_bytes(measured.bytes)
-
-        # Update repository
-        old_count = repository.archive_count
-        old_size = repository.total_size
-        old_last_backup = repository.last_backup
-        repository.archive_count = archive_count
-        if total_size:
-            repository.total_size = total_size
-            repository.total_size_source = measured.source
-        if measured.last_modified:
-            repository.borg_last_modified = measured.last_modified
-        if last_backup_time:
-            repository.last_backup = last_backup_time
-
-        db.commit()
-        logger.info(
-            "Updated repository stats",
-            repository=repository.name,
-            archive_count_old=old_count,
-            archive_count_new=archive_count,
-            size_old=old_size,
-            size_new=total_size,
-            last_backup_old=old_last_backup,
-            last_backup_new=last_backup_time,
-        )
-        return True
-
-    except Exception as e:
-        logger.error(
-            "Exception while updating repository stats",
-            repository=repository.name,
-            error=str(e),
-        )
-        return False
-    finally:
-        if temp_key_file and os.path.exists(temp_key_file):
-            try:
-                os.unlink(temp_key_file)
-            except Exception:
-                pass
-
-
 # Helper function to format bytes to human readable format
 def format_bytes(bytes_size: int) -> str:
     """Format bytes to human readable string (e.g., '1.23 GB')"""
@@ -2087,13 +1941,9 @@ def _serialize_rclone_storage(
         .order_by(Operation.created_at.desc(), Operation.id.desc())
         .first()
     )
-    latest_legacy = (
-        db.query(RcloneSyncJob)
-        .filter(RcloneSyncJob.repository_id == repository.id)
-        .order_by(RcloneSyncJob.created_at.desc(), RcloneSyncJob.id.desc())
-        .first()
+    latest_job = (
+        RcloneSyncFacade(db, latest_operation) if latest_operation is not None else None
     )
-    latest_job = _newer_rclone_job(db, latest_operation, latest_legacy)
     if log_save_policy is None:
         log_save_policy = get_log_save_policy(db)
     status["latest_sync_job"] = (
@@ -2117,18 +1967,6 @@ def _serialize_rclone_storage(
         else None
     )
     return status
-
-
-def _newer_rclone_job(db: Session, operation, legacy):
-    """The newer of an operations row and a pre-phase-6 legacy row. Both
-    tables can hold mirror history for the same repository until phase 9."""
-    if operation is None:
-        return legacy
-    if legacy is None:
-        return RcloneSyncFacade(db, operation)
-    if legacy.created_at and operation.created_at < legacy.created_at:
-        return legacy
-    return RcloneSyncFacade(db, operation)
 
 
 def _queue_initial_cloud_mirror_sync(db: Session, repository: Repository) -> None:
@@ -3133,9 +2971,7 @@ async def get_repositories(
                 db.query(Repository).filter(Repository.id.in_(repository_ids)).all()
             )
         for repo in repositories:
-            # Running check, compact, or prune. Phase 5 moved these to
-            # `operations`; the legacy tables are still consulted for work
-            # that a pre-upgrade process left behind (deleted in phase 9).
+            # Running check, compact, or prune.
             running_kinds = {
                 row.kind
                 for row in db.query(Operation.kind)
@@ -3147,17 +2983,9 @@ async def get_repositories(
                 .all()
             }
 
-            def _legacy_running(model) -> bool:
-                return (
-                    db.query(model.id)
-                    .filter(model.repository_id == repo.id, model.status == "running")
-                    .first()
-                    is not None
-                )
-
-            has_check = "check" in running_kinds or _legacy_running(CheckJob)
-            has_compact = "compact" in running_kinds or _legacy_running(CompactJob)
-            has_prune = "prune" in running_kinds or _legacy_running(PruneJob)
+            has_check = "check" in running_kinds
+            has_compact = "compact" in running_kinds
+            has_prune = "prune" in running_kinds
             schedule_summary = _get_repository_schedule_summary(repo.id, db)
             source_directories = _decode_json_list_field(repo.source_directories)
 
@@ -5190,75 +5018,10 @@ async def delete_repository(
 
         from app.database.models import (
             RepositoryScript,
-            RestoreJob,
-            CheckJob,
-            RestoreCheckJob,
-            PruneJob,
-            CompactJob,
             ScheduledJob,
             ScheduledJobRepository,
-            BackupJob,
             ScriptExecution,
         )
-
-        # 1. Delete job records (these don't have CASCADE)
-        # Note: RestoreJob stores repository path (string), not repository_id (int)
-        restore_jobs = (
-            db.query(RestoreJob).filter(RestoreJob.repository == repository.path).all()
-        )
-        for job in restore_jobs:
-            db.delete(job)
-        if restore_jobs:
-            logger.info(
-                "Deleted restore jobs", repo_id=repo_id, count=len(restore_jobs)
-            )
-
-        check_jobs = db.query(CheckJob).filter(CheckJob.repository_id == repo_id).all()
-        for job in check_jobs:
-            db.delete(job)
-        if check_jobs:
-            logger.info("Deleted check jobs", repo_id=repo_id, count=len(check_jobs))
-
-        restore_check_jobs = (
-            db.query(RestoreCheckJob)
-            .filter(RestoreCheckJob.repository_id == repo_id)
-            .all()
-        )
-        for job in restore_check_jobs:
-            db.delete(job)
-        if restore_check_jobs:
-            logger.info(
-                "Deleted restore check jobs",
-                repo_id=repo_id,
-                count=len(restore_check_jobs),
-            )
-
-        prune_jobs = db.query(PruneJob).filter(PruneJob.repository_id == repo_id).all()
-        for job in prune_jobs:
-            db.delete(job)
-        if prune_jobs:
-            logger.info("Deleted prune jobs", repo_id=repo_id, count=len(prune_jobs))
-
-        compact_jobs = (
-            db.query(CompactJob).filter(CompactJob.repository_id == repo_id).all()
-        )
-        for job in compact_jobs:
-            db.delete(job)
-        if compact_jobs:
-            logger.info(
-                "Deleted compact jobs", repo_id=repo_id, count=len(compact_jobs)
-            )
-
-        # 2. Set repository path to NULL (preserve historical backup jobs)
-        # Note: BackupJob stores repository path (string), not repository_id (int).
-        # Legacy rows only: a backup operation cascades with the repository.
-        backup_jobs = (
-            db.query(BackupJob).filter(BackupJob.repository == repository.path).all()
-        )
-        for job in backup_jobs:
-            job.repository = None
-        if backup_jobs:
-            logger.info("Unlinked backup jobs", repo_id=repo_id, count=len(backup_jobs))
 
         # 3. Handle scheduled jobs
         # Set ScheduledJob.repository_id to NULL (for single-repo schedules)

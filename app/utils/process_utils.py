@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Optional
 import structlog
 from datetime import datetime, timedelta
-from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, object_session
 from app.config import settings
 from app.core.borg_router import BorgRouter
@@ -19,22 +18,15 @@ from app.utils.borg_env import (
     get_standard_ssh_opts,
 )
 from app.database.models import (
-    AgentJob,
     BackupPlanRun,
     BackupPlanRunRepository,
-    CheckJob,
-    CompactJob,
-    BackupJob,
-    DeleteArchiveJob,
     Operation,
-    PruneJob,
-    RestoreCheckJob,
-    RestoreJob,
     Repository,
 )
 from app.services.operations.backup_facade import backup_jobs_in_maintenance
 from app.utils.backup_maintenance import (
     COMPLETED_BACKUP_STATUSES,
+    MAINTENANCE_STATUS_KIND,
     RUNNING_BACKUP_MAINTENANCE_FAILURES,
 )
 from app.utils.ssh_utils import (
@@ -44,7 +36,6 @@ from app.utils.ssh_utils import (
 
 logger = structlog.get_logger()
 
-ACTIVE_JOB_STATUSES = {"pending", "running"}
 ACTIVE_PLAN_RUN_STATUSES = {"pending", "running"}
 SUCCESS_PLAN_REPOSITORY_STATUSES = {"completed", "completed_with_warnings"}
 WARNING_PLAN_REPOSITORY_STATUSES = {"completed_with_warnings", "skipped"}
@@ -140,43 +131,24 @@ def _normalize_interrupted_backup_plan_runs(
     return len(interrupted_runs)
 
 
-def _mark_backup_job_failed_after_restart(
-    job: BackupJob, now: datetime, message: str
-) -> None:
-    job.status = "failed"
-    job.error_message = message
-    job.completed_at = now
-
-
-def _has_running_check_child(db: Session, backup_job: BackupJob) -> bool:
-    # Phase 5 moved check to `operations`, so a live check child is normally an
-    # operation now. The legacy table is still consulted for a row a pre-phase-5
-    # process left running; both are deleted in phase 9.
-    if backup_job.repository_id is not None:
-        from app.database.models import Operation
-
-        running_operation = (
-            db.query(Operation.id)
-            .filter(
-                Operation.kind == "check",
-                Operation.status == "running",
-                Operation.repository_id == backup_job.repository_id,
-            )
-            .first()
+def _has_running_check_child(db: Session, backup_job) -> bool:
+    """True while a check operation is running on the backup's repository."""
+    if backup_job.repository_id is None:
+        return False
+    return (
+        db.query(Operation.id)
+        .filter(
+            Operation.kind == "check",
+            Operation.status == "running",
+            Operation.repository_id == backup_job.repository_id,
         )
-        if running_operation is not None:
-            return True
-
-    query = db.query(CheckJob.id).filter(CheckJob.status == "running")
-    if backup_job.repository_id is not None:
-        query = query.filter(CheckJob.repository_id == backup_job.repository_id)
-    else:
-        query = query.filter(CheckJob.repository_path == backup_job.repository)
-    return query.first() is not None
+        .first()
+        is not None
+    )
 
 
 def _mark_backup_maintenance_failed(
-    backup_job: BackupJob,
+    backup_job,
     previous_state: str,
     now: datetime,
 ) -> None:
@@ -225,37 +197,22 @@ def _mark_stale_backup_maintenance_failed(db: Session, now: datetime) -> int:
 # liveness guard below is the primary protection.
 MAINTENANCE_RECONCILE_AFTER = timedelta(minutes=5)
 
-_MAINTENANCE_CHILD_MODELS = {
-    "running_prune": PruneJob,
-    "running_compact": CompactJob,
-    "running_check": CheckJob,
-}
-
-# Phase 5 moved prune, compact, and check onto `operations`; the post-backup
-# inline path (`start_inline_maintenance`) writes a `running` Operation row
-# for the whole synchronous run, which the legacy tables below never see.
-_MAINTENANCE_STATUS_KIND = {
-    "running_prune": "prune",
-    "running_compact": "compact",
-    "running_check": "check",
-}
-
 
 def _has_running_maintenance_child(
-    db: Session, backup_job: BackupJob, maintenance_status: str
+    db: Session, backup_job, maintenance_status: str
 ) -> bool:
-    """True if a maintenance child job for this repo is still actually running.
+    """True if a maintenance child operation for this repo is still running.
 
-    The PruneJob/CompactJob/CheckJob row is created and set to 'running' for both
-    server-side and agent-delegated maintenance, so it is a reliable liveness
-    signal. Agent maintenance jobs carry no backup_job_id, so we correlate by
-    repository (mirroring _has_running_check_child).
+    The child operation is created `running` for both server-side and
+    agent-delegated maintenance, so it is a reliable liveness signal. An agent
+    maintenance job names no backup, so we correlate by repository (mirroring
+    _has_running_check_child).
     """
-    kind = _MAINTENANCE_STATUS_KIND.get(maintenance_status)
-    if (
-        kind is not None
-        and backup_job.repository_id is not None
-        and db.query(Operation.id)
+    kind = MAINTENANCE_STATUS_KIND.get(maintenance_status)
+    if kind is None or backup_job.repository_id is None:
+        return False
+    return (
+        db.query(Operation.id)
         .filter(
             Operation.repository_id == backup_job.repository_id,
             Operation.kind == kind,
@@ -263,17 +220,7 @@ def _has_running_maintenance_child(
         )
         .first()
         is not None
-    ):
-        return True
-    model = _MAINTENANCE_CHILD_MODELS.get(maintenance_status)
-    if model is None:
-        return False
-    query = db.query(model.id).filter(model.status == "running")
-    if backup_job.repository_id is not None:
-        query = query.filter(model.repository_id == backup_job.repository_id)
-    else:
-        query = query.filter(model.repository_path == backup_job.repository)
-    return query.first() is not None
+    )
 
 
 def _strip_tz(value: datetime) -> datetime:
@@ -312,7 +259,7 @@ def reconcile_stale_backup_maintenance(
         # 1) genuinely in-progress maintenance -> leave alone
         if _has_running_maintenance_child(db, backup_job, state):
             continue
-        # 2) age guard (BackupJob has no updated_at; completed_at is set when the
+        # 2) age guard (a backup has no updated_at; completed_at is set when the
         #    backup phase finished, i.e. before maintenance started)
         activity = backup_job.completed_at or backup_job.created_at
         if activity is not None and _strip_tz(activity) > cutoff:
@@ -329,115 +276,6 @@ def reconcile_stale_backup_maintenance(
 
     if reaped:
         db.commit()
-
-    return reaped
-
-
-# An agent maintenance job carries no backup_job_id, so a *_job is correlated to
-# its agent job via the payload's maintenance_job {kind, id}.
-_ACTIVE_AGENT_STATUSES = ("queued", "claimed", "cancel_requested", "running")
-_ORPHAN_MAINTENANCE_MODELS = (
-    ("prune", PruneJob),
-    ("compact", CompactJob),
-    ("check", CheckJob),
-    ("delete_archive", DeleteArchiveJob),
-)
-
-
-def _has_active_agent_job_for(
-    db: Session, maintenance_kind: str, maintenance_job_id: int
-) -> bool:
-    """True if a live agent job exists for this maintenance ``*_job``."""
-    active = (
-        db.query(AgentJob)
-        .filter(
-            AgentJob.job_type == "repository",
-            AgentJob.status.in_(_ACTIVE_AGENT_STATUSES),
-        )
-        .all()
-    )
-    for agent_job in active:
-        payload = agent_job.payload if isinstance(agent_job.payload, dict) else {}
-        maintenance_job = (payload.get("operation") or {}).get("maintenance_job") or {}
-        if (
-            maintenance_job.get("kind") == maintenance_kind
-            and maintenance_job.get("id") == maintenance_job_id
-        ):
-            return True
-    return False
-
-
-def reconcile_orphaned_maintenance_jobs(
-    db: Session,
-    *,
-    now: Optional[datetime] = None,
-    reap_after: timedelta = MAINTENANCE_RECONCILE_AFTER,
-) -> int:
-    """Fail maintenance ``*_jobs`` left 'pending' with no agent job to run them.
-
-    The ``*_job`` row (PruneJob/CompactJob/CheckJob/DeleteArchiveJob) is created
-    before its agent job is queued; if the queue fails (e.g. ``database is
-    locked``) no agent job exists, so the row stays 'pending' forever and blocks
-    the repository via admission control. Reap old pending rows that have no
-    active agent job.
-
-    Only 'pending' is reaped here: 'running' rows are covered by the existing
-    process-liveness reapers, and a server-side maintenance op runs in-process
-    without an agent job (so absence of an agent job does not imply orphaned for
-    a running row). The age guard bounds a legitimately just-created row.
-    """
-    now = _strip_tz(now or datetime.utcnow())
-    cutoff = now - reap_after
-
-    reaped = 0
-    for kind, model in _ORPHAN_MAINTENANCE_MODELS:
-        candidates = (
-            db.query(model.id, model.created_at, model.repository_id)
-            .filter(model.status == "pending")
-            .all()
-        )
-        for job_id, created_at, repository_id in candidates:
-            if created_at is not None and _strip_tz(created_at) > cutoff:
-                continue  # too fresh; its agent job may be queued a moment later
-            if _has_active_agent_job_for(db, kind, job_id):
-                continue  # dispatched, waiting for the agent
-            # Fail closed with a guarded UPDATE: it only touches a row that is
-            # STILL 'pending', so a concurrent dispatch that has meanwhile moved
-            # it to 'running' is left untouched. A load-then-mutate would instead
-            # overwrite that live transition on commit. coalesce keeps any
-            # error_message/completed_at already set.
-            updated = (
-                db.query(model)
-                .filter(model.id == job_id, model.status == "pending")
-                .update(
-                    {
-                        model.status: "failed",
-                        model.error_message: func.coalesce(
-                            model.error_message,
-                            "orphaned: no agent job was queued for this maintenance",
-                        ),
-                        model.completed_at: func.coalesce(model.completed_at, now),
-                    },
-                    synchronize_session=False,
-                )
-            )
-            if not updated:
-                continue  # another transaction claimed the row first
-            # Re-check correlation now the row is claimed: an agent job could have
-            # been queued between the check above and this UPDATE (status was
-            # still 'pending' then). If so, preserve the dispatched job by
-            # reverting rather than committing a spurious 'failed'.
-            if _has_active_agent_job_for(db, kind, job_id):
-                db.rollback()
-                continue
-            db.commit()
-            reaped += 1
-            logger.info(
-                "Reaped orphaned pending maintenance job",
-                job_model=model.__name__,
-                job_id=job_id,
-                repository_id=repository_id,
-            )
 
     return reaped
 
@@ -576,339 +414,27 @@ def _is_remote_repository(repository: Repository, db: Session) -> bool:
 
 
 def cleanup_orphaned_jobs(db: Session):
-    """
-    Find and cleanup jobs that were running when container stopped
-
-    This function is called on container startup to detect and cleanup
-    orphaned jobs from container restarts or crashes.
-
-    Args:
-        db: Database session
-    """
+    """Normalise what a restart leaves behind that the operations runner's
+    own recovery (spec 7.6) does not cover: backup rows still in a running
+    maintenance state, and backup plan runs left active."""
     logger.info("Checking for orphaned jobs...")
 
     now = datetime.utcnow()
     stale_backup_jobs = _mark_stale_backup_maintenance_failed(db, now)
-
-    # Backup rows written before phase 8 moved backup to `operations`. New
-    # work is recovered by OperationRunner.recover_on_startup (spec 7.6),
-    # which fails them the same way, since a backup records no pid. Empty
-    # after the first restart past the upgrade; goes away in phase 9.
-    active_backup_jobs = (
-        db.query(BackupJob).filter(BackupJob.status.in_(ACTIVE_JOB_STATUSES)).all()
-    )
-
-    # Find all running restore jobs
-    running_restore_jobs = (
-        db.query(RestoreJob).filter(RestoreJob.status == "running").all()
-    )
-
-    # Running check rows written before phase 5 moved check to `operations`.
-    # New work is recovered by OperationRunner.recover_on_startup (spec 7.6),
-    # which also makes the local lock-break attempt this loop makes below. This
-    # query is empty on any install that has restarted since the upgrade, and
-    # goes away with the table in phase 9.
-    running_check_jobs = db.query(CheckJob).filter(CheckJob.status == "running").all()
-
-    # Running restore-check rows written before phase 5 moved restore_check to
-    # `operations`, kept for the same reason as running_check_jobs above.
-    # Empty after the first restart past the upgrade; goes away with the
-    # table in phase 9.
-    running_restore_check_jobs = (
-        db.query(RestoreCheckJob).filter(RestoreCheckJob.status == "running").all()
-    )
-
-    # Running prune rows written before phase 5 moved prune to `operations`,
-    # kept for the same reason as running_check_jobs above: OperationRunner.
-    # recover_on_startup covers new work, but a pre-upgrade running row still
-    # needs this loop to mark it failed. Empty after the first restart past
-    # the upgrade; goes away with the table in phase 9.
-    running_prune_jobs = db.query(PruneJob).filter(PruneJob.status == "running").all()
-
-    # Running compact rows written before phase 5 moved compact to
-    # `operations`, kept for the same reason as running_check_jobs and
-    # running_prune_jobs above. Empty after the first restart past the
-    # upgrade; goes away with the table in phase 9.
-    running_compact_jobs = (
-        db.query(CompactJob).filter(CompactJob.status == "running").all()
-    )
-
     active_backup_plan_runs = (
         db.query(BackupPlanRun)
         .filter(BackupPlanRun.status.in_(ACTIVE_PLAN_RUN_STATUSES))
         .all()
     )
-
-    total_jobs = (
-        len(active_backup_jobs)
-        + len(running_restore_jobs)
-        + len(running_check_jobs)
-        + len(running_restore_check_jobs)
-        + len(running_prune_jobs)
-        + len(running_compact_jobs)
-        + stale_backup_jobs
-        + len(active_backup_plan_runs)
-    )
     logger.info(
-        "Found running jobs",
-        backup_jobs=len(active_backup_jobs),
-        restore_jobs=len(running_restore_jobs),
-        check_jobs=len(running_check_jobs),
-        restore_check_jobs=len(running_restore_check_jobs),
-        prune_jobs=len(running_prune_jobs),
-        compact_jobs=len(running_compact_jobs),
+        "Found interrupted work",
         stale_backup_maintenance_jobs=stale_backup_jobs,
         active_backup_plan_runs=len(active_backup_plan_runs),
     )
 
-    if total_jobs == 0:
+    if not stale_backup_jobs and not active_backup_plan_runs:
         logger.info("No orphaned jobs found")
         return
-
-    # Process backup jobs
-    for job in active_backup_jobs:
-        # Backup jobs don't have process_pid tracking, so active rows cannot resume.
-        previous_status = job.status
-        _mark_backup_job_failed_after_restart(
-            job, now, CONTAINER_RESTARTED_DURING_BACKUP
-        )
-
-        logger.info(
-            "Orphaned backup job detected",
-            job_id=job.id,
-            repository=job.repository,
-            previous_status=previous_status,
-        )
-
-    # Process restore jobs
-    for job in running_restore_jobs:
-        # Rows written before phase 7 moved restore to `operations`. New
-        # restores are recovered by OperationRunner.recover_on_startup (spec
-        # 7.6), which fails them the same way: a restore records no pid to
-        # reattach to. Empty after the first restart past the upgrade; goes
-        # away with the table in phase 9.
-        job.status = "failed"
-        job.error_message = json.dumps(
-            {"key": "backend.errors.service.containerRestartedDuringRestore"}
-        )
-        job.completed_at = datetime.utcnow()
-
-        logger.info(
-            "Orphaned restore job detected", job_id=job.id, repository=job.repository
-        )
-
-    # Process check jobs
-    for job in running_check_jobs:
-        if not is_process_alive(job.process_pid, job.process_start_time):
-            # Process is dead! Mark job as failed
-            job.status = "failed"
-            job.error_message = CONTAINER_RESTARTED_DURING_OPERATION
-            job.completed_at = now
-
-            logger.info(
-                "Orphaned check job detected",
-                job_id=job.id,
-                repository_id=job.repository_id,
-                pid=job.process_pid,
-            )
-
-            # Get repository to determine if we should auto-break lock
-            repository = (
-                db.query(Repository).filter(Repository.id == job.repository_id).first()
-            )
-
-            if repository:
-                if not _is_remote_repository(repository, db):
-                    # For local repos, we can safely break the lock
-                    logger.info(
-                        "Attempting to break lock for local repository",
-                        repository_id=repository.id,
-                    )
-                    if break_repository_lock(repository):
-                        logger.info(
-                            "Successfully broke lock for local repository",
-                            repository_id=repository.id,
-                        )
-                    else:
-                        logger.warning(
-                            "Failed to break lock for local repository",
-                            repository_id=repository.id,
-                        )
-                        job.error_message += "\n" + json.dumps(
-                            {"key": "backend.errors.service.warningFailedBreakLock"}
-                        )
-                else:
-                    # For remote repos, don't auto-break lock (remote process may still be running)
-                    logger.warning(
-                        "Orphaned check job for remote repository - manual lock break may be needed",
-                        repository_id=repository.id,
-                    )
-                    job.error_message += "\n" + json.dumps(
-                        {
-                            "key": "backend.errors.service.warningRemoteProcessMayBeRunning"
-                        }
-                    )
-
-            backup_match_filter = BackupJob.repository_id == job.repository_id
-            if job.repository_path:
-                backup_match_filter = or_(
-                    backup_match_filter,
-                    and_(
-                        BackupJob.repository_id.is_(None),
-                        BackupJob.repository == job.repository_path,
-                    ),
-                )
-
-            affected_backup_jobs = (
-                db.query(BackupJob)
-                .filter(
-                    BackupJob.maintenance_status == "running_check",
-                    backup_match_filter,
-                )
-                .all()
-            )
-
-            for backup_job in affected_backup_jobs:
-                _mark_backup_maintenance_failed(backup_job, "running_check", now)
-                logger.info(
-                    "Marked backup maintenance state as failed after orphaned check",
-                    backup_job_id=backup_job.id,
-                    check_job_id=job.id,
-                    repository=backup_job.repository,
-                )
-        else:
-            # Process is still alive! This is unexpected
-            logger.warning(
-                "Check job marked as running and process is still alive",
-                job_id=job.id,
-                pid=job.process_pid,
-            )
-
-    # Process restore check jobs
-    for job in running_restore_check_jobs:
-        if not is_process_alive(job.process_pid, job.process_start_time):
-            job.status = "failed"
-            job.error_message = CONTAINER_RESTARTED_DURING_OPERATION
-            job.completed_at = now
-            logger.info(
-                "Orphaned restore check job detected",
-                job_id=job.id,
-                repository_id=job.repository_id,
-                pid=job.process_pid,
-            )
-        else:
-            logger.warning(
-                "Restore check job marked as running and process is still alive",
-                job_id=job.id,
-                pid=job.process_pid,
-            )
-
-    # Process prune jobs
-    for job in running_prune_jobs:
-        job.status = "failed"
-        job.error_message = CONTAINER_RESTARTED_DURING_OPERATION
-        job.completed_at = now
-
-        logger.info(
-            "Orphaned prune job detected",
-            job_id=job.id,
-            repository_id=job.repository_id,
-        )
-
-        affected_backup_jobs = (
-            db.query(BackupJob)
-            .filter(
-                BackupJob.repository == job.repository_path,
-                BackupJob.maintenance_status == "running_prune",
-            )
-            .all()
-        )
-
-        for backup_job in affected_backup_jobs:
-            backup_job.maintenance_status = "prune_failed"
-            logger.info(
-                "Marked backup maintenance state as failed after orphaned prune",
-                backup_job_id=backup_job.id,
-                prune_job_id=job.id,
-                repository=backup_job.repository,
-            )
-
-    # Process compact jobs
-    for job in running_compact_jobs:
-        if not is_process_alive(job.process_pid, job.process_start_time):
-            # Process is dead! Mark job as failed
-            job.status = "failed"
-            job.error_message = CONTAINER_RESTARTED_DURING_OPERATION
-            job.completed_at = now
-
-            logger.info(
-                "Orphaned compact job detected",
-                job_id=job.id,
-                repository_id=job.repository_id,
-                pid=job.process_pid,
-            )
-
-            # Get repository to determine if we should auto-break lock
-            repository = (
-                db.query(Repository).filter(Repository.id == job.repository_id).first()
-            )
-
-            if repository:
-                if not _is_remote_repository(repository, db):
-                    # For local repos, we can safely break the lock
-                    logger.info(
-                        "Attempting to break lock for local repository",
-                        repository_id=repository.id,
-                    )
-                    if break_repository_lock(repository):
-                        logger.info(
-                            "Successfully broke lock for local repository",
-                            repository_id=repository.id,
-                        )
-                    else:
-                        logger.warning(
-                            "Failed to break lock for local repository",
-                            repository_id=repository.id,
-                        )
-                        job.error_message += "\n" + json.dumps(
-                            {"key": "backend.errors.service.warningFailedBreakLock"}
-                        )
-                else:
-                    # For remote repos, don't auto-break lock
-                    logger.warning(
-                        "Orphaned compact job for remote repository - manual lock break may be needed",
-                        repository_id=repository.id,
-                    )
-                    job.error_message += "\n" + json.dumps(
-                        {
-                            "key": "backend.errors.service.warningRemoteProcessMayBeRunning"
-                        }
-                    )
-
-            affected_backup_jobs = (
-                db.query(BackupJob)
-                .filter(
-                    BackupJob.repository == job.repository_path,
-                    BackupJob.maintenance_status == "running_compact",
-                )
-                .all()
-            )
-
-            for backup_job in affected_backup_jobs:
-                backup_job.maintenance_status = "compact_failed"
-                logger.info(
-                    "Marked backup maintenance state as failed after orphaned compact",
-                    backup_job_id=backup_job.id,
-                    compact_job_id=job.id,
-                    repository=backup_job.repository,
-                )
-        else:
-            # Process is still alive! This is unexpected
-            logger.warning(
-                "Compact job marked as running and process is still alive",
-                job_id=job.id,
-                pid=job.process_pid,
-            )
 
     normalized_plan_runs = _normalize_interrupted_backup_plan_runs(
         db, now, active_backup_plan_runs
@@ -919,9 +445,7 @@ def cleanup_orphaned_jobs(db: Session):
             count=normalized_plan_runs,
         )
 
-    # Commit all changes
     db.commit()
-
     logger.info("Orphaned job cleanup completed")
 
 

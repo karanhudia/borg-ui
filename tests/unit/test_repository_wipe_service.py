@@ -6,6 +6,8 @@ import pytest
 
 from app.core.borg_router import BorgRouter
 from app.database.models import Repository, RepositoryWipeJob, User
+from app.services.operations.wipe_facade import resolve_wipe_job
+from tests.utils.operations import seed_job_operation
 from app.services.repository_wipe_service import (
     RepositoryWipeService,
     WipeArchiveSetChanged,
@@ -235,24 +237,38 @@ async def test_execute_marks_compact_failure_after_successful_delete(db_session)
     db_session.add_all([user, repo])
     db_session.commit()
     db_session.refresh(repo)
+    # The confirmed wipe is an operation (phase 6); the preview it was
+    # confirmed from keeps its own row and its own status.
     preview = RepositoryWipeJob(
         repository_id=repo.id,
         repository_path=repo.path,
         repository_name=repo.name,
         borg_version=1,
-        status="pending",
-        phase="queued",
+        status="previewed",
+        phase="preview",
+        archive_count=1,
+        archive_fingerprint=compute_archive_fingerprint(manifest),
+        archive_manifest_json='[{"identity":"archive-a","name":"archive-a"}]',
+        run_compact=True,
+        requested_by_user_id=user.id,
+        created_at=datetime.utcnow(),
+    )
+    db_session.add(preview)
+    db_session.commit()
+    db_session.refresh(preview)
+    wipe = seed_job_operation(
+        db_session,
+        "wipe",
+        repository_id=repo.id,
+        status="running",
+        params={"preview_id": preview.id},
         archive_count=1,
         archive_fingerprint=compute_archive_fingerprint(manifest),
         archive_manifest_json='[{"identity":"archive-a","name":"archive-a"}]',
         run_compact=True,
         requested_by_user_id=user.id,
         confirmed_by_user_id=user.id,
-        created_at=datetime.utcnow(),
     )
-    db_session.add(preview)
-    db_session.commit()
-    db_session.refresh(preview)
 
     service = RepositoryWipeService()
 
@@ -270,14 +286,13 @@ async def test_execute_marks_compact_failure_after_successful_delete(db_session)
             "run_wipe_compact",
             new=AsyncMock(return_value={"success": False, "stderr": "compact failed"}),
         ),
-        patch.object(BorgRouter, "update_stats", new=AsyncMock(return_value=True)),
     ):
-        await service.execute_wipe(preview.id, repo.id)
+        await service.execute_wipe(wipe.id, repo.id)
 
-    db_session.refresh(preview)
-    assert preview.status == "completed_compaction_failed"
-    assert preview.phase == "compact_failed"
-    assert "compact failed" in (preview.error_message or "")
+    job = resolve_wipe_job(db_session, wipe.id)
+    assert job.status == "completed_compaction_failed"
+    assert job.phase == "compact_failed"
+    assert "compact failed" in (job.error_message or "")
 
 
 def test_manifest_preserves_epoch_zero_time():

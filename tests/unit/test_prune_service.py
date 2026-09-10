@@ -4,8 +4,11 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import BackupJob, PruneJob, Repository
+from app.database.models import Repository
 from app.services.prune_service import PruneService
+from app.services.operations.job_facade import resolve_maintenance_job
+from app.database.models import OperationBackupDetails
+from tests.utils.operations import seed_job_operation
 
 
 class EmptyAsyncStream:
@@ -43,8 +46,13 @@ async def test_execute_prune_command_includes_keep_within(db_engine):
     session.commit()
     session.refresh(repo)
 
-    job = PruneJob(repository_id=repo.id, repository_path=repo.path, status="pending")
-    session.add(job)
+    job = seed_job_operation(
+        session,
+        "prune",
+        repository_id=repo.id,
+        repository_path=repo.path,
+        status="pending",
+    )
     session.commit()
     session.refresh(job)
     repo_id = repo.id
@@ -143,11 +151,20 @@ async def test_execute_prune_marks_the_jobs_of_pruned_archives(db_engine):
     session.add(repo)
     session.commit()
     session.refresh(repo)
-    backup = BackupJob(
-        repository_id=repo.id, status="completed", archive_name="host-old"
+    backup = seed_job_operation(
+        session,
+        "backup",
+        repository_id=repo.id,
+        status="completed",
+        archive_name="host-old",
     )
-    job = PruneJob(repository_id=repo.id, repository_path=repo.path, status="pending")
-    session.add_all([backup, job])
+    job = seed_job_operation(
+        session,
+        "prune",
+        repository_id=repo.id,
+        repository_path=repo.path,
+        status="pending",
+    )
     session.commit()
     repo_id, job_id, backup_id = repo.id, job.id, backup.id
     session.close()
@@ -166,9 +183,9 @@ async def test_execute_prune_marks_the_jobs_of_pruned_archives(db_engine):
         await PruneService().execute_prune(job_id, repo_id, 0, 7, 4, 6, 0, 1)
 
     session = testing_session_local()
-    row = session.get(BackupJob, backup_id)
+    row = session.get(OperationBackupDetails, backup_id)
     assert row is not None and row.archive_pruned_at is not None
-    assert session.get(PruneJob, job_id).status == "completed"
+    assert resolve_maintenance_job(session, job_id, "prune").status == "completed"
     session.close()
 
 
@@ -190,11 +207,20 @@ async def test_execute_prune_marks_archives_whose_lines_left_the_log_buffer(db_e
     session.add(repo)
     session.commit()
     session.refresh(repo)
-    backup = BackupJob(
-        repository_id=repo.id, status="completed", archive_name="host-old"
+    backup = seed_job_operation(
+        session,
+        "backup",
+        repository_id=repo.id,
+        status="completed",
+        archive_name="host-old",
     )
-    job = PruneJob(repository_id=repo.id, repository_path=repo.path, status="pending")
-    session.add_all([backup, job])
+    job = seed_job_operation(
+        session,
+        "prune",
+        repository_id=repo.id,
+        repository_path=repo.path,
+        status="pending",
+    )
     session.commit()
     repo_id, job_id, backup_id = repo.id, job.id, backup.id
     session.close()
@@ -215,8 +241,8 @@ async def test_execute_prune_marks_archives_whose_lines_left_the_log_buffer(db_e
         await PruneService().execute_prune(job_id, repo_id, 0, 7, 4, 6, 0, 1)
 
     session = testing_session_local()
-    assert session.get(BackupJob, backup_id).archive_pruned_at is not None
-    prune_row = session.get(PruneJob, job_id)
+    assert session.get(OperationBackupDetails, backup_id).archive_pruned_at is not None
+    prune_row = resolve_maintenance_job(session, job_id, "prune")
     # proof that the buffer really lost the line
     assert "Pruning archive" not in (prune_row.logs or "")
     session.close()
@@ -240,9 +266,16 @@ async def test_execute_prune_matches_names_that_json_escapes(db_engine):
     session.add(repo)
     session.commit()
     session.refresh(repo)
-    backup = BackupJob(repository_id=repo.id, status="completed", archive_name=name)
-    job = PruneJob(repository_id=repo.id, repository_path=repo.path, status="pending")
-    session.add_all([backup, job])
+    backup = seed_job_operation(
+        session, "backup", repository_id=repo.id, status="completed", archive_name=name
+    )
+    job = seed_job_operation(
+        session,
+        "prune",
+        repository_id=repo.id,
+        repository_path=repo.path,
+        status="pending",
+    )
     session.commit()
     repo_id, job_id, backup_id = repo.id, job.id, backup.id
     session.close()
@@ -261,7 +294,7 @@ async def test_execute_prune_matches_names_that_json_escapes(db_engine):
         await PruneService().execute_prune(job_id, repo_id, 0, 7, 4, 6, 0, 1)
 
     session = testing_session_local()
-    assert session.get(BackupJob, backup_id).archive_pruned_at is not None
+    assert session.get(OperationBackupDetails, backup_id).archive_pruned_at is not None
     session.close()
 
 

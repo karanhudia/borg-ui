@@ -49,7 +49,7 @@ def is_package_actually_installed(package_name):
 def _in_flight_operation_package_ids(conn):
     """Package ids with a queued or running `package_install` operation.
 
-    Phase 6 moved install jobs to `operations` (spec 6.2), where the package id
+    An install is an `operations` row (spec 6.2), where the package id
     lives in the `params` JSON. That is read in Python rather than in SQL,
     because JSON extraction is spelled differently in SQLite and PostgreSQL and
     this script runs against whichever the install uses.
@@ -66,8 +66,8 @@ def _in_flight_operation_package_ids(conn):
             """)
         ).fetchall()
     except Exception as exc:
-        # A database that predates the operations table (pre-phase-1) has
-        # nothing in flight there by definition.
+        # A database that predates the operations table has nothing in flight
+        # by definition.
         print(f"ℹ️  Skipping operations check: {exc}")
         return ids
     for (params,) in rows:
@@ -98,11 +98,6 @@ def get_packages_to_install():
                 text("""
                     SELECT p.id, p.name, p.status, p.install_command
                     FROM installed_packages p
-                    WHERE NOT EXISTS (
-                        SELECT 1 FROM package_install_jobs j
-                        WHERE j.package_id = p.id
-                        AND j.status IN ('pending', 'installing')
-                    )
                 """)
             ).fetchall()
             in_flight = _in_flight_operation_package_ids(conn)

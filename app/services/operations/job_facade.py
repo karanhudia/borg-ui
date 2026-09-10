@@ -8,8 +8,8 @@ facade instead of the legacy model, and every attribute write lands on the
 operation's own columns (spec 6.1). Kind-specific inputs live in
 `operations.params`, since spec 6.2 gives these kinds no extension table.
 
-Deleted in phase 9 with the legacy tables, at which point the services can
-read `Operation` directly.
+Kept after phase 9 as that surface; retiring it is a service-by-service
+refactor, not a migration step.
 """
 
 from datetime import datetime
@@ -18,15 +18,7 @@ from typing import Any, Optional
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
-from app.database.models import (
-    CheckJob,
-    CompactJob,
-    DeleteArchiveJob,
-    Operation,
-    PruneJob,
-    Repository,
-    RestoreCheckJob,
-)
+from app.database.models import Operation, Repository
 
 MAINTENANCE_KINDS: tuple[str, ...] = (
     "check",
@@ -35,14 +27,6 @@ MAINTENANCE_KINDS: tuple[str, ...] = (
     "delete_archive",
     "restore_check",
 )
-
-LEGACY_MODELS: dict[str, Any] = {
-    "check": CheckJob,
-    "prune": PruneJob,
-    "compact": CompactJob,
-    "delete_archive": DeleteArchiveJob,
-    "restore_check": RestoreCheckJob,
-}
 
 # The inputs each kind carries in `operations.params` (spec 6.2). A service
 # reading anything outside its own tuple is a bug, so the facade raises
@@ -320,24 +304,19 @@ class MaintenanceJobFacade:
         return params.get(name)
 
 
-def resolve_maintenance_job(db: Session, job_id: int, kind: str) -> Any:
-    """The job a maintenance service should drive for `job_id`.
-
-    Operations win, so new work runs on the new table. Ids that belong to a
-    row written before this phase fall back to the legacy table, which keeps
-    the job status routes and the agent callbacks working for history.
-    """
+def resolve_maintenance_job(
+    db: Session, job_id: int, kind: str
+) -> Optional["MaintenanceJobFacade"]:
+    """The job a maintenance service should drive for `job_id`, or None when
+    no operation of that kind has the id."""
     operation = (
         db.query(Operation)
         .filter(Operation.id == job_id, Operation.kind == kind)
         .first()
     )
-    if operation is not None:
-        return MaintenanceJobFacade(db, operation)
-    model = LEGACY_MODELS.get(kind)
-    if model is None:
+    if operation is None:
         return None
-    return db.query(model).filter(model.id == job_id).first()
+    return MaintenanceJobFacade(db, operation)
 
 
 def refresh_job(db: Session, job: Any) -> None:
@@ -351,43 +330,23 @@ def refresh_job(db: Session, job: Any) -> None:
 def claim_running(db: Session, job_id: int, kind: str, started_at: datetime) -> int:
     """Conditionally mark the job running, returning the number of rows
     claimed. The v2 services use this shape so two dispatches of the same id
-    cannot both start work. A manual-start route (or a test simulating one,
-    for either an Operation or a legacy row) pre-sets the row to "running"
+    cannot both start work. A manual-start route (or a test simulating one)
+    pre-sets the row to "running"
     with no `started_at` before this ever runs, so "running" alone isn't
     "already claimed" - only a "running" row that already has a `started_at`
     is, and matching it here would let two concurrent claims both report
     success."""
-    operation = (
-        db.query(Operation)
-        .filter(Operation.id == job_id, Operation.kind == kind)
-        .first()
-    )
-    if operation is not None:
-        return (
-            db.query(Operation)
-            .filter(
-                Operation.id == job_id,
-                or_(
-                    Operation.status == "queued",
-                    and_(
-                        Operation.status == "running",
-                        Operation.started_at.is_(None),
-                    ),
-                ),
-            )
-            .update(
-                {"status": "running", "started_at": started_at},
-                synchronize_session=False,
-            )
-        )
-    model = LEGACY_MODELS[kind]
     return (
-        db.query(model)
+        db.query(Operation)
         .filter(
-            model.id == job_id,
+            Operation.id == job_id,
+            Operation.kind == kind,
             or_(
-                model.status == "pending",
-                and_(model.status == "running", model.started_at.is_(None)),
+                Operation.status == "queued",
+                and_(
+                    Operation.status == "running",
+                    Operation.started_at.is_(None),
+                ),
             ),
         )
         .update(

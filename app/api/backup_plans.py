@@ -18,7 +18,6 @@ from app.core.security import (
 from app.database.database import get_db
 from app.database.models import (
     AgentJobLog,
-    BackupJob,
     BackupPlan,
     BackupPlanRepository,
     BackupPlanRun,
@@ -672,7 +671,7 @@ def _serialize_plan(plan: BackupPlan, *, detail: bool = False) -> dict[str, Any]
 
 
 def _serialize_backup_job(
-    job: Optional[BackupJob],
+    job,
     repo: Optional[Repository],
     *,
     log_save_policy: str = DEFAULT_LOG_SAVE_POLICY,
@@ -709,14 +708,14 @@ def _serialize_backup_job(
 
 
 def _plan_run_backup_job(link: BackupPlanRunRepository) -> Optional[Any]:
-    """The backup this plan-run row points at, in whichever shape it has: an
-    operation for work created from phase 8 on, the legacy row before it. The
-    session comes off the loaded row, as `_latest_agent_script_line` does."""
+    """The backup this plan-run row points at, as the facade the serializer
+    reads. The session comes off the loaded row, as
+    `_latest_agent_script_line` does."""
     if link.backup_operation is None:
-        return link.backup_job
+        return None
     session = object_session(link.backup_operation)
     if session is None:
-        return link.backup_job
+        return None
     return BackupJobFacade(session, link.backup_operation)
 
 
@@ -907,9 +906,6 @@ def _load_run_or_404(db: Session, run_id: int) -> BackupPlanRun:
         .options(
             joinedload(BackupPlanRun.repositories).joinedload(
                 BackupPlanRunRepository.repository
-            ),
-            joinedload(BackupPlanRun.repositories).joinedload(
-                BackupPlanRunRepository.backup_job
             ),
             joinedload(BackupPlanRun.repositories).joinedload(
                 BackupPlanRunRepository.backup_operation
@@ -1462,9 +1458,6 @@ async def list_backup_plan_runs(
                 BackupPlanRunRepository.repository
             ),
             joinedload(BackupPlanRun.repositories).joinedload(
-                BackupPlanRunRepository.backup_job
-            ),
-            joinedload(BackupPlanRun.repositories).joinedload(
                 BackupPlanRunRepository.backup_operation
             ),
             joinedload(BackupPlanRun.script_executions).joinedload(
@@ -1753,9 +1746,6 @@ async def list_backup_plan_runs_for_plan(
         .options(
             joinedload(BackupPlanRun.repositories).joinedload(
                 BackupPlanRunRepository.repository
-            ),
-            joinedload(BackupPlanRun.repositories).joinedload(
-                BackupPlanRunRepository.backup_job
             ),
             joinedload(BackupPlanRun.repositories).joinedload(
                 BackupPlanRunRepository.backup_operation

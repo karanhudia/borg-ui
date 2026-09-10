@@ -16,10 +16,7 @@ from app.database.models import (
     Repository,
     ScheduledJob,
     ScheduledJobRepository,
-    CheckJob,
-    CompactJob,
-    PruneJob,
-    RestoreCheckJob,
+    Operation,
     SSHConnection,
     SystemSettings,
 )
@@ -29,6 +26,7 @@ from app.services.operations.backup_facade import (
     backup_jobs_started_since,
     recent_backup_jobs,
 )
+from app.services.operations.job_facade import MaintenanceJobFacade
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
@@ -38,6 +36,19 @@ from app.utils.schedule_time import (
 
 logger = structlog.get_logger()
 router = APIRouter()
+
+
+def _maintenance_since(db: Session, kind: str, since: datetime) -> list:
+    """Maintenance operations of one kind started since `since`, presented
+    through the facade so the timeline keeps reading `repository_path` and the
+    status words the dashboard contract promises."""
+    return [
+        MaintenanceJobFacade(db, op)
+        for op in db.query(Operation)
+        .filter(Operation.kind == kind, Operation.started_at >= since)
+        .all()
+    ]
+
 
 RESTORE_CHECK_WARNING_DAYS = 14
 RESTORE_CHECK_CRITICAL_DAYS = 30
@@ -180,7 +191,7 @@ def classify_day_age(days: int, warning_days: int, critical_days: int) -> str:
 def build_restore_check_health(
     repo: Repository,
     now: datetime,
-    latest_restore_check: Optional[RestoreCheckJob] = None,
+    latest_restore_check=None,
     thresholds: Optional[DashboardHealthThresholds] = None,
 ) -> Dict[str, Any]:
     """Build restore-verification health without penalizing unconfigured repos."""
@@ -305,7 +316,7 @@ def build_restore_check_health(
 def build_full_repository_health(
     repo: Repository,
     now: datetime,
-    latest_restore_check: Optional[RestoreCheckJob] = None,
+    latest_restore_check=None,
     thresholds: Optional[DashboardHealthThresholds] = None,
 ) -> Dict[str, Any]:
     """Build health signals for repositories managed directly by Borg UI."""
@@ -384,7 +395,7 @@ def build_full_repository_health(
 def build_observe_repository_health(
     repo: Repository,
     now: datetime,
-    latest_restore_check: Optional[RestoreCheckJob] = None,
+    latest_restore_check=None,
     thresholds: Optional[DashboardHealthThresholds] = None,
 ) -> Dict[str, Any]:
     """Build monitoring-oriented health signals for observe-only repositories."""
@@ -733,22 +744,25 @@ async def get_dashboard_overview(
         repository_ids = [repo.id for repo in repositories]
         if repository_ids:
             latest_restore_check_ids = (
-                db.query(func.max(RestoreCheckJob.id).label("id"))
-                .filter(RestoreCheckJob.repository_id.in_(repository_ids))
-                .group_by(RestoreCheckJob.repository_id)
+                db.query(func.max(Operation.id).label("id"))
+                .filter(
+                    Operation.kind == "restore_check",
+                    Operation.repository_id.in_(repository_ids),
+                )
+                .group_by(Operation.repository_id)
                 .subquery()
             )
             restore_check_jobs = (
-                db.query(RestoreCheckJob)
+                db.query(Operation)
                 .join(
                     latest_restore_check_ids,
-                    RestoreCheckJob.id == latest_restore_check_ids.c.id,
+                    Operation.id == latest_restore_check_ids.c.id,
                 )
                 .all()
             )
             for restore_check_job in restore_check_jobs:
                 latest_restore_checks[restore_check_job.repository_id] = (
-                    restore_check_job
+                    MaintenanceJobFacade(db, restore_check_job)
                 )
 
         # Calculate repository health (only for full-mode repos that do backups)
@@ -1034,21 +1048,11 @@ async def get_dashboard_overview(
         # Get activity for the last 14 days — matches the timeline window exactly
         fourteen_days_ago = now - timedelta(days=14)
         recent_backups = backup_jobs_started_since(db, fourteen_days_ago)
-        recent_checks = (
-            db.query(CheckJob).filter(CheckJob.started_at >= fourteen_days_ago).all()
-        )
-        recent_compacts = (
-            db.query(CompactJob)
-            .filter(CompactJob.started_at >= fourteen_days_ago)
-            .all()
-        )
-        recent_prunes = (
-            db.query(PruneJob).filter(PruneJob.started_at >= fourteen_days_ago).all()
-        )
-        recent_restore_checks = (
-            db.query(RestoreCheckJob)
-            .filter(RestoreCheckJob.started_at >= fourteen_days_ago)
-            .all()
+        recent_checks = _maintenance_since(db, "check", fourteen_days_ago)
+        recent_compacts = _maintenance_since(db, "compact", fourteen_days_ago)
+        recent_prunes = _maintenance_since(db, "prune", fourteen_days_ago)
+        recent_restore_checks = _maintenance_since(
+            db, "restore_check", fourteen_days_ago
         )
 
         # Create a lookup map for repository paths to names (with normalized paths)

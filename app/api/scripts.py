@@ -66,7 +66,7 @@ async def test_script(
         )
         if repo:
             # Resolve source SSH connection (SSHFS pull: on repo; remote SSH push: no job yet,
-            # so we check the repo field only — push-mode connection is on the BackupJob at
+            # so we check the repo field only, push-mode connection is on the backup at
             # runtime, but for testing we use whatever is available on the repo record)
             source_connection = None
             if repo.source_ssh_connection_id:

@@ -3,7 +3,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.database.models import BackupJob, Repository, SystemSettings
+from app.database.models import Repository, SystemSettings
+from tests.utils.operations import seed_job_operation
 from app.services.backup_monitoring_service import (
     build_backup_report,
     find_stale_repositories,
@@ -257,13 +258,16 @@ def test_build_backup_report_respects_content_toggles(db_session):
         last_backup=now - timedelta(days=10),
         archive_count=2,
     )
-    job = BackupJob(
+    db_session.add_all([settings, repo])
+    db_session.flush()
+    seed_job_operation(
+        db_session,
+        "backup",
         repository="/repos/stale",
         status="completed",
         started_at=now - timedelta(hours=2),
         completed_at=now - timedelta(hours=1),
     )
-    db_session.add_all([settings, repo, job])
     db_session.commit()
 
     report = build_backup_report(db_session, settings, now)
@@ -285,21 +289,21 @@ def test_build_backup_report_uses_daily_activity_window(db_session):
         backup_reports_include_recent_activity=True,
     )
     db_session.add(settings)
-    db_session.add_all(
-        [
-            BackupJob(
-                repository="/repos/recent",
-                status="completed",
-                started_at=now - timedelta(hours=3),
-                completed_at=now - timedelta(hours=2),
-            ),
-            BackupJob(
-                repository="/repos/old",
-                status="completed",
-                started_at=now - timedelta(days=2),
-                completed_at=now - timedelta(days=2) + timedelta(hours=1),
-            ),
-        ]
+    seed_job_operation(
+        db_session,
+        "backup",
+        repository="/repos/recent",
+        status="completed",
+        started_at=now - timedelta(hours=3),
+        completed_at=now - timedelta(hours=2),
+    )
+    seed_job_operation(
+        db_session,
+        "backup",
+        repository="/repos/old",
+        status="completed",
+        started_at=now - timedelta(days=2),
+        completed_at=now - timedelta(days=2) + timedelta(hours=1),
     )
     db_session.commit()
 
@@ -321,21 +325,21 @@ def test_build_backup_report_uses_monthly_activity_window(db_session):
         backup_reports_include_recent_activity=True,
     )
     db_session.add(settings)
-    db_session.add_all(
-        [
-            BackupJob(
-                repository="/repos/inside-window",
-                status="completed",
-                started_at=datetime(2026, 4, 20, 9, 0, tzinfo=timezone.utc),
-                completed_at=datetime(2026, 4, 20, 10, 0, tzinfo=timezone.utc),
-            ),
-            BackupJob(
-                repository="/repos/outside-window",
-                status="completed",
-                started_at=datetime(2026, 4, 19, 8, 30, tzinfo=timezone.utc),
-                completed_at=datetime(2026, 4, 19, 9, 30, tzinfo=timezone.utc),
-            ),
-        ]
+    seed_job_operation(
+        db_session,
+        "backup",
+        repository="/repos/inside-window",
+        status="completed",
+        started_at=datetime(2026, 4, 20, 9, 0, tzinfo=timezone.utc),
+        completed_at=datetime(2026, 4, 20, 10, 0, tzinfo=timezone.utc),
+    )
+    seed_job_operation(
+        db_session,
+        "backup",
+        repository="/repos/outside-window",
+        status="completed",
+        started_at=datetime(2026, 4, 19, 8, 30, tzinfo=timezone.utc),
+        completed_at=datetime(2026, 4, 19, 9, 30, tzinfo=timezone.utc),
     )
     db_session.commit()
 

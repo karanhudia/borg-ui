@@ -173,36 +173,30 @@ curl -sS "$BASE_URL/api/backup/logs/$JOB_ID/download" \
 ## Maintenance jobs (check, prune, compact, restore check, archive delete)
 
 The start routes (`POST /api/repositories/{id}/check`, `/prune`, `/compact`,
-`/restore-check`, and `DELETE /api/archives/{archive_id}`) still return
-`{"job_id", "status", "message"}`. As of section 13 phase 5, `job_id` is an
-`operations` row id rather than a row in a per-kind table: the work is
-queued behind the repository's other exclusive operations (a running
-backup, for example) instead of being rejected with a conflict, so `status`
-is usually `pending` rather than `running`. A prune's dry run is the
-exception: it runs and answers inline, so its payload carries the legacy
+`/restore-check`, and `DELETE /api/archives/{archive_id}`) return
+`{"job_id", "status", "message"}`, where `job_id` is an `operations` row id:
+the work is queued behind the repository's other exclusive operations (a
+running backup, for example) instead of being rejected with a conflict, so
+`status` is usually `pending` rather than `running`. A prune's dry run is the
+exception: it runs and answers inline, so its payload carries the
 `prune_result` shape instead of a `job_id` to poll.
 
-The corresponding status and list routes (`GET .../check-jobs/{id}`,
+The corresponding status and list routes are `GET .../check-jobs/{id}`,
 `/prune-jobs/{id}`, `/compact-jobs/{id}`, `/restore-check-jobs/{id}`,
-`/api/archives/delete-jobs/{id}`, and their per-repository list forms) serve
-operations first and fall back to the pre-phase-5 row for that id, so a link
-or activity entry from before the upgrade keeps resolving.
+`/api/archives/delete-jobs/{id}`, and their per-repository list forms.
 
 ## Repository wipe, cloud mirror, and package install jobs
 
-As of section 13 phase 6 these three kinds are `operations` rows too, and the
-same rule applies as for maintenance jobs: a job id resolves against
-`operations` first and falls back to the pre-phase-6 row for that id, so links
-and activity entries from before the upgrade keep resolving. Every response
-body and every status word is unchanged.
+These three kinds are `operations` rows too, and every response body and
+status word is unchanged.
 
 `POST /api/repositories/{id}/wipe` still answers
 `{"id", "status", "phase", ...}` with `status: "pending"`, but the wipe is now
 queued behind the repository's other exclusive work rather than started
 immediately, and `GET /api/repositories/{id}/wipe-jobs/{job_id}` polls it as
 before. The preview from `POST .../wipe-preview` keeps its own id space in
-`repository_wipe_jobs`; both id spaces resolve on the status and cancel
-routes. The statuses `completed_compaction_failed` and `failed_partial` are
+`repository_wipe_jobs`, the one table that still holds previews; both id
+spaces resolve on the status and cancel routes. The statuses `completed_compaction_failed` and `failed_partial` are
 still returned, reconstructed from the operation's wipe details.
 
 The cloud mirror `latest_sync_job` block on the repository payload keeps its
@@ -218,15 +212,53 @@ before it answers `installing`.
 
 ## Restore jobs
 
-As of section 13 phase 7 a restore is an `operations` row as well.
-`POST /api/restore/start` still answers `{"job_id", "status": "pending",
-"message"}`; the id is now an operations row id. `GET /api/restore/jobs`,
-`GET /api/restore/status/{id}`, and `POST /api/restore/cancel/{id}` keep
-their bodies and status words, serve operations first, and fall back to the
-pre-phase-7 row for that id. `progress_details.estimated_time_remaining` is
+A restore is an `operations` row as well. `POST /api/restore/start` answers
+`{"job_id", "status": "pending", "message"}`, where the id is an operations row
+id. `GET /api/restore/jobs`, `GET /api/restore/status/{id}`, and
+`POST /api/restore/cancel/{id}` keep their bodies and status words.
+`progress_details.estimated_time_remaining` is
 computed from the sizes and the speed rather than stored. The restore's
 logs are its operation log file, readable through
 `GET /api/activity/restore/{id}/logs` as before.
+
+## Operations
+
+Every job is an `operations` row, and these routes read and steer them
+directly. Each `job_id` the job routes return is an operation id usable here.
+
+| Route | Purpose |
+| --- | --- |
+| `GET /api/operations/` | List operations, filtered by `repository_id`, `category[]`, `kind[]`, `status[]`, `trigger[]`, `run_id`, `since`, with `limit` and a `cursor` for paging |
+| `GET /api/operations/queue` | What is running and waiting right now, with the concurrency limits in force |
+| `GET /api/operations/repositories` | One row per repository the user may see, with the state of its derived data |
+| `GET /api/operations/repositories/{id}` | The archives behind a row's failed and truncated counts, newest first |
+| `POST /api/operations/reconcile` | Run the reconcile tick now instead of waiting for the interval |
+| `POST /api/operations/pause` | Stop dispatching follow-up and reconcile work |
+| `POST /api/operations/resume` | Dispatch it again |
+| `PUT /api/operations/limits` | Change the concurrency limits |
+| `GET /api/operations/{id}` | One operation with its kind-specific detail |
+| `POST /api/operations/{id}/cancel` | Ask the runner to cancel it |
+| `GET /api/operations/{id}/logs` | Paginated log lines |
+| `GET /api/operations/{id}/logs/download` | The log file as a download |
+
+## Activity
+
+`GET /api/activity/recent` is the unified history. Parameters: `limit`,
+`job_type`, `status`, `category[]`, `trigger[]`, `repository_id`, and
+`collapse_runs` (on by default, which nests a run's index follow-ups under
+their parent).
+
+Each item carries `activity_key`, `type`, `category`, `trigger`, `followups`,
+and the fields the job views have always read: `id`, `status`, `started_at`,
+`completed_at`, `error_message`, `repository`, `repository_path`,
+`log_file_path`, `triggered_by`, `schedule_id`, `archive_name`,
+`package_name`, and `has_logs`.
+
+Three routes serve one item by type and id: `GET /api/activity/{job_type}/{id}/logs`,
+`GET /api/activity/{job_type}/{id}/logs/download`, and
+`DELETE /api/activity/{job_type}/{id}`. The `job_type` values are the Activity
+type words (`backup`, `restore`, `check`, `restore_check`, `compact`, `prune`,
+`package`, `rclone_sync`, `rclone_hydrate`, `script_execution`).
 
 ## Archive index and history
 

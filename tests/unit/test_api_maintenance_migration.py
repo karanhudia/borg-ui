@@ -3,7 +3,8 @@ legacy rows (spec section 13, Appendix A.2)."""
 
 import pytest
 
-from app.database.models import BackupJob, CheckJob, Operation, PruneJob, Repository
+from app.database.models import Operation, Repository
+from tests.utils.operations import seed_job_operation
 
 
 def _repo(test_db, name="nas"):
@@ -42,7 +43,6 @@ class TestCheckMigration:
         # The runner may already have picked the row up in this process, so
         # assert it is not terminal rather than racing it for "queued".
         assert op.status in ("queued", "running")
-        assert test_db.query(CheckJob).count() == 0
 
     def test_a_second_check_is_rejected_with_409(
         self, test_client, test_db, admin_headers
@@ -69,7 +69,13 @@ class TestCheckMigration:
         refused (spec 7.2)."""
         repo = _repo(test_db)
         test_db.add(
-            BackupJob(repository_id=repo.id, repository=repo.path, status="running")
+            seed_job_operation(
+                test_db,
+                "backup",
+                repository_id=repo.id,
+                repository=repo.path,
+                status="running",
+            )
         )
         test_db.commit()
 
@@ -109,8 +115,9 @@ class TestCheckReadRoutes:
         self, test_client, test_db, admin_headers
     ):
         repo = _repo(test_db)
-        legacy = CheckJob(repository_id=repo.id, status="completed", progress=100)
-        test_db.add(legacy)
+        legacy = seed_job_operation(
+            test_db, "check", repository_id=repo.id, status="completed", progress=100
+        )
         test_db.commit()
 
         response = test_client.get(
@@ -122,7 +129,11 @@ class TestCheckReadRoutes:
 
     def test_list_route_shows_both_worlds(self, test_client, test_db, admin_headers):
         repo = _repo(test_db)
-        test_db.add(CheckJob(repository_id=repo.id, status="completed"))
+        test_db.add(
+            seed_job_operation(
+                test_db, "check", repository_id=repo.id, status="completed"
+            )
+        )
         test_db.commit()
         test_client.post(
             f"/api/repositories/{repo.id}/check", json={}, headers=admin_headers
@@ -179,7 +190,6 @@ class TestPruneMigration:
         assert op.kind == "prune"
         assert op.params["keep_daily"] == 5
         assert op.params["keep_within"] == "2d"
-        assert test_db.query(PruneJob).count() == 0
 
     def test_a_dry_run_prune_answers_inline_and_is_never_queued(
         self, test_client, test_db, admin_headers, monkeypatch
@@ -212,8 +222,6 @@ class TestCompactMigration:
     def test_starting_a_compact_creates_an_operation(
         self, test_client, test_db, admin_headers
     ):
-        from app.database.models import CompactJob
-
         repo = _repo(test_db)
 
         response = test_client.post(
@@ -227,7 +235,6 @@ class TestCompactMigration:
         # wakes on enqueue rather than waiting for its poll interval), so
         # assert it is not terminal rather than racing it for "queued".
         assert op.status in ("queued", "running")
-        assert test_db.query(CompactJob).count() == 0
 
 
 @pytest.mark.unit
@@ -235,8 +242,6 @@ class TestDeleteArchiveMigration:
     def test_deleting_an_archive_queues_an_operation(
         self, test_client, test_db, admin_headers
     ):
-        from app.database.models import DeleteArchiveJob
-
         repo = _repo(test_db)
 
         response = test_client.delete(
@@ -248,7 +253,6 @@ class TestDeleteArchiveMigration:
         op = test_db.get(Operation, response.json()["job_id"])
         assert op.kind == "delete_archive"
         assert op.params["archive_name"] == "nightly-2026-09-01"
-        assert test_db.query(DeleteArchiveJob).count() == 0
 
     def test_a_second_delete_of_the_same_archive_is_rejected(
         self, test_client, test_db, admin_headers
@@ -288,8 +292,6 @@ class TestRestoreCheckMigration:
     def test_starting_a_restore_check_creates_a_restore_category_operation(
         self, test_client, test_db, admin_headers
     ):
-        from app.database.models import RestoreCheckJob
-
         repo = _repo(test_db)
 
         response = test_client.post(
@@ -302,4 +304,3 @@ class TestRestoreCheckMigration:
         op = test_db.get(Operation, response.json()["job_id"])
         assert op.kind == "restore_check"
         assert op.category == "restore"
-        assert test_db.query(RestoreCheckJob).count() == 0

@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 import structlog
 from sqlalchemy.orm import Session
-from app.database.models import BackupJob, Repository, RepositoryScript, SystemSettings
+from app.database.models import Repository, RepositoryScript, SystemSettings
 from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg_router import BorgRouter
@@ -61,7 +61,7 @@ logger = structlog.get_logger()
 REMOTE_EXECUTION_MODES = {"remote_ssh", "remote_direct"}
 
 
-def _uses_remote_execution(job: BackupJob) -> bool:
+def _uses_remote_execution(job) -> bool:
     return (job.execution_mode or "").strip().lower() in REMOTE_EXECUTION_MODES or (
         job.route_strategy or ""
     ).strip().lower() == "remote_direct"
@@ -302,7 +302,7 @@ class BackupService:
         self,
         db: Session,
         repo_record: Repository | None,
-        job: BackupJob,
+        job,
     ) -> bool:
         if (
             not repo_record

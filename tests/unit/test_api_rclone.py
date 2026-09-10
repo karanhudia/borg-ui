@@ -15,7 +15,6 @@ from app.database.models import (
     Repository,
     RepositoryStorage,
     RcloneOAuthProviderCredential,
-    RcloneSyncJob,
     RcloneRemote,
     SSHConnection,
     SystemSettings,
@@ -23,6 +22,7 @@ from app.database.models import (
 from app.services.rclone_service import RcloneCommandResult
 from app.services.rclone_service import RcloneUnavailable
 from tests.unit.helpers import assert_auth_required
+from tests.utils.operations import seed_job_operation
 
 
 def _enable_borg_v2(test_db):
@@ -2500,7 +2500,9 @@ def test_repository_rclone_status_applies_log_save_policy_to_latest_sync_job(
         sync_policy="after_success",
         sync_status="synced",
     )
-    sync_job = RcloneSyncJob(
+    sync_job = seed_job_operation(
+        test_db,
+        "rclone_sync",
         repository_id=repository.id,
         direction="primary_to_remote",
         operation="sync",
@@ -3589,10 +3591,6 @@ def test_import_local_repository_with_cloud_mirror_preserves_primary_path_and_sy
                 "info": {"encryption": {"mode": "none"}},
             }
         ),
-    )
-    monkeypatch.setattr(
-        "app.api.repositories.BorgRouter.update_stats",
-        AsyncMock(return_value=None),
     )
     monkeypatch.setattr(
         "app.services.rclone_repository_service.rclone_service.lsjson",
@@ -4848,7 +4846,6 @@ def test_update_local_repository_cloud_mirror_default_policy_queues_initial_sync
     assert operation.trigger == "import"
     assert details.operation == "sync"
     assert details.direction == storage.sync_direction
-    assert test_db.query(RcloneSyncJob).count() == 0
     # Phase 6: the route only enqueues, which `sync_repository` never being
     # awaited proves. `scheduled_tasks` is no longer a signal: patching
     # asyncio.create_task catches the live runner's own dispatch too.
@@ -4900,7 +4897,6 @@ def test_update_local_repository_cloud_mirror_queue_failure_still_returns_saved_
     )
     assert storage.sync_policy == "after_success"
     assert storage.rclone_remote_id == remote.id
-    assert test_db.query(RcloneSyncJob).count() == 0
 
 
 @pytest.mark.unit
@@ -4963,7 +4959,6 @@ def test_update_local_repository_cloud_mirror_manual_or_scheduled_policy_does_no
         .one()
     )
     assert storage.sync_policy == sync_policy
-    assert test_db.query(RcloneSyncJob).count() == 0
     assert scheduled_tasks == []
     sync_repository.assert_not_awaited()
 

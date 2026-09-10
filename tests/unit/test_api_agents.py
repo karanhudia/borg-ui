@@ -14,14 +14,15 @@ from app.database.models import (
     AgentJob,
     AgentJobLog,
     AgentMachine,
-    BackupJob,
     BackupPlan,
-    CheckJob,
     LicensingState,
     Operation,
     Repository,
 )
 from app.services.operations.executors import load_default_executors
+from app.services.operations.backup_facade import resolve_backup_job
+from app.database.models import BackupPlanRun
+from tests.utils.operations import seed_job_operation
 
 
 def _set_plan(test_db, plan: str) -> None:
@@ -778,10 +779,11 @@ class TestAgentJobTransport:
         )
         agent = _get_agent(test_db, registered["agent_id"])
         job = _create_agent_job(test_db, agent, status="running")
-        backup_job = BackupJob(repository="/repo", status="running")
-        test_db.add(backup_job)
+        backup_job = seed_job_operation(
+            test_db, "backup", repository="/repo", status="running"
+        )
         test_db.commit()
-        job.backup_job_id = backup_job.id
+        job.operation_id = backup_job.id
         test_db.commit()
         headers = _agent_headers(registered["agent_token"])
 
@@ -800,6 +802,7 @@ class TestAgentJobTransport:
 
         test_db.refresh(job)
         test_db.refresh(backup_job)
+        backup_job = resolve_backup_job(test_db, backup_job.id)
         assert job.status == "completed_with_warnings"
         assert "jobCompletedWithWarning" in (job.error_message or "")
         assert backup_job.status == "completed_with_warnings"
@@ -831,12 +834,15 @@ class TestAgentJobTransport:
         test_db.add(repo)
         test_db.commit()
         job = _create_agent_job(test_db, agent, status="running")
-        backup_job = BackupJob(
-            repository="/repo", repository_id=repo.id, status="running"
+        backup_job = seed_job_operation(
+            test_db,
+            "backup",
+            repository="/repo",
+            repository_id=repo.id,
+            status="running",
         )
-        test_db.add(backup_job)
         test_db.commit()
-        job.backup_job_id = backup_job.id
+        job.operation_id = backup_job.id
         test_db.commit()
 
         complete = test_client.post(
@@ -854,8 +860,9 @@ class TestAgentJobTransport:
             .order_by(Operation.id)
             .all()
         )
-        assert [o.kind for o in ops][:1] == ["archive_sync"]
-        assert {o.trigger for o in ops} == {"followup"}
+        followups = [o for o in ops if o.id != backup_job.id]
+        assert [o.kind for o in followups][:1] == ["archive_sync"]
+        assert {o.trigger for o in followups} == {"followup"}
 
     def test_agent_job_links_a_backup_operation_and_cancels_it(
         self, test_client: TestClient, test_db, admin_headers
@@ -927,12 +934,15 @@ class TestAgentJobTransport:
 
         existing = enqueue(test_db, "stats", repository_id=repo.id)
         job = _create_agent_job(test_db, agent, status="running")
-        backup_job = BackupJob(
-            repository="/repo", repository_id=repo.id, status="running"
+        backup_job = seed_job_operation(
+            test_db,
+            "backup",
+            repository="/repo",
+            repository_id=repo.id,
+            status="running",
         )
-        test_db.add(backup_job)
         test_db.commit()
-        job.backup_job_id = backup_job.id
+        job.operation_id = backup_job.id
         test_db.commit()
         seen = {}
 
@@ -967,11 +977,12 @@ class TestAgentJobTransport:
         assert "error" in seen
         test_db.expire_all()
         assert test_db.get(AgentJob, job.id).status == "completed"
-        assert test_db.get(BackupJob, backup_job.id).status == "completed"
-        assert test_db.get(BackupJob, backup_job.id).archive_name == "a1"
+        assert resolve_backup_job(test_db, backup_job.id).status == "completed"
+        assert resolve_backup_job(test_db, backup_job.id).archive_name == "a1"
+        # The backup itself plus the one index row the colliding enqueue left.
         assert (
             test_db.query(Operation).filter(Operation.repository_id == repo.id).count()
-            == 1
+            == 2
         )
 
     def test_modern_warning_range_counts_as_warning(
@@ -1032,10 +1043,11 @@ class TestAgentJobTransport:
         )
         agent = _get_agent(test_db, registered["agent_id"])
         job = _create_agent_job(test_db, agent, status="running")
-        backup_job = BackupJob(repository="/repo", status="running")
-        test_db.add(backup_job)
+        backup_job = seed_job_operation(
+            test_db, "backup", repository="/repo", status="running"
+        )
         test_db.commit()
-        job.backup_job_id = backup_job.id
+        job.operation_id = backup_job.id
         test_db.commit()
         headers = _agent_headers(registered["agent_token"])
 
@@ -1049,6 +1061,7 @@ class TestAgentJobTransport:
 
         test_db.refresh(job)
         test_db.refresh(backup_job)
+        backup_job = resolve_backup_job(test_db, backup_job.id)
         assert job.status == "failed"
         assert "malformed return code" in (job.error_message or "")
         assert backup_job.status == "failed"
@@ -1415,13 +1428,13 @@ class TestAgentJobReaper:
 
     def test_fails_linked_backup_job(self, test_client, test_db, admin_headers):
         from app.services.agent_job_reaper import reap_stale_agent_jobs
-        from app.database.models import BackupJob
 
-        backup_job = BackupJob(
+        backup_job = seed_job_operation(
+            test_db,
+            "backup",
             repository="/repo",
             status="running",
         )
-        test_db.add(backup_job)
         test_db.commit()
         test_db.refresh(backup_job)
 
@@ -1434,7 +1447,7 @@ class TestAgentJobReaper:
         stale_at = datetime.now(timezone.utc) - timedelta(minutes=30)
         # Link and stale-ify in a single commit; updated_at has an onupdate, so a
         # later separate commit would refresh the timestamp and un-stale the job.
-        job.backup_job_id = backup_job.id
+        job.operation_id = backup_job.id
         job.started_at = stale_at
         job.updated_at = stale_at
         test_db.commit()
@@ -1449,12 +1462,12 @@ class TestAgentJobReaper:
         self, test_client, test_db, admin_headers
     ):
         from app.services.agent_job_reaper import reap_stale_agent_jobs
-        from app.database.models import BackupJob
 
         # An already-finished backup must not be flipped back to failed when its
         # AgentJob gets stale-reaped after the fact.
-        backup_job = BackupJob(repository="/repo", status="completed")
-        test_db.add(backup_job)
+        backup_job = seed_job_operation(
+            test_db, "backup", repository="/repo", status="completed"
+        )
         test_db.commit()
         test_db.refresh(backup_job)
 
@@ -1465,7 +1478,7 @@ class TestAgentJobReaper:
         agent = _get_agent(test_db, registered["agent_id"])
         job = _create_agent_job(test_db, agent, status="running")
         stale_at = datetime.now(timezone.utc) - timedelta(minutes=30)
-        job.backup_job_id = backup_job.id
+        job.operation_id = backup_job.id
         job.started_at = stale_at
         job.updated_at = stale_at
         test_db.commit()
@@ -1493,12 +1506,13 @@ class TestAgentJobNotifications:
         return agent, _agent_headers(registered["agent_token"])
 
     def _linked_backup_job(self, test_db, agent, *, agent_status="running"):
-        backup_job = BackupJob(repository="/repo", status="running")
-        test_db.add(backup_job)
+        backup_job = seed_job_operation(
+            test_db, "backup", repository="/repo", status="running"
+        )
         test_db.commit()
         test_db.refresh(backup_job)
         job = _create_agent_job(test_db, agent, status=agent_status)
-        job.backup_job_id = backup_job.id
+        job.operation_id = backup_job.id
         test_db.commit()
         return job, backup_job
 
@@ -1624,8 +1638,9 @@ class TestAgentJobNotifications:
         test_db.add(repository)
         test_db.commit()
         test_db.refresh(repository)
-        check_job = CheckJob(repository_id=repository.id, status="running")
-        test_db.add(check_job)
+        check_job = seed_job_operation(
+            test_db, "check", repository_id=repository.id, status="running"
+        )
         test_db.commit()
         test_db.refresh(check_job)
         now = datetime.now(timezone.utc)
@@ -1695,18 +1710,27 @@ class TestAgentJobNotifications:
         test_db.add(plan)
         test_db.commit()
         test_db.refresh(plan)
-        backup_job = BackupJob(
-            repository="/repo",
-            status="failed",
-            backup_plan_id=plan.id,
-            error_message="agent session lost",
-        )
-        test_db.add(backup_job)
+        # An operation names its plan through the run, which is where the
+        # facade reads `backup_plan_id` from.
+        run = BackupPlanRun(backup_plan_id=plan.id, trigger="manual", status="running")
+        test_db.add(run)
         test_db.commit()
-        test_db.refresh(backup_job)
+        backup_job = resolve_backup_job(
+            test_db,
+            seed_job_operation(
+                test_db,
+                "backup",
+                repository="/repo",
+                status="failed",
+                backup_plan_run_id=run.id,
+                error_message="agent session lost",
+            ).id,
+        )
 
         with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
-            await notify_backup_job_finished(test_db, backup_job)
+            await notify_backup_job_finished(
+                test_db, resolve_backup_job(test_db, backup_job.id)
+            )
 
         notifier.send_backup_failure.assert_awaited_once()
         args = notifier.send_backup_failure.await_args.args
@@ -1716,12 +1740,15 @@ class TestAgentJobNotifications:
     async def test_notify_backup_job_finished_skips_cancelled(self, test_db):
         from app.services.agent_job_notifications import notify_backup_job_finished
 
-        backup_job = BackupJob(repository="/repo", status="cancelled")
-        test_db.add(backup_job)
+        backup_job = seed_job_operation(
+            test_db, "backup", repository="/repo", status="cancelled"
+        )
         test_db.commit()
 
         with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
-            await notify_backup_job_finished(test_db, backup_job)
+            await notify_backup_job_finished(
+                test_db, resolve_backup_job(test_db, backup_job.id)
+            )
 
         notifier.send_backup_failure.assert_not_awaited()
         notifier.send_backup_success.assert_not_awaited()
@@ -1732,13 +1759,14 @@ class TestAgentJobNotifications:
         from app.services.agent_job_reaper import reap_stale_agent_jobs
 
         agent, _headers = self._register(test_client, test_db, admin_headers)
-        backup_job = BackupJob(repository="/repo", status="running")
-        test_db.add(backup_job)
+        backup_job = seed_job_operation(
+            test_db, "backup", repository="/repo", status="running"
+        )
         test_db.commit()
         test_db.refresh(backup_job)
         job = _create_agent_job(test_db, agent, status="running")
         stale_at = datetime.now(timezone.utc) - timedelta(minutes=30)
-        job.backup_job_id = backup_job.id
+        job.operation_id = backup_job.id
         job.started_at = stale_at
         job.updated_at = stale_at
         test_db.commit()
@@ -1749,7 +1777,7 @@ class TestAgentJobNotifications:
         )
 
         assert reaped == 1
-        assert failed_backup_job_ids == [("backup_jobs", backup_job.id)]
+        assert failed_backup_job_ids == [backup_job.id]
 
     def test_reaper_does_not_collect_terminal_backup_jobs(
         self, test_client, test_db, admin_headers
@@ -1757,13 +1785,14 @@ class TestAgentJobNotifications:
         from app.services.agent_job_reaper import reap_stale_agent_jobs
 
         agent, _headers = self._register(test_client, test_db, admin_headers)
-        backup_job = BackupJob(repository="/repo", status="completed")
-        test_db.add(backup_job)
+        backup_job = seed_job_operation(
+            test_db, "backup", repository="/repo", status="completed"
+        )
         test_db.commit()
         test_db.refresh(backup_job)
         job = _create_agent_job(test_db, agent, status="running")
         stale_at = datetime.now(timezone.utc) - timedelta(minutes=30)
-        job.backup_job_id = backup_job.id
+        job.operation_id = backup_job.id
         job.started_at = stale_at
         job.updated_at = stale_at
         test_db.commit()
@@ -1797,8 +1826,8 @@ class TestAgentJobNotifications:
                 {AgentJob.status: "failed", AgentJob.error_message: "reaped"},
                 synchronize_session=False,
             )
-            test_db.query(BackupJob).filter(BackupJob.id == backup_job.id).update(
-                {BackupJob.status: "failed", BackupJob.error_message: "reaped"},
+            test_db.query(Operation).filter(Operation.id == backup_job.id).update(
+                {Operation.status: "failed", Operation.error_message: "reaped"},
                 synchronize_session=False,
             )
             test_db.commit()
@@ -1816,7 +1845,7 @@ class TestAgentJobNotifications:
             test_db.query(AgentJob).filter(AgentJob.id == job.id).first().status
             == "failed"
         )
-        linked = test_db.query(BackupJob).filter(BackupJob.id == backup_job.id).first()
+        linked = test_db.get(Operation, backup_job.id)
         assert linked.status == "failed"
         assert linked.error_message == "reaped"
 
@@ -1884,31 +1913,35 @@ class TestAgentJobNotifications:
     ):
         from app.services.agent_job_notifications import notify_backup_job_finished
 
-        backup_job = BackupJob(repository="/repo", status="failed", error_message="x")
-        test_db.add(backup_job)
+        backup_job = seed_job_operation(
+            test_db, "backup", repository="/repo", status="failed", error_message="x"
+        )
         test_db.commit()
-        test_db.refresh(backup_job)
+        facade = resolve_backup_job(test_db, backup_job.id)
         # Detached + expired: every attribute read raises, modeling a refresh
         # failure on the committed (expired) row after the job turned final.
         test_db.expire(backup_job)
         test_db.expunge(backup_job)
 
         with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
-            await notify_backup_job_finished(test_db, backup_job)
+            await notify_backup_job_finished(test_db, facade)
 
         notifier.send_backup_failure.assert_not_awaited()
 
     async def test_notifier_failure_does_not_propagate(self, test_db):
         from app.services.agent_job_notifications import notify_backup_job_finished
 
-        backup_job = BackupJob(repository="/repo", status="failed", error_message="x")
-        test_db.add(backup_job)
+        backup_job = seed_job_operation(
+            test_db, "backup", repository="/repo", status="failed", error_message="x"
+        )
         test_db.commit()
         test_db.refresh(backup_job)
 
         with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
             notifier.send_backup_failure.side_effect = RuntimeError("boom")
-            await notify_backup_job_finished(test_db, backup_job)
+            await notify_backup_job_finished(
+                test_db, resolve_backup_job(test_db, backup_job.id)
+            )
 
         notifier.send_backup_failure.assert_awaited_once()
 
@@ -1931,8 +1964,8 @@ class TestAgentJobNotifications:
                 {AgentJob.status: "failed", AgentJob.error_message: "reaped"},
                 synchronize_session=False,
             )
-            test_db.query(BackupJob).filter(BackupJob.id == backup_job.id).update(
-                {BackupJob.status: "failed", BackupJob.error_message: "reaped"},
+            test_db.query(Operation).filter(Operation.id == backup_job.id).update(
+                {Operation.status: "failed", Operation.error_message: "reaped"},
                 synchronize_session=False,
             )
             test_db.commit()
@@ -1947,13 +1980,7 @@ class TestAgentJobNotifications:
             test_db.query(AgentJob).filter(AgentJob.id == job.id).first().status
             == "failed"
         )
-        assert (
-            test_db.query(BackupJob)
-            .filter(BackupJob.id == backup_job.id)
-            .first()
-            .status
-            == "failed"
-        )
+        assert test_db.get(Operation, backup_job.id).status == "failed"
 
     def _running_compact_operation(self, test_db, repository):
         operation = Operation(
@@ -2454,8 +2481,9 @@ async def test_script_and_backup_waiters_return_on_a_completion_with_warnings(
     agent = _get_agent(test_db, registered["agent_id"])
     script_job = _create_agent_job(test_db, agent, status="completed_with_warnings")
     script_job.result = {"return_code": 1}
-    backup_job = BackupJob(repository="/repo", status="completed_with_warnings")
-    test_db.add(backup_job)
+    backup_job = seed_job_operation(
+        test_db, "backup", repository="/repo", status="completed_with_warnings"
+    )
     test_db.commit()
     agent_backup_job = _create_agent_job(
         test_db, agent, status="completed_with_warnings"

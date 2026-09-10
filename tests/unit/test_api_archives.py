@@ -24,9 +24,10 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from fastapi.testclient import TestClient
 from app.core.security import get_password_hash
+from app.services.operations.job_facade import resolve_maintenance_job
+from tests.utils.operations import seed_job_operation
 from app.database.models import (
     AgentMachine,
-    DeleteArchiveJob,
     Repository,
     SystemSettings,
 )
@@ -128,7 +129,6 @@ class TestArchivesResourceValidation:
         op = test_db.get(Operation, response.json()["job_id"])
         assert op.kind == "delete_archive"
         assert op.params["archive_name"] == "archive-1"
-        assert test_db.query(DeleteArchiveJob).count() == 0
 
         ctx = SimpleNamespace(
             db=test_db,
@@ -226,7 +226,9 @@ class TestArchivesResourceValidation:
         test_db.flush()
         log_file = tmp_path / "delete.log"
         log_file.write_text("archive deleted", encoding="utf-8")
-        job = DeleteArchiveJob(
+        job = seed_job_operation(
+            test_db,
+            "delete_archive",
             repository_id=repo.id,
             repository_path=repo.path,
             archive_name="archive-1",
@@ -236,7 +238,6 @@ class TestArchivesResourceValidation:
             log_file_path=str(log_file),
             has_logs=True,
         )
-        test_db.add(job)
         test_db.commit()
 
         response = test_client.get(
@@ -751,7 +752,7 @@ def test_archives_list_route_sends_deprecation_headers(
 @pytest.mark.unit
 class TestDeleteJobCancel:
     @staticmethod
-    def _create_delete_job(test_db, status: str) -> DeleteArchiveJob:
+    def _create_delete_job(test_db, status: str):
         repo = Repository(
             name="Cancel Repo",
             path="/tmp/cancel-repo",
@@ -760,49 +761,54 @@ class TestDeleteJobCancel:
         )
         test_db.add(repo)
         test_db.flush()
-        job = DeleteArchiveJob(
+        job = seed_job_operation(
+            test_db,
+            "delete_archive",
             repository_id=repo.id,
             repository_path=repo.path,
             archive_name="archive-1",
             status=status,
             started_at=datetime(2026, 4, 27, 3, 0, 6),
         )
-        test_db.add(job)
         test_db.commit()
         return job
 
-    def test_cancel_running_delete_job_marks_it_cancelled(
+    def test_cancel_running_delete_job_asks_the_runner_to_cancel(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        """The runner owns the kill and writes the terminal status, so the
+        route raises its flag rather than stamping `cancelled` itself."""
         job = self._create_delete_job(test_db, "running")
 
-        response = test_client.post(
-            f"/api/archives/delete-jobs/{job.id}/cancel", headers=admin_headers
-        )
+        with patch(
+            "app.services.operations.runner.operation_runner.request_cancel",
+            new_callable=AsyncMock,
+        ) as request_cancel:
+            response = test_client.post(
+                f"/api/archives/delete-jobs/{job.id}/cancel", headers=admin_headers
+            )
 
         assert response.status_code == 200
         assert response.json() == {
             "message": "backend.success.archives.deletionCancelled"
         }
-        test_db.expire_all()
-        assert (
-            test_db.query(DeleteArchiveJob).filter_by(id=job.id).one().status
-            == "cancelled"
-        )
+        request_cancel.assert_awaited_once_with(job.id)
 
-    def test_cancel_finished_delete_job_returns_400(
+    def test_cancel_finished_delete_job_leaves_it_alone(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        """A finished operation has nothing to cancel: the runner refuses the
+        flag and the row keeps its outcome."""
         job = self._create_delete_job(test_db, "completed")
 
         response = test_client.post(
             f"/api/archives/delete-jobs/{job.id}/cancel", headers=admin_headers
         )
 
-        assert response.status_code == 400
+        assert response.status_code == 200
         test_db.expire_all()
         assert (
-            test_db.query(DeleteArchiveJob).filter_by(id=job.id).one().status
+            resolve_maintenance_job(test_db, job.id, "delete_archive").status
             == "completed"
         )
 

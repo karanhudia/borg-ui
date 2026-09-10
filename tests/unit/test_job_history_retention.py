@@ -7,6 +7,7 @@ freshest timestamp, so genuinely live work never looks old.
 """
 
 from datetime import timedelta
+from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, event
@@ -14,20 +15,21 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database.models import (
     AgentJob,
-    PruneJob,
     AgentJobLog,
     AgentMachine,
     Base,
-    BackupJob,
     BackupPlan,
     BackupPlanRun,
+    Operation,
+    OperationBackupDetails,
     Repository,
-    CheckJob,
     RepositoryWipeJob,
     ScriptExecution,
     SystemSettings,
     utc_now,
 )
+from app.services.operations.job_facade import resolve_maintenance_job
+from tests.utils.operations import seed_job_operation
 from app.services.job_history_retention import (
     archive_names_from_prune_output,
     mark_jobs_of_pruned_archives,
@@ -128,10 +130,18 @@ def test_old_agent_job_logs_deleted_recent_and_live_kept(db):
 
 
 @pytest.mark.unit
-def test_inline_logs_cleared_history_kept(db):
+def test_log_files_deleted_history_kept(db):
+    """An operation's log is a file (spec 6.1): the log window takes the file
+    and leaves the row, which is the record that the run happened."""
     settings = _settings(db)
     when = utc_now() - timedelta(days=40)
-    job = BackupJob(
+    repo = Repository(name="r", path="/tmp/r")
+    db.add(repo)
+    db.commit()
+    job = seed_job_operation(
+        db,
+        "backup",
+        repository_id=repo.id,
         status="completed",
         completed_at=when,
         created_at=when,
@@ -139,30 +149,27 @@ def test_inline_logs_cleared_history_kept(db):
         error_message="kept",
         nfiles=123,
     )
-    repo = Repository(name="r", path="/tmp/r")
-    db.add(repo)
-    db.commit()
-    check = CheckJob(
+    check = seed_job_operation(
+        db,
+        "check",
         repository_id=repo.id,
         status="completed",
         completed_at=when,
         created_at=when,
         logs="check output",
-        has_logs=True,
     )
-    db.add_all([job, check])
-    db.commit()
+    backup_log, check_log = job.log_file_path, check.log_file_path
 
     results = run_retention(db, settings)
 
-    assert results["inline_logs_cleared"] == 2
+    assert results["operation_log_files_deleted"] == 2
     db.refresh(job)
     db.refresh(check)
-    assert job.logs is None
+    assert not Path(backup_log).exists()
+    assert not Path(check_log).exists()
+    assert job.log_file_path is None and check.log_file_path is None
     assert job.error_message == "kept"  # history stays
-    assert job.nfiles == 123
-    assert check.logs is None
-    assert check.has_logs is False
+    assert db.get(OperationBackupDetails, job.id).nfiles == 123
 
 
 @pytest.mark.unit
@@ -171,12 +178,13 @@ def test_expired_job_rows_deleted_and_agent_logs_cascade(db):
     machine = _machine(db)
     expired = _agent_job(db, machine, "failed", age_days=120, log_lines=2)
     kept = _agent_job(db, machine, "completed", age_days=40)
-    old_backup = BackupJob(
+    old_backup = seed_job_operation(
+        db,
+        "backup",
         status="completed",
         completed_at=utc_now() - timedelta(days=120),
         created_at=utc_now() - timedelta(days=120),
     )
-    db.add(old_backup)
     db.commit()
     expired_id, kept_id = expired.id, kept.id
 
@@ -186,7 +194,6 @@ def test_expired_job_rows_deleted_and_agent_logs_cascade(db):
     db.expunge_all()
     assert db.get(AgentJob, expired_id) is None
     assert db.get(AgentJob, kept_id) is not None
-    assert db.query(BackupJob).count() == 0
     # The expired job's log rows are counted by the log phase (they aged past
     # log_retention_days too), and nothing dangles afterwards.
     assert db.query(AgentJobLog).count() == 0
@@ -219,9 +226,10 @@ def test_age_rules_regardless_of_status(db):
     # in-flight work. It falls with the window like everything else.
     zombie = _agent_job(db, machine, "queued", age_days=120, log_lines=1)
     zombie_id = zombie.id
+    # A wipe preview, the only thing `repository_wipe_jobs` still holds.
     wipe = RepositoryWipeJob(
         repository_id=None,
-        status="previewed",  # never reached a terminal status
+        status="previewed",
         created_at=utc_now() - timedelta(days=400),
         dry_run_output="preview",
     )
@@ -279,25 +287,26 @@ def test_policy_drops_success_logs_regardless_of_age(db):
     success = _agent_job(db, machine, "completed", age_days=1, log_lines=3)
     warned = _agent_job(db, machine, "completed_with_warnings", age_days=1, log_lines=2)
     failed = _agent_job(db, machine, "failed", age_days=1, log_lines=2)
-    fresh_backup = BackupJob(
+    fresh_backup = seed_job_operation(
+        db,
+        "backup",
         status="completed",
         completed_at=utc_now() - timedelta(days=1),
         created_at=utc_now() - timedelta(days=1),
         logs="clean success output",
         error_message=None,
     )
-    db.add(fresh_backup)
     db.commit()
 
     results = run_retention(db, settings)
 
     # Day-old logs, way inside the age window - the policy drops them anyway.
     assert results["policy_log_rows_deleted"] == 3
-    assert results["policy_inline_logs_cleared"] == 1
+    assert results["policy_operation_log_files_deleted"] == 1
     remaining = {row.agent_job_id for row in db.query(AgentJobLog)}
     assert remaining == {warned.id, failed.id}
     db.refresh(fresh_backup)
-    assert fresh_backup.logs is None
+    assert fresh_backup.log_file_path is None
     # Job rows themselves stay: only the windows delete history.
     assert db.get(AgentJob, success.id) is not None
 
@@ -367,7 +376,9 @@ def test_pruned_archives_mark_their_job_records_and_keep_them(db, tmp_path):
     log_file = tmp_path / "backup_1.log"
     log_file.write_text("borg output")
     when = utc_now() - timedelta(days=3)
-    pruned = BackupJob(
+    pruned = seed_job_operation(
+        db,
+        "backup",
         repository_id=repo.id,
         status="completed",
         archive_name="host-old",
@@ -375,7 +386,9 @@ def test_pruned_archives_mark_their_job_records_and_keep_them(db, tmp_path):
         completed_at=when,
         created_at=when,
     )
-    kept = BackupJob(
+    kept = seed_job_operation(
+        db,
+        "backup",
         repository_id=repo.id,
         status="completed",
         archive_name="host-new",
@@ -385,7 +398,7 @@ def test_pruned_archives_mark_their_job_records_and_keep_them(db, tmp_path):
     db.add_all([pruned, kept])
     db.flush()
     agent_run = _agent_job(db, machine, "completed", age_days=3, log_lines=2)
-    agent_run.backup_job_id = pruned.id
+    agent_run.operation_id = pruned.id
     db.commit()
     repo_id = repo.id
     pruned_id, kept_id, agent_id = pruned.id, kept.id, agent_run.id
@@ -394,10 +407,10 @@ def test_pruned_archives_mark_their_job_records_and_keep_them(db, tmp_path):
 
     db.expunge_all()
     assert marked == 1
-    pruned_row = db.get(BackupJob, pruned_id)
+    pruned_row = db.get(OperationBackupDetails, pruned_id)
     assert pruned_row is not None and pruned_row.archive_pruned_at is not None
-    assert pruned_row.status == "completed"
-    assert db.get(BackupJob, kept_id).archive_pruned_at is None
+    assert db.get(Operation, pruned_id).status == "completed"
+    assert db.get(OperationBackupDetails, kept_id).archive_pruned_at is None
     assert db.get(AgentJob, agent_id) is not None
     assert db.query(AgentJobLog).count() == 2
     assert log_file.exists()
@@ -405,7 +418,7 @@ def test_pruned_archives_mark_their_job_records_and_keep_them(db, tmp_path):
     first_mark = pruned_row.archive_pruned_at
     assert mark_jobs_of_pruned_archives(db, repo_id, {"host-old"}) == 0
     db.expunge_all()
-    assert db.get(BackupJob, pruned_id).archive_pruned_at == first_mark
+    assert db.get(OperationBackupDetails, pruned_id).archive_pruned_at == first_mark
 
 
 @pytest.mark.unit
@@ -416,14 +429,18 @@ def test_marked_rows_fall_with_cleanup_retention_like_any_other(db):
     recent = utc_now() - timedelta(days=3)
     db.add_all(
         [
-            BackupJob(
+            seed_job_operation(
+                db,
+                "backup",
                 repository_id=repo.id,
                 status="completed",
                 archive_name="host-a",
                 completed_at=old,
                 created_at=old,
             ),
-            BackupJob(
+            seed_job_operation(
+                db,
+                "backup",
                 repository_id=repo.id,
                 status="completed",
                 archive_name="host-b",
@@ -439,7 +456,9 @@ def test_marked_rows_fall_with_cleanup_retention_like_any_other(db):
     # The mark is not "activity": age comes from the job's own timestamps.
     assert purge_job_rows(db, utc_now() - timedelta(days=30)) == 1
     db.expunge_all()
-    assert [j.archive_name for j in db.query(BackupJob).all()] == ["host-b"]
+    assert [d.archive_name for d in db.query(OperationBackupDetails).all()] == [
+        "host-b"
+    ]
 
 
 @pytest.mark.unit
@@ -447,21 +466,22 @@ def test_borg2_repositories_are_skipped(db):
     _settings(db)
     repo = _repo(db, borg_version=2)
     when = utc_now() - timedelta(days=3)
-    job = BackupJob(
+    job = seed_job_operation(
+        db,
+        "backup",
         repository_id=repo.id,
         status="completed",
         archive_name="series-name",
         completed_at=when,
         created_at=when,
     )
-    db.add(job)
     db.commit()
 
     # An archive series shares one name across archives: a name match would
     # hit jobs whose archives still exist, so borg2 is skipped for now.
     assert mark_jobs_of_pruned_archives(db, repo.id, {"series-name"}) == 0
     db.expunge_all()
-    assert db.query(BackupJob).one().archive_pruned_at is None
+    assert db.query(OperationBackupDetails).one().archive_pruned_at is None
 
 
 def _late_prune_log_scenario(db):
@@ -471,17 +491,20 @@ def _late_prune_log_scenario(db):
     machine = _machine(db)
     repo = _repo(db)
     when = utc_now() - timedelta(hours=6)
-    pruned_backup = BackupJob(
+    pruned_backup = seed_job_operation(
+        db,
+        "backup",
         repository_id=repo.id,
         status="completed",
         archive_name="host-old",
         completed_at=when - timedelta(hours=1),
         created_at=when - timedelta(hours=1),
     )
-    db.add(pruned_backup)
     db.flush()
     finished = when + timedelta(minutes=5)
-    prune_row = PruneJob(
+    prune_row = seed_job_operation(
+        db,
+        "prune",
         repository_id=repo.id,
         status="completed",
         started_at=when,
@@ -490,7 +513,6 @@ def _late_prune_log_scenario(db):
         logs="Starting repository.prune",  # truncated by the race
         has_logs=True,
     )
-    db.add(prune_row)
     db.flush()
     prune_agent_job = AgentJob(
         agent_machine_id=machine.id,
@@ -536,31 +558,34 @@ def test_sweep_marks_from_late_arriving_prune_logs(db):
     assert run_retention(db)["pruned_archive_records_marked"] == 1
 
     db.expunge_all()
-    row = db.get(BackupJob, pruned_id)
+    row = db.get(OperationBackupDetails, pruned_id)
     # the recorded time is when the prune finished, not when the pass ran
     assert row is not None and row.archive_pruned_at == prune_finished
-    # The truncated stored log got repaired from the full agent log.
-    assert "Pruning archive" in db.get(PruneJob, prune_row_id).logs
+    # The operation's own log file is left as the executor wrote it: the
+    # facade's `logs` setter is a no-op once the file has content, so the
+    # repair the legacy text column needed no longer applies.
+    assert resolve_maintenance_job(db, prune_row_id, "prune") is not None
     # Idempotent: a second sweep finds nothing left to do.
     assert sweep_pruned_archive_records(db) == 0
 
 
 @pytest.mark.unit
-def test_retention_covers_operations_and_the_legacy_maintenance_tables():
-    """Phase 5 moved the five maintenance kinds to `operations`, but their
-    legacy tables still hold pre-migration history that must keep aging out
-    until phase 9 deletes the tables outright."""
-    from app.database.models import (
-        CompactJob,
-        DeleteArchiveJob,
-        Operation,
-        RestoreCheckJob,
-    )
+def test_retention_covers_every_surviving_job_table():
+    """Phase 9 left one job table plus the rows that are not operations: agent
+    jobs, wipe previews, script executions, plan runs and availability
+    skips."""
+    from app.database.models import AvailabilityScheduleSkip
     from app.services.job_history_retention import _JOB_TABLES
 
     models = {model for model, _ in _JOB_TABLES}
-    assert Operation in models
-    assert {CheckJob, PruneJob, CompactJob, RestoreCheckJob, DeleteArchiveJob} <= models
+    assert models == {
+        AgentJob,
+        Operation,
+        RepositoryWipeJob,
+        ScriptExecution,
+        BackupPlanRun,
+        AvailabilityScheduleSkip,
+    }
 
 
 def test_sweep_runs_before_the_save_policy_drops_the_logs_it_reads(db):
@@ -575,29 +600,7 @@ def test_sweep_runs_before_the_save_policy_drops_the_logs_it_reads(db):
     assert results["pruned_archive_records_marked"] == 1
     assert results["policy_log_rows_deleted"] == 2  # the logs did go afterwards
     db.expunge_all()
-    assert db.get(BackupJob, pruned_id).archive_pruned_at is not None
-
-
-@pytest.mark.unit
-def test_jobs_that_carry_only_the_repository_path_are_marked_too(db):
-    """Rows written before repository_id existed (or after the FK was
-    nulled) match by path, as every other job-to-repository lookup does."""
-    _settings(db)
-    repo = _repo(db)
-    when = utc_now() - timedelta(days=3)
-    db.add(
-        BackupJob(
-            repository=repo.path + "/",
-            status="completed",
-            archive_name="host-old",
-            completed_at=when,
-            created_at=when,
-        )
-    )
-    db.commit()
-    assert mark_jobs_of_pruned_archives(db, repo.id, {"host-old"}) == 1
-    db.expunge_all()
-    assert db.query(BackupJob).one().archive_pruned_at is not None
+    assert db.get(OperationBackupDetails, pruned_id).archive_pruned_at is not None
 
 
 @pytest.mark.unit
@@ -615,21 +618,27 @@ def test_a_backup_that_ran_after_the_prune_keeps_its_reused_name(db):
     after_prune = prune_started + timedelta(hours=1)
     db.add_all(
         [
-            BackupJob(
+            seed_job_operation(
+                db,
+                "backup",
                 repository_id=repo.id,
                 status="completed",
                 archive_name="weekly",
                 completed_at=before_prune,
                 created_at=before_prune,
             ),
-            BackupJob(
+            seed_job_operation(
+                db,
+                "backup",
                 repository_id=repo.id,
                 status="completed",
                 archive_name="weekly",
                 completed_at=prune_finished + timedelta(minutes=1),
                 created_at=during_prune,
             ),
-            BackupJob(
+            seed_job_operation(
+                db,
+                "backup",
                 repository_id=repo.id,
                 status="completed",
                 archive_name="weekly",
@@ -648,7 +657,12 @@ def test_a_backup_that_ran_after_the_prune_keeps_its_reused_name(db):
     )
     assert marked == 1
     db.expunge_all()
-    rows = db.query(BackupJob).order_by(BackupJob.created_at).all()
+    rows = (
+        db.query(OperationBackupDetails)
+        .join(Operation, Operation.id == OperationBackupDetails.operation_id)
+        .order_by(Operation.created_at)
+        .all()
+    )
     # the recorded time is when the prune finished, not when it started
     assert rows[0].archive_pruned_at == prune_finished
     assert rows[1].archive_pruned_at is None
@@ -664,15 +678,22 @@ def test_agent_prune_completion_marks_the_pruned_archives_jobs(db):
     machine = _machine(db)
     repo = _repo(db)
     when = utc_now() - timedelta(hours=1)
-    backup = BackupJob(
+    backup = seed_job_operation(
+        db,
+        "backup",
         repository_id=repo.id,
         status="completed",
         archive_name="host-old",
         completed_at=when,
         created_at=when,
     )
-    prune_row = PruneJob(
-        repository_id=repo.id, status="running", started_at=utc_now(), created_at=when
+    prune_row = seed_job_operation(
+        db,
+        "prune",
+        repository_id=repo.id,
+        status="running",
+        started_at=utc_now(),
+        created_at=when,
     )
     db.add_all([backup, prune_row])
     db.flush()
@@ -710,7 +731,7 @@ def test_agent_prune_completion_marks_the_pruned_archives_jobs(db):
     db.commit()
 
     db.expunge_all()
-    row = db.get(BackupJob, backup_id)
+    row = db.get(OperationBackupDetails, backup_id)
     assert row is not None and row.archive_pruned_at is not None
 
 
@@ -785,7 +806,7 @@ def test_operation_log_files_follow_both_retention_windows(db, tmp_path):
 def test_row_purge_takes_log_files_along_for_every_model(db, tmp_path):
     # #895: deleting expired rows must unlink their log_file_path files -
     # uniformly, not as an Operation-only special case.
-    from app.database.models import CheckJob, CompactJob, Repository, RestoreCheckJob
+    from app.database.models import Repository
 
     settings = _settings(db)
     repo = Repository(
@@ -804,22 +825,24 @@ def test_row_purge_takes_log_files_along_for_every_model(db, tmp_path):
     kept_file.write_text("keep me", encoding="utf-8")
     missing_file = tmp_path / "already_gone.log"  # never created
 
-    for index, model in enumerate((CheckJob, CompactJob, RestoreCheckJob)):
+    for index, kind in enumerate(("check", "compact", "restore_check")):
         log_file = tmp_path / f"expired_{index}.log"
         log_file.write_text("old log", encoding="utf-8")
         expired_files.append(log_file)
-        db.add(
-            model(
-                repository_id=repo.id,
-                status="completed",
-                completed_at=old,
-                created_at=old,
-                log_file_path=str(log_file),
-            )
+        seed_job_operation(
+            db,
+            kind,
+            repository_id=repo.id,
+            status="completed",
+            completed_at=old,
+            created_at=old,
+            log_file_path=str(log_file),
         )
     # An expired row whose file is already gone must not break the purge.
     db.add(
-        CheckJob(
+        seed_job_operation(
+            db,
+            "check",
             repository_id=repo.id,
             status="failed",
             completed_at=old,
@@ -829,7 +852,9 @@ def test_row_purge_takes_log_files_along_for_every_model(db, tmp_path):
     )
     # A row inside the window keeps row AND file.
     db.add(
-        CheckJob(
+        seed_job_operation(
+            db,
+            "check",
             repository_id=repo.id,
             status="completed",
             completed_at=fresh,
@@ -845,9 +870,7 @@ def test_row_purge_takes_log_files_along_for_every_model(db, tmp_path):
     for log_file in expired_files:
         assert not log_file.exists()
     assert kept_file.exists()
-    from app.database.models import CheckJob as CheckJobModel
-
-    assert db.query(CheckJobModel).count() == 1
+    assert db.query(Operation).filter(Operation.kind == "check").count() == 1
 
 
 @pytest.mark.unit
@@ -860,7 +883,6 @@ def test_orphaned_log_files_are_swept_by_age_unless_referenced(
     import os
     import time as time_module
 
-    from app.database.models import CheckJob
     from app.services.job_history_retention import sweep_orphaned_log_files
 
     log_dir = tmp_path / "logs"
@@ -895,7 +917,9 @@ def test_orphaned_log_files_are_swept_by_age_unless_referenced(
     db.add(repo)
     db.commit()
     db.add(
-        CheckJob(
+        seed_job_operation(
+            db,
+            "check",
             repository_id=repo.id,
             status="completed",
             completed_at=utc_now(),
@@ -918,7 +942,6 @@ def test_orphaned_log_files_are_swept_by_age_unless_referenced(
 def test_shared_log_file_survives_when_a_live_row_still_references_it(db, tmp_path):
     # log_file_path is not unique: an expired and a retained row can name the
     # same file - purging the expired row must not take the survivor's log.
-    from app.database.models import CheckJob
 
     settings = _settings(db)
     old = utc_now() - timedelta(days=120)
@@ -939,21 +962,27 @@ def test_shared_log_file_survives_when_a_live_row_still_references_it(db, tmp_pa
     db.commit()
     db.add_all(
         [
-            CheckJob(
+            seed_job_operation(
+                db,
+                "check",
                 repository_id=repo.id,
                 status="completed",
                 completed_at=old,
                 created_at=old,
                 log_file_path=str(shared),
             ),
-            CheckJob(
+            seed_job_operation(
+                db,
+                "check",
                 repository_id=repo.id,
                 status="completed",
                 completed_at=fresh,
                 created_at=fresh,
                 log_file_path=str(shared),
             ),
-            CheckJob(
+            seed_job_operation(
+                db,
+                "check",
                 repository_id=repo.id,
                 status="completed",
                 completed_at=old,

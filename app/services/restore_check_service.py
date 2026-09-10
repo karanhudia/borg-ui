@@ -15,7 +15,7 @@ from app.config import settings
 from app.core.borg_errors import is_borg_warning_exit_code
 from app.core.borg_router import BorgRouter
 from app.database.database import SessionLocal
-from app.database.models import Repository, RestoreCheckJob
+from app.database.models import Repository
 from app.services.notification_service import NotificationService
 from app.services.operations.job_facade import resolve_maintenance_job
 from app.services.restore_check_canary import (
@@ -158,9 +158,7 @@ class RestoreCheckService:
             )
             return False
 
-    def _save_job_logs(
-        self, job: RestoreCheckJob, job_id: int, raw_logs: list[str]
-    ) -> None:
+    def _save_job_logs(self, job, job_id: int, raw_logs: list[str]) -> None:
         if not raw_logs:
             return
 
@@ -182,7 +180,7 @@ class RestoreCheckService:
         *,
         db,
         repository: Repository,
-        job: RestoreCheckJob,
+        job,
     ) -> None:
         if job.status not in {
             "completed",
@@ -238,7 +236,7 @@ class RestoreCheckService:
         db = SessionLocal()
         temp_key_file = None
         temp_restore_dir = None
-        job: RestoreCheckJob | None = None
+        job = None
         repository: Repository | None = None
         raw_logs: list[str] = []
         logs_saved = False
@@ -511,14 +509,14 @@ class RestoreCheckService:
             db.close()
 
     async def _execute_agent_restore_check(
-        self, db, job: RestoreCheckJob, job_id: int, repository: Repository
+        self, db, job, job_id: int, repository: Repository
     ):
         """Run a restore check by delegating to the repository's managed agent.
 
         Lists archives on the node, extracts the latest one into a throwaway
         directory the agent owns, and (for canary mode) verifies the canary
         manifest on the node. The agent's verdict is mapped onto the
-        RestoreCheckJob status.
+        restore check operation's status.
         """
         from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
         from app.services.repository_executor import (
@@ -776,7 +774,7 @@ class RestoreCheckService:
     def _finish_agent_restore_check_failure(
         self,
         db,
-        job: RestoreCheckJob,
+        job,
         job_id: int,
         raw_logs: list[str],
         *,
@@ -794,7 +792,7 @@ class RestoreCheckService:
     def _apply_agent_restore_check_result(
         self,
         db,
-        job: RestoreCheckJob,
+        job,
         job_id: int,
         repository: Repository,
         result: dict,

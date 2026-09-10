@@ -1195,9 +1195,12 @@ async def update_system_settings(
 
 
 async def _run_stats_refresh_background(repo_ids: list, username: str):
-    """Background task to refresh stats for all repositories"""
-    from app.core.borg_router import BorgRouter
+    """Background task to refresh stats for all repositories.
+
+    The refresh is the `stats` and `archive_sync` index chain (spec 8.1, 8.2),
+    which the operations runner executes; this only enqueues it."""
     from app.database.database import SessionLocal
+    from app.services.operations.enqueue import enqueue_chain
 
     db = SessionLocal()
     try:
@@ -1209,11 +1212,13 @@ async def _run_stats_refresh_background(repo_ids: list, username: str):
             if not repo:
                 continue
             try:
-                result = await BorgRouter(repo).update_stats(db)
-                if result:
-                    success_count += 1
-                else:
-                    error_count += 1
+                enqueue_chain(
+                    db,
+                    ["stats", "archive_sync"],
+                    repository_id=repo.id,
+                    trigger="manual",
+                )
+                success_count += 1
             except Exception as e:
                 logger.error(
                     "Error refreshing stats for repository",

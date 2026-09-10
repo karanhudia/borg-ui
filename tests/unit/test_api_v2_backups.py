@@ -6,11 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.database.models import (
-    CheckJob,
-    CompactJob,
     LicensingState,
     Operation,
-    PruneJob,
     Repository,
 )
 from app.services.operations.backup_facade import BackupJobFacade
@@ -204,7 +201,6 @@ class TestV2BackupRoutes:
         op = test_db.get(Operation, body["job_id"])
         assert op.kind == "prune"
         assert op.params["keep_daily"] == 3
-        assert test_db.query(PruneJob).count() == 0
 
     @pytest.mark.asyncio
     async def test_backup_prune_dispatcher_uses_stable_repo_id(
@@ -304,7 +300,6 @@ class TestV2BackupRoutes:
         assert response.json()["message"] == "backend.success.repo.compactJobStarted"
         op = test_db.get(Operation, response.json()["job_id"])
         assert op.kind == "compact"
-        assert test_db.query(CompactJob).count() == 0
 
     @pytest.mark.asyncio
     async def test_backup_compact_dispatcher_uses_stable_repo_id(
@@ -386,7 +381,6 @@ class TestV2BackupRoutes:
         op = test_db.get(Operation, response.json()["job_id"])
         assert op.kind == "check"
         assert op.params["max_duration"] == 3600
-        assert test_db.query(CheckJob).count() == 0
 
     def test_backup_check_stores_extra_flags(
         self, test_client: TestClient, admin_headers, test_db

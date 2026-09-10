@@ -9,7 +9,7 @@ from typing import Any, Callable, Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.database.models import AgentJob, AgentMachine, BackupJob, Repository
+from app.database.models import AgentJob, AgentMachine, Repository
 from app.services.agent_job_dispatcher import dispatch_agent_cancel_if_connected
 from app.services.job_admission import (
     OPERATION_BACKUP,
@@ -438,7 +438,7 @@ async def wait_for_agent_repository_operation_job(
 
 def queue_agent_backup_job(
     db: Session,
-    backup_job: BackupJob,
+    backup_job,
     repository: Repository,
     *,
     archive_name: Optional[str] = None,
@@ -697,7 +697,7 @@ def abandon_agent_repository_operation_job(
 
 
 def cancel_agent_backup_job(
-    db: Session, backup_job: BackupJob, *, now: Optional[datetime] = None
+    db: Session, backup_job, *, now: Optional[datetime] = None
 ) -> tuple[AgentJob, bool]:
     agent_job = get_agent_job_for_backup(db, backup_job)
     if not agent_job:

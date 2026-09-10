@@ -10,7 +10,7 @@ import structlog
 from sqlalchemy.orm import Session
 from app.core.authorization import authorize_request
 from app.core.security import get_current_user
-from app.database.models import User, InstalledPackage, Operation, PackageInstallJob
+from app.database.models import User, InstalledPackage, Operation
 from app.services.operations.package_facade import (
     PackageInstallFacade,
     active_package_install,
@@ -273,8 +273,6 @@ async def get_job_status(job_id: int, db: Session = Depends(get_db)):
 @router.get("/jobs")
 async def list_jobs(db: Session = Depends(get_db)):
     """List all package installation jobs"""
-    # Both tables until phase 9 deletes the legacy one: operations for new
-    # work, package_install_jobs for pre-phase-6 history.
     jobs = [
         PackageInstallFacade(db, op)
         for op in db.query(Operation)
@@ -283,14 +281,6 @@ async def list_jobs(db: Session = Depends(get_db)):
         .limit(50)
         .all()
     ]
-    jobs.extend(
-        db.query(PackageInstallJob)
-        .order_by(PackageInstallJob.created_at.desc())
-        .limit(50)
-        .all()
-    )
-    jobs.sort(key=lambda job: job.created_at, reverse=True)
-    jobs = jobs[:50]
 
     return [
         {

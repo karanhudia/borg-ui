@@ -40,9 +40,6 @@ def test_import_repository_records_operation_and_skips_inline_stats(
             new=AsyncMock(return_value=verify_result),
         ),
         patch(
-            "app.core.borg_router.BorgRouter.update_stats", new=AsyncMock()
-        ) as update_stats,
-        patch(
             "app.api.repositories.mqtt_service.sync_state_with_db",
             return_value=None,
         ),
@@ -58,7 +55,6 @@ def test_import_repository_records_operation_and_skips_inline_stats(
             headers=admin_headers,
         )
     assert response.status_code in (200, 201), response.text
-    update_stats.assert_not_awaited()
     repo = test_db.query(Repository).filter_by(name="imported").one()
     kinds = [
         o.kind
@@ -173,7 +169,6 @@ def test_import_records_failure_rolls_back_the_session(
             "app.api.repositories.verify_existing_repository",
             new=AsyncMock(return_value=verify_result),
         ),
-        patch("app.core.borg_router.BorgRouter.update_stats", new=AsyncMock()),
         patch(
             "app.api.repositories.mqtt_service.sync_state_with_db", return_value=None
         ),
