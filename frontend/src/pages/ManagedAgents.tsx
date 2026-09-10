@@ -2194,7 +2194,15 @@ export function AgentList({
         agents={upgradeTargets}
         busy={isUpgrading}
         onConfirm={(list) => {
-          onUpgradeMany?.(list)
+          // The dialog holds a snapshot. A refetch while it was open may have
+          // queued one of these endpoints already, and submitting it would be
+          // counted in the toast without producing an upgrade.
+          const stillEligible = agents.filter(
+            (agent) => list.some((target) => target.id === agent.id) && canUpgradeNow(agent)
+          )
+          if (stillEligible.length > 0) {
+            onUpgradeMany?.(stillEligible)
+          }
           setUpgradeTargets([])
           setSelectedIds([])
         }}

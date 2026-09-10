@@ -199,3 +199,37 @@ async def test_the_whole_wave_is_claimed_before_anything_is_dispatched(
     await release_agent_upgrade_waves(test_db)
 
     assert seen_in_flight == [2, 2]
+
+
+async def test_a_wave_that_stops_unexpectedly_hands_back_its_unused_slots(
+    test_db, monkeypatch, cap
+):
+    """An endpoint nothing was sent to must not hold a slot until the reaper's
+    timeout: it goes back in the queue for the next wave."""
+    cap(3)
+    sent = []
+
+    async def fake_send_command(agent_id, **kwargs):
+        sent.append(agent_id)
+        raise RuntimeError("the session layer blew up")
+
+    monkeypatch.setattr(
+        "app.services.agent_upgrades.agent_connection_manager.send_command",
+        fake_send_command,
+    )
+    agents = [_queued(test_db, f"a{index}") for index in range(3)]
+
+    with pytest.raises(RuntimeError):
+        await release_agent_upgrade_waves(test_db)
+
+    assert len(sent) == 1
+    states = [_state(test_db, agent) for agent in agents]
+    # The endpoint that was attempted keeps its claim; the two behind it are
+    # eligible for the next wave.
+    assert states[1:] == ["queued", "queued"]
+    assert [
+        agent.upgrade_requested_at
+        for agent in test_db.query(AgentMachine)
+        .filter(AgentMachine.upgrade_state == "queued")
+        .all()
+    ] == [None, None]

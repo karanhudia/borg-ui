@@ -440,7 +440,7 @@
         "mixedTargets": "Ogni endpoint si reinstalla da questo server e torna con la propria versione configurata.",
         "disconnectWarning_one": "Durante l'operazione si disconnette per un breve periodo.",
         "disconnectWarning_other": "Ognuno si disconnette per un breve periodo e vengono aggiornati pochi alla volta, quindi alcuni attendono prima di iniziare.",
-        "busyWarning": "Un endpoint che sta eseguendo un backup rifiuta l'aggiornamento, quindi riprova quando e inattivo.",
+        "busyWarning": "Un endpoint che sta eseguendo un backup rifiuta l'aggiornamento, quindi riprova quando è inattivo.",
         "confirm": "Aggiorna"
       },
       "upgradeState": {

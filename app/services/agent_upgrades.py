@@ -145,10 +145,51 @@ async def release_agent_upgrade_waves(db: Session) -> int:
     # is not safe to use concurrently. Ceiling: a wave of endpoints that are
     # connected but unresponsive costs up to
     # AGENT_UPGRADE_COMMAND_TIMEOUT_SECONDS each before the call returns.
-    for agent in claimed:
-        db.refresh(agent)
-        await request_agent_upgrade(db, agent, target=agent.upgrade_target_version)
+    pending = list(claimed)
+    dispatched = 0
+    try:
+        while pending:
+            agent = pending[0]
+            db.refresh(agent)
+            await request_agent_upgrade(db, agent, target=agent.upgrade_target_version)
+            pending.pop(0)
+            dispatched += 1
+    except BaseException:
+        # request_agent_upgrade already owns every failure it expects, so
+        # reaching here means the wave stopped on something else, cancellation
+        # included. The head of pending was attempted and owns its outcome;
+        # everything behind it never got a command, and leaving those at
+        # "requested" would hold their slots until the reaper's timeout.
+        _requeue_undispatched(db, pending[1:])
+        raise
 
-    if claimed:
-        logger.info("Agent upgrade wave released", count=len(claimed))
-    return len(claimed)
+    if dispatched:
+        logger.info("Agent upgrade wave released", count=dispatched)
+    return dispatched
+
+
+def _requeue_undispatched(db: Session, agents: list[AgentMachine]) -> None:
+    """Hand back slots claimed for endpoints nothing was ever sent to."""
+    if not agents:
+        return
+    try:
+        for agent in agents:
+            db.query(AgentMachine).filter(
+                AgentMachine.id == agent.id,
+                AgentMachine.upgrade_state == "requested",
+            ).update(
+                {
+                    AgentMachine.upgrade_state: "queued",
+                    AgentMachine.upgrade_requested_at: None,
+                },
+                synchronize_session=False,
+            )
+        db.commit()
+    except Exception:
+        # Never mask the failure that got us here. The reaper's timeout still
+        # frees these slots, just far later than this would have.
+        db.rollback()
+        logger.warning(
+            "Could not requeue undispatched agent upgrades",
+            count=len(agents),
+        )

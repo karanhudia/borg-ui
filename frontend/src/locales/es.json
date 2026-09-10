@@ -305,8 +305,8 @@
         "cancellationRequested": "Cancelación solicitada",
         "copied": "Copiado",
         "agentVersionPinned": "Versión fijada guardada",
-        "agentUpgradeRequested_one": "Actualizacion solicitada",
-        "agentUpgradeRequested_other": "Actualizacion solicitada para {{count}} endpoints"
+        "agentUpgradeRequested_one": "Actualización solicitada",
+        "agentUpgradeRequested_other": "Actualización solicitada para {{count}} endpoints"
       },
       "errors": {
         "revokeToken": "No se pudo revocar el token de registro",
@@ -427,20 +427,20 @@
         "upgradeSelected_other": "Actualizar {{count}} endpoints",
         "selectAgent": "Seleccionar {{name}}",
         "clearSelection": "Limpiar",
-        "bannerManualOnly_one": "{{count}} endpoint necesita una reinstalacion manual desde su tarjeta antes de poder actualizarse desde aqui.",
-        "bannerManualOnly_other": "{{count}} endpoints necesitan una reinstalacion manual desde sus tarjetas antes de poder actualizarse desde aqui.",
+        "bannerManualOnly_one": "{{count}} endpoint necesita una reinstalación manual desde su tarjeta antes de poder actualizarse desde aquí.",
+        "bannerManualOnly_other": "{{count}} endpoints necesitan una reinstalación manual desde sus tarjetas antes de poder actualizarse desde aquí.",
         "upgradeAll": "Actualizar todos ({{count}})"
       },
       "upgradeDialog": {
         "title_one": "Actualizar este endpoint",
         "title_other": "Actualizar {{count}} endpoints",
         "description": "El endpoint se reinstala desde este servidor.",
-        "descriptionWithVersion_one": "El endpoint se reinstala desde este servidor y vuelve con la version {{version}}.",
-        "descriptionWithVersion_other": "Cada endpoint se reinstala desde este servidor y vuelve con la version {{version}}.",
-        "mixedTargets": "Cada endpoint se reinstala desde este servidor y vuelve con su propia version configurada.",
-        "disconnectWarning_one": "Se desconecta durante un breve periodo mientras lo hace.",
-        "disconnectWarning_other": "Cada uno se desconecta durante un breve periodo mientras lo hace, y se actualizan unos pocos a la vez, asi que algunos esperan antes de empezar.",
-        "busyWarning": "Un endpoint que esta ejecutando una copia de seguridad rechaza la actualizacion, asi que intentalo de nuevo cuando este inactivo.",
+        "descriptionWithVersion_one": "El endpoint se reinstala desde este servidor y vuelve con la versión {{version}}.",
+        "descriptionWithVersion_other": "Cada endpoint se reinstala desde este servidor y vuelve con la versión {{version}}.",
+        "mixedTargets": "Cada endpoint se reinstala desde este servidor y vuelve con su propia versión configurada.",
+        "disconnectWarning_one": "Se desconecta durante un breve período mientras lo hace.",
+        "disconnectWarning_other": "Cada uno se desconecta durante un breve período mientras lo hace, y se actualizan unos pocos a la vez, así que algunos esperan antes de empezar.",
+        "busyWarning": "Un endpoint que está ejecutando una copia de seguridad rechaza la actualización, así que inténtalo de nuevo cuando esté inactivo.",
         "confirm": "Actualizar"
       },
       "upgradeState": {
@@ -450,7 +450,7 @@
         "failed": "Actualización fallida",
         "failedHint": "El endpoint no volvió a tiempo. Reinstálalo manualmente.",
         "queued": "Esperando para actualizar",
-        "queuedTooltip": "En cola detras de otros endpoints. Empieza solo cuando se libera un hueco."
+        "queuedTooltip": "En cola detrás de otros endpoints. Empieza solo cuando se libera un hueco."
       },
       "pinControl": {
         "title": "Fijar versión",

@@ -1513,6 +1513,31 @@ describe('AgentList fleet upgrades', () => {
     expect(onUpgradeMany).toHaveBeenCalledWith([alpha])
   })
 
+  it('drops a dialog target that was queued while the dialog was open', async () => {
+    const onUpgradeMany = vi.fn()
+    const alpha = outdated()
+    const { rerender } = renderList([alpha], onUpgradeMany)
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /select alpha/i }))
+    await userEvent.click(screen.getByRole('button', { name: /upgrade 1 endpoint/i }))
+    rerender(
+      <AgentList
+        agents={[{ ...alpha, upgrade_state: 'queued' }]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        onUpgradeMany={onUpgradeMany}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+    await userEvent.click(screen.getByRole('button', { name: /^upgrade$/i }))
+
+    expect(onUpgradeMany).not.toHaveBeenCalled()
+  })
+
   it('upgrades every selected endpoint in one request', async () => {
     const onUpgradeMany = vi.fn()
     renderList(

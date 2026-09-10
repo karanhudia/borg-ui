@@ -693,6 +693,12 @@ export const AgentFleetVersionStates: Story = {
 
 export const AgentFleetUpgradeSelection: Story = {
   name: 'Agent list with endpoints selected for a fleet upgrade',
+  // The bulk bar is hidden at zero selected, so the snapshot has to tick a box
+  // to cover it. Matches the play convention in BackendTargetSwitcher.stories.
+  play: async ({ canvasElement }) => {
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+    canvasElement.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click()
+  },
   render: () => (
     <AgentList
       agents={[
