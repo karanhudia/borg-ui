@@ -14,7 +14,6 @@ from app.utils.process_utils import (
     reconcile_orphaned_maintenance_operations,
 )
 from app.database.models import (
-    AgentJob,
     AgentMachine,
     BackupPlan,
     BackupPlanRun,
@@ -26,6 +25,7 @@ from app.database.models import (
 from app.core.security import get_password_hash
 from app.services.operations.details import backup_details
 from app.services.operations.job_facade import MAINTENANCE_KINDS
+from tests.utils.agent_jobs import agent_maintenance_job
 from tests.utils.operations import seed_job_operation
 
 # ==========================================
@@ -689,24 +689,7 @@ class TestReconcileOrphanedMaintenanceOperations:
         db_session.add(agent)
         db_session.flush()
         operation = _running_operation(db_session, repo, "prune", age_minutes=10)
-        db_session.add(
-            AgentJob(
-                agent_machine_id=agent.id,
-                job_type="repository",
-                status="running",
-                payload={
-                    "job_kind": "repository.prune",
-                    "operation": {
-                        "maintenance_job": {
-                            "kind": "prune",
-                            "id": operation.id,
-                            "table": "operations",
-                        },
-                    },
-                },
-            )
-        )
-        db_session.commit()
+        agent_maintenance_job(db_session, agent, "prune", operation.id)
 
         assert reconcile_orphaned_maintenance_operations(db_session) == 0
         db_session.refresh(operation)
@@ -728,20 +711,9 @@ class TestReconcileOrphanedMaintenanceOperations:
         db_session.add(agent)
         db_session.flush()
         operation = _running_operation(db_session, repo, "prune", age_minutes=10)
-        db_session.add(
-            AgentJob(
-                agent_machine_id=agent.id,
-                job_type="repository",
-                status="queued",
-                payload={
-                    "job_kind": "repository.prune",
-                    "operation": {
-                        "maintenance_job": {"kind": "prune", "id": operation.id},
-                    },
-                },
-            )
+        agent_maintenance_job(
+            db_session, agent, "prune", operation.id, status="queued", table=None
         )
-        db_session.commit()
 
         assert reconcile_orphaned_maintenance_operations(db_session) == 0
         db_session.refresh(operation)

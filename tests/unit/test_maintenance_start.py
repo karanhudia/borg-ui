@@ -8,6 +8,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.database.models import Base, Operation, Repository, utc_now
+from tests.utils.agent_jobs import agent_maintenance_job
 from app.services.operations.maintenance_start import (
     active_maintenance_operation,
     start_maintenance,
@@ -374,7 +375,7 @@ async def test_fail_inline_keeps_an_operation_a_live_agent_job_is_carrying(
     running. Failing the row then would free the repository for the next
     step while the agent still holds it; the agent's report closes it."""
     from app.core.security import get_password_hash
-    from app.database.models import AgentJob, AgentMachine
+    from app.database.models import AgentMachine
     from app.services.operations.maintenance_start import (
         fail_inline_maintenance,
         start_inline_maintenance,
@@ -390,24 +391,7 @@ async def test_fail_inline_keeps_an_operation_a_live_agent_job_is_carrying(
     db.add(agent)
     db.commit()
     op = start_inline_maintenance(db, repository, "prune", params={}, user_id=None)
-    db.add(
-        AgentJob(
-            agent_machine_id=agent.id,
-            job_type="repository",
-            status="running",
-            payload={
-                "job_kind": "repository.prune",
-                "operation": {
-                    "maintenance_job": {
-                        "kind": "prune",
-                        "id": op.id,
-                        "table": "operations",
-                    }
-                },
-            },
-        )
-    )
-    db.commit()
+    agent_maintenance_job(db, agent, "prune", op.id)
 
     assert not await fail_inline_maintenance(
         db, op, RuntimeError("agent prune failed: repositoryOperationTimeout")
@@ -530,7 +514,7 @@ async def test_fail_inline_keeps_an_operation_a_queued_agent_job_is_waiting_on(
     and runs on the agent's next hello; the row must agree with the job
     rather than read `failed` while the prune is still going to happen."""
     from app.core.security import get_password_hash
-    from app.database.models import AgentJob, AgentMachine
+    from app.database.models import AgentMachine
     from app.services.operations.maintenance_start import (
         fail_inline_maintenance,
         start_inline_maintenance,
@@ -546,24 +530,7 @@ async def test_fail_inline_keeps_an_operation_a_queued_agent_job_is_waiting_on(
     db.add(agent)
     db.commit()
     op = start_inline_maintenance(db, repository, "prune", params={}, user_id=None)
-    db.add(
-        AgentJob(
-            agent_machine_id=agent.id,
-            job_type="repository",
-            status="queued",
-            payload={
-                "job_kind": "repository.prune",
-                "operation": {
-                    "maintenance_job": {
-                        "kind": "prune",
-                        "id": op.id,
-                        "table": "operations",
-                    }
-                },
-            },
-        )
-    )
-    db.commit()
+    agent_maintenance_job(db, agent, "prune", op.id, status="queued")
 
     assert not await fail_inline_maintenance(
         db, op, RuntimeError("agent prune failed: repositoryOperationTimeout")

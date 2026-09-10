@@ -31,6 +31,7 @@ from app.database.models import (
     utc_now,
 )
 from app.services.operations.job_facade import resolve_maintenance_job
+from tests.utils.agent_jobs import agent_maintenance_job
 from tests.utils.operations import seed_job_operation
 from app.services.job_history_retention import (
     archive_names_from_prune_output,
@@ -516,27 +517,19 @@ def _late_prune_log_scenario(db):
         has_logs=True,
     )
     db.flush()
-    prune_agent_job = AgentJob(
-        agent_machine_id=machine.id,
-        job_type="repository",
+    prune_agent_job = agent_maintenance_job(
+        db,
+        machine,
+        "prune",
+        prune_row.id,
+        repository=repo,
         status="completed",
-        payload={
-            "job_kind": "repository.prune",
-            "operation": {
-                "maintenance_job": {
-                    "kind": "prune",
-                    "id": prune_row.id,
-                    "table": "operations",
-                }
-            },
-        },
+        commit=False,
         claimed_at=when,
         completed_at=finished,
         created_at=when,
         updated_at=when,
     )
-    db.add(prune_agent_job)
-    db.flush()
     for seq, message in enumerate(
         [
             "Starting repository.prune",
@@ -705,27 +698,19 @@ def test_agent_prune_completion_marks_the_pruned_archives_jobs(db):
     )
     db.add_all([backup, prune_row])
     db.flush()
-    agent_job = AgentJob(
-        agent_machine_id=machine.id,
-        job_type="repository",
+    agent_job = agent_maintenance_job(
+        db,
+        machine,
+        "prune",
+        prune_row.id,
+        repository=repo,
         status="completed",
-        payload={
-            "job_kind": "repository.prune",
-            "operation": {
-                "maintenance_job": {
-                    "kind": "prune",
-                    "id": prune_row.id,
-                    "table": "operations",
-                }
-            },
-        },
+        commit=False,
         claimed_at=utc_now(),
         started_at=utc_now(),
         created_at=when,
         updated_at=when,
     )
-    db.add(agent_job)
-    db.flush()
     db.add(
         AgentJobLog(
             agent_job_id=agent_job.id,
@@ -1161,27 +1146,19 @@ def test_sweep_marks_only_the_repository_of_the_prune_it_resolves(
         completed_at=finished,
         created_at=when,
     )
-    agent_job = AgentJob(
-        agent_machine_id=machine.id,
-        job_type="repository",
+    agent_job = agent_maintenance_job(
+        db,
+        machine,
+        "prune",
+        prune.id,
+        repository=repo_b,
         status="completed",
-        payload={
-            "job_kind": "repository.prune",
-            "operation": {
-                "maintenance_job": {
-                    "kind": "prune",
-                    "id": prune.id,
-                    "table": "operations",
-                }
-            },
-        },
+        commit=False,
         claimed_at=when,
         completed_at=finished,
         created_at=when,
         updated_at=when,
     )
-    db.add(agent_job)
-    db.flush()
     db.add(
         AgentJobLog(
             agent_job_id=agent_job.id,
@@ -1246,27 +1223,19 @@ def test_sweep_ignores_a_prune_payload_from_a_dropped_table(db):
         completed_at=finished,
         created_at=when,
     )
-    agent_job = AgentJob(
-        agent_machine_id=machine.id,
-        job_type="repository",
+    agent_job = agent_maintenance_job(
+        db,
+        machine,
+        "prune",
+        prune.id,
         status="completed",
-        payload={
-            "job_kind": "repository.prune",
-            "operation": {
-                "maintenance_job": {
-                    "kind": "prune",
-                    "id": prune.id,
-                    "table": "prune_jobs",
-                }
-            },
-        },
+        table="prune_jobs",  # queued before the collapse: names a dropped id
+        commit=False,
         claimed_at=when,
         completed_at=finished,
         created_at=when,
         updated_at=when,
     )
-    db.add(agent_job)
-    db.flush()
     db.add(
         AgentJobLog(
             agent_job_id=agent_job.id,
