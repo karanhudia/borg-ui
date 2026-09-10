@@ -304,8 +304,9 @@
         "agentDeleted": "Agent gelöscht",
         "cancellationRequested": "Abbruch angefordert",
         "copied": "Kopiert",
-        "agentUpgradeRequested": "Aktualisierung angefordert",
-        "agentVersionPinned": "Versions-Pin gespeichert"
+        "agentVersionPinned": "Versions-Pin gespeichert",
+        "agentUpgradeRequested_one": "Upgrade angefordert",
+        "agentUpgradeRequested_other": "Upgrade fuer {{count}} Endpunkte angefordert"
       },
       "errors": {
         "revokeToken": "Registrierungstoken konnte nicht widerrufen werden",
@@ -417,10 +418,18 @@
         "outdatedCount_one": "{{count}} Endpunkt verwendet einen älteren Agenten",
         "outdatedCount_other": "{{count}} Endpunkte verwenden einen älteren Agenten",
         "bannerBody": "Die aktuelle Agent-Version ist {{version}}.",
-        "bannerManual": "Installieren Sie jeden Endpunkt über seine Karte neu, um ihn zu aktualisieren.",
         "bannerMixedTargets": "Jeder Endpunkt zielt auf seine eigene konfigurierte Version.",
         "manualOnly": "Nur manuelle Updates",
-        "manualOnlyTooltip": "Dieser Endpunkt hat kein Self-Upgrade-Hilfsprogramm und wird daher mit dem Reinstall-Befehl auf der Maschine aktualisiert. Eine Neuinstallation bereitet es auf servergesteuerte Upgrades vor."
+        "manualOnlyTooltip": "Dieser Endpunkt hat kein Self-Upgrade-Hilfsprogramm und wird daher mit dem Reinstall-Befehl auf der Maschine aktualisiert. Eine Neuinstallation bereitet es auf servergesteuerte Upgrades vor.",
+        "selectedCount_one": "{{count}} Endpunkt ausgewaehlt",
+        "selectedCount_other": "{{count}} Endpunkte ausgewaehlt",
+        "upgradeSelected_one": "{{count}} Endpunkt aktualisieren",
+        "upgradeSelected_other": "{{count}} Endpunkte aktualisieren",
+        "selectAgent": "{{name}} auswaehlen",
+        "clearSelection": "Auswahl aufheben",
+        "bannerManualOnly_one": "{{count}} Endpunkt braucht eine manuelle Neuinstallation ueber seine Karte, bevor er von hier aktualisiert werden kann.",
+        "bannerManualOnly_other": "{{count}} Endpunkte brauchen eine manuelle Neuinstallation ueber ihre Karten, bevor sie von hier aktualisiert werden koennen.",
+        "upgradeAll": "Alle aktualisieren ({{count}})"
       },
       "upgradeDialog": {
         "title_one": "Diesen Endpunkt aktualisieren",

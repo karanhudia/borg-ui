@@ -304,8 +304,9 @@
         "agentDeleted": "Agente eliminado",
         "cancellationRequested": "Cancelación solicitada",
         "copied": "Copiado",
-        "agentUpgradeRequested": "Actualización solicitada",
-        "agentVersionPinned": "Versión fijada guardada"
+        "agentVersionPinned": "Versión fijada guardada",
+        "agentUpgradeRequested_one": "Actualizacion solicitada",
+        "agentUpgradeRequested_other": "Actualizacion solicitada para {{count}} endpoints"
       },
       "errors": {
         "revokeToken": "No se pudo revocar el token de registro",
@@ -417,10 +418,18 @@
         "outdatedCount_one": "{{count}} endpoint ejecuta un agente antiguo",
         "outdatedCount_other": "{{count}} endpoints ejecutan un agente antiguo",
         "bannerBody": "La versión actual del agente es {{version}}.",
-        "bannerManual": "Reinstale cada uno desde su tarjeta para actualizarlo.",
         "bannerMixedTargets": "Cada uno apunta a su propia versión configurada.",
         "manualOnly": "Solo actualizaciones manuales",
-        "manualOnlyTooltip": "Este endpoint no tiene el asistente de autoactualización, así que se actualiza ejecutando el comando de reinstalación en la máquina. Una reinstalación lo prepara para las actualizaciones desde el servidor."
+        "manualOnlyTooltip": "Este endpoint no tiene el asistente de autoactualización, así que se actualiza ejecutando el comando de reinstalación en la máquina. Una reinstalación lo prepara para las actualizaciones desde el servidor.",
+        "selectedCount_one": "{{count}} endpoint seleccionado",
+        "selectedCount_other": "{{count}} endpoints seleccionados",
+        "upgradeSelected_one": "Actualizar {{count}} endpoint",
+        "upgradeSelected_other": "Actualizar {{count}} endpoints",
+        "selectAgent": "Seleccionar {{name}}",
+        "clearSelection": "Limpiar",
+        "bannerManualOnly_one": "{{count}} endpoint necesita una reinstalacion manual desde su tarjeta antes de poder actualizarse desde aqui.",
+        "bannerManualOnly_other": "{{count}} endpoints necesitan una reinstalacion manual desde sus tarjetas antes de poder actualizarse desde aqui.",
+        "upgradeAll": "Actualizar todos ({{count}})"
       },
       "upgradeDialog": {
         "title_one": "Actualizar este endpoint",

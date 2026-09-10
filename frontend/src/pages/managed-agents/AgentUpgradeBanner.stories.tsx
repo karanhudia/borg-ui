@@ -42,6 +42,40 @@ export const SeveralOutdated: Story = {
   },
 }
 
+export const WithUpgradeAll: Story = {
+  name: 'Outdated agents with an Upgrade all action',
+  args: {
+    agents: [
+      { ...base, self_upgrade_supported: true },
+      {
+        ...base,
+        id: 2,
+        name: 'Build Server',
+        agent_id: 'agt_build_02',
+        self_upgrade_supported: true,
+      },
+    ],
+    onUpgradeAll: () => {},
+  },
+}
+
+export const SomeNeedAManualReinstall: Story = {
+  name: 'Outdated agents where some cannot upgrade themselves',
+  args: {
+    agents: [
+      { ...base, self_upgrade_supported: true },
+      {
+        ...base,
+        id: 2,
+        name: 'Legacy Print Server',
+        agent_id: 'agt_legacy_02',
+        self_upgrade_supported: false,
+      },
+    ],
+    onUpgradeAll: () => {},
+  },
+}
+
 export const MixedTargets: Story = {
   name: 'Outdated agents with different targets',
   args: {

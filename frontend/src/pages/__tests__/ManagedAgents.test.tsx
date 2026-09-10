@@ -1347,7 +1347,7 @@ describe('ManagedAgents', () => {
   })
   it('offers the upgrade action to an outdated endpoint that can upgrade itself', async () => {
     const user = userEvent.setup()
-    const onUpgrade = vi.fn()
+    const onUpgradeMany = vi.fn()
     const agent = buildAgent({
       upgrade_status: 'outdated',
       self_upgrade_supported: true,
@@ -1362,7 +1362,7 @@ describe('ManagedAgents', () => {
         onRevoke={vi.fn()}
         onDelete={vi.fn()}
         onViewLogs={vi.fn()}
-        onUpgrade={onUpgrade}
+        onUpgradeMany={onUpgradeMany}
         onRunDiagnostics={vi.fn()}
         isRevoking={false}
         isDeleting={false}
@@ -1371,7 +1371,7 @@ describe('ManagedAgents', () => {
 
     await user.click(screen.getByRole('button', { name: /upgrade this endpoint/i }))
     await user.click(await screen.findByRole('button', { name: /^upgrade$/i }))
-    expect(onUpgrade).toHaveBeenCalledWith(agent)
+    expect(onUpgradeMany).toHaveBeenCalledWith([agent])
   })
 
   it('leaves an endpoint without the helper on the manual reinstall path', () => {
@@ -1389,7 +1389,7 @@ describe('ManagedAgents', () => {
         onRevoke={vi.fn()}
         onDelete={vi.fn()}
         onViewLogs={vi.fn()}
-        onUpgrade={vi.fn()}
+        onUpgradeMany={vi.fn()}
         onRunDiagnostics={vi.fn()}
         isRevoking={false}
         isDeleting={false}
@@ -1416,7 +1416,7 @@ describe('ManagedAgents', () => {
         onRevoke={vi.fn()}
         onDelete={vi.fn()}
         onViewLogs={vi.fn()}
-        onUpgrade={vi.fn()}
+        onUpgradeMany={vi.fn()}
         onRunDiagnostics={vi.fn()}
         isRevoking={false}
         isDeleting={false}
@@ -1425,5 +1425,104 @@ describe('ManagedAgents', () => {
 
     expect(screen.getByText(/Upgrading to 0\.1\.3/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /upgrade this endpoint/i })).toBeDisabled()
+  })
+})
+
+describe('AgentList fleet upgrades', () => {
+  const outdated = (overrides: Partial<AgentMachineResponse> = {}): AgentMachineResponse =>
+    ({
+      id: 1,
+      agent_id: 'agent-fleet-1',
+      name: 'alpha',
+      hostname: 'alpha-01',
+      status: 'online',
+      agent_version: '0.1.2',
+      available_agent_version: '0.1.3',
+      upgrade_status: 'outdated',
+      self_upgrade_supported: true,
+      created_at: '2026-05-18T09:00:00.000Z',
+      updated_at: '2026-05-18T10:00:00.000Z',
+      ...overrides,
+    }) as AgentMachineResponse
+
+  const renderList = (
+    agents: AgentMachineResponse[],
+    onUpgradeMany?: (list: AgentMachineResponse[]) => void
+  ) =>
+    renderWithProviders(
+      <AgentList
+        agents={agents}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        onUpgradeMany={onUpgradeMany}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+
+  it('offers selection only on endpoints that can upgrade themselves', () => {
+    renderList(
+      [
+        outdated(),
+        outdated({
+          id: 2,
+          agent_id: 'agent-fleet-2',
+          name: 'manual',
+          self_upgrade_supported: false,
+        }),
+      ],
+      vi.fn()
+    )
+
+    expect(screen.getByRole('checkbox', { name: /select alpha/i })).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: /select manual/i })).toBeNull()
+  })
+
+  it('upgrades every selected endpoint in one request', async () => {
+    const onUpgradeMany = vi.fn()
+    renderList(
+      [outdated(), outdated({ id: 2, agent_id: 'agent-fleet-2', name: 'beta' })],
+      onUpgradeMany
+    )
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /select alpha/i }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /select beta/i }))
+    await userEvent.click(screen.getByRole('button', { name: /upgrade 2 endpoints/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^upgrade$/i }))
+
+    expect(onUpgradeMany).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 1 }),
+        expect.objectContaining({ id: 2 }),
+      ])
+    )
+    expect(onUpgradeMany.mock.calls[0][0]).toHaveLength(2)
+  })
+
+  it('clears the selection once a bulk upgrade is confirmed', async () => {
+    renderList([outdated()], vi.fn())
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /select alpha/i }))
+    expect(screen.getByRole('button', { name: /upgrade 1 endpoint/i })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /upgrade 1 endpoint/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^upgrade$/i }))
+
+    expect(screen.queryByRole('button', { name: /upgrade 1 endpoint/i })).toBeNull()
+  })
+
+  it('upgrades the whole fleet from the banner', async () => {
+    const onUpgradeMany = vi.fn()
+    renderList(
+      [outdated(), outdated({ id: 2, agent_id: 'agent-fleet-2', name: 'beta' })],
+      onUpgradeMany
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: /upgrade all \(2\)/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^upgrade$/i }))
+
+    expect(onUpgradeMany.mock.calls[0][0]).toHaveLength(2)
   })
 })

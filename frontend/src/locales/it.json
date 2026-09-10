@@ -304,8 +304,9 @@
         "agentDeleted": "Agente eliminato",
         "cancellationRequested": "Annullamento richiesto",
         "copied": "Copiato",
-        "agentUpgradeRequested": "Aggiornamento richiesto",
-        "agentVersionPinned": "Blocco versione salvato"
+        "agentVersionPinned": "Blocco versione salvato",
+        "agentUpgradeRequested_one": "Aggiornamento richiesto",
+        "agentUpgradeRequested_other": "Aggiornamento richiesto per {{count}} endpoint"
       },
       "errors": {
         "revokeToken": "Impossibile revocare il token di registrazione",
@@ -417,10 +418,18 @@
         "outdatedCount_one": "{{count}} endpoint esegue un agente più vecchio",
         "outdatedCount_other": "{{count}} endpoint eseguono un agente più vecchio",
         "bannerBody": "La versione attuale dell'agente è {{version}}.",
-        "bannerManual": "Reinstalla ciascuno dalla sua scheda per aggiornarlo.",
         "bannerMixedTargets": "Ognuno punta alla propria versione configurata.",
         "manualOnly": "Solo aggiornamenti manuali",
-        "manualOnlyTooltip": "Questo endpoint non ha l'helper di autoaggiornamento, quindi si aggiorna eseguendo il comando di reinstallazione sulla macchina. Una reinstallazione lo prepara agli aggiornamenti dal server."
+        "manualOnlyTooltip": "Questo endpoint non ha l'helper di autoaggiornamento, quindi si aggiorna eseguendo il comando di reinstallazione sulla macchina. Una reinstallazione lo prepara agli aggiornamenti dal server.",
+        "selectedCount_one": "{{count}} endpoint selezionato",
+        "selectedCount_other": "{{count}} endpoint selezionati",
+        "upgradeSelected_one": "Aggiorna {{count}} endpoint",
+        "upgradeSelected_other": "Aggiorna {{count}} endpoint",
+        "selectAgent": "Seleziona {{name}}",
+        "clearSelection": "Deseleziona",
+        "bannerManualOnly_one": "{{count}} endpoint richiede una reinstallazione manuale dalla sua scheda prima di poter essere aggiornato da qui.",
+        "bannerManualOnly_other": "{{count}} endpoint richiedono una reinstallazione manuale dalle loro schede prima di poter essere aggiornati da qui.",
+        "upgradeAll": "Aggiorna tutti ({{count}})"
       },
       "upgradeDialog": {
         "title_one": "Aggiorna questo endpoint",
