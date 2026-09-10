@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Development helper script for Borg Web UI
+# Development helper script for Borg UI
 # Usage: ./dev.sh [command]
 
 set -e
@@ -177,7 +177,7 @@ cmd_init() {
 
 cmd_help() {
     cat << EOF
-Borg Web UI - Development Helper Script
+Borg UI - Development Helper Script
 
 Usage: ./dev.sh [command]
 

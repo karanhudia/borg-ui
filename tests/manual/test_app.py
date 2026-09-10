@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Comprehensive test suite for Borg Web UI
+Comprehensive test suite for Borg UI
 Tests all core functionality including API endpoints, authentication, routing, and application health.
 """
 
@@ -433,7 +433,7 @@ class BorgWebUITester:
 
     def run_all_tests(self) -> Dict[str, Any]:
         """Run all tests and return results"""
-        print("🚀 Starting Borg Web UI Test Suite")
+        print("🚀 Starting Borg UI Test Suite")
         print("=" * 50)
 
         # Run tests in order
@@ -493,7 +493,7 @@ def main():
     """Main function to run the test suite"""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Test Borg Web UI")
+    parser = argparse.ArgumentParser(description="Test Borg UI")
     parser.add_argument(
         "--url",
         default="http://localhost:7879",

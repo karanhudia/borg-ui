@@ -1779,7 +1779,7 @@ class NotificationService:
             try:
                 success = apobj.notify(
                     title="🔔 Borg UI Test Notification",
-                    body="This is a test notification from Borg Web UI. If you received this, your notification service is configured correctly!",
+                    body="This is a test notification from Borg UI. If you received this, your notification service is configured correctly!",
                 )
             finally:
                 socket.setdefaulttimeout(old_timeout)

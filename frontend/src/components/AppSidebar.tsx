@@ -453,24 +453,6 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
                 >
                   Borg UI
                 </Typography>
-                <Box
-                  component="span"
-                  sx={{
-                    fontSize: '0.6rem',
-                    fontWeight: 700,
-                    letterSpacing: '0.04em',
-                    px: 0.6,
-                    py: 0.2,
-                    borderRadius: 0.75,
-                    bgcolor: 'rgba(5,150,105,0.15)',
-                    border: '1px solid rgba(5,150,105,0.35)',
-                    color: '#34d399',
-                    lineHeight: 1.5,
-                    userSelect: 'none',
-                  }}
-                >
-                  2.0
-                </Box>
               </Box>
             </Box>
           </Box>

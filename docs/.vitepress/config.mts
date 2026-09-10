@@ -13,7 +13,7 @@ const withBase = (path: string) => `${siteBase}${path.replace(/^\/+/, '')}`;
 
 export default defineConfig({
   base: siteBase,
-  title: 'Borg Web UI',
+  title: 'Borg UI',
   description: 'A modern web interface for Borg Backup management',
   cleanUrls: true,
   srcExclude: [
@@ -42,7 +42,7 @@ export default defineConfig({
     logo: {
       light: '/logo-light.png',
       dark: '/logo-dark.png',
-      alt: 'Borg Web UI',
+      alt: 'Borg UI',
     },
     siteTitle: false,
     nav: [

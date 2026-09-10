@@ -1,5 +1,5 @@
 """
-MQTT Sync Scheduler for Borg Web UI.
+MQTT Sync Scheduler for Borg UI.
 
 Periodically synchronizes repository state with MQTT broker to ensure
 Home Assistant devices stay in sync with database changes.

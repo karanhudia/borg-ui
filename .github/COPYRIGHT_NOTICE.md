@@ -1,6 +1,6 @@
 # Copyright Notice
 
-## Borg Web UI
+## Borg UI
 
 **Copyright (c) 2025 Karan Hudia (ainullcode)**
 All Rights Reserved.

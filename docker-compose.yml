@@ -1,4 +1,4 @@
-# Borg Web UI - Docker Compose Configuration
+# Borg UI - Docker Compose Configuration
 #
 # Zero-configuration setup with smart defaults:
 # - SECRET_KEY: Auto-generated and persisted to /data/.secret_key

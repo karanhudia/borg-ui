@@ -1,6 +1,6 @@
-# Contributing to Borg Web UI
+# Contributing to Borg UI
 
-Thank you for your interest in contributing to Borg Web UI!
+Thank you for your interest in contributing to Borg UI!
 
 ## Quick Start
 
@@ -182,4 +182,4 @@ Please read and follow the [Borg UI Code of Conduct](CODE_OF_CONDUCT.md).
 - **Issues**: [GitHub Issues](https://github.com/karanhudia/borg-ui/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/karanhudia/borg-ui/discussions)
 
-Thank you for contributing to Borg Web UI!
+Thank you for contributing to Borg UI!

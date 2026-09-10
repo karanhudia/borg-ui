@@ -253,7 +253,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
               </div>
             </div>
 
-            {/* App name + version badge */}
+            {/* App name */}
             <div
               style={{
                 display: 'flex',
@@ -276,22 +276,6 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
               >
                 Borg UI
               </h1>
-              <span
-                style={{
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  letterSpacing: '0.04em',
-                  padding: '3px 7px',
-                  borderRadius: 6,
-                  background: 'rgba(5,150,105,0.15)',
-                  border: '1px solid rgba(5,150,105,0.35)',
-                  color: '#34d399',
-                  lineHeight: 1.5,
-                  userSelect: 'none',
-                }}
-              >
-                2.0
-              </span>
             </div>
 
             {/* Tagline — desktop only */}
