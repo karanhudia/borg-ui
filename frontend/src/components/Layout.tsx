@@ -7,7 +7,7 @@ import AppHeader from './AppHeader'
 import AppSidebar from './AppSidebar'
 import { useAuth } from '../hooks/useAuth'
 import { useAnnouncementSurface } from '../hooks/useAnnouncementSurface'
-import { usePlan } from '../hooks/usePlan'
+import { useSystemInfo } from '../hooks/useSystemInfo'
 import PasskeyEnrollmentPrompt from './PasskeyEnrollmentPrompt'
 import { useActiveBackendTarget } from '../services/remoteBackends/context'
 import {
@@ -35,13 +35,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   } = useAuth()
   const { announcement, acknowledgeAnnouncement, snoozeAnnouncement, trackAnnouncementCtaClick } =
     useAnnouncementSurface()
-  const { plan, isLoading: planLoading } = usePlan()
+  const { data: systemInfo } = useSystemInfo()
 
-  // Segment Umami visitors by plan. Skipped while loading so the 'community'
-  // fallback is never reported for a Pro or Enterprise install.
+  // Segment Umami visitors by plan. Read straight from the query so a loading
+  // or failed system-info never reports a paid install as community.
   useEffect(() => {
-    if (!planLoading) setAnalyticsPlan(plan)
-  }, [plan, planLoading])
+    if (systemInfo?.plan) setAnalyticsPlan(systemInfo.plan)
+  }, [systemInfo?.plan])
   const [mobileOpen, setMobileOpen] = useState(false)
   const [showConsentBanner, setShowConsentBanner] = useState(false)
   const [showPasskeyPrompt, setShowPasskeyPrompt] = useState(false)
