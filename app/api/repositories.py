@@ -43,6 +43,7 @@ from app.api.maintenance_jobs import (
 )
 from app.services.operations.maintenance_start import (
     active_maintenance_operation,
+    fail_inline_maintenance,
     finish_inline_maintenance,
     start_inline_maintenance,
     start_maintenance,
@@ -5667,17 +5668,22 @@ async def prune_repository(
 
         # Wait for prune to complete and get logs
         prune_kwargs = {"keep_within": keep_within} if keep_within is not None else {}
-        await BorgRouter(repository).prune(
-            prune_job.id,
-            keep_hourly,
-            keep_daily,
-            keep_weekly,
-            keep_monthly,
-            keep_quarterly,
-            keep_yearly,
-            dry_run,
-            **prune_kwargs,
-        )
+        try:
+            await BorgRouter(repository).prune(
+                prune_job.id,
+                keep_hourly,
+                keep_daily,
+                keep_weekly,
+                keep_monthly,
+                keep_quarterly,
+                keep_yearly,
+                dry_run,
+                **prune_kwargs,
+            )
+        except Exception as exc:
+            # The row was created `running`; a step that raised never closed it.
+            await fail_inline_maintenance(db, prune_job, exc)
+            raise
 
         # Refresh job to get updated status and logs
         db.refresh(prune_job)

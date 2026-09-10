@@ -45,7 +45,7 @@ from app.services.operations.backup_facade import (
 )
 from app.services.operations.job_facade import (
     LEGACY_MODELS,
-    resolve_maintenance_job,
+    resolve_agent_maintenance_job,
 )
 from app.services.agent_artifact_relay import agent_artifact_relay
 from app.services.agent_connection_manager import (
@@ -664,19 +664,12 @@ def _finish_linked_backup_job(
 
 
 def _get_repository_operation_job(agent_job: AgentJob, db: Session) -> Any | None:
-    payload = agent_job.payload or {}
-    operation = payload.get("operation") if isinstance(payload, dict) else None
-    maintenance_job = (
-        operation.get("maintenance_job") if isinstance(operation, dict) else None
+    """The maintenance job this agent job reports on. The payload names its
+    table since the marker exists; a payload without one is resolved by the
+    repository it carries (see `resolve_agent_maintenance_job`)."""
+    return resolve_agent_maintenance_job(
+        db, agent_job.payload, kinds=REPOSITORY_OPERATION_JOB_KINDS
     )
-    if not isinstance(maintenance_job, dict):
-        return None
-
-    kind = str(maintenance_job.get("kind") or "")
-    job_id = maintenance_job.get("id")
-    if kind not in REPOSITORY_OPERATION_JOB_KINDS or not job_id:
-        return None
-    return resolve_maintenance_job(db, int(job_id), kind)
 
 
 def _maintenance_kind(operation_job: Any) -> Optional[str]:

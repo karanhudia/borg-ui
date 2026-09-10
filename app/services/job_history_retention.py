@@ -47,7 +47,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.config import settings as app_config
-from typing import Dict, Iterable, Optional
+from typing import Any, Dict, Iterable, Optional
 
 import structlog
 from sqlalchemy import func, or_
@@ -113,6 +113,48 @@ _JOB_TABLES = (
     (AvailabilityScheduleSkip, ()),
     (Operation, ()),
 )
+
+
+def _prune_job_for(db: Session, payload: Any) -> Any:
+    """The prune job an agent job's payload names: an `operations` row (a
+    facade) or a legacy `prune_jobs` row, as the payload's table marker and
+    repository say. Only prunes are of interest here."""
+    from app.services.operations.job_facade import resolve_agent_maintenance_job
+
+    return resolve_agent_maintenance_job(db, payload, kinds=("prune",))
+
+
+def _store_prune_log(prune_job: Any, full_log: str) -> None:
+    """Write the complete agent log onto the prune job. A legacy row keeps
+    it in its `logs` column; an operation keeps only its log file, and the
+    facade's setter never overwrites an existing file (that protects a
+    service's captured output from a later marker), so the repair writes
+    the file itself."""
+    from app.services.operations.job_facade import MaintenanceJobFacade
+
+    if not isinstance(prune_job, MaintenanceJobFacade):
+        prune_job.logs = full_log
+        prune_job.has_logs = True
+        return
+    from pathlib import Path
+
+    from app.services.operations.runner import operation_log_path
+
+    path = prune_job.log_file_path or str(operation_log_path(prune_job.id))
+    try:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(full_log)
+    except OSError as exc:
+        # a full or read-only data directory loses this repair, not the
+        # marking below it or the rest of the retention pass
+        logger.warning(
+            "Could not repair the prune operation's log file",
+            operation_id=prune_job.id,
+            error=str(exc),
+        )
+        return
+    prune_job.log_file_path = path
 
 
 def _older_than(model, cutoff):
@@ -525,13 +567,7 @@ def sweep_pruned_archive_records(
         payload = agent_job.payload if isinstance(agent_job.payload, dict) else {}
         if str(payload.get("job_kind") or "") != "repository.prune":
             continue
-        operation = payload.get("operation") or {}
-        maintenance = (
-            operation.get("maintenance_job") if isinstance(operation, dict) else None
-        )
-        prune_job = None
-        if isinstance(maintenance, dict) and maintenance.get("id"):
-            prune_job = db.get(PruneJob, int(maintenance["id"]))
+        prune_job = _prune_job_for(db, payload)
         if prune_job is None:
             continue
 
@@ -546,8 +582,7 @@ def sweep_pruned_archive_records(
             continue
 
         if len(full_log) > len(prune_job.logs or ""):
-            prune_job.logs = full_log
-            prune_job.has_logs = True
+            _store_prune_log(prune_job, full_log)
             db.commit()
 
         marked += mark_jobs_of_pruned_archives(

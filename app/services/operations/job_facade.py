@@ -13,7 +13,7 @@ read `Operation` directly.
 """
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
@@ -338,6 +338,71 @@ def resolve_maintenance_job(db: Session, job_id: int, kind: str) -> Any:
     if model is None:
         return None
     return db.query(model).filter(model.id == job_id).first()
+
+
+def resolve_agent_maintenance_job(
+    db: Session, payload: Any, *, kinds: Iterable[str] = MAINTENANCE_KINDS
+) -> Any:
+    """The maintenance job an agent job's payload names, or None; only for
+    the `kinds` the caller handles.
+
+    The payload's `operation.maintenance_job` carries `kind`, `id` and, for
+    every job queued since the marker exists, `table`. The `operations` ids
+    and the legacy ``*_jobs`` ids are separate sequences, so the table is
+    what tells them apart. A payload without it predates the marker and may
+    name either; the payload's repository decides (the row of the same
+    repository, an operation first, and nothing when neither row is that
+    repository's), and a payload without a repository takes the operation,
+    as before.
+    """
+    if not isinstance(payload, dict):
+        return None
+    operation_payload = payload.get("operation")
+    maintenance = (
+        operation_payload.get("maintenance_job")
+        if isinstance(operation_payload, dict)
+        else None
+    )
+    if not isinstance(maintenance, dict):
+        return None
+    kind = str(maintenance.get("kind") or "")
+    if kind not in MAINTENANCE_KINDS or kind not in set(kinds):
+        return None
+    try:
+        job_id = int(maintenance.get("id"))
+    except (TypeError, ValueError):
+        return None
+    if job_id <= 0:
+        return None
+    table = maintenance.get("table")
+    operation = (
+        db.query(Operation)
+        .filter(Operation.id == job_id, Operation.kind == kind)
+        .first()
+    )
+    if table == Operation.__tablename__:
+        return MaintenanceJobFacade(db, operation) if operation is not None else None
+    model = LEGACY_MODELS[kind]
+    if table and table != model.__tablename__:
+        return None
+    legacy = db.query(model).filter(model.id == job_id).first()
+    if table:
+        return legacy
+    repository = payload.get("repository")
+    repository_id = repository.get("id") if isinstance(repository, dict) else None
+    candidates = [
+        candidate
+        for candidate in (
+            MaintenanceJobFacade(db, operation) if operation is not None else None,
+            legacy,
+        )
+        if candidate is not None
+    ]
+    if repository_id is not None:
+        # a row of another repository is never the one this job reports on
+        matching = [c for c in candidates if c.repository_id == repository_id]
+        return matching[0] if matching else None
+    return candidates[0] if candidates else None
 
 
 def refresh_job(db: Session, job: Any) -> None:

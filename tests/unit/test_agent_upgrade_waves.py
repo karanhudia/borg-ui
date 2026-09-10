@@ -160,7 +160,7 @@ async def test_reaper_tick_releases_the_next_wave(monkeypatch):
     monkeypatch.setattr(
         "app.services.agent_upgrades.release_agent_upgrade_waves", fake_release
     )
-    monkeypatch.setattr(agent_job_reaper, "_reap_once", lambda ids=None: 0)
+    monkeypatch.setattr(agent_job_reaper, "_reap_once", lambda *args: 0)
 
     task = asyncio.create_task(
         agent_job_reaper.start_agent_job_reaper(interval_seconds=0.01)
