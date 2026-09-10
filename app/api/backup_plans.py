@@ -640,6 +640,10 @@ def _serialize_plan(plan: BackupPlan, *, detail: bool = False) -> dict[str, Any]
         "last_run": serialize_datetime(plan.last_run),
         "next_run": serialize_datetime(plan.next_run),
         "repository_count": len(enabled_links),
+        "repositories": [
+            _serialize_repository_link(link)
+            for link in sorted(plan.repositories, key=lambda item: item.execution_order)
+        ],
         "created_at": serialize_datetime(plan.created_at),
         "updated_at": serialize_datetime(plan.updated_at),
     }
@@ -663,9 +667,6 @@ def _serialize_plan(plan: BackupPlan, *, detail: bool = False) -> dict[str, Any]
                 "prune_keep_quarterly": plan.prune_keep_quarterly,
                 "prune_keep_yearly": plan.prune_keep_yearly,
                 "prune_keep_within": plan.prune_keep_within,
-                "repositories": [
-                    _serialize_repository_link(link) for link in plan.repositories
-                ],
             }
         )
     return payload
@@ -1821,6 +1822,48 @@ async def toggle_backup_plan(
         "Backup plan toggled",
         backup_plan_id=plan.id,
         enabled=plan.enabled,
+        user=current_user.username,
+    )
+    return _serialize_plan(plan, detail=True)
+
+
+@router.post("/{plan_id}/repositories/{repository_id}/toggle")
+async def toggle_backup_plan_repository(
+    plan_id: int,
+    repository_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Skip or resume one repository inside a plan without touching its config."""
+    plan = _load_plan_or_404(db, plan_id)
+    _require_plan_operator_access(db, current_user, plan)
+
+    link = next(
+        (item for item in plan.repositories if item.repository_id == repository_id),
+        None,
+    )
+    if link is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"key": "backend.errors.backupPlans.repositoryNotFound"},
+        )
+    if link.enabled and not any(
+        item.enabled for item in plan.repositories if item.id != link.id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"key": "backend.errors.backupPlans.repositoriesRequired"},
+        )
+
+    link.enabled = not link.enabled
+    plan.updated_at = datetime.utcnow()
+    db.commit()
+    plan = _load_plan_or_404(db, plan_id)
+    logger.info(
+        "Backup plan repository toggled",
+        backup_plan_id=plan.id,
+        repository_id=repository_id,
+        enabled=link.enabled,
         user=current_user.username,
     )
     return _serialize_plan(plan, detail=True)

@@ -1411,7 +1411,11 @@
       "nextRun": "Next run: {{date}}",
       "repositoryFallback": "Repository",
       "moreRepositories": "+{{count}} more",
-      "runningNow": "Running"
+      "runningNow": "Running",
+      "repositoryCountPartial": "{{enabled}} of {{total}} repositories",
+      "skippedRepositoriesTooltip": "Skipped during runs: {{names}}",
+      "skippedLabel": "Skipped",
+      "clickToResumeRepository": "Resume backups to {{name}}"
     },
     "statuses": {
       "unknown": "Unknown",
@@ -1443,7 +1447,9 @@
       "repositoryCreateFailed": "Failed to create repository",
       "multiRepositoryRequiresPro": "Multiple repositories in one backup plan require Pro",
       "selectSourceConnection": "Select a remote client before browsing source paths",
-      "scriptCreateFailed": "Failed to create generated script"
+      "scriptCreateFailed": "Failed to create generated script",
+      "repositoryToggled": "Repository updated",
+      "repositoryToggleFailed": "Failed to update repository"
     },
     "sourceChooser": {
       "summaryTitle": "Backup source",
@@ -4409,7 +4415,10 @@
     "moveUp": "Move up",
     "moveDown": "Move down",
     "remove": "Remove",
-    "searchOrAddMore": "Search or add more..."
+    "searchOrAddMore": "Search or add more...",
+    "skipped": "Skipped",
+    "skip": "Skip during runs",
+    "resume": "Resume backups"
   },
   "wizard": {
     "steps": {

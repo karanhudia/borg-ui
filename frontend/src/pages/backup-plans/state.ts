@@ -21,6 +21,7 @@ export const createInitialState = (): WizardState => ({
   sourceLocations: [],
   excludePatterns: [],
   repositoryIds: [],
+  disabledRepositoryIds: [],
   compression: 'lz4',
   archiveNameTemplate: '{plan_name}-{repo_name}-{now}',
   customFlags: '',
@@ -316,9 +317,9 @@ function normalizePlanScriptHooks(plan: BackupPlan): BackupPlanScriptHook[] {
 }
 
 export function planToState(plan: BackupPlan): WizardState {
-  const repositoryLinks = (plan.repositories || [])
-    .filter((link) => link.enabled)
-    .sort((a, b) => a.execution_order - b.execution_order)
+  const repositoryLinks = [...(plan.repositories || [])].sort(
+    (a, b) => a.execution_order - b.execution_order
+  )
   const sourceLocations = normalizePlanSourceLocations(plan)
   const sourceDirectories = sourceLocations.length
     ? sourceLocations.flatMap((location) => location.paths)
@@ -342,6 +343,9 @@ export function planToState(plan: BackupPlan): WizardState {
     sourceLocations,
     excludePatterns: plan.exclude_patterns || [],
     repositoryIds: repositoryLinks.map((link) => link.repository_id),
+    disabledRepositoryIds: repositoryLinks
+      .filter((link) => !link.enabled)
+      .map((link) => link.repository_id),
     compression: plan.compression || 'lz4',
     archiveNameTemplate: plan.archive_name_template || '{plan_name}-{repo_name}-{now}',
     customFlags: plan.custom_flags || '',

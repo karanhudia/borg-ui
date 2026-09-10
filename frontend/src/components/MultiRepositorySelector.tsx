@@ -1,7 +1,16 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Autocomplete, TextField, Box, Typography, Stack, IconButton, Tooltip } from '@mui/material'
-import { ChevronUp, ChevronDown, X } from 'lucide-react'
+import {
+  Autocomplete,
+  TextField,
+  Box,
+  Typography,
+  Stack,
+  IconButton,
+  Tooltip,
+  Chip,
+} from '@mui/material'
+import { ChevronUp, ChevronDown, X, Pause, Play } from 'lucide-react'
 import { Repository } from '../types'
 import RepoMenuItem from './RepoMenuItem'
 import { getRepoCapabilities } from '../utils/repoCapabilities'
@@ -20,6 +29,9 @@ interface MultiRepositorySelectorProps {
   error?: boolean
   filterMode?: 'observe' | null // Exclude repositories with this mode
   getOptionDisabled?: (repo: Repository) => boolean
+  // Selected repositories that stay attached but are skipped during runs.
+  disabledIds?: number[]
+  onToggleEnabled?: (repoId: number) => void
 }
 
 /**
@@ -43,6 +55,8 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
   error = false,
   filterMode = null,
   getOptionDisabled,
+  disabledIds = [],
+  onToggleEnabled,
 }) => {
   const { t } = useTranslation()
   // Track whether user has interacted with the field
@@ -160,88 +174,129 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
               : t('multiRepositorySelector.selectedCount', { count: selectedRepos.length })}
           </Typography>
           <Stack spacing={1}>
-            {selectedRepos.map((repo, index) => (
-              <Box
-                key={repo.id}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  p: 1.5,
-                  border: 1,
-                  borderColor: 'divider',
-                  borderRadius: 1,
-                  bgcolor: 'background.paper',
-                  '&:hover': {
-                    bgcolor: 'action.hover',
-                  },
-                }}
-              >
-                {allowReorder && selectedRepos.length > 1 && (
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      minWidth: 24,
-                      fontWeight: 600,
-                      color: 'text.secondary',
-                    }}
-                  >
-                    {index + 1}.
-                  </Typography>
-                )}
-
-                <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                  <RepoMenuItem
-                    name={repo.name}
-                    path={repo.path}
-                    borgVersion={repo.borg_version}
-                    mode={repo.mode as 'full' | 'observe' | undefined}
-                    hasRunningMaintenance={repo.has_running_maintenance}
-                  />
-                </Box>
-
-                <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+            {selectedRepos.map((repo, index) => {
+              const skipped = disabledIds.includes(repo.id)
+              return (
+                <Box
+                  key={repo.id}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    p: 1.5,
+                    border: 1,
+                    borderColor: 'divider',
+                    borderStyle: skipped ? 'dashed' : 'solid',
+                    borderRadius: 1,
+                    bgcolor: 'background.paper',
+                    opacity: skipped ? 0.6 : 1,
+                    transition: 'opacity 150ms ease',
+                    '&:hover': {
+                      bgcolor: 'action.hover',
+                    },
+                  }}
+                >
                   {allowReorder && selectedRepos.length > 1 && (
-                    <>
-                      <Tooltip title={t('multiRepositorySelector.moveUp')} arrow>
-                        <span>
-                          <IconButton
-                            size="small"
-                            disabled={index === 0 || disabled}
-                            onClick={() => handleMoveUp(index)}
-                          >
-                            <ChevronUp size={18} />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                      <Tooltip title={t('multiRepositorySelector.moveDown')} arrow>
-                        <span>
-                          <IconButton
-                            size="small"
-                            disabled={index === selectedRepos.length - 1 || disabled}
-                            onClick={() => handleMoveDown(index)}
-                          >
-                            <ChevronDown size={18} />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    </>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        minWidth: 24,
+                        fontWeight: 600,
+                        color: 'text.secondary',
+                      }}
+                    >
+                      {index + 1}.
+                    </Typography>
                   )}
-                  <Tooltip title={t('multiRepositorySelector.remove')} arrow>
-                    <span>
-                      <IconButton
+
+                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                    <RepoMenuItem
+                      name={repo.name}
+                      path={repo.path}
+                      borgVersion={repo.borg_version}
+                      mode={repo.mode as 'full' | 'observe' | undefined}
+                      hasRunningMaintenance={repo.has_running_maintenance}
+                    />
+                  </Box>
+
+                  <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                    {skipped && (
+                      <Chip
                         size="small"
-                        disabled={disabled}
-                        onClick={() => handleRemove(repo.id)}
-                        sx={{ color: 'error.main' }}
+                        label={t('multiRepositorySelector.skipped')}
+                        color="warning"
+                        variant="outlined"
+                        sx={{ height: 20, fontSize: '0.65rem', '& .MuiChip-label': { px: 0.75 } }}
+                      />
+                    )}
+                    {onToggleEnabled && (
+                      <Tooltip
+                        title={
+                          skipped
+                            ? t('multiRepositorySelector.resume')
+                            : t('multiRepositorySelector.skip')
+                        }
+                        arrow
                       >
-                        <X size={18} />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
+                        <span>
+                          <IconButton
+                            size="small"
+                            disabled={disabled}
+                            onClick={() => onToggleEnabled(repo.id)}
+                            aria-label={
+                              skipped
+                                ? t('multiRepositorySelector.resume')
+                                : t('multiRepositorySelector.skip')
+                            }
+                            sx={{ color: skipped ? 'success.main' : 'text.secondary' }}
+                          >
+                            {skipped ? <Play size={16} /> : <Pause size={16} />}
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    )}
+                    {allowReorder && selectedRepos.length > 1 && (
+                      <>
+                        <Tooltip title={t('multiRepositorySelector.moveUp')} arrow>
+                          <span>
+                            <IconButton
+                              size="small"
+                              disabled={index === 0 || disabled}
+                              onClick={() => handleMoveUp(index)}
+                            >
+                              <ChevronUp size={18} />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                        <Tooltip title={t('multiRepositorySelector.moveDown')} arrow>
+                          <span>
+                            <IconButton
+                              size="small"
+                              disabled={index === selectedRepos.length - 1 || disabled}
+                              onClick={() => handleMoveDown(index)}
+                            >
+                              <ChevronDown size={18} />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      </>
+                    )}
+                    <Tooltip title={t('multiRepositorySelector.remove')} arrow>
+                      <span>
+                        <IconButton
+                          size="small"
+                          disabled={disabled}
+                          onClick={() => handleRemove(repo.id)}
+                          sx={{ color: 'error.main' }}
+                        >
+                          <X size={18} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </Box>
                 </Box>
-              </Box>
-            ))}
+              )
+            })}
           </Stack>
         </Box>
       )}

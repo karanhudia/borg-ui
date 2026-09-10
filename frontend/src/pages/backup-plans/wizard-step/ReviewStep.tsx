@@ -1,4 +1,4 @@
-import { Alert, Box, Stack, Typography } from '@mui/material'
+import { Alert, Box, Chip, Stack, Typography } from '@mui/material'
 import {
   CalendarClock,
   Code,
@@ -340,6 +340,7 @@ export function ReviewStep({
           >
             {selectedRepositories.map((repository) => {
               const routePreview = routePreviewByRepositoryId.get(repository.id)
+              const skipped = (wizardState.disabledRepositoryIds || []).includes(repository.id)
               return (
                 <Box
                   key={repository.id}
@@ -364,6 +365,21 @@ export function ReviewStep({
                     title={repository.name}
                   >
                     {repository.name}
+                    {skipped && (
+                      <Chip
+                        size="small"
+                        label={t('multiRepositorySelector.skipped')}
+                        color="warning"
+                        variant="outlined"
+                        sx={{
+                          ml: 0.75,
+                          height: 18,
+                          fontSize: '0.62rem',
+                          verticalAlign: 'middle',
+                          '& .MuiChip-label': { px: 0.6 },
+                        }}
+                      />
+                    )}
                   </Typography>
                   <Typography
                     variant="caption"

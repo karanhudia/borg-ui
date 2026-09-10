@@ -1411,7 +1411,11 @@
       "nextRun": "Nächster Lauf: {{date}}",
       "repositoryFallback": "Repository",
       "moreRepositories": "+{{count}} weitere",
-      "runningNow": "Läuft"
+      "runningNow": "Läuft",
+      "repositoryCountPartial": "{{enabled}} von {{total}} Repositories",
+      "skippedRepositoriesTooltip": "Bei Läufen übersprungen: {{names}}",
+      "skippedLabel": "Übersprungen",
+      "clickToResumeRepository": "Backups nach {{name}} fortsetzen"
     },
     "statuses": {
       "unknown": "Unbekannt",
@@ -1443,7 +1447,9 @@
       "repositoryCreateFailed": "Repository konnte nicht erstellt werden",
       "multiRepositoryRequiresPro": "Mehrere Repositories in einem Backup-Plan erfordern Pro",
       "selectSourceConnection": "Wähle einen Remote-Client aus, bevor du Quellpfade durchsuchst",
-      "scriptCreateFailed": "Failed to create generated script"
+      "scriptCreateFailed": "Failed to create generated script",
+      "repositoryToggled": "Repository aktualisiert",
+      "repositoryToggleFailed": "Repository konnte nicht aktualisiert werden"
     },
     "sourceChooser": {
       "summaryTitle": "Backup source",
@@ -4409,7 +4415,10 @@
     "moveUp": "Nach oben",
     "moveDown": "Nach unten",
     "remove": "Entfernen",
-    "searchOrAddMore": "Suchen oder weitere hinzufügen..."
+    "searchOrAddMore": "Suchen oder weitere hinzufügen...",
+    "skipped": "Übersprungen",
+    "skip": "Bei Läufen überspringen",
+    "resume": "Backups fortsetzen"
   },
   "wizard": {
     "steps": {

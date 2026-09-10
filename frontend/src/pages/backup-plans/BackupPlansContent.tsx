@@ -50,6 +50,7 @@ interface BackupPlansContentProps {
   onCancelRun: (runId: number) => void
   onViewLogs: (job: BackupPlanRunLogJob) => void
   onTogglePlan: (planId: number) => void
+  onToggleRepository: (planId: number, repositoryId: number) => void
   onEditPlan: (plan: BackupPlan) => void
   onDeletePlan: (planId: number) => void
   onViewHistory: (planId: number) => void
@@ -167,6 +168,7 @@ function BackupPlansContentImpl({
   onCancelRun,
   onViewLogs,
   onTogglePlan,
+  onToggleRepository,
   onEditPlan,
   onDeletePlan,
   onViewHistory,
@@ -609,6 +611,13 @@ function BackupPlansContentImpl({
                           enabled_before: plan.enabled,
                         })
                         onTogglePlan(plan.id)
+                      }}
+                      onToggleRepository={(repositoryId) => {
+                        trackBackupPlan(EventAction.EDIT, {
+                          operation: 'enable_plan_repository',
+                          repository_count: plan.repository_count,
+                        })
+                        onToggleRepository(plan.id, repositoryId)
                       }}
                       onEdit={() => {
                         trackBackupPlan(EventAction.VIEW, {

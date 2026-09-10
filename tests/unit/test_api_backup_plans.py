@@ -2518,6 +2518,74 @@ class TestBackupPlanRoutes:
         assert plan.enabled is True
         assert plan.next_run is not None
 
+    def test_toggle_plan_repository_disables_link_and_list_reports_it(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "pro")
+        repo_a = _create_repo(test_db, "Primary", "/repos/primary")
+        repo_b = _create_repo(test_db, "Offsite", "/repos/offsite")
+        plan = _create_scheduled_plan(test_db, [repo_a, repo_b])
+
+        response = test_client.post(
+            f"/api/backup-plans/{plan.id}/repositories/{repo_b.id}/toggle",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["repository_count"] == 1
+        assert {
+            link["repository_id"]: link["enabled"] for link in body["repositories"]
+        } == {repo_a.id: True, repo_b.id: False}
+
+        listed = test_client.get("/api/backup-plans/", headers=admin_headers).json()
+        listed_plan = next(p for p in listed["backup_plans"] if p["id"] == plan.id)
+        assert listed_plan["repository_count"] == 1
+        assert [
+            (link["repository_id"], link["enabled"], link["repository"]["name"])
+            for link in listed_plan["repositories"]
+        ] == [(repo_a.id, True, "Primary"), (repo_b.id, False, "Offsite")]
+
+        # Toggle again re-enables in one action.
+        response = test_client.post(
+            f"/api/backup-plans/{plan.id}/repositories/{repo_b.id}/toggle",
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["repository_count"] == 2
+
+    def test_toggle_plan_repository_refuses_to_disable_last_enabled_link(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        plan = _create_scheduled_plan(test_db, [repo])
+
+        response = test_client.post(
+            f"/api/backup-plans/{plan.id}/repositories/{repo.id}/toggle",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"] == {
+            "key": "backend.errors.backupPlans.repositoriesRequired"
+        }
+        test_db.refresh(plan)
+        assert plan.repositories[0].enabled is True
+
+    def test_toggle_plan_repository_unknown_link_returns_404(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        other = _create_repo(test_db, "Other", "/repos/other")
+        plan = _create_scheduled_plan(test_db, [repo])
+
+        response = test_client.post(
+            f"/api/backup-plans/{plan.id}/repositories/{other.id}/toggle",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 404
+
     def test_community_cannot_enable_existing_multi_repository_plan_after_downgrade(
         self, test_client: TestClient, admin_headers, test_db
     ):
