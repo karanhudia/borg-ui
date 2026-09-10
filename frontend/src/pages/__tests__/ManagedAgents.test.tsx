@@ -1486,6 +1486,33 @@ describe('AgentList fleet upgrades', () => {
     expect(screen.queryByRole('checkbox', { name: /select waiting/i })).toBeNull()
   })
 
+  it('drops a selected endpoint that someone else has already queued', async () => {
+    const onUpgradeMany = vi.fn()
+    const alpha = outdated()
+    const beta = outdated({ id: 2, agent_id: 'agent-fleet-2', name: 'beta' })
+    const { rerender } = renderList([alpha, beta], onUpgradeMany)
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /select alpha/i }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /select beta/i }))
+    rerender(
+      <AgentList
+        agents={[alpha, { ...beta, upgrade_state: 'queued' }]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        onUpgradeMany={onUpgradeMany}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: /upgrade 1 endpoint/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^upgrade$/i }))
+    expect(onUpgradeMany).toHaveBeenCalledWith([alpha])
+  })
+
   it('upgrades every selected endpoint in one request', async () => {
     const onUpgradeMany = vi.fn()
     renderList(

@@ -171,3 +171,31 @@ async def test_reaper_tick_releases_the_next_wave(monkeypatch):
         await task
 
     assert released
+
+
+async def test_the_whole_wave_is_claimed_before_anything_is_dispatched(
+    test_db, monkeypatch, cap
+):
+    """Slots are accounted for before the first send, so a release that runs
+    while this one is dispatching sees the cap as already full."""
+    cap(2)
+    seen_in_flight = []
+
+    async def fake_send_command(agent_id, **kwargs):
+        seen_in_flight.append(
+            test_db.query(AgentMachine)
+            .filter(AgentMachine.upgrade_state == "requested")
+            .count()
+        )
+        return {"success": True}
+
+    monkeypatch.setattr(
+        "app.services.agent_upgrades.agent_connection_manager.send_command",
+        fake_send_command,
+    )
+    for index in range(3):
+        _queued(test_db, f"a{index}")
+
+    await release_agent_upgrade_waves(test_db)
+
+    assert seen_in_flight == [2, 2]

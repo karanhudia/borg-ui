@@ -98,6 +98,13 @@ async def release_agent_upgrade_waves(db: Session) -> int:
     success or a timeout starts the next endpoint with nobody watching.
     Returns the number dispatched.
     """
+    # Counting and claiming happen with no await between them, so the event
+    # loop cannot interleave a second release here: the endpoint's inline call
+    # and the reaper's tick run on the same loop, and either sees the other's
+    # claims committed before it counts. Keep this section await-free, or two
+    # releases can each hand out the same free slots and exceed the cap.
+    # Ceiling: this holds within one process. A multi-process deployment would
+    # need the claim to happen in a single UPDATE against a capacity check.
     in_flight = (
         db.query(AgentMachine).filter(AgentMachine.upgrade_state == "requested").count()
     )
@@ -112,12 +119,11 @@ async def release_agent_upgrade_waves(db: Session) -> int:
         .limit(free)
         .all()
     )
-    dispatched = 0
+    claimed = []
     for agent in waiting:
-        # Conditional claim, matching the endpoint's: two releases racing (an
-        # operator request landing on a reaper tick) must not dispatch one
-        # endpoint twice. The loser updates no row and skips it.
-        claimed = (
+        # Conditional claim: a row an earlier release already took is skipped
+        # rather than dispatched twice.
+        if (
             db.query(AgentMachine)
             .filter(
                 AgentMachine.id == agent.id,
@@ -130,14 +136,19 @@ async def release_agent_upgrade_waves(db: Session) -> int:
                 },
                 synchronize_session=False,
             )
-        )
-        db.commit()
-        if not claimed:
-            continue
+        ):
+            claimed.append(agent)
+    db.commit()
+
+    # Dispatch only once every claim is committed, so the slots are already
+    # accounted for. Serial on purpose: each send shares this session, which
+    # is not safe to use concurrently. Ceiling: a wave of endpoints that are
+    # connected but unresponsive costs up to
+    # AGENT_UPGRADE_COMMAND_TIMEOUT_SECONDS each before the call returns.
+    for agent in claimed:
         db.refresh(agent)
         await request_agent_upgrade(db, agent, target=agent.upgrade_target_version)
-        dispatched += 1
 
-    if dispatched:
-        logger.info("Agent upgrade wave released", count=dispatched)
-    return dispatched
+    if claimed:
+        logger.info("Agent upgrade wave released", count=len(claimed))
+    return len(claimed)

@@ -1670,6 +1670,14 @@ export function AgentList({
       tcp: null,
     }))
 
+  // Filtered against the current fleet on every render, not trusted from the
+  // click that made it: an endpoint selected before a refetch may since have
+  // been queued by someone else, and counting it would promise an upgrade that
+  // will not happen.
+  const selectedAgents = agents.filter(
+    (agent) => selectedIds.includes(agent.id) && canUpgradeNow(agent)
+  )
+
   if (!agents.length) {
     return <Alert severity="info">{t('managedAgents.page.emptyAgents')}</Alert>
   }
@@ -1682,12 +1690,10 @@ export function AgentList({
         onUpgradeAll={onUpgradeMany ? (list) => setUpgradeTargets(list) : undefined}
       />
       <AgentBulkUpgradeBar
-        count={selectedIds.length}
+        count={selectedAgents.length}
         busy={isUpgrading}
         onClear={() => setSelectedIds([])}
-        onUpgrade={() =>
-          setUpgradeTargets(agents.filter((agent) => selectedIds.includes(agent.id)))
-        }
+        onUpgrade={() => setUpgradeTargets(selectedAgents)}
       />
       <Box
         sx={{

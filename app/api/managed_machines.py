@@ -705,7 +705,10 @@ async def upgrade_agent_machines(
                 "job_id": None
                 if agent.upgrade_state == "queued"
                 else _last_upgrade_job_id(db, agent),
-                "state": agent.upgrade_state,
+                # An endpoint skipped above because a dispatch was already in
+                # flight for it may not have reached "requested" yet, and the
+                # caller is owed a state either way.
+                "state": agent.upgrade_state or "requested",
             }
         )
 
