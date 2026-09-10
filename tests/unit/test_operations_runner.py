@@ -727,6 +727,64 @@ async def test_repository_busy_defers_instead_of_failing(db, repo, runner, regis
 
 
 @pytest.mark.unit
+def test_the_runner_recognises_the_admissions_refusal_key():
+    """Two literals, one contract: the runner defers on the key admission
+    puts in its 409, so the two must not drift apart."""
+    from app.services.job_admission import REPOSITORY_OPERATION_ACTIVE_KEY
+    from app.services.operations.runner import REPOSITORY_BUSY_KEY
+
+    assert REPOSITORY_BUSY_KEY == REPOSITORY_OPERATION_ACTIVE_KEY
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_stats_refusal_from_the_real_executor_is_deferred(
+    db, repo, runner, registry, monkeypatch
+):
+    """The stats executor lets the admission's refusal of its list job reach
+    the runner (it used to record it as a failure); the runner defers the
+    operation and completes it on a later tick."""
+    from fastapi import HTTPException
+
+    from app.services.operations.executors import index as index_exec
+
+    attempts = []
+
+    async def refused_then_done(repository, session, **kwargs):
+        assert kwargs == {"raise_busy": True}
+        attempts.append(repository.id)
+        if len(attempts) == 1:
+            raise HTTPException(
+                status_code=409,
+                detail={"key": "backend.errors.jobs.repositoryOperationActive"},
+            )
+        repository.total_size = "2.0 GB"
+        session.commit()
+        return True
+
+    monkeypatch.setattr(index_exec, "is_agent_executor", lambda repository: True)
+    monkeypatch.setattr(
+        "app.api.repositories._update_agent_repository_stats", refused_then_done
+    )
+    monkeypatch.setattr(index_exec, "_publish_mqtt_state", lambda db_, reason: None)
+    registry["stats"] = index_exec.run_stats
+    op = enqueue(db, "stats", repository_id=repo.id)
+    await runner.tick()
+    await asyncio.gather(*list(runner.running_tasks.values()), return_exceptions=True)
+    db.expire_all()
+    op = db.get(Operation, op.id)
+    assert op.status == "queued" and op.params["deferrals"] == 1
+    assert op.error_message is None
+
+    await _drain(runner)
+    db.expire_all()
+    op = db.get(Operation, op.id)
+    assert op.status == "completed"
+    assert op.result["total_size"] == "2.0 GB"
+    assert len(attempts) == 2
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_cancel_during_repository_busy_wins_over_the_deferral(
     db, repo, runner, registry

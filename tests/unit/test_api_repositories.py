@@ -1362,6 +1362,256 @@ class TestRepositoriesCreate:
         assert repo.archive_count == 2
         assert repo.last_backup == datetime(2026, 8, 19, 19, 3, 18, 624537)
 
+    @pytest.mark.parametrize(
+        "refused_job, raise_busy, expect_raise, expect_result",
+        [
+            # the list is refused with nothing in hand: raised for the runner
+            # to defer, swallowed for a route ("not refreshed")
+            ("repository.list_archives", True, True, None),
+            ("repository.list_archives", False, False, False),
+            # a later job is refused with the listing in hand: never raised,
+            # since a deferral would repeat the listing; it only costs what
+            # the refused job would have added
+            ("repository.rinfo", True, False, True),
+            ("repository.rinfo", False, False, True),
+            ("repository.storage_usage", True, False, True),
+            ("repository.storage_usage", False, False, True),
+            ("repository.disk_usage", True, False, True),
+            ("repository.disk_usage", False, False, True),
+        ],
+    )
+    async def test_agent_stats_refresh_and_the_admission_refusal(
+        self, test_db, refused_job, raise_busy, expect_raise, expect_result
+    ):
+        from fastapi import HTTPException
+
+        from app.api.repositories import _update_agent_repository_stats
+
+        capabilities = ["repository.list_archives", "repository.rinfo"]
+        if refused_job in ("repository.storage_usage", "repository.disk_usage"):
+            capabilities.append(refused_job)
+        agent = _agent_machine_with_capabilities(*capabilities)
+        repo = Repository(
+            name="Busy Agent Repo",
+            path="/agent/busy/repo",
+            encryption="repokey-blake2",
+            executor_type="agent",
+            execution_target="agent",
+            repository_type="local",
+            archive_count=5,
+            total_size="9.0 GB",
+        )
+        test_db.add_all([agent, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        test_db.commit()
+        refusal = HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.jobs.repositoryOperationActive"},
+        )
+
+        def queue(db, r, **kw):
+            if kw["job_kind"] == refused_job:
+                raise refusal
+            return SimpleNamespace(id=1)
+
+        listing = json.dumps([{"name": "a1", "time": "2026-09-01T01:00:00"}])
+        rinfo = json.dumps({"encryption": {"mode": "repokey-blake2"}})
+
+        async def wait(db, job_id, **kw):
+            # the list answers first, then repo-info; a size probe that still
+            # runs afterwards gets the repo-info text, which is not a du line
+            wait.calls += 1
+            return {"return_code": 0, "stdout": listing if wait.calls == 1 else rinfo}
+
+        wait.calls = 0
+        with (
+            patch(
+                "app.services.repository_executor.queue_agent_repository_operation_job",
+                side_effect=queue,
+            ),
+            patch(
+                "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+                new=AsyncMock(),
+            ),
+            patch(
+                "app.services.repository_executor.wait_for_agent_repository_operation_job",
+                new=wait,
+            ),
+        ):
+            if expect_raise:
+                with pytest.raises(HTTPException) as raised:
+                    await _update_agent_repository_stats(
+                        repo, test_db, raise_busy=raise_busy
+                    )
+                assert raised.value is refusal
+            else:
+                result = await _update_agent_repository_stats(
+                    repo, test_db, raise_busy=raise_busy
+                )
+                assert result is expect_result
+
+        test_db.refresh(repo)
+        # a refused list writes nothing; after it the listing is written and
+        # the size left alone
+        expected_count = 5 if refused_job == "repository.list_archives" else 1
+        assert (repo.archive_count, repo.total_size) == (expected_count, "9.0 GB")
+
+    @pytest.mark.parametrize(
+        "timed_out_job, claimed, raise_busy",
+        [
+            ("repository.list_archives", False, False),
+            ("repository.list_archives", False, True),
+            ("repository.list_archives", True, False),
+            ("repository.rinfo", False, False),
+            ("repository.rinfo", True, True),
+            ("repository.storage_usage", False, False),
+            ("repository.disk_usage", False, False),
+        ],
+    )
+    async def test_agent_stats_refresh_abandons_a_job_it_stopped_waiting_for(
+        self, test_db, timed_out_job, claimed, raise_busy
+    ):
+        """A queued job the server no longer waits for would be refused as a
+        duplicate by every later refresh, and the reaper never reaps a
+        queued job; the refresh cancels it on its way out. A job the agent
+        already runs is left to it: its result warms the next attempt. Real
+        jobs through the real queue, so admission sees what it would see in
+        production. A timeout is not the admission's refusal, so `raise_busy`
+        changes nothing here."""
+        from fastapi import HTTPException
+
+        from app.api.repositories import _update_agent_repository_stats
+        from app.database.models import AgentJob
+        from app.services.job_admission import (
+            ensure_repository_admission,
+            operation_for_agent_job_kind,
+        )
+
+        capabilities = ["repository.list_archives", "repository.rinfo"]
+        if timed_out_job in ("repository.storage_usage", "repository.disk_usage"):
+            capabilities.append(timed_out_job)
+        agent = _agent_machine_with_capabilities(*capabilities)
+        repo = Repository(
+            name="Slow Agent Repo",
+            path="/agent/slow/repo",
+            encryption="repokey-blake2",
+            executor_type="agent",
+            execution_target="agent",
+            repository_type="local",
+            archive_count=5,
+        )
+        test_db.add_all([agent, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        test_db.commit()
+
+        async def wait(db, job_id, **kw):
+            job = db.get(AgentJob, job_id)
+            if job.payload["job_kind"] == timed_out_job:
+                if claimed:
+                    # the agent picked it up just before the server gave up
+                    job.status = "claimed"
+                    db.commit()
+                raise HTTPException(status_code=504, detail="timed out")
+            job.status = "completed"
+            db.commit()
+            if job.payload["job_kind"] == "repository.list_archives":
+                return {"return_code": 0, "stdout": "[]"}
+            return {"return_code": 0, "stdout": json.dumps({"encryption": {}})}
+
+        with (
+            patch(
+                "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+                new=AsyncMock(),
+            ),
+            patch(
+                "app.services.agent_job_dispatcher.dispatch_agent_cancel_if_connected",
+                new=AsyncMock(return_value=True),
+            ) as cancel,
+            patch(
+                "app.services.repository_executor.wait_for_agent_repository_operation_job",
+                new=wait,
+            ),
+        ):
+            ok = await _update_agent_repository_stats(
+                repo, test_db, raise_busy=raise_busy
+            )
+
+        # the list timing out ends the refresh; a later job timing out only
+        # costs what it would have added
+        assert ok is (timed_out_job != "repository.list_archives")
+        assert cancel.await_count == 0
+        if claimed:
+            # the agent is running it: left alone, the reaper's if the agent
+            # is gone
+            live = test_db.query(AgentJob).filter(AgentJob.status == "claimed").one()
+            assert live.payload["job_kind"] == timed_out_job
+        else:
+            abandoned = (
+                test_db.query(AgentJob).filter(AgentJob.status == "canceled").one()
+            )
+            assert abandoned.payload["job_kind"] == timed_out_job
+            # nothing of this refresh blocks the next one
+            for kind in capabilities:
+                ensure_repository_admission(
+                    test_db, repo, operation_for_agent_job_kind(kind)
+                )
+
+    async def test_agent_stats_refresh_raises_the_refusal_the_real_admission_makes(
+        self, test_db
+    ):
+        """No hand-built 409: a list job of an earlier refresh is still queued,
+        so the real admission refuses this refresh's list as its duplicate,
+        and that refusal is what the runner gets to defer on."""
+        from fastapi import HTTPException
+
+        from app.api.repositories import _update_agent_repository_stats
+        from app.services.operations.runner import repository_busy
+        from app.services.repository_executor import (
+            queue_agent_repository_operation_job,
+        )
+
+        agent = _agent_machine_with_capabilities(
+            "repository.list_archives", "repository.rinfo"
+        )
+        repo = Repository(
+            name="Contended Agent Repo",
+            path="/agent/contended/repo",
+            encryption="repokey-blake2",
+            executor_type="agent",
+            execution_target="agent",
+            repository_type="local",
+            archive_count=5,
+        )
+        test_db.add_all([agent, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        test_db.commit()
+        earlier = queue_agent_repository_operation_job(
+            test_db, repo, job_kind="repository.list_archives"
+        )
+        assert earlier.status == "queued"
+
+        with (
+            patch(
+                "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+                new=AsyncMock(),
+            ),
+            patch(
+                "app.services.repository_executor.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"return_code": 0, "stdout": "[]"}),
+            ),
+        ):
+            with pytest.raises(HTTPException) as raised:
+                await _update_agent_repository_stats(repo, test_db, raise_busy=True)
+            assert repository_busy(raised.value)
+            assert raised.value.detail["params"]["active_job_id"] == earlier.id
+            assert await _update_agent_repository_stats(repo, test_db) is False
+
+        test_db.refresh(repo)
+        assert repo.archive_count == 5
+
     async def test_agent_stats_refresh_keeps_count_when_list_job_fails(self, test_db):
         # A completed list job can still carry a non-zero borg exit with no
         # stdout (-> []). That must not wipe the stored archive_count to 0.

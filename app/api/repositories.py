@@ -16,7 +16,6 @@ import uuid
 
 from app.database.database import get_db, SessionLocal
 from app.database.models import (
-    AgentJob,
     AgentMachine,
     CheckJob,
     CompactJob,
@@ -90,7 +89,6 @@ from app.services.check_flag_validation import (
     validate_check_flags_for_max_duration,
 )
 from app.services.agent_job_dispatcher import (
-    dispatch_agent_cancel_if_connected,
     dispatch_agent_job_best_effort,
 )
 from app.services.agent_connection_manager import (
@@ -841,43 +839,51 @@ def _agent_storage_usage_data(result: Optional[dict]) -> dict:
     return parsed if isinstance(parsed, dict) else {}
 
 
-async def _release_timed_out_agent_job(db: Session, agent_job_id: int) -> None:
-    """The server stopped waiting for a storage_usage job: the agent's own
-    budget starts only when it runs, so the job may still be queued,
-    claimed or running, where admission would refuse the next refresh as a
-    duplicate. Cancel a queued job outright; ask the agent to end a live
-    one. Terminal jobs are left alone."""
-    job = db.get(AgentJob, agent_job_id)
-    if job is None:
-        return
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    if job.status == "queued":
-        job.status = "canceled"
-        job.completed_at = now
-        job.error_message = "Abandoned by server: the stats refresh stopped waiting"
-    elif job.status in ("claimed", "running"):
-        job.status = "cancel_requested"
-    else:
-        return
-    job.updated_at = now
-    db.commit()
-    if job.status == "cancel_requested":
-        await dispatch_agent_cancel_if_connected(job)
-
-
-async def _update_agent_repository_stats(repository: Repository, db: Session) -> bool:
+async def _update_agent_repository_stats(
+    repository: Repository, db: Session, *, raise_busy: bool = False
+) -> bool:
     """Refresh stats for an agent repo by running list + repo-info on the node.
 
     Sets archive_count, last_backup and encryption from the live agent results.
     A remote Borg 2 repository has no client-computable on-disk size (borg2
     repo-info exposes no size, and du is server/local-only), so total_size is
     left unchanged rather than reset.
+
+    With `raise_busy` the admission's refusal of the list job (another job
+    holds the repository, nothing gathered yet) is raised instead of logged,
+    so the operations runner can defer the `stats` operation and retry it
+    later. Only the list, because a deferral repeats the whole refresh,
+    listing included: raising for a later job would make every retry pay
+    for the listing again and could fail an operation that used to complete
+    with the listing. Those jobs keep the swallow and only cost what they
+    would have added. A route caller keeps the swallow throughout and
+    reports "not refreshed" for a refused list.
     """
     from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+    from app.services.operations.runner import repository_busy
     from app.services.repository_executor import (
+        cancel_unclaimed_agent_repository_job,
         queue_agent_repository_operation_job,
         wait_for_agent_repository_operation_job,
     )
+
+    def busy(exc: BaseException) -> bool:
+        return raise_busy and repository_busy(exc)
+
+    async def wait(job, timeout_seconds):
+        # A job the server stops waiting for that no agent took (still
+        # queued) is taken out of the admission's way, or every later refresh
+        # would be refused as its duplicate with no bound: the reaper never
+        # reaps a queued job. A job the agent claimed or runs stays: its
+        # result warms the next attempt, and a dead agent's job is reaped.
+        try:
+            return await wait_for_agent_repository_operation_job(
+                db, job.id, timeout_seconds=timeout_seconds
+            )
+        except HTTPException as exc:
+            if exc.status_code == 504:
+                cancel_unclaimed_agent_repository_job(db, job.id)
+            raise
 
     try:
         timeouts = get_operation_timeouts(db)
@@ -886,9 +892,7 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
             db, repository, job_kind="repository.list_archives"
         )
         await dispatch_agent_job_best_effort(db, list_job, repository_id=repository.id)
-        list_result = await wait_for_agent_repository_operation_job(
-            db, list_job.id, timeout_seconds=timeouts["list_timeout"]
-        )
+        list_result = await wait(list_job, timeouts["list_timeout"])
         archives = _agent_result_archives(list_result)
         # A completed job can still carry a non-zero borg exit with no stdout,
         # which parses to [] -- don't let that wipe the stored count to 0. Trust
@@ -930,9 +934,7 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
             await dispatch_agent_job_best_effort(
                 db, rinfo_job, repository_id=repository.id
             )
-            rinfo_result = await wait_for_agent_repository_operation_job(
-                db, rinfo_job.id, timeout_seconds=timeouts["info_timeout"]
-            )
+            rinfo_result = await wait(rinfo_job, timeouts["info_timeout"])
             rinfo = json.loads((rinfo_result or {}).get("stdout") or "{}")
             # Deliberately NOT normalize_repo_info_encryption() here. That fills
             # `mode` with the bare cipher for Borg 2.0.0b22, which is right for
@@ -972,7 +974,6 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
             db, repository, "repository.storage_usage"
         ):
             storage_usage_tried = True
-            usage_job = None
             try:
                 usage_job = queue_agent_repository_operation_job(
                     db,
@@ -983,9 +984,7 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
                 await dispatch_agent_job_best_effort(
                     db, usage_job, repository_id=repository.id
                 )
-                usage_result = await wait_for_agent_repository_operation_job(
-                    db, usage_job.id, timeout_seconds=timeouts["info_timeout"]
-                )
+                usage_result = await wait(usage_job, timeouts["info_timeout"])
                 usage = _agent_storage_usage_data(usage_result)
                 size_bytes = usage.get("bytes")
                 if (
@@ -1001,12 +1000,6 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
                     repository=repository.name,
                     error=str(e),
                 )
-                if (
-                    usage_job is not None
-                    and isinstance(e, HTTPException)
-                    and e.status_code == 504
-                ):
-                    await _release_timed_out_agent_job(db, usage_job.id)
         # du is the older agents' only tool and the Borg 1 fallback when
         # rinfo carried no cache stats (storage_usage answers Borg 1 with
         # borg1_uses_rinfo). For Borg 2 it adds nothing: storage_usage runs
@@ -1021,9 +1014,7 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
                 await dispatch_agent_job_best_effort(
                     db, du_job, repository_id=repository.id
                 )
-                du_result = await wait_for_agent_repository_operation_job(
-                    db, du_job.id, timeout_seconds=timeouts["info_timeout"]
-                )
+                du_result = await wait(du_job, timeouts["info_timeout"])
                 du_meta = du_result or {}
                 if du_meta.get("return_code", 0) == 0:
                     # `du -sb` prints "<bytes>\t<path>".
@@ -1060,6 +1051,8 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
         )
         return True
     except Exception as e:
+        if busy(e):
+            raise
         logger.error(
             "Failed to update agent repository stats",
             repository=repository.name,
