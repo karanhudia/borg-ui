@@ -4156,7 +4156,8 @@
     },
     "restricted": {
       "label": "Nur Borg",
-      "tooltip": "Die Remote-Shell ist auf Borg beschränkt. Durchsuchen und Speicherinformationen sind für diese Verbindung nicht verfügbar."
+      "tooltip": "Die Remote-Shell ist auf Borg beschränkt. Durchsuchen und Speicherinformationen sind für diese Verbindung nicht verfügbar.",
+      "storage": "Speicher nicht verfügbar (nur Borg)"
     },
     "storage": "Speicher",
     "mountPoint": "Einhängepunkt",

@@ -4156,7 +4156,8 @@
     },
     "restricted": {
       "label": "Borg only",
-      "tooltip": "The remote shell is restricted to Borg. Browsing and storage information are unavailable on this connection."
+      "tooltip": "The remote shell is restricted to Borg. Browsing and storage information are unavailable on this connection.",
+      "storage": "Storage unavailable (Borg only)"
     },
     "storage": "Storage",
     "mountPoint": "Mount Point",

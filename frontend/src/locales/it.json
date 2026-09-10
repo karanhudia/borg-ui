@@ -4156,7 +4156,8 @@
     },
     "restricted": {
       "label": "Solo Borg",
-      "tooltip": "La shell remota è limitata a Borg. Navigazione e informazioni storage non sono disponibili per questa connessione."
+      "tooltip": "La shell remota è limitata a Borg. Navigazione e informazioni storage non sono disponibili per questa connessione.",
+      "storage": "Storage non disponibile (solo Borg)"
     },
     "storage": "Archiviazione",
     "mountPoint": "Punto di Mount",

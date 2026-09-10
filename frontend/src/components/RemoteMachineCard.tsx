@@ -197,54 +197,57 @@ export default function RemoteMachineCard({
                   defaultValue: t('remoteMachineCard.status.unknown'),
                 })}
               </Typography>
-              {machine.shell_restricted && (
+            </Box>
+
+            {/* SSH key badge — right of status row, small */}
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-end',
+                gap: 0.375,
+                flexShrink: 0,
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: '0.58rem',
+                  fontWeight: 500,
+                  color: 'text.disabled',
+                  letterSpacing: '0.02em',
+                }}
+              >
+                {machine.ssh_key_name}
+              </Typography>
+              {isRestricted && (
                 <Tooltip title={t('remoteMachineCard.restricted.tooltip')} arrow>
                   <Box
                     component="span"
                     tabIndex={0}
                     aria-label={t('remoteMachineCard.restricted.tooltip')}
                     sx={{
-                      ml: 0.5,
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 0.375,
-                      px: 0.625,
-                      py: 0.125,
-                      borderRadius: 1,
-                      border: '1px solid',
-                      borderColor: alpha(theme.palette.text.primary, isDark ? 0.18 : 0.14),
-                      color: 'text.secondary',
                       fontSize: '0.58rem',
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.06em',
+                      fontWeight: 500,
+                      color: 'text.secondary',
+                      letterSpacing: '0.02em',
                       lineHeight: 1,
                       cursor: 'default',
+                      borderRadius: 0.5,
                       '&:focus-visible': {
                         outline: `2px solid ${theme.palette.primary.main}`,
-                        outlineOffset: 1,
+                        outlineOffset: 2,
                       },
                     }}
                   >
-                    <Lock size={10} aria-hidden />
+                    <Lock size={9} aria-hidden />
                     {t('remoteMachineCard.restricted.label')}
                   </Box>
                 </Tooltip>
               )}
             </Box>
-
-            {/* SSH key badge — right of status row, small */}
-            <Typography
-              sx={{
-                fontSize: '0.58rem',
-                fontWeight: 500,
-                color: 'text.disabled',
-                letterSpacing: '0.02em',
-                flexShrink: 0,
-              }}
-            >
-              {machine.ssh_key_name}
-            </Typography>
           </Box>
 
           {/* Machine name — full width, no competing badge */}
@@ -432,7 +435,9 @@ export default function RemoteMachineCard({
           >
             <HardDrive size={14} style={{ opacity: 0.4, flexShrink: 0 }} />
             <Typography noWrap sx={{ fontSize: '0.75rem', color: 'text.disabled', flex: 1 }}>
-              {t('remoteMachine.noStorageInfo')}
+              {isRestricted
+                ? t('remoteMachineCard.restricted.storage')
+                : t('remoteMachine.noStorageInfo')}
             </Typography>
             <Tooltip title={refreshStorageTooltip} arrow>
               {/* span keeps the tooltip reachable while the button is disabled */}
