@@ -435,7 +435,9 @@
         "upgradingTo": "Aktualisierung auf {{version}}",
         "upgradingTooltip": "Der Endpunkt installiert sich neu und verbindet sich von selbst wieder.",
         "failed": "Aktualisierung fehlgeschlagen",
-        "failedHint": "Der Endpunkt kam nicht rechtzeitig zurück. Installieren Sie ihn manuell neu."
+        "failedHint": "Der Endpunkt kam nicht rechtzeitig zurück. Installieren Sie ihn manuell neu.",
+        "queued": "Wartet auf Upgrade",
+        "queuedTooltip": "Wartet hinter anderen Endpunkten. Der Vorgang startet automatisch, sobald ein Platz frei wird."
       },
       "pinControl": {
         "title": "Versions-Pin",

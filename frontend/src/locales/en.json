@@ -435,7 +435,9 @@
         "upgradingTo": "Upgrading to {{version}}",
         "upgradingTooltip": "The endpoint is reinstalling itself and will reconnect on its own.",
         "failed": "Upgrade failed",
-        "failedHint": "The endpoint did not come back in time. Reinstall it manually."
+        "failedHint": "The endpoint did not come back in time. Reinstall it manually.",
+        "queued": "Waiting to upgrade",
+        "queuedTooltip": "Queued behind other endpoints. It starts on its own when a slot frees."
       },
       "pinControl": {
         "title": "Version pin",

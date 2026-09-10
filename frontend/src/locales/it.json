@@ -435,7 +435,9 @@
         "upgradingTo": "Aggiornamento alla {{version}}",
         "upgradingTooltip": "L'endpoint si sta reinstallando e si riconnetterà da solo.",
         "failed": "Aggiornamento non riuscito",
-        "failedHint": "L'endpoint non è tornato in tempo. Reinstallalo manualmente."
+        "failedHint": "L'endpoint non è tornato in tempo. Reinstallalo manualmente.",
+        "queued": "In attesa di aggiornamento",
+        "queuedTooltip": "In coda dietro ad altri endpoint. Parte da solo quando si libera uno slot."
       },
       "pinControl": {
         "title": "Blocco versione",

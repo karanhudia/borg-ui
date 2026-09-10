@@ -435,7 +435,9 @@
         "upgradingTo": "Actualizando a {{version}}",
         "upgradingTooltip": "El endpoint se está reinstalando y volverá a conectarse solo.",
         "failed": "Actualización fallida",
-        "failedHint": "El endpoint no volvió a tiempo. Reinstálalo manualmente."
+        "failedHint": "El endpoint no volvió a tiempo. Reinstálalo manualmente.",
+        "queued": "Esperando para actualizar",
+        "queuedTooltip": "En cola detras de otros endpoints. Empieza solo cuando se libera un hueco."
       },
       "pinControl": {
         "title": "Fijar versión",
