@@ -309,6 +309,44 @@ class TestSSHKeysEndpoints:
         assert data["session"]["status"] == "success"
         assert data["session"]["restricted"] is True
 
+    def test_restricted_result_clears_cached_storage(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Storage numbers collected before the key was locked down cannot be
+        refreshed any more, so a restricted result drops them."""
+        _, connection = self._create_diagnostics_connection(test_db)
+        connection.storage_total = 1000
+        connection.storage_used = 400
+        connection.storage_available = 600
+        connection.storage_percent_used = 40.0
+        connection.last_storage_check = datetime.utcnow()
+        test_db.commit()
+
+        async def mock_subprocess(*cmd, **kwargs):
+            mock_process = AsyncMock()
+            mock_process.communicate = AsyncMock(return_value=(b"", b"denied\n"))
+            mock_process.returncode = 1
+            return mock_process
+
+        with patch(
+            "app.api.ssh_keys.asyncio.create_subprocess_exec",
+            side_effect=mock_subprocess,
+        ):
+            response = test_client.post(
+                f"/api/ssh-keys/connections/{connection.id}/test",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+        test_db.refresh(connection)
+        assert connection.shell_restricted is True
+        assert connection.storage_total is None
+        assert connection.storage_used is None
+        assert connection.storage_available is None
+        assert connection.storage_percent_used is None
+        assert connection.last_storage_check is None
+
     def _create_diagnostics_connection(self, test_db):
         fake_private_key = "-----BEGIN OPENSSH PRIVATE KEY-----\ntest\n-----END OPENSSH PRIVATE KEY-----\n"
         ssh_key = SSHKey(

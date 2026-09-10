@@ -1740,6 +1740,13 @@ async def test_ssh_connection(
             connection.last_success = datetime.utcnow()
             connection.error_message = None
             connection.shell_restricted = bool(test_result.get("restricted"))
+            if connection.shell_restricted:
+                # df cannot run here any more; drop numbers we can no longer refresh.
+                connection.storage_total = None
+                connection.storage_used = None
+                connection.storage_available = None
+                connection.storage_percent_used = None
+                connection.last_storage_check = None
         else:
             connection.status = "failed"
             connection.error_message = test_result.get(
@@ -2024,6 +2031,13 @@ async def test_existing_connection(
             connection.last_success = datetime.utcnow()
             connection.error_message = None
             connection.shell_restricted = bool(test_result.get("restricted"))
+            if connection.shell_restricted:
+                # df cannot run here any more; drop numbers we can no longer refresh.
+                connection.storage_total = None
+                connection.storage_used = None
+                connection.storage_available = None
+                connection.storage_percent_used = None
+                connection.last_storage_check = None
             logger.info(
                 "SSH connection test successful",
                 connection_id=connection_id,
