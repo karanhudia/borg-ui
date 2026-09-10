@@ -63,6 +63,34 @@ def _wait_for_agent_job(test_db, operation_id: int, timeout: float = 5.0):
     raise AssertionError(f"no agent job queued for operation {operation_id}")
 
 
+def _wait_for_followups(test_db, repository_id: int, timeout: float = 5.0):
+    """The follow-up chain of a runner-driven backup.
+
+    The runner commits the operation's terminal status before it enqueues the
+    chain, so a completion observed from the request thread can briefly
+    precede the follow-ups.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        test_db.expire_all()
+        rows = (
+            test_db.query(Operation)
+            .filter(
+                Operation.repository_id == repository_id,
+                Operation.trigger == "followup",
+            )
+            .order_by(Operation.id)
+            .all()
+        )
+        if rows:
+            return rows
+        if time.monotonic() >= deadline:
+            raise AssertionError(
+                f"no follow-ups enqueued for repository {repository_id}"
+            )
+        time.sleep(0.05)
+
+
 def _set_log_save_policy(test_db, policy: str) -> None:
     settings = test_db.query(SystemSettings).first()
     if settings is None:
@@ -869,6 +897,8 @@ class TestBackupStart:
             == 200
         )
 
+        followups = _wait_for_followups(test_db, repo.id)
+
         test_db.expire_all()
         backup_job = BackupJobFacade(test_db, test_db.get(Operation, backup_job_id))
         test_db.refresh(repo)
@@ -881,13 +911,7 @@ class TestBackupStart:
         # last_backup now comes from the archive index: completion enqueues
         # the backup follow-up chain instead of writing the column (#933).
         assert repo.last_backup is None
-        followups = (
-            test_db.query(Operation)
-            .filter(Operation.repository_id == repo.id, Operation.trigger == "followup")
-            .order_by(Operation.id)
-            .all()
-        )
-        assert followups and followups[0].kind == "archive_sync"
+        assert followups[0].kind == "archive_sync"
 
         logs_response = test_client.get(
             f"/api/activity/backup/{backup_job_id}/logs", headers=admin_headers
