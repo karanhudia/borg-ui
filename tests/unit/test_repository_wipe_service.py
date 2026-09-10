@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import HTTPException
 
 from app.core.borg_router import BorgRouter
 from app.database.models import Repository, RepositoryWipeJob, User
@@ -434,3 +435,52 @@ async def test_start_execution_rejects_a_preview_already_consumed(db_session):
     # preview row itself is untouched by a confirm.
     db_session.refresh(preview)
     assert preview.status == "previewed"
+
+
+def test_cancel_preview_finds_a_preview_row(db_session):
+    """Previews are the only rows left in `repository_wipe_jobs`, so the
+    cancel route cannot resolve them through the operations facade."""
+    user, repo = _wipe_user_and_repository(db_session)
+    preview = _fresh_preview(db_session, user, repo)
+    service = RepositoryWipeService()
+
+    payload = service.cancel_preview(db_session, repo, user, job_id=preview.id)
+
+    assert payload["status"] == "cancelled"
+    db_session.refresh(preview)
+    assert preview.status == "cancelled"
+    assert preview.phase == "cancelled"
+    assert preview.completed_at is not None
+
+
+def test_cancel_preview_still_cancels_a_queued_operation(db_session):
+    user, repo = _wipe_user_and_repository(db_session)
+    operation = seed_job_operation(
+        db_session, "wipe", repository_id=repo.id, status="queued"
+    )
+    service = RepositoryWipeService()
+
+    payload = service.cancel_preview(db_session, repo, user, job_id=operation.id)
+
+    assert payload["status"] == "cancelled"
+    db_session.refresh(operation)
+    assert operation.status == "cancelled"
+
+
+def test_cancel_preview_rejects_a_preview_of_another_repository(db_session):
+    user, repo = _wipe_user_and_repository(db_session)
+    other = Repository(
+        name="Other",
+        path="/repos/other-wipe",
+        encryption="none",
+        repository_type="local",
+    )
+    db_session.add(other)
+    db_session.commit()
+    preview = _fresh_preview(db_session, user, repo)
+    service = RepositoryWipeService()
+
+    with pytest.raises(HTTPException) as raised:
+        service.cancel_preview(db_session, other, user, job_id=preview.id)
+
+    assert raised.value.status_code == 404

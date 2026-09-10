@@ -510,6 +510,30 @@ class RepositoryWipeService:
                 error=str(exc),
             )
 
+    def resolve_job_or_preview(
+        self, db: Session, repository: Repository, job_id: int
+    ) -> Any:
+        """The wipe execution operation with this id, or the preview row that
+        has it.
+
+        Previews are the only rows left in `repository_wipe_jobs`, and they
+        keep their own id sequence, so a caller holding a preview id (the
+        status and cancel routes take whichever id the client was given)
+        cannot be answered by the operations facade alone. The operation wins
+        the ambiguity: an id that names one is execution work, and only an id
+        that names none can be a preview."""
+        job = resolve_wipe_job(db, job_id)
+        if job is not None:
+            return job
+        return (
+            db.query(RepositoryWipeJob)
+            .filter(
+                RepositoryWipeJob.id == job_id,
+                RepositoryWipeJob.repository_id == repository.id,
+            )
+            .first()
+        )
+
     def cancel_preview(
         self,
         db: Session,
@@ -518,7 +542,7 @@ class RepositoryWipeService:
         *,
         job_id: int,
     ) -> dict[str, Any]:
-        job = resolve_wipe_job(db, job_id)
+        job = self.resolve_job_or_preview(db, repository, job_id)
         if not job or job.repository_id != repository.id:
             raise HTTPException(
                 status_code=404,

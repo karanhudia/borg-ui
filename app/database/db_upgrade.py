@@ -27,7 +27,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import MetaData, create_engine, event, inspect, text
+from sqlalchemy import MetaData, create_engine, event, inspect, select, text
 from sqlalchemy.engine import Engine, make_url
 
 from app.config import settings
@@ -526,6 +526,24 @@ def _transfer(source: Engine, target: Engine) -> UpgradeReport:
     # no longer declare, and those rows are exactly what must come across.
     target_meta = MetaData()
     target_meta.reflect(bind=target)
+
+    # A table the source has and the target does not is not transferred, and
+    # the loop below cannot say so, because it walks the target. Empty ones are
+    # ordinary (a build that dropped a table it no longer writes); one with
+    # rows means history that does not arrive, which section 14 promises it
+    # does, so it is named in the log.
+    with source.connect() as probe:
+        for name in sorted(set(reflected.tables) - set(target_meta.tables)):
+            if name == "alembic_version":
+                continue
+            if probe.execute(
+                select(1).select_from(reflected.tables[name]).limit(1)
+            ).first():
+                log.warning(
+                    "source table %s has rows and no counterpart in the target; "
+                    "it is not transferred",
+                    name,
+                )
 
     with source.connect() as src, target.begin() as dst:
         deferred: list[tuple] = []

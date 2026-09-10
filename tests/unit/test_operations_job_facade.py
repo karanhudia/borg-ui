@@ -317,18 +317,20 @@ def _payload(job_id, **maintenance_extra):
 def test_resolve_agent_job_takes_the_operation_the_payload_names(db, repository):
     op = _operation(db, repository)
 
-    for payload in (_payload(op.id), _payload(op.id, table="operations")):
-        job = resolve_agent_maintenance_job(db, payload)
-        assert isinstance(job, MaintenanceJobFacade)
-        assert job.id == op.id
+    job = resolve_agent_maintenance_job(db, _payload(op.id, table="operations"))
+
+    assert isinstance(job, MaintenanceJobFacade)
+    assert job.id == op.id
 
 
-def test_resolve_agent_job_ignores_a_payload_from_a_dropped_table(db, repository):
-    """A job queued before the collapse names an id from a table that is
-    gone; the copy it became has another id, so nothing is resolved rather
-    than an unrelated operation that happens to hold that id."""
+def test_resolve_agent_job_needs_the_operations_marker(db, repository):
+    """A job queued before the collapse names an id from a table that is gone
+    (or names no table at all, from before the marker existed); the copy it
+    became has another id, so nothing is resolved rather than an unrelated
+    operation that happens to hold that id."""
     op = _operation(db, repository)
 
+    assert resolve_agent_maintenance_job(db, _payload(op.id)) is None
     assert (
         resolve_agent_maintenance_job(db, _payload(op.id, table="check_jobs")) is None
     )
@@ -341,7 +343,7 @@ def test_resolve_agent_job_checks_the_payloads_repository(db, repository):
     db.commit()
     op = _operation(db, repository)
 
-    payload = _payload(op.id)
+    payload = _payload(op.id, table="operations")
     payload["repository"] = {"id": repository.id, "path": repository.path}
     assert resolve_agent_maintenance_job(db, payload).id == op.id
 

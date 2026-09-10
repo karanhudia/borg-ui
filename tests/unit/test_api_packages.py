@@ -453,9 +453,12 @@ class TestPackageInstallOperations:
         assert body["stdout"] == "installed"
         assert body["stderr"] == ""
 
-    def test_job_status_still_serves_a_pre_phase_6_row(
+    def test_job_status_serves_a_row_seeded_from_the_legacy_columns(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        """The legacy table is gone; a caller that used to seed one of its
+        rows seeds the operation it became, and the route still answers with
+        the words and the output the row carried."""
         package = self._package(test_db, name="tree")
         job = seed_job_operation(
             test_db,
@@ -477,20 +480,20 @@ class TestPackageInstallOperations:
         assert body["status"] == "completed"
         assert body["stdout"] == "legacy out"
 
-    def test_job_list_unions_operations_and_legacy_rows(
+    def test_job_list_returns_every_package_install_operation(
         self, test_client: TestClient, admin_headers, test_db
     ):
         package = self._package(test_db, name="ncdu")
         op = self._operation(test_db, package, status="completed")
-        legacy = seed_job_operation(
+        other = seed_job_operation(
             test_db, "package_install", package_id=package.id, status="failed"
         )
         test_db.commit()
-        test_db.refresh(legacy)
+        test_db.refresh(other)
 
         response = test_client.get("/api/packages/jobs", headers=admin_headers)
 
         body = response.json()
         assert response.status_code == 200
         assert {item["status"] for item in body} == {"completed", "failed"}
-        assert {item["id"] for item in body} == {op.id, legacy.id}
+        assert {item["id"] for item in body} == {op.id, other.id}

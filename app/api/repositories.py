@@ -64,7 +64,6 @@ from app.services.mqtt_service import mqtt_service
 from app.services.operations.wipe_facade import (
     WipeJobFacade,
     active_wipe_operation,
-    resolve_wipe_job,
 )
 from app.services.repository_wipe_service import (
     WipeArchiveSetChanged,
@@ -5555,7 +5554,7 @@ async def get_repository_wipe_job(
         repository = get_repository_with_access(
             db, current_user, repo_id, required_role="operator"
         )
-        job = resolve_wipe_job(db, job_id)
+        job = repository_wipe_service.resolve_job_or_preview(db, repository, job_id)
         if not job or job.repository_id != repository.id:
             raise HTTPException(
                 status_code=404,

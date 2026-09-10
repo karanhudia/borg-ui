@@ -1014,7 +1014,7 @@ class TestRestoreJobLogs:
         our_job = next((j for j in data["jobs"] if j["id"] == job.id), None)
         assert our_job is not None
         assert "logs" in our_job
-        assert our_job["logs"] == resolve_restore_job(test_db, job.id).logs
+        assert our_job["logs"] == "Test log line 1\nTest log line 2\nRestore completed"
 
     def test_restore_job_status_includes_logs(
         self, test_client: TestClient, admin_headers, test_db
@@ -1044,7 +1044,7 @@ class TestRestoreJobLogs:
         assert response.status_code == 200
         data = response.json()
         assert "logs" in data
-        assert data["logs"] == resolve_restore_job(test_db, job.id).logs
+        assert data["logs"] == "Detailed restore logs here\nProgress: 100%\nSuccess"
 
     def test_restore_logs_follow_log_save_policy(
         self, test_client: TestClient, admin_headers, test_db

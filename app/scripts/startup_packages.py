@@ -17,7 +17,7 @@ from pathlib import Path
 # so the repository root is not on sys.path by itself.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from sqlalchemy import create_engine, text  # noqa: E402
+from sqlalchemy import create_engine, inspect, text  # noqa: E402
 
 from app.config import settings  # noqa: E402
 from app.database.url_utils import sqlite_database_missing  # noqa: E402
@@ -57,6 +57,11 @@ def _in_flight_operation_package_ids(conn):
     import json
 
     ids = set()
+    if not inspect(conn).has_table("operations"):
+        # A database that predates the operations table has nothing in flight
+        # by definition.
+        print("ℹ️  No operations table yet; nothing is in flight")
+        return ids
     try:
         rows = conn.execute(
             text("""
@@ -66,9 +71,11 @@ def _in_flight_operation_package_ids(conn):
             """)
         ).fetchall()
     except Exception as exc:
-        # A database that predates the operations table has nothing in flight
-        # by definition.
-        print(f"ℹ️  Skipping operations check: {exc}")
+        # Anything else (a locked database, a lost connection) is a failure to
+        # read, not an empty answer. Boot must not die for it, so the caller
+        # gets the empty set, but the log says what happened rather than
+        # implying there was nothing to find.
+        print(f"⚠️  Could not read in-flight package operations: {exc}")
         return ids
     for (params,) in rows:
         if isinstance(params, str):

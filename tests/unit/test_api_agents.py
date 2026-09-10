@@ -1771,7 +1771,7 @@ class TestAgentJobNotifications:
         job.updated_at = stale_at
         test_db.commit()
 
-        failed_backup_job_ids: list[tuple[str, int]] = []
+        failed_backup_job_ids: list[int] = []
         reaped = reap_stale_agent_jobs(
             test_db, failed_backup_job_ids=failed_backup_job_ids
         )
@@ -1797,7 +1797,7 @@ class TestAgentJobNotifications:
         job.updated_at = stale_at
         test_db.commit()
 
-        failed_backup_job_ids: list[tuple[str, int]] = []
+        failed_backup_job_ids: list[int] = []
         reap_stale_agent_jobs(test_db, failed_backup_job_ids=failed_backup_job_ids)
 
         assert failed_backup_job_ids == []
@@ -2488,7 +2488,7 @@ async def test_script_and_backup_waiters_return_on_a_completion_with_warnings(
     agent_backup_job = _create_agent_job(
         test_db, agent, status="completed_with_warnings"
     )
-    agent_backup_job.backup_job_id = backup_job.id
+    agent_backup_job.operation_id = backup_job.id
     test_db.commit()
 
     snapshot = await wait_for_agent_script_job(

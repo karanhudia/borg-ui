@@ -263,9 +263,10 @@ Borg process may still be running.
 
 Two sweeps run beside it, for state that is not an operation:
 
-- a backup left in a `running_prune` or `running_compact` maintenance state is
-  marked `failed`, with the maintenance state changed to `prune_failed` or
-  `compact_failed`, unless its child operation is genuinely still running
+- a backup left in a `running_prune`, `running_compact` or `running_check`
+  maintenance state is marked `failed`, with the maintenance state changed to
+  `prune_failed`, `compact_failed` or `check_failed`, unless its child
+  operation is genuinely still running
 - a backup plan run left `pending` or `running` is finalised from the states
   of its children
 
@@ -467,5 +468,6 @@ their extension rows and the retry lineage. Copied rows get new ids, and the
 `agent_jobs`, `script_executions` and `backup_plan_run_repositories` links are
 rewritten to them. Log text a legacy row kept inline becomes the operation's
 log file. A row whose repository had already been deleted is not copied, since
-an operation's repository is a real foreign key. The ten job tables are then
-dropped; `repository_wipe_jobs` stays behind holding wipe previews only.
+an operation's repository is a real foreign key. Nine of the ten job tables
+are then dropped; `repository_wipe_jobs` stays behind as the preview store,
+its executed rows having moved to `operations` and only its previews left.

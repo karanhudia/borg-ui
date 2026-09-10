@@ -346,11 +346,11 @@ def resolve_agent_maintenance_job(
     the `kinds` the caller handles.
 
     The payload's `operation.maintenance_job` carries `kind`, `id` and, since
-    phase 5, `table`. `operations` is the only table left, so a payload naming
-    another one is from before the collapse and names a row that is gone: its
-    id belongs to a dropped sequence and cannot be mapped to the operation the
-    copy became, so it resolves to nothing rather than to an unrelated row of
-    the same kind.
+    phase 5, `table`. `operations` is the only table left, so the marker must
+    name it: a payload naming another table, or carrying none at all, was
+    written before the collapse and names an id from a dropped sequence, which
+    cannot be mapped to the operation the copy became. Such a payload resolves
+    to nothing rather than to an unrelated row that happens to hold that id.
     """
     if not isinstance(payload, dict):
         return None
@@ -371,8 +371,7 @@ def resolve_agent_maintenance_job(
         return None
     if job_id <= 0:
         return None
-    table = maintenance.get("table")
-    if table and table != Operation.__tablename__:
+    if maintenance.get("table") != Operation.__tablename__:
         return None
     operation = (
         db.query(Operation)

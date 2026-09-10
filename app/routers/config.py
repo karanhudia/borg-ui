@@ -184,7 +184,11 @@ async def import_borgmatic_config(
                             trigger="manual",
                         )
                     except Exception as e:
-                        # Log but don't fail the import - stats can be updated later
+                        # Log but don't fail the import - stats can be updated later.
+                        # The rollback comes first: the failed enqueue may have
+                        # left this session's transaction unusable, and every
+                        # later repository in the loop shares it.
+                        db.rollback()
                         logger.warning(
                             "Failed to enqueue repository stats after import",
                             repository=repo.name,
@@ -226,7 +230,11 @@ async def import_borgmatic_config(
                             trigger="manual",
                         )
                     except Exception as e:
-                        # Log but don't fail the import - stats can be updated later
+                        # Log but don't fail the import - stats can be updated later.
+                        # The rollback comes first: the failed enqueue may have
+                        # left this session's transaction unusable, and every
+                        # later repository in the loop shares it.
+                        db.rollback()
                         logger.warning(
                             "Failed to enqueue repository stats after import",
                             repository=repo.name,

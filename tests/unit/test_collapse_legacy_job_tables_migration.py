@@ -138,6 +138,51 @@ def test_upgrade_copies_then_drops_and_downgrade_recreates_empty(tmp_path, monke
 
 
 @pytest.mark.unit
+def test_an_executed_wipe_of_a_deleted_repository_is_left_in_place(
+    tmp_path, monkeypatch
+):
+    """`repository_wipe_jobs` is the one legacy table that survives, so a row
+    the copy cannot take (its repository is gone, and an operation's
+    repository is a real foreign key) must stay rather than be deleted with
+    the copied ones: the row is the only record left of that wipe."""
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+    url = f"sqlite:///{tmp_path / 'orphan.db'}"
+    _migrate(url, PREVIOUS)
+    engine = _engine(url)
+    with engine.begin() as connection:
+        # The column is ON DELETE SET NULL, so a dangling id only exists where
+        # SQLite ran without foreign keys enforced, which is where these rows
+        # come from; the insert needs the same freedom.
+        connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        connection.execute(
+            insert(legacy.repository_wipe_jobs).values(
+                id=1,
+                repository_id=404,  # a repository that is no longer there
+                status="completed",
+                run_compact=False,
+                created_at=NOW,
+            )
+        )
+    engine.dispose()
+
+    _migrate(url, REVISION)
+
+    engine = _engine(url)
+    with engine.connect() as connection:
+        meta = MetaData()
+        meta.reflect(bind=connection)
+        assert connection.execute(select(meta.tables["operations"].c.kind)).all() == []
+        left = connection.execute(
+            select(
+                legacy.repository_wipe_jobs.c.id,
+                legacy.repository_wipe_jobs.c.status,
+            )
+        ).all()
+        assert left == [(1, "completed")]
+    engine.dispose()
+
+
+@pytest.mark.unit
 def test_revision_chains_on_the_previous_head_and_leaves_one_head():
     from alembic.script import ScriptDirectory
 

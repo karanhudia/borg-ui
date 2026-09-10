@@ -463,8 +463,10 @@ def _copy_wipes(connection, target, log_dir, ids, users, report):
         if m["status"] == "previewed":
             continue
         if m["repository_id"] is not None and m["repository_id"] not in ids:
+            # Not copied, so not deleted either: this is the one legacy table
+            # that survives the collapse, and the row it keeps is the only
+            # record left of that wipe. `moved` is the copied set.
             skipped += 1
-            moved.append(m["id"])
             continue
         requested_by = _kept(m["requested_by_user_id"], users)
         confirmed_by = _kept(m["confirmed_by_user_id"], users)

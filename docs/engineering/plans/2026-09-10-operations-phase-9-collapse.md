@@ -120,7 +120,7 @@ same deviation phases 4, 6 and 7 recorded for their drafts.
 | --- | --- |
 | `app/database/legacy_job_tables.py` | Frozen Core `Table` definitions of the ten legacy tables on their own `MetaData`, exactly as `models.py` declared them before this phase. Used by the copy, the revision's downgrade, and the tests. |
 | `app/database/legacy_job_collapse.py` | `collapse_legacy_job_tables(connection, *, log_dir) -> CollapseReport`: the copy, one function per table, id maps, link rewrites, log file materialisation. Core only, no ORM. |
-| `app/database/alembic/versions/c9d0e1f2a3b4_collapse_legacy_job_tables.py` | The one revision: copy, then drop nine tables and three link columns, then delete executed wipe rows. |
+| `app/database/alembic/versions/d0e1f2a3b4c5_collapse_legacy_job_tables.py` | The one revision: copy, then drop nine tables and three link columns, then delete executed wipe rows. |
 | `tests/unit/test_legacy_job_collapse.py` | The copy against a scratch SQLite built at `b8c9d0e1f2a3`, table by table. |
 | `tests/unit/test_collapse_legacy_job_tables_migration.py` | The revision up and down, the one-head check, the counts. |
 
@@ -1141,18 +1141,18 @@ what the insert refuses).
 ## Task 2: The collapse revision and the model deletions
 
 **Files:**
-- Create: `app/database/alembic/versions/c9d0e1f2a3b4_collapse_legacy_job_tables.py`
+- Create: `app/database/alembic/versions/d0e1f2a3b4c5_collapse_legacy_job_tables.py`
 - Modify: `app/database/models.py`
 - Test: `tests/unit/test_collapse_legacy_job_tables_migration.py`
 
 **Interfaces:**
 - Consumes: `collapse_legacy_job_tables`, `legacy_job_tables.metadata`, `LEGACY_JOB_TABLE_NAMES`, `app.config.settings.data_dir`.
-- Produces: revision `c9d0e1f2a3b4` (down `b8c9d0e1f2a3`), the new single head; `models.py` without the ten classes and the three `backup_job_id` columns.
+- Produces: revision `d0e1f2a3b4c5` (down `b8c9d0e1f2a3`), the new single head; `models.py` without the ten classes and the three `backup_job_id` columns.
 
 - [x] **Step 1: Write the failing migration tests**
 
 ```python
-"""Tests for revision c9d0e1f2a3b4 (collapse of the legacy job tables)."""
+"""Tests for revision d0e1f2a3b4c5 (collapse of the legacy job tables)."""
 
 from datetime import datetime
 
@@ -1163,7 +1163,7 @@ from sqlalchemy import MetaData, inspect, insert, select
 from app.database import legacy_job_tables as legacy
 from app.database.db_upgrade import _alembic_config, _engine
 
-REVISION = "c9d0e1f2a3b4"
+REVISION = "d0e1f2a3b4c5"
 PREVIOUS = "b8c9d0e1f2a3"
 NOW = datetime(2026, 9, 1, 12, 0, 0)
 
@@ -1248,14 +1248,14 @@ def test_revision_chains_on_the_previous_head_and_leaves_one_head():
 - [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pytest tests/unit/test_collapse_legacy_job_tables_migration.py -q`
-Expected: FAIL, `Can't locate revision identified by 'c9d0e1f2a3b4'`.
+Expected: FAIL, `Can't locate revision identified by 'd0e1f2a3b4c5'`.
 
 - [x] **Step 3: Write the revision**
 
 ```python
 """collapse the legacy job tables into operations
 
-Revision ID: c9d0e1f2a3b4
+Revision ID: d0e1f2a3b4c5
 Revises: b8c9d0e1f2a3
 Create Date: 2026-09-10
 
@@ -1278,7 +1278,7 @@ from app.config import settings
 from app.database import legacy_job_tables as legacy
 from app.database.legacy_job_collapse import collapse_legacy_job_tables
 
-revision = "c9d0e1f2a3b4"
+revision = "d0e1f2a3b4c5"
 down_revision = "b8c9d0e1f2a3"
 branch_labels = None
 depends_on = None
@@ -1342,7 +1342,7 @@ only." Delete the `__repr__` of `PackageInstallJob` with the class.
 
 Run: `pytest tests/unit/test_collapse_legacy_job_tables_migration.py tests/unit/test_legacy_job_collapse.py -q && python -c "import app.database.models"`
 Expected: the tests pass; the import succeeds. `alembic heads` prints
-`c9d0e1f2a3b4 (head)`. The rest of the suite does not import yet; that is
+`d0e1f2a3b4c5 (head)`. The rest of the suite does not import yet; that is
 Tasks 4 to 8.
 
 ---
@@ -1425,7 +1425,7 @@ Add, next to `_upgrade_to_head`:
 ```python
 # The last revision whose schema still holds the legacy job tables. A
 # pre-Alembic database is transferred onto this revision, not onto head, so
-# the collapse revision (c9d0e1f2a3b4) folds its job history into
+# the collapse revision (d0e1f2a3b4c5) folds its job history into
 # `operations` instead of the transfer silently skipping tables head no
 # longer has.
 PRE_COLLAPSE_REVISION = "b8c9d0e1f2a3"
@@ -2155,7 +2155,7 @@ git diff -U0 origin/main | grep -nP '\xe2\x80\x94' ; echo "em dashes above (expe
 git diff --stat origin/main -- frontend   # expect empty
 grep -rnE '\b(BackupJob|CheckJob|PruneJob|CompactJob|RestoreCheckJob|DeleteArchiveJob|RcloneSyncJob|PackageInstallJob|RestoreJob|BackupJobRetryLineage)\b' app/ | grep -v "legacy_job_tables.py\|legacy_job_collapse.py\|alembic/versions"   # expect empty
 grep -rn "legacy_running_exclusive\|LEGACY_MODELS\|_MIGRATED_LEGACY_MODELS\|_LEGACY_ACTIVE_STATUSES\|legacy_status import" app/   # expect empty
-alembic heads                              # expect c9d0e1f2a3b4 (head)
+alembic heads                              # expect d0e1f2a3b4c5 (head)
 python -m app.database.db_upgrade          # against a copy of a v2.2.x borg.db from a real install, if one is at hand
 ```
 

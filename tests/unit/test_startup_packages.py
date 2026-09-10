@@ -39,6 +39,14 @@ def engine(tmp_path):
     return engine
 
 
+@pytest.fixture()
+def engine_without_operations(tmp_path):
+    """A pre-phase-1 database: the packages table and nothing else."""
+    engine = create_engine(f"sqlite:///{tmp_path}/legacy.db")
+    Base.metadata.create_all(engine, tables=[InstalledPackage.__table__])
+    return engine
+
+
 def _seed_package(engine, status):
     with engine.begin() as conn:
         conn.execute(
@@ -213,10 +221,11 @@ def test_a_completed_install_operation_does_not_block_a_reinstall(
 
 
 def test_a_database_without_the_operations_table_still_works(
-    startup_packages, engine, monkeypatch
+    startup_packages, engine_without_operations, monkeypatch
 ):
     """A pre-phase-1 database has no operations table; the check degrades to
     the legacy one rather than crashing the boot."""
+    engine = engine_without_operations
     _seed_package(engine, "pending")
     monkeypatch.setattr(startup_packages, "engine", engine)
     monkeypatch.setattr(startup_packages, "_database_absent", lambda: False)

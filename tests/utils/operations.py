@@ -114,10 +114,15 @@ def seed_operation(
     )
     from app.services.operations.enqueue import enqueue
 
+    if repository is not None:
+        if repository.id is None:
+            db.flush()  # the test sessions run with autoflush off
+        repository_id = repository.id
+
     op = enqueue(
         db,
         kind,
-        repository_id=repository.id if repository is not None else repository_id,
+        repository_id=repository_id,
         trigger=trigger,
         params=params,
         execution_mode=execution_mode,
@@ -265,16 +270,14 @@ _OPERATION_COLUMNS = (
 
 # Columns the operation derives rather than stores: `has_logs` from the log
 # file, `backup_plan_id` through the plan run, `repository_path`,
-# `repository_name` and `borg_version` from the repository,
-# `estimated_time_remaining` from the sizes and the speed, and the id from the
-# insert.
+# `repository_name` and `borg_version` from the repository, and the id from
+# the insert.
 _DROPPED = (
     "has_logs",
     "backup_plan_id",
     "repository_path",
     "repository_name",
     "borg_version",
-    "estimated_time_remaining",
     "id",
 )
 
@@ -350,7 +353,9 @@ def seed_job_operation(db, kind, **legacy):
     elif kind == "restore":
         execution_mode = "server"
     progress = legacy.pop("progress", None)
-    progress_percent = legacy.pop("progress_percent", None) or progress
+    progress_percent = legacy.pop("progress_percent", None)
+    if progress_percent is None:
+        progress_percent = progress
     logs = legacy.pop("logs", None)
     stdout = legacy.pop("stdout", None)
     stderr = legacy.pop("stderr", None)
