@@ -85,6 +85,23 @@ describe('CommandPreview', () => {
         />
       )
       expect(screen.getByText('/usr/local/bin/borg serve --umask=077')).toBeInTheDocument()
+
+      rerender(
+        <CommandPreview
+          mode="create"
+          repositoryLocation="ssh"
+          repositoryPath="/backups/repo"
+          host="repo.example"
+          username="borg"
+          remotePath="/usr/local/sbin/borg-serve"
+          useSudo
+          repositoryMode="full"
+          dataSource="local"
+        />
+      )
+      expect(
+        screen.getByText('sudo -n -H /usr/local/sbin/borg-serve serve --umask=077')
+      ).toBeInTheDocument()
     })
 
     it('renders borg2 init and backup commands for Borg 2 repositories', () => {

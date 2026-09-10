@@ -34,6 +34,7 @@ interface SSHConnection {
   ssh_key_id: number
   default_path?: string
   ssh_path_prefix?: string
+  use_sudo?: boolean
 }
 
 interface AgentMachine {
@@ -191,6 +192,7 @@ export default function WizardStepReview({
             sourceDirs={data.sourceDirs}
             customFlags={data.customFlags}
             remotePath={data.remotePath}
+            useSudo={getRepoSshConnection()?.use_sudo}
             repositoryMode={data.repositoryMode}
             dataSource={data.dataSource}
             sourceSshConnection={getSourceSshConnection()}

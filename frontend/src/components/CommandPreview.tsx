@@ -29,6 +29,7 @@ interface CommandPreviewProps {
   sourceDirs?: string[]
   customFlags?: string
   remotePath?: string
+  useSudo?: boolean
   repositoryMode?: 'full' | 'observe'
   // Remote source props
   dataSource?: 'local' | 'remote'
@@ -125,6 +126,7 @@ export default function CommandPreview({
   sourceDirs = [],
   customFlags = '',
   remotePath = '',
+  useSudo = false,
   repositoryMode = 'full',
   dataSource = 'local',
   sourceSshConnection = null,
@@ -143,7 +145,9 @@ export default function CommandPreview({
   const remotePathFlag = remotePath ? `--remote-path ${remotePath} ` : ''
   // What the repository host's forced-command wrapper has to accept.
   const remoteServeCommand =
-    repositoryLocation === 'ssh' ? `${remotePath || 'borg'} serve --umask=077` : ''
+    repositoryLocation === 'ssh'
+      ? `${useSudo ? 'sudo -n -H ' : ''}${remotePath || 'borg'} serve --umask=077`
+      : ''
 
   // Generate init command
   const initCommand = generateBorgInitCommand({
