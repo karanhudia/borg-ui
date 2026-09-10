@@ -1,8 +1,12 @@
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 import json
 
 import pytest
+
+from fastapi import HTTPException
+from sqlalchemy.exc import OperationalError
 
 from app.core.borg_router import BorgRouter
 
@@ -1110,3 +1114,172 @@ async def test_prune_delegates_to_v2_service():
         keep_yearly=6,
         dry_run=True,
     )
+
+
+@pytest.mark.parametrize(
+    "maintenance_kind, job_kind, extra",
+    [
+        ("prune", "repository.prune", {}),
+        ("compact", "repository.compact", {}),
+        ("check", "repository.check", {}),
+        ("delete_archive", "repository.delete_archive", {"archive_name": "arch-1"}),
+    ],
+)
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_agent_maintenance_fails_the_operation_when_queue_is_refused(
+    db_session, maintenance_kind, job_kind, extra
+):
+    # Since phase 5 the maintenance job is an `operations` row the caller
+    # created `running` (post-backup prune/compact/check). When admission
+    # refuses the agent job, that row - not a legacy *_jobs row - must be
+    # failed, or it counts as active work and blocks every backup of the
+    # repository until a restart. A legacy row that happens to share the id
+    # (the two id spaces are independent) must stay untouched.
+    from app.database.models import Operation, Repository
+    from app.services.operations.job_facade import LEGACY_MODELS
+    from app.services.operations.maintenance_start import (
+        active_maintenance_operation,
+        start_inline_maintenance,
+    )
+
+    repo_row = Repository(
+        name=f"Refused {maintenance_kind}",
+        path=f"/repos/refused-{maintenance_kind}",
+        encryption="none",
+        repository_type="local",
+        executor_type="agent",
+        execution_target="agent",
+    )
+    db_session.add(repo_row)
+    db_session.commit()
+    operation = start_inline_maintenance(
+        db_session, repo_row, maintenance_kind, params=extra, user_id=None
+    )
+    operation_id = operation.id
+    repository_id = repo_row.id
+    legacy_model = LEGACY_MODELS[maintenance_kind]
+    legacy = legacy_model(
+        id=operation_id,
+        repository_id=repository_id,
+        repository_path=repo_row.path,
+        status="completed",
+        created_at=datetime.utcnow(),
+        **extra,
+    )
+    db_session.add(legacy)
+    db_session.commit()
+
+    repo = SimpleNamespace(borg_version=1, id=repository_id, executor_type="agent")
+    refused = HTTPException(
+        status_code=409,
+        detail={
+            "key": "backend.errors.jobs.repositoryOperationActive",
+            "params": {
+                "requested_operation": maintenance_kind,
+                "active_operation": "list_archives",
+                "active_job_table": "agent_jobs",
+                "active_status": "running",
+            },
+        },
+    )
+
+    with (
+        patch("app.database.database.SessionLocal", return_value=db_session),
+        patch(
+            "app.services.repository_executor.queue_agent_repository_operation_job",
+            side_effect=refused,
+        ),
+        pytest.raises(
+            RuntimeError,
+            match=(
+                f"agent {maintenance_kind} failed: "
+                "list_archives is active on the repository"
+            ),
+        ),
+    ):
+        await BorgRouter(repo)._run_agent_maintenance(
+            job_kind=job_kind,
+            maintenance_kind=maintenance_kind,
+            maintenance_job_id=operation_id,
+        )
+
+    # The router closed the session it was handed; read the rows back fresh.
+    stored = db_session.get(Operation, operation_id)
+    assert stored.status == "failed"
+    assert stored.completed_at is not None
+    assert (
+        stored.error_message
+        == "agent job could not be queued: list_archives is active on the repository"
+    )
+    assert db_session.get(legacy_model, operation_id).status == "completed"
+    # Nothing is left that admission would count as active maintenance.
+    assert (
+        active_maintenance_operation(db_session, repository_id, maintenance_kind)
+        is None
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "error, expected",
+    [
+        (
+            HTTPException(
+                status_code=409,
+                detail={
+                    "key": "backend.errors.jobs.repositoryOperationActive",
+                    "params": {"active_operation": "list_archives"},
+                },
+            ),
+            "agent job could not be queued: list_archives is active on the repository",
+        ),
+        (
+            HTTPException(
+                status_code=409,
+                detail={"key": "backend.errors.agents.noQueueableAgent"},
+            ),
+            "agent job could not be queued: backend.errors.agents.noQueueableAgent",
+        ),
+        (
+            RuntimeError("database is locked"),
+            "agent job could not be queued: database is locked",
+        ),
+        (
+            HTTPException(
+                status_code=409,
+                detail={
+                    "key": "backend.errors.repo.pruneAlreadyRunning",
+                    "params": {"active_operation": "prune"},
+                },
+            ),
+            "agent job could not be queued: backend.errors.repo.pruneAlreadyRunning",
+        ),
+        (
+            HTTPException(
+                status_code=502, detail={"key": "x", "message": "agent gone"}
+            ),
+            "agent job could not be queued: agent gone",
+        ),
+        (RuntimeError(), "agent job could not be queued: RuntimeError"),
+    ],
+)
+def test_queue_failure_message_names_the_cause(error, expected):
+    from app.core.borg_router import _queue_failure_message
+
+    assert _queue_failure_message(error) == expected
+
+
+@pytest.mark.unit
+def test_queue_failure_message_keeps_a_database_error_as_the_cause():
+    # SQLAlchemy errors carry a `detail` attribute too (an empty list); only
+    # an HTTPException's detail is the cause, anything else is rendered as is.
+    from app.core.borg_router import _queue_failure_message
+
+    message = _queue_failure_message(
+        OperationalError("INSERT INTO agent_jobs", {}, Exception("database is locked"))
+    )
+
+    # The statement and its parameters (the agent job payload, secrets
+    # included) stay out of the row; the driver's error is the cause.
+    assert message == "agent job could not be queued: Exception: database is locked"

@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from unittest.mock import patch, mock_open, MagicMock
@@ -11,6 +11,7 @@ from app.utils.process_utils import (
     cleanup_orphaned_mounts,
     reconcile_stale_backup_maintenance,
     reconcile_orphaned_maintenance_jobs,
+    reconcile_orphaned_maintenance_operations,
 )
 from app.database.models import (
     AgentJob,
@@ -41,6 +42,7 @@ _MAINTENANCE_CASES = [
     ),
 ]
 from app.core.security import get_password_hash
+from app.services.operations.job_facade import MAINTENANCE_KINDS
 
 # ==========================================
 # Datetime Utils Tests
@@ -564,9 +566,10 @@ class TestProcessUtils:
         db_session.refresh(backup_job)
         assert backup_job.maintenance_status == "running_prune"
 
-    def test_reap_once_runs_all_three_reaper_passes(self):
+    def test_reap_once_runs_every_reaper_pass(self):
         # The background loop must run the agent-job reaper, the maintenance
-        # status reconciler AND the orphaned-*_job reaper each tick.
+        # status reconciler, the orphaned-*_job reaper AND the orphaned
+        # operation reaper each tick.
         with (
             patch("app.services.agent_job_reaper.SessionLocal"),
             patch(
@@ -581,15 +584,30 @@ class TestProcessUtils:
                 "app.utils.process_utils.reconcile_orphaned_maintenance_jobs",
                 return_value=1,
             ) as m_orphan,
+            patch(
+                "app.utils.process_utils.reconcile_orphaned_maintenance_operations",
+                return_value=4,
+            ) as m_operations,
         ):
             from app.services.agent_job_reaper import _reap_once
 
-            total = _reap_once()
+            order = MagicMock()
+            order.attach_mock(m_operations, "operations")
+            order.attach_mock(m_maint, "maintenance")
+            reaped_operation_ids: list[int] = []
+            total = _reap_once(None, reaped_operation_ids)
 
-        assert total == 6
+        assert total == 10
         m_agent.assert_called_once()
-        m_maint.assert_called_once()
         m_orphan.assert_called_once()
+        # the ids the pass failed travel back to the loop for the broadcast
+        assert (
+            m_operations.call_args.kwargs["reaped_operation_ids"]
+            is reaped_operation_ids
+        )
+        # The orphaned operation is failed before the backup-row pass, so the
+        # backup's maintenance state is reconciled in the same tick.
+        assert [call[0] for call in order.mock_calls] == ["operations", "maintenance"]
 
     @pytest.mark.parametrize("kind, model, extra, job_kind", _MAINTENANCE_CASES)
     def test_reconcile_orphaned_reaps_old_pending_without_agent_job(
@@ -701,7 +719,7 @@ class TestProcessUtils:
         # is selected as a candidate but before the guarded UPDATE. The
         # correlation check still reports no active agent job, so only the
         # WHERE status == 'pending' guard can prevent a spurious 'failed'.
-        def _flip_to_running(db, kind, job_id):
+        def _flip_to_running(db, kind, job_id, **_):
             db.query(PruneJob).filter(PruneJob.id == job_id).update(
                 {PruneJob.status: "running"}, synchronize_session=False
             )
@@ -709,7 +727,7 @@ class TestProcessUtils:
             return False
 
         with patch(
-            "app.utils.process_utils._has_active_agent_job_for",
+            "app.utils.process_utils.has_active_agent_job_for",
             side_effect=_flip_to_running,
         ):
             reaped = reconcile_orphaned_maintenance_jobs(db_session)
@@ -745,7 +763,7 @@ class TestProcessUtils:
         # appears before the re-check after the guarded UPDATE (second call ->
         # True). The row must be rolled back to 'pending', not reaped.
         with patch(
-            "app.utils.process_utils._has_active_agent_job_for",
+            "app.utils.process_utils.has_active_agent_job_for",
             side_effect=[False, True],
         ):
             reaped = reconcile_orphaned_maintenance_jobs(db_session)
@@ -1125,3 +1143,255 @@ class TestProcessUtils:
             "-uz",
             str(orphaned_dir),
         ]
+
+
+def _agent_repository(db_session, name: str) -> Repository:
+    repo = Repository(
+        name=name,
+        path=f"/repos/{name}",
+        encryption="none",
+        repository_type="local",
+        executor_type="agent",
+        execution_target="agent",
+    )
+    db_session.add(repo)
+    db_session.commit()
+    return repo
+
+
+def _running_operation(
+    db_session,
+    repo: Repository,
+    kind: str,
+    *,
+    age_minutes: int,
+    execution_mode: str | None = "agent",
+):
+    """An inline maintenance operation as `start_inline_maintenance` leaves
+    it: `running`, no pid, the executor recorded, started `age_minutes`
+    ago."""
+    from app.services.operations.enqueue import enqueue
+
+    operation = enqueue(
+        db_session,
+        kind,
+        repository_id=repo.id,
+        execution_mode=execution_mode,
+        commit=False,
+    )
+    operation.status = "running"
+    operation.started_at = datetime.utcnow() - timedelta(minutes=age_minutes)
+    db_session.commit()
+    return operation
+
+
+class TestReconcileOrphanedMaintenanceOperations:
+    """A `running` maintenance operation of an agent-executed repository with
+    no agent job behind it blocks the repository until a restart (#983)."""
+
+    @pytest.mark.parametrize("kind", MAINTENANCE_KINDS)
+    def test_reaps_an_old_running_operation_without_agent_job(self, db_session, kind):
+        repo = _agent_repository(db_session, f"orphan-{kind}")
+        operation = _running_operation(db_session, repo, kind, age_minutes=10)
+
+        reaped_ids: list[int] = []
+        reaped = reconcile_orphaned_maintenance_operations(
+            db_session, reaped_operation_ids=reaped_ids
+        )
+
+        assert reaped == 1
+        assert reaped_ids == [operation.id]
+        db_session.refresh(operation)
+        assert operation.status == "failed"
+        assert operation.completed_at is not None
+        assert operation.error_message == (
+            "orphaned: no agent job is working on this operation"
+        )
+
+    def test_keeps_a_fresh_operation(self, db_session):
+        repo = _agent_repository(db_session, "fresh")
+        operation = _running_operation(db_session, repo, "prune", age_minutes=1)
+
+        assert reconcile_orphaned_maintenance_operations(db_session) == 0
+        db_session.refresh(operation)
+        assert operation.status == "running"
+
+    def test_ages_a_row_without_started_at_by_its_creation(self, db_session):
+        repo = _agent_repository(db_session, "unstarted")
+        operation = _running_operation(db_session, repo, "prune", age_minutes=10)
+        operation.started_at = None
+        operation.created_at = datetime.utcnow() - timedelta(minutes=10)
+        db_session.commit()
+
+        assert reconcile_orphaned_maintenance_operations(db_session) == 1
+        db_session.refresh(operation)
+        assert operation.status == "failed"
+
+    def test_keeps_an_operation_with_a_live_agent_job(self, db_session):
+        repo = _agent_repository(db_session, "dispatched")
+        agent = AgentMachine(
+            name="Agent",
+            agent_id="agt_orphan_operation",
+            token_hash=get_password_hash("secret"),
+            token_prefix="secret",
+            status="online",
+        )
+        db_session.add(agent)
+        db_session.flush()
+        operation = _running_operation(db_session, repo, "prune", age_minutes=10)
+        db_session.add(
+            AgentJob(
+                agent_machine_id=agent.id,
+                job_type="repository",
+                status="running",
+                payload={
+                    "job_kind": "repository.prune",
+                    "operation": {
+                        "maintenance_job": {
+                            "kind": "prune",
+                            "id": operation.id,
+                            "table": "operations",
+                        },
+                    },
+                },
+            )
+        )
+        db_session.commit()
+
+        assert reconcile_orphaned_maintenance_operations(db_session) == 0
+        db_session.refresh(operation)
+        assert operation.status == "running"
+
+    def test_keeps_an_operation_a_table_less_agent_job_may_refer_to(self, db_session):
+        # A payload without a table marker predates it and may name either a
+        # legacy row or this operation (an agent job queued by the previous
+        # build); the ambiguity keeps the row rather than reaping a live one.
+        repo = _agent_repository(db_session, "table-less")
+        agent = AgentMachine(
+            name="Agent",
+            agent_id="agt_table_less",
+            token_hash=get_password_hash("secret"),
+            token_prefix="secret",
+            status="online",
+        )
+        db_session.add(agent)
+        db_session.flush()
+        operation = _running_operation(db_session, repo, "prune", age_minutes=10)
+        db_session.add(
+            AgentJob(
+                agent_machine_id=agent.id,
+                job_type="repository",
+                status="queued",
+                payload={
+                    "job_kind": "repository.prune",
+                    "operation": {
+                        "maintenance_job": {"kind": "prune", "id": operation.id},
+                    },
+                },
+            )
+        )
+        db_session.commit()
+
+        assert reconcile_orphaned_maintenance_operations(db_session) == 0
+        db_session.refresh(operation)
+        assert operation.status == "running"
+
+    def test_keeps_a_server_side_operation(self, db_session):
+        # The Borg process of a server-side prune runs in this process and
+        # records no pid, so its absence proves nothing; that row belongs to
+        # startup recovery, not to the runtime reaper. The executor is read
+        # from the row: a repository switched to an agent while its
+        # server-side prune still runs does not make that prune reapable.
+        repo = _agent_repository(db_session, "was-server-side")
+        operation = _running_operation(
+            db_session, repo, "prune", age_minutes=10, execution_mode="server"
+        )
+
+        assert reconcile_orphaned_maintenance_operations(db_session) == 0
+        db_session.refresh(operation)
+        assert operation.status == "running"
+
+    def test_keeps_an_operation_with_a_recorded_process(self, db_session):
+        # A row with a pid belongs to the process-liveness rules (startup
+        # recovery), whatever its executor says.
+        repo = _agent_repository(db_session, "with-pid")
+        operation = _running_operation(db_session, repo, "compact", age_minutes=10)
+        operation.process_pid = 4242
+        operation.process_start_time = 1.0
+        db_session.commit()
+
+        assert reconcile_orphaned_maintenance_operations(db_session) == 0
+        db_session.refresh(operation)
+        assert operation.status == "running"
+
+    def test_keeps_an_operation_the_runner_is_executing(self, db_session):
+        from app.services.operations.runner import operation_runner
+
+        repo = _agent_repository(db_session, "runner-owned")
+        operation = _running_operation(db_session, repo, "check", age_minutes=10)
+
+        with patch.dict(operation_runner.running_tasks, {operation.id: object()}):
+            assert reconcile_orphaned_maintenance_operations(db_session) == 0
+        db_session.refresh(operation)
+        assert operation.status == "running"
+
+    def test_keeps_an_operation_whose_agent_job_arrives_mid_reap(self, db_session):
+        # The pass reads the live agent jobs once; the re-check after the
+        # guarded update is what catches a job queued in between.
+        repo = _agent_repository(db_session, "racing")
+        operation = _running_operation(db_session, repo, "compact", age_minutes=10)
+
+        with patch(
+            "app.utils.process_utils.has_active_agent_job_for", return_value=True
+        ):
+            assert reconcile_orphaned_maintenance_operations(db_session) == 0
+        db_session.refresh(operation)
+        assert operation.status == "running"
+
+    def test_keeps_the_status_a_caller_wrote_mid_reap(self, db_session):
+        # The caller closed the row between the read and the guarded update:
+        # the update matches nothing and the caller's status stands.
+        repo = _agent_repository(db_session, "closed-meanwhile")
+        operation = _running_operation(db_session, repo, "prune", age_minutes=10)
+
+        def close_it(db):
+            db.query(Operation).filter(Operation.id == operation.id).update(
+                {Operation.status: "completed"}, synchronize_session=False
+            )
+            db.commit()
+            return set()
+
+        with patch(
+            "app.utils.process_utils.active_agent_maintenance_jobs",
+            side_effect=close_it,
+        ):
+            assert reconcile_orphaned_maintenance_operations(db_session) == 0
+        db_session.refresh(operation)
+        assert operation.status == "completed"
+        assert operation.error_message is None
+
+
+class TestBroadcastReapedOperations:
+    async def test_broadcasts_each_reaped_operation(self, db_session):
+        from app.services.agent_job_reaper import _broadcast_reaped_operations
+
+        repo = _agent_repository(db_session, "broadcast")
+        operation = _running_operation(db_session, repo, "prune", age_minutes=10)
+        operation_id = operation.id
+        seen = []
+
+        async def record(op, db=None):
+            seen.append(op.id)
+
+        with (
+            patch(
+                "app.services.agent_job_reaper.SessionLocal", return_value=db_session
+            ),
+            patch(
+                "app.services.operations.events.broadcast_operation_updated",
+                new=record,
+            ),
+        ):
+            await _broadcast_reaped_operations([operation_id, 999_999])
+
+        assert seen == [operation_id]

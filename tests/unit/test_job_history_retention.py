@@ -8,6 +8,8 @@ freshest timestamp, so genuinely live work never looks old.
 
 from datetime import timedelta
 
+from unittest.mock import patch
+
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
@@ -1077,3 +1079,208 @@ def test_recent_extension_log_columns_are_kept(db):
 
     db.expunge_all()
     assert db.get(OperationRcloneDetails, rclone_id).log_text == "copied 2 files"
+
+
+@pytest.mark.unit
+def test_sweep_resolves_an_operations_backed_prune_by_its_table(
+    db, monkeypatch, tmp_path
+):
+    """Since phase 5 an agent prune's `maintenance_job` names an `operations`
+    row, and its payload says so. The sweep must read that row, not the
+    legacy `prune_jobs` row that happens to share the id (the id spaces are
+    separate): here that decoy belongs to another repository, whose backup
+    must not be marked."""
+    import uuid
+
+    from app.database.models import Operation
+
+    # the repaired log is a file under data_dir
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+    _settings(db)
+    machine = _machine(db)
+    repo_b = _repo(db)
+    repo_a = Repository(
+        name="other", path="/repo/other", encryption="none", borg_version=1
+    )
+    db.add(repo_a)
+    db.flush()
+    when = utc_now() - timedelta(hours=6)
+    finished = when + timedelta(minutes=5)
+    backups = {}
+    for repo, name in ((repo_b, "host-old"), (repo_a, "host-old")):
+        job = BackupJob(
+            repository_id=repo.id,
+            status="completed",
+            archive_name=name,
+            completed_at=when - timedelta(hours=1),
+            created_at=when - timedelta(hours=1),
+        )
+        db.add(job)
+        db.flush()
+        backups[repo.id] = job.id
+    operation = Operation(
+        kind="prune",
+        category="maintenance",
+        status="completed",
+        repository_id=repo_b.id,
+        run_id=str(uuid.uuid4()),
+        started_at=when,
+        completed_at=finished,
+        created_at=when,
+    )
+    db.add(operation)
+    db.flush()
+    decoy = PruneJob(
+        id=operation.id,
+        repository_id=repo_a.id,
+        status="completed",
+        started_at=when,
+        completed_at=finished,
+        created_at=when,
+        logs="decoy",
+        has_logs=True,
+    )
+    db.add(decoy)
+    agent_job = AgentJob(
+        agent_machine_id=machine.id,
+        job_type="repository",
+        status="completed",
+        payload={
+            "job_kind": "repository.prune",
+            "operation": {
+                "maintenance_job": {
+                    "kind": "prune",
+                    "id": operation.id,
+                    "table": "operations",
+                }
+            },
+        },
+        claimed_at=when,
+        completed_at=finished,
+        created_at=when,
+        updated_at=when,
+    )
+    db.add(agent_job)
+    db.flush()
+    db.add(
+        AgentJobLog(
+            agent_job_id=agent_job.id,
+            sequence=0,
+            stream="stderr",
+            message="Pruning archive: host-old"
+            "                     Mon, 2026-07-20 03:00:00 [aa00] (1/1)",
+            created_at=when,
+        )
+    )
+    db.commit()
+
+    repo_a_id, repo_b_id, operation_id = repo_a.id, repo_b.id, operation.id
+
+    # A data directory that cannot be written loses the log repair, not the
+    # marking (the retention pass must not abort on it).
+    with patch("builtins.open", side_effect=OSError("read-only file system")):
+        assert sweep_pruned_archive_records(db) == 1
+    db.expunge_all()
+    assert db.get(BackupJob, backups[repo_b_id]).archive_pruned_at == finished
+    db.query(BackupJob).filter(BackupJob.id == backups[repo_b_id]).update(
+        {BackupJob.archive_pruned_at: None}, synchronize_session=False
+    )
+    db.commit()
+
+    assert sweep_pruned_archive_records(db) == 1
+
+    db.expunge_all()
+    assert db.get(BackupJob, backups[repo_b_id]).archive_pruned_at == finished
+    assert db.get(BackupJob, backups[repo_a_id]).archive_pruned_at is None
+    assert db.get(PruneJob, operation_id).logs == "decoy"
+    # The operation keeps its log in a file; the repair writes the full log
+    # there (the facade's own setter would leave an existing file alone).
+    from app.services.operations.job_facade import MaintenanceJobFacade
+
+    repaired = MaintenanceJobFacade(db, db.get(Operation, operation_id))
+    assert "Pruning archive: host-old" in repaired.logs
+
+
+@pytest.mark.unit
+def test_sweep_resolves_a_table_less_prune_by_its_repository(db):
+    """An agent prune queued by the build before the table marker names an
+    `operations` id without saying so. The payload's repository tells it
+    apart from a legacy row sharing the id."""
+    import uuid
+
+    from app.database.models import Operation
+
+    _settings(db)
+    machine = _machine(db)
+    repo_b = _repo(db)
+    repo_a = Repository(
+        name="other", path="/repo/other", encryption="none", borg_version=1
+    )
+    db.add(repo_a)
+    db.flush()
+    when = utc_now() - timedelta(hours=6)
+    finished = when + timedelta(minutes=5)
+    pruned = BackupJob(
+        repository_id=repo_b.id,
+        status="completed",
+        archive_name="host-old",
+        completed_at=when - timedelta(hours=1),
+        created_at=when - timedelta(hours=1),
+    )
+    db.add(pruned)
+    db.flush()
+    operation = Operation(
+        kind="prune",
+        category="maintenance",
+        status="completed",
+        repository_id=repo_b.id,
+        run_id=str(uuid.uuid4()),
+        started_at=when,
+        completed_at=finished,
+        created_at=when,
+    )
+    db.add(operation)
+    db.flush()
+    db.add(
+        PruneJob(
+            id=operation.id,
+            repository_id=repo_a.id,
+            status="completed",
+            started_at=when,
+            completed_at=finished,
+            created_at=when,
+        )
+    )
+    agent_job = AgentJob(
+        agent_machine_id=machine.id,
+        job_type="repository",
+        status="completed",
+        payload={
+            "job_kind": "repository.prune",
+            "repository": {"id": repo_b.id, "path": repo_b.path},
+            "operation": {"maintenance_job": {"kind": "prune", "id": operation.id}},
+        },
+        claimed_at=when,
+        completed_at=finished,
+        created_at=when,
+        updated_at=when,
+    )
+    db.add(agent_job)
+    db.flush()
+    db.add(
+        AgentJobLog(
+            agent_job_id=agent_job.id,
+            sequence=0,
+            stream="stderr",
+            message="Pruning archive: host-old"
+            "                     Mon, 2026-07-20 03:00:00 [aa00] (1/1)",
+            created_at=when,
+        )
+    )
+    db.commit()
+    pruned_id = pruned.id
+
+    assert sweep_pruned_archive_records(db) == 1
+
+    db.expunge_all()
+    assert db.get(BackupJob, pruned_id).archive_pruned_at == finished

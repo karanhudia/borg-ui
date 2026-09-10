@@ -222,9 +222,14 @@ def build_agent_repository_operation_payload(
 
     operation_payload = dict(operation or {})
     if maintenance_job_kind and maintenance_job_id:
+        # Since phase 5 every maintenance job is an `operations` row. The
+        # legacy `*_jobs` ids are an independent sequence, so the table is
+        # named: a payload without it was written before the upgrade and
+        # names a legacy row.
         operation_payload["maintenance_job"] = {
             "kind": maintenance_job_kind,
             "id": maintenance_job_id,
+            "table": "operations",
         }
 
     secrets = {}

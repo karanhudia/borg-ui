@@ -26,6 +26,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 from app.core.agent_auth import AGENT_AUTH_HEADER
 from app.core.security import get_password_hash
+from app.services.operations.maintenance_start import active_maintenance_operation
 from app.database.models import (
     AgentJob,
     AgentMachine,
@@ -1848,6 +1849,77 @@ class TestRepositoriesCreate:
         if routed_keep_within is None and len(args) >= 9:
             routed_keep_within = args[8]
         assert routed_keep_within == "1d"
+
+    def test_prune_dry_run_closes_its_operation_when_the_router_raises(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """The dry-run preview runs inline on an operation created `running`.
+        A router error must close that row, or it blocks the repository via
+        admission control until the next restart."""
+        repo = Repository(**_base_repository_payload(name="Dry Run Prune"))
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.repositories.BorgRouter.prune",
+            new=AsyncMock(side_effect=RuntimeError("agent prune failed: refused")),
+        ):
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/prune",
+                json={"keep_daily": 7, "dry_run": True},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 500
+        test_db.expire_all()
+        prune = test_db.query(Operation).filter(Operation.kind == "prune").one()
+        assert prune.status == "failed"
+        assert prune.error_message == "agent prune failed: refused"
+        assert prune.completed_at is not None
+
+    def test_prune_dry_run_on_an_agent_repository_records_the_refusal(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """End to end through the router: admission refuses the agent job,
+        the router fails the operation with the cause, and the route's own
+        handler leaves that verdict alone."""
+        from fastapi import HTTPException
+
+        repo = Repository(
+            **_base_repository_payload(name="Dry Run Agent Prune"),
+            executor_type="agent",
+            execution_target="agent",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        refused = HTTPException(
+            status_code=409,
+            detail={
+                "key": "backend.errors.jobs.repositoryOperationActive",
+                "params": {"active_operation": "list_archives"},
+            },
+        )
+
+        with patch(
+            "app.services.repository_executor.queue_agent_repository_operation_job",
+            side_effect=refused,
+        ):
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/prune",
+                json={"keep_daily": 7, "dry_run": True},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 500
+        test_db.expire_all()
+        prune = test_db.query(Operation).filter(Operation.kind == "prune").one()
+        assert prune.status == "failed"
+        assert prune.error_message == (
+            "agent job could not be queued: list_archives is active on the repository"
+        )
+        assert active_maintenance_operation(test_db, repo.id, "prune") is None
 
     def test_legacy_prune_route_rejects_non_string_keep_within(
         self, test_client: TestClient, admin_headers, test_db
