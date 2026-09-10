@@ -1447,7 +1447,7 @@
       "repositoryCreateFailed": "No se pudo crear el repositorio",
       "multiRepositoryRequiresPro": "Varios repositorios en un plan de copia requieren Pro",
       "selectSourceConnection": "Selecciona un cliente remoto antes de explorar rutas de origen",
-      "scriptCreateFailed": "Failed to create generated script",
+      "scriptCreateFailed": "No se pudo crear el script generado",
       "repositoryToggled": "Repositorio actualizado",
       "repositoryToggleFailed": "No se pudo actualizar el repositorio"
     },

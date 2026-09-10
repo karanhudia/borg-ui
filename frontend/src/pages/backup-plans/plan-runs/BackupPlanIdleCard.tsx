@@ -54,6 +54,7 @@ interface BackupPlanIdleCardProps {
   onViewHistory: () => void
   onViewRepositories: () => void
   onToggleRepository: (repositoryId: number) => void
+  togglingRepositoryId: number | null
   planIsToggling: boolean
   t: TFunction
   formatStatusLabel: (status?: string) => string
@@ -77,6 +78,7 @@ export function BackupPlanIdleCard({
   onViewHistory,
   onViewRepositories,
   onToggleRepository,
+  togglingRepositoryId,
   planIsToggling,
   t,
   formatStatusLabel,
@@ -482,6 +484,7 @@ export function BackupPlanIdleCard({
                     icon={<Pause size={11} />}
                     label={name}
                     onClick={() => onToggleRepository(link.repository_id)}
+                    disabled={togglingRepositoryId === link.repository_id}
                     sx={{
                       height: 22,
                       fontSize: '0.68rem',

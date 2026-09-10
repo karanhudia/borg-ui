@@ -208,6 +208,7 @@ function SkippedRepositoryBackupPlans() {
         onViewLogs={noop}
         onTogglePlan={noop}
         onToggleRepository={noop}
+        togglingRepository={null}
         onEditPlan={noop}
         onDeletePlan={noop}
         onViewHistory={noop}
@@ -256,6 +257,7 @@ function CommunityLockedBackupPlans() {
         onViewLogs={noop}
         onTogglePlan={noop}
         onToggleRepository={noop}
+        togglingRepository={null}
         onEditPlan={noop}
         onDeletePlan={noop}
         onViewHistory={noop}

@@ -367,6 +367,7 @@ export function ReviewStep({
                     {repository.name}
                     {skipped && (
                       <Chip
+                        component="span"
                         size="small"
                         label={t('multiRepositorySelector.skipped')}
                         color="warning"

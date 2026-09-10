@@ -192,6 +192,7 @@ function renderContent(overrides: Partial<React.ComponentProps<typeof BackupPlan
     onViewLogs: vi.fn(),
     onTogglePlan: vi.fn(),
     onToggleRepository: vi.fn(),
+    togglingRepository: null,
     onEditPlan: vi.fn(),
     onDeletePlan: vi.fn(),
     onViewHistory: vi.fn(),
@@ -277,6 +278,33 @@ describe('BackupPlansContent', () => {
     fireEvent.click(screen.getByText('Offsite Repo'))
 
     expect(onToggleRepository).toHaveBeenCalledWith(plan.id, 12)
+  })
+
+  it('ignores clicks on a skipped repository chip while its toggle is pending', () => {
+    const onToggleRepository = vi.fn()
+    const plan: BackupPlan = {
+      ...basePlan,
+      repositories: [
+        { repository_id: 11, enabled: true, execution_order: 1 },
+        {
+          repository_id: 12,
+          enabled: false,
+          execution_order: 2,
+          repository: { id: 12, name: 'Offsite Repo', path: '/backups/offsite' } as never,
+        },
+      ],
+    }
+
+    renderContent({
+      onToggleRepository,
+      togglingRepository: { planId: plan.id, repositoryId: 12 },
+      backupPlans: [plan],
+      processedPlans: { groups: [{ name: null, plans: [plan] }] },
+    })
+
+    fireEvent.click(screen.getByText('Offsite Repo'))
+
+    expect(onToggleRepository).not.toHaveBeenCalled()
   })
 
   it('calls the repository navigation action from a backup plan card', async () => {

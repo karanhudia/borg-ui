@@ -644,13 +644,16 @@ export default function BackupPlans() {
       })
     }
 
-    setWizardState((prev) => ({
-      ...prev,
-      repositoryIds: nextSelection.ids,
-      disabledRepositoryIds: (prev.disabledRepositoryIds || []).filter((id) =>
+    setWizardState((prev) => {
+      let disabled = (prev.disabledRepositoryIds || []).filter((id) =>
         nextSelection.ids.includes(id)
-      ),
-    }))
+      )
+      // Removing the last enabled repository must not leave only skipped ones.
+      if (nextSelection.ids.length > 0 && disabled.length === nextSelection.ids.length) {
+        disabled = disabled.filter((id) => id !== nextSelection.ids[0])
+      }
+      return { ...prev, repositoryIds: nextSelection.ids, disabledRepositoryIds: disabled }
+    })
   }
 
   const handleRepositoryEnabledToggle = (repositoryId: number) => {
@@ -907,6 +910,9 @@ export default function BackupPlans() {
         onViewLogs={setLogJob}
         onTogglePlan={handleTogglePlan}
         onToggleRepository={handleToggleRepository}
+        togglingRepository={
+          toggleRepositoryMutation.isPending ? (toggleRepositoryMutation.variables ?? null) : null
+        }
         onEditPlan={openEditWizard}
         onDeletePlan={handleDeletePlan}
         onViewHistory={setHistoryPlanId}

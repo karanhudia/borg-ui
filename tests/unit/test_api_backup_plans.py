@@ -2588,6 +2588,27 @@ class TestBackupPlanRoutes:
             "key": "backend.errors.backupPlans.repositoriesRequired"
         }
 
+    def test_toggle_plan_repository_refuses_to_resume_observe_repository(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "pro")
+        repo_a = _create_repo(test_db, "Primary", "/repos/primary")
+        repo_b = _create_repo(test_db, "Watch only", "/repos/watch")
+        plan = _create_scheduled_plan(test_db, [repo_a, repo_b])
+        plan.repositories[1].enabled = False
+        repo_b.mode = "observe"
+        test_db.commit()
+
+        response = test_client.post(
+            f"/api/backup-plans/{plan.id}/repositories/{repo_b.id}/toggle",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"] == {
+            "key": "backend.errors.backupPlans.observeRepositorySelected"
+        }
+
     def test_toggle_plan_repository_unknown_link_returns_404(
         self, test_client: TestClient, admin_headers, test_db
     ):

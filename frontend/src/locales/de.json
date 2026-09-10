@@ -1447,7 +1447,7 @@
       "repositoryCreateFailed": "Repository konnte nicht erstellt werden",
       "multiRepositoryRequiresPro": "Mehrere Repositories in einem Backup-Plan erfordern Pro",
       "selectSourceConnection": "Wähle einen Remote-Client aus, bevor du Quellpfade durchsuchst",
-      "scriptCreateFailed": "Failed to create generated script",
+      "scriptCreateFailed": "Generiertes Skript konnte nicht erstellt werden",
       "repositoryToggled": "Repository aktualisiert",
       "repositoryToggleFailed": "Repository konnte nicht aktualisiert werden"
     },

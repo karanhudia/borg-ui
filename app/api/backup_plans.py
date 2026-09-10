@@ -1854,6 +1854,40 @@ async def toggle_backup_plan_repository(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"key": "backend.errors.backupPlans.repositoriesRequired"},
         )
+    if not link.enabled:
+        # Resuming must pass the same checks as attaching an enabled link on save.
+        repo = link.repository
+        if repo is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"key": "backend.errors.backupPlans.repositoryNotFound"},
+            )
+        if repo.mode == "observe":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"key": "backend.errors.backupPlans.observeRepositorySelected"},
+            )
+        source_locations = decode_source_locations(
+            plan.source_locations,
+            source_type=plan.source_type,
+            source_ssh_connection_id=plan.source_ssh_connection_id,
+            source_directories=_decode_json_list(plan.source_directories),
+        )
+        route = plan_repository_route(repo, source_locations)
+        if not route.supported:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"key": route.reason_key, "params": route.display_params},
+            )
+        require_backup_plan_feature_access(
+            db,
+            enabled_repository_count=sum(
+                1 for item in plan.repositories if item.enabled
+            )
+            + 1,
+            repository_run_mode=plan.repository_run_mode,
+            source_locations=source_locations,
+        )
 
     link.enabled = not link.enabled
     plan.updated_at = datetime.utcnow()
