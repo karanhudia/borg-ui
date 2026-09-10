@@ -38,9 +38,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { data: systemInfo } = useSystemInfo()
 
   // Segment Umami visitors by plan. Read straight from the query so a loading
-  // or failed system-info never reports a paid install as community.
+  // or failed system-info never reports a paid install as community, and so
+  // switching backend target (which clears the cache) drops the old plan.
   useEffect(() => {
-    if (systemInfo?.plan) setAnalyticsPlan(systemInfo.plan)
+    setAnalyticsPlan(systemInfo?.plan ?? null)
   }, [systemInfo?.plan])
   const [mobileOpen, setMobileOpen] = useState(false)
   const [showConsentBanner, setShowConsentBanner] = useState(false)

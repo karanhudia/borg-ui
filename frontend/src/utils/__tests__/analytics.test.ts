@@ -242,7 +242,9 @@ describe('analytics (umami)', () => {
       expect(window.umami?.identify).toHaveBeenLastCalledWith(
         expect.objectContaining({ app_version: '1.2.3', plan: 'pro' })
       )
+
       setAnalyticsPlan(null)
+      expect(window.umami?.identify).toHaveBeenLastCalledWith({ app_version: '1.2.3' })
     })
 
     it('setUserId does not throw', () => {
