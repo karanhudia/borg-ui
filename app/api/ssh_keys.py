@@ -1155,6 +1155,7 @@ async def get_ssh_connections(
                     "ssh_path_prefix": conn.ssh_path_prefix,
                     "mount_point": conn.mount_point,
                     "status": conn.status,
+                    "shell_restricted": bool(conn.shell_restricted),
                     "last_test": serialize_datetime(conn.last_test),
                     "last_success": serialize_datetime(conn.last_success),
                     "error_message": conn.error_message,
@@ -1738,6 +1739,14 @@ async def test_ssh_connection(
             connection.status = "connected"
             connection.last_success = datetime.utcnow()
             connection.error_message = None
+            connection.shell_restricted = bool(test_result.get("restricted"))
+            if connection.shell_restricted:
+                # df cannot run here any more; drop numbers we can no longer refresh.
+                connection.storage_total = None
+                connection.storage_used = None
+                connection.storage_available = None
+                connection.storage_percent_used = None
+                connection.last_storage_check = None
         else:
             connection.status = "failed"
             connection.error_message = test_result.get(
@@ -1758,6 +1767,7 @@ async def test_ssh_connection(
                 "username": connection.username,
                 "port": connection.port,
                 "status": connection.status,
+                "shell_restricted": bool(connection.shell_restricted),
                 "error_message": connection.error_message,
             },
         }
@@ -2020,6 +2030,14 @@ async def test_existing_connection(
             connection.status = "connected"
             connection.last_success = datetime.utcnow()
             connection.error_message = None
+            connection.shell_restricted = bool(test_result.get("restricted"))
+            if connection.shell_restricted:
+                # df cannot run here any more; drop numbers we can no longer refresh.
+                connection.storage_total = None
+                connection.storage_used = None
+                connection.storage_available = None
+                connection.storage_percent_used = None
+                connection.last_storage_check = None
             logger.info(
                 "SSH connection test successful",
                 connection_id=connection_id,

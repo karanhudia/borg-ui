@@ -106,6 +106,37 @@ describe('RemoteMachineCard', () => {
       expect(screen.getByText('Connected')).toBeInTheDocument()
     })
 
+    it('shows the Borg-only badge for a restricted shell', () => {
+      render(
+        <RemoteMachineCard
+          machine={{ ...baseMachine, shell_restricted: true }}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onRefreshStorage={mockOnRefreshStorage}
+          onTestConnection={mockOnTestConnection}
+          onDeployKey={mockOnDeployKey}
+        />
+      )
+      expect(screen.getByText('Borg only')).toBeInTheDocument()
+      const refreshButtons = screen.getAllByRole('button', { name: /refresh storage/i })
+      expect(refreshButtons.length).toBeGreaterThan(0)
+      refreshButtons.forEach((button) => expect(button).toBeDisabled())
+    })
+
+    it('hides the Borg-only badge when the shell is not restricted', () => {
+      render(
+        <RemoteMachineCard
+          machine={baseMachine}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onRefreshStorage={mockOnRefreshStorage}
+          onTestConnection={mockOnTestConnection}
+          onDeployKey={mockOnDeployKey}
+        />
+      )
+      expect(screen.queryByText('Borg only')).not.toBeInTheDocument()
+    })
+
     it('renders status chip for failed', () => {
       const failedMachine = { ...baseMachine, status: 'failed' }
       render(
