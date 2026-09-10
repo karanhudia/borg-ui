@@ -54,6 +54,33 @@ def stable_sshfs_temp_root(repository_id: int | None) -> str | None:
     return os.path.join(SSHFS_CACHE_BASE, f"repository-{repository_id}")
 
 
+def _ensure_sshfs_cache_root(temp_root: str) -> None:
+    """Create the SSHFS cache root, rejecting hijacked path components.
+
+    /tmp is world-writable, so a local user could otherwise pre-create
+    /tmp/borg-ui as a symlink and redirect the mount elsewhere (CWE-59).
+    A residual TOCTOU race remains for an attacker already running inside
+    the container; closing it needs an O_NOFOLLOW dirfd walk.
+    """
+    path = Path(temp_root)
+    base = Path(SSHFS_CACHE_BASE)
+    if base not in path.parents:
+        os.makedirs(temp_root, exist_ok=True)
+        return
+
+    for component in (base.parent, base, path):
+        if component.is_symlink():
+            raise Exception(
+                f"Refusing to use SSHFS cache path reached via symlink: {component}"
+            )
+        component.mkdir(mode=0o700, exist_ok=True)
+        component.chmod(0o700)
+        if component.stat().st_uid != os.geteuid():
+            raise Exception(
+                f"Refusing to use SSHFS cache path owned by another user: {component}"
+            )
+
+
 NO_FUSE_SUPPORT_MARKERS = (
     "no fuse support",
     "borg mount not available",
@@ -645,7 +672,7 @@ class MountService:
             if temp_root is None:
                 temp_root = tempfile.mkdtemp(prefix=f"sshfs_mount_{job_id or 'user'}_")
             else:
-                os.makedirs(temp_root, exist_ok=True)
+                _ensure_sshfs_cache_root(temp_root)
 
             logger.info(
                 "Mounting multiple SSH paths under shared temp root",

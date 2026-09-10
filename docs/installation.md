@@ -406,7 +406,7 @@ SSHFS sources somewhere else and see
 `apparmor="DENIED" ... info="failed mntpnt match"` in the host's kernel log, add
 a drop-in for your path instead of editing the shipped profile:
 
-```
+```text
 # /etc/apparmor.d/local/fusermount3
 mount fstype={fuse,fuse.*} options=(nosuid,nodev) options in (ro,rw,noatime,dirsync,nodiratime,noexec,sync) -> /your/mount/base/**/,
 umount /your/mount/base/**/,
