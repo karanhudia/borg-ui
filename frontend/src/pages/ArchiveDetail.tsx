@@ -112,6 +112,9 @@ export default function ArchiveDetail() {
     const repositories = repositoriesData?.data?.repositories || []
     return repositories.find((r: Repository) => r.id === repositoryId) || null
   }, [repositoriesData, repositoryId])
+  // Spec 6.8. Defaults to `full` while the repository list is still loading,
+  // which is the behaviour every install had before the mode existed.
+  const indexMode = repository?.index_mode ?? 'full'
 
   // The archive a restore reads from: the one on screen, unless file history
   // asked for an older one, whose borg id has to be resolved before Borg can
@@ -231,8 +234,11 @@ export default function ArchiveDetail() {
         })
         .then((res) => res.data),
     // The counts come from a Pro route, so a Community install would take a
-    // 403 on every archive it opens.
-    enabled: validParams && !!archive && can('archive_history'),
+    // 403 on every archive it opens. A repository that does not index file
+    // history has no counts to show either (spec 6.8), and showing them on
+    // the tab label while the tab itself says the history is not indexed is
+    // the contradiction the mode exists to avoid.
+    enabled: validParams && !!archive && indexMode === 'full' && can('archive_history'),
   })
 
   if (!validParams || archiveErrored) {
@@ -247,7 +253,8 @@ export default function ArchiveDetail() {
     return <Box sx={{ p: 3 }} />
   }
 
-  const totals = changesForLabel?.totals
+  // Cached data from a previous mode must not outlive the setting.
+  const totals = indexMode === 'full' ? changesForLabel?.totals : undefined
   const tabLabel = (
     <Box
       component="span"
@@ -444,11 +451,7 @@ export default function ArchiveDetail() {
 
       <Box sx={{ pt: 1 }}>
         {activeTab === 'changes' && (
-          <ArchiveChangesTab
-            repositoryId={repositoryId}
-            archive={archive}
-            indexMode={repository?.index_mode ?? 'full'}
-          />
+          <ArchiveChangesTab repositoryId={repositoryId} archive={archive} indexMode={indexMode} />
         )}
         {activeTab === 'files' && repository && (
           <ArchiveFilesTab

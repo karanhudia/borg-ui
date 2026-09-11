@@ -5,6 +5,7 @@ import { formatBytes } from '../../utils/dateUtils'
 import FileTypeIcon from '../FileTypeIcon'
 import FileHistoryPanel from './FileHistoryPanel'
 import IndexModeGate from './IndexModeGate'
+import { usePlan } from '../../hooks/usePlan'
 import type { ArchiveItem } from '../ArchivePathSelector'
 import type { HistoryEntry } from '../../types/archives'
 import type { IndexMode } from '../../types/operations'
@@ -44,6 +45,7 @@ export default function ArchiveFileDetailsPane({
 }: ArchiveFileDetailsPaneProps) {
   const { t } = useTranslation()
   const theme = useTheme()
+  const { can } = usePlan()
 
   if (!selectedPath || !selectedEntry) {
     return (
@@ -84,6 +86,9 @@ export default function ArchiveFileDetailsPane({
     )
   }
 
+  const historyPanel = (
+    <FileHistoryPanel repositoryId={repositoryId} path={selectedPath} onRestoreEntry={onRestore} />
+  )
   const isFile = selectedEntry.type === 'file'
 
   return (
@@ -149,13 +154,14 @@ export default function ArchiveFileDetailsPane({
 
       <Box sx={{ px: 2.5, pb: 2, pt: 1, borderTop: 1, borderColor: 'divider' }}>
         <SectionTitle>{t('archives.files.history')}</SectionTitle>
-        <IndexModeGate mode={indexMode}>
-          <FileHistoryPanel
-            repositoryId={repositoryId}
-            path={selectedPath}
-            onRestoreEntry={onRestore}
-          />
-        </IndexModeGate>
+        {/* Plan first, then mode (spec 6.8). FileHistoryPanel carries its
+            own PlanGate, so gating it from the outside would answer a
+            Community user with the mode instead of the upsell. */}
+        {can('archive_history') ? (
+          <IndexModeGate mode={indexMode}>{historyPanel}</IndexModeGate>
+        ) : (
+          historyPanel
+        )}
       </Box>
     </Box>
   )
