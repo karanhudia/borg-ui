@@ -87,3 +87,15 @@ export const SystemLane: Story = {
     },
   },
 }
+
+// A repository executed by a managed agent has no history stage: the cell
+// says so instead of showing a plan chip or "no file history yet".
+export const AgentRepository: Story = {
+  args: {
+    repository: hubRepository({
+      repository_name: 'k8s-node',
+      history: { indexed: 0, pending: 0, failed: 0, skipped: 18, truncated: 0, rows: 0 },
+      history_capability: 'agent_unsupported',
+    }),
+  },
+}

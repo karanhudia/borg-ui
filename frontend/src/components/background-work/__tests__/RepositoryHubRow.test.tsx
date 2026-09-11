@@ -113,6 +113,32 @@ describe('RepositoryHubRow', () => {
     expect(screen.queryByText(/of 18 indexed/i)).not.toBeInTheDocument()
   })
 
+  it('names the agent reason ahead of the Pro chip, since an upgrade would not help', () => {
+    renderRow({
+      historyAvailable: false,
+      repository: {
+        ...repository(),
+        history_capability: 'agent_unsupported',
+        history: { indexed: 0, pending: 0, failed: 0, skipped: 18, truncated: 0, rows: 0 },
+      },
+    })
+    expect(screen.getByText(/not available for agent repositories/i)).toBeInTheDocument()
+    expect(screen.queryByText('Pro')).not.toBeInTheDocument()
+  })
+
+  it('names the agent reason over the Pro chip even when an older index survives', () => {
+    renderRow({
+      historyAvailable: false,
+      repository: {
+        ...repository(),
+        history_capability: 'agent_unsupported',
+        history: { indexed: 12, pending: 0, failed: 0, skipped: 6, truncated: 0, rows: 4000 },
+      },
+    })
+    expect(screen.getByText(/not available for agent repositories/i)).toBeInTheDocument()
+    expect(screen.queryByText('Pro')).not.toBeInTheDocument()
+  })
+
   it('shows only the stages that belong to the run', () => {
     renderRow({
       track: track({

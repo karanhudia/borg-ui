@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Alert,
   Box,
@@ -22,7 +22,14 @@ import { REBUILD_STAGES } from './repositoryTrack'
 import { archivesAPI, operationsAPI } from '../../services/api'
 import { usePlan } from '../../hooks/usePlan'
 import { parseBackendDate } from '../../utils/dateUtils'
-import type { HubArchive, OperationItem, RebuildStage } from '../../types/operations'
+import type {
+  HubArchive,
+  HubHistorySummary,
+  IndexMode,
+  OperationItem,
+  RebuildStage,
+} from '../../types/operations'
+import type { HistoryCapability } from '../../types/archives'
 
 interface RepositoryTrackDialogProps {
   open: boolean
@@ -30,6 +37,14 @@ interface RepositoryTrackDialogProps {
   repositoryId: number
   repositoryName: string
   operations: OperationItem[]
+  // From the hub row; the history stage is not offered when the
+  // repository cannot have one (an agent executes it), and its summary
+  // says whether an index built before that is still there.
+  historyCapability?: HistoryCapability
+  history?: HubHistorySummary
+  // The repository's index mode (spec 6.8): a mode without the history
+  // stage is a standing choice, not an index still being built.
+  indexMode?: IndexMode
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
@@ -100,6 +115,9 @@ export default function RepositoryTrackDialog({
   repositoryId,
   repositoryName,
   operations,
+  historyCapability = 'available',
+  history,
+  indexMode = 'full',
 }: RepositoryTrackDialogProps) {
   const { t } = useTranslation()
   const theme = useTheme()
@@ -107,7 +125,32 @@ export default function RepositoryTrackDialog({
   const [submitting, setSubmitting] = useState(false)
   const [failed, setFailed] = useState(false)
   const { can } = usePlan()
-  const historyLocked = !can('archive_history')
+  // The agent restriction names itself even when the plan lacks the feature
+  // too: a plan upgrade would not unlock the stage for such a repository.
+  const historyLocked = !can('archive_history') || historyCapability !== 'available'
+  // An index built before the repository moved to an agent (or before the
+  // plan lapsed) is still real data (the hub row and the Changes tab show
+  // it); a repository with none is told why there is none instead of
+  // "every archive has its file history".
+  const historyUnavailable =
+    historyCapability !== 'available' &&
+    (history == null || (history.indexed === 0 && history.rows === 0))
+  // Archives the index does not cover: still pending, skipped, or failed.
+  // While any remain, "every archive has its file history" would claim a
+  // completeness the hub row's own counts contradict.
+  const historyOutstanding =
+    history == null ? 0 : history.pending + history.skipped + history.failed
+  const historyIndexed = history?.indexed ?? 0
+  const historyPartial = !historyUnavailable && historyOutstanding > 0
+  // Mode before everything below (as in the hub row): under `archives` or
+  // `off` the pending archives are the choice made, not work still coming.
+  const historyByMode = indexMode !== 'full'
+  // A picked history stage that becomes locked while the dialog is open
+  // (the row's capability changed under it) would still be sent and
+  // refused; fall back to the stage before it.
+  useEffect(() => {
+    if (historyLocked && stage === 'history') setStage('archives')
+  }, [historyLocked, stage])
 
   const { data: detail } = useQuery({
     queryKey: ['operations-repository-detail', repositoryId],
@@ -233,8 +276,47 @@ export default function RepositoryTrackDialog({
                       />
                     )}
                     <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                      {t('operations.background.hub.detailHint')}
+                      {historyCapability === 'agent_unsupported'
+                        ? // leftovers from a server-executed past: real, but
+                          // no rebuild can touch them on an agent's repository
+                          t('operations.background.hub.historyAgentUnsupported')
+                        : t('operations.background.hub.detailHint')}
                     </Typography>
+                  </Stack>
+                ) : historyByMode ? (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    {t(
+                      indexMode === 'archives'
+                        ? 'operations.background.hub.modeArchives'
+                        : 'operations.background.hub.modeOff'
+                    )}
+                  </Typography>
+                ) : historyUnavailable ? (
+                  // "every archive has its file history" would be a claim
+                  // about an index that was never built
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    {historyCapability === 'agent_unsupported'
+                      ? t('operations.background.hub.historyAgentUnsupported')
+                      : t('operations.background.hub.historyNone')}
+                  </Typography>
+                ) : historyPartial ? (
+                  // an index still being built, or one that skipped or
+                  // failed archives whose list has not loaded: say how far
+                  // it got rather than that it is complete. On an agent's
+                  // repository the rest stays uncovered, and the same line
+                  // says why the stage below is locked.
+                  <Stack spacing={0.5}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      {t('operations.background.hub.detailPartial', {
+                        indexed: historyIndexed,
+                        total: historyIndexed + historyOutstanding,
+                      })}
+                    </Typography>
+                    {historyCapability === 'agent_unsupported' && (
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                        {t('operations.background.hub.historyAgentUnsupported')}
+                      </Typography>
+                    )}
                   </Stack>
                 ) : (
                   <Typography
@@ -259,7 +341,12 @@ export default function RepositoryTrackDialog({
             <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }}>
               {t('operations.background.rebuildMenuHint')}
             </Typography>
-            <RebuildStagePicker value={stage} onChange={setStage} historyLocked={historyLocked} />
+            <RebuildStagePicker
+              value={stage}
+              onChange={setStage}
+              historyLocked={historyLocked}
+              historyLockedReason={historyCapability === 'agent_unsupported' ? 'agent' : 'plan'}
+            />
             <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1.5 }}>
               {summary}
             </Typography>

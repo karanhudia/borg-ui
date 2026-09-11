@@ -474,3 +474,105 @@ def test_enqueue_followups_ignores_a_running_chain(db, repo, monkeypatch):
     db.commit()
     chain = enqueue_followups(db, prune, depends_on_id=prune.id)
     assert [o.kind for o in chain] == ["archive_sync", "history_merge", "stats"]
+
+
+@pytest.mark.unit
+def test_history_capability_names_the_reason(db_session):
+    """The executor first, then the plan: an agent's repository reads as
+    agent-unsupported on every plan (an upgrade would not change it), a
+    Community install's server repository as plan-locked, and only a Pro
+    server-side repository has the history stage."""
+    from app.database.models import LicensingState
+    from app.services.operations.followups import (
+        history_capability,
+        history_possible,
+        history_possible_for,
+    )
+
+    server = Repository(name="server", path="/repo/server", borg_version=1)
+    agent = Repository(
+        name="agent",
+        path="/repo/agent",
+        borg_version=1,
+        executor_type="agent",
+        execution_target="agent",
+    )
+    db_session.add_all([server, agent])
+    db_session.commit()
+
+    assert history_capability(db_session, server) == "plan_locked"
+    assert history_capability(db_session, agent) == "agent_unsupported"
+    state = db_session.query(LicensingState).first()
+    state.plan = "pro"
+    state.status = "active"
+    db_session.commit()
+    assert history_capability(db_session, server) == "available"
+    assert history_capability(db_session, agent) == "agent_unsupported"
+    assert history_possible(db_session, server) is True
+    assert history_possible(db_session, agent) is False
+    # the plan gate can be handed in by a caller that already read it
+    assert history_capability(db_session, agent, history=False) == "agent_unsupported"
+    assert history_capability(db_session, server, history=False) == "plan_locked"
+    assert history_possible_for(db_session, agent.id, history=True) is False
+    assert history_possible_for(db_session, server.id, history=True) is True
+    # a missing repository keeps the plan answer
+    assert history_possible_for(db_session, 999_999, history=True) is True
+    assert history_possible_for(db_session, None, history=True) is True
+
+
+@pytest.mark.unit
+def test_enqueue_backup_followups_omits_history_index_for_an_agent_repository(db):
+    agent = Repository(
+        name="agent",
+        path="/repo/agent",
+        borg_version=1,
+        executor_type="agent",
+        execution_target="agent",
+    )
+    db.add(agent)
+    db.commit()
+    load_default_executors()
+    ops = enqueue_backup_followups(db, agent.id, history=True)
+    assert [o.kind for o in ops] == ["archive_sync", "history_merge", "stats"]
+
+
+@pytest.mark.unit
+def test_chain_for_repository_gives_an_agent_repository_no_history_stage(
+    db, monkeypatch
+):
+    """The one place every follow-up site reads its gates: with the plan
+    open and the mode `full`, a repository executed by an agent still gets
+    no `history_index`, since the server cannot diff it."""
+    from app.services.operations.followups import chain_for_repository
+
+    monkeypatch.setattr(
+        "app.services.operations.followups.history_enabled", lambda db: True
+    )
+    server = Repository(name="server", path="/repo/server", borg_version=1)
+    agent = Repository(
+        name="agent",
+        path="/repo/agent",
+        borg_version=1,
+        executor_type="agent",
+        execution_target="agent",
+    )
+    db.add_all([server, agent])
+    db.commit()
+    load_default_executors()
+
+    assert chain_for_repository(db, "backup", server.id) == [
+        "archive_sync",
+        "history_merge",
+        "history_index",
+        "stats",
+    ]
+    assert chain_for_repository(db, "backup", agent.id) == [
+        "archive_sync",
+        "history_merge",
+        "stats",
+    ]
+    # the mode still applies on top: an `archives` agent repository keeps
+    # the listing and the size only
+    agent.index_mode = "archives"
+    db.commit()
+    assert chain_for_repository(db, "backup", agent.id) == ["archive_sync", "stats"]

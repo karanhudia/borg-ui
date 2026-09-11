@@ -25,6 +25,47 @@ def test_record_import_connect_creates_completed_row_and_followups(test_db):
 
 
 @pytest.mark.unit
+def test_record_import_connect_gives_an_agent_repository_no_history_stage(test_db):
+    """The import chain carries `history_index` on a plan with the feature,
+    but not for a repository executed by an agent (the server cannot diff
+    it); the other stages are unchanged."""
+    from app.database.models import LicensingState
+    from app.services.operations.enqueue import record_import_connect
+    import app.services.operations.executors.index  # noqa: F401
+    import app.services.operations.executors.history  # noqa: F401
+
+    test_db.add(
+        LicensingState(instance_id="t-import-agent", plan="pro", status="active")
+    )
+    server = Repository(name="s", path="/tmp/s", encryption="none", compression="lz4")
+    agent = Repository(
+        name="a",
+        path="/tmp/a",
+        encryption="none",
+        compression="lz4",
+        executor_type="agent",
+        execution_target="agent",
+    )
+    test_db.add_all([server, agent])
+    test_db.commit()
+
+    for_server = record_import_connect(test_db, server, user_id=None)
+    for_agent = record_import_connect(test_db, agent, user_id=None)
+
+    def chain(op):
+        return [
+            r.kind
+            for r in test_db.query(Operation)
+            .filter(Operation.run_id == op.run_id, Operation.id != op.id)
+            .order_by(Operation.id)
+            .all()
+        ]
+
+    assert chain(for_server) == ["stats", "archive_sync", "history_index"]
+    assert chain(for_agent) == ["stats", "archive_sync"]
+
+
+@pytest.mark.unit
 def test_import_repository_records_operation_and_skips_inline_stats(
     test_client, test_db, admin_headers, tmp_path
 ):

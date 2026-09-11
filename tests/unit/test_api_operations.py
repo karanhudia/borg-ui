@@ -305,6 +305,38 @@ class TestOperationsRepositories:
     """GET /api/operations/repositories: the derived-data hub, one row per
     repository whether or not anything is running."""
 
+    def test_rows_name_the_history_capability(
+        self, test_client, test_db, admin_headers
+    ):
+        """The executor first, then the plan: an agent's repository is
+        agent-unsupported on every plan; a server repository is plan-locked
+        on Community and has the stage on Pro."""
+        from app.database.models import LicensingState
+
+        _repo(test_db, "server")
+        agent = _repo(test_db, "agent")
+        agent.executor_type = "agent"
+        agent.execution_target = "agent"
+        test_db.commit()
+
+        r = test_client.get("/api/operations/repositories", headers=admin_headers)
+        rows = {row["repository_name"]: row for row in r.json()["repositories"]}
+        assert rows["server"]["history_capability"] == "plan_locked"
+        assert rows["agent"]["history_capability"] == "agent_unsupported"
+        assert r.json()["history_available"] is False
+
+        # the first request created the single licensing row; flip that one
+        # (lookups always read the first row in the table)
+        state = test_db.query(LicensingState).first()
+        state.plan = "pro"
+        state.status = "active"
+        test_db.commit()
+        r = test_client.get("/api/operations/repositories", headers=admin_headers)
+        rows = {row["repository_name"]: row for row in r.json()["repositories"]}
+        assert rows["server"]["history_capability"] == "available"
+        assert rows["agent"]["history_capability"] == "agent_unsupported"
+        assert r.json()["history_available"] is True
+
     def test_rows_cover_every_repository_with_index_totals(
         self, test_client, test_db, admin_headers
     ):

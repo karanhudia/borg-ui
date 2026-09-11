@@ -1339,3 +1339,147 @@ def test_archive_changes_has_no_btree_index_on_the_unbounded_path():
         )
     assert not path.index
     assert any({c.name for c in idx.columns} == {"archive_id"} for idx in table.indexes)
+
+
+@pytest.mark.unit
+class TestAgentRepositoryHistoryCapability:
+    """A managed agent's repository cannot be diffed by the server, so the
+    history stage does not exist for it: the responses say so, nothing
+    enqueues it, and a rebuild of it is refused (#953)."""
+
+    @staticmethod
+    def _agent_repo(test_db):
+        return _repo(
+            test_db, name="agent", executor_type="agent", execution_target="agent"
+        )
+
+    def test_list_and_detail_name_the_capability(
+        self, test_client, test_db, admin_headers
+    ):
+        _pro(test_db)
+        agent = self._agent_repo(test_db)
+        server = _repo(test_db, name="server")
+        a = _archive(test_db, agent, "a1", 1, state="skipped")
+        b = _archive(test_db, server, "b1", 1)
+
+        r = test_client.get(
+            f"/api/repositories/{agent.id}/archives", headers=admin_headers
+        )
+        assert r.status_code == 200
+        assert r.json()["history_capability"] == "agent_unsupported"
+        # `history_available` keeps meaning "the plan has the feature"
+        assert r.json()["history_available"] is True
+        r = test_client.get(
+            f"/api/repositories/{agent.id}/archives/{a.id}", headers=admin_headers
+        )
+        assert r.json()["history_capability"] == "agent_unsupported"
+        r = test_client.get(
+            f"/api/repositories/{agent.id}/archives/{a.id}/changes",
+            headers=admin_headers,
+        )
+        assert r.json()["history_capability"] == "agent_unsupported"
+
+        r = test_client.get(
+            f"/api/repositories/{server.id}/archives", headers=admin_headers
+        )
+        assert r.json()["history_capability"] == "available"
+        assert r.json()["history_available"] is True
+        r = test_client.get(
+            f"/api/repositories/{server.id}/archives/{b.id}", headers=admin_headers
+        )
+        assert r.json()["history_capability"] == "available"
+
+    def test_community_reads_as_plan_locked(self, test_client, test_db, admin_headers):
+        server = _repo(test_db, name="server")
+        r = test_client.get(
+            f"/api/repositories/{server.id}/archives", headers=admin_headers
+        )
+        assert r.json()["history_capability"] == "plan_locked"
+        assert r.json()["history_available"] is False
+        # the executor's reason outlasts the plan: an agent's repository
+        # names it on Community too
+        agent = self._agent_repo(test_db)
+        r = test_client.get(
+            f"/api/repositories/{agent.id}/archives", headers=admin_headers
+        )
+        assert r.json()["history_capability"] == "agent_unsupported"
+        assert r.json()["history_available"] is False
+
+    def test_rebuild_from_history_is_refused_for_an_agent_repository(
+        self, test_client, test_db, admin_headers
+    ):
+        _pro(test_db)
+        agent = self._agent_repo(test_db)
+        a = _archive(test_db, agent, "a1", 1, state="skipped")
+        r = test_client.post(
+            f"/api/repositories/{agent.id}/rebuild",
+            json={"from": "history"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 409
+        assert (
+            r.json()["detail"]["key"]
+            == "backend.errors.archives.historyUnavailableForAgent"
+        )
+        test_db.refresh(a)
+        assert a.history_state == "skipped"  # not reset to "pending" for nothing
+        assert test_db.query(Operation).count() == 0
+
+    def test_rebuild_from_archives_skips_the_history_stage_for_an_agent_repository(
+        self, test_client, test_db, admin_headers
+    ):
+        _pro(test_db)
+        agent = self._agent_repo(test_db)
+        _archive(test_db, agent, "a1", 1, state="skipped")
+        r = test_client.post(
+            f"/api/repositories/{agent.id}/rebuild",
+            json={"from": "archives"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 200
+        kinds = [test_db.get(Operation, i).kind for i in r.json()["operations"]]
+        assert kinds == ["archive_sync", "history_merge", "stats"]
+
+    def test_path_history_reports_its_coverage(
+        self, test_client, test_db, admin_headers
+    ):
+        _pro(test_db)
+        agent = self._agent_repo(test_db)
+        _archive(test_db, agent, "a1", 1, state="skipped")
+        _archive(test_db, agent, "a2", 2, state="skipped")
+        r = test_client.get(
+            f"/api/repositories/{agent.id}/history",
+            params={"path": "etc/hosts"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 200
+        assert r.json()["entries"] == []
+        # `skipped` archives are uncovered like `pending` ones; the
+        # capability says why they stay so
+        assert r.json()["coverage"] == {
+            "indexed": 0,
+            "exhausted": 0,
+            "total": 2,
+            "capability": "agent_unsupported",
+        }
+
+        server = _repo(test_db, name="server")
+        _archive(test_db, server, "b1", 1)
+        _archive(test_db, server, "b2", 2, state="pending")
+        retrying = _archive(test_db, server, "b3", 3, state="failed")
+        given_up = _archive(test_db, server, "b4", 4, state="failed")
+        given_up.history_attempts = 3
+        test_db.commit()
+        r = test_client.get(
+            f"/api/repositories/{server.id}/history",
+            params={"path": "etc/hosts"},
+            headers=admin_headers,
+        )
+        # one failure still has retries, one the executor gave up on
+        assert retrying.history_attempts in (None, 0)
+        assert r.json()["coverage"] == {
+            "indexed": 1,
+            "exhausted": 1,
+            "total": 4,
+            "capability": "available",
+        }

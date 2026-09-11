@@ -2424,6 +2424,348 @@ class TestRepositoriesUpdate:
 
         assert response.status_code == 200
 
+    def test_moving_a_repository_back_to_the_server_reopens_its_history(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """An agent's archives carry `skipped` (no history run reaches them);
+        once the server executes the repository the history stage exists
+        again, so they go back to `pending` for the next index run, a
+        `failed` one the listing had not marked yet with them."""
+        from app.database.models import Archive
+
+        repo = Repository(
+            name="Moved Back",
+            path="/repos/moved-back",
+            encryption="none",
+            repository_type="local",
+            executor_type="agent",
+            execution_target="agent",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        for i, state in enumerate(("skipped", "failed", "indexed")):
+            test_db.add(
+                Archive(
+                    repository_id=repo.id,
+                    borg_id=f"id-{i}",
+                    name=f"a{i}",
+                    series="nas",
+                    start=datetime(2026, 9, 1 + i, 2),
+                    history_state=state,
+                    history_attempts=3,
+                )
+            )
+        test_db.commit()
+
+        from app.services.operations.executors import load_default_executors
+
+        load_default_executors()  # the queued run needs registered kinds
+        with patch("app.api.repositories.mqtt_service.sync_state_with_db"):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"executor_type": "server"},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200, response.text
+        test_db.expire_all()
+        rows = test_db.query(Archive).filter_by(repository_id=repo.id).all()
+        assert sorted(a.history_state for a in rows) == [
+            "indexed",
+            "pending",
+            "pending",
+        ]
+        assert all(
+            a.history_attempts == 0 for a in rows if a.history_state == "pending"
+        )
+
+    def test_moving_back_to_the_server_queues_the_history_despite_a_running_listing(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """The agent's listing may still be in flight when the repository
+        moves back, and its chain has no history stage: the reopened
+        archives would wait for the hourly reconcile. The run is queued
+        anyway (the runner serialises it on the repository)."""
+        from app.database.models import Archive, Operation
+
+        repo = Repository(
+            name="Moved Back Busy",
+            path="/repos/moved-back-busy",
+            encryption="none",
+            repository_type="local",
+            executor_type="agent",
+            execution_target="agent",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        test_db.add(
+            Archive(
+                repository_id=repo.id,
+                borg_id="id-busy",
+                name="busy",
+                series="nas",
+                start=datetime(2026, 9, 1, 2),
+                history_state="skipped",
+            )
+        )
+        listing = Operation(
+            repository_id=repo.id,
+            kind="archive_sync",
+            category="index",
+            status="running",
+            trigger="followup",
+            run_id="run-busy",
+        )
+        test_db.add(listing)
+        test_db.commit()
+        listing_id = listing.id
+
+        from app.services.operations.executors import load_default_executors
+
+        load_default_executors()
+        with patch("app.api.repositories.mqtt_service.sync_state_with_db"):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"executor_type": "server"},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200, response.text
+        test_db.expire_all()
+        run = (
+            test_db.query(Operation)
+            .filter(
+                Operation.repository_id == repo.id, Operation.trigger == "reconcile"
+            )
+            .order_by(Operation.id)
+            .all()
+        )
+        assert run, "a reconcile run was queued despite the listing"
+        # its own chain, not one hung behind the listing
+        assert run[0].depends_on_id is None
+        assert listing_id not in [op.depends_on_id for op in run]
+        assert "history_index" in [op.kind for op in run]
+
+    def test_moving_back_to_the_server_reopens_but_does_not_index_a_narrower_mode(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """A mode without the history stage keeps the reopened archives
+        `pending`, the state every archive of such a repository has, and
+        queues no run for them: a later return to `full` catches up."""
+        from app.database.models import Archive, Operation
+
+        repo = Repository(
+            name="Moved Back Archives",
+            path="/repos/moved-back-archives",
+            encryption="none",
+            repository_type="local",
+            executor_type="agent",
+            execution_target="agent",
+            index_mode="archives",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        test_db.add(
+            Archive(
+                repository_id=repo.id,
+                borg_id="id-narrow",
+                name="narrow",
+                series="nas",
+                start=datetime(2026, 9, 1, 2),
+                history_state="skipped",
+                history_attempts=3,
+            )
+        )
+        test_db.commit()
+
+        from app.services.operations.executors import load_default_executors
+
+        load_default_executors()
+        with patch("app.api.repositories.mqtt_service.sync_state_with_db"):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"executor_type": "server"},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200, response.text
+        test_db.expire_all()
+        archive = test_db.query(Archive).filter_by(repository_id=repo.id).one()
+        assert archive.history_state == "pending"
+        assert archive.history_attempts == 0
+        assert (
+            test_db.query(Operation).filter(Operation.repository_id == repo.id).count()
+            == 0
+        )
+
+    def test_moving_back_to_the_server_with_a_mode_change_queues_one_run(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """An update that both returns the repository to the server and
+        sets its mode to `full` has one catch-up run, not one per reason."""
+        from app.database.models import Archive, Operation
+
+        repo = Repository(
+            name="Moved Back Full",
+            path="/repos/moved-back-full",
+            encryption="none",
+            repository_type="local",
+            executor_type="agent",
+            execution_target="agent",
+            index_mode="archives",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        test_db.add(
+            Archive(
+                repository_id=repo.id,
+                borg_id="id-full",
+                name="full",
+                series="nas",
+                start=datetime(2026, 9, 1, 2),
+                history_state="skipped",
+            )
+        )
+        test_db.commit()
+
+        from app.services.operations.executors import load_default_executors
+
+        load_default_executors()
+        with patch("app.api.repositories.mqtt_service.sync_state_with_db"):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"executor_type": "server", "index_mode": "full"},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200, response.text
+        test_db.expire_all()
+        listings = (
+            test_db.query(Operation)
+            .filter(
+                Operation.repository_id == repo.id, Operation.kind == "archive_sync"
+            )
+            .all()
+        )
+        assert len(listings) == 1
+        kinds = {
+            op.kind
+            for op in test_db.query(Operation).filter(
+                Operation.repository_id == repo.id
+            )
+        }
+        assert "history_index" in kinds
+        archive = test_db.query(Archive).filter_by(repository_id=repo.id).one()
+        assert archive.history_state == "pending"
+
+    def test_moving_back_to_the_server_keeps_the_reopen_when_the_queueing_fails(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """The reopen is stored with the executor change; the index run is
+        a convenience the hourly reconcile makes up for."""
+        from app.database.models import Archive
+
+        repo = Repository(
+            name="Moved Back Unqueued",
+            path="/repos/moved-back-unqueued",
+            encryption="none",
+            repository_type="local",
+            executor_type="agent",
+            execution_target="agent",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        test_db.add(
+            Archive(
+                repository_id=repo.id,
+                borg_id="id-unqueued",
+                name="unqueued",
+                series="nas",
+                start=datetime(2026, 9, 1, 2),
+                history_state="skipped",
+            )
+        )
+        test_db.commit()
+
+        with (
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+            patch(
+                "app.api.repositories.enqueue_reconcile_run",
+                side_effect=RuntimeError("queue closed"),
+            ),
+        ):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"executor_type": "server"},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200, response.text
+        test_db.expire_all()
+        archive = test_db.query(Archive).filter_by(repository_id=repo.id).one()
+        assert archive.history_state == "pending"
+        test_db.refresh(repo)
+        assert repo.executor_type == "server"
+
+    def test_moving_a_repository_to_an_agent_leaves_its_archive_states_alone(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """The other direction changes nothing on the rows: an index built on
+        the server stays (the Changes tab still serves it), and `pending`
+        archives are marked `skipped` by the next listing, not here."""
+        from app.database.models import Archive
+
+        agent = AgentMachine(
+            name="Taker",
+            agent_id="agt_taker",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
+        )
+        repo = Repository(
+            name="Moved Out",
+            path="/repos/moved-out",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add_all([agent, repo])
+        test_db.commit()
+        test_db.refresh(repo)
+        for i, state in enumerate(("indexed", "pending")):
+            test_db.add(
+                Archive(
+                    repository_id=repo.id,
+                    borg_id=f"id-{i}",
+                    name=f"a{i}",
+                    series="nas",
+                    start=datetime(2026, 9, 1 + i, 2),
+                    history_state=state,
+                )
+            )
+        test_db.commit()
+
+        with patch("app.api.repositories.mqtt_service.sync_state_with_db"):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"executor_type": "agent", "agent_machine_id": agent.id},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200, response.text
+        test_db.expire_all()
+        assert test_db.get(Repository, repo.id).executor_type == "agent"
+        states = sorted(
+            a.history_state
+            for a in test_db.query(Archive).filter_by(repository_id=repo.id)
+        )
+        assert states == ["indexed", "pending"]
+
     def test_update_repository_clear_source_connection_id(
         self, test_client: TestClient, admin_headers, test_db
     ):

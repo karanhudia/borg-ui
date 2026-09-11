@@ -20,6 +20,7 @@ import { PLAN_COLOR, PLAN_LABEL } from '../../core/features'
 import { parseBackendDate } from '../../utils/dateUtils'
 import { HUB_GRID_COLUMNS, type RepositoryTrack, type StageState } from './repositoryTrack'
 import type { HubRepository } from '../../types/operations'
+import type { HistoryCapability } from '../../types/archives'
 
 interface RepositoryHubRowProps {
   // Null for the system lane (package installs and other work with no
@@ -110,6 +111,9 @@ function HistoryCell({
   const theme = useTheme()
   const { history, archives } = repository
   const mode = repository.index_mode ?? 'full'
+  // The repository's own reason for having no history stage (an agent
+  // executes it), next to the plan-wide `historyAvailable`.
+  const historyCapability: HistoryCapability = repository.history_capability ?? 'available'
 
   // Mode before plan (spec 6.8): an upgrade would not start indexing this
   // repository, so the Pro chip below would be a false promise.
@@ -124,6 +128,16 @@ function HistoryCell({
         )}
       />
     )
+  }
+  // An index built before the repository moved to an agent is still real
+  // data (the Changes tab serves it); only a repository with none says so.
+  // Ahead of the plan chip either way: an upgrade would not unlock the
+  // stage here, so without the plan the reason is the whole answer.
+  if (
+    historyCapability === 'agent_unsupported' &&
+    (!historyAvailable || (history.indexed === 0 && history.rows === 0))
+  ) {
+    return <Cell muted primary={t('operations.background.hub.historyAgentUnsupported')} />
   }
   if (!historyAvailable) {
     return (

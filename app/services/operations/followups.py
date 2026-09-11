@@ -2,7 +2,7 @@
 operation reaches a success state. Phase 2 adds plan awareness here
 (spec 11.2): history kinds are dropped for Community installs."""
 
-from typing import Optional
+from typing import Literal, Optional
 
 from app.services.operations.index_mode import (
     DEFAULT_INDEX_MODE,
@@ -71,13 +71,18 @@ def chain_for_repository(
     history: Optional[bool] = None,
     available: Optional[set[str]] = None,
 ) -> list[str]:
-    """`chain_for` with this install's executors, this install's plan, and
-    this repository's index mode. Every follow-up site calls this, so the
-    two gates are read in one place rather than six.
+    """`chain_for` with this install's executors, this install's plan, this
+    repository's index mode, and this repository's executor. Every
+    follow-up site calls this, so the three gates are read in one place
+    rather than six.
 
     `history` is the plan gate; left None it is read here, which goes
     through the licensing service and commits the session. A caller that
     wraps this call in a savepoint reads it beforehand and passes it in.
+    With the plan gate open, the executor decides next: a repository
+    executed by a managed agent cannot be diffed by the server, so it gets
+    no history stage either (`history_capability`), by the same rule as
+    the plan and the mode: a stage that will never run does not exist.
 
     `available` is for the runner, which carries its own registry and must
     not be told about executors it was not given.
@@ -86,6 +91,8 @@ def chain_for_repository(
 
     if history is None:
         history = history_enabled(db)
+    if history:
+        history = history_possible_for(db, repository_id, history=True)
     if available is None:
         available = registered_kinds()
     return chain_for(
@@ -220,6 +227,58 @@ def history_enabled(db) -> bool:
     from app.core.features import Plan, get_current_plan, plan_includes
 
     return plan_includes(get_current_plan(db), Plan.PRO)
+
+
+HistoryCapability = Literal["available", "plan_locked", "agent_unsupported"]
+HISTORY_AVAILABLE: HistoryCapability = "available"
+HISTORY_PLAN_LOCKED: HistoryCapability = "plan_locked"
+HISTORY_AGENT_UNSUPPORTED: HistoryCapability = "agent_unsupported"
+
+
+def history_capability(
+    db, repository, *, history: Optional[bool] = None
+) -> HistoryCapability:
+    """Whether change history can be built for `repository`, and if not, why.
+
+    `agent_unsupported`: the repository is executed by a managed agent, and
+    the agent protocol has no diff job, so `history_index` would only ever
+    skip it (the server runs `borg diff`, and it cannot reach an agent's
+    repository). `plan_locked`: the plan lacks the feature (spec 11.2). The
+    executor is read first: its reason outlasts any plan change, and a plan
+    chip on such a repository would promise what an upgrade cannot deliver.
+    Derived at read time from the executor and the plan rather than stored:
+    both are facts about the repository, not about one run. `history` is
+    the plan gate when the caller already read it.
+    """
+    from app.services.repository_executor import is_agent_executor
+
+    if repository is not None and is_agent_executor(repository):
+        return HISTORY_AGENT_UNSUPPORTED
+    if history is None:
+        history = history_enabled(db)
+    if not history:
+        return HISTORY_PLAN_LOCKED
+    return HISTORY_AVAILABLE
+
+
+def history_possible(db, repository, *, history: Optional[bool] = None) -> bool:
+    """The `history` argument for `chain_for`: the history stage exists for
+    this repository (it is not merely created and skipped, Appendix B)."""
+    return history_capability(db, repository, history=history) == HISTORY_AVAILABLE
+
+
+def history_possible_for(
+    db, repository_id: Optional[int], *, history: Optional[bool] = None
+) -> bool:
+    """`history_possible` for a caller holding only the repository id (the
+    runner, the follow-up enqueuers). A missing repository keeps the plan
+    answer; the executor skips its chain as `repository_missing` anyway."""
+    from app.database.models import Repository
+
+    repository = (
+        db.get(Repository, repository_id) if repository_id is not None else None
+    )
+    return history_possible(db, repository, history=history)
 
 
 def enqueue_backup_followups(

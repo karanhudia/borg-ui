@@ -4,9 +4,24 @@ import { Box } from '@mui/material'
 import RebuildStagePicker from './RebuildStagePicker'
 import type { RebuildStage } from '../../types/operations'
 
-function Picker({ historyLocked, initial }: { historyLocked: boolean; initial: RebuildStage }) {
+function Picker({
+  historyLocked,
+  initial,
+  reason,
+}: {
+  historyLocked: boolean
+  initial: RebuildStage
+  reason?: 'plan' | 'agent'
+}) {
   const [value, setValue] = useState<RebuildStage>(initial)
-  return <RebuildStagePicker value={value} onChange={setValue} historyLocked={historyLocked} />
+  return (
+    <RebuildStagePicker
+      value={value}
+      onChange={setValue}
+      historyLocked={historyLocked}
+      historyLockedReason={reason}
+    />
+  )
 }
 
 const meta = {
@@ -35,4 +50,10 @@ export const FromArchives: Story = {
 
 export const Community: Story = {
   render: () => <Picker historyLocked initial="archives" />,
+}
+
+// Locked by the repository, not the plan: an agent's repository cannot be
+// diffed, so the history stage is out regardless of the plan.
+export const HistoryUnsupportedForAgent: Story = {
+  render: () => <Picker historyLocked initial="archives" reason="agent" />,
 }
