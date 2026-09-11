@@ -386,6 +386,10 @@ class Repository(Base):
         JSON, nullable=True, default=lambda: list(DEFAULT_HISTORY_INDEX_EXCLUDES)
     )
 
+    # How much derived data this repository keeps refreshed (spec 6.8).
+    # "full", "archives" or "off"; see app/services/operations/index_mode.py.
+    index_mode = Column(String(20), nullable=False, server_default="full")
+
     # Custom flags for borg create command (advanced users)
     custom_flags = Column(
         Text, nullable=True

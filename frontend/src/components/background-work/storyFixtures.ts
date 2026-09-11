@@ -54,6 +54,7 @@ export const hubRepository = (overrides: Partial<HubRepository> = {}): HubReposi
   repository_id: 1,
   repository_name: 'nas',
   repository_type: 'local',
+  index_mode: 'full',
   sync_state: 'fresh',
   last_synced_at: minutesAgo(12),
   last_stats_at: minutesAgo(11),

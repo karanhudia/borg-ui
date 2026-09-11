@@ -1132,6 +1132,12 @@
       "window": "Ultime {{count}} settimane, una riga per ora",
       "tooltip": "{{count}} alle {{time}} il {{date}}",
       "none": "Nessun archivio nelle ultime {{count}} settimane."
+    },
+    "indexMode": {
+      "archivesTitle": "Solo archivi per questo repository",
+      "offTitle": "Il lavoro in background è disattivato per questo repository",
+      "description": "La cronologia dei file non viene costruita qui, quindi non viene indicizzato nulla di nuovo. Quanto già memorizzato viene mantenuto e semplicemente non aggiornato.",
+      "changeSetting": "Modificalo nelle impostazioni del repository"
     }
   },
   "restore": {
@@ -2863,6 +2869,8 @@
     "lastCompact": "Ultima Compattazione",
     "lastPrune": "Ultimo Sfoltimento",
     "lastIndex": "Ultima Indicizzazione",
+    "backgroundWorkOff": "Lavoro in background disattivato",
+    "backgroundWorkOffHint": "L'indicizzazione in background è disattivata per questo repository. Può essere modificata nelle impostazioni del repository, in Avanzate.",
     "tomorrow": "Domani",
     "schedulePaused": "Pianificazione in pausa",
     "schedulePausedWithName": "{{name}} in pausa",
@@ -3650,6 +3658,10 @@
         "historyNone": "Ancora nessuna cronologia dei file",
         "historyShare": "{{percent}}% di tutte le righe di cronologia",
         "statsRefreshed": "Aggiornato {{ago}}",
+        "syncOff": "Non aggiornato",
+        "modeArchives": "Solo archivi",
+        "modeOff": "Non indicizzato",
+        "trackOff": "Il lavoro in background è disattivato per questo repository",
         "statsNever": "Non ancora aggiornato",
         "openDetails": "Apri i dettagli di {{repository}}",
         "noRepositoriesTitle": "Ancora nessun repository",
@@ -6203,5 +6215,25 @@
       "migration_notice": "Avviso di migrazione",
       "custom_announcement": "Annuncio"
     }
+  },
+  "repositoryIndexMode": {
+    "label": "Indicizzazione in background",
+    "mode": {
+      "full": {
+        "title": "Tutto",
+        "cost": "Mantiene aggiornati elenco degli archivi, cronologia dei file, stato e dimensioni."
+      },
+      "archives": {
+        "title": "Solo archivi",
+        "cost": "Mantiene aggiornati elenco degli archivi, mappa di calore, stato ed età dell'ultimo backup, senza confrontare i file. Ideale per repository troppo grandi da confrontare."
+      },
+      "off": {
+        "title": "Disattivata",
+        "cost": "Non aggiorna nulla. L'elenco degli archivi non verrà più aggiornato. Ideale per remoti lenti o raramente raggiungibili."
+      }
+    },
+    "excludes": "Percorsi da saltare",
+    "excludesHelp": "Un pattern glob per riga. La cronologia dei file ignora i percorsi corrispondenti.",
+    "excludesInactive": "Questi pattern valgono per la cronologia dei file, che questa modalità non costruisce."
   }
 }

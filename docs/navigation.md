@@ -62,6 +62,7 @@ administration.
 | System | Configure runtime settings, backup health thresholds, timeouts, and maintenance controls. |
 | Monitoring & Reports | Configure backup reports, monitoring behavior, and recent activity included in reports. |
 | Background work | View and control queued and running index, stats, and archive-sync work across repositories: pause, resume, adjust index workers, and rebuild derived data. Visible to admins and operators. |
+| Repository settings, Advanced step | How much a repository indexes in the background (everything, archives only, or off) and the paths file history skips. Reached by editing a repository. |
 | MQTT | Configure MQTT and Home Assistant integration. This appears when MQTT is enabled. |
 | Cache | Configure Redis/cache behavior and clear cache entries when needed. |
 | Logs | Review log storage and cleanup controls. |

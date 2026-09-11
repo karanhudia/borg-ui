@@ -13,6 +13,11 @@ from app.database.models import Operation, Repository, SystemSettings, utc_now
 from app.services.operations.enqueue import enqueue_chain
 from app.services.operations.executors import registered_kinds
 from app.services.operations.followups import PLAN_GATED_KINDS, history_enabled
+from app.services.operations.index_mode import (
+    DEFAULT_INDEX_MODE,
+    filter_kinds,
+    mode_for_repository,
+)
 from app.services.operations.vocab import PRIORITY_RECONCILE
 
 logger = structlog.get_logger()
@@ -44,17 +49,23 @@ def has_active_index_work(db: Session, repository_id: int) -> bool:
     return waiting.first() is not None or syncing.first() is not None
 
 
-def reconcile_kinds(db: Session, *, history: Optional[bool] = None) -> list:
-    """The reconcile chain, minus kinds this install has no executor for and
-    kinds the plan does not include."""
+def reconcile_kinds(
+    db: Session, *, history: Optional[bool] = None, mode: str = DEFAULT_INDEX_MODE
+) -> list:
+    """The reconcile chain, minus kinds this install has no executor for,
+    kinds the plan does not include, and kinds the repository's index mode
+    does not refresh (spec 6.8)."""
     available = registered_kinds()
     if history is None:
         history = history_enabled(db)
-    return [
-        k
-        for k in RECONCILE_CHAIN
-        if k in available and (history or k not in PLAN_GATED_KINDS)
-    ]
+    return filter_kinds(
+        mode,
+        [
+            k
+            for k in RECONCILE_CHAIN
+            if k in available and (history or k not in PLAN_GATED_KINDS)
+        ],
+    )
 
 
 def enqueue_reconcile_run(
@@ -62,14 +73,33 @@ def enqueue_reconcile_run(
     repository_id: int,
     *,
     history: Optional[bool] = None,
+    manual: bool = False,
+    force: bool = False,
     commit: bool = True,
 ) -> list:
     """One repository's reconcile run. Returns the operations enqueued, or an
     empty list when index work for the repository is already in flight, so a
     burst of callers (a run of archive deletes, say) queues one run rather
-    than one per call."""
-    kinds = reconcile_kinds(db, history=history)
-    if not kinds or has_active_index_work(db, repository_id):
+    than one per call.
+
+    `manual=True` is a user asking for this run: an `off` repository is
+    listed once anyway (spec 6.8, "manual work is not gated by the mode"),
+    but history is never re-enabled behind a mode that excludes it, and
+    nothing is scheduled to repeat. The trigger stays `reconcile` either
+    way: it names the chain, and the resync route has always recorded its
+    runs under it.
+
+    `force=True` skips the in-flight check. The catch-up run on returning to
+    `full` (spec 6.8) needs it: the work already queued was built for the
+    narrower mode and will never produce the history stages, so deferring to
+    it would mean no catch-up at all until the next tick.
+    """
+    mode = mode_for_repository(db, repository_id)
+    if manual and mode == "off":
+        # The one-off look: archive_sync and stats, this once.
+        mode = "archives"
+    kinds = reconcile_kinds(db, history=history, mode=mode)
+    if not kinds or (not force and has_active_index_work(db, repository_id)):
         return []
     return enqueue_chain(
         db,
@@ -82,15 +112,17 @@ def enqueue_reconcile_run(
 
 
 def enqueue_reconcile_runs(db: Session, *, history: Optional[bool] = None) -> int:
-    kinds = reconcile_kinds(db, history=history)
-    if not kinds:
-        return 0
+    # No early return on an empty chain: the chain now differs per
+    # repository (spec 6.8), so it is resolved inside the loop, and the
+    # kinds are left out of the log for the same reason.
+    if history is None:
+        history = history_enabled(db)
     count = 0
     for repo in db.query(Repository).all():
         if enqueue_reconcile_run(db, repo.id, history=history, commit=False):
             count += 1
     db.commit()
-    logger.info("Reconcile runs enqueued", repositories=count, kinds=kinds)
+    logger.info("Reconcile runs enqueued", repositories=count)
     return count
 
 

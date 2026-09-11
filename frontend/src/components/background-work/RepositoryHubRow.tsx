@@ -109,7 +109,22 @@ function HistoryCell({
   const { t } = useTranslation()
   const theme = useTheme()
   const { history, archives } = repository
+  const mode = repository.index_mode ?? 'full'
 
+  // Mode before plan (spec 6.8): an upgrade would not start indexing this
+  // repository, so the Pro chip below would be a false promise.
+  if (mode !== 'full') {
+    return (
+      <Cell
+        muted
+        primary={t(
+          mode === 'archives'
+            ? 'operations.background.hub.modeArchives'
+            : 'operations.background.hub.modeOff'
+        )}
+      />
+    )
+  }
   if (!historyAvailable) {
     return (
       <Cell
@@ -285,11 +300,20 @@ export default function RepositoryHubRow({
         {repository ? (
           <>
             <Box sx={{ minWidth: 0, gridColumn: { xs: '1 / -1', md: 'auto' } }}>
-              <SyncStateChip
-                state={repository.sync_state}
-                lastSyncedAt={repository.last_synced_at}
-                showRebuild={false}
-              />
+              {/* An amber "out of date" chip on a repository nobody indexes
+                  is the same false alarm the summary counts drop (spec 6.8),
+                  so the state is stated plainly instead. */}
+              {(repository.index_mode ?? 'full') === 'off' ? (
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  {t('operations.background.hub.syncOff')}
+                </Typography>
+              ) : (
+                <SyncStateChip
+                  state={repository.sync_state}
+                  lastSyncedAt={repository.last_synced_at}
+                  showRebuild={false}
+                />
+              )}
               <Typography
                 variant="caption"
                 sx={{
@@ -346,6 +370,15 @@ export default function RepositoryHubRow({
           )}
         </Box>
       </Box>
+
+      {/* Nothing is refreshed for an `off` repository, so the four empty
+          stage columns would read as work that failed to start (spec 6.8).
+          A manual one-off run still shows its track, below. */}
+      {repository && (repository.index_mode ?? 'full') === 'off' && !active && (
+        <Typography variant="caption" sx={{ display: 'block', mt: 1.5, color: 'text.secondary' }}>
+          {t('operations.background.hub.trackOff')}
+        </Typography>
+      )}
 
       {active && track && (
         <Box

@@ -4,6 +4,11 @@ operation reaches a success state. Phase 2 adds plan awareness here
 
 from typing import Optional
 
+from app.services.operations.index_mode import (
+    DEFAULT_INDEX_MODE,
+    filter_kinds,
+    mode_for_repository,
+)
 from app.services.operations.vocab import validate_kind
 
 FOLLOWUPS: dict[str, tuple[str, ...]] = {
@@ -34,14 +39,20 @@ PLAN_GATED_KINDS: frozenset[str] = frozenset({"history_index"})
 
 
 def chain_for(
-    kind: str, *, available: Optional[set[str]] = None, history: bool = True
+    kind: str,
+    *,
+    available: Optional[set[str]] = None,
+    history: bool = True,
+    mode: str = DEFAULT_INDEX_MODE,
 ) -> list[str]:
     """Return the follow-up kinds for `kind`, in order.
 
     `available` drops kinds without an executor. `history=False` drops the
     plan gated kinds for Community installs (spec 11.2): the stage does not
     exist rather than being created and skipped (Appendix B). history_merge
-    is not gated; see PLAN_GATED_KINDS.
+    is not gated; see PLAN_GATED_KINDS. `mode` drops the kinds the
+    repository's index mode does not refresh (spec 6.8), by the same rule:
+    a stage that will never run does not exist.
     """
     validate_kind(kind)
     chain = list(FOLLOWUPS[kind])
@@ -49,7 +60,40 @@ def chain_for(
         chain = [k for k in chain if k in available]
     if not history:
         chain = [k for k in chain if k not in PLAN_GATED_KINDS]
-    return chain
+    return filter_kinds(mode, chain)
+
+
+def chain_for_repository(
+    db,
+    kind: str,
+    repository_id: Optional[int],
+    *,
+    history: Optional[bool] = None,
+    available: Optional[set[str]] = None,
+) -> list[str]:
+    """`chain_for` with this install's executors, this install's plan, and
+    this repository's index mode. Every follow-up site calls this, so the
+    two gates are read in one place rather than six.
+
+    `history` is the plan gate; left None it is read here, which goes
+    through the licensing service and commits the session. A caller that
+    wraps this call in a savepoint reads it beforehand and passes it in.
+
+    `available` is for the runner, which carries its own registry and must
+    not be told about executors it was not given.
+    """
+    from app.services.operations.executors import registered_kinds
+
+    if history is None:
+        history = history_enabled(db)
+    if available is None:
+        available = registered_kinds()
+    return chain_for(
+        kind,
+        available=available,
+        history=history,
+        mode=mode_for_repository(db, repository_id),
+    )
 
 
 def history_enabled(db) -> bool:
@@ -94,7 +138,6 @@ def enqueue_backup_followups(
 
     from app.database.models import Operation
     from app.services.operations.enqueue import enqueue_chain
-    from app.services.operations.executors import registered_kinds
     from app.services.operations.vocab import SUCCESS_STATUSES
 
     dependency = aliased(Operation)
@@ -125,7 +168,7 @@ def enqueue_backup_followups(
         return []
     if history is None:
         history = history_enabled(db)
-    kinds = chain_for("backup", available=registered_kinds(), history=history)
+    kinds = chain_for_repository(db, "backup", repository_id, history=history)
     if not kinds:
         return []
     return enqueue_chain(

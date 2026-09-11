@@ -31,7 +31,10 @@ from app.services.operations.executors.history import (
 )
 from app.services.operations.followups import PLAN_GATED_KINDS, history_enabled
 from app.services.operations.history_fold import Change, fold_sequence, rows_to_changes
-from app.services.operations.reconcile import enqueue_reconcile_run
+from app.services.operations.index_mode import allows as mode_allows
+from app.services.operations.index_mode import filter_kinds
+from app.services.operations.index_mode import mode_of as index_mode_of
+from app.services.operations.reconcile import RECONCILE_CHAIN, enqueue_reconcile_run
 from app.services.operations.repository_status import repository_status
 from app.services.operations.series import cron_for_repository
 from app.services.operations.vocab import PRIORITY_RECONCILE
@@ -333,6 +336,13 @@ async def rebuild(
         kinds = ["stats"]
     if not history:
         kinds = [k for k in kinds if k not in PLAN_GATED_KINDS]
+    mode = index_mode_of(repository)
+    # Spec 6.8: manual work is not blocked by the mode, but a mode that
+    # excludes file history is a standing instruction not to diff this
+    # repository, so the history stages go and the listing and the size
+    # still run this once.
+    requested = list(kinds)
+    kinds = filter_kinds("archives" if mode == "off" else mode, kinds)
     db.commit()
     ops = enqueue_chain(
         db,
@@ -342,7 +352,19 @@ async def rebuild(
         priority=PRIORITY_RECONCILE,
         triggered_by_user_id=current_user.id,
     )
-    return {"run_id": ops[0].run_id if ops else None, "operations": [o.id for o in ops]}
+    return {
+        "run_id": ops[0].run_id if ops else None,
+        "operations": [o.id for o in ops],
+        "index_mode": mode,
+        # Whether the background chain will keep what was asked for fresh
+        # from now on, or whether this was the one-off look (spec 6.8). It
+        # is a warning, so it reads the stages requested rather than the
+        # ones that survived the mode filter: a `from = history` rebuild on
+        # an `archives` repository must still say the history will not come
+        # back, while a `from = stats` rebuild on the same repository is
+        # honestly repeating work, which the old `mode == "full"` denied.
+        "repeats": all(mode_allows(mode, k) for k in requested),
+    }
 
 
 @router.post("/{repo_id}/resync")
@@ -355,12 +377,20 @@ async def resync(
     work that removed archives (delete, prune, wipe). Unlike /rebuild this
     invalidates nothing: archive_sync reconciles the list, history_merge
     folds the rows of archives that have gone, and stats refreshes the
-    totals. A run already in flight is reused rather than duplicated."""
+    totals. A run already in flight is reused rather than duplicated.
+
+    An `off` repository is listed once here and then goes quiet again, and a
+    mode that excludes file history keeps excluding it (spec 6.8)."""
     repository = _repo(db, current_user, repo_id, role="operator")
-    ops = enqueue_reconcile_run(db, repository.id)
+    mode = index_mode_of(repository)
+    ops = enqueue_reconcile_run(db, repository.id, manual=True)
     return {
         "run_id": ops[0].run_id if ops else None,
         "operations": [o.id for o in ops],
+        "index_mode": mode,
+        # Resync asks for the whole reconcile chain, so it repeats only for
+        # a mode that keeps every stage of it (spec 6.8).
+        "repeats": all(mode_allows(mode, k) for k in RECONCILE_CHAIN),
     }
 
 

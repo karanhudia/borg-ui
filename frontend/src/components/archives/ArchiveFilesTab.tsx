@@ -169,6 +169,7 @@ export default function ArchiveFilesTab({
   const detailsPane = (
     <ArchiveFileDetailsPane
       repositoryId={repositoryId}
+      indexMode={repository.index_mode ?? 'full'}
       selectedPath={lastClicked?.path ?? null}
       selectedEntry={lastClicked}
       onRestore={(entry) =>

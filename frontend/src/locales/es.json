@@ -1132,6 +1132,12 @@
       "window": "Últimas {{count}} semanas, una fila por hora",
       "tooltip": "{{count}} a las {{time}} el {{date}}",
       "none": "No hay archivos en las últimas {{count}} semanas."
+    },
+    "indexMode": {
+      "archivesTitle": "Solo archivos para este repositorio",
+      "offTitle": "El trabajo en segundo plano está desactivado para este repositorio",
+      "description": "Aquí no se construye el historial de ficheros, así que no se indexa nada nuevo. Lo ya almacenado se conserva y simplemente deja de actualizarse.",
+      "changeSetting": "Cámbialo en la configuración del repositorio"
     }
   },
   "restore": {
@@ -2863,6 +2869,8 @@
     "lastCompact": "Última compactación",
     "lastPrune": "Última poda",
     "lastIndex": "Última indexación",
+    "backgroundWorkOff": "Trabajo en segundo plano desactivado",
+    "backgroundWorkOffHint": "La indexación en segundo plano está desactivada para este repositorio. Puede cambiarse en la configuración del repositorio, en Avanzado.",
     "tomorrow": "Mañana",
     "schedulePaused": "Programación en pausa",
     "schedulePausedWithName": "{{name}} en pausa",
@@ -3650,6 +3658,10 @@
         "historyNone": "Aún sin historial de ficheros",
         "historyShare": "{{percent}}% de todas las filas de historial",
         "statsRefreshed": "Actualizado {{ago}}",
+        "syncOff": "Sin actualizar",
+        "modeArchives": "Solo archivos",
+        "modeOff": "Sin indexar",
+        "trackOff": "El trabajo en segundo plano está desactivado para este repositorio",
         "statsNever": "Aún no actualizado",
         "openDetails": "Abrir los detalles de {{repository}}",
         "noRepositoriesTitle": "Aún no hay repositorios",
@@ -6203,5 +6215,25 @@
       "migration_notice": "Migration notice",
       "custom_announcement": "Announcement"
     }
+  },
+  "repositoryIndexMode": {
+    "label": "Indexación en segundo plano",
+    "mode": {
+      "full": {
+        "title": "Todo",
+        "cost": "Mantiene actualizados la lista de archivos, el historial de ficheros, el estado y los tamaños."
+      },
+      "archives": {
+        "title": "Solo archivos",
+        "cost": "Mantiene actualizados la lista de archivos, el mapa de calor, el estado y la antigüedad de la última copia, y deja de comparar ficheros. Ideal para repositorios demasiado grandes para comparar."
+      },
+      "off": {
+        "title": "Desactivada",
+        "cost": "No actualiza nada. La lista de archivos dejará de actualizarse. Ideal para remotos lentos o poco accesibles."
+      }
+    },
+    "excludes": "Rutas a omitir",
+    "excludesHelp": "Un patrón glob por línea. El historial de ficheros ignora las rutas que coincidan.",
+    "excludesInactive": "Estos patrones se aplican al historial de ficheros, que este modo no construye."
   }
 }

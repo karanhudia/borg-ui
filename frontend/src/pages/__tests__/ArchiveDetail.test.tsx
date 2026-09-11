@@ -173,4 +173,56 @@ describe('ArchiveDetail', () => {
     renderRoute('/archives/7/999')
     expect(await screen.findByText(/could not be loaded/i)).toBeInTheDocument()
   })
+
+  describe('index mode (spec 6.8)', () => {
+    // A repository that does not index file history has no counts to show.
+    // Labelling the tab with them while the tab itself says the history is
+    // not indexed is the contradiction the mode exists to avoid.
+    for (const mode of ['archives', 'off'] as const) {
+      it(`asks for no change totals in ${mode} mode`, async () => {
+        vi.mocked(repositoriesAPI.getRepositories).mockResolvedValue({
+          data: {
+            repositories: [
+              { id: 7, name: 'nas', path: '/data/nas', mode: 'full', index_mode: mode },
+            ],
+          },
+        } as never)
+        vi.mocked(archivesAPI.getArchive).mockResolvedValue({ data: archive } as never)
+        renderRoute('/archives/7/12')
+        expect(await screen.findByText('nas-2026-09-02T02:00')).toBeInTheDocument()
+        expect(screen.getByRole('tab', { name: /changes/i })).not.toHaveTextContent(/\+4/)
+        expect(archivesAPI.getChanges).not.toHaveBeenCalled()
+      })
+    }
+
+    it('waits for the repository before asking for totals', async () => {
+      // The mode falls back to `full` while the repository list loads, so
+      // without a guard on the repository itself the query would fire once
+      // under that fallback and fetch history for a repository that has
+      // none.
+      let resolveRepositories: (value: unknown) => void = () => {}
+      vi.mocked(repositoriesAPI.getRepositories).mockReturnValue(
+        new Promise((resolve) => {
+          resolveRepositories = resolve
+        }) as never
+      )
+      vi.mocked(archivesAPI.getArchive).mockResolvedValue({ data: archive } as never)
+      renderRoute('/archives/7/12')
+      expect(await screen.findByText('nas-2026-09-02T02:00')).toBeInTheDocument()
+      expect(archivesAPI.getChanges).not.toHaveBeenCalled()
+
+      resolveRepositories({
+        data: {
+          repositories: [
+            { id: 7, name: 'nas', path: '/data/nas', mode: 'full', index_mode: 'archives' },
+          ],
+        },
+      })
+      // The mode panel only renders once the repository has resolved, so it
+      // is the signal that the fallback window has closed. The Changes tab
+      // itself is present from the first paint and would prove nothing.
+      expect(await screen.findByText(/archives only/i)).toBeInTheDocument()
+      expect(archivesAPI.getChanges).not.toHaveBeenCalled()
+    })
+  })
 })

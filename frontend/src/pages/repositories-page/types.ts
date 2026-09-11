@@ -1,4 +1,5 @@
 import type { RepositoryData } from '../../services/api'
+import type { IndexMode } from '../../types/operations'
 
 export interface Repository extends RepositoryData {
   id: number
@@ -13,6 +14,8 @@ export interface Repository extends RepositoryData {
   last_compact: string | null
   last_prune?: string | null
   last_index?: string | null
+  // How much derived data this repository refreshes (spec 6.8).
+  index_mode?: IndexMode
   has_schedule?: boolean
   schedule_enabled?: boolean
   schedule_name?: string | null

@@ -1,3 +1,5 @@
+import type { IndexMode } from './operations'
+
 export type SourceLocationKind = 'local' | 'remote' | 'agent'
 export type SourceType = SourceLocationKind | 'mixed'
 export type FilesystemSnapshotProvider = 'btrfs' | 'zfs'
@@ -90,6 +92,8 @@ export interface Repository {
   last_compact?: string | null
   last_prune?: string | null
   last_index?: string | null
+  // How much derived data this repository refreshes (spec 6.8).
+  index_mode?: IndexMode
   has_schedule?: boolean
   schedule_enabled?: boolean
   schedule_name?: string | null

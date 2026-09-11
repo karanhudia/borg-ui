@@ -99,6 +99,7 @@ const hubRepository = (overrides: Partial<HubRepository> = {}): HubRepository =>
   repository_id: 1,
   repository_name: 'nas',
   repository_type: 'local',
+  index_mode: 'full',
   sync_state: 'fresh',
   last_synced_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
   last_stats_at: new Date(Date.now() - 4 * 60 * 1000).toISOString(),

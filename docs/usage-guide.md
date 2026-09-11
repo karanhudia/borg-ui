@@ -300,6 +300,18 @@ If an older repository still has legacy source settings, its repository card can
 
 Redis is used to speed up repeated archive browsing. The first browse of a large archive can still take time because Borg has to list archive contents.
 
+## Choose How Much a Repository Indexes
+
+Borg UI keeps derived data about each repository up to date in the background: the archive list, the repository size and health, and the per-file change history behind the Changes tab and file history. On a very large or slow repository that work is not always welcome, so each repository carries an index mode. Edit the repository and open the Advanced step to change it.
+
+| Mode | What stays current | Use it for |
+| --- | --- | --- |
+| Everything (default) | Archive list, size and health, file history | Normal repositories. |
+| Archives only | Archive list, size and health | Repositories too large to diff, where the per-file history costs hours. |
+| Off | Nothing | Slow or rarely reachable remotes. The archive list, the card's last-run entries, and the dashboard age go stale, and the interface says so. |
+
+Nothing already stored is deleted by a change of mode; it simply stops being refreshed. You can still ask for a one-off run at any time with Resync or Rebuild on the repository, and Borg UI tells you when that run will not repeat. The Advanced step also holds the exclude patterns file history skips, which only apply when the mode is set to index everything.
+
 ## Restore Files
 
 1. Go to Archives.

@@ -1132,6 +1132,12 @@
       "window": "Last {{count}} weeks, one row per hour",
       "tooltip": "{{count}} at {{time}} on {{date}}",
       "none": "No archives in the last {{count}} weeks."
+    },
+    "indexMode": {
+      "archivesTitle": "Archives only for this repository",
+      "offTitle": "Background work is off for this repository",
+      "description": "File history is not being built here, so nothing new is indexed. Anything already stored is kept and simply not updated.",
+      "changeSetting": "Change this in repository settings"
     }
   },
   "restore": {
@@ -2863,6 +2869,8 @@
     "lastCompact": "Last Compact",
     "lastPrune": "Last Prune",
     "lastIndex": "Last Index",
+    "backgroundWorkOff": "Background work is off",
+    "backgroundWorkOffHint": "Background indexing is off for this repository. Change it in repository settings, under Advanced.",
     "tomorrow": "Tomorrow",
     "schedulePaused": "Schedule paused",
     "schedulePausedWithName": "{{name}} paused",
@@ -3650,6 +3658,10 @@
         "historyNone": "No file history yet",
         "historyShare": "{{percent}}% of all history rows",
         "statsRefreshed": "Refreshed {{ago}}",
+        "syncOff": "Not refreshed",
+        "modeArchives": "Archives only",
+        "modeOff": "Not indexed",
+        "trackOff": "Background work is off for this repository",
         "statsNever": "Not refreshed yet",
         "openDetails": "Open the details for {{repository}}",
         "noRepositoriesTitle": "No repositories yet",
@@ -6203,5 +6215,25 @@
       "migration_notice": "Migration notice",
       "custom_announcement": "Announcement"
     }
+  },
+  "repositoryIndexMode": {
+    "label": "Background indexing",
+    "mode": {
+      "full": {
+        "title": "Everything",
+        "cost": "Keeps the archive list, file history, health and sizes current."
+      },
+      "archives": {
+        "title": "Archives only",
+        "cost": "Keeps the archive list, heatmap, health and last backup age current, and stops diffing files. Best for repositories too large to diff."
+      },
+      "off": {
+        "title": "Off",
+        "cost": "Refreshes nothing. The archive list will no longer refresh. Best for slow or rarely reachable remotes."
+      }
+    },
+    "excludes": "Paths to skip",
+    "excludesHelp": "One glob pattern per line. File history ignores paths that match.",
+    "excludesInactive": "These patterns apply to file history, which this mode does not build."
   }
 }

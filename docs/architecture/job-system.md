@@ -446,6 +446,45 @@ deliberately leaves the deletion to it.
 index; `from = archives` refetches per-archive info; `from = stats`
 re-measures the repository.
 
+### Per-repository index mode
+
+`repositories.index_mode` says how much derived data a repository keeps up
+to date, and is the second gate beside the plan:
+
+| Mode | Archive listing | File history | Size and health |
+| --- | --- | --- | --- |
+| `full` (default) | yes | yes (Pro) | yes |
+| `archives` | yes | no | yes |
+| `off` | no | no | no |
+
+The mode is applied in two functions and nowhere else,
+`followups.chain_for()` and `reconcile.reconcile_kinds()`, so a stage a
+mode excludes is never created and then skipped, exactly as a Community
+install never gets a `history_index` row. The reconcile tick skips an `off`
+repository outright rather than enqueueing an empty run.
+
+Manual work overrides the mode once and never repeats:
+`POST /api/repositories/{id}/rebuild` and `POST /api/repositories/{id}/resync`
+run for an `off` repository, and both answer with `index_mode` and a
+`repeats` flag. The flag is a warning: it reads the stages that were asked
+for, not the ones that survived the mode filter, so it is false as soon as
+any of them will not be kept fresh. A `from = stats` rebuild on an
+`archives` repository does repeat, since that mode still refreshes the
+listing and the size; a `from = history` rebuild on the same repository
+does not. Neither re-enables file history
+behind a mode that excludes it, since the mode is a standing instruction
+not to diff this repository. Clearing history stays explicit and works in
+every mode: `rebuild` with `from = history` deletes the change rows
+whatever the mode is.
+
+Changing the mode away from `full` cancels the repository's queued index
+work; a running index is left to finish, because the lane time is already
+spent and its rows are kept in every mode. Changing back to `full` enqueues
+one reconcile run so the repository catches up without waiting for the
+tick. Rows already stored are never deleted by a mode change: they go
+stale, and every surface says so rather than reporting the repository as a
+problem.
+
 ## Notifications
 
 Job-related notifications are handled by the notification service.

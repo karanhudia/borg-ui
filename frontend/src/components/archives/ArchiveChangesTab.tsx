@@ -14,16 +14,21 @@ import { useTranslation } from 'react-i18next'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import RichSelect from '../shared/RichSelect'
 import PlanGate from '../shared/PlanGate'
+import IndexModeGate from './IndexModeGate'
 import { usePlan } from '../../hooks/usePlan'
 import { archivesAPI } from '../../services/api'
 import { CHANGE_GLYPH, changeColor } from './changeStyle'
 import ChangeRowLine from './ChangeRowLine'
 import ArchiveChangesPreview from './ArchiveChangesPreview'
 import type { ArchiveDetailResponse, ChangeRow, ChangeType } from '../../types/archives'
+import type { IndexMode } from '../../types/operations'
 
 interface ArchiveChangesTabProps {
   repositoryId: number
   archive: ArchiveDetailResponse
+  // The repository's index mode (spec 6.8). Defaulted so a caller that
+  // predates the mode reads as the behaviour every install had.
+  indexMode?: IndexMode
 }
 
 const CHANGE_TYPES: Exclude<ChangeType, 'summary'>[] = ['added', 'removed', 'modified']
@@ -259,16 +264,25 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
   )
 }
 
-export default function ArchiveChangesTab(props: ArchiveChangesTabProps) {
+export default function ArchiveChangesTab({
+  indexMode = 'full',
+  ...props
+}: ArchiveChangesTabProps) {
   const { can } = usePlan()
   return (
+    // Plan first, then mode, never both (spec 6.8): PlanGate answers for a
+    // Community install, and the mode panel only renders behind it.
     <PlanGate
       feature="archive_history"
       preview={<ArchiveChangesPreview />}
       surface="archive_detail"
       operation="view_changes"
     >
-      {can('archive_history') ? <ArchiveChangesTabContent {...props} /> : null}
+      {can('archive_history') ? (
+        <IndexModeGate mode={indexMode}>
+          <ArchiveChangesTabContent {...props} />
+        </IndexModeGate>
+      ) : null}
     </PlanGate>
   )
 }

@@ -1132,6 +1132,12 @@
       "window": "Letzte {{count}} Wochen, eine Zeile pro Stunde",
       "tooltip": "{{count}} um {{time}} am {{date}}",
       "none": "Keine Archive in den letzten {{count}} Wochen."
+    },
+    "indexMode": {
+      "archivesTitle": "Nur Archive für dieses Repository",
+      "offTitle": "Hintergrundarbeit ist für dieses Repository deaktiviert",
+      "description": "Der Dateiverlauf wird hier nicht erstellt, es wird also nichts Neues indiziert. Bereits gespeicherte Daten bleiben erhalten und werden lediglich nicht aktualisiert.",
+      "changeSetting": "In den Repository-Einstellungen ändern"
     }
   },
   "restore": {
@@ -2863,6 +2869,8 @@
     "lastCompact": "Letzte Komprimierung",
     "lastPrune": "Letzte Bereinigung",
     "lastIndex": "Letzte Indexierung",
+    "backgroundWorkOff": "Hintergrundarbeit ist deaktiviert",
+    "backgroundWorkOffHint": "Die Hintergrundindizierung ist für dieses Repository deaktiviert. Sie kann in den Repository-Einstellungen unter Erweitert geändert werden.",
     "tomorrow": "Morgen",
     "schedulePaused": "Zeitplan pausiert",
     "schedulePausedWithName": "{{name}} pausiert",
@@ -3650,6 +3658,10 @@
         "historyNone": "Noch kein Dateiverlauf",
         "historyShare": "{{percent}}% aller Verlaufszeilen",
         "statsRefreshed": "Aktualisiert {{ago}}",
+        "syncOff": "Nicht aktualisiert",
+        "modeArchives": "Nur Archive",
+        "modeOff": "Nicht indiziert",
+        "trackOff": "Hintergrundarbeit ist für dieses Repository deaktiviert",
         "statsNever": "Noch nicht aktualisiert",
         "openDetails": "Details für {{repository}} öffnen",
         "noRepositoriesTitle": "Noch keine Repositorys",
@@ -6203,5 +6215,25 @@
       "migration_notice": "Migration notice",
       "custom_announcement": "Announcement"
     }
+  },
+  "repositoryIndexMode": {
+    "label": "Hintergrundindizierung",
+    "mode": {
+      "full": {
+        "title": "Alles",
+        "cost": "Hält Archivliste, Dateiverlauf, Zustand und Größen aktuell."
+      },
+      "archives": {
+        "title": "Nur Archive",
+        "cost": "Hält Archivliste, Heatmap, Zustand und Alter des letzten Backups aktuell und verzichtet auf Datei-Diffs. Ideal für Repositories, die zu groß für Diffs sind."
+      },
+      "off": {
+        "title": "Aus",
+        "cost": "Aktualisiert nichts. Die Archivliste wird nicht mehr aktualisiert. Ideal für langsame oder selten erreichbare Gegenstellen."
+      }
+    },
+    "excludes": "Zu überspringende Pfade",
+    "excludesHelp": "Ein Glob-Muster pro Zeile. Der Dateiverlauf ignoriert passende Pfade.",
+    "excludesInactive": "Diese Muster gelten für den Dateiverlauf, den dieser Modus nicht erstellt."
   }
 }
