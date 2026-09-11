@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from app.database.models import Base, Operation, Repository
 from app.services.operations.executors import get_executor, load_default_executors
 from app.services.operations.job_facade import MaintenanceJobFacade
+from app.utils.datetime_utils import utc_now
 
 
 @pytest.fixture()
@@ -574,7 +575,7 @@ async def test_run_hands_the_runner_claimed_row_to_a_claiming_service(
     async def fake_service(self, job_id, *args, **kwargs):
         other = _other_session(db)
         try:
-            seen["started_at"] = datetime.utcnow()
+            seen["started_at"] = utc_now()
             seen["claimed"] = claim_running(other, job_id, kind, seen["started_at"])
             other.commit()
             job = MaintenanceJobFacade(other, other.get(Operation, job_id))
@@ -851,7 +852,7 @@ async def test_run_does_not_touch_a_row_dispatched_without_a_start(
     async def fake_compact(self, job_id):
         other = _other_session(db)
         try:
-            seen["started_at"] = datetime.utcnow()
+            seen["started_at"] = utc_now()
             assert claim_running(other, job_id, "compact", seen["started_at"]) == 1
             other.commit()
             job = MaintenanceJobFacade(other, other.get(Operation, job_id))
@@ -936,6 +937,142 @@ async def test_restore_failure_does_not_replace_the_services_error(
 
     with pytest.raises(RuntimeError, match="borg2 compact failed"):
         await maintenance.run_compact(FakeContext(db, op))
+
+    db.expire_all()
+    assert db.get(Operation, op.id).started_at == _RUNNER_CLAIMED_AT
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "service_result", ["raises", "failed", "completed", "no_verdict"]
+)
+async def test_restore_recovers_after_exhausting_commit_retries(
+    db, borg2_repository, monkeypatch, service_result
+):
+    """Recovery persists the start before returning the original service verdict."""
+    from sqlalchemy.exc import OperationalError
+
+    from app.services.operations.executors import maintenance
+    from app.utils import db_retries
+
+    op = _runner_claimed(db, borg2_repository)
+    operation_id = op.id
+    real_commit = db.commit
+    failed_commits = 0
+
+    def locked_commit():
+        nonlocal failed_commits
+        if failed_commits < 6:  # initial attempt plus all five retries
+            failed_commits += 1
+            raise OperationalError("COMMIT", {}, Exception("database is locked"))
+        real_commit()
+
+    async def no_sleep(delay):
+        return None
+
+    async def fake_compact(self, job_id):
+        with _other_session(db) as other:
+            job = MaintenanceJobFacade(other, other.get(Operation, job_id))
+            assert job.started_at is None
+            if service_result in ("failed", "completed"):
+                job.status = service_result
+                if service_result == "failed":
+                    job.error_message = "borg2 compact failed"
+                other.commit()
+        monkeypatch.setattr(db, "commit", locked_commit)
+        if service_result == "raises":
+            raise RuntimeError("borg2 compact failed")
+
+    monkeypatch.setattr(db_retries.asyncio, "sleep", no_sleep)
+    monkeypatch.setattr("app.core.borg_router.BorgRouter.compact", fake_compact)
+
+    if service_result == "raises":
+        with pytest.raises(RuntimeError, match="borg2 compact failed"):
+            await maintenance.run_compact(FakeContext(db, op))
+    else:
+        outcome = await maintenance.run_compact(FakeContext(db, op))
+        assert outcome.status == (
+            "completed" if service_result == "completed" else "failed"
+        )
+        if service_result == "failed":
+            assert outcome.error_message == "borg2 compact failed"
+        elif service_result == "no_verdict":
+            assert outcome.error_message == "service returned no result"
+
+    assert failed_commits == 6
+    with _other_session(db) as other:
+        assert other.get(Operation, operation_id).started_at == _RUNNER_CLAIMED_AT
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cancel_recovery", [False, True])
+async def test_failed_restore_recovery_preserves_service_error_or_cancellation(
+    db, borg2_repository, monkeypatch, cancel_recovery
+):
+    """Recovery is bounded and does not mask service errors or shutdown cancellation."""
+    from app.services.operations.executors import maintenance
+
+    op = _runner_claimed(db, borg2_repository)
+    real = maintenance.commit_with_retry
+    actions = []
+
+    async def commit(session, **kwargs):
+        action = kwargs["action"]
+        if action.startswith("maintenance_restore_start"):
+            actions.append(action)
+            kwargs["prepare"]()
+            if len(actions) == 2 and cancel_recovery:
+                raise asyncio.CancelledError()
+            raise RuntimeError("restore unavailable")
+        return await real(session, **kwargs)
+
+    async def fake_compact(self, job_id):
+        raise RuntimeError("borg2 compact failed")
+
+    monkeypatch.setattr(maintenance, "commit_with_retry", commit)
+    monkeypatch.setattr("app.core.borg_router.BorgRouter.compact", fake_compact)
+
+    if cancel_recovery:
+        with pytest.raises(asyncio.CancelledError):
+            await maintenance.run_compact(FakeContext(db, op))
+    else:
+        with pytest.raises(RuntimeError, match="borg2 compact failed"):
+            await maintenance.run_compact(FakeContext(db, op))
+
+    assert len(actions) == 2
+    assert not db.in_transaction()
+
+
+@pytest.mark.asyncio
+async def test_restore_recovery_keeps_a_start_written_between_attempts(
+    db, borg2_repository, monkeypatch
+):
+    """The recovery UPDATE preserves a service start committed after the rollback."""
+    from app.services.operations.executors import maintenance
+
+    op = _runner_claimed(db, borg2_repository)
+    operation_id = op.id
+    service_start = utc_now()
+    real = maintenance.commit_with_retry
+
+    async def commit(session, **kwargs):
+        if kwargs["action"] == "maintenance_restore_start":
+            kwargs["prepare"]()
+            session.rollback()
+            with _other_session(db) as other:
+                other.get(Operation, operation_id).started_at = service_start
+                other.commit()
+            raise RuntimeError("restore commit failed")
+        return await real(session, **kwargs)
+
+    monkeypatch.setattr(maintenance, "commit_with_retry", commit)
+    monkeypatch.setattr("app.core.borg_router.BorgRouter.compact", _completing(db))
+
+    outcome = await maintenance.run_compact(FakeContext(db, op))
+
+    assert outcome.status == "completed"
+    with _other_session(db) as other:
+        assert other.get(Operation, operation_id).started_at == service_start
 
 
 @pytest.mark.parametrize(

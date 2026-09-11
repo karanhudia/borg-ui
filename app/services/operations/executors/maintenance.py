@@ -145,7 +145,9 @@ async def _restore_start(ctx, claimed_at: Optional[datetime]) -> None:
     on a missing repository or a lock it gave up on, returned without a
     verdict, or raised out of the call) left it with no start; the runner's
     start is put back, whatever the status, so the run keeps its place in
-    the history and its duration. A start the service wrote stays."""
+    the history and its duration. A start the service wrote stays. If the
+    first commit exhausts its retries, retry the guarded write in a fresh
+    transaction before returning control to the runner's finalization."""
     if claimed_at is None:
         return
 
@@ -162,32 +164,37 @@ async def _restore_start(ctx, claimed_at: Optional[datetime]) -> None:
             .update({Operation.started_at: claimed_at}, synchronize_session=False)
         )
 
-    try:
-        await commit_with_retry(
-            ctx.db,
-            prepare=restore,
-            logger=logger,
-            action="maintenance_restore_start",
-            operation_id=ctx.operation_id,
-        )
-    except asyncio.CancelledError:
-        # A shutdown drain cancelled this task while the retry slept: the
-        # cancel must propagate, and the start stays lost, on record.
-        ctx.db.rollback()
-        logger.warning(
-            "Maintenance start not restored, task cancelled",
-            operation_id=ctx.operation_id,
-        )
-        raise
-    except Exception as exc:
-        # Runs in the executor's `finally`: the service's own failure, if
-        # any, must reach the runner, not this one.
-        ctx.db.rollback()
-        logger.warning(
-            "Maintenance start not restored",
-            operation_id=ctx.operation_id,
-            error=str(exc),
-        )
+    for action in ("maintenance_restore_start", "maintenance_restore_start_recovery"):
+        try:
+            await commit_with_retry(
+                ctx.db,
+                prepare=restore,
+                logger=logger,
+                action=action,
+                operation_id=ctx.operation_id,
+            )
+            break
+        except asyncio.CancelledError:
+            # A shutdown drain must still be able to interrupt either retry.
+            ctx.db.rollback()
+            logger.warning(
+                "Maintenance start not restored, task cancelled",
+                operation_id=ctx.operation_id,
+            )
+            raise
+        except Exception as exc:
+            # Rollback discards the UPDATE as well as the failed transaction.
+            # Recovery must execute it again, keeping the NULL guard in case
+            # a service has since recorded its own start. Neither failure may
+            # replace the service's exception escaping the executor's finally.
+            ctx.db.rollback()
+            logger.warning(
+                "Maintenance start restore failed",
+                operation_id=ctx.operation_id,
+                action=action,
+                error=str(exc),
+            )
+    else:
         return
     if restored:
         logger.info(
