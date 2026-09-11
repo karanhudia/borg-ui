@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen, fireEvent, waitFor } from '@testing-library/react'
+import { screen, fireEvent } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
 import ArchiveDetail from '../ArchiveDetail'
 import { archivesAPI, repositoriesAPI } from '../../services/api'
@@ -218,7 +218,10 @@ describe('ArchiveDetail', () => {
           ],
         },
       })
-      await waitFor(() => expect(screen.getByRole('tab', { name: /changes/i })).toBeInTheDocument())
+      // The mode panel only renders once the repository has resolved, so it
+      // is the signal that the fallback window has closed. The Changes tab
+      // itself is present from the first paint and would prove nothing.
+      expect(await screen.findByText(/archives only/i)).toBeInTheDocument()
       expect(archivesAPI.getChanges).not.toHaveBeenCalled()
     })
   })
