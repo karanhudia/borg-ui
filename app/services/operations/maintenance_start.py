@@ -111,15 +111,21 @@ def start_inline_maintenance(
     on the child prune operation while the backup itself is completed)."""
     from app.services.repository_executor import is_agent_executor
 
+    # A step of a run is triggered by whatever triggered the run: the prune
+    # inside a plan backup is plan work, not a manual prune, and the trigger
+    # filter should find it there. A standalone inline step stays manual.
+    parent = db.get(Operation, depends_on_id) if depends_on_id is not None else None
     operation = enqueue(
         db,
         kind,
         repository_id=repository.id,
-        trigger="manual",
+        trigger=parent.trigger if parent is not None else "manual",
         params={key: value for key, value in params.items() if value is not None},
         triggered_by_user_id=user_id,
         run_id=run_id,
         depends_on_id=depends_on_id,
+        scheduled_job_id=parent.scheduled_job_id if parent is not None else None,
+        backup_plan_run_id=parent.backup_plan_run_id if parent is not None else None,
         # Recorded on the row so a later reader (the runtime reaper) judges
         # the operation by the executor it ran under, not by what the
         # repository is set to by then.
@@ -265,8 +271,9 @@ def finish_inline_maintenance(
     enqueued for it (spec 7.4). Call after the caller has written the terminal
     status."""
     from app.database.models import utc_now
-    from app.services.operations.enqueue import enqueue_chain
-    from app.services.operations.followups import chain_for_repository
+    from app.services.operations.followups import (
+        enqueue_followups as enqueue_followup_chain,
+    )
     from app.services.operations.vocab import SUCCESS_STATUSES, TERMINAL_STATUSES
 
     if operation.status not in TERMINAL_STATUSES:
@@ -310,15 +317,4 @@ def finish_inline_maintenance(
         return
     if not enqueue_followups or operation.status not in SUCCESS_STATUSES:
         return
-    kinds = chain_for_repository(db, operation.kind, operation.repository_id)
-    if not kinds:
-        return
-    enqueue_chain(
-        db,
-        kinds,
-        repository_id=operation.repository_id,
-        trigger="followup",
-        run_id=operation.run_id,
-        depends_on_id=operation.id,
-        triggered_by_user_id=operation.triggered_by_user_id,
-    )
+    enqueue_followup_chain(db, operation, depends_on_id=operation.id)

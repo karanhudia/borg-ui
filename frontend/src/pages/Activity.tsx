@@ -1,21 +1,28 @@
-import React, { useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { Box, IconButton, Typography } from '@mui/material'
-import { History, Info, RefreshCw } from 'lucide-react'
+import { Box, IconButton, Skeleton, Typography } from '@mui/material'
+import { History, RefreshCw } from 'lucide-react'
 import { activityAPI, repositoriesAPI } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
 import { useLockBreakPermissions } from '../hooks/useLockBreakPermissions'
-import BackupJobsTable from '../components/BackupJobsTable'
-import LogViewerDialog from '../components/LogViewerDialog'
-import RunningCloudStorageJobsSection from '../components/RunningCloudStorageJobsSection'
-import { ActivityFilters } from './activity/ActivityFilters'
-import RepositoryOperationsView from './activity/RepositoryOperationsView'
+import { useOperationEvents } from '../hooks/useOperationEvents'
+import { useJobActions } from '../components/jobs/useJobActions'
 import RepositoryScopeSelect from '../components/activity/RepositoryScopeSelect'
-import type { OperationCategory, OperationTrigger } from '../types/operations'
 import { CATEGORIES } from '../components/activity/categories'
+import { ActivityFilters } from './activity/ActivityFilters'
+import ActivityTimeline from './activity/ActivityTimeline'
+import RepositoryHeader from './activity/RepositoryHeader'
+import RunningNow from './activity/RunningNow'
+import { activityKey, repositoryCount } from './activity/runs'
+import type {
+  OperationCategory,
+  OperationProgressEvent,
+  OperationTrigger,
+} from '../types/operations'
+import type { Repository } from '@/types'
 
 export interface ActivityItem {
   activity_key?: string | null
@@ -39,68 +46,141 @@ export interface ActivityItem {
   backup_plan_name?: string | null
   skip_reason?: 'minimum_interval_not_elapsed' | 'source_unavailable' | null
   has_logs?: boolean
+  execution_mode?: string | null
+  route_strategy?: string | null
   kind?: string | null
   category?: OperationCategory | null
   trigger?: OperationTrigger | null
+  depends_on_id?: number | null
+  operation_id?: number | null
+  hook_type?: string | null
+  progress_percent?: number | null
   progress_current?: number | null
   progress_total?: number | null
+  progress_message?: string | null
   followups?: ActivityItem[]
 }
 
-interface ActivityContentProps {
-  activities?: ActivityItem[]
-  isLoading: boolean
-  typeFilter: string
-  statusFilter: string
-  onTypeFilterChange: (value: string) => void
-  onStatusFilterChange: (value: string) => void
-  categoryFilter: OperationCategory[]
-  onCategoryFilterChange: (categories: OperationCategory[]) => void
-  triggerFilter: string
-  onTriggerFilterChange: (value: string) => void
-  onRefresh: () => void
-  canManageActivityJobs: boolean
-  canBreakLockForActivity: (job: ActivityItem) => boolean
-  lockBreakingEnabled: boolean
+type Progress = OperationProgressEvent['data']
+
+function withProgress(item: ActivityItem, progress: Progress): ActivityItem {
+  const patched =
+    item.id === progress.id && (item.kind || item.type) !== 'script_execution'
+      ? {
+          ...item,
+          progress_percent: progress.progress_percent,
+          progress_current: progress.progress_current,
+          progress_total: progress.progress_total,
+          progress_message: progress.progress_message,
+        }
+      : item
+  if (!patched.followups?.length) return patched
+  return { ...patched, followups: patched.followups.map((step) => withProgress(step, progress)) }
 }
 
-export function ActivityContent({
-  activities,
-  isLoading,
-  typeFilter,
-  statusFilter,
-  onTypeFilterChange,
-  onStatusFilterChange,
-  categoryFilter,
-  onCategoryFilterChange,
-  triggerFilter,
-  onTriggerFilterChange,
-  onRefresh,
-  canManageActivityJobs,
-  canBreakLockForActivity,
-  lockBreakingEnabled,
-}: ActivityContentProps) {
+const Activity: React.FC = () => {
   const { t } = useTranslation()
-  const [logJob, setLogJob] = useState<ActivityItem | null>(null)
+  const { track, EventCategory, EventAction } = useAnalytics()
+  const { hasGlobalPermission } = useAuth()
+  const queryClient = useQueryClient()
+  const [searchParams] = useSearchParams()
 
-  const processedActivities = React.useMemo(() => {
-    if (!activities) return { grouped: [], individual: [] }
-    return { grouped: [], individual: activities }
-  }, [activities])
-  const activeCloudStorageJobs = React.useMemo(
-    () =>
-      ((activities || []) as ActivityItem[]).filter(
-        (activity: ActivityItem) =>
-          (activity.type === 'rclone_sync' || activity.type === 'rclone_hydrate') &&
-          (activity.status === 'pending' || activity.status === 'running')
-      ),
-    [activities]
+  const repositoryIdParam = Number(searchParams.get('repository_id'))
+  const repositoryId =
+    Number.isInteger(repositoryIdParam) && repositoryIdParam > 0 ? repositoryIdParam : null
+  // Links such as "View index runs" from the Background work tab open the
+  // page with the category already chosen.
+  const urlCategory = searchParams
+    .getAll('category')
+    .filter((value): value is OperationCategory => CATEGORIES.includes(value as OperationCategory))
+  const urlCategoryKey = urlCategory.join(',')
+
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [categoryFilter, setCategoryFilter] = useState<OperationCategory[]>(urlCategory)
+  const [triggerFilter, setTriggerFilter] = useState('all')
+  useEffect(() => {
+    setCategoryFilter(urlCategoryKey ? (urlCategoryKey.split(',') as OperationCategory[]) : [])
+  }, [urlCategoryKey])
+
+  const canManageActivityJobs = hasGlobalPermission('repositories.manage_all')
+
+  const {
+    data: activities,
+    isLoading,
+    refetch,
+  } = useQuery({
+    queryKey: ['activity', repositoryId, typeFilter, statusFilter, categoryFilter, triggerFilter],
+    queryFn: async () => {
+      // The route filters by repository in SQL, per source, before each
+      // source's own limit. Filtering here instead would hide a quiet
+      // repository behind whatever the rest of the install did lately.
+      const params: Record<string, unknown> = { limit: 200 }
+      if (repositoryId !== null) params.repository_id = repositoryId
+      if (typeFilter !== 'all') params.job_type = typeFilter
+      if (statusFilter !== 'all') params.status = statusFilter
+      if (categoryFilter.length > 0) params.category = categoryFilter
+      if (triggerFilter !== 'all') params.trigger = [triggerFilter]
+      const response = await activityAPI.list(params)
+      return response.data as ActivityItem[]
+    },
+    refetchInterval: 3000,
+  })
+  const items = useMemo(() => activities ?? [], [activities])
+
+  const { data: repositoriesData } = useQuery({
+    queryKey: ['repositories'],
+    queryFn: repositoriesAPI.getRepositories,
+  })
+  const repositories: Repository[] = useMemo(
+    () => repositoriesData?.data?.repositories ?? [],
+    [repositoriesData?.data?.repositories]
   )
+  const pinnedRepository = repositories.find((repo) => repo.id === repositoryId)
+  const { canBreakLock, lockBreakingEnabled } = useLockBreakPermissions({ repositories })
+
+  // Progress arrives once a second over SSE; the list refetches every
+  // three. Patching the cache in between keeps bars moving without a
+  // request per tick. Status changes are rarer and get a full refetch.
+  const onProgress = useCallback(
+    (progress: Progress) => {
+      queryClient.setQueriesData<ActivityItem[]>({ queryKey: ['activity'] }, (old) =>
+        Array.isArray(old) ? old.map((item) => withProgress(item, progress)) : old
+      )
+    },
+    [queryClient]
+  )
+  const onUpdated = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['activity'] })
+  }, [queryClient])
+  useOperationEvents(onUpdated, onProgress)
+
+  const { actionButtons, dialogs } = useJobActions<ActivityItem>({
+    actions: { viewLogs: true, downloadLogs: true, errorInfo: true, breakLock: true, delete: true },
+    canBreakLocks: canBreakLock,
+    lockBreakingEnabled,
+    canDeleteJobs: canManageActivityJobs,
+  })
+
+  const trackFilter = (kind: string, value: string) =>
+    track(EventCategory.NAVIGATION, EventAction.FILTER, {
+      filter_kind: kind,
+      filter_value: value,
+    })
+
+  const summary = [
+    t('activity.summary.runs', { count: items.length }),
+    repositoryId === null &&
+      items.length > 0 &&
+      t('activity.summary.repositories', { count: repositoryCount(items) }),
+    categoryFilter.length === 0 && t('activity.summary.indexHidden'),
+  ]
+    .filter(Boolean)
+    .join(' · ')
   const refreshLabel = t('activity.actions.refresh')
 
   return (
     <Box>
-      {/* Header */}
       <Box
         sx={{
           display: 'flex',
@@ -114,213 +194,71 @@ export function ActivityContent({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <History size={32} />
           <Box>
-            <Typography variant="h4">{t('activity.title')}</Typography>
-            <Typography
-              variant="body2"
-              sx={{
-                color: 'text.secondary',
-              }}
-            >
+            <Typography variant="h4" component="h1">
+              {t('activity.title')}
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               {t('activity.subtitle')}
             </Typography>
           </Box>
         </Box>
         <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            width: { xs: '100%', sm: 'auto' },
-          }}
+          sx={{ display: 'flex', alignItems: 'center', gap: 1, width: { xs: '100%', sm: 'auto' } }}
         >
           <Box sx={{ width: { xs: '100%', sm: 320 } }}>
-            <RepositoryScopeSelect value={null} />
+            <RepositoryScopeSelect value={repositoryId} />
           </Box>
-          <IconButton onClick={onRefresh} aria-label={refreshLabel} title={refreshLabel}>
+          <IconButton onClick={() => refetch()} aria-label={refreshLabel} title={refreshLabel}>
             <RefreshCw size={20} />
           </IconButton>
         </Box>
       </Box>
 
+      {repositoryId !== null && (
+        <RepositoryHeader repositoryId={repositoryId} repository={pinnedRepository} />
+      )}
+
       <ActivityFilters
         typeFilter={typeFilter}
         statusFilter={statusFilter}
-        onTypeFilterChange={onTypeFilterChange}
-        onStatusFilterChange={onStatusFilterChange}
+        onTypeFilterChange={(value) => {
+          setTypeFilter(value)
+          trackFilter('type', value)
+        }}
+        onStatusFilterChange={(value) => {
+          setStatusFilter(value)
+          trackFilter('status', value)
+        }}
         categoryFilter={categoryFilter}
-        onCategoryFilterChange={onCategoryFilterChange}
+        onCategoryFilterChange={(categories) => {
+          setCategoryFilter(categories)
+          trackFilter('category', categories.join(','))
+        }}
         triggerFilter={triggerFilter}
-        onTriggerFilterChange={onTriggerFilterChange}
+        onTriggerFilterChange={(value) => {
+          setTriggerFilter(value)
+          trackFilter('trigger', value)
+        }}
       />
+      <Typography
+        data-testid="activity-summary"
+        variant="body2"
+        sx={{ color: 'text.secondary', mt: -1.5, mb: 3 }}
+      >
+        {isLoading && items.length === 0 ? <Skeleton width={220} /> : summary}
+      </Typography>
 
-      <RunningCloudStorageJobsSection
-        jobs={activeCloudStorageJobs}
-        onViewLogs={(job) => setLogJob(job as ActivityItem)}
+      <RunningNow items={items} actions={actionButtons} />
+
+      <ActivityTimeline
+        items={items}
+        loading={isLoading}
+        actions={actionButtons}
+        showRepository={repositoryId === null}
+        getKey={activityKey}
       />
-
-      {/* Activity List */}
-      {isLoading ? (
-        <BackupJobsTable<ActivityItem>
-          jobs={[]}
-          showTypeColumn={true}
-          showTriggerColumn={true}
-          loading={true}
-          actions={{
-            viewLogs: true,
-            downloadLogs: true,
-            errorInfo: true,
-            breakLock: true,
-            delete: true,
-          }}
-          canBreakLocks={canBreakLockForActivity}
-          lockBreakingEnabled={lockBreakingEnabled}
-          canDeleteJobs={canManageActivityJobs}
-          getRowKey={(activity) => activity.activity_key ?? `${activity.type}-${activity.id}`}
-          headerBgColor="background.default"
-          enableHover={true}
-          tableId="activity"
-        />
-      ) : (
-        <BackupJobsTable<ActivityItem>
-          jobs={processedActivities.individual}
-          showTypeColumn={true}
-          showTriggerColumn={true}
-          loading={false}
-          actions={{
-            viewLogs: true,
-            downloadLogs: true,
-            errorInfo: true,
-            breakLock: true,
-            delete: true,
-          }}
-          canBreakLocks={canBreakLockForActivity}
-          lockBreakingEnabled={lockBreakingEnabled}
-          canDeleteJobs={canManageActivityJobs}
-          getRowKey={(activity) => activity.activity_key ?? `${activity.type}-${activity.id}`}
-          headerBgColor="background.default"
-          enableHover={true}
-          tableId="activity"
-          emptyState={{
-            icon: <Info size={48} />,
-            title: t('activity.empty.title'),
-            description: t('activity.empty.message'),
-          }}
-        />
-      )}
-      <LogViewerDialog job={logJob} open={Boolean(logJob)} onClose={() => setLogJob(null)} />
+      {dialogs}
     </Box>
-  )
-}
-
-const Activity: React.FC = () => {
-  const [searchParams] = useSearchParams()
-  const repositoryIdParam = Number(searchParams.get('repository_id'))
-  const pinnedRepositoryId =
-    Number.isInteger(repositoryIdParam) && repositoryIdParam > 0 ? repositoryIdParam : null
-  const initialCategory = searchParams
-    .getAll('category')
-    .filter((value): value is OperationCategory => CATEGORIES.includes(value as OperationCategory))
-  if (pinnedRepositoryId !== null) {
-    return (
-      <RepositoryOperationsView
-        repositoryId={pinnedRepositoryId}
-        initialCategory={initialCategory}
-      />
-    )
-  }
-  return <GlobalActivity />
-}
-
-const GlobalActivity: React.FC = () => {
-  const { track, EventCategory, EventAction } = useAnalytics()
-  const { hasGlobalPermission } = useAuth()
-  const canManageActivityJobs = hasGlobalPermission('repositories.manage_all')
-  const [typeFilter, setTypeFilter] = useState<string>('all')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [categoryFilter, setCategoryFilter] = useState<OperationCategory[]>([])
-  const [triggerFilter, setTriggerFilter] = useState<string>('all')
-
-  // Fetch activity data
-  const {
-    data: activities,
-    isLoading,
-    refetch,
-  } = useQuery({
-    queryKey: ['activity', typeFilter, statusFilter, categoryFilter, triggerFilter],
-    queryFn: async () => {
-      const params: Record<string, unknown> = { limit: 200 }
-      if (typeFilter !== 'all') params.job_type = typeFilter
-      if (statusFilter !== 'all') params.status = statusFilter
-      if (categoryFilter.length > 0) params.category = categoryFilter
-      if (triggerFilter !== 'all') params.trigger = [triggerFilter]
-
-      const response = await activityAPI.list(params)
-      return response.data
-    },
-    refetchInterval: 3000, // Refresh every 3 seconds
-  })
-
-  const { data: repositoriesData } = useQuery({
-    queryKey: ['repositories'],
-    queryFn: repositoriesAPI.getRepositories,
-  })
-  const repositories = React.useMemo(
-    () => repositoriesData?.data?.repositories ?? [],
-    [repositoriesData?.data?.repositories]
-  )
-  const { canBreakLock: canBreakLockForActivity, lockBreakingEnabled } = useLockBreakPermissions({
-    repositories,
-  })
-
-  const handleTypeFilterChange = (value: string) => {
-    setTypeFilter(value)
-    track(EventCategory.NAVIGATION, EventAction.FILTER, {
-      filter_kind: 'type',
-      filter_value: value,
-    })
-  }
-
-  const handleStatusFilterChange = (value: string) => {
-    setStatusFilter(value)
-    track(EventCategory.NAVIGATION, EventAction.FILTER, {
-      filter_kind: 'status',
-      filter_value: value,
-    })
-  }
-
-  const handleCategoryFilterChange = (categories: OperationCategory[]) => {
-    setCategoryFilter(categories)
-    track(EventCategory.NAVIGATION, EventAction.FILTER, {
-      filter_kind: 'category',
-      filter_value: categories.join(','),
-    })
-  }
-
-  const handleTriggerFilterChange = (value: string) => {
-    setTriggerFilter(value)
-    track(EventCategory.NAVIGATION, EventAction.FILTER, {
-      filter_kind: 'trigger',
-      filter_value: value,
-    })
-  }
-
-  return (
-    <ActivityContent
-      activities={activities}
-      isLoading={isLoading}
-      typeFilter={typeFilter}
-      statusFilter={statusFilter}
-      onTypeFilterChange={handleTypeFilterChange}
-      onStatusFilterChange={handleStatusFilterChange}
-      categoryFilter={categoryFilter}
-      onCategoryFilterChange={handleCategoryFilterChange}
-      triggerFilter={triggerFilter}
-      onTriggerFilterChange={handleTriggerFilterChange}
-      onRefresh={() => refetch()}
-      canManageActivityJobs={canManageActivityJobs}
-      canBreakLockForActivity={canBreakLockForActivity}
-      lockBreakingEnabled={lockBreakingEnabled}
-    />
   )
 }
 

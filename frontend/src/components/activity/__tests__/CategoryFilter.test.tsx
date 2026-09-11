@@ -25,10 +25,12 @@ describe('CategoryFilter', () => {
     expect(group.querySelectorAll('button')).toHaveLength(7)
   })
 
-  it('says that index runs are hidden while nothing is selected', () => {
+  it('marks the Index chip as hidden until it is selected', () => {
     const { rerender } = render(<CategoryFilter value={[]} onChange={() => {}} />)
-    expect(screen.getByText(/except index runs/i)).toBeInTheDocument()
+    expect(screen.getByTestId('index-hidden')).toBeInTheDocument()
     rerender(<CategoryFilter value={['backup']} onChange={() => {}} />)
-    expect(screen.queryByText(/except index runs/i)).not.toBeInTheDocument()
+    expect(screen.getByTestId('index-hidden')).toBeInTheDocument()
+    rerender(<CategoryFilter value={['index']} onChange={() => {}} />)
+    expect(screen.queryByTestId('index-hidden')).not.toBeInTheDocument()
   })
 })

@@ -690,6 +690,261 @@ class TestRecentActivityEndpoint:
 
 
 @pytest.mark.unit
+class TestRecentActivityHooks:
+    def _seed(self, test_db):
+        from app.database.models import Repository, Script, ScriptExecution
+
+        repo = Repository(
+            name="Repo", path="/tmp/repo", encryption="none", repository_type="local"
+        )
+        script = Script(
+            name="Default vars",
+            file_path="library/default-vars.sh",
+            category="custom",
+            timeout=300,
+        )
+        test_db.add_all([repo, script])
+        test_db.flush()
+        backup = Operation(
+            repository_id=repo.id,
+            kind="backup",
+            category="backup",
+            status="completed",
+            trigger="plan",
+            priority=0,
+            run_id="run-hooks",
+            started_at=datetime.now() - timedelta(minutes=2),
+            completed_at=datetime.now(),
+        )
+        test_db.add(backup)
+        test_db.flush()
+        hooks = [
+            ScriptExecution(
+                script_id=script.id,
+                hook_type=hook,
+                status="completed",
+                started_at=datetime.now() - timedelta(minutes=2),
+                completed_at=datetime.now() - timedelta(minutes=2),
+                exit_code=0,
+                stdout="",
+                stderr="",
+                triggered_by="backup",
+                repository_id=repo.id,
+                operation_id=backup.id,
+            )
+            for hook in ("pre-backup", "post-backup")
+        ]
+        test_db.add_all(hooks)
+        test_db.commit()
+        return backup, hooks
+
+    def test_hook_scripts_ride_under_the_backup_they_ran_around(
+        self, test_client, admin_headers, test_db
+    ):
+        backup, hooks = self._seed(test_db)
+        response = test_client.get("/api/activity/recent", headers=admin_headers)
+        assert response.status_code == 200
+        activity = response.json()
+        assert [a["id"] for a in activity] == [backup.id]
+        nested = activity[0]["followups"]
+        assert {n["id"] for n in nested} == {h.id for h in hooks}
+        assert {n["hook_type"] for n in nested} == {"pre-backup", "post-backup"}
+        assert all(n["type"] == "script_execution" for n in nested)
+        assert all(n["operation_id"] == backup.id for n in nested)
+        # The hook belongs to the plan run, not to a manual click.
+        assert all(n["trigger"] == "plan" for n in nested)
+
+    def test_hook_scripts_ride_under_a_backup_selected_by_category(
+        self, test_client, admin_headers, test_db
+    ):
+        """A hook is a system row, so a category filter must not drop it
+        before it can join the backup that the filter selected."""
+        backup, hooks = self._seed(test_db)
+        response = test_client.get(
+            "/api/activity/recent?category=backup&trigger=plan", headers=admin_headers
+        )
+        assert response.status_code == 200
+        activity = response.json()
+        assert [a["id"] for a in activity] == [backup.id]
+        assert {n["id"] for n in activity[0]["followups"]} == {h.id for h in hooks}
+
+    def test_script_executions_are_scoped_to_accessible_repositories(
+        self, test_client, auth_headers, test_db
+    ):
+        """A viewer without a grant on the repository learns nothing about
+        the scripts that ran against it."""
+        self._seed(test_db)
+        response = test_client.get(
+            "/api/activity/recent?job_type=script_execution", headers=auth_headers
+        )
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_operations_window_is_by_time_not_id(
+        self, test_client, admin_headers, test_db
+    ):
+        """Rows backfilled from the legacy job tables have ids above the
+        backups they followed. A window on the newest ids kept them and
+        dropped the backup, so the window is on time instead."""
+        backup, hooks = self._seed(test_db)
+        old = [
+            Operation(
+                repository_id=backup.repository_id,
+                kind="prune",
+                category="maintenance",
+                status="completed",
+                trigger="manual",
+                priority=0,
+                run_id=f"legacy-{i}",
+                started_at=datetime.now() - timedelta(days=30, minutes=i),
+                completed_at=datetime.now() - timedelta(days=30, minutes=i),
+            )
+            for i in range(8)
+        ]
+        test_db.add_all(old)
+        test_db.commit()
+        # limit=2 windows 8 operations: with an id window, the backup would
+        # lose to the eight legacy rows above it.
+        response = test_client.get(
+            "/api/activity/recent?limit=2", headers=admin_headers
+        )
+        assert response.status_code == 200
+        activity = response.json()
+        assert [a["id"] for a in activity] == [backup.id, old[0].id]
+        assert {n["id"] for n in activity[0]["followups"]} == {h.id for h in hooks}
+
+    def test_hidden_reconcile_rows_do_not_use_up_the_window(
+        self, test_client, admin_headers, test_db
+    ):
+        """Reconcile chains are hidden index rows, and there are thousands
+        of them; the window must be spent on the runs the page shows."""
+        backup, hooks = self._seed(test_db)
+        newer = [
+            Operation(
+                repository_id=backup.repository_id,
+                kind="archive_sync",
+                category="index",
+                status="completed",
+                trigger="reconcile",
+                priority=0,
+                run_id=f"reconcile-{i}",
+                started_at=datetime.now() + timedelta(minutes=i + 1),
+                completed_at=datetime.now() + timedelta(minutes=i + 1),
+            )
+            for i in range(8)
+        ]
+        test_db.add_all(newer)
+        test_db.commit()
+        response = test_client.get(
+            "/api/activity/recent?limit=2", headers=admin_headers
+        )
+        assert response.status_code == 200
+        activity = response.json()
+        assert [a["id"] for a in activity] == [backup.id]
+        assert {n["id"] for n in activity[0]["followups"]} == {h.id for h in hooks}
+        # Asked for, the reconcile rows are still there.
+        response = test_client.get(
+            "/api/activity/recent?category=index&limit=2", headers=admin_headers
+        )
+        assert [a["kind"] for a in response.json()] == ["archive_sync", "archive_sync"]
+
+    def test_chain_head_outside_the_window_is_pulled_in(
+        self, test_client, admin_headers, test_db
+    ):
+        """A follow-up is newer than the backup it follows, so the window's
+        oldest edge can hold the chain without its head. The head is
+        fetched so the chain rides under it."""
+        backup, hooks = self._seed(test_db)
+
+        def op(kind, category, trigger, minutes, run_id, depends_on_id=None):
+            row = Operation(
+                repository_id=backup.repository_id,
+                kind=kind,
+                category=category,
+                status="completed",
+                trigger=trigger,
+                priority=0,
+                run_id=run_id,
+                depends_on_id=depends_on_id,
+                started_at=datetime.now() + timedelta(minutes=minutes),
+                completed_at=datetime.now() + timedelta(minutes=minutes),
+            )
+            test_db.add(row)
+            test_db.flush()
+            return row
+
+        # Three newer backups with four follow-ups each: fifteen rows that
+        # fill a window of sixteen without filling a page of four.
+        newer = []
+        for i in range(3):
+            head = op("backup", "backup", "plan", 10 * (i + 1), f"newer-{i}")
+            newer.append(head)
+            for j, kind in enumerate(
+                ("archive_sync", "history_merge", "history_index", "stats")
+            ):
+                op(
+                    kind,
+                    "index",
+                    "followup",
+                    10 * (i + 1) + j + 1,
+                    head.run_id,
+                    head.id,
+                )
+        stats = op("stats", "index", "followup", 60, backup.run_id, backup.id)
+        test_db.commit()
+
+        # limit=4 windows 16 operations: the 16 newest exclude the backup.
+        response = test_client.get(
+            "/api/activity/recent?limit=4", headers=admin_headers
+        )
+        assert response.status_code == 200
+        activity = response.json()
+        assert [a["id"] for a in activity] == [
+            *[b.id for b in reversed(newer)],
+            backup.id,
+        ]
+        nested = {n["id"] for n in activity[-1]["followups"]}
+        assert stats.id in nested
+        assert {h.id for h in hooks} <= nested
+
+    def test_ancestor_fetch_stops_when_the_filter_excludes_the_head(
+        self, test_client, admin_headers, test_db
+    ):
+        """A job_type filter that selects a follow-up but not its head must
+        return, with the follow-up hidden as before, not loop on the
+        parent it cannot load."""
+        backup, _hooks = self._seed(test_db)
+        stats = Operation(
+            repository_id=backup.repository_id,
+            kind="stats",
+            category="index",
+            status="completed",
+            trigger="followup",
+            priority=0,
+            run_id=backup.run_id,
+            depends_on_id=backup.id,
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+        )
+        test_db.add(stats)
+        test_db.commit()
+        response = test_client.get(
+            "/api/activity/recent?job_type=stats", headers=admin_headers
+        )
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_hook_scripts_stay_top_level_when_their_backup_is_not_listed(
+        self, test_client, admin_headers, test_db
+    ):
+        backup, hooks = self._seed(test_db)
+        response = test_client.get(
+            "/api/activity/recent?job_type=script_execution", headers=admin_headers
+        )
+        assert response.status_code == 200
+        assert {a["id"] for a in response.json()} == {h.id for h in hooks}
+
+
 class TestRecentActivityLogPolicy:
     """Test Activity has_logs serialization against SystemSettings.log_save_policy."""
 

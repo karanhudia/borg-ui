@@ -2067,7 +2067,7 @@
   },
   "activity": {
     "title": "Activity",
-    "subtitle": "View all operations and their logs",
+    "subtitle": "Every run on every repository, newest first",
     "actions": {
       "refresh": "Refresh activity"
     },
@@ -2104,7 +2104,6 @@
       "message": "There are no operations matching your filters"
     },
     "filterCategory": "Category",
-    "indexHiddenHint": "Showing everything except index runs. Select Index to include them.",
     "filterTrigger": "Trigger",
     "allTriggers": "All triggers",
     "triggers": {
@@ -2124,6 +2123,14 @@
     },
     "followupsCollapsed": "{{count}} steps",
     "operations": "Operations",
+    "runChain": {
+      "allSucceeded": "All succeeded",
+      "failed": "{{count}} failed",
+      "failed_one": "{{count}} failed",
+      "active": "{{count}} in progress",
+      "cancelled": "{{count}} cancelled",
+      "cancelled_one": "{{count}} cancelled"
+    },
     "followupsCollapsed_one": "{{count}} step",
     "repositoryView": {
       "back": "All activity",
@@ -2142,6 +2149,51 @@
     "repositoryScope": {
       "label": "Repository",
       "all": "All repositories"
+    },
+    "indexHiddenTooltip": "Index runs are hidden until you select this",
+    "umbrella": {
+      "plan": "Plan · {{name}}",
+      "schedule": "Schedule · {{name}}"
+    },
+    "day": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "unknown": "Undated"
+    },
+    "summary": {
+      "runs": "{{count}} runs",
+      "runs_one": "{{count}} run",
+      "repositories": "across {{count}} repositories",
+      "repositories_one": "across {{count}} repository",
+      "indexHidden": "index runs hidden"
+    },
+    "runningNow": {
+      "title": "Running now",
+      "queued": "Queued"
+    },
+    "showMore": "Show {{count}} more",
+    "health": {
+      "backup": "Backup",
+      "check": "Check",
+      "prune": "Prune",
+      "compact": "Compact",
+      "index": "Index",
+      "mirror": "Mirror",
+      "running": "Running",
+      "overdue": "overdue"
+    },
+    "hook": {
+      "pre": "Pre-backup script",
+      "post": "Post-backup script",
+      "sourcePre": "Source pre-backup script",
+      "sourcePost": "Source post-backup script",
+      "other": "Script"
+    },
+    "planRun": {
+      "repositories": "{{count}} repositories",
+      "repositories_one": "{{count}} repository",
+      "members": "{{count}} runs",
+      "members_one": "{{count}} run"
     }
   },
   "availabilitySchedule": {

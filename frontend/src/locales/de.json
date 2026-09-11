@@ -2067,7 +2067,7 @@
   },
   "activity": {
     "title": "Aktivität",
-    "subtitle": "Alle Vorgänge und ihre Protokolle anzeigen",
+    "subtitle": "Jeder Lauf auf jedem Repository, neueste zuerst",
     "actions": {
       "refresh": "Aktivität aktualisieren"
     },
@@ -2104,7 +2104,6 @@
       "message": "Es gibt keine Vorgänge, die deinen Filtern entsprechen"
     },
     "filterCategory": "Kategorie",
-    "indexHiddenHint": "Alles außer Index-Läufen wird angezeigt. Wähle Index, um sie einzublenden.",
     "filterTrigger": "Auslöser",
     "allTriggers": "Alle Auslöser",
     "triggers": {
@@ -2124,6 +2123,14 @@
     },
     "followupsCollapsed": "{{count}} Schritte",
     "operations": "Vorgänge",
+    "runChain": {
+      "allSucceeded": "Alle erfolgreich",
+      "failed": "{{count}} fehlgeschlagen",
+      "failed_one": "{{count}} fehlgeschlagen",
+      "active": "{{count}} in Bearbeitung",
+      "cancelled": "{{count}} abgebrochen",
+      "cancelled_one": "{{count}} abgebrochen"
+    },
     "followupsCollapsed_one": "{{count}} Schritt",
     "repositoryView": {
       "back": "Gesamte Aktivität",
@@ -2142,6 +2149,51 @@
     "repositoryScope": {
       "label": "Repository",
       "all": "Alle Repositorys"
+    },
+    "indexHiddenTooltip": "Indexläufe bleiben ausgeblendet, bis Sie dies auswählen",
+    "umbrella": {
+      "plan": "Plan · {{name}}",
+      "schedule": "Zeitplan · {{name}}"
+    },
+    "day": {
+      "today": "Heute",
+      "yesterday": "Gestern",
+      "unknown": "Ohne Datum"
+    },
+    "summary": {
+      "runs": "{{count}} Läufe",
+      "runs_one": "{{count}} Lauf",
+      "repositories": "in {{count}} Repositories",
+      "repositories_one": "in {{count}} Repository",
+      "indexHidden": "Indexläufe ausgeblendet"
+    },
+    "runningNow": {
+      "title": "Läuft gerade",
+      "queued": "In Warteschlange"
+    },
+    "showMore": "{{count}} weitere anzeigen",
+    "health": {
+      "backup": "Backup",
+      "check": "Prüfung",
+      "prune": "Prune",
+      "compact": "Compact",
+      "index": "Index",
+      "mirror": "Spiegel",
+      "running": "Läuft",
+      "overdue": "überfällig"
+    },
+    "hook": {
+      "pre": "Pre-Backup-Skript",
+      "post": "Post-Backup-Skript",
+      "sourcePre": "Quellen-Pre-Backup-Skript",
+      "sourcePost": "Quellen-Post-Backup-Skript",
+      "other": "Skript"
+    },
+    "planRun": {
+      "repositories": "{{count}} Repositories",
+      "repositories_one": "{{count}} Repository",
+      "members": "{{count}} Läufe",
+      "members_one": "{{count}} Lauf"
     }
   },
   "availabilitySchedule": {

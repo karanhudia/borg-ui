@@ -7,6 +7,7 @@ Provides a unified view of all operations (backups, restores, checks, compacts, 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import Any, List, Optional
 from datetime import datetime
@@ -101,6 +102,10 @@ class ActivityItem(BaseModel):
     progress_message: Optional[str] = None
     execution_mode: Optional[str] = None
     created_at: Optional[datetime] = None
+    # Script executions only: the hook that ran the script and the operation
+    # it ran around. With collapse_runs a hook rides under that operation.
+    operation_id: Optional[int] = None
+    hook_type: Optional[str] = None
     followups: List["ActivityItem"] = []
 
     class Config:
@@ -604,9 +609,41 @@ def _operation_activity_items(
     if status:
         wanted = {status, op_vocab.LEGACY_STATUS_MAP.get(status, status)}
         q = q.filter(Operation.status.in_(tuple(wanted)))
-    ops = q.order_by(Operation.id.desc()).limit(limit * 4).all()
+    if not category or "index" not in category:
+        # Reconcile runs are index rows `_visible` hides unless the filter
+        # names them, and they outnumber everything else many times over.
+        # Keep them out of the window so it reaches back through real runs;
+        # index follow-ups stay, they ride under their visible parent.
+        q = q.filter(
+            ~((Operation.category == "index") & (Operation.trigger != "followup"))
+        )
+    scoped = q
+    # Window by time, not id: rows backfilled from the legacy job tables
+    # carry ids far above the backups they ran beside, so an id window kept
+    # a plan's prune and dropped the backup it followed.
+    ops = (
+        q.order_by(
+            func.coalesce(Operation.started_at, Operation.created_at).desc(),
+            Operation.id.desc(),
+        )
+        .limit(limit * 4)
+        .all()
+    )
     if not ops:
         return []
+    # Follow-ups are newer than what they follow, so the window's oldest
+    # edge can hold a chain without its head. Pull the missing ancestors in,
+    # under the same filters, so the chain rides under its run instead of
+    # surfacing as loose steps.
+    have = {op.id for op in ops}
+    missing = {op.depends_on_id for op in ops if op.depends_on_id is not None} - have
+    while missing:
+        parents = scoped.filter(Operation.id.in_(tuple(missing))).all()
+        ops.extend(parents)
+        have |= {p.id for p in parents}
+        missing = {
+            p.depends_on_id for p in parents if p.depends_on_id is not None
+        } - have
     repo_ids = {op.repository_id for op in ops if op.repository_id is not None}
     repos = (
         {
@@ -804,7 +841,17 @@ async def list_recent_activity(
     # Script executions name their repository, so a repository-scoped view
     # keeps the ones that ran against it instead of dropping the source.
     if not job_type or job_type == "script_execution":
+        from app.api.operations import accessible_repository_ids
+
         script_query = db.query(ScriptExecution)
+        # Same rule as operations: rows with no repository are system rows
+        # every user may see; the rest need a permission on the repository.
+        accessible = accessible_repository_ids(db, current_user)
+        if accessible is not None:
+            script_query = script_query.filter(
+                ScriptExecution.repository_id.is_(None)
+                | ScriptExecution.repository_id.in_(accessible)
+            )
         if repository_scoped:
             script_query = script_query.filter(
                 ScriptExecution.repository_id == repository_id
@@ -833,6 +880,9 @@ async def list_recent_activity(
                     "error_message": execution.error_message,
                     "repository": repo_name,
                     "repository_path": repo_path,
+                    "repository_id": execution.repository_id,
+                    "operation_id": execution.operation_id,
+                    "hook_type": execution.hook_type,
                     "log_file_path": None,
                     "triggered_by": execution.triggered_by or "manual",
                     "schedule_id": None,
@@ -865,10 +915,6 @@ async def list_recent_activity(
         )
         activity.setdefault("trigger", _trigger_for_non_operation_item(activity))
         activity.setdefault("followups", [])
-    if category:
-        activities = [a for a in activities if a["category"] in category]
-    if trigger:
-        activities = [a for a in activities if a["trigger"] in trigger]
     activities.extend(
         _operation_activity_items(
             db,
@@ -883,6 +929,35 @@ async def list_recent_activity(
             log_save_policy=log_save_policy,
         )
     )
+
+    # A pre- or post-backup script ran around one backup, so it rides under
+    # that backup (like the follow-up chain) when the backup is in the list,
+    # and reads as part of the run rather than a manual script beside it.
+    if collapse_runs:
+        parents = {a["id"]: a for a in activities if a.get("kind") is not None}
+        top_level: List[dict] = []
+        for activity in activities:
+            parent = (
+                parents.get(activity.get("operation_id"))
+                if activity["type"] == "script_execution"
+                else None
+            )
+            if parent is None:
+                top_level.append(activity)
+                continue
+            activity["trigger"] = parent.get("trigger", activity["trigger"])
+            activity.pop("_sort_at", None)
+            parent["followups"].append(activity)
+        activities = top_level
+
+    # The category and trigger filters apply to top-level rows only, after
+    # hooks have found their backup: a hook is a system row with its own
+    # trigger, and it must ride under a backup selected by category before
+    # the filter would drop it. Operation rows already passed these filters.
+    if category:
+        activities = [a for a in activities if a["category"] in category]
+    if trigger:
+        activities = [a for a in activities if a["trigger"] in trigger]
 
     # Sort by start time, falling back to creation time for pending jobs.
     activities.sort(

@@ -353,6 +353,149 @@ async def test_backup_followup_chain_deletes_removed_archive_and_keeps_survivor(
 
 
 @pytest.mark.unit
+def test_enqueue_followups_skips_a_chain_already_queued_on_the_repository(
+    db, repo, monkeypatch
+):
+    """The shape of a plan backup with inline prune and compact: the backup's
+    chain is queued first, then prune and compact finish. Their chains are
+    subsets of what already waits, so they enqueue nothing (the queued rows
+    start after now and see the pruned repository)."""
+    from app.services.operations.followups import enqueue_followups
+
+    monkeypatch.setattr("app.services.operations.enqueue.wake_runner", lambda: None)
+    backup = enqueue(db, "backup", repository_id=repo.id, trigger="plan")
+    backup.status = "completed"
+    db.commit()
+    chain = enqueue_followups(db, backup, depends_on_id=backup.id)
+    assert [o.kind for o in chain] == ["archive_sync", "history_merge", "stats"]
+
+    last = None
+    for kind in ("prune", "compact"):
+        step = enqueue(
+            db,
+            kind,
+            repository_id=repo.id,
+            trigger="plan",
+            run_id=backup.run_id,
+            depends_on_id=backup.id,
+        )
+        step.status = "completed"
+        db.commit()
+        assert enqueue_followups(db, step, depends_on_id=step.id) == []
+        last = step
+
+    assert db.query(Operation).filter(Operation.trigger == "followup").count() == 3
+    # The refresh is the last thing the run does: its head now hangs off
+    # the compact, the last stage to finish, and the rest of the chain
+    # still hangs off the head.
+    db.refresh(chain[0])
+    assert last is not None and chain[0].depends_on_id == last.id
+    assert chain[1].depends_on_id == chain[0].id
+
+
+@pytest.mark.unit
+def test_enqueue_followups_leaves_another_runs_chain_where_it_is(db, repo, monkeypatch):
+    """A reconcile's queued listing covers a manual prune's refresh, but it
+    is not the prune's run, so it keeps its own dependency."""
+    from app.services.operations.followups import enqueue_followups
+
+    monkeypatch.setattr("app.services.operations.enqueue.wake_runner", lambda: None)
+    sync = enqueue(db, "archive_sync", repository_id=repo.id, trigger="reconcile")
+    enqueue(
+        db,
+        "history_merge",
+        repository_id=repo.id,
+        trigger="reconcile",
+        run_id=sync.run_id,
+        depends_on_id=sync.id,
+    )
+    enqueue(
+        db,
+        "stats",
+        repository_id=repo.id,
+        trigger="reconcile",
+        run_id=sync.run_id,
+        depends_on_id=sync.id,
+    )
+    prune = enqueue(db, "prune", repository_id=repo.id, trigger="manual")
+    prune.status = "completed"
+    db.commit()
+    assert enqueue_followups(db, prune, depends_on_id=prune.id) == []
+    db.refresh(sync)
+    assert sync.depends_on_id is None
+
+
+@pytest.mark.unit
+def test_enqueue_followups_does_not_trust_a_chain_behind_a_failed_row(
+    db, repo, monkeypatch
+):
+    """A queued chain whose dependency failed will be skipped as
+    dependency_failed, so it covers nothing."""
+    from app.services.operations.followups import enqueue_followups
+
+    monkeypatch.setattr("app.services.operations.enqueue.wake_runner", lambda: None)
+    failed = enqueue(db, "backup", repository_id=repo.id, trigger="plan")
+    failed.status = "failed"
+    db.commit()
+    for kind, parent in (
+        ("archive_sync", failed),
+        ("history_merge", None),
+        ("stats", None),
+    ):
+        parent = parent or db.query(Operation).order_by(Operation.id.desc()).first()
+        enqueue(
+            db,
+            kind,
+            repository_id=repo.id,
+            trigger="followup",
+            run_id=failed.run_id,
+            depends_on_id=parent.id,
+        )
+
+    prune = enqueue(db, "prune", repository_id=repo.id, trigger="manual")
+    prune.status = "completed"
+    db.commit()
+    chain = enqueue_followups(db, prune, depends_on_id=prune.id)
+    assert [o.kind for o in chain] == ["archive_sync", "history_merge", "stats"]
+
+
+@pytest.mark.unit
+def test_enqueue_followups_does_not_trust_a_chain_behind_a_missing_row(
+    db, repo, monkeypatch
+):
+    """The runner skips a queued row whose dependency no longer exists, so
+    such a chain covers nothing and a fresh one is enqueued."""
+    from app.services.operations.followups import enqueue_followups
+
+    monkeypatch.setattr("app.services.operations.enqueue.wake_runner", lambda: None)
+    orphan = enqueue(db, "archive_sync", repository_id=repo.id, trigger="followup")
+    orphan.depends_on_id = 999_999
+    db.commit()
+    prune = enqueue(db, "prune", repository_id=repo.id, trigger="manual")
+    prune.status = "completed"
+    db.commit()
+    chain = enqueue_followups(db, prune, depends_on_id=prune.id)
+    assert [o.kind for o in chain] == ["archive_sync", "history_merge", "stats"]
+
+
+@pytest.mark.unit
+def test_enqueue_followups_ignores_a_running_chain(db, repo, monkeypatch):
+    """A listing already running may have started before this operation
+    changed the repository, so it does not count."""
+    from app.services.operations.followups import enqueue_followups
+
+    monkeypatch.setattr("app.services.operations.enqueue.wake_runner", lambda: None)
+    running = enqueue(db, "archive_sync", repository_id=repo.id, trigger="reconcile")
+    running.status = "running"
+    db.commit()
+    prune = enqueue(db, "prune", repository_id=repo.id, trigger="manual")
+    prune.status = "completed"
+    db.commit()
+    chain = enqueue_followups(db, prune, depends_on_id=prune.id)
+    assert [o.kind for o in chain] == ["archive_sync", "history_merge", "stats"]
+
+
+@pytest.mark.unit
 def test_history_capability_names_the_reason(db_session):
     """The executor first, then the plan: an agent's repository reads as
     agent-unsupported on every plan (an upgrade would not change it), a

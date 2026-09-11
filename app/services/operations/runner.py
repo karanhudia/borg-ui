@@ -14,12 +14,11 @@ from sqlalchemy.orm import Session
 import app.config as app_config
 from app.database.models import Operation, Repository, SystemSettings, utc_now
 from app.services.operations import executors as executor_registry
-from app.services.operations.enqueue import enqueue_chain
 from app.services.operations.events import (
     broadcast_operation_progress,
     broadcast_operation_updated,
 )
-from app.services.operations.followups import chain_for_repository
+from app.services.operations.followups import enqueue_followups
 from app.services.operations.lanes import can_start
 from app.services.operations.vocab import INDEX_KINDS, SUCCESS_STATUSES, is_exclusive
 from app.utils.process_utils import is_process_alive
@@ -472,24 +471,9 @@ class OperationRunner:
             db.commit()
             await broadcast_operation_updated(op, db)
             if op.status in SUCCESS_STATUSES:
-                kinds = chain_for_repository(
-                    db,
-                    op.kind,
-                    op.repository_id,
-                    available=self._registered_kinds(),
+                enqueue_followups(
+                    db, op, depends_on_id=op.id, available=self._registered_kinds()
                 )
-                if kinds:
-                    enqueue_chain(
-                        db,
-                        kinds,
-                        repository_id=op.repository_id,
-                        trigger="followup",
-                        run_id=op.run_id,
-                        depends_on_id=op.id,
-                        triggered_by_user_id=op.triggered_by_user_id,
-                        scheduled_job_id=op.scheduled_job_id,
-                        backup_plan_run_id=op.backup_plan_run_id,
-                    )
         finally:
             if ctx is not None:
                 ctx.close()
