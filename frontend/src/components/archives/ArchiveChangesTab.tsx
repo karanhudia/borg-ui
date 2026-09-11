@@ -114,6 +114,13 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
   // nothing to show, the empty state would claim the archive has no changes.
   const loadFailed = isError && !changes
   const historyState = changes?.history_state ?? archive.history_state
+  // The repository decides whether history can exist at all; an archive of
+  // a repository executed by an agent is `skipped` for good, and a rebuild
+  // would only skip it again. The rebuild control is offered only where it
+  // can change the outcome.
+  const capability = changes?.history_capability ?? archive.history_capability ?? 'available'
+  const historyUnavailable = capability !== 'available'
+  const canRebuild = !historyUnavailable
   const rows = [...(changes?.changes ?? []), ...extraPages]
   const totals = changes?.totals
 
@@ -205,22 +212,29 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
 
       {!isLoading && historyState !== 'indexed' && (
         <Alert
-          severity={historyState === 'failed' ? 'warning' : 'info'}
+          severity={historyState === 'failed' && !historyUnavailable ? 'warning' : 'info'}
           action={
-            <Button
-              size="small"
-              disabled={rebuildMutation.isPending}
-              onClick={() => rebuildMutation.mutate()}
-            >
-              {t('archives.changes.rebuildLink')}
-            </Button>
+            canRebuild ? (
+              <Button
+                size="small"
+                disabled={rebuildMutation.isPending}
+                onClick={() => rebuildMutation.mutate()}
+              >
+                {t('archives.changes.rebuildLink')}
+              </Button>
+            ) : undefined
           }
         >
-          {historyState === 'skipped'
-            ? t('archives.changes.skipped')
-            : historyState === 'failed'
-              ? t('archives.changes.failed')
-              : t('archives.changes.pending')}
+          {capability === 'agent_unsupported'
+            ? // whatever the archive's own state says (a failure recorded
+              // before the move included): the failed wording promises a
+              // rebuild this repository cannot have
+              t('archives.changes.agentUnsupported')
+            : historyState === 'skipped'
+              ? t('archives.changes.skipped')
+              : historyState === 'failed'
+                ? t('archives.changes.failed')
+                : t('archives.changes.pending')}
         </Alert>
       )}
 

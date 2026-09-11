@@ -146,3 +146,30 @@ export const Locked: Story = {
     systemInfo: communitySystemInfo,
   },
 }
+
+// An archive of a repository executed by a managed agent: the server cannot
+// diff it, so the state is `skipped` for good and no rebuild is offered.
+export const AgentUnsupported: Story = {
+  args: {
+    archive: {
+      ...archive,
+      history_state: 'skipped',
+      history_capability: 'agent_unsupported',
+    },
+  },
+  parameters: {
+    systemInfo: proSystemInfo,
+  },
+  render: (args) => (
+    <SeededChanges
+      response={changesResponse({
+        changes: [],
+        totals: { added: 0, removed: 0, modified: 0, summary: 0 },
+        history_state: 'skipped',
+        history_capability: 'agent_unsupported',
+      })}
+    >
+      <ArchiveChangesTab {...args} />
+    </SeededChanges>
+  ),
+}

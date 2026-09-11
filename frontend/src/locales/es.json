@@ -1096,7 +1096,8 @@
       "showMore": "Mostrar más",
       "filterLabel": "Tipo de cambio",
       "delta": "{{sign}}{{size}}",
-      "summaryFolder": "Carpeta"
+      "summaryFolder": "Carpeta",
+      "agentUnsupported": "El historial de cambios no está disponible para repositorios ejecutados por un agente."
     },
     "files": {
       "size": "Tamaño",
@@ -1110,7 +1111,8 @@
       "unchanged": "Sin cambios",
       "changed": "Cambiado",
       "restoreThis": "Restaurar esto",
-      "notPresent": "No presente en {{count}} archivos anteriores",
+      "notPresent_one": "No presente en {{count}} archivo anterior",
+      "notPresent_other": "No presente en {{count}} archivos anteriores",
       "selected": "{{count}} seleccionados ({{size}})",
       "restoreSelection": "Restaurar selección",
       "selectionBar": "Selección",
@@ -1125,7 +1127,13 @@
       "historyEmpty": "Ningún archivo anterior contiene esta ruta.",
       "type": "Tipo",
       "typeFile": "Fichero",
-      "typeDirectory": "Carpeta"
+      "typeDirectory": "Carpeta",
+      "historyUnavailableAgent": "El historial de cambios no está disponible para repositorios ejecutados por un agente.",
+      "historyNotIndexed": "Este repositorio aún no se ha indexado.",
+      "historyCoverage_one": "{{indexed}} de {{count}} archivo indexado",
+      "historyCoverage_other": "{{indexed}} de {{count}} archivos indexados",
+      "historyEmptyIndexed": "Ninguno de los archivos indexados contiene esta ruta.",
+      "historyFailed": "Este repositorio no se pudo indexar."
     },
     "toolbarOperations": "Operaciones",
     "hourly": {
@@ -3556,6 +3564,7 @@
       "pauseFailed": "No se pudo cambiar el estado de la cola en segundo plano.",
       "openTrack": "Abrir el seguimiento de ejecución de {{repository}}",
       "rebuildFailed": "No se pudo iniciar la reconstrucción.",
+      "retryDeferred": "Ya hay trabajo de índice en cola o en curso para este repositorio, por lo que no se puso nada más en cola.",
       "queueFailed": "No se pudo cargar la cola en segundo plano.",
       "pauseAdminOnly": "Solo los administradores pueden pausar el trabajo en segundo plano.",
       "reason": {
@@ -3671,9 +3680,11 @@
         "detailTruncatedTitle": "Archivos con historial de ficheros truncado",
         "detailAttempts_one": "{{count}} intento",
         "detailAttempts_other": "{{count}} intentos",
+        "detailPartial": "El historial de ficheros cubre {{indexed}} de {{total}} archivos.",
         "detailAllIndexed": "Todos los archivos tienen su historial de ficheros.",
         "detailHint": "Reconstruye desde Historial de ficheros para indexar estos archivos de nuevo.",
-        "viewIndexRuns": "Ver ejecuciones de índice"
+        "viewIndexRuns": "Ver ejecuciones de índice",
+        "historyAgentUnsupported": "No disponible para repositorios de agente"
       },
       "rebuildMenuHint": "Cada etapa posterior a la elegida también se reconstruye. Las anteriores se conservan. Las estadísticas siempre van al final, porque suman lo que produjeron las demás etapas.",
       "rebuildTitle": "Reconstruir datos derivados",
@@ -3681,7 +3692,8 @@
       "stageWillRebuild": "Se reconstruirá",
       "stageKept": "Se conserva",
       "stageStart": "Empezar aquí",
-      "currentRun": "Ejecución actual"
+      "currentRun": "Ejecución actual",
+      "stageAgentUnsupported": "No disponible para repositorios ejecutados por un agente"
     },
     "status": {
       "queued": "En cola",
@@ -5913,7 +5925,8 @@
         "failedListArchives": "Error al listar los archivos",
         "repositoryNotFound": "Repositorio no encontrado",
         "fileNotFoundAfterExtraction": "Archivo no encontrado después de la extracción",
-        "failedExtractFile": "Error al extraer el archivo: {{error}}"
+        "failedExtractFile": "Error al extraer el archivo: {{error}}",
+        "historyUnavailableForAgent": "El historial de cambios no está disponible para repositorios ejecutados por un agente, así que no hay nada que reconstruir."
       },
       "borg": {
         "repositoryDoesNotExist": "El repositorio no existe en la ruta especificada",

@@ -1096,7 +1096,8 @@
       "showMore": "Show more",
       "filterLabel": "Change type",
       "delta": "{{sign}}{{size}}",
-      "summaryFolder": "Folder"
+      "summaryFolder": "Folder",
+      "agentUnsupported": "Change history is not available for repositories executed by an agent."
     },
     "files": {
       "size": "Size",
@@ -1110,7 +1111,8 @@
       "unchanged": "Unchanged",
       "changed": "Changed",
       "restoreThis": "Restore this",
-      "notPresent": "Not present in {{count}} older archives",
+      "notPresent_one": "Not present in {{count}} older archive",
+      "notPresent_other": "Not present in {{count}} older archives",
       "selected": "{{count}} selected ({{size}})",
       "restoreSelection": "Restore selection",
       "selectionBar": "Selection",
@@ -1125,7 +1127,13 @@
       "historyEmpty": "No earlier archive contains this path.",
       "type": "Type",
       "typeFile": "File",
-      "typeDirectory": "Folder"
+      "typeDirectory": "Folder",
+      "historyUnavailableAgent": "Change history is not available for repositories executed by an agent.",
+      "historyNotIndexed": "This repository has not been indexed yet.",
+      "historyCoverage_one": "{{indexed}} of {{count}} archive indexed",
+      "historyCoverage_other": "{{indexed}} of {{count}} archives indexed",
+      "historyEmptyIndexed": "None of the indexed archives contains this path.",
+      "historyFailed": "This repository could not be indexed."
     },
     "toolbarOperations": "Operations",
     "hourly": {
@@ -3556,6 +3564,7 @@
       "pauseFailed": "Could not change the background queue state.",
       "openTrack": "Open the run track for {{repository}}",
       "rebuildFailed": "The rebuild could not be started.",
+      "retryDeferred": "Index work for this repository is already queued or running, so nothing more was queued.",
       "queueFailed": "The background queue could not be loaded.",
       "pauseAdminOnly": "Only administrators can pause background work.",
       "reason": {
@@ -3671,9 +3680,11 @@
         "detailTruncatedTitle": "Archives with truncated file history",
         "detailAttempts_one": "{{count}} attempt",
         "detailAttempts_other": "{{count}} attempts",
+        "detailPartial": "File history covers {{indexed}} of {{total}} archives.",
         "detailAllIndexed": "Every archive has its file history.",
         "detailHint": "Rebuild from File history to index these archives again.",
-        "viewIndexRuns": "View index runs"
+        "viewIndexRuns": "View index runs",
+        "historyAgentUnsupported": "Not available for agent repositories"
       },
       "rebuildMenuHint": "Every stage after the one you pick is rebuilt too. Earlier stages are kept. Stats always run last, because they total up what the other stages produced.",
       "rebuildTitle": "Rebuild derived data",
@@ -3681,7 +3692,8 @@
       "stageWillRebuild": "Will rebuild",
       "stageKept": "Kept",
       "stageStart": "Start here",
-      "currentRun": "Current run"
+      "currentRun": "Current run",
+      "stageAgentUnsupported": "Not available for repositories executed by an agent"
     },
     "status": {
       "queued": "Queued",
@@ -5913,7 +5925,8 @@
         "failedListArchives": "Failed to list archives",
         "repositoryNotFound": "Repository not found",
         "fileNotFoundAfterExtraction": "File not found after extraction",
-        "failedExtractFile": "Failed to extract file: {{error}}"
+        "failedExtractFile": "Failed to extract file: {{error}}",
+        "historyUnavailableForAgent": "Change history is not available for repositories executed by an agent, so there is nothing to rebuild."
       },
       "borg": {
         "repositoryDoesNotExist": "Repository does not exist at the specified path",

@@ -361,12 +361,23 @@ async def test_cap_collapses_overflow_into_summary_rows(db, repo, monkeypatch):
 
 @pytest.mark.unit
 async def test_agent_repository_skips_all_pending(db, repo):
+    """Every archive not indexed is marked, the exhausted failures too:
+    the same rule the listing applies, so the two never disagree."""
     a1 = _archive(db, repo, "first", 1)
+    given_up = _archive(db, repo, "given-up", 2, state="failed")
+    given_up.history_attempts = history.MAX_HISTORY_ATTEMPTS
+    done = _archive(db, repo, "done", 3, state="indexed")
+    db.commit()
     with patch.object(history, "is_agent_executor", return_value=True):
         out = await history.run_history_index(_ctx(db, repo))
     assert out.status == "skipped" and out.skip_reason == "agent_diff_unsupported"
+    assert out.result == {"archives": 2}
     db.refresh(a1)
+    db.refresh(given_up)
+    db.refresh(done)
     assert a1.history_state == "skipped"
+    assert given_up.history_state == "skipped"
+    assert done.history_state == "indexed"
 
 
 @pytest.mark.unit

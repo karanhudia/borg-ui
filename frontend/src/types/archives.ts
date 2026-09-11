@@ -1,9 +1,16 @@
 // Mirrors the response shapes in app/api/archive_index.py (spec 9.2).
 
-// Mirrors what the history executor writes: an archive starts `pending`,
-// becomes `indexed`, is `skipped` when its repository cannot be diffed,
-// and turns `failed` once its attempts run out.
+// Mirrors what the index executors write: an archive starts `pending`,
+// becomes `indexed`, is `skipped` when its repository cannot be diffed (an
+// agent executes it; the archive listing marks it, since no history run
+// ever reaches such a repository), and turns `failed` once its attempts
+// run out.
 export type HistoryState = 'pending' | 'indexed' | 'skipped' | 'failed'
+// Whether the history stage exists for a repository, and if not, why:
+// the plan lacks the feature, or a managed agent executes the repository
+// and the server cannot diff it. Derived by the backend from the plan and
+// the executor, so it is the same for every archive of the repository.
+export type HistoryCapability = 'available' | 'plan_locked' | 'agent_unsupported'
 export type SyncState = 'fresh' | 'syncing' | 'stale' | 'never'
 export type ChangeType = 'added' | 'removed' | 'modified' | 'summary'
 
@@ -38,6 +45,7 @@ export interface ArchiveListResponse {
   sync_state: SyncState
   last_synced_at: string | null
   history_available: boolean
+  history_capability?: HistoryCapability
 }
 
 export interface HeatmapDay {
@@ -72,6 +80,7 @@ export interface ArchiveDetailResponse extends ArchiveRow {
   predecessor_id: number | null
   successor_id: number | null
   history_available: boolean
+  history_capability?: HistoryCapability
 }
 
 export interface ChangeRow {
@@ -101,6 +110,7 @@ export interface ChangesResponse {
   unindexed_archive_ids: number[]
   history_state?: HistoryState
   history_truncated?: boolean
+  history_capability?: HistoryCapability
 }
 
 export interface HistoryEntry {
@@ -121,11 +131,25 @@ export interface PresentRange {
   to_archive_id: number | null
 }
 
+// What a path's history is based on: with nothing indexed the entries say
+// nothing about the path; with a partial index they cover the indexed
+// archives only.
+// `total` counts every archive, `skipped` ones included: they are uncovered
+// like `pending` ones, and `capability` says whether an index run will ever
+// reach them; `exhausted` are the failures the executor gave up on.
+export interface HistoryCoverage {
+  indexed: number
+  exhausted: number
+  total: number
+  capability: HistoryCapability
+}
+
 export interface PathHistoryResponse {
   path: string
   entries: HistoryEntry[]
   present: PresentRange[]
   present_in_latest: boolean
+  coverage?: HistoryCoverage
 }
 
 export interface SearchResult {

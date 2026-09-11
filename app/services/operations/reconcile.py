@@ -12,7 +12,11 @@ from app.database.database import SessionLocal
 from app.database.models import Operation, Repository, SystemSettings, utc_now
 from app.services.operations.enqueue import enqueue_chain
 from app.services.operations.executors import registered_kinds
-from app.services.operations.followups import PLAN_GATED_KINDS, history_enabled
+from app.services.operations.followups import (
+    PLAN_GATED_KINDS,
+    history_enabled,
+    history_possible_for,
+)
 from app.services.operations.index_mode import (
     DEFAULT_INDEX_MODE,
     filter_kinds,
@@ -92,13 +96,19 @@ def enqueue_reconcile_run(
     `force=True` skips the in-flight check. The catch-up run on returning to
     `full` (spec 6.8) needs it: the work already queued was built for the
     narrower mode and will never produce the history stages, so deferring to
-    it would mean no catch-up at all until the next tick.
+    it would mean no catch-up at all until the next tick. The reopen of a
+    repository moved from an agent back to the server is the same case: the
+    agent's listing that may still be queued carries no history stage.
     """
     mode = mode_for_repository(db, repository_id)
     if manual and mode == "off":
         # The one-off look: archive_sync and stats, this once.
         mode = "archives"
-    kinds = reconcile_kinds(db, history=history, mode=mode)
+    # The plan gate is read once by the caller; the executor gate is per
+    # repository (an agent's repository gets no history stage).
+    kinds = reconcile_kinds(
+        db, history=history_possible_for(db, repository_id, history=history), mode=mode
+    )
     if not kinds or (not force and has_active_index_work(db, repository_id)):
         return []
     return enqueue_chain(

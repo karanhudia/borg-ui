@@ -109,6 +109,7 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
   const { can } = usePlan()
   const [trackRepository, setTrackRepository] = useState<{ id: number; name: string } | null>(null)
   const [rebuildFailed, setRebuildFailed] = useState(false)
+  const [resyncDeferred, setResyncDeferred] = useState(false)
   const [reconcileResult, setReconcileResult] = useState<number | null>(null)
   const [toolbar, setToolbarState] = useState<HubToolbarState>(DEFAULT_TOOLBAR)
   const [windowSize, setWindowSize] = useState(WINDOW_SIZE)
@@ -216,7 +217,28 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
   const rebuildMutation = useMutation({
     mutationFn: ({ repositoryId, stage }: { repositoryId: number; stage: RebuildStage }) =>
       archivesAPI.rebuild(repositoryId, stage),
-    onMutate: () => setRebuildFailed(false),
+    onMutate: () => {
+      setRebuildFailed(false)
+      setResyncDeferred(false)
+    },
+    onError: () => setRebuildFailed(true),
+    onSettled: invalidateBoard,
+  })
+
+  // The listing chain (archive_sync, history_merge, stats) without
+  // invalidating anything: what a retry of the history segment needs on a
+  // repository that has no history stage, where its segment is the merge
+  // alone and a rebuild from the history stage is refused.
+  // The resync yields to index work already queued or running for the
+  // repository (it answers with no operations then); said so rather than
+  // left as a retry that visibly did nothing.
+  const resyncMutation = useMutation({
+    mutationFn: (repositoryId: number) => archivesAPI.resync(repositoryId),
+    onMutate: () => {
+      setRebuildFailed(false)
+      setResyncDeferred(false)
+    },
+    onSuccess: (res) => setResyncDeferred(res.data.operations.length === 0),
     onError: () => setRebuildFailed(true),
     onSettled: invalidateBoard,
   })
@@ -233,13 +255,32 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
     onSettled: invalidateBoard,
   })
 
+  const hubRepositories = hub.data?.repositories
+  const trackHubRepository =
+    trackRepository == null
+      ? undefined
+      : hubRepositories?.find((repo) => repo.repository_id === trackRepository.id)
   const handleRetry = useCallback(
     (repositoryId: number | null, stage: StageState) => {
       const rebuildStage = REBUILD_STAGE_FOR[stage.key]
       if (!rebuildStage || repositoryId == null) return
+      // A repository without the history stage (the plan lacks it, or an
+      // agent executes it) has its history segment from `history_merge`
+      // alone, and a rebuild from the history stage is refused for it. The
+      // retry re-runs the listing chain instead, which includes the merge
+      // and invalidates nothing.
+      // A row without the field (an older hub payload) takes the plan-wide
+      // answer: with the feature absent the stage is locked for everyone.
+      const capability =
+        hubRepositories?.find((repo) => repo.repository_id === repositoryId)?.history_capability ??
+        (hub.data?.history_available ? 'available' : 'plan_locked')
+      if (rebuildStage === 'history' && capability !== 'available') {
+        resyncMutation.mutate(repositoryId)
+        return
+      }
       rebuildMutation.mutate({ repositoryId, stage: rebuildStage })
     },
-    [rebuildMutation]
+    [rebuildMutation, resyncMutation, hubRepositories, hub.data?.history_available]
   )
 
   if (queue.isError) {
@@ -258,6 +299,11 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
       {rebuildFailed && (
         <Alert severity="error" onClose={() => setRebuildFailed(false)}>
           {t('operations.background.rebuildFailed')}
+        </Alert>
+      )}
+      {resyncDeferred && (
+        <Alert severity="info" onClose={() => setResyncDeferred(false)}>
+          {t('operations.background.retryDeferred')}
         </Alert>
       )}
       {limitsMutation.isError && (
@@ -418,6 +464,9 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
           onClose={() => setTrackRepository(null)}
           repositoryId={trackRepository.id}
           repositoryName={trackRepository.name}
+          historyCapability={trackHubRepository?.history_capability}
+          indexMode={trackHubRepository?.index_mode}
+          history={trackHubRepository?.history}
           operations={
             queue.data.repositories.find((repo) => repo.repository_id === trackRepository.id)
               ?.operations ?? []

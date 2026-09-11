@@ -223,6 +223,89 @@ describe('ArchiveChangesTab', () => {
     )
   })
 
+  it('says history is not available for an agent repository and offers no rebuild', async () => {
+    vi.mocked(archivesAPI.getChanges).mockResolvedValue({
+      data: baseChangesResponse({
+        changes: [],
+        history_state: 'skipped',
+        history_capability: 'agent_unsupported',
+      }),
+    } as never)
+    renderWithProviders(
+      <ArchiveChangesTab
+        repositoryId={7}
+        archive={{
+          ...archive,
+          history_state: 'skipped',
+          history_capability: 'agent_unsupported',
+        }}
+      />
+    )
+    expect(
+      await screen.findByText(/not available for repositories executed by an agent/i)
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /rebuild/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/was skipped for this archive/i)).not.toBeInTheDocument()
+  })
+
+  it('says the same for an agent archive the listing has not marked yet', async () => {
+    // the archive is still `pending` (its listing has not run since it was
+    // created); the repository decides, not the archive's state
+    vi.mocked(archivesAPI.getChanges).mockResolvedValue({
+      data: baseChangesResponse({
+        changes: [],
+        history_state: 'pending',
+        history_capability: 'agent_unsupported',
+      }),
+    } as never)
+    renderWithProviders(
+      <ArchiveChangesTab
+        repositoryId={7}
+        archive={{ ...archive, history_state: 'pending', history_capability: 'agent_unsupported' }}
+      />
+    )
+    expect(
+      await screen.findByText(/not available for repositories executed by an agent/i)
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /rebuild/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/has not been indexed yet/i)).not.toBeInTheDocument()
+  })
+
+  it('says the same for a failed archive of an agent repository, without a rebuild', async () => {
+    // the failed wording promises a rebuild this repository cannot have
+    vi.mocked(archivesAPI.getChanges).mockResolvedValue({
+      data: baseChangesResponse({
+        changes: [],
+        history_state: 'failed',
+        history_capability: 'agent_unsupported',
+      }),
+    } as never)
+    renderWithProviders(
+      <ArchiveChangesTab
+        repositoryId={7}
+        archive={{ ...archive, history_state: 'failed', history_capability: 'agent_unsupported' }}
+      />
+    )
+    expect(
+      await screen.findByText(/not available for repositories executed by an agent/i)
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /rebuild/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/could not be indexed/i)).not.toBeInTheDocument()
+  })
+
+  it('still offers the rebuild for a skipped archive of a repository that can be indexed', async () => {
+    vi.mocked(archivesAPI.getChanges).mockResolvedValue({
+      data: baseChangesResponse({
+        changes: [],
+        history_state: 'skipped',
+        history_capability: 'available',
+      }),
+    } as never)
+    renderTab()
+    expect(await screen.findByText(/was skipped for this archive/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /rebuild/i })).toBeInTheDocument()
+  })
+
   it('shows the inert preview to a plan without the feature', () => {
     mockPlanCan.mockReturnValue(false)
     renderTab()

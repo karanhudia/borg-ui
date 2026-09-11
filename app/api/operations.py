@@ -31,7 +31,11 @@ from app.database.models import (
     utc_now,
 )
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
-from app.services.operations.followups import history_enabled
+from app.services.operations.followups import (
+    HistoryCapability,
+    history_capability,
+    history_enabled,
+)
 from app.services.operations.lanes import lane_free, running_count
 from app.services.operations.models import is_terminal, serialize_operation
 from app.services.operations.index_mode import mode_of as index_mode_of
@@ -156,6 +160,10 @@ class HubRepository(BaseModel):
     last_history_at: Optional[datetime] = None
     archives: int = 0
     history: HistorySummary
+    # Whether the history stage exists for this repository: `available`,
+    # `plan_locked`, or `agent_unsupported` (a managed agent's repository
+    # cannot be diffed). The board offers no history stage otherwise.
+    history_capability: HistoryCapability = "available"
 
 
 class HubTotals(BaseModel):
@@ -503,6 +511,9 @@ async def get_repositories_hub(
     q = db.query(Repository)
     if accessible is not None:
         q = q.filter(Repository.id.in_(accessible))
+    # The plan lookup commits the session; read it before the rows so the
+    # commit cannot expire them (one refresh per repository otherwise).
+    history_plan = history_enabled(db)
     repositories = q.order_by(func.lower(Repository.name), Repository.id).all()
 
     settings = _settings_row(db)
@@ -534,6 +545,7 @@ async def get_repositories_hub(
                 last_history_at=facts["last_history_at"] if facts else None,
                 archives=facts["archives"] if facts else 0,
                 history=facts["summary"] if facts else HistorySummary(),
+                history_capability=history_capability(db, repo, history=history_plan),
             )
         )
 
@@ -557,7 +569,7 @@ async def get_repositories_hub(
         ),
         last_reconcile_at=last_reconcile,
         reconcile_interval_minutes=interval,
-        history_available=history_enabled(db),
+        history_available=history_plan,
     )
 
 

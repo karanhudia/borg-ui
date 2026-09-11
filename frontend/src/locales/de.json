@@ -1096,7 +1096,8 @@
       "showMore": "Mehr anzeigen",
       "filterLabel": "Änderungstyp",
       "delta": "{{sign}}{{size}}",
-      "summaryFolder": "Ordner"
+      "summaryFolder": "Ordner",
+      "agentUnsupported": "Für Repositories, die ein Agent ausführt, ist keine Änderungshistorie verfügbar."
     },
     "files": {
       "size": "Größe",
@@ -1110,7 +1111,8 @@
       "unchanged": "Unverändert",
       "changed": "Geändert",
       "restoreThis": "Dies wiederherstellen",
-      "notPresent": "Nicht vorhanden in {{count}} älteren Archiven",
+      "notPresent_one": "Nicht vorhanden in {{count}} älteren Archiv",
+      "notPresent_other": "Nicht vorhanden in {{count}} älteren Archiven",
       "selected": "{{count}} ausgewählt ({{size}})",
       "restoreSelection": "Auswahl wiederherstellen",
       "selectionBar": "Auswahl",
@@ -1125,7 +1127,13 @@
       "historyEmpty": "Kein früheres Archiv enthält diesen Pfad.",
       "type": "Typ",
       "typeFile": "Datei",
-      "typeDirectory": "Ordner"
+      "typeDirectory": "Ordner",
+      "historyUnavailableAgent": "Für Repositories, die ein Agent ausführt, ist keine Änderungshistorie verfügbar.",
+      "historyNotIndexed": "Dieses Repository wurde noch nicht indiziert.",
+      "historyCoverage_one": "{{indexed}} von {{count}} Archiv indiziert",
+      "historyCoverage_other": "{{indexed}} von {{count}} Archiven indiziert",
+      "historyEmptyIndexed": "Keines der indizierten Archive enthält diesen Pfad.",
+      "historyFailed": "Dieses Repository konnte nicht indiziert werden."
     },
     "toolbarOperations": "Vorgänge",
     "hourly": {
@@ -3556,6 +3564,7 @@
       "pauseFailed": "Der Zustand der Hintergrundwarteschlange konnte nicht geändert werden.",
       "openTrack": "Ablaufverfolgung für {{repository}} öffnen",
       "rebuildFailed": "Der Neuaufbau konnte nicht gestartet werden.",
+      "retryDeferred": "Für dieses Repository ist bereits Index-Arbeit eingereiht oder aktiv, daher wurde nichts weiter eingereiht.",
       "queueFailed": "Die Hintergrundwarteschlange konnte nicht geladen werden.",
       "pauseAdminOnly": "Nur Administratoren können Hintergrundarbeiten pausieren.",
       "reason": {
@@ -3671,9 +3680,11 @@
         "detailTruncatedTitle": "Archive mit gekürztem Dateiverlauf",
         "detailAttempts_one": "{{count}} Versuch",
         "detailAttempts_other": "{{count}} Versuche",
+        "detailPartial": "Der Dateiverlauf deckt {{indexed}} von {{total}} Archiven ab.",
         "detailAllIndexed": "Jedes Archiv hat seinen Dateiverlauf.",
         "detailHint": "Baue ab Dateiverlauf neu auf, um diese Archive erneut zu indizieren.",
-        "viewIndexRuns": "Indexläufe anzeigen"
+        "viewIndexRuns": "Indexläufe anzeigen",
+        "historyAgentUnsupported": "Für Agent-Repositories nicht verfügbar"
       },
       "rebuildMenuHint": "Jede Stufe nach der gewählten wird ebenfalls neu aufgebaut. Frühere Stufen bleiben erhalten. Statistiken laufen immer zuletzt, weil sie zusammenzählen, was die anderen Stufen erzeugt haben.",
       "rebuildTitle": "Abgeleitete Daten neu aufbauen",
@@ -3681,7 +3692,8 @@
       "stageWillRebuild": "Wird neu aufgebaut",
       "stageKept": "Bleibt erhalten",
       "stageStart": "Hier beginnen",
-      "currentRun": "Aktueller Lauf"
+      "currentRun": "Aktueller Lauf",
+      "stageAgentUnsupported": "Für Repositories, die ein Agent ausführt, nicht verfügbar"
     },
     "status": {
       "queued": "In Warteschlange",
@@ -5913,7 +5925,8 @@
         "failedListArchives": "Archive konnten nicht aufgelistet werden",
         "repositoryNotFound": "Repository nicht gefunden",
         "fileNotFoundAfterExtraction": "Datei nach der Extraktion nicht gefunden",
-        "failedExtractFile": "Fehler beim Extrahieren der Datei: {{error}}"
+        "failedExtractFile": "Fehler beim Extrahieren der Datei: {{error}}",
+        "historyUnavailableForAgent": "Für Repositories, die ein Agent ausführt, ist keine Änderungshistorie verfügbar; es gibt nichts neu aufzubauen."
       },
       "borg": {
         "repositoryDoesNotExist": "Das Repository existiert nicht im angegebenen Pfad",

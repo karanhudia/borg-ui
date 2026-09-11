@@ -1,3 +1,5 @@
+import type { HistoryCapability } from './archives'
+
 // Mirrors app/services/operations/vocab.py (spec 6.3) and the response
 // shapes in app/api/operations.py and app/api/archive_index.py.
 
@@ -119,6 +121,7 @@ export interface HubRepository {
   last_history_at: string | null
   archives: number
   history: HubHistorySummary
+  history_capability?: HistoryCapability
 }
 
 export interface HubTotals {

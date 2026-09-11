@@ -336,8 +336,6 @@ async def run_history_index(ctx) -> Outcome:
     if repository is None:
         return Outcome(status="skipped", skip_reason="repository_missing")
     db = ctx.db
-    if not history_enabled(db):
-        return Outcome(status="skipped", skip_reason="plan_locked")
     # "failed" is retried: nothing else moves an archive out of that state, so
     # skipping it would stall the series for good, since every later archive
     # needs an indexed predecessor. The retry is bounded, because each attempt
@@ -359,14 +357,21 @@ async def run_history_index(ctx) -> Outcome:
     ]
     pending = [a for a in candidates if a not in exhausted]
     if is_agent_executor(repository):
-        for archive in pending:
+        # The chains no longer create this stage for an agent's repository;
+        # a row that reaches it anyway marks what the listing marks: every
+        # archive not indexed, the exhausted failures included (nothing can
+        # retry them here either).
+        for archive in candidates:
             archive.history_state = "skipped"
         db.commit()
         return Outcome(
             status="skipped",
             skip_reason="agent_diff_unsupported",
-            result={"archives": len(pending)},
+            result={"archives": len(candidates)},
         )
+    if not history_enabled(db):
+        # after the executor: its reason is the durable one
+        return Outcome(status="skipped", skip_reason="plan_locked")
     if not pending:
         return Outcome(
             status="completed_with_warnings" if exhausted else "completed",
@@ -472,14 +477,17 @@ def _delete_rows(db: Session, archive_id: int) -> None:
     )
 
 
-def merge_removed_archive(db: Session, removed: Archive) -> str:
+def merge_removed_archive(
+    db: Session, removed: Archive, *, reset_state: str = "pending"
+) -> str:
     """Fold `removed` into its successor and delete it, in one transaction.
 
     Returns "folded" when both archives were indexed, "reset" when the
     successor was indexed against an archive that never was (its delta is
-    now against the wrong base, so it goes back to pending), and "dropped"
-    when there is no successor or the successor is not indexed yet (it will
-    be diffed against the new predecessor when it is).
+    now against the wrong base, so it goes back to `reset_state`: pending,
+    or skipped where no history run will come, an agent's repository), and
+    "dropped" when there is no successor or the successor is not indexed
+    yet (it will be diffed against the new predecessor when it is).
     """
     successor = successor_of(db, removed)
     try:
@@ -515,7 +523,7 @@ def merge_removed_archive(db: Session, removed: Archive) -> str:
             outcome = "folded"
         elif successor.history_state == "indexed":
             _delete_rows(db, successor.id)
-            successor.history_state = "pending"
+            successor.history_state = reset_state
             successor.history_indexed_at = None
             successor.history_rows = None
             successor.history_truncated = False
@@ -540,6 +548,10 @@ async def run_history_merge(ctx) -> Outcome:
     db = ctx.db
     counts = {"merged": 0, "folded": 0, "reset": 0, "dropped": 0}
     ids = removed_archive_ids_from_dependency(db, ctx.operation)
+    # A reset successor reads as "not yet"; on an agent's repository no run
+    # comes on any plan (the capability is the executor's), so it takes the
+    # state the listing writes there.
+    reset_state = "skipped" if is_agent_executor(repository) else "pending"
     for position, archive_id in enumerate(ids):
         if ctx.cancelled():
             break
@@ -548,7 +560,7 @@ async def run_history_merge(ctx) -> Outcome:
             continue
         # The row is gone (and expired) after the merge commits.
         name = removed.name
-        outcome = merge_removed_archive(db, removed)
+        outcome = merge_removed_archive(db, removed, reset_state=reset_state)
         counts[outcome] += 1
         counts["merged"] += 1
         ctx.log(f"{name}: {outcome}")

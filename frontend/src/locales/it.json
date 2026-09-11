@@ -1096,7 +1096,8 @@
       "showMore": "Mostra altro",
       "filterLabel": "Tipo di modifica",
       "delta": "{{sign}}{{size}}",
-      "summaryFolder": "Cartella"
+      "summaryFolder": "Cartella",
+      "agentUnsupported": "La cronologia delle modifiche non è disponibile per i repository eseguiti da un agente."
     },
     "files": {
       "size": "Dimensione",
@@ -1110,7 +1111,8 @@
       "unchanged": "Invariato",
       "changed": "Modificato",
       "restoreThis": "Ripristina questo",
-      "notPresent": "Non presente in {{count}} archivi precedenti",
+      "notPresent_one": "Non presente in {{count}} archivio precedente",
+      "notPresent_other": "Non presente in {{count}} archivi precedenti",
       "selected": "{{count}} selezionati ({{size}})",
       "restoreSelection": "Ripristina selezione",
       "selectionBar": "Selezione",
@@ -1125,7 +1127,13 @@
       "historyEmpty": "Nessun archivio precedente contiene questo percorso.",
       "type": "Tipo",
       "typeFile": "File",
-      "typeDirectory": "Cartella"
+      "typeDirectory": "Cartella",
+      "historyUnavailableAgent": "La cronologia delle modifiche non è disponibile per i repository eseguiti da un agente.",
+      "historyNotIndexed": "Questo repository non è ancora stato indicizzato.",
+      "historyCoverage_one": "{{indexed}} di {{count}} archivio indicizzato",
+      "historyCoverage_other": "{{indexed}} di {{count}} archivi indicizzati",
+      "historyEmptyIndexed": "Nessuno degli archivi indicizzati contiene questo percorso.",
+      "historyFailed": "Impossibile indicizzare questo repository."
     },
     "toolbarOperations": "Operazioni",
     "hourly": {
@@ -3556,6 +3564,7 @@
       "pauseFailed": "Impossibile modificare lo stato della coda in background.",
       "openTrack": "Apri la traccia di esecuzione di {{repository}}",
       "rebuildFailed": "Non è stato possibile avviare la ricostruzione.",
+      "retryDeferred": "Per questo repository c'è già lavoro di indice in coda o in corso, quindi non è stato accodato altro.",
       "queueFailed": "Impossibile caricare la coda in background.",
       "pauseAdminOnly": "Solo gli amministratori possono mettere in pausa il lavoro in background.",
       "reason": {
@@ -3671,9 +3680,11 @@
         "detailTruncatedTitle": "Archivi con cronologia dei file troncata",
         "detailAttempts_one": "{{count}} tentativo",
         "detailAttempts_other": "{{count}} tentativi",
+        "detailPartial": "La cronologia dei file copre {{indexed}} di {{total}} archivi.",
         "detailAllIndexed": "Ogni archivio ha la sua cronologia dei file.",
         "detailHint": "Ricostruisci da Cronologia dei file per indicizzare di nuovo questi archivi.",
-        "viewIndexRuns": "Vedi esecuzioni di indicizzazione"
+        "viewIndexRuns": "Vedi esecuzioni di indicizzazione",
+        "historyAgentUnsupported": "Non disponibile per i repository agente"
       },
       "rebuildMenuHint": "Ogni fase successiva a quella scelta viene ricostruita a sua volta. Le fasi precedenti restano. Le statistiche vengono sempre per ultime, perché sommano ciò che le altre fasi hanno prodotto.",
       "rebuildTitle": "Ricostruisci i dati derivati",
@@ -3681,7 +3692,8 @@
       "stageWillRebuild": "Verrà ricostruito",
       "stageKept": "Conservato",
       "stageStart": "Inizia qui",
-      "currentRun": "Esecuzione corrente"
+      "currentRun": "Esecuzione corrente",
+      "stageAgentUnsupported": "Non disponibile per i repository eseguiti da un agente"
     },
     "status": {
       "queued": "In coda",
@@ -5913,7 +5925,8 @@
         "failedListArchives": "Impossibile elencare gli archivi",
         "repositoryNotFound": "Repository non trovato",
         "fileNotFoundAfterExtraction": "File non trovato dopo l'estrazione",
-        "failedExtractFile": "Impossibile estrarre il file: {{error}}"
+        "failedExtractFile": "Impossibile estrarre il file: {{error}}",
+        "historyUnavailableForAgent": "La cronologia delle modifiche non è disponibile per i repository eseguiti da un agente, quindi non c'è nulla da ricostruire."
       },
       "borg": {
         "repositoryDoesNotExist": "Il repository non esiste nel percorso specificato",

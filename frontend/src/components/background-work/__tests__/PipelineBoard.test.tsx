@@ -16,6 +16,7 @@ vi.mock('../../../services/api', () => ({
   },
   archivesAPI: {
     rebuild: vi.fn(),
+    resync: vi.fn(),
   },
 }))
 
@@ -256,6 +257,20 @@ describe('PipelineBoard', () => {
     expect(await screen.findByText(/every archive has its file history/i)).toBeInTheDocument()
   })
 
+  it('says the history stage is not available for an agent repository', async () => {
+    mockQueue([])
+    mockHub([
+      hubRepository({
+        repository_name: 'k8s-node',
+        history: { indexed: 0, pending: 0, failed: 0, skipped: 18, truncated: 0, rows: 0 },
+        history_capability: 'agent_unsupported',
+      }),
+    ])
+    renderBoard()
+    expect(await screen.findByText(/not available for agent repositories/i)).toBeInTheDocument()
+    expect(screen.queryByText(/no file history yet/i)).not.toBeInTheDocument()
+  })
+
   it('changes the index worker count from the file history column header', async () => {
     mockQueue([])
     ;(operationsAPI.updateLimits as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {} })
@@ -270,6 +285,69 @@ describe('PipelineBoard', () => {
     await screen.findAllByTestId('repository-row')
     expect(screen.queryByRole('button', { name: /more index workers/i })).not.toBeInTheDocument()
     expect(screen.getByText(/2 workers/i)).toBeInTheDocument()
+  })
+
+  it('retries a failed history segment of an agent repository through a resync', async () => {
+    // the segment is the merge (an agent repository has no index stage); a
+    // rebuild from the history stage would be refused, and one from the
+    // listing would wipe every archive's stored info; the resync runs the
+    // listing chain, merge included, and invalidates nothing
+    mockQueue([
+      {
+        repository_id: 1,
+        repository_name: 'nas',
+        lane_busy: false,
+        operations: [queueOp({ id: 9, repository_id: 1, kind: 'history_merge', status: 'failed' })],
+      },
+    ])
+    mockHub([hubRepository({ history_capability: 'agent_unsupported' })])
+    ;(archivesAPI.resync as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { run_id: 'r9', operations: [10, 11] },
+    })
+    renderBoard()
+    fireEvent.click(await screen.findByRole('button', { name: /retry/i }))
+    await waitFor(() => expect(archivesAPI.resync).toHaveBeenCalledWith(1))
+    expect(archivesAPI.rebuild).not.toHaveBeenCalled()
+    expect(screen.queryByText(/already queued or running/i)).not.toBeInTheDocument()
+  })
+
+  it('says so when the resync yields to index work already in flight', async () => {
+    mockQueue([
+      {
+        repository_id: 1,
+        repository_name: 'nas',
+        lane_busy: false,
+        operations: [queueOp({ id: 9, repository_id: 1, kind: 'history_merge', status: 'failed' })],
+      },
+    ])
+    mockHub([hubRepository({ history_capability: 'agent_unsupported' })])
+    ;(archivesAPI.resync as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { run_id: null, operations: [] },
+    })
+    renderBoard()
+    fireEvent.click(await screen.findByRole('button', { name: /retry/i }))
+    expect(await screen.findByText(/already queued or running/i)).toBeInTheDocument()
+  })
+
+  it('retries a failed history segment on a plan-locked repository through a resync too', async () => {
+    // Community: the segment is the merge as well, and a rebuild from the
+    // history stage is refused by the plan gate; the resync re-runs it
+    mockQueue([
+      {
+        repository_id: 1,
+        repository_name: 'nas',
+        lane_busy: false,
+        operations: [queueOp({ id: 9, repository_id: 1, kind: 'history_merge', status: 'failed' })],
+      },
+    ])
+    mockHub([hubRepository({ history_capability: 'plan_locked' })], { history_available: false })
+    ;(archivesAPI.resync as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { run_id: 'r9', operations: [10, 11] },
+    })
+    renderBoard()
+    fireEvent.click(await screen.findByRole('button', { name: /retry/i }))
+    await waitFor(() => expect(archivesAPI.resync).toHaveBeenCalledWith(1))
+    expect(archivesAPI.rebuild).not.toHaveBeenCalled()
   })
 
   it('has no rebuild form below the table, only the per-row menus', async () => {
