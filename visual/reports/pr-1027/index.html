@@ -1,0 +1,974 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PR #1027 visual report</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f8fa;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #637083;
+      --border: #d8dee8;
+      --accent: #1769aa;
+      --changed: #b42318;
+      --added: #067647;
+      --removed: #7f56d9;
+      --shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 28px min(5vw, 56px);
+    }
+
+    main {
+      display: grid;
+      gap: 24px;
+      padding: 24px min(5vw, 56px) 48px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      font-size: clamp(1.6rem, 2.2vw, 2.4rem);
+      letter-spacing: 0;
+      line-height: 1.15;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-top: 22px;
+      max-width: 980px;
+    }
+
+    .metric {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 14px 16px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 1.6rem;
+      line-height: 1.1;
+    }
+
+    .metric span {
+      color: var(--muted);
+      display: block;
+      font-size: 0.88rem;
+      margin-top: 4px;
+    }
+
+    .meta {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .pill {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      display: inline-flex;
+      font-size: 0.84rem;
+      padding: 4px 10px;
+    }
+
+    .pill-ok { color: var(--added); border-color: #abefc6; background: #ecfdf3; }
+    .pill-changed { color: var(--changed); border-color: #fecdca; background: #fef3f2; }
+    .pill-info { color: var(--accent); border-color: #b9d6f2; background: #eff8ff; }
+
+    .section {
+      display: grid;
+      gap: 14px;
+    }
+
+    .section-title {
+      align-items: center;
+      display: flex;
+      gap: 10px;
+    }
+
+    .section-title h2 {
+      font-size: 1.08rem;
+      letter-spacing: 0;
+    }
+
+    .section-title span {
+      background: #e9eef5;
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      padding: 2px 9px;
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 12px 0;
+    }
+
+    .shot {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .shot-header {
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      justify-content: space-between;
+      padding: 14px 16px;
+    }
+
+    .shot-header h3 {
+      font-size: 0.96rem;
+      overflow-wrap: anywhere;
+    }
+
+    .shot-header p {
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .image-grid {
+      display: grid;
+      gap: 1px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      background: var(--border);
+    }
+
+    .image-grid.single {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    figure {
+      background: #f8fafc;
+      margin: 0;
+      min-width: 0;
+      padding: 12px;
+    }
+
+    figcaption {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    img {
+      background: white;
+      border: 1px solid #e5e7eb;
+      display: block;
+      height: auto;
+      max-width: 100%;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover { text-decoration: underline; }
+
+    @media (max-width: 820px) {
+      header { padding: 22px 18px; }
+      main { padding: 18px; }
+      .image-grid { grid-template-columns: minmax(0, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>PR #1027 visual report</h1>
+    <p class="subtitle">Generated Sep 11, 2026, 6:13 PM UTC</p>
+    <div class="meta">
+      <span class="pill pill-changed">Visual changes found</span>
+      
+      <span class="pill pill-info">Commit 8fbbafd87e79</span>
+      <a class="pill pill-info" href="https://github.com/karanhudia/borg-ui/actions/runs/34630348042">Workflow run</a>
+    </div>
+    <div class="summary">
+      <div class="metric"><strong>10</strong><span>Changed</span></div>
+      <div class="metric"><strong>18</strong><span>Added</span></div>
+      <div class="metric"><strong>12</strong><span>Removed</span></div>
+      <div class="metric"><strong>788</strong><span>Unchanged</span></div>
+      <div class="metric"><strong>816</strong><span>Current screenshots</span></div>
+      <div class="metric"><strong>810</strong><span>Baseline screenshots</span></div>
+    </div>
+  </header>
+  <main>
+    
+    <section class="section">
+      <div class="section-title">
+        <h2>Changed</h2>
+        <span>10</span>
+      </div>
+      
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-categoryfilter--backup-and-maintenance--mobile.png</h3>
+        <p>767 px changed · 0.23%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-categoryfilter--backup-and-maintenance--mobile.png"><img src="images/baseline/activity-categoryfilter--backup-and-maintenance--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-categoryfilter--backup-and-maintenance--mobile.png"><img src="images/actual/activity-categoryfilter--backup-and-maintenance--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-categoryfilter--backup-and-maintenance--mobile.png"><img src="images/diff/activity-categoryfilter--backup-and-maintenance--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-categoryfilter--backup-and-maintenance.png</h3>
+        <p>2,242 px changed · 0.22%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-categoryfilter--backup-and-maintenance.png"><img src="images/baseline/activity-categoryfilter--backup-and-maintenance.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-categoryfilter--backup-and-maintenance.png"><img src="images/actual/activity-categoryfilter--backup-and-maintenance.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-categoryfilter--backup-and-maintenance.png"><img src="images/diff/activity-categoryfilter--backup-and-maintenance.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-categoryfilter--nothing-selected--mobile.png</h3>
+        <p>3,101 px changed · 0.94%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-categoryfilter--nothing-selected--mobile.png"><img src="images/baseline/activity-categoryfilter--nothing-selected--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-categoryfilter--nothing-selected--mobile.png"><img src="images/actual/activity-categoryfilter--nothing-selected--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-categoryfilter--nothing-selected--mobile.png"><img src="images/diff/activity-categoryfilter--nothing-selected--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-categoryfilter--nothing-selected.png</h3>
+        <p>4,581 px changed · 0.45%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-categoryfilter--nothing-selected.png"><img src="images/baseline/activity-categoryfilter--nothing-selected.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-categoryfilter--nothing-selected.png"><img src="images/actual/activity-categoryfilter--nothing-selected.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-categoryfilter--nothing-selected.png"><img src="images/diff/activity-categoryfilter--nothing-selected.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-backupjobstable--run-with-followups--mobile.png</h3>
+        <p>133,894 px changed · 40.68%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-backupjobstable--run-with-followups--mobile.png"><img src="images/baseline/components-backupjobstable--run-with-followups--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-backupjobstable--run-with-followups--mobile.png"><img src="images/actual/components-backupjobstable--run-with-followups--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-backupjobstable--run-with-followups--mobile.png"><img src="images/diff/components-backupjobstable--run-with-followups--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-backupjobstable--run-with-followups.png</h3>
+        <p>194,228 px changed · 18.97%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-backupjobstable--run-with-followups.png"><img src="images/baseline/components-backupjobstable--run-with-followups.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-backupjobstable--run-with-followups.png"><img src="images/actual/components-backupjobstable--run-with-followups.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-backupjobstable--run-with-followups.png"><img src="images/diff/components-backupjobstable--run-with-followups.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>pages-activity-activityfilters--all-activity--mobile.png</h3>
+        <p>3,101 px changed · 0.94%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/pages-activity-activityfilters--all-activity--mobile.png"><img src="images/baseline/pages-activity-activityfilters--all-activity--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/pages-activity-activityfilters--all-activity--mobile.png"><img src="images/actual/pages-activity-activityfilters--all-activity--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/pages-activity-activityfilters--all-activity--mobile.png"><img src="images/diff/pages-activity-activityfilters--all-activity--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>pages-activity-activityfilters--all-activity.png</h3>
+        <p>4,581 px changed · 0.45%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/pages-activity-activityfilters--all-activity.png"><img src="images/baseline/pages-activity-activityfilters--all-activity.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/pages-activity-activityfilters--all-activity.png"><img src="images/actual/pages-activity-activityfilters--all-activity.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/pages-activity-activityfilters--all-activity.png"><img src="images/diff/pages-activity-activityfilters--all-activity.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>pages-activity-activityfilters--completed-with-warnings-filter--mobile.png</h3>
+        <p>3,101 px changed · 0.94%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/pages-activity-activityfilters--completed-with-warnings-filter--mobile.png"><img src="images/baseline/pages-activity-activityfilters--completed-with-warnings-filter--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/pages-activity-activityfilters--completed-with-warnings-filter--mobile.png"><img src="images/actual/pages-activity-activityfilters--completed-with-warnings-filter--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/pages-activity-activityfilters--completed-with-warnings-filter--mobile.png"><img src="images/diff/pages-activity-activityfilters--completed-with-warnings-filter--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>pages-activity-activityfilters--completed-with-warnings-filter.png</h3>
+        <p>4,581 px changed · 0.45%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/pages-activity-activityfilters--completed-with-warnings-filter.png"><img src="images/baseline/pages-activity-activityfilters--completed-with-warnings-filter.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/pages-activity-activityfilters--completed-with-warnings-filter.png"><img src="images/actual/pages-activity-activityfilters--completed-with-warnings-filter.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/pages-activity-activityfilters--completed-with-warnings-filter.png"><img src="images/diff/pages-activity-activityfilters--completed-with-warnings-filter.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+    </section>
+    
+    <section class="section">
+      <div class="section-title">
+        <h2>Added</h2>
+        <span>18</span>
+      </div>
+      
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-activitytimeline--dark--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-activitytimeline--dark--mobile.png"><img src="images/actual/activity-activitytimeline--dark--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-activitytimeline--dark.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-activitytimeline--dark.png"><img src="images/actual/activity-activitytimeline--dark.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-activitytimeline--global--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-activitytimeline--global--mobile.png"><img src="images/actual/activity-activitytimeline--global--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-activitytimeline--global.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-activitytimeline--global.png"><img src="images/actual/activity-activitytimeline--global.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-activitytimeline--loading--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-activitytimeline--loading--mobile.png"><img src="images/actual/activity-activitytimeline--loading--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-activitytimeline--loading.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-activitytimeline--loading.png"><img src="images/actual/activity-activitytimeline--loading.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-activitytimeline--pinned--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-activitytimeline--pinned--mobile.png"><img src="images/actual/activity-activitytimeline--pinned--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-activitytimeline--pinned.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-activitytimeline--pinned.png"><img src="images/actual/activity-activitytimeline--pinned.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--dark--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-runchainrow--dark--mobile.png"><img src="images/actual/activity-runchainrow--dark--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--dark.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-runchainrow--dark.png"><img src="images/actual/activity-runchainrow--dark.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--failed--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-runchainrow--failed--mobile.png"><img src="images/actual/activity-runchainrow--failed--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--failed.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-runchainrow--failed.png"><img src="images/actual/activity-runchainrow--failed.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--running--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-runchainrow--running--mobile.png"><img src="images/actual/activity-runchainrow--running--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--running.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-runchainrow--running.png"><img src="images/actual/activity-runchainrow--running.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--single-lane--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-runchainrow--single-lane--mobile.png"><img src="images/actual/activity-runchainrow--single-lane--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--single-lane.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-runchainrow--single-lane.png"><img src="images/actual/activity-runchainrow--single-lane.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--succeeded--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-runchainrow--succeeded--mobile.png"><img src="images/actual/activity-runchainrow--succeeded--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--succeeded.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-runchainrow--succeeded.png"><img src="images/actual/activity-runchainrow--succeeded.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+    </section>
+    
+    <section class="section">
+      <div class="section-title">
+        <h2>Removed</h2>
+        <span>12</span>
+      </div>
+      
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-repositoryoperationsview--default--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-repositoryoperationsview--default--mobile.png"><img src="images/baseline/activity-repositoryoperationsview--default--mobile.png" alt="Before"></a>
+    </figure>
+        
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-repositoryoperationsview--default.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-repositoryoperationsview--default.png"><img src="images/baseline/activity-repositoryoperationsview--default.png" alt="Before"></a>
+    </figure>
+        
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--collapsed--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-runchainrow--collapsed--mobile.png"><img src="images/baseline/activity-runchainrow--collapsed--mobile.png" alt="Before"></a>
+    </figure>
+        
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--collapsed.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-runchainrow--collapsed.png"><img src="images/baseline/activity-runchainrow--collapsed.png" alt="Before"></a>
+    </figure>
+        
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--stacked-running--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-runchainrow--stacked-running--mobile.png"><img src="images/baseline/activity-runchainrow--stacked-running--mobile.png" alt="Before"></a>
+    </figure>
+        
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--stacked-running.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-runchainrow--stacked-running.png"><img src="images/baseline/activity-runchainrow--stacked-running.png" alt="Before"></a>
+    </figure>
+        
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--stacked-succeeded--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-runchainrow--stacked-succeeded--mobile.png"><img src="images/baseline/activity-runchainrow--stacked-succeeded--mobile.png" alt="Before"></a>
+    </figure>
+        
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--stacked-succeeded.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-runchainrow--stacked-succeeded.png"><img src="images/baseline/activity-runchainrow--stacked-succeeded.png" alt="Before"></a>
+    </figure>
+        
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--two-followups--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-runchainrow--two-followups--mobile.png"><img src="images/baseline/activity-runchainrow--two-followups--mobile.png" alt="Before"></a>
+    </figure>
+        
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--two-followups.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-runchainrow--two-followups.png"><img src="images/baseline/activity-runchainrow--two-followups.png" alt="Before"></a>
+    </figure>
+        
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--with-running--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-runchainrow--with-running--mobile.png"><img src="images/baseline/activity-runchainrow--with-running--mobile.png" alt="Before"></a>
+    </figure>
+        
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--with-running.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-runchainrow--with-running.png"><img src="images/baseline/activity-runchainrow--with-running.png" alt="Before"></a>
+    </figure>
+        
+        
+      </div>
+    </article>
+    </section>
+  </main>
+</body>
+</html>
