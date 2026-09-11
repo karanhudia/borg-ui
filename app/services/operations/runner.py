@@ -47,6 +47,10 @@ _OUTCOME_STATUSES = (
 # prune row exists and admission then refuses the listing. Bounded, so a
 # repository that never frees up still ends in a visible failure.
 MAX_DEFERRALS = 20
+# How often an index row left `running` without a live task is put back to
+# `queued` before it fails: a terminal commit that keeps failing (a locked
+# database, a full disk) would otherwise re-run the listing every tick.
+MAX_REQUEUES = 3
 # Each deferral waits before the next attempt, doubling from 5 s to 5 min.
 # The runner is woken by every completion anywhere in the system, so without
 # the delay a busy install would spend the whole deferral budget in seconds
@@ -77,6 +81,17 @@ def deferral_count(op: Operation) -> int:
         count = int((op.params or {}).get("deferrals", 0))
     except (TypeError, ValueError, OverflowError):
         # inf overflows int(), nan and text are ValueErrors
+        return 0
+    return max(count, 0)
+
+
+def requeue_count(op: Operation) -> int:
+    """How often the tick has requeued the abandoned row; unreadable
+    bookkeeping counts as none, like `deferral_count`."""
+    params = op.params if isinstance(op.params, dict) else {}
+    try:
+        count = int(params.get("requeues", 0))
+    except (TypeError, ValueError, OverflowError):
         return 0
     return max(count, 0)
 
@@ -295,10 +310,102 @@ class OperationRunner:
 
     # -- scheduling ------------------------------------------------------------
 
+    async def requeue_abandoned_index_rows(self, db: Session) -> int:
+        """Index rows left `running` by a task this runner no longer has (a
+        task that died before its terminal commit, or none at all). The row
+        holds no lock, but it would count as running index work for its
+        repository and against `index_workers` until the next restart; it
+        goes back to `queued` the way `recover_on_startup` puts it, and runs
+        again, after the deferral path's backoff so a transient condition
+        (a locked database) does not spend the budget in seconds. Bounded:
+        after `MAX_REQUEUES` the row fails instead, keeping its start time
+        and progress, so a condition that kills the task every time ends in
+        a visible failure rather than a listing re-run every tick. The
+        caller guards the sweep: a failure in it must not cost the dispatch
+        pass. Every index kind is covered, `history_index`
+        included, as at startup; the other exclusive kinds are not: their
+        process may still be alive, which startup checks and the tick does
+        not. An entry that is not a future (a test's patched task) is left
+        alone: it cannot be told apart from live work."""
+        changed: list[Operation] = []
+        for op in (
+            db.query(Operation)
+            .filter(
+                Operation.status == "running",
+                Operation.kind.in_(tuple(sorted(INDEX_KINDS))),
+            )
+            .all()
+        ):
+            task = self.running_tasks.get(op.id)
+            if task is not None and (not asyncio.isfuture(task) or not task.done()):
+                continue
+            requeues = requeue_count(op) + 1
+            if requeues > MAX_REQUEUES:
+                # the row keeps its start time and progress: the only
+                # evidence of how far the work got
+                op.status = "failed"
+                op.error_message = (
+                    f"lost by the runner again after {MAX_REQUEUES} requeues: the "
+                    "operation kept ending without a result"
+                )
+                op.completed_at = utc_now()
+            else:
+                self._reset_index_row(op)
+                params = op.params if isinstance(op.params, dict) else {}
+                # the deferral path's gate; a row deferred a few times and then
+                # swept keeps the larger of the two backoffs
+                backoff = self.deferral_delay_for(max(requeues, deferral_count(op)))
+                op.params = {
+                    **params,
+                    "requeues": requeues,
+                    "deferred_until": time.time() + backoff,
+                }
+            self.running_tasks.pop(op.id, None)
+            changed.append(op)
+        if not changed:
+            return 0
+        db.commit()
+        logger.warning(
+            "Swept abandoned index operations",
+            requeued=sum(1 for op in changed if op.status == "queued"),
+            failed=sum(1 for op in changed if op.status == "failed"),
+        )
+        for op in changed:
+            try:
+                await broadcast_operation_updated(op, db)
+            except Exception as exc:  # the row is stored; the board refetches
+                logger.warning(
+                    "Could not broadcast a requeued operation",
+                    operation_id=op.id,
+                    error=str(exc),
+                )
+        return len(changed)
+
+    @staticmethod
+    def _reset_index_row(op: Operation) -> None:
+        op.status = "queued"
+        op.error_message = None
+        op.started_at = None
+        op.process_pid = None
+        op.process_start_time = None
+        op.progress_percent = None
+        op.progress_current = None
+        op.progress_total = None
+        op.progress_message = None
+
     async def tick(self) -> int:
         dispatched = 0
         db: Session = self._session()
         try:
+            try:
+                await self.requeue_abandoned_index_rows(db)
+            except Exception as exc:
+                # the sweep is housekeeping; the dispatch pass must not
+                # depend on it (a locked database, an unreadable row)
+                db.rollback()
+                logger.warning(
+                    "Sweep of abandoned index operations failed", error=str(exc)
+                )
             system_settings = db.query(SystemSettings).first()
             queued = (
                 db.query(Operation)
@@ -579,14 +686,7 @@ class OperationRunner:
         counts = {"requeued": 0, "failed": 0, "kept": 0}
         for op in db.query(Operation).filter(Operation.status == "running").all():
             if op.kind in INDEX_KINDS:
-                op.status = "queued"
-                op.started_at = None
-                op.process_pid = None
-                op.process_start_time = None
-                op.progress_percent = None
-                op.progress_current = None
-                op.progress_total = None
-                op.progress_message = None
+                self._reset_index_row(op)
                 counts["requeued"] += 1
             elif op.process_pid and is_process_alive(
                 op.process_pid, int(op.process_start_time or 0)

@@ -59,7 +59,24 @@ export type StageStatus = 'idle' | 'done' | 'running' | 'waiting' | 'failed' | '
 // Why a queued stage has not started, in the order a person would want to
 // hear it: the whole queue is paused, a foreground job owns this
 // repository, every index worker is busy, or it is simply next in line.
-export type WaitReason = 'paused' | 'lane_busy' | 'workers' | 'queued'
+export type WaitReason = 'paused' | 'lane_busy' | 'index_busy' | 'workers' | 'queued'
+
+// The index kinds that share a repository's index slot; `history_index`
+// holds the lane instead. A copy of what lanes.py derives (INDEX_KINDS
+// minus the exclusive one): keep the two in step when a kind is added.
+const SHARED_INDEX_KINDS = new Set<OperationItem['kind']>([
+  'archive_sync',
+  'history_merge',
+  'stats',
+])
+
+// Whether one of `operations` is running index work of the shared kind. The
+// track reads the server's `index_busy` against the operations it holds: an
+// SSE update that finishes that work clears the wait reason before the next
+// fetch, the same way the lane's holder is checked against them.
+export function indexBusyFrom(operations: OperationItem[]): boolean {
+  return operations.some((op) => op.status === 'running' && SHARED_INDEX_KINDS.has(op.kind))
+}
 
 export interface StageState {
   key: StageKey
@@ -131,6 +148,12 @@ export function deriveTrack(
       (operation) => FOREGROUND_CATEGORIES.has(operation.category) && operation.status === 'running'
     ) ?? null
 
+  // A stage queued behind its own run's predecessor is next in line, not
+  // waiting for foreign work: the repository-wide flag is read only while
+  // index work of another run is still running in the operations at hand.
+  const foreignIndexRunning =
+    repository.index_busy &&
+    indexBusyFrom(repository.operations.filter((operation) => !chosen.includes(operation)))
   const stages = STAGE_ORDER.map<StageState>((key) => {
     const operation = latest.get(key) ?? null
     if (!operation) return { key, status: 'idle', operation: null, reason: null }
@@ -139,6 +162,7 @@ export function deriveTrack(
     if (status === 'waiting') {
       if (paused) reason = 'paused'
       else if (repository.lane_busy) reason = 'lane_busy'
+      else if (foreignIndexRunning) reason = 'index_busy'
       else if (key === 'history' && limits.index_running >= limits.index_workers) reason = 'workers'
       else reason = 'queued'
     }

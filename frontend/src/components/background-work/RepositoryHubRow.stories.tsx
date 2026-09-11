@@ -67,6 +67,13 @@ export const BackupHoldsTheLane: Story = {
   args: { repository: hubRepositories[1], track: trackFor(2) },
 }
 
+// A stats refresh of the repository is still running: its queued listing
+// waits for it (one index operation per repository) although a worker is
+// free, and the stage says so.
+export const IndexWorkHoldsTheRepository: Story = {
+  args: { repository: hubRepositories[5], track: trackFor(6) },
+}
+
 export const FailedStage: Story = {
   args: { repository: hubRepositories[3], track: trackFor(4) },
 }

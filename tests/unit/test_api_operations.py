@@ -90,6 +90,28 @@ class TestOperationsList:
 
 @pytest.mark.unit
 class TestOperationsQueue:
+    def test_queue_reports_running_index_work_of_a_repository(
+        self, test_client, test_db, admin_headers
+    ):
+        """A running listing, merge or stats holds the repository's index
+        slot, not the lane; the board needs the difference to explain a
+        queued index stage next to free workers."""
+        repo = _repo(test_db)
+        _settings(test_db)
+        running = enqueue(test_db, "stats", repository_id=repo.id)
+        running.status = "running"
+        enqueue(test_db, "archive_sync", repository_id=repo.id)
+        test_db.commit()
+        system = enqueue(test_db, "package_install", repository_id=None)
+        system.status = "running"
+        test_db.commit()
+        body = test_client.get("/api/operations/queue", headers=admin_headers).json()
+        groups = {g["repository_id"]: g for g in body["repositories"]}
+        assert groups[repo.id]["lane_busy"] is False
+        assert groups[repo.id]["index_busy"] is True
+        # the system lane has no repository, so nothing of the sort
+        assert groups[None]["index_busy"] is False
+
     def test_queue_groups_and_limits(self, test_client, test_db, admin_headers):
         repo = _repo(test_db)
         settings = _settings(test_db)
@@ -109,6 +131,8 @@ class TestOperationsQueue:
         assert group["repository_id"] == repo.id
         assert group["repository_name"] == "r"
         assert group["lane_busy"] is True
+        # history_index holds the lane, not the shared index slot
+        assert group["index_busy"] is False
         assert {o["id"] for o in group["operations"]} == {running.id, recent.id}
         assert body["limits"]["index_workers"] == 3
         assert body["limits"]["index_running"] == 1

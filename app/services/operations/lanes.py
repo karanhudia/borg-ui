@@ -13,6 +13,10 @@ from app.database.models import (
 from app.services.operations.vocab import INDEX_KINDS, KINDS, is_exclusive
 
 _EXCLUSIVE_KINDS = tuple(k for k, spec in KINDS.items() if spec.exclusive)
+# The index kinds that share the repository lane: listing, merge and stats.
+# `history_index` is exclusive and holds the lane itself. Sorted, so the
+# `IN (...)` literal is the same text in every process.
+_SHARED_INDEX_KINDS = tuple(sorted(k for k in INDEX_KINDS if not KINDS[k].exclusive))
 
 _DEFAULTS = {
     "max_concurrent_backups": 1,
@@ -82,6 +86,47 @@ def lane_free(
     return not running_exclusive_operation(db, repository_id, exclude_id=exclude_id)
 
 
+def running_index_operation(db: Session, repository_id: int) -> bool:
+    """True while a listing, merge or stats of the repository is running.
+
+    No two of those overlap on one repository (spec 7.2): two chains of one
+    run (the backup's follow-ups and the prune's) otherwise start their
+    stats side by side, and on an agent's repository a listing started next
+    to the stats' `rinfo` dies with rc 2, since Borg 1 holds the cache lock
+    during `info` and `list` and the agent's calls are not serialised the
+    way the server's own are (`run_serialized_repository_command`, scope
+    `metadata`). A running `history_index` is not counted: it is exclusive
+    and holds the lane, which the bypass setting may cross so an hours-long
+    index does not hold the hourly listing; the server's metadata scope
+    keeps its `borg diff` and the listing apart, and an agent's repository
+    has no history stage.
+
+    A row a dead task left `running` would hold the repository for good;
+    the runner requeues such rows at every tick (as it does at startup),
+    so the answer here is the state the runner is actually in."""
+    return repository_id in repositories_with_running_index_work(
+        db, repository_ids=(repository_id,)
+    )
+
+
+def repositories_with_running_index_work(
+    db: Session, *, repository_ids: Optional[Iterable[int]] = None
+) -> set[int]:
+    """The repositories with a listing, merge or stats running, in one
+    query; `repository_ids` narrows it. See `running_index_operation`."""
+    q = db.query(Operation.repository_id).filter(
+        Operation.status == "running",
+        Operation.kind.in_(_SHARED_INDEX_KINDS),
+        Operation.repository_id.isnot(None),
+    )
+    if repository_ids is not None:
+        ids = tuple(repository_ids)
+        if not ids:
+            return set()
+        q = q.filter(Operation.repository_id.in_(ids))
+    return {row.repository_id for row in q.distinct()}
+
+
 def running_count(
     db: Session,
     *,
@@ -135,15 +180,20 @@ def can_start(db: Session, op: Operation, settings: Optional[SystemSettings]) ->
         return False
     if op.repository_id is None:
         return True
+    if op.kind in INDEX_KINDS and running_index_operation(db, op.repository_id):
+        # No second index operation next to a running listing, merge or
+        # stats of the repository, bypass or not: that setting reads past
+        # a backup's lock, not past another index job.
+        return False
     if is_exclusive(op.kind):
         return lane_free(db, op.repository_id, exclude_id=op.id)
     if op.kind in INDEX_KINDS:
         # Admission refuses a listing while prune, compact, delete or wipe
         # is pending or running, whatever the lane says (a pending job holds
         # no lane yet) and whatever bypass_lock says (that reads past a
-        # running backup's lock, not past admission). Checked first: the
-        # backup follow-up chain otherwise fails with 409 against the plan's
-        # own post-backup prune.
+        # running backup's lock, not past admission). Checked before the
+        # lane and bypass decision: the backup follow-up chain otherwise
+        # fails with 409 against the plan's own post-backup prune.
         if write_maintenance_running(db, op.repository_id):
             return False
         if lane_free(db, op.repository_id, exclude_id=op.id):

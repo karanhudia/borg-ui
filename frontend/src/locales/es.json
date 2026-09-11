@@ -3570,6 +3570,7 @@
       "reason": {
         "paused": "En pausa",
         "lane_busy": "Esperando a que termine la copia de este repositorio",
+        "index_busy": "Esperando a que termine el otro trabajo de índice de este repositorio",
         "workers": "Esperando un worker de índice",
         "queued": "Siguiente en la cola"
       },

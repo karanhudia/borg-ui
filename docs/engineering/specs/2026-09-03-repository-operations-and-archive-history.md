@@ -482,6 +482,15 @@ SSE event, a `log()` sink writing to `log_file_path`, and a
   `legacy_running_exclusive(repository_id)`, which is deleted in phase 9.
 - Non-exclusive index kinds may run alongside an exclusive operation only if
   `bypass_lock_on_list` is enabled; otherwise they wait too.
+- No two of the non-exclusive index kinds (`archive_sync`, `history_merge`,
+  `stats`) run on one repository at the same time, and no `history_index`
+  starts next to one of them; the bypass settings do not change that (#1003:
+  two chains of one run started their stats side by side, and on an agent's
+  repository a listing next to the stats' `rinfo` failed with rc 2 on the
+  Borg 1 cache lock). A running `history_index` holds the lane as before.
+  An index row left `running` by a task the runner no longer has is
+  requeued at the next tick, as at startup (bounded: it fails after three
+  requeues), so it holds neither the repository nor a worker.
 - `rclone_sync` uses `run_serialized_repository_command(scope="rclone")` as
   it does today and ignores the lane.
 - Executors also wrap Borg calls in

@@ -324,6 +324,23 @@ Rules:
   exclusive operations wait. Index operations wait too unless
   `bypass_lock_on_list` or the repository's bypass setting allows them to
   run alongside.
+- No two of the shared index kinds (`archive_sync`, `history_merge`,
+  `stats`) run on one repository at the same time, and no `history_index`
+  starts next to one of them. The bypass settings do not change that: they
+  read past a backup's lock, not past another index job. Two chains of one
+  run (the backup's follow-ups and the prune's) otherwise started their
+  stats side by side, and on an agent's repository a listing next to the
+  stats' `rinfo` failed with rc 2, since Borg 1 holds the cache lock during
+  `info` and `list` and only the server's own Borg calls are serialised by
+  the metadata scope. A running `history_index` is governed by the lane
+  and bypass as above, so an hours-long index does not hold the hourly
+  listing; the metadata scope keeps its diff and the listing apart. Lane
+  capacity (`index_workers`) stays global. An index row left `running` by
+  a task the runner no longer has is requeued at the next tick, as at
+  startup, so it holds neither the repository nor a worker; after three
+  such requeues it fails instead, so a task that keeps dying ends in a
+  visible failure. `GET /queue` reports the state as `index_busy` per
+  repository.
 - Lower priority number runs first: manual and plan work at 0, scheduled at
   5, follow-ups at 10, reconcile at 20.
 - A failed or cancelled operation skips everything that depends on it with

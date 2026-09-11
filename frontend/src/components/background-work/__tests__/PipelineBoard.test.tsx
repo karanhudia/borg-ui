@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import PipelineBoard from '../PipelineBoard'
@@ -19,6 +19,8 @@ vi.mock('../../../services/api', () => ({
     resync: vi.fn(),
   },
 }))
+
+import { useOperationEvents } from '../../../hooks/useOperationEvents'
 
 vi.mock('../../../hooks/useOperationEvents', () => ({
   useOperationEvents: vi.fn(),
@@ -153,6 +155,7 @@ describe('PipelineBoard', () => {
         repository_id: 2,
         repository_name: 'photos',
         lane_busy: false,
+        index_busy: false,
         operations: [queueOp({ id: 2, repository_id: 2, repository: 'photos', status: 'running' })],
       },
     ])
@@ -171,6 +174,7 @@ describe('PipelineBoard', () => {
         repository_id: 1,
         repository_name: 'nas',
         lane_busy: true,
+        index_busy: false,
         operations: [
           queueOp({
             kind: 'backup',
@@ -192,6 +196,7 @@ describe('PipelineBoard', () => {
         repository_id: null,
         repository_name: 'System',
         lane_busy: false,
+        index_busy: false,
         operations: [
           queueOp({
             id: 9,
@@ -237,6 +242,7 @@ describe('PipelineBoard', () => {
         repository_id: 1,
         repository_name: 'nas',
         lane_busy: false,
+        index_busy: false,
         operations: [queueOp({ id: 9, repository_id: 1, kind: 'archive_sync', status: 'failed' })],
       },
     ])
@@ -297,6 +303,7 @@ describe('PipelineBoard', () => {
         repository_id: 1,
         repository_name: 'nas',
         lane_busy: false,
+        index_busy: false,
         operations: [queueOp({ id: 9, repository_id: 1, kind: 'history_merge', status: 'failed' })],
       },
     ])
@@ -317,6 +324,7 @@ describe('PipelineBoard', () => {
         repository_id: 1,
         repository_name: 'nas',
         lane_busy: false,
+        index_busy: false,
         operations: [queueOp({ id: 9, repository_id: 1, kind: 'history_merge', status: 'failed' })],
       },
     ])
@@ -337,6 +345,7 @@ describe('PipelineBoard', () => {
         repository_id: 1,
         repository_name: 'nas',
         lane_busy: false,
+        index_busy: false,
         operations: [queueOp({ id: 9, repository_id: 1, kind: 'history_merge', status: 'failed' })],
       },
     ])
@@ -348,6 +357,39 @@ describe('PipelineBoard', () => {
     fireEvent.click(await screen.findByRole('button', { name: /retry/i }))
     await waitFor(() => expect(archivesAPI.resync).toHaveBeenCalledWith(1))
     expect(archivesAPI.rebuild).not.toHaveBeenCalled()
+  })
+
+  it('follows the running index work through SSE updates between two fetches', async () => {
+    mockQueue([
+      {
+        repository_id: 1,
+        repository_name: 'nas',
+        lane_busy: false,
+        index_busy: true,
+        operations: [
+          queueOp({ id: 9, repository_id: 1, kind: 'stats', status: 'running' }),
+          // another chain's listing: the running stats is foreign work to it
+          queueOp({
+            id: 10,
+            repository_id: 1,
+            kind: 'archive_sync',
+            status: 'queued',
+            run_id: 'r2',
+          }),
+        ],
+      },
+    ])
+    renderBoard()
+    expect(await screen.findByText(/other index work to finish/i)).toBeInTheDocument()
+    const calls = vi.mocked(useOperationEvents).mock.calls
+    const onUpdated = calls[calls.length - 1]?.[0]
+    expect(onUpdated).toBeDefined()
+    act(() => {
+      onUpdated?.(queueOp({ id: 9, repository_id: 1, kind: 'stats', status: 'completed' }) as never)
+    })
+    await waitFor(() =>
+      expect(screen.queryByText(/other index work to finish/i)).not.toBeInTheDocument()
+    )
   })
 
   it('has no rebuild form below the table, only the per-row menus', async () => {

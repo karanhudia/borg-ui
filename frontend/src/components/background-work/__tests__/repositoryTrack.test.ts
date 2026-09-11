@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deriveTrack } from '../repositoryTrack'
+import { deriveTrack, indexBusyFrom } from '../repositoryTrack'
 import type { OperationItem, QueueLimits, QueueRepository } from '../../../types/operations'
 
 const op = (overrides: Partial<OperationItem>): OperationItem =>
@@ -51,11 +51,16 @@ const limits: QueueLimits = {
   max_concurrent_scheduled_checks: 4,
 }
 
-const repo = (operations: OperationItem[], lane_busy = false): QueueRepository => ({
+const repo = (
+  operations: OperationItem[],
+  overrides: Partial<QueueRepository> = {}
+): QueueRepository => ({
   repository_id: 1,
   repository_name: 'nas',
-  lane_busy,
+  lane_busy: false,
+  index_busy: false,
   operations,
+  ...overrides,
 })
 
 describe('deriveTrack', () => {
@@ -79,13 +84,69 @@ describe('deriveTrack', () => {
   })
 
   it('explains a queued stage with the paused state first', () => {
-    const track = deriveTrack(repo([op({ kind: 'stats', status: 'queued' })], true), limits, true)
+    const track = deriveTrack(
+      repo([op({ kind: 'stats', status: 'queued' })], { lane_busy: true }),
+      limits,
+      true
+    )
     expect(track.stages[3].reason).toBe('paused')
   })
 
   it('explains a queued stage with the busy lane', () => {
-    const track = deriveTrack(repo([op({ kind: 'stats', status: 'queued' })], true), limits, false)
+    const track = deriveTrack(
+      repo([op({ kind: 'stats', status: 'queued' })], { lane_busy: true }),
+      limits,
+      false
+    )
     expect(track.stages[3].reason).toBe('lane_busy')
+  })
+
+  it("explains a queued stage with the repository's running index work", () => {
+    const track = deriveTrack(
+      repo(
+        [
+          op({ id: 1, kind: 'stats', status: 'running', run_id: 'r1' }),
+          op({ id: 2, kind: 'archive_sync', status: 'queued', run_id: 'r2' }),
+        ],
+        { index_busy: true }
+      ),
+      limits,
+      false
+    )
+    expect(track.stages[1].reason).toBe('index_busy')
+  })
+
+  it("calls a stage behind its own run's predecessor next in line, not foreign work", () => {
+    const track = deriveTrack(
+      repo(
+        [
+          op({ id: 1, kind: 'archive_sync', status: 'running' }),
+          op({ id: 2, kind: 'stats', status: 'queued', depends_on_id: 1 }),
+        ],
+        { index_busy: true }
+      ),
+      limits,
+      false
+    )
+    expect(track.stages[3].reason).toBe('queued')
+  })
+
+  it('names the busy lane before the running index work', () => {
+    const track = deriveTrack(
+      repo([op({ kind: 'stats', status: 'queued' })], { lane_busy: true, index_busy: true }),
+      limits,
+      false
+    )
+    expect(track.stages[3].reason).toBe('lane_busy')
+  })
+
+  it('derives the index flag from the operations at hand', () => {
+    for (const kind of ['archive_sync', 'history_merge', 'stats'] as const) {
+      expect(indexBusyFrom([op({ kind, status: 'running' })])).toBe(true)
+    }
+    expect(indexBusyFrom([op({ kind: 'stats', status: 'completed' })])).toBe(false)
+    // history_index holds the lane, not the index slot
+    expect(indexBusyFrom([op({ kind: 'history_index', status: 'running' })])).toBe(false)
   })
 
   it('explains a queued history stage with the worker limit', () => {
@@ -171,7 +232,9 @@ describe('deriveTrack', () => {
 
   it('surfaces a running foreground operation separately from the stages', () => {
     const track = deriveTrack(
-      repo([op({ id: 7, kind: 'backup', category: 'backup', status: 'running' })], true),
+      repo([op({ id: 7, kind: 'backup', category: 'backup', status: 'running' })], {
+        lane_busy: true,
+      }),
       limits,
       false
     )

@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.database.models import Base, Operation, Repository, SystemSettings
+from app.database.models import Base, Operation, Repository, SystemSettings, utc_now
 from app.services.operations.enqueue import enqueue, enqueue_chain
 from app.services.operations.runner import (
     OperationContext,
@@ -109,8 +109,13 @@ async def test_tick_does_not_dispatch_a_row_cancelled_while_it_awaited(
         return Outcome()
 
     registry["stats"] = record
+    # two repositories: on one, the second stats would wait for the first
+    # (one index operation per repository) and never reach the claim
+    other = Repository(name="o", path="/tmp/o", encryption="none", compression="lz4")
+    db.add(other)
+    db.commit()
     first = enqueue(db, "stats", repository_id=repo.id, priority=0)
-    second = enqueue(db, "stats", repository_id=repo.id, priority=5)
+    second = enqueue(db, "stats", repository_id=other.id, priority=5)
 
     import app.services.operations.runner as runner_module
 
@@ -120,11 +125,11 @@ async def test_tick_does_not_dispatch_a_row_cancelled_while_it_awaited(
     async def broadcast_then_cancel(op, session):
         calls.append(op.id)
         if len(calls) == 1:
-            other = session_factory()
-            row = other.get(Operation, second.id)
+            aside = session_factory()
+            row = aside.get(Operation, second.id)
             row.status = "cancelled"
-            other.commit()
-            other.close()
+            aside.commit()
+            aside.close()
         return await real_broadcast(op, session)
 
     monkeypatch.setattr(
@@ -355,6 +360,289 @@ async def test_no_followups_on_failure(db, repo, runner, registry):
     db.expire_all()
     assert db.query(Operation).count() == 1
     assert db.query(Operation).first().error_message == "nope"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_index_operations_of_one_repository_start_one_at_a_time(
+    db, repo, runner, registry
+):
+    """Two chains of one run (the backup's follow-ups and the prune's) each
+    queue index work for the same repository: the tick starts the second
+    operation only once the first has finished, with index_workers=2 (the
+    default)."""
+    gate = asyncio.Event()
+    reached = asyncio.Event()
+    started = []
+
+    async def wait(ctx):
+        started.append(ctx.operation_id)
+        reached.set()
+        await gate.wait()
+        return Outcome()
+
+    registry["stats"] = wait
+    registry["archive_sync"] = wait
+    enqueue(db, "stats", repository_id=repo.id, trigger="followup")
+    enqueue(db, "archive_sync", repository_id=repo.id, trigger="followup")
+    assert await runner.tick() == 1
+    await asyncio.wait_for(reached.wait(), 5)
+    assert await runner.tick() == 0
+    assert len(started) == 1
+    gate.set()
+    await asyncio.gather(*runner.running_tasks.values())
+    assert await runner.tick() == 1
+    await asyncio.gather(*runner.running_tasks.values())
+    assert len(started) == 2
+    db.expire_all()
+    assert {o.status for o in db.query(Operation)} == {"completed"}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_row_left_running_by_a_dead_task_is_requeued_by_the_tick(
+    db, repo, runner, registry
+):
+    """A `running` index row whose task is gone (died before its terminal
+    commit) or never existed holds no lock; left alone it would hold every
+    index operation of the repository and a worker until the next restart.
+    The tick puts it back to `queued`, as startup does, and it runs again."""
+    seen = []
+
+    async def ok(ctx):
+        seen.append(ctx.kind)
+        return Outcome()
+
+    registry["stats"] = ok
+    registry["archive_sync"] = ok
+    no_task = enqueue(db, "stats", repository_id=repo.id)
+    no_task.status = "running"
+    dead_task = enqueue(db, "archive_sync", repository_id=repo.id)
+    dead_task.status = "running"
+    dead_task.started_at = utc_now()
+    db.commit()
+    finished = asyncio.ensure_future(asyncio.sleep(0))
+    await finished
+    runner.running_tasks[dead_task.id] = finished
+
+    assert await runner.requeue_abandoned_index_rows(db) == 2
+    db.expire_all()
+    for op in (no_task, dead_task):
+        row = db.get(Operation, op.id)
+        assert row.status == "queued" and row.started_at is None
+        assert row.params["requeues"] == 1
+    assert dead_task.id not in runner.running_tasks
+    # abandoned again: the count is what bounds the loop
+    for op in (no_task, dead_task):
+        db.get(Operation, op.id).status = "running"
+    db.commit()
+    assert await runner.requeue_abandoned_index_rows(db) == 2
+    db.expire_all()
+    assert {
+        db.get(Operation, op.id).params["requeues"] for op in (no_task, dead_task)
+    } == {2}
+    await _drain(runner)
+    db.expire_all()
+    assert {o.status for o in db.query(Operation)} == {"completed"}
+    assert sorted(seen) == ["archive_sync", "stats"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_the_tick_requeues_the_abandoned_row_before_it_dispatches(
+    db, repo, runner, registry
+):
+    """The wiring: an abandoned row holds the repository under the new
+    rule, so the tick must clear it before it looks at the queue. With the
+    backoff the requeued row itself may wait a moment; what the tick must
+    do is sweep first and then dispatch something."""
+
+    async def ok(ctx):
+        return Outcome()
+
+    registry["stats"] = ok
+    registry["archive_sync"] = ok
+    orphan = enqueue(db, "stats", repository_id=repo.id)
+    orphan.status = "running"
+    db.commit()
+    enqueue(db, "archive_sync", repository_id=repo.id)
+    assert await runner.tick() == 1
+    db.expire_all()
+    swept = db.get(Operation, orphan.id)
+    assert swept.params["requeues"] == 1
+    assert swept.status in ("queued", "running")  # requeued, or already re-run
+    await _drain(runner)
+    db.expire_all()
+    assert {o.status for o in db.query(Operation)} == {"completed"}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_requeued_row_waits_out_the_backoff(
+    db, repo, session_factory, registry, monkeypatch, tmp_path
+):
+    """The deferral path's backoff applies: the row is not re-run in the
+    same pass, and a third requeue still requeues (the cap is four)."""
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+    slow = OperationRunner(
+        session_factory=session_factory,
+        registry=registry,
+        poll_interval=0.01,
+        deferral_delay=2.0,
+    )
+    op = enqueue(db, "stats", repository_id=repo.id)
+    op.status = "running"
+    op.params = {"requeues": 2}
+    db.commit()
+    before = time.time()
+    assert await slow.requeue_abandoned_index_rows(db) == 1
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert row.status == "queued" and row.params["requeues"] == 3
+    assert row.params["deferred_until"] >= before + slow.deferral_delay_for(3)
+    assert await slow.tick() == 0  # waiting out the backoff
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_an_index_row_abandoned_again_and_again_fails(db, repo, runner):
+    """Bounded: a task that keeps dying (a terminal commit that keeps
+    failing) must not re-run the listing every tick forever."""
+    from app.services.operations.runner import MAX_REQUEUES
+
+    op = enqueue(db, "history_index", repository_id=repo.id)  # the exclusive one too
+    op.status = "running"
+    op.started_at = utc_now()
+    op.progress_percent = 40
+    op.params = {"requeues": MAX_REQUEUES}
+    db.commit()
+    assert await runner.requeue_abandoned_index_rows(db) == 1
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert row.status == "failed"
+    assert row.completed_at is not None
+    # how far it got stays on the row
+    assert row.started_at is not None and row.progress_percent == 40
+    assert f"after {MAX_REQUEUES} requeues" in row.error_message
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_failing_sweep_does_not_cost_the_dispatch_pass(
+    db, repo, runner, registry, monkeypatch
+):
+    """The sweep is housekeeping: a row whose bookkeeping cannot be read,
+    or a commit that fails, must not stop the tick from dispatching."""
+    seen = []
+
+    async def ok(ctx):
+        seen.append(ctx.kind)
+        return Outcome()
+
+    registry["stats"] = ok
+
+    async def dirty_then_boom(db_):
+        # the sweep has touched a row when its commit fails: the dirty
+        # session must be rolled back before the dispatch pass uses it
+        row = db_.query(Operation).first()
+        row.error_message = "half-swept"
+        raise RuntimeError("database is locked")
+
+    monkeypatch.setattr(runner, "requeue_abandoned_index_rows", dirty_then_boom)
+    op = enqueue(db, "stats", repository_id=repo.id)
+    assert await runner.tick() == 1
+    await asyncio.gather(*runner.running_tasks.values())
+    assert seen == ["stats"]
+    db.expire_all()
+    assert db.get(Operation, op.id).error_message is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_the_sweep_leaves_running_rows_of_other_kinds_alone(db, repo, runner):
+    """Inline maintenance (`start_inline_maintenance`) records prune, compact
+    and check rows as `running` with no task in this runner; the sweep is
+    for index kinds only and must never touch them."""
+    for kind in ("prune", "compact", "check", "backup"):
+        row = enqueue(db, kind, repository_id=repo.id)
+        row.status = "running"
+    db.commit()
+    assert await runner.requeue_abandoned_index_rows(db) == 0
+    db.expire_all()
+    assert {o.status for o in db.query(Operation)} == {"running"}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_task_entry_that_is_not_a_future_is_left_alone(db, repo, runner):
+    """A patched `create_task` can land a mock in `running_tasks`; that
+    row cannot be told apart from live work and stays running."""
+    from unittest.mock import MagicMock
+
+    op = enqueue(db, "stats", repository_id=repo.id)
+    op.status = "running"
+    db.commit()
+    runner.running_tasks[op.id] = MagicMock()
+    assert await runner.requeue_abandoned_index_rows(db) == 0
+    db.expire_all()
+    assert db.get(Operation, op.id).status == "running"
+    runner.running_tasks.pop(op.id)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_the_tick_leaves_a_running_index_task_alone(db, repo, runner, registry):
+    """The requeue is for rows without a live task; a row with one is
+    running index work and stays so."""
+    gate = asyncio.Event()
+    reached = asyncio.Event()
+
+    async def wait(ctx):
+        reached.set()
+        await gate.wait()
+        return Outcome()
+
+    registry["stats"] = wait
+    op = enqueue(db, "stats", repository_id=repo.id)
+    assert await runner.tick() == 1
+    await asyncio.wait_for(reached.wait(), 5)
+    assert await runner.requeue_abandoned_index_rows(db) == 0
+    db.expire_all()
+    assert db.get(Operation, op.id).status == "running"
+    gate.set()
+    await asyncio.gather(*runner.running_tasks.values())
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_history_index_waits_for_running_index_work_through_the_tick(
+    db, repo, runner, registry
+):
+    """The exclusive index kind is held back by a running listing of its
+    repository too, and the tick reaches that rule before the lane one."""
+    gate = asyncio.Event()
+    reached = asyncio.Event()
+    started = []
+
+    async def wait(ctx):
+        started.append(ctx.kind)
+        reached.set()
+        await gate.wait()
+        return Outcome()
+
+    registry["archive_sync"] = wait
+    registry["history_index"] = wait
+    enqueue(db, "archive_sync", repository_id=repo.id, priority=5)
+    enqueue(db, "history_index", repository_id=repo.id, priority=10)
+    assert await runner.tick() == 1
+    await asyncio.wait_for(reached.wait(), 5)
+    assert started == ["archive_sync"]
+    assert await runner.tick() == 0
+    gate.set()
+    await asyncio.gather(*runner.running_tasks.values())
+    assert await runner.tick() == 1
+    await asyncio.gather(*runner.running_tasks.values())
+    assert started == ["archive_sync", "history_index"]
 
 
 @pytest.mark.unit

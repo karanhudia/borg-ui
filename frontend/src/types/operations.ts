@@ -86,6 +86,9 @@ export interface QueueRepository {
   repository_id: number | null
   repository_name: string
   lane_busy: boolean
+  // A listing, merge or stats of the repository is running: the next index
+  // operation waits for it, whatever the lane and the worker count say.
+  index_busy: boolean
   operations: OperationItem[]
 }
 

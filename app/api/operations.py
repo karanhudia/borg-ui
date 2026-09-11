@@ -36,7 +36,11 @@ from app.services.operations.followups import (
     history_capability,
     history_enabled,
 )
-from app.services.operations.lanes import lane_free, running_count
+from app.services.operations.lanes import (
+    lane_free,
+    repositories_with_running_index_work,
+    running_count,
+)
 from app.services.operations.models import is_terminal, serialize_operation
 from app.services.operations.index_mode import mode_of as index_mode_of
 from app.services.operations.reconcile import (
@@ -120,6 +124,10 @@ class QueueRepository(BaseModel):
     repository_id: Optional[int]
     repository_name: str
     lane_busy: bool
+    # A listing, merge or stats of the repository is running: the next index
+    # operation waits for it (one at a time per repository), whatever the
+    # lane and the worker count say.
+    index_busy: bool
     operations: list[OperationItem]
 
 
@@ -476,6 +484,11 @@ async def get_queue(
     groups: dict[Optional[int], list[dict]] = {}
     for op in ops:
         groups.setdefault(op.repository_id, []).append(_item(op, repos, policy))
+    # only the repositories in the response, which the query above already
+    # scoped to the caller's access
+    index_busy_ids = repositories_with_running_index_work(
+        db, repository_ids=[r for r in groups if r is not None]
+    )
     repositories = []
     for repository_id, items in groups.items():
         repo = repos.get(repository_id) if repository_id is not None else None
@@ -488,6 +501,7 @@ async def get_queue(
                     if repository_id is not None
                     else False
                 ),
+                index_busy=repository_id in index_busy_ids,
                 operations=items,
             )
         )
