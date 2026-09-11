@@ -155,6 +155,7 @@ export const busyQueue: QueueResponse = {
       repository_id: 2,
       repository_name: 'nas',
       lane_busy: true,
+      lane_holder: { kind: 'backup', id: 3 },
       operations: [
         op({
           id: 2,
@@ -231,4 +232,58 @@ export const emptyQueue: QueueResponse = {
     max_concurrent_scheduled_checks: 4,
   },
   paused: false,
+}
+
+// The same queue with a prune holding the lane instead of a backup: the
+// waiting stages name the prune (issue: the wording used to say "backup"
+// whatever held the lane).
+export const maintenanceLaneQueue: QueueResponse = {
+  ...busyQueue,
+  repositories: busyQueue.repositories.map((repository) =>
+    repository.repository_id === 2
+      ? {
+          ...repository,
+          lane_holder: { kind: 'prune' as const, id: 3 },
+          operations: [
+            // the prune that holds the lane, and an index stage queued
+            // behind it: the caption under that stage names the prune
+            ...repository.operations.map((operation) =>
+              operation.id === 3
+                ? { ...operation, kind: 'prune' as const, category: 'maintenance' as const }
+                : // admission holds index work back while a prune runs, so
+                  // the stats row of the busy fixture waits here too
+                  { ...operation, status: 'queued' as const, started_at: null }
+            ),
+            op({
+              id: 31,
+              kind: 'archive_sync',
+              status: 'queued',
+              repository: 'nas',
+              repository_id: 2,
+              started_at: null,
+            }),
+          ],
+        }
+      : repository
+  ),
+}
+
+// The lane is taken, but the payload does not say by what: a page loaded
+// before the server carried the holder, or one whose holder has finished
+// since. The caption stays generic rather than naming a guess.
+export const unnamedLaneQueue: QueueResponse = {
+  ...busyQueue,
+  repositories: busyQueue.repositories.map((repository) =>
+    repository.repository_id === 2
+      ? {
+          ...repository,
+          lane_holder: null,
+          operations: repository.operations.map((operation) =>
+            operation.id === 2
+              ? { ...operation, status: 'queued' as const, started_at: null }
+              : operation
+          ),
+        }
+      : repository
+  ),
 }

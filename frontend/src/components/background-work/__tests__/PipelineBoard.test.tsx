@@ -186,6 +186,92 @@ describe('PipelineBoard', () => {
     expect(within(row).getByRole('link', { name: /view runs/i })).toBeInTheDocument()
   })
 
+  it('names the operation a waiting stage is held up by', async () => {
+    // the lane belongs to whichever exclusive operation runs; saying
+    // "backup" while a prune holds it contradicts the row above
+    mockQueue([
+      {
+        repository_id: 1,
+        repository_name: 'nas',
+        lane_busy: true,
+        lane_holder: { kind: 'prune', id: 5 },
+        operations: [
+          queueOp({
+            id: 5,
+            kind: 'prune',
+            category: 'maintenance',
+            status: 'running',
+            started_at: new Date().toISOString(),
+          }),
+          queueOp({ id: 6, kind: 'stats', category: 'index', status: 'queued' }),
+        ],
+      },
+    ])
+    renderBoard()
+    const row = (await screen.findAllByTestId('repository-row'))[0]
+    expect(within(row).getByText(/prune still running/i)).toBeInTheDocument()
+    // backup is the kind the old wording named whatever held the lane
+    expect(within(row).queryByText(/backup still running/i)).not.toBeInTheDocument()
+    expect(within(row).queryByText(/\{\{kind\}\}/)).not.toBeInTheDocument()
+  })
+
+  it('falls back to the unnamed wording when the payload carries no holder', async () => {
+    mockQueue([
+      {
+        repository_id: 1,
+        repository_name: 'nas',
+        lane_busy: true,
+        operations: [
+          queueOp({
+            id: 5,
+            kind: 'backup',
+            category: 'backup',
+            status: 'running',
+            started_at: new Date().toISOString(),
+          }),
+          queueOp({ id: 6, kind: 'stats', category: 'index', status: 'queued' }),
+        ],
+      },
+    ])
+    renderBoard()
+    const row = (await screen.findAllByTestId('repository-row'))[0]
+    expect(within(row).getByText(/another operation is still running/i)).toBeInTheDocument()
+  })
+
+  it('stops naming a holder the same payload shows as finished', async () => {
+    // an event can mark the holder completed in the cache before the queue
+    // is refetched; the row must not wait for an operation it lists as
+    // done, while the backup that is still running keeps it waiting
+    mockQueue([
+      {
+        repository_id: 1,
+        repository_name: 'nas',
+        lane_busy: true,
+        lane_holder: { kind: 'prune', id: 5 },
+        operations: [
+          queueOp({
+            id: 5,
+            kind: 'prune',
+            category: 'maintenance',
+            status: 'completed',
+          }),
+          queueOp({
+            id: 7,
+            kind: 'backup',
+            category: 'backup',
+            status: 'running',
+            started_at: new Date().toISOString(),
+          }),
+          queueOp({ id: 6, kind: 'stats', category: 'index', status: 'queued' }),
+        ],
+      },
+    ])
+    renderBoard()
+    const row = (await screen.findAllByTestId('repository-row'))[0]
+    expect(within(row).getByText(/another operation is still running/i)).toBeInTheDocument()
+    expect(within(row).queryByText(/prune still running/i)).not.toBeInTheDocument()
+  })
+
   it('adds a system lane below the repositories for work with no repository', async () => {
     mockQueue([
       {

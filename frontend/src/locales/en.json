@@ -3569,7 +3569,8 @@
       "pauseAdminOnly": "Only administrators can pause background work.",
       "reason": {
         "paused": "Paused",
-        "lane_busy": "Waiting for the backup on this repository to finish",
+        "lane_busy": "{{kind}} still running",
+        "lane_busy_unnamed": "Another operation is still running",
         "workers": "Waiting for an index worker",
         "queued": "Next in line"
       },

@@ -51,12 +51,32 @@ const limits: QueueLimits = {
   max_concurrent_scheduled_checks: 4,
 }
 
-const repo = (operations: OperationItem[], lane_busy = false): QueueRepository => ({
+const repo = (
+  operations: OperationItem[],
+  lane_busy = false,
+  lane_holder: QueueRepository['lane_holder'] = null
+): QueueRepository => ({
   repository_id: 1,
   repository_name: 'nas',
   lane_busy,
+  lane_holder,
   operations,
 })
+
+// A busy lane and the operation holding it, as the queue sends the pair:
+// the holder is one of the repository's own running rows.
+const held = (
+  kind: 'backup' | 'prune' | 'compact' | 'check',
+  queued: OperationItem[]
+): QueueRepository => {
+  const holder = op({
+    id: 99,
+    kind,
+    category: kind === 'backup' ? 'backup' : 'maintenance',
+    status: 'running',
+  })
+  return repo([...queued, holder], true, { kind, id: holder.id })
+}
 
 describe('deriveTrack', () => {
   it('maps each stage to its latest operation status', () => {
@@ -79,13 +99,142 @@ describe('deriveTrack', () => {
   })
 
   it('explains a queued stage with the paused state first', () => {
-    const track = deriveTrack(repo([op({ kind: 'stats', status: 'queued' })], true), limits, true)
+    const track = deriveTrack(
+      held('backup', [op({ kind: 'stats', status: 'queued' })]),
+      limits,
+      true
+    )
     expect(track.stages[3].reason).toBe('paused')
   })
 
   it('explains a queued stage with the busy lane', () => {
-    const track = deriveTrack(repo([op({ kind: 'stats', status: 'queued' })], true), limits, false)
+    const track = deriveTrack(
+      held('backup', [op({ kind: 'stats', status: 'queued' })]),
+      limits,
+      false
+    )
     expect(track.stages[3].reason).toBe('lane_busy')
+    expect(track.stages[3].reasonKind).toBe('backup')
+  })
+
+  it('names whichever exclusive operation holds the lane', () => {
+    // a prune, a compact or a check hold it as much as a backup does
+    for (const kind of ['prune', 'compact', 'check'] as const) {
+      const track = deriveTrack(
+        held(kind, [op({ kind: 'stats', status: 'queued' })]),
+        limits,
+        false
+      )
+      expect(track.stages[3].reason).toBe('lane_busy')
+      expect(track.stages[3].reasonKind).toBe(kind)
+    }
+  })
+
+  it('falls back to the unnamed wording when the payload carries no holder', () => {
+    // a page loaded before the server sent the holder: the lane is busy,
+    // something runs, but nothing names it, and "the backup" would be a guess
+    const track = deriveTrack(
+      repo(
+        [
+          op({ kind: 'stats', status: 'queued' }),
+          op({ id: 99, kind: 'backup', category: 'backup', status: 'running' }),
+        ],
+        true,
+        null
+      ),
+      limits,
+      false
+    )
+    expect(track.stages[3].reason).toBe('lane_busy_unnamed')
+    expect(track.stages[3].reasonKind).toBeNull()
+  })
+
+  it('stops naming a holder the same payload shows as finished', () => {
+    // an event marked the holder completed in the cache before the queue
+    // was refetched, while another operation still runs: the stage waits,
+    // but for something it can no longer name
+    const track = deriveTrack(
+      repo(
+        [
+          op({ kind: 'stats', status: 'queued' }),
+          op({ id: 99, kind: 'prune', category: 'maintenance', status: 'completed' }),
+          op({ id: 100, kind: 'backup', category: 'backup', status: 'running' }),
+        ],
+        true,
+        { kind: 'prune', id: 99 }
+      ),
+      limits,
+      false
+    )
+    expect(track.stages[3].reason).toBe('lane_busy_unnamed')
+    expect(track.stages[3].reasonKind).toBeNull()
+  })
+
+  it('leaves the worker limit to explain a stage once the holder is gone', () => {
+    // bypass_lock lets index work run beside a lane holder; when that
+    // holder finishes in the cache, an archive_sync still running is not
+    // evidence of a taken lane, and the real answer is the worker pool
+    const track = deriveTrack(
+      repo(
+        [
+          op({ id: 10, kind: 'history_index', status: 'queued' }),
+          op({ id: 99, kind: 'prune', category: 'maintenance', status: 'completed' }),
+          op({ id: 9, kind: 'archive_sync', category: 'index', status: 'running' }),
+        ],
+        true,
+        { kind: 'prune', id: 99 }
+      ),
+      { ...limits, index_running: 2 },
+      false
+    )
+    expect(track.stages[2].reason).toBe('workers')
+    expect(track.stages[2].reasonKind).toBeNull()
+  })
+
+  it('does not let a kind it cannot place keep the lane busy', () => {
+    // an operation from a newer build carries a category all the same; the
+    // server refuses it the lane, and so does the track rather than
+    // reporting a holder it cannot name
+    const track = deriveTrack(
+      repo(
+        [
+          op({ id: 10, kind: 'history_index', status: 'queued' }),
+          op({ id: 99, kind: 'prune', category: 'maintenance', status: 'completed' }),
+          op({
+            id: 11,
+            kind: 'teleport' as OperationItem['kind'],
+            category: 'maintenance',
+            status: 'running',
+          }),
+        ],
+        true,
+        { kind: 'prune', id: 99 }
+      ),
+      { ...limits, index_running: 2 },
+      false
+    )
+    expect(track.stages[2].reason).toBe('workers')
+    expect(track.stages[2].reasonKind).toBeNull()
+  })
+
+  it('does not claim a busy lane while the payload shows nothing running', () => {
+    // the lane flag is the server's word and the rows are this payload's;
+    // with every operation finished in the cache the stage is simply next
+    // in line, not waiting for a phantom
+    const track = deriveTrack(
+      repo(
+        [
+          op({ kind: 'stats', status: 'queued' }),
+          op({ id: 99, kind: 'prune', category: 'maintenance', status: 'completed' }),
+        ],
+        true,
+        { kind: 'prune', id: 99 }
+      ),
+      limits,
+      false
+    )
+    expect(track.stages[3].reason).toBe('queued')
+    expect(track.stages[3].reasonKind).toBeNull()
   })
 
   it('explains a queued history stage with the worker limit', () => {

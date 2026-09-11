@@ -39,9 +39,18 @@ function StageSegment({
   if (stage.status === 'done') caption = t('operations.background.stageDone')
   else if (stage.status === 'failed') caption = t('operations.background.stageFailed')
   else if (stage.status === 'skipped') caption = t('operations.background.stageSkipped')
-  else if (stage.status === 'waiting' && stage.reason)
-    caption = t(`operations.background.reason.${stage.reason}`)
-  else if (stage.status === 'running') {
+  else if (stage.status === 'waiting' && stage.reason) {
+    // `lane_busy` is the only reason with a placeholder; without a kind to
+    // fill it the unnamed wording is used, so the raw `{{kind}}` can never
+    // reach the page however a caller built the stage.
+    const named = stage.reason === 'lane_busy' && stage.reasonKind
+    caption = t(
+      `operations.background.reason.${named ? 'lane_busy' : stage.reason === 'lane_busy' ? 'lane_busy_unnamed' : stage.reason}`,
+      named
+        ? { kind: t(`operations.kind.${stage.reasonKind}`, { defaultValue: stage.reasonKind }) }
+        : {}
+    )
+  } else if (stage.status === 'running') {
     const elapsed = elapsedSince(stage.operation?.started_at ?? null, now)
     const counted =
       stage.operation?.progress_current != null && stage.operation?.progress_total != null

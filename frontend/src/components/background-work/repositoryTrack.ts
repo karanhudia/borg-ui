@@ -1,5 +1,6 @@
 import type {
   OperationItem,
+  OperationKind,
   QueueLimits,
   QueueRepository,
   RebuildStage,
@@ -59,13 +60,20 @@ export type StageStatus = 'idle' | 'done' | 'running' | 'waiting' | 'failed' | '
 // Why a queued stage has not started, in the order a person would want to
 // hear it: the whole queue is paused, a foreground job owns this
 // repository, every index worker is busy, or it is simply next in line.
-export type WaitReason = 'paused' | 'lane_busy' | 'workers' | 'queued'
+// `lane_busy` names the operation that holds the lane; `lane_busy_unnamed`
+// is the same state from a payload that did not carry it.
+export type WaitReason = 'paused' | 'lane_busy' | 'lane_busy_unnamed' | 'workers' | 'queued'
 
 export interface StageState {
   key: StageKey
   status: StageStatus
   operation: OperationItem | null
   reason: WaitReason | null
+  // The lane holder's kind, for the `lane_busy` wording. Any exclusive
+  // kind can hold a lane: a backup, but also a prune, a compact, a check
+  // or the file-history index. Optional so the partial stage literals in
+  // tests and stories stay valid; `deriveTrack` always sets it.
+  reasonKind?: OperationKind | null
 }
 
 export interface RepositoryTrack {
@@ -74,6 +82,22 @@ export interface RepositoryTrack {
   foreground: OperationItem | null
   stages: StageState[]
 }
+
+// The kinds the server admits one at a time (its exclusive set). The track
+// only needs them to tell "the lane is taken" apart from "the index workers
+// are busy", so it names them rather than reading a category: a kind this
+// build does not know carries a category all the same, and the server
+// already refuses it the lane. A drift against the server's table costs
+// wording, never a stage.
+const LANE_KINDS = new Set<OperationItem['kind']>([
+  'backup',
+  'check',
+  'prune',
+  'compact',
+  'delete_archive',
+  'wipe',
+  'history_index',
+])
 
 const FOREGROUND_CATEGORIES = new Set<OperationItem['category']>([
   'backup',
@@ -131,18 +155,33 @@ export function deriveTrack(
       (operation) => FOREGROUND_CATEGORIES.has(operation.category) && operation.status === 'running'
     ) ?? null
 
+  const holdingLane = repository.operations.filter(
+    (operation) => operation.status === 'running' && LANE_KINDS.has(operation.kind)
+  )
+
   const stages = STAGE_ORDER.map<StageState>((key) => {
     const operation = latest.get(key) ?? null
-    if (!operation) return { key, status: 'idle', operation: null, reason: null }
+    if (!operation) return { key, status: 'idle', operation: null, reason: null, reasonKind: null }
     const status = stageStatus(operation.status)
     let reason: WaitReason | null = null
+    let reasonKind: OperationKind | null = null
     if (status === 'waiting') {
       if (paused) reason = 'paused'
-      else if (repository.lane_busy) reason = 'lane_busy'
-      else if (key === 'history' && limits.index_running >= limits.index_workers) reason = 'workers'
+      else if (repository.lane_busy && holdingLane.length > 0) {
+        // The lane is the server's word, the operations are this payload's:
+        // an event can mark the holder finished in the cache before the
+        // queue is refetched. Only name a holder this payload still shows
+        // running, and only claim the lane is taken while it shows
+        // something running at all, or the caption contradicts the row it
+        // sits in.
+        const holder = repository.lane_holder ?? null
+        reasonKind = holdingLane.some((o) => o.id === holder?.id) ? (holder?.kind ?? null) : null
+        reason = reasonKind ? 'lane_busy' : 'lane_busy_unnamed'
+      } else if (key === 'history' && limits.index_running >= limits.index_workers)
+        reason = 'workers'
       else reason = 'queued'
     }
-    return { key, status, operation, reason }
+    return { key, status, operation, reason, reasonKind }
   })
 
   return {
