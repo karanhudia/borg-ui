@@ -2059,7 +2059,7 @@
   },
   "activity": {
     "title": "Attività",
-    "subtitle": "Visualizza tutte le operazioni e i relativi log",
+    "subtitle": "Ogni esecuzione su ogni repository, la più recente prima",
     "actions": {
       "refresh": "Aggiorna attività"
     },
@@ -2096,7 +2096,6 @@
       "message": "Non ci sono operazioni corrispondenti ai tuoi filtri"
     },
     "filterCategory": "Categoria",
-    "indexHiddenHint": "Viene mostrato tutto tranne le esecuzioni di indicizzazione. Seleziona Indice per includerle.",
     "filterTrigger": "Trigger",
     "allTriggers": "Tutti i trigger",
     "triggers": {
@@ -2116,6 +2115,11 @@
     },
     "followupsCollapsed": "{{count}} passaggi",
     "operations": "Operazioni",
+    "runChain": {
+      "allSucceeded": "Tutti riusciti",
+      "failed": "{{count}} non riusciti",
+      "active": "{{count}} in corso"
+    },
     "followupsCollapsed_one": "{{count}} passaggio",
     "repositoryView": {
       "back": "Tutta l'attività",
@@ -2134,6 +2138,51 @@
     "repositoryScope": {
       "label": "Repository",
       "all": "Tutti i repository"
+    },
+    "indexHiddenTooltip": "Le esecuzioni di indice restano nascoste finché non selezioni questo",
+    "umbrella": {
+      "plan": "Piano · {{name}}",
+      "schedule": "Pianificazione · {{name}}"
+    },
+    "day": {
+      "today": "Oggi",
+      "yesterday": "Ieri",
+      "unknown": "Senza data"
+    },
+    "summary": {
+      "runs": "{{count}} esecuzioni",
+      "runs_one": "{{count}} esecuzione",
+      "repositories": "su {{count}} repository",
+      "repositories_one": "su {{count}} repository",
+      "indexHidden": "esecuzioni di indice nascoste"
+    },
+    "runningNow": {
+      "title": "In corso",
+      "queued": "In coda"
+    },
+    "showMore": "Mostra altri {{count}}",
+    "health": {
+      "backup": "Backup",
+      "check": "Verifica",
+      "prune": "Prune",
+      "compact": "Compact",
+      "index": "Indice",
+      "mirror": "Mirror",
+      "running": "In corso",
+      "overdue": "in ritardo"
+    },
+    "hook": {
+      "pre": "Script pre-backup",
+      "post": "Script post-backup",
+      "sourcePre": "Script pre-backup della sorgente",
+      "sourcePost": "Script post-backup della sorgente",
+      "other": "Script"
+    },
+    "planRun": {
+      "repositories": "{{count}} repository",
+      "repositories_one": "{{count}} repository",
+      "members": "{{count}} esecuzioni",
+      "members_one": "{{count}} esecuzione"
     }
   },
   "availabilitySchedule": {

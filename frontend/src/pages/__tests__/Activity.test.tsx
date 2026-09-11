@@ -1,41 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import Activity from '../Activity'
-import { activityAPI } from '../../services/api'
+import { activityAPI, repositoriesAPI } from '../../services/api'
 
-const { activityData } = vi.hoisted(() => ({
-  activityData: {
-    current: [
-      {
-        id: 7,
-        type: 'backup',
-        status: 'completed',
-        started_at: '2026-04-01T10:00:00Z',
-        completed_at: '2026-04-01T10:05:00Z',
-        error_message: null,
-        repository: '/backup/repo7',
-        log_file_path: '/logs/job7.log',
-        archive_name: null,
-        package_name: null,
-        repository_path: '/backup/repo7',
-        has_logs: true,
-      },
-    ] as Array<Record<string, unknown>>,
-  },
-}))
 const track = vi.fn()
-const refetchSpy = vi.fn()
-const jobsTablePropsSpy = vi.fn()
 
 vi.mock('../../hooks/useAnalytics', () => ({
   useAnalytics: () => ({
     track,
-    EventCategory: {
-      NAVIGATION: 'Navigation',
-    },
-    EventAction: {
-      FILTER: 'Filter',
-    },
+    EventCategory: { NAVIGATION: 'Navigation' },
+    EventAction: { FILTER: 'Filter' },
   }),
 }))
 
@@ -46,221 +20,193 @@ vi.mock('../../hooks/useAuth', () => ({
 }))
 
 vi.mock('../../hooks/useLockBreakPermissions', () => ({
-  useLockBreakPermissions: () => ({
-    canBreakLock: () => true,
-    lockBreakingEnabled: true,
-  }),
+  useLockBreakPermissions: () => ({ canBreakLock: () => true, lockBreakingEnabled: true }),
 }))
 
-vi.mock('@tanstack/react-query', async () => {
-  const actual =
-    await vi.importActual<typeof import('@tanstack/react-query')>('@tanstack/react-query')
-  return {
-    ...actual,
-    useQuery: ({ queryKey, queryFn }: { queryKey: unknown[]; queryFn: () => Promise<unknown> }) => {
-      void queryFn()
-      if (queryKey[0] === 'repositories') {
-        return {
-          data: { data: { repositories: [{ id: 1, name: 'nas', path: '/mnt/nas' }] } },
-          isLoading: false,
-          refetch: refetchSpy,
-        }
-      }
-      return {
-        data: activityData.current,
-        isLoading: false,
-        refetch: refetchSpy,
-      }
-    },
-  }
-})
+vi.mock('../../hooks/useOperationEvents', () => ({ useOperationEvents: () => {} }))
 
-vi.mock('../activity/RepositoryOperationsView', () => ({
-  default: ({
-    repositoryId,
-    initialCategory,
-  }: {
-    repositoryId: number
-    initialCategory?: string[]
-  }) => (
-    <div>
-      Repository View {repositoryId}
-      {initialCategory?.length ? ` (${initialCategory.join(',')})` : ''}
-    </div>
-  ),
+vi.mock('../../components/LogViewerDialog', () => ({
+  default: ({ open }: { open: boolean }) => (open ? <div>Log Viewer</div> : null),
 }))
 
-vi.mock('../../components/BackupJobsTable', () => ({
-  default: (props: unknown) => {
-    jobsTablePropsSpy(props)
-    return <div>Jobs Table</div>
-  },
-}))
+const noon = () => {
+  const day = new Date()
+  day.setHours(12, 0, 0, 0)
+  return day.toISOString()
+}
+
+const backup = {
+  id: 7,
+  type: 'backup',
+  kind: 'backup',
+  category: 'backup',
+  trigger: 'plan',
+  backup_plan_name: 'Nightly',
+  status: 'completed',
+  started_at: noon(),
+  completed_at: noon(),
+  error_message: null,
+  repository: 'repo7',
+  repository_id: 1,
+  log_file_path: '/logs/job7.log',
+  archive_name: null,
+  package_name: null,
+  repository_path: '/backup/repo7',
+  has_logs: true,
+}
 
 describe('Activity page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    activityData.current = [
-      {
-        id: 7,
-        type: 'backup',
-        status: 'completed',
-        started_at: '2026-04-01T10:00:00Z',
-        completed_at: '2026-04-01T10:05:00Z',
-        error_message: null,
-        repository: '/backup/repo7',
-        log_file_path: '/logs/job7.log',
-        archive_name: null,
-        package_name: null,
-        repository_path: '/backup/repo7',
-        has_logs: true,
+    vi.spyOn(activityAPI, 'list').mockResolvedValue({ data: [backup] } as never)
+    vi.spyOn(repositoriesAPI, 'getRepositories').mockResolvedValue({
+      data: { repositories: [{ id: 1, name: 'nas', path: '/mnt/nas' }] },
+    } as never)
+    vi.spyOn(repositoriesAPI, 'getStatus').mockResolvedValue({
+      data: {
+        cells: [
+          {
+            cell: 'backup',
+            status: 'completed',
+            completed_at: noon(),
+            age_seconds: 60,
+            threshold_days: 2,
+            overdue: false,
+            running: false,
+            source: 'archive',
+          },
+          {
+            cell: 'check',
+            status: null,
+            completed_at: null,
+            age_seconds: null,
+            threshold_days: 30,
+            overdue: true,
+            running: false,
+            source: null,
+          },
+        ],
+        overdue_available: true,
       },
-    ]
-    vi.spyOn(activityAPI, 'list').mockResolvedValue({ data: [] } as never)
+    } as never)
   })
 
-  it('passes filters into the activity API, tracks filter changes, and supports refresh', async () => {
-    const user = userEvent.setup()
-
+  it('lists runs with what they belong to and says what is shown', async () => {
     renderWithProviders(<Activity />)
-
-    expect(await screen.findByText('Jobs Table')).toBeInTheDocument()
-    const getTypeFilter = () => screen.getByRole('combobox', { name: /^type$/i })
-    const getStatusFilter = () => screen.getByRole('combobox', { name: /^status$/i })
-    const refreshButton = screen.getByRole('button', { name: /^refresh activity$/i })
-    expect(getTypeFilter()).toBeInTheDocument()
-    expect(getStatusFilter()).toBeInTheDocument()
-    expect(refreshButton).toHaveAttribute('title', 'Refresh activity')
+    await screen.findByTestId('run-entry')
+    expect(screen.getByTestId('umbrella-band')).toHaveTextContent('Plan · Nightly')
     expect(activityAPI.list).toHaveBeenCalledWith({ limit: 200 })
-    expect(jobsTablePropsSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        showTypeColumn: true,
-        showTriggerColumn: true,
-        canBreakLocks: expect.any(Function),
-        lockBreakingEnabled: true,
-        canDeleteJobs: true,
-        actions: expect.objectContaining({ delete: true, breakLock: true }),
-      })
+    expect(screen.getByTestId('activity-summary')).toHaveTextContent(
+      '1 run · across 1 repository · index runs hidden'
     )
+  })
 
-    fireEvent.mouseDown(getTypeFilter())
+  it('passes filters into the activity API and tracks them', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<Activity />)
+    await screen.findByTestId('run-entry')
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /^type$/i }))
     await user.click(await screen.findByRole('option', { name: /^Restore Check$/i }))
-
-    await waitFor(() => {
-      expect(activityAPI.list).toHaveBeenLastCalledWith({
-        limit: 200,
-        job_type: 'restore_check',
-      })
-    })
+    await waitFor(() =>
+      expect(activityAPI.list).toHaveBeenLastCalledWith({ limit: 200, job_type: 'restore_check' })
+    )
     expect(track).toHaveBeenCalledWith('Navigation', 'Filter', {
       filter_kind: 'type',
       filter_value: 'restore_check',
     })
 
-    fireEvent.mouseDown(getStatusFilter())
-    await user.click(await screen.findByRole('option', { name: /failed/i }))
-
-    await waitFor(() => {
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /^status$/i }))
+    await user.click(await screen.findByRole('option', { name: /^failed$/i }))
+    await waitFor(() =>
       expect(activityAPI.list).toHaveBeenLastCalledWith({
         limit: 200,
         job_type: 'restore_check',
         status: 'failed',
       })
-    })
-    expect(track).toHaveBeenCalledWith('Navigation', 'Filter', {
-      filter_kind: 'status',
-      filter_value: 'failed',
-    })
+    )
 
-    fireEvent.mouseDown(getStatusFilter())
-    await user.click(await screen.findByRole('option', { name: /completed with warnings/i }))
-
-    await waitFor(() => {
-      expect(activityAPI.list).toHaveBeenLastCalledWith({
-        limit: 200,
-        job_type: 'restore_check',
-        status: 'completed_with_warnings',
-      })
-    })
-    expect(track).toHaveBeenCalledWith('Navigation', 'Filter', {
-      filter_kind: 'status',
-      filter_value: 'completed_with_warnings',
-    })
-
-    await user.click(refreshButton)
-    expect(refetchSpy).toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: /^index$/i }))
+    await waitFor(() =>
+      expect(activityAPI.list).toHaveBeenLastCalledWith(
+        expect.objectContaining({ category: ['index'] })
+      )
+    )
+    expect(screen.getByTestId('activity-summary')).not.toHaveTextContent('index runs hidden')
   })
 
-  it('switches to the repository view when a repository is chosen', async () => {
+  it('refreshes on demand', async () => {
+    renderWithProviders(<Activity />)
+    await screen.findByTestId('run-entry')
+    const calls = (activityAPI.list as ReturnType<typeof vi.fn>).mock.calls.length
+    fireEvent.click(screen.getByRole('button', { name: /^refresh activity$/i }))
+    await waitFor(() =>
+      expect((activityAPI.list as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(
+        calls
+      )
+    )
+  })
+
+  it('pins a repository from the URL: same timeline, plus its header', async () => {
+    renderWithProviders(<Activity />, { initialRoute: '/activity?repository_id=1' })
+    expect(await screen.findByRole('heading', { name: 'nas' })).toBeInTheDocument()
+    await waitFor(() =>
+      expect(activityAPI.list).toHaveBeenLastCalledWith(
+        expect.objectContaining({ repository_id: 1 })
+      )
+    )
+    const cells = await screen.findAllByTestId('health-cell')
+    expect(cells).toHaveLength(2)
+    expect(cells[1]).toHaveTextContent(/overdue/i)
+    expect(screen.getByTestId('activity-summary')).not.toHaveTextContent('across')
+    expect(screen.getByRole('link', { name: /all activity/i })).toHaveAttribute('href', '/activity')
+    expect(await screen.findByTestId('run-entry')).toBeInTheDocument()
+  })
+
+  it('switches scope from the repository selector', async () => {
     renderWithProviders(<Activity />, { initialRoute: '/activity' })
-    await screen.findByText('Jobs Table')
+    await screen.findByTestId('run-entry')
     fireEvent.mouseDown(screen.getByRole('combobox', { name: /repository/i }))
     fireEvent.click(await screen.findByRole('option', { name: /nas/ }))
-    expect(await screen.findByText('Repository View 1')).toBeInTheDocument()
+    await waitFor(() => expect(window.location.search).toBe('?repository_id=1'))
   })
 
-  it('renders the repository view when the URL carries repository_id', async () => {
-    renderWithProviders(<Activity />, { initialRoute: '/activity?repository_id=4' })
-    expect(await screen.findByText('Repository View 4')).toBeInTheDocument()
-    expect(screen.queryByText('Jobs Table')).not.toBeInTheDocument()
-  })
-
-  it('hands a valid category from the URL to the repository view and drops unknown ones', async () => {
+  it('seeds the category filter from the URL and drops unknown values', async () => {
     renderWithProviders(<Activity />, {
-      initialRoute: '/activity?repository_id=4&category=index&category=bogus',
+      initialRoute: '/activity?repository_id=1&category=index&category=bogus',
     })
-    expect(await screen.findByText('Repository View 4 (index)')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(activityAPI.list).toHaveBeenLastCalledWith(
+        expect.objectContaining({ repository_id: 1, category: ['index'] })
+      )
+    )
+    expect(screen.getByRole('button', { name: /^index$/i })).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('offers cloud storage activity filters and summarizes active rclone jobs', async () => {
-    activityData.current = [
-      {
-        id: 10,
-        type: 'rclone_sync',
-        status: 'pending',
-        started_at: null,
-        completed_at: null,
-        error_message: null,
-        repository: 'Cloud Mirror Repo',
-        log_file_path: null,
-        archive_name: null,
-        package_name: null,
-        repository_path: '/repositories/cloud-mirror',
-        triggered_by: 'initial',
-        has_logs: true,
-      },
-      {
-        id: 11,
-        type: 'rclone_hydrate',
-        status: 'running',
-        started_at: '2026-04-01T10:00:00Z',
-        completed_at: null,
-        error_message: null,
-        repository: 'Cloud Hydrate Repo',
-        log_file_path: null,
-        archive_name: null,
-        package_name: null,
-        repository_path: '/repositories/cloud-hydrate',
-        triggered_by: 'manual',
-        has_logs: true,
-      },
-    ]
-    const user = userEvent.setup()
-
-    renderWithProviders(<Activity />)
-
-    expect(await screen.findByText(/Active cloud storage jobs/i)).toBeInTheDocument()
-    expect(screen.getByText('Cloud Mirror Repo')).toBeInTheDocument()
-    expect(screen.getByText('Cloud Hydrate Repo')).toBeInTheDocument()
-
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: /^type$/i }))
-    await user.click(await screen.findByRole('option', { name: /^Cloud Sync$/i }))
-
-    await waitFor(() => {
-      expect(activityAPI.list).toHaveBeenLastCalledWith({
-        limit: 200,
-        job_type: 'rclone_sync',
-      })
+  it('lifts running work into the live strip and opens its logs', async () => {
+    ;(activityAPI.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [
+        backup,
+        {
+          ...backup,
+          id: 11,
+          type: 'rclone_hydrate',
+          kind: 'rclone_sync',
+          category: 'mirror',
+          trigger: 'manual',
+          status: 'running',
+          completed_at: null,
+          repository: 'Cloud Hydrate Repo',
+          progress_percent: 55,
+        },
+      ],
     })
+    renderWithProviders(<Activity />)
+    const strip = await screen.findByTestId('running-now')
+    expect(strip).toHaveTextContent('Cloud Hydrate Repo')
+    expect(strip).toHaveTextContent('Cloud Hydrate')
+    expect(screen.getAllByTestId('run-entry')).toHaveLength(2)
+    await userEvent.click(screen.getAllByRole('button', { name: /view logs/i })[0])
+    expect(await screen.findByText('Log Viewer')).toBeInTheDocument()
   })
 })

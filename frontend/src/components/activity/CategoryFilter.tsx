@@ -1,4 +1,5 @@
-import { Box, ToggleButton, ToggleButtonGroup, Typography, alpha, useTheme } from '@mui/material'
+import { Box, ToggleButton, ToggleButtonGroup, Tooltip, alpha, useTheme } from '@mui/material'
+import { EyeOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { CATEGORY_ICONS, categoryColor } from '../categoryStyle'
 import { CATEGORIES } from './categories'
@@ -29,7 +30,11 @@ export default function CategoryFilter({ value, onChange }: CategoryFilterProps)
         {CATEGORIES.map((category) => {
           const Icon = CATEGORY_ICONS[category]
           const color = categoryColor(theme, category)
-          return (
+          // The empty filter is "everything but index", since a reconcile
+          // writes four index rows an hour per repository. The chip itself
+          // says so, or the missing rows look like a bug.
+          const indexHidden = category === 'index' && !value.includes('index')
+          const button = (
             <ToggleButton
               key={category}
               value={category}
@@ -53,18 +58,26 @@ export default function CategoryFilter({ value, onChange }: CategoryFilterProps)
             >
               <Icon size={14} />
               {t(`operations.category.${category}`)}
+              {indexHidden && (
+                <Box
+                  component="span"
+                  data-testid="index-hidden"
+                  sx={{ display: 'inline-flex', color: 'text.disabled', ml: 0.25 }}
+                >
+                  <EyeOff size={12} />
+                </Box>
+              )}
             </ToggleButton>
+          )
+          return indexHidden ? (
+            <Tooltip key={category} title={t('activity.indexHiddenTooltip')} arrow>
+              {button}
+            </Tooltip>
+          ) : (
+            button
           )
         })}
       </ToggleButtonGroup>
-      {value.length === 0 && (
-        // The empty filter is "everything but index", since a reconcile
-        // writes four index rows an hour per repository. Say so, or the
-        // missing rows look like a bug.
-        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.75 }}>
-          {t('activity.indexHiddenHint')}
-        </Typography>
-      )}
     </Box>
   )
 }

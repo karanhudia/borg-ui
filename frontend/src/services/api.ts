@@ -939,6 +939,8 @@ export const authAPIAdmin = {
 // Repositories API
 export const repositoriesAPI = {
   getRepositories: () => api.get('/repositories/'),
+  // Per-category health from repository evidence (spec 9.2).
+  getStatus: (id: number) => api.get(`/repositories/${id}/status`),
   createRepository: (data: RepositoryData) => api.post('/repositories/', data),
   importRepository: (data: RepositoryData) => api.post('/repositories/import', data),
   uploadKeyfile: (id: number, keyfile: File) => {
