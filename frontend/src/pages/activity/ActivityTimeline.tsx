@@ -299,7 +299,9 @@ function TimelineSkeleton() {
           sx={{
             my: 0.75,
             borderRadius: 2,
-            boxShadow: (theme) => `inset 0 0 0 1px ${alpha(theme.palette.divider, 0.6)}`,
+            // As faint as the real bands' ring; the divider itself reads as a
+            // hard border around a block this size.
+            boxShadow: (theme) => `inset 0 0 0 1px ${alpha(theme.palette.text.primary, 0.08)}`,
             pb: 0.5,
           }}
         >

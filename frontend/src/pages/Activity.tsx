@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { Box, IconButton, Typography } from '@mui/material'
+import { Box, IconButton, Skeleton, Typography } from '@mui/material'
 import { History, RefreshCw } from 'lucide-react'
 import { activityAPI, repositoriesAPI } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
@@ -245,7 +245,7 @@ const Activity: React.FC = () => {
         variant="body2"
         sx={{ color: 'text.secondary', mt: -1.5, mb: 3 }}
       >
-        {summary}
+        {isLoading && items.length === 0 ? <Skeleton width={220} /> : summary}
       </Typography>
 
       <RunningNow items={items} actions={actionButtons} />
