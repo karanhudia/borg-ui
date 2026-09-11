@@ -2118,7 +2118,8 @@
     "runChain": {
       "allSucceeded": "Alle erfolgreich",
       "failed": "{{count}} fehlgeschlagen",
-      "active": "{{count}} in Bearbeitung"
+      "active": "{{count}} in Bearbeitung",
+      "cancelled": "{{count}} abgebrochen"
     },
     "followupsCollapsed_one": "{{count}} Schritt",
     "repositoryView": {

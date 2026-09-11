@@ -76,6 +76,19 @@ describe('RunChainRow', () => {
     expect(screen.getByText('1 failed')).toBeInTheDocument()
   })
 
+  it('names a chain whose steps were cancelled', () => {
+    render(
+      <RunChainRow
+        operation={{
+          kind: 'backup',
+          status: 'cancelled',
+          followups: [followup('archive_sync', 'cancelled'), followup('stats', 'cancelled')],
+        }}
+      />
+    )
+    expect(screen.getByText('2 cancelled')).toBeInTheDocument()
+  })
+
   it('uses the singular for one step', () => {
     render(
       <RunChainRow

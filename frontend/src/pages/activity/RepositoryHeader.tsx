@@ -53,7 +53,8 @@ export default function RepositoryHeader({ repositoryId, repository }: Repositor
     },
     refetchInterval: 15000,
   })
-  const cells = data?.cells ?? []
+  // The route may grow a cell before this file learns its icon.
+  const cells = (data?.cells ?? []).filter((cell) => cell.cell in CELL_ICONS)
 
   return (
     <Box

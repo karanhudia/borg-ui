@@ -78,12 +78,14 @@ export function RunChainSummary({ steps, expanded, onToggle }: RunChainSummaryPr
   const allSucceeded = !chainOpensByDefault(steps)
   const failed = steps.filter((step) => step.status === 'failed').length
   const active = steps.filter((step) => ACTIVE.has(step.status)).length
+  const cancelled = steps.filter((step) => step.status === 'cancelled').length
   const total = chainSeconds(steps.filter((step) => !isHook(step)))
   const summary = allSucceeded
     ? t('activity.runChain.allSucceeded')
     : [
         failed > 0 && t('activity.runChain.failed', { count: failed }),
         active > 0 && t('activity.runChain.active', { count: active }),
+        cancelled > 0 && t('activity.runChain.cancelled', { count: cancelled }),
       ]
         .filter(Boolean)
         .join(' · ')
