@@ -808,7 +808,17 @@ async def list_recent_activity(
     # Script executions name their repository, so a repository-scoped view
     # keeps the ones that ran against it instead of dropping the source.
     if not job_type or job_type == "script_execution":
+        from app.api.operations import accessible_repository_ids
+
         script_query = db.query(ScriptExecution)
+        # Same rule as operations: rows with no repository are system rows
+        # every user may see; the rest need a permission on the repository.
+        accessible = accessible_repository_ids(db, current_user)
+        if accessible is not None:
+            script_query = script_query.filter(
+                ScriptExecution.repository_id.is_(None)
+                | ScriptExecution.repository_id.in_(accessible)
+            )
         if repository_scoped:
             script_query = script_query.filter(
                 ScriptExecution.repository_id == repository_id
@@ -872,10 +882,6 @@ async def list_recent_activity(
         )
         activity.setdefault("trigger", _trigger_for_non_operation_item(activity))
         activity.setdefault("followups", [])
-    if category:
-        activities = [a for a in activities if a["category"] in category]
-    if trigger:
-        activities = [a for a in activities if a["trigger"] in trigger]
     activities.extend(
         _operation_activity_items(
             db,
@@ -910,6 +916,15 @@ async def list_recent_activity(
             activity.pop("_sort_at", None)
             parent["followups"].append(activity)
         activities = top_level
+
+    # The category and trigger filters apply to top-level rows only, after
+    # hooks have found their backup: a hook is a system row with its own
+    # trigger, and it must ride under a backup selected by category before
+    # the filter would drop it. Operation rows already passed these filters.
+    if category:
+        activities = [a for a in activities if a["category"] in category]
+    if trigger:
+        activities = [a for a in activities if a["trigger"] in trigger]
 
     # Sort by start time, falling back to creation time for pending jobs.
     activities.sort(

@@ -2126,8 +2126,10 @@
     "runChain": {
       "allSucceeded": "All succeeded",
       "failed": "{{count}} failed",
+      "failed_one": "{{count}} failed",
       "active": "{{count}} in progress",
-      "cancelled": "{{count}} cancelled"
+      "cancelled": "{{count}} cancelled",
+      "cancelled_one": "{{count}} cancelled"
     },
     "followupsCollapsed_one": "{{count}} step",
     "repositoryView": {

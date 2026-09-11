@@ -23,6 +23,7 @@ import {
   ACTIVE_STATUSES,
   clusterRuns,
   dayLabel,
+  flattenRuns,
   groupByDay,
   repositoryCount,
   runTime,
@@ -97,8 +98,9 @@ function UmbrellaBand({
   const time = runTime(cluster.items[0])
   const accent = umbrellaColor(theme, cluster.umbrella.kind)
   const Icon = UMBRELLA_ICONS[cluster.umbrella.kind]
-  const status = clusterStatus(cluster.items)
-  const span = clusterSpan(cluster.items)
+  const steps = flattenRuns(cluster.items)
+  const status = clusterStatus(steps)
+  const span = clusterSpan(steps)
   const repositories = repositoryCount(
     cluster.items.filter((item) => item.type !== 'script_execution')
   )
@@ -252,9 +254,28 @@ export default function ActivityTimeline({
 }: ActivityTimelineProps) {
   const { t } = useTranslation()
   const [limit, setLimit] = useState(WINDOW_SIZE)
-  const visible = useMemo(() => items.slice(0, limit), [items, limit])
-  const groups = useMemo(() => groupByDay(visible), [visible])
-  const hidden = items.length - visible.length
+  const days = useMemo(
+    () => groupByDay(items).map((group) => ({ ...group, clusters: clusterRuns(group.items, t) })),
+    [items, t]
+  )
+  // The window closes on a cluster boundary, so a plan run or schedule
+  // firing never shows half its members with "show more" changing the rest.
+  const { groups, shown } = useMemo(() => {
+    let shown = 0
+    const groups: typeof days = []
+    for (const day of days) {
+      if (shown >= limit) break
+      const clusters: Cluster[] = []
+      for (const cluster of day.clusters) {
+        if (shown >= limit) break
+        clusters.push(cluster)
+        shown += cluster.items.length
+      }
+      groups.push({ ...day, clusters })
+    }
+    return { groups, shown }
+  }, [days, limit])
+  const hidden = items.length - shown
 
   if (loading && items.length === 0) return <TimelineSkeleton />
 
@@ -308,7 +329,7 @@ export default function ActivityTimeline({
             {dayLabel(group.date, t)}
           </Typography>
           <Box>
-            {clusterRuns(group.items, t).map((cluster) => (
+            {group.clusters.map((cluster) => (
               <UmbrellaBand
                 key={cluster.key}
                 cluster={cluster}

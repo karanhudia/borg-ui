@@ -166,6 +166,11 @@ export function useJobActions<T extends Job = Job>({
 
       toast.success(t('backupJobsTable.toasts.cancelSuccess'))
       setCancelJob(null)
+      // The Activity, Backup and Schedule tables each cache their own list;
+      // refresh them so the row stops offering Cancel before the next poll.
+      queryClient.invalidateQueries({ queryKey: ['activity'] })
+      queryClient.invalidateQueries({ queryKey: ['backup-status-manual'] })
+      queryClient.invalidateQueries({ queryKey: ['backup-jobs-all'] })
     } catch (error) {
       toast.error(t('backupJobsTable.toasts.failedToCancel'))
       console.error(error)

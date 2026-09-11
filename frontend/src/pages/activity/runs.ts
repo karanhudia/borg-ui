@@ -9,6 +9,11 @@ export const activityKey = (item: ActivityItem) => item.activity_key ?? `${item.
 
 export const ACTIVE_STATUSES = new Set(['running', 'pending', 'queued'])
 
+// A collapsed run and every step under it, so a summary sees the follow-up
+// chain and the hooks, not just the row that started them.
+export const flattenRuns = (items: ActivityItem[]): ActivityItem[] =>
+  items.flatMap((item) => [item, ...(item.followups ?? [])])
+
 export type UmbrellaKind =
   'plan' | 'schedule' | 'manual' | 'import' | 'followup' | 'reconcile' | 'retry' | 'other'
 
@@ -97,6 +102,7 @@ export function runChain(item: ActivityItem): RunChainOperation {
       completed_at: step.completed_at,
       progress_current: step.progress_current,
       progress_total: step.progress_total,
+      progress_message: step.progress_message,
     })),
   }
 }
@@ -178,7 +184,7 @@ export function clusterRuns(items: ActivityItem[], t: TFunction): Cluster[] {
     if (kind.kind === 'plan' && item.backup_plan_run_id != null) {
       key = `plan-run-${item.backup_plan_run_id}`
     } else if (kind.kind === 'schedule') {
-      const scheduleKey = item.schedule_id ?? item.kind ?? item.type
+      const scheduleKey = item.schedule_id ?? item.schedule_name ?? item.kind ?? item.type
       const time = runTime(item)?.getTime() ?? 0
       const open = [...byKey.values()].find(
         (cluster) =>

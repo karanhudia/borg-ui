@@ -2126,8 +2126,10 @@
     "runChain": {
       "allSucceeded": "Todos completados",
       "failed": "{{count}} con error",
+      "failed_one": "{{count}} con error",
       "active": "{{count}} en curso",
-      "cancelled": "{{count}} cancelados"
+      "cancelled": "{{count}} cancelados",
+      "cancelled_one": "{{count}} cancelado"
     },
     "followupsCollapsed_one": "{{count}} paso",
     "repositoryView": {
@@ -2171,10 +2173,10 @@
     },
     "showMore": "Mostrar {{count}} más",
     "health": {
-      "backup": "Backup",
+      "backup": "Copia de seguridad",
       "check": "Verificación",
-      "prune": "Prune",
-      "compact": "Compact",
+      "prune": "Poda",
+      "compact": "Compactación",
       "index": "Índice",
       "mirror": "Espejo",
       "running": "En ejecución",

@@ -134,7 +134,8 @@ def queued_chain_covering(
             if parent is None:
                 dependency = db.get(Operation, op.depends_on_id)
                 if dependency is None:
-                    return True
+                    # The runner skips a row whose dependency is gone.
+                    return False
                 # The runner's skip semantics (#917): an intentional skip
                 # satisfies; dependency_failed propagates.
                 return dependency.status in SUCCESS_STATUSES or (

@@ -460,6 +460,25 @@ def test_enqueue_followups_does_not_trust_a_chain_behind_a_failed_row(
 
 
 @pytest.mark.unit
+def test_enqueue_followups_does_not_trust_a_chain_behind_a_missing_row(
+    db, repo, monkeypatch
+):
+    """The runner skips a queued row whose dependency no longer exists, so
+    such a chain covers nothing and a fresh one is enqueued."""
+    from app.services.operations.followups import enqueue_followups
+
+    monkeypatch.setattr("app.services.operations.enqueue.wake_runner", lambda: None)
+    orphan = enqueue(db, "archive_sync", repository_id=repo.id, trigger="followup")
+    orphan.depends_on_id = 999_999
+    db.commit()
+    prune = enqueue(db, "prune", repository_id=repo.id, trigger="manual")
+    prune.status = "completed"
+    db.commit()
+    chain = enqueue_followups(db, prune, depends_on_id=prune.id)
+    assert [o.kind for o in chain] == ["archive_sync", "history_merge", "stats"]
+
+
+@pytest.mark.unit
 def test_enqueue_followups_ignores_a_running_chain(db, repo, monkeypatch):
     """A listing already running may have started before this operation
     changed the repository, so it does not count."""

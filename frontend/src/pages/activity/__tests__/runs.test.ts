@@ -1,7 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import i18n from '../../../i18n'
 import type { ActivityItem } from '../../Activity'
-import { groupByDay, repositoryCount, runChain, runTitle, umbrella } from '../runs'
+import {
+  clusterRuns,
+  flattenRuns,
+  groupByDay,
+  repositoryCount,
+  runChain,
+  runTitle,
+  umbrella,
+} from '../runs'
 
 const t = i18n.t.bind(i18n)
 
@@ -106,5 +114,26 @@ describe('repositoryCount', () => {
         item({ repository_id: null, repository_path: null, repository: null }),
       ])
     ).toBe(2)
+  })
+})
+
+describe('clusterRuns', () => {
+  it('keeps legacy schedules apart by name when they carry no schedule id', () => {
+    const clusters = clusterRuns(
+      [
+        item({ id: 1, trigger: 'schedule', schedule_name: 'Weekly' }),
+        item({ id: 2, trigger: 'schedule', schedule_name: 'Nightly' }),
+        item({ id: 3, trigger: 'schedule', schedule_name: 'Weekly' }),
+      ],
+      t
+    )
+    expect(clusters.map((cluster) => cluster.items.map((run) => run.id))).toEqual([[1, 3], [2]])
+  })
+})
+
+describe('flattenRuns', () => {
+  it('lists each run followed by its steps', () => {
+    const steps = flattenRuns([item({ id: 1, followups: [item({ id: 11 }), item({ id: 12 })] })])
+    expect(steps.map((run) => run.id)).toEqual([1, 11, 12])
   })
 })

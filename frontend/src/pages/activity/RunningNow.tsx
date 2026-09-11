@@ -5,7 +5,7 @@ import type { ActivityItem } from '../Activity'
 import type { ActionButton } from '../../components/RowActions'
 import RowActions from '../../components/RowActions'
 import { formatTimeRange } from '../../utils/dateUtils'
-import { ACTIVE_STATUSES, runTitle, umbrella } from './runs'
+import { ACTIVE_STATUSES, flattenRuns, runTitle, umbrella } from './runs'
 
 interface RunningNowProps {
   items: ActivityItem[]
@@ -17,7 +17,7 @@ interface RunningNowProps {
 export default function RunningNow({ items, actions }: RunningNowProps) {
   const { t } = useTranslation()
   const theme = useTheme()
-  const active = items.filter((item) => ACTIVE_STATUSES.has(item.status))
+  const active = flattenRuns(items).filter((item) => ACTIVE_STATUSES.has(item.status))
   if (active.length === 0) return null
 
   return (

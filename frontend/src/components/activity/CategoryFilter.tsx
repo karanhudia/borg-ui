@@ -70,7 +70,7 @@ export default function CategoryFilter({ value, onChange }: CategoryFilterProps)
             </ToggleButton>
           )
           return indexHidden ? (
-            <Tooltip key={category} title={t('activity.indexHiddenTooltip')} arrow>
+            <Tooltip key={category} title={t('activity.indexHiddenTooltip')} arrow describeChild>
               {button}
             </Tooltip>
           ) : (

@@ -100,7 +100,7 @@ const Activity: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState<OperationCategory[]>(urlCategory)
   const [triggerFilter, setTriggerFilter] = useState('all')
   useEffect(() => {
-    if (urlCategoryKey) setCategoryFilter(urlCategoryKey.split(',') as OperationCategory[])
+    setCategoryFilter(urlCategoryKey ? (urlCategoryKey.split(',') as OperationCategory[]) : [])
   }, [urlCategoryKey])
 
   const canManageActivityJobs = hasGlobalPermission('repositories.manage_all')

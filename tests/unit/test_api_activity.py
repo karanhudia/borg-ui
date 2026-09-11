@@ -754,6 +754,32 @@ class TestRecentActivityHooks:
         # The hook belongs to the plan run, not to a manual click.
         assert all(n["trigger"] == "plan" for n in nested)
 
+    def test_hook_scripts_ride_under_a_backup_selected_by_category(
+        self, test_client, admin_headers, test_db
+    ):
+        """A hook is a system row, so a category filter must not drop it
+        before it can join the backup that the filter selected."""
+        backup, hooks = self._seed(test_db)
+        response = test_client.get(
+            "/api/activity/recent?category=backup&trigger=plan", headers=admin_headers
+        )
+        assert response.status_code == 200
+        activity = response.json()
+        assert [a["id"] for a in activity] == [backup.id]
+        assert {n["id"] for n in activity[0]["followups"]} == {h.id for h in hooks}
+
+    def test_script_executions_are_scoped_to_accessible_repositories(
+        self, test_client, auth_headers, test_db
+    ):
+        """A viewer without a grant on the repository learns nothing about
+        the scripts that ran against it."""
+        self._seed(test_db)
+        response = test_client.get(
+            "/api/activity/recent?job_type=script_execution", headers=auth_headers
+        )
+        assert response.status_code == 200
+        assert response.json() == []
+
     def test_hook_scripts_stay_top_level_when_their_backup_is_not_listed(
         self, test_client, admin_headers, test_db
     ):

@@ -156,6 +156,41 @@ describe('ActivityTimeline', () => {
     expect(screen.getAllByTestId('run-entry')).toHaveLength(70)
   })
 
+  it('keeps a plan run whole across the show-more boundary', () => {
+    // Runs 60 and 61 belong to one plan run, so the first window carries
+    // both rather than showing the band with half its members.
+    const many = Array.from({ length: 70 }, (_, index) =>
+      run({
+        id: index + 1,
+        backup_plan_run_id: index === 59 || index === 60 ? 7 : null,
+        started_at: minutesAfterNoon(0, 70 - index),
+        completed_at: null,
+      })
+    )
+    renderTimeline({ items: many })
+    expect(screen.getAllByTestId('run-entry')).toHaveLength(61)
+    expect(screen.getByRole('button', { name: 'Show 9 more' })).toBeInTheDocument()
+  })
+
+  it('rolls a running follow-up chain up into the band status', () => {
+    renderTimeline({
+      items: [
+        run({ id: 2, backup_plan_run_id: 7, started_at: minutesAfterNoon(0, 5) }),
+        run({
+          id: 1,
+          backup_plan_run_id: 7,
+          followups: [
+            run({ id: 11, kind: 'stats', type: 'stats', trigger: 'followup', status: 'running' }),
+          ],
+        }),
+      ],
+    })
+    const band = screen.getByTestId('umbrella-band')
+    // Both members finished; only the nested step is still running, and
+    // the band says so. Steps carry no status text of their own.
+    expect(within(band).getByText('Running')).toBeInTheDocument()
+  })
+
   it('groups the runs of one plan run under one band, in the order they happened', () => {
     const planRun = [
       run({
