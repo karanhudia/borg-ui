@@ -129,6 +129,17 @@ describe('clusterRuns', () => {
     )
     expect(clusters.map((cluster) => cluster.items.map((run) => run.id))).toEqual([[1, 3], [2]])
   })
+
+  it('does not merge a schedule id with a legacy schedule name that spells the same', () => {
+    const clusters = clusterRuns(
+      [
+        item({ id: 1, trigger: 'schedule', schedule_id: 7, schedule_name: 'Weekly' }),
+        item({ id: 2, trigger: 'schedule', schedule_name: '7' }),
+      ],
+      t
+    )
+    expect(clusters).toHaveLength(2)
+  })
 })
 
 describe('flattenRuns', () => {

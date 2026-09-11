@@ -184,7 +184,14 @@ export function clusterRuns(items: ActivityItem[], t: TFunction): Cluster[] {
     if (kind.kind === 'plan' && item.backup_plan_run_id != null) {
       key = `plan-run-${item.backup_plan_run_id}`
     } else if (kind.kind === 'schedule') {
-      const scheduleKey = item.schedule_id ?? item.schedule_name ?? item.kind ?? item.type
+      // Namespaced: a schedule id of 7 and a legacy schedule named "7" are
+      // not the same firing.
+      const scheduleKey =
+        item.schedule_id != null
+          ? `id:${item.schedule_id}`
+          : item.schedule_name != null
+            ? `name:${item.schedule_name}`
+            : `operation:${item.kind ?? item.type}`
       const time = runTime(item)?.getTime() ?? 0
       const open = [...byKey.values()].find(
         (cluster) =>

@@ -617,6 +617,7 @@ def _operation_activity_items(
         q = q.filter(
             ~((Operation.category == "index") & (Operation.trigger != "followup"))
         )
+    scoped = q
     # Window by time, not id: rows backfilled from the legacy job tables
     # carry ids far above the backups they ran beside, so an id window kept
     # a plan's prune and dropped the backup it followed.
@@ -630,6 +631,19 @@ def _operation_activity_items(
     )
     if not ops:
         return []
+    # Follow-ups are newer than what they follow, so the window's oldest
+    # edge can hold a chain without its head. Pull the missing ancestors in,
+    # under the same filters, so the chain rides under its run instead of
+    # surfacing as loose steps.
+    have = {op.id for op in ops}
+    missing = {op.depends_on_id for op in ops if op.depends_on_id is not None} - have
+    while missing:
+        parents = scoped.filter(Operation.id.in_(tuple(missing))).all()
+        ops.extend(parents)
+        have |= {p.id for p in parents}
+        missing = {
+            p.depends_on_id for p in parents if p.depends_on_id is not None
+        } - have
     repo_ids = {op.repository_id for op in ops if op.repository_id is not None}
     repos = (
         {

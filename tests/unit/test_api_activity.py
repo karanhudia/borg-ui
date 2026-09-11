@@ -848,6 +848,65 @@ class TestRecentActivityHooks:
         )
         assert [a["kind"] for a in response.json()] == ["archive_sync", "archive_sync"]
 
+    def test_chain_head_outside_the_window_is_pulled_in(
+        self, test_client, admin_headers, test_db
+    ):
+        """A follow-up is newer than the backup it follows, so the window's
+        oldest edge can hold the chain without its head. The head is
+        fetched so the chain rides under it."""
+        backup, hooks = self._seed(test_db)
+
+        def op(kind, category, trigger, minutes, run_id, depends_on_id=None):
+            row = Operation(
+                repository_id=backup.repository_id,
+                kind=kind,
+                category=category,
+                status="completed",
+                trigger=trigger,
+                priority=0,
+                run_id=run_id,
+                depends_on_id=depends_on_id,
+                started_at=datetime.now() + timedelta(minutes=minutes),
+                completed_at=datetime.now() + timedelta(minutes=minutes),
+            )
+            test_db.add(row)
+            test_db.flush()
+            return row
+
+        # Three newer backups with four follow-ups each: fifteen rows that
+        # fill a window of sixteen without filling a page of four.
+        newer = []
+        for i in range(3):
+            head = op("backup", "backup", "plan", 10 * (i + 1), f"newer-{i}")
+            newer.append(head)
+            for j, kind in enumerate(
+                ("archive_sync", "history_merge", "history_index", "stats")
+            ):
+                op(
+                    kind,
+                    "index",
+                    "followup",
+                    10 * (i + 1) + j + 1,
+                    head.run_id,
+                    head.id,
+                )
+        stats = op("stats", "index", "followup", 60, backup.run_id, backup.id)
+        test_db.commit()
+
+        # limit=4 windows 16 operations: the 16 newest exclude the backup.
+        response = test_client.get(
+            "/api/activity/recent?limit=4", headers=admin_headers
+        )
+        assert response.status_code == 200
+        activity = response.json()
+        assert [a["id"] for a in activity] == [
+            *[b.id for b in reversed(newer)],
+            backup.id,
+        ]
+        nested = {n["id"] for n in activity[-1]["followups"]}
+        assert stats.id in nested
+        assert {h.id for h in hooks} <= nested
+
     def test_hook_scripts_stay_top_level_when_their_backup_is_not_listed(
         self, test_client, admin_headers, test_db
     ):
