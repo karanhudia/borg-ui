@@ -196,6 +196,113 @@ async def test_run_archive_sync_updates_repository_columns(db, repo, monkeypatch
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "agent, plan_has_history, expected_state",
+    [
+        (True, True, "skipped"),  # no history run reaches it: say so
+        (
+            True,
+            False,
+            "skipped",
+        ),  # on Community too: the executor's reason outlasts the plan
+        (False, True, "pending"),  # server-side: the history run decides
+        (False, False, "pending"),  # Community: the stage is absent, nothing is touched
+    ],
+)
+async def test_run_archive_sync_marks_agent_archives_skipped(
+    db, repo, monkeypatch, agent, plan_has_history, expected_state
+):
+    """No history run reaches an agent's repository on any plan, so the
+    listing writes the state that run used to write: a new archive is
+    `skipped`, not a `pending` that reads as "not yet"; an indexed one is
+    left alone. On a server's repository `pending` stays, so the history
+    run (or a later plan change) finds it."""
+    monkeypatch.setattr(
+        index_exec,
+        "list_archives_for_repository",
+        AsyncMock(return_value=(True, [BORG1_ENTRY], "UTC")),
+    )
+    monkeypatch.setattr(index_exec, "fill_archive_info", AsyncMock(return_value=0))
+    monkeypatch.setattr(
+        index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
+    )
+    monkeypatch.setattr(
+        "app.services.repository_executor.is_agent_executor", lambda repository: agent
+    )
+    monkeypatch.setattr(index_exec, "is_agent_executor", lambda repository: agent)
+    monkeypatch.setattr(
+        "app.services.operations.followups.history_enabled",
+        lambda db: plan_has_history,
+    )
+    # a Borg 1 listing needs a way to resolve archive ends; not this test's point
+    monkeypatch.setattr(
+        index_exec, "archive_end_resolvable", lambda db, repository: True
+    )
+    earlier = Archive(
+        repository_id=repo.id,
+        borg_id="earlier",
+        name="earlier",
+        series="nas",
+        start=datetime(2026, 9, 1, 2),
+        history_state="indexed",
+    )
+    given_up = Archive(
+        repository_id=repo.id,
+        borg_id="given-up",
+        name="given-up",
+        series="nas",
+        start=datetime(2026, 9, 1, 3),
+        history_state="failed",
+    )
+    leftover = Archive(
+        repository_id=repo.id,
+        borg_id="leftover",
+        name="leftover",
+        series="nas",
+        start=datetime(2026, 9, 1, 4),
+        history_state="skipped",
+        history_attempts=3,
+    )
+    other_repo = Repository(
+        name="other", path="/tmp/other", encryption="none", compression="lz4"
+    )
+    db.add_all([earlier, given_up, leftover, other_repo])
+    db.flush()
+    db.add(
+        Archive(
+            repository_id=other_repo.id,
+            borg_id="elsewhere",
+            name="elsewhere",
+            series="nas",
+            start=datetime(2026, 9, 1, 2),
+            history_state="pending",
+        )
+    )
+    db.commit()
+
+    await index_exec.run_archive_sync(_ctx(db, repo))
+
+    db.expire_all()
+    states = {a.name: a.history_state for a in db.query(Archive).all()}
+    assert states.pop("earlier") == "indexed"
+    assert states.pop("elsewhere") == "pending"  # another repository's row
+    # a failure is marked with the rest where the listing marks, kept otherwise
+    assert states.pop("given-up") == (
+        "skipped" if expected_state == "skipped" else "failed"
+    )
+    # a `skipped` row on a server's repository is left over from an
+    # agent-executed past: reopened with a fresh budget where the history
+    # stage exists, left alone everywhere else
+    reopened = not agent and plan_has_history
+    assert states.pop("leftover") == ("pending" if reopened else "skipped")
+    assert db.query(Archive).filter_by(name="leftover").one().history_attempts == (
+        0 if reopened else 3
+    )
+    assert states and all(state == expected_state for state in states.values())
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_run_archive_sync_clears_last_backup_when_no_archives_remain(
     db, repo, monkeypatch
 ):

@@ -6,9 +6,20 @@ import { Button } from '@mui/material'
 import RepositoryTrackDialog from './RepositoryTrackDialog'
 import api from '../../services/api'
 import { hubDetail, op } from './storyFixtures'
-import type { HubRepositoryDetail } from '../../types/operations'
+import type { HubHistorySummary, HubRepositoryDetail, IndexMode } from '../../types/operations'
+import type { HistoryCapability } from '../../types/archives'
 
-function Wrapper({ detail }: { detail: HubRepositoryDetail }) {
+function Wrapper({
+  detail,
+  historyCapability,
+  history,
+  indexMode,
+}: {
+  detail: HubRepositoryDetail
+  historyCapability?: HistoryCapability
+  history?: HubHistorySummary
+  indexMode?: IndexMode
+}) {
   const [open, setOpen] = useState(true)
   const [ready, setReady] = useState(false)
   useEffect(() => {
@@ -29,6 +40,9 @@ function Wrapper({ detail }: { detail: HubRepositoryDetail }) {
         onClose={() => setOpen(false)}
         repositoryId={4}
         repositoryName="laptop"
+        historyCapability={historyCapability}
+        history={history}
+        indexMode={indexMode}
         operations={[
           op({ kind: 'stats', status: 'completed' }),
           op({ id: 2, kind: 'archive_sync', status: 'running' }),
@@ -53,5 +67,40 @@ export const WithProblems: Story = {
 export const AllIndexed: Story = {
   render: () => (
     <Wrapper detail={{ repository_id: 4, failed_archives: [], truncated_archives: [] }} />
+  ),
+}
+
+// An agent's repository: the history stage is locked by the executor, with
+// its own wording rather than a plan chip.
+export const AgentRepository: Story = {
+  render: () => (
+    <Wrapper
+      detail={{ ...hubDetail, failed_archives: [], truncated_archives: [] }}
+      historyCapability="agent_unsupported"
+    />
+  ),
+}
+
+// An index still being built: the dialog says how far it got instead of
+// claiming every archive is covered.
+export const HistoryPartial: Story = {
+  render: () => (
+    <Wrapper
+      detail={{ repository_id: 4, failed_archives: [], truncated_archives: [] }}
+      history={{ indexed: 14, pending: 24, failed: 0, skipped: 0, truncated: 0, rows: 8501 }}
+    />
+  ),
+}
+
+// A repository indexed in `archives` mode: its pending archives are the
+// choice made (spec 6.8), so the summary names the mode rather than an
+// index in progress.
+export const ArchivesOnlyMode: Story = {
+  render: () => (
+    <Wrapper
+      detail={{ repository_id: 4, failed_archives: [], truncated_archives: [] }}
+      indexMode="archives"
+      history={{ indexed: 0, pending: 18, failed: 0, skipped: 0, truncated: 0, rows: 0 }}
+    />
   ),
 }

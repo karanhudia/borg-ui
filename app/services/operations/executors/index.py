@@ -23,6 +23,10 @@ from app.config import settings
 from app.core.borg_router import BorgRouter
 from app.database.models import Archive, Repository, SystemSettings, utc_now
 from app.services.operations import executors
+from app.services.operations.followups import (
+    HISTORY_AVAILABLE,
+    history_capability,
+)
 from app.services.operations.runner import Outcome, repository_busy
 from app.services.operations.series import infer_series, series_prefixes_for_repository
 from app.services.repository_command_lock import run_serialized_repository_command
@@ -588,6 +592,45 @@ async def run_archive_sync(ctx) -> Outcome:
         new_rows, removed_ids = apply_listing(
             db, repository, entries, timezone_name=timezone_name
         )
+        if is_agent_executor(repository):
+            # No history run ever reaches an agent's repository (the server
+            # cannot diff it), so the listing records the state the history
+            # run used to write: `skipped`, not a `pending` that would read
+            # as "not yet". On every plan: the capability is the executor's
+            # and outlasts a plan change. `failed` is marked too: nothing can retry it
+            # here, and a row left `failed` would flag the repository and
+            # offer a rebuild that is refused. Moving the repository back to
+            # the server reopens every `skipped` archive with a fresh retry
+            # budget.
+            db.query(Archive).filter(
+                Archive.repository_id == repository.id,
+                Archive.history_state.in_(("pending", "failed")),
+            ).update({Archive.history_state: "skipped"}, synchronize_session=False)
+            db.commit()
+        elif (
+            db.query(Archive.id)
+            .filter(
+                Archive.repository_id == repository.id,
+                Archive.history_state == "skipped",
+            )
+            .first()
+            is not None
+            and history_capability(db, repository) == HISTORY_AVAILABLE
+        ):
+            # The mirror image: `skipped` on a server's repository is left
+            # over from an agent-executed past (the executor change reopens
+            # them, but rows written before it did so stay). With the history
+            # stage available they go back to `pending` with a fresh budget,
+            # and the chain's history stage picks them up. The plan lookup
+            # behind the capability commits, so it runs only with such rows.
+            db.query(Archive).filter(
+                Archive.repository_id == repository.id,
+                Archive.history_state == "skipped",
+            ).update(
+                {Archive.history_state: "pending", Archive.history_attempts: 0},
+                synchronize_session=False,
+            )
+            db.commit()
         filled = await fill_archive_info(
             db,
             repository,

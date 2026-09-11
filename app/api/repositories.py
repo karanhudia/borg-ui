@@ -17,6 +17,7 @@ import uuid
 from app.database.database import get_db, SessionLocal
 from app.database.models import (
     AgentMachine,
+    Archive,
     DEFAULT_HISTORY_INDEX_EXCLUDES,
     Operation,
     RcloneRemote,
@@ -46,7 +47,7 @@ from app.services.operations.maintenance_start import (
 from app.services.operations.job_facade import MaintenanceJobFacade
 from app.services.operations.enqueue import enqueue, wake_runner
 from app.services.operations.rclone_facade import RcloneSyncFacade
-from app.services.operations.index_mode import MODE_KINDS
+from app.services.operations.index_mode import MODE_KINDS, indexes_history
 from app.services.operations.index_mode import mode_of as index_mode_of
 from app.services.operations.reconcile import enqueue_reconcile_run
 from app.services.operations.runner import operation_runner
@@ -5000,6 +5001,8 @@ async def update_repository(
         executor_changed = (
             "executor_type" in update_data or repo_data.execution_target is not None
         )
+        previous_executor_type = repository_executor_type(repository)
+        reopen_history = False
         if executor_changed:
             if target_executor_type == "agent":
                 requested_agent_id = (
@@ -5023,6 +5026,7 @@ async def update_repository(
                     repository_location="ssh" if repository.connection_id else "local",
                 )
                 repository.agent_machine_id = None
+                reopen_history = previous_executor_type == "agent"
 
         elif (
             "connection_id" in update_data
@@ -5054,12 +5058,52 @@ async def update_repository(
         ):
             _apply_mirror_source_strategy(existing_rclone_storage, repository)
 
+        if reopen_history:
+            # On the server the history stage exists again: the archives an
+            # agent left `skipped` go back to `pending` with a fresh retry
+            # budget, and so does a `failed` one the agent's listing had not
+            # marked yet (the same rule either way, not one that depends on
+            # whether a listing ran in between), in the same transaction as
+            # the executor change, so neither is stored without the other. A
+            # mode that excludes the
+            # history stage keeps them `pending`, which is what every archive
+            # of such a repository reads as; a later return to `full` catches
+            # them up (spec 6.8).
+            db.query(Archive).filter(
+                Archive.repository_id == repository.id,
+                Archive.history_state.in_(("skipped", "failed")),
+            ).update(
+                {Archive.history_state: "pending", Archive.history_attempts: 0},
+                synchronize_session=False,
+            )
+
         repository.updated_at = datetime.utcnow()
         db.commit()
 
         if repo_data.index_mode is not None:
             await _apply_index_mode_change(db, repository, changed=index_mode_changed)
 
+        if (
+            reopen_history
+            and indexes_history(index_mode_of(repository))
+            # a mode change to `full` in the same update queued its own
+            # forced catch-up run just above; a second one would only
+            # re-diff every archive
+            and not (repo_data.index_mode is not None and index_mode_changed)
+        ):
+            # An index run for the reopened archives now rather than at the
+            # hourly tick. Forced past the in-flight check: a listing the
+            # agent's chain still has queued carries no history stage and
+            # would not reach them. Best effort, like the mode catch-up.
+            try:
+                enqueue_reconcile_run(db, repository.id, force=True)
+            except Exception as e:
+                db.rollback()
+                logger.error(
+                    "Failed to queue the history index after the executor change",
+                    repo_id=repository.id,
+                    error=str(e),
+                )
         if sync_cloud_mirror_after_update:
             try:
                 _queue_initial_cloud_mirror_sync(db, repository)

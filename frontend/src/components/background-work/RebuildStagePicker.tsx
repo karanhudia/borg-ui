@@ -11,6 +11,9 @@ interface RebuildStagePickerProps {
   value: RebuildStage
   onChange: (stage: RebuildStage) => void
   historyLocked: boolean
+  // Why the history stage is locked: the plan (a Pro chip) or the
+  // repository's executor (an agent's repository cannot be diffed).
+  historyLockedReason?: 'plan' | 'agent'
 }
 
 // The three derived-data stages as cards. Picking one marks it and every
@@ -20,6 +23,7 @@ export default function RebuildStagePicker({
   value,
   onChange,
   historyLocked,
+  historyLockedReason = 'plan',
 }: RebuildStagePickerProps) {
   const { t } = useTranslation()
   const theme = useTheme()
@@ -108,7 +112,14 @@ export default function RebuildStagePicker({
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, flex: 1 }}>
                   {index + 1}. {t(`operations.background.stages.${key}.title`)}
                 </Typography>
-                {locked ? (
+                {locked && historyLockedReason === 'agent' ? (
+                  <Typography
+                    variant="caption"
+                    sx={{ fontWeight: 600, color: 'text.disabled', textAlign: 'right' }}
+                  >
+                    {t('operations.background.stageAgentUnsupported')}
+                  </Typography>
+                ) : locked ? (
                   <Chip
                     size="small"
                     label={PLAN_LABEL.pro}
