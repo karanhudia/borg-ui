@@ -219,3 +219,42 @@ def test_the_catch_up_run_is_not_swallowed_by_queued_work(
     # history_index is plan gated and this install is Community, so the
     # fold is the stage that proves the full chain, not the narrow one, ran.
     assert "history_merge" in kinds
+
+
+def test_the_cleanup_reruns_when_the_same_mode_is_sent_again(
+    test_client, admin_headers, test_db
+):
+    """The mode is committed before the cancels run, so a cancel that failed
+    partway must be finishable by sending the same PUT again. A change-only
+    guard would see no change and leave the rest of the chain queued."""
+    from tests.utils.operations import seed_operation
+
+    repo = _repo(test_db, index_mode="archives")
+    queued = seed_operation(test_db, "history_index", repository=repo, status="queued")
+    response = test_client.put(
+        f"/api/repositories/{repo.id}",
+        json={"index_mode": "archives"},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    test_db.refresh(queued)
+    assert queued.status == "cancelled"
+
+
+def test_an_edit_of_a_full_repository_enqueues_no_catch_up(
+    test_client, admin_headers, test_db
+):
+    """The catch-up half stays behind the change check, or every edit of a
+    `full` repository would queue a reconcile run."""
+    from app.database.models import Operation
+
+    repo = _repo(test_db)
+    response = test_client.put(
+        f"/api/repositories/{repo.id}",
+        json={"index_mode": "full", "compression": "zstd"},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    assert (
+        test_db.query(Operation).filter(Operation.repository_id == repo.id).count() == 0
+    )

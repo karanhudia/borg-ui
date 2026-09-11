@@ -4138,16 +4138,28 @@ async def get_repository(
         )
 
 
-async def _apply_index_mode_change(db: Session, repository: Repository) -> None:
+async def _apply_index_mode_change(
+    db: Session, repository: Repository, *, changed: bool
+) -> None:
     """Spec 6.8. Leaving `full` cancels the repository's queued index work,
     so a mode set to stop the diffs does not leave hours of them waiting in
     the queue. A running index is left to finish: the lane time is already
     spent, and the rows it writes are kept either way (the mode makes
     history stale, never deleted). Returning to `full` enqueues one
     reconcile run so the repository catches up without waiting for the tick.
+
+    The mode is already committed when this runs, so the cancelling half is
+    driven by the mode the repository now has rather than by `changed`: if a
+    cancel fails partway, the same PUT sent again finishes the job, where a
+    change-only guard would see no change and leave the rest queued. It is
+    naturally idempotent, since it only ever looks at work still queued. The
+    catch-up run is the half that must not repeat, so that one stays behind
+    `changed` and does not fire on every edit of a `full` repository.
     """
     mode = index_mode_of(repository)
     if mode == "full":
+        if not changed:
+            return
         try:
             enqueue_reconcile_run(db, repository.id, force=True)
         except Exception as exc:
@@ -4175,7 +4187,12 @@ async def _apply_index_mode_change(db: Session, repository: Repository) -> None:
         return
     _relink_over_cancelled(db, repository.id, {op.id: op for op in queued})
     for operation in queued:
-        await operation_runner.request_cancel(operation.id)
+        # The rows were read before the relink commit, and the runner can
+        # claim one in between. Only what is still waiting is cancelled;
+        # anything that started is left to finish, as the mode promises.
+        db.refresh(operation)
+        if operation.status == "queued":
+            await operation_runner.request_cancel(operation.id)
 
 
 def _relink_over_cancelled(
@@ -5040,8 +5057,8 @@ async def update_repository(
         repository.updated_at = datetime.utcnow()
         db.commit()
 
-        if index_mode_changed:
-            await _apply_index_mode_change(db, repository)
+        if repo_data.index_mode is not None:
+            await _apply_index_mode_change(db, repository, changed=index_mode_changed)
 
         if sync_cloud_mirror_after_update:
             try:
