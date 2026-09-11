@@ -95,22 +95,11 @@ async def _cancel_agent_backup(operation_id: int) -> bool:
 
 
 def _enqueue_post_create_chain(ctx, operation: Operation) -> None:
-    from app.services.operations.enqueue import enqueue_chain
-    from app.services.operations.followups import chain_for_repository
+    from app.services.operations.followups import enqueue_followups
 
-    kinds = chain_for_repository(ctx.db, "backup", operation.repository_id)
-    if not kinds:
-        return
-    enqueue_chain(
-        ctx.db,
-        kinds,
-        repository_id=operation.repository_id,
-        trigger="followup",
-        run_id=operation.run_id,
-        triggered_by_user_id=operation.triggered_by_user_id,
-        scheduled_job_id=operation.scheduled_job_id,
-        backup_plan_run_id=operation.backup_plan_run_id,
-    )
+    # The archive exists although the row failed, so the chain hangs off
+    # nothing rather than inheriting the failure.
+    enqueue_followups(ctx.db, operation, depends_on_id=None)
 
 
 async def run_backup(ctx) -> Outcome:

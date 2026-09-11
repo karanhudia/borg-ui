@@ -11,8 +11,7 @@ import structlog
 
 from app.database.models import Operation, Repository
 from app.services.operations import executors
-from app.services.operations.enqueue import enqueue_chain
-from app.services.operations.followups import chain_for_repository
+from app.services.operations.followups import enqueue_followups
 from app.services.operations.runner import Outcome
 from app.services.operations.wipe_facade import (
     PHASE_DELETE_FAILED_PARTIAL,
@@ -55,16 +54,7 @@ async def run_wipe(ctx) -> Outcome:
         # repository, so the index chain is queued here, with no dependency on
         # the failed row, to keep the archive list and stats honest
         # (Appendix B, phase 6 review).
-        kinds = chain_for_repository(ctx.db, "wipe", operation.repository_id)
-        if kinds:
-            enqueue_chain(
-                ctx.db,
-                kinds,
-                repository_id=operation.repository_id,
-                trigger="followup",
-                run_id=operation.run_id,
-                triggered_by_user_id=operation.triggered_by_user_id,
-            )
+        enqueue_followups(ctx.db, operation, depends_on_id=None)
     # `Outcome` has no cancelled status (spec 6.3 gives that to the row, not to
     # the executor's verdict); the runner rewrites the row to cancelled itself
     # when it sees its own flag set. Report the failure shape and let the

@@ -244,6 +244,49 @@ def test_start_inline_maintenance_can_join_a_run(db, repository):
     assert child.run_id == "run-9"
     assert child.depends_on_id == parent.id
     assert child.status == "running"
+    # A step of a plan run is plan work, not a manual prune.
+    assert child.trigger == "plan"
+
+
+def test_start_inline_maintenance_inherits_the_schedule_from_its_parent(db, repository):
+    from app.services.operations.maintenance_start import start_inline_maintenance
+
+    from app.database.models import ScheduledJob
+
+    schedule = ScheduledJob(name="nightly", cron_expression="0 2 * * *")
+    db.add(schedule)
+    db.commit()
+    parent = Operation(
+        repository_id=repository.id,
+        kind="backup",
+        category="backup",
+        status="completed",
+        trigger="schedule",
+        priority=0,
+        run_id="run-10",
+        scheduled_job_id=schedule.id,
+    )
+    db.add(parent)
+    db.commit()
+
+    child = start_inline_maintenance(
+        db,
+        repository,
+        "compact",
+        params={},
+        user_id=None,
+        run_id="run-10",
+        depends_on_id=parent.id,
+    )
+    assert child.trigger == "schedule"
+    assert child.scheduled_job_id == schedule.id
+
+
+def test_start_inline_maintenance_alone_is_manual(db, repository):
+    from app.services.operations.maintenance_start import start_inline_maintenance
+
+    op = start_inline_maintenance(db, repository, "prune", params={}, user_id=None)
+    assert op.trigger == "manual"
 
 
 def test_finish_inline_enqueues_the_followup_chain(db, repository):

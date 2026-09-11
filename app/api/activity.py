@@ -101,6 +101,10 @@ class ActivityItem(BaseModel):
     progress_message: Optional[str] = None
     execution_mode: Optional[str] = None
     created_at: Optional[datetime] = None
+    # Script executions only: the hook that ran the script and the operation
+    # it ran around. With collapse_runs a hook rides under that operation.
+    operation_id: Optional[int] = None
+    hook_type: Optional[str] = None
     followups: List["ActivityItem"] = []
 
     class Config:
@@ -833,6 +837,9 @@ async def list_recent_activity(
                     "error_message": execution.error_message,
                     "repository": repo_name,
                     "repository_path": repo_path,
+                    "repository_id": execution.repository_id,
+                    "operation_id": execution.operation_id,
+                    "hook_type": execution.hook_type,
                     "log_file_path": None,
                     "triggered_by": execution.triggered_by or "manual",
                     "schedule_id": None,
@@ -883,6 +890,26 @@ async def list_recent_activity(
             log_save_policy=log_save_policy,
         )
     )
+
+    # A pre- or post-backup script ran around one backup, so it rides under
+    # that backup (like the follow-up chain) when the backup is in the list,
+    # and reads as part of the run rather than a manual script beside it.
+    if collapse_runs:
+        parents = {a["id"]: a for a in activities if a.get("kind") is not None}
+        top_level: List[dict] = []
+        for activity in activities:
+            parent = (
+                parents.get(activity.get("operation_id"))
+                if activity["type"] == "script_execution"
+                else None
+            )
+            if parent is None:
+                top_level.append(activity)
+                continue
+            activity["trigger"] = parent.get("trigger", activity["trigger"])
+            activity.pop("_sort_at", None)
+            parent["followups"].append(activity)
+        activities = top_level
 
     # Sort by start time, falling back to creation time for pending jobs.
     activities.sort(

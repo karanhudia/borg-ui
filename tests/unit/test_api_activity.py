@@ -690,6 +690,81 @@ class TestRecentActivityEndpoint:
 
 
 @pytest.mark.unit
+class TestRecentActivityHooks:
+    def _seed(self, test_db):
+        from app.database.models import Repository, Script, ScriptExecution
+
+        repo = Repository(
+            name="Repo", path="/tmp/repo", encryption="none", repository_type="local"
+        )
+        script = Script(
+            name="Default vars",
+            file_path="library/default-vars.sh",
+            category="custom",
+            timeout=300,
+        )
+        test_db.add_all([repo, script])
+        test_db.flush()
+        backup = Operation(
+            repository_id=repo.id,
+            kind="backup",
+            category="backup",
+            status="completed",
+            trigger="plan",
+            priority=0,
+            run_id="run-hooks",
+            started_at=datetime.now() - timedelta(minutes=2),
+            completed_at=datetime.now(),
+        )
+        test_db.add(backup)
+        test_db.flush()
+        hooks = [
+            ScriptExecution(
+                script_id=script.id,
+                hook_type=hook,
+                status="completed",
+                started_at=datetime.now() - timedelta(minutes=2),
+                completed_at=datetime.now() - timedelta(minutes=2),
+                exit_code=0,
+                stdout="",
+                stderr="",
+                triggered_by="backup",
+                repository_id=repo.id,
+                operation_id=backup.id,
+            )
+            for hook in ("pre-backup", "post-backup")
+        ]
+        test_db.add_all(hooks)
+        test_db.commit()
+        return backup, hooks
+
+    def test_hook_scripts_ride_under_the_backup_they_ran_around(
+        self, test_client, admin_headers, test_db
+    ):
+        backup, hooks = self._seed(test_db)
+        response = test_client.get("/api/activity/recent", headers=admin_headers)
+        assert response.status_code == 200
+        activity = response.json()
+        assert [a["id"] for a in activity] == [backup.id]
+        nested = activity[0]["followups"]
+        assert {n["id"] for n in nested} == {h.id for h in hooks}
+        assert {n["hook_type"] for n in nested} == {"pre-backup", "post-backup"}
+        assert all(n["type"] == "script_execution" for n in nested)
+        assert all(n["operation_id"] == backup.id for n in nested)
+        # The hook belongs to the plan run, not to a manual click.
+        assert all(n["trigger"] == "plan" for n in nested)
+
+    def test_hook_scripts_stay_top_level_when_their_backup_is_not_listed(
+        self, test_client, admin_headers, test_db
+    ):
+        backup, hooks = self._seed(test_db)
+        response = test_client.get(
+            "/api/activity/recent?job_type=script_execution", headers=admin_headers
+        )
+        assert response.status_code == 200
+        assert {a["id"] for a in response.json()} == {h.id for h in hooks}
+
+
 class TestRecentActivityLogPolicy:
     """Test Activity has_logs serialization against SystemSettings.log_save_policy."""
 
