@@ -124,7 +124,7 @@ const fanOut = (root: number, prune: number, compact: number): ActivityItem[] =>
   }),
 ]
 
-export const items: ActivityItem[] = [
+const items: ActivityItem[] = [
   base({
     id: 11700,
     repository: 'Important Documents',
