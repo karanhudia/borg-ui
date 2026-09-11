@@ -238,7 +238,12 @@ export default function ArchiveDetail() {
     // history has no counts to show either (spec 6.8), and showing them on
     // the tab label while the tab itself says the history is not indexed is
     // the contradiction the mode exists to avoid.
-    enabled: validParams && !!archive && indexMode === 'full' && can('archive_history'),
+    // `!!repository` as well as the mode: `indexMode` falls back to `full`
+    // while the repository list loads, and without the guard the query
+    // would fire once under that fallback on a repository that indexes no
+    // history.
+    enabled:
+      validParams && !!archive && !!repository && indexMode === 'full' && can('archive_history'),
   })
 
   if (!validParams || archiveErrored) {
@@ -450,7 +455,11 @@ export default function ArchiveDetail() {
       </Tabs>
 
       <Box sx={{ pt: 1 }}>
-        {activeTab === 'changes' && (
+        {/* `repository` as well, like the Files tab below: the mode falls
+            back to `full` while the repository list loads, and the tab
+            would spend a history query under that fallback on a repository
+            that indexes none. */}
+        {activeTab === 'changes' && repository && (
           <ArchiveChangesTab repositoryId={repositoryId} archive={archive} indexMode={indexMode} />
         )}
         {activeTab === 'files' && repository && (

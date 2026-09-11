@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen, fireEvent } from '@testing-library/react'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
 import ArchiveDetail from '../ArchiveDetail'
 import { archivesAPI, repositoriesAPI } from '../../services/api'
@@ -194,5 +194,32 @@ describe('ArchiveDetail', () => {
         expect(archivesAPI.getChanges).not.toHaveBeenCalled()
       })
     }
+
+    it('waits for the repository before asking for totals', async () => {
+      // The mode falls back to `full` while the repository list loads, so
+      // without a guard on the repository itself the query would fire once
+      // under that fallback and fetch history for a repository that has
+      // none.
+      let resolveRepositories: (value: unknown) => void = () => {}
+      vi.mocked(repositoriesAPI.getRepositories).mockReturnValue(
+        new Promise((resolve) => {
+          resolveRepositories = resolve
+        }) as never
+      )
+      vi.mocked(archivesAPI.getArchive).mockResolvedValue({ data: archive } as never)
+      renderRoute('/archives/7/12')
+      expect(await screen.findByText('nas-2026-09-02T02:00')).toBeInTheDocument()
+      expect(archivesAPI.getChanges).not.toHaveBeenCalled()
+
+      resolveRepositories({
+        data: {
+          repositories: [
+            { id: 7, name: 'nas', path: '/data/nas', mode: 'full', index_mode: 'archives' },
+          ],
+        },
+      })
+      await waitFor(() => expect(screen.getByRole('tab', { name: /changes/i })).toBeInTheDocument())
+      expect(archivesAPI.getChanges).not.toHaveBeenCalled()
+    })
   })
 })
