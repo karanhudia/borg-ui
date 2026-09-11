@@ -4149,7 +4149,7 @@ async def _apply_index_mode_change(db: Session, repository: Repository) -> None:
     mode = index_mode_of(repository)
     if mode == "full":
         try:
-            enqueue_reconcile_run(db, repository.id)
+            enqueue_reconcile_run(db, repository.id, force=True)
         except Exception as exc:
             # A catch-up run is a convenience; the tick will pick the
             # repository up within the hour. The mode change itself is
@@ -4171,8 +4171,48 @@ async def _apply_index_mode_change(db: Session, repository: Repository) -> None:
         )
         .all()
     )
+    if not queued:
+        return
+    _relink_over_cancelled(db, repository.id, {op.id: op for op in queued})
     for operation in queued:
         await operation_runner.request_cancel(operation.id)
+
+
+def _relink_over_cancelled(
+    db: Session, repository_id: int, doomed: dict[int, Operation]
+) -> None:
+    """Point the queued work that survives a mode change at the nearest
+    dependency that survives with it.
+
+    A follow-up chain is linear and `stats` sits last, behind the history
+    stages (`followups.FOLLOWUPS`), so cancelling the history of a queued
+    chain would leave `stats` depending on a `cancelled` row. The runner
+    reads that as a failed dependency and skips it, which loses the size
+    refresh `archives` mode exists to keep and paints a failed stage on a
+    repository the user just told us not to worry about. Rewritten and
+    committed before the cancels, so the runner never sees the dangling
+    state.
+    """
+    survivors = (
+        db.query(Operation)
+        .filter(
+            Operation.repository_id == repository_id,
+            Operation.status == "queued",
+            Operation.depends_on_id.in_(sorted(doomed)),
+            Operation.id.notin_(sorted(doomed)),
+        )
+        .all()
+    )
+    if not survivors:
+        return
+    for operation in survivors:
+        dependency = operation.depends_on_id
+        seen: set[int] = set()
+        while dependency in doomed and dependency not in seen:
+            seen.add(dependency)
+            dependency = doomed[dependency].depends_on_id
+        operation.depends_on_id = None if dependency in doomed else dependency
+    db.commit()
 
 
 @router.put("/{repo_id}")

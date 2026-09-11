@@ -76,11 +76,12 @@ def test_archives_mode_keeps_a_queued_listing(test_client, admin_headers, test_d
 
     repo = _repo(test_db)
     queued = seed_operation(test_db, "archive_sync", repository=repo, status="queued")
-    test_client.put(
+    response = test_client.put(
         f"/api/repositories/{repo.id}",
         json={"index_mode": "archives"},
         headers=admin_headers,
     )
+    assert response.status_code == 200
     test_db.refresh(queued)
     assert queued.status == "queued"
 
@@ -92,11 +93,12 @@ def test_a_running_index_is_left_to_finish(test_client, admin_headers, test_db):
     running = seed_operation(
         test_db, "history_index", repository=repo, status="running"
     )
-    test_client.put(
+    response = test_client.put(
         f"/api/repositories/{repo.id}",
         json={"index_mode": "off"},
         headers=admin_headers,
     )
+    assert response.status_code == 200
     test_db.refresh(running)
     assert running.status == "running"
 
@@ -135,3 +137,85 @@ def test_setting_the_same_mode_again_does_nothing(test_client, admin_headers, te
     assert (
         test_db.query(Operation).filter(Operation.repository_id == repo.id).count() == 0
     )
+
+
+def test_off_cancels_every_queued_index_kind(test_client, admin_headers, test_db):
+    """The `off` branch cancels the whole index category, so its filter runs
+    against an empty set of kinds to keep."""
+    from tests.utils.operations import seed_operation
+
+    repo = _repo(test_db)
+    queued = [
+        seed_operation(test_db, kind, repository=repo, status="queued")
+        for kind in ("archive_sync", "history_merge", "history_index", "stats")
+    ]
+    other = seed_operation(test_db, "backup", repository=repo, status="queued")
+    response = test_client.put(
+        f"/api/repositories/{repo.id}",
+        json={"index_mode": "off"},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    for operation in queued:
+        test_db.refresh(operation)
+        assert operation.status == "cancelled"
+    test_db.refresh(other)
+    assert other.status == "queued"
+
+
+def test_a_survivor_is_relinked_over_the_cancelled_work(
+    test_client, admin_headers, test_db
+):
+    """A queued chain is linear with `stats` last, so cancelling the history
+    stages must not leave `stats` waiting on a cancelled row: the runner
+    reads that as a failed dependency and skips the size refresh `archives`
+    mode exists to keep."""
+    from tests.utils.operations import seed_operation
+
+    repo = _repo(test_db)
+    sync = seed_operation(test_db, "archive_sync", repository=repo, status="queued")
+    merge = seed_operation(test_db, "history_merge", repository=repo, status="queued")
+    merge.depends_on_id = sync.id
+    index = seed_operation(test_db, "history_index", repository=repo, status="queued")
+    index.depends_on_id = merge.id
+    stats = seed_operation(test_db, "stats", repository=repo, status="queued")
+    stats.depends_on_id = index.id
+    test_db.commit()
+
+    response = test_client.put(
+        f"/api/repositories/{repo.id}",
+        json={"index_mode": "archives"},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    test_db.refresh(stats)
+    assert stats.status == "queued"
+    assert stats.depends_on_id == sync.id
+
+
+def test_the_catch_up_run_is_not_swallowed_by_queued_work(
+    test_client, admin_headers, test_db
+):
+    """Returning to `full` catches up even when work is already queued: that
+    work was built for the narrower mode and never produces the history
+    stages (spec 6.8)."""
+    from app.database.models import Operation
+    from tests.utils.operations import seed_operation
+
+    repo = _repo(test_db, index_mode="archives")
+    seed_operation(test_db, "archive_sync", repository=repo, status="queued")
+    response = test_client.put(
+        f"/api/repositories/{repo.id}",
+        json={"index_mode": "full"},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    kinds = [
+        op.kind
+        for op in test_db.query(Operation)
+        .filter(Operation.repository_id == repo.id)
+        .all()
+    ]
+    # history_index is plan gated and this install is Community, so the
+    # fold is the stage that proves the full chain, not the narrow one, ran.
+    assert "history_merge" in kinds

@@ -132,3 +132,31 @@ def test_resync_lists_an_off_repository_once(test_client, test_db, admin_headers
     assert _kinds(test_db, body) == ["archive_sync", "stats"]
     assert body["index_mode"] == "off"
     assert body["repeats"] is False
+
+
+def test_a_stats_rebuild_repeats_in_archives_mode(test_client, test_db, admin_headers):
+    """`archives` keeps refreshing the listing and the size, so a stage the
+    mode still runs is not a one-off look (spec 6.8)."""
+    repo = _repo(test_db, index_mode="archives")
+    response = test_client.post(
+        f"/api/repositories/{repo.id}/rebuild",
+        json={"from": "stats"},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["index_mode"] == "archives"
+    assert body["repeats"] is True
+
+
+def test_resync_does_not_claim_to_repeat_in_archives_mode(
+    test_client, test_db, admin_headers
+):
+    """Resync asks for the whole reconcile chain, and `archives` drops its
+    history stages, so the flag warns rather than over-promising."""
+    repo = _repo(test_db, index_mode="archives")
+    response = test_client.post(
+        f"/api/repositories/{repo.id}/resync", headers=admin_headers
+    )
+    assert response.status_code == 200
+    assert response.json()["repeats"] is False

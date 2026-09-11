@@ -298,7 +298,8 @@ running index is left to finish), and changing it back to `full` enqueues
 one catch-up run.
 
 Manual work is not blocked by the mode. `/rebuild` and `/resync` run once
-for a repository in any mode and report `"repeats": false` when the
-background chain will not keep the stage fresh afterwards; neither builds
-file history for a mode that excludes it. `repositories.history_index_excludes`,
+for a repository in any mode. `repeats` is false as soon as any stage the
+call asked for will not be kept fresh afterwards: every stage for `off`, and
+the history stages for `archives`. Neither route builds file history for a
+mode that excludes it. `repositories.history_index_excludes`,
 the glob patterns file history skips, is accepted on the same route.

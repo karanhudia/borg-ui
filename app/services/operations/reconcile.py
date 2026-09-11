@@ -74,6 +74,7 @@ def enqueue_reconcile_run(
     *,
     history: Optional[bool] = None,
     manual: bool = False,
+    force: bool = False,
     commit: bool = True,
 ) -> list:
     """One repository's reconcile run. Returns the operations enqueued, or an
@@ -87,13 +88,18 @@ def enqueue_reconcile_run(
     nothing is scheduled to repeat. The trigger stays `reconcile` either
     way: it names the chain, and the resync route has always recorded its
     runs under it.
+
+    `force=True` skips the in-flight check. The catch-up run on returning to
+    `full` (spec 6.8) needs it: the work already queued was built for the
+    narrower mode and will never produce the history stages, so deferring to
+    it would mean no catch-up at all until the next tick.
     """
     mode = mode_for_repository(db, repository_id)
     if manual and mode == "off":
         # The one-off look: archive_sync and stats, this once.
         mode = "archives"
     kinds = reconcile_kinds(db, history=history, mode=mode)
-    if not kinds or has_active_index_work(db, repository_id):
+    if not kinds or (not force and has_active_index_work(db, repository_id)):
         return []
     return enqueue_chain(
         db,

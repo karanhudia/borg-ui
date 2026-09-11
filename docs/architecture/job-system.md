@@ -465,8 +465,13 @@ repository outright rather than enqueueing an empty run.
 
 Manual work overrides the mode once and never repeats:
 `POST /api/repositories/{id}/rebuild` and `POST /api/repositories/{id}/resync`
-run for an `off` repository, and both answer with `index_mode` and
-`repeats: false` so the caller can say so. Neither re-enables file history
+run for an `off` repository, and both answer with `index_mode` and a
+`repeats` flag. The flag is a warning: it reads the stages that were asked
+for, not the ones that survived the mode filter, so it is false as soon as
+any of them will not be kept fresh. A `from = stats` rebuild on an
+`archives` repository does repeat, since that mode still refreshes the
+listing and the size; a `from = history` rebuild on the same repository
+does not. Neither re-enables file history
 behind a mode that excludes it, since the mode is a standing instruction
 not to diff this repository. Clearing history stays explicit and works in
 every mode: `rebuild` with `from = history` deletes the change rows
