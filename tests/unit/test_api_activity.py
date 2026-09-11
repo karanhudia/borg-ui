@@ -780,6 +780,74 @@ class TestRecentActivityHooks:
         assert response.status_code == 200
         assert response.json() == []
 
+    def test_operations_window_is_by_time_not_id(
+        self, test_client, admin_headers, test_db
+    ):
+        """Rows backfilled from the legacy job tables have ids above the
+        backups they followed. A window on the newest ids kept them and
+        dropped the backup, so the window is on time instead."""
+        backup, hooks = self._seed(test_db)
+        old = [
+            Operation(
+                repository_id=backup.repository_id,
+                kind="prune",
+                category="maintenance",
+                status="completed",
+                trigger="manual",
+                priority=0,
+                run_id=f"legacy-{i}",
+                started_at=datetime.now() - timedelta(days=30, minutes=i),
+                completed_at=datetime.now() - timedelta(days=30, minutes=i),
+            )
+            for i in range(8)
+        ]
+        test_db.add_all(old)
+        test_db.commit()
+        # limit=2 windows 8 operations: with an id window, the backup would
+        # lose to the eight legacy rows above it.
+        response = test_client.get(
+            "/api/activity/recent?limit=2", headers=admin_headers
+        )
+        assert response.status_code == 200
+        activity = response.json()
+        assert [a["id"] for a in activity] == [backup.id, old[0].id]
+        assert {n["id"] for n in activity[0]["followups"]} == {h.id for h in hooks}
+
+    def test_hidden_reconcile_rows_do_not_use_up_the_window(
+        self, test_client, admin_headers, test_db
+    ):
+        """Reconcile chains are hidden index rows, and there are thousands
+        of them; the window must be spent on the runs the page shows."""
+        backup, hooks = self._seed(test_db)
+        newer = [
+            Operation(
+                repository_id=backup.repository_id,
+                kind="archive_sync",
+                category="index",
+                status="completed",
+                trigger="reconcile",
+                priority=0,
+                run_id=f"reconcile-{i}",
+                started_at=datetime.now() + timedelta(minutes=i + 1),
+                completed_at=datetime.now() + timedelta(minutes=i + 1),
+            )
+            for i in range(8)
+        ]
+        test_db.add_all(newer)
+        test_db.commit()
+        response = test_client.get(
+            "/api/activity/recent?limit=2", headers=admin_headers
+        )
+        assert response.status_code == 200
+        activity = response.json()
+        assert [a["id"] for a in activity] == [backup.id]
+        assert {n["id"] for n in activity[0]["followups"]} == {h.id for h in hooks}
+        # Asked for, the reconcile rows are still there.
+        response = test_client.get(
+            "/api/activity/recent?category=index&limit=2", headers=admin_headers
+        )
+        assert [a["kind"] for a in response.json()] == ["archive_sync", "archive_sync"]
+
     def test_hook_scripts_stay_top_level_when_their_backup_is_not_listed(
         self, test_client, admin_headers, test_db
     ):

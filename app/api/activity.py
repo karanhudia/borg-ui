@@ -7,6 +7,7 @@ Provides a unified view of all operations (backups, restores, checks, compacts, 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import Any, List, Optional
 from datetime import datetime
@@ -608,7 +609,25 @@ def _operation_activity_items(
     if status:
         wanted = {status, op_vocab.LEGACY_STATUS_MAP.get(status, status)}
         q = q.filter(Operation.status.in_(tuple(wanted)))
-    ops = q.order_by(Operation.id.desc()).limit(limit * 4).all()
+    if not category or "index" not in category:
+        # Reconcile runs are index rows `_visible` hides unless the filter
+        # names them, and they outnumber everything else many times over.
+        # Keep them out of the window so it reaches back through real runs;
+        # index follow-ups stay, they ride under their visible parent.
+        q = q.filter(
+            ~((Operation.category == "index") & (Operation.trigger != "followup"))
+        )
+    # Window by time, not id: rows backfilled from the legacy job tables
+    # carry ids far above the backups they ran beside, so an id window kept
+    # a plan's prune and dropped the backup it followed.
+    ops = (
+        q.order_by(
+            func.coalesce(Operation.started_at, Operation.created_at).desc(),
+            Operation.id.desc(),
+        )
+        .limit(limit * 4)
+        .all()
+    )
     if not ops:
         return []
     repo_ids = {op.repository_id for op in ops if op.repository_id is not None}
