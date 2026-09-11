@@ -371,6 +371,8 @@ async def test_run_stats_writes_total_size(db, repo, monkeypatch):
     }
     db.refresh(repo)
     assert repo.total_size == "2.00 KB"
+    assert repo.total_size_bytes == 2048
+    assert repo.total_size_measured_at is not None
     assert repo.total_size_source == "borg2_index"
     assert repo.borg_last_modified == datetime(2026, 9, 6, 8, 57, 17)
 

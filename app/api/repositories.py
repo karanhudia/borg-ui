@@ -51,7 +51,12 @@ from app.services.operations.index_mode import MODE_KINDS, indexes_history
 from app.services.operations.index_mode import mode_of as index_mode_of
 from app.services.operations.reconcile import enqueue_reconcile_run
 from app.services.operations.runner import operation_runner
-from app.services.operations.repository_status import LastRuns, last_runs
+from app.services.operations.repository_status import (
+    LastRuns,
+    StorageSummary,
+    last_runs,
+    storage_summaries,
+)
 from app.core.authorization import authorize_request
 from app.core.security import get_current_user, check_repo_access
 from app.core.borg import BorgInterface
@@ -103,6 +108,8 @@ from app.services.repository_info_sync import sync_archive_stats_from_info
 from app.services.storage_usage import (
     SOURCE_BORG1_CACHE_STATS,
     SOURCE_STORAGE_USED,
+    format_bytes,
+    set_repository_size,
 )
 from app.services.repository_command_lock import run_serialized_repository_command
 from app.services.rclone_repository_service import (
@@ -923,6 +930,7 @@ async def _update_agent_repository_stats(
 
         encryption_mode = None
         total_size = None
+        total_size_bytes = None
         total_size_source = None
         borg_last_modified = None
         try:
@@ -949,6 +957,7 @@ async def _update_agent_repository_stats(
             size_bytes = stats.get("unique_csize") or stats.get("unique_size")
             if isinstance(size_bytes, (int, float)) and size_bytes > 0:
                 total_size = format_bytes(int(size_bytes))
+                total_size_bytes = int(size_bytes)
                 total_size_source = SOURCE_BORG1_CACHE_STATS
             # Both versions report the last manifest write; the agent renders
             # it in its reported zone (UTC since #889).
@@ -991,6 +1000,7 @@ async def _update_agent_repository_stats(
                     and usage.get("source")
                 ):
                     total_size = format_bytes(size_bytes)
+                    total_size_bytes = size_bytes
                     total_size_source = str(usage["source"])
             except Exception as e:
                 logger.warning(
@@ -1021,6 +1031,7 @@ async def _update_agent_repository_stats(
                     fields = first.split()
                     if fields and fields[0].isdigit() and int(fields[0]) > 0:
                         total_size = format_bytes(int(fields[0]))
+                        total_size_bytes = int(fields[0])
                         total_size_source = SOURCE_STORAGE_USED
             except Exception as e:
                 logger.warning(
@@ -1035,9 +1046,8 @@ async def _update_agent_repository_stats(
                 repository.last_backup = last_backup_time
         if encryption_mode:
             repository.encryption = encryption_mode
-        if total_size:
-            repository.total_size = total_size
-            repository.total_size_source = total_size_source
+        if total_size and total_size_bytes is not None:
+            set_repository_size(repository, total_size_bytes, total_size_source)
         if borg_last_modified:
             repository.borg_last_modified = borg_last_modified
         db.commit()
@@ -1060,13 +1070,11 @@ async def _update_agent_repository_stats(
 
 
 # Helper function to format bytes to human readable format
-def format_bytes(bytes_size: int) -> str:
-    """Format bytes to human readable string (e.g., '1.23 GB')"""
-    for unit in ["B", "KB", "MB", "GB", "TB", "PB"]:
-        if bytes_size < 1024.0:
-            return f"{bytes_size:.2f} {unit}"
-        bytes_size /= 1024.0
-    return f"{bytes_size:.2f} EB"
+# `format_bytes` now lives next to the parser that reads its output and the
+# writer that keeps the size columns in agreement (`storage_usage`); it is
+# imported above and re-exported here for the callers that have always
+# taken it from this module.
+__all__ = ["format_bytes"]
 
 
 def _decode_json_list_field(value):
@@ -1120,6 +1128,61 @@ def _normalize_repository_source_payload(
 def format_datetime(dt):
     """Format datetime to ISO8601 with UTC timezone indicator"""
     return serialize_datetime(dt)
+
+
+def _storage_summary_or_none(
+    db: Session, repository: Repository
+) -> Optional[StorageSummary]:
+    """The repository's storage summary, or None when it cannot be computed:
+    a decorative object must not take the repository detail down. The
+    detail carries the archive sums and the compact statistics; the list,
+    polled by every tab, carries the stored size columns only."""
+    repository_id = repository.id  # before a rollback could expire the row
+    try:
+        return storage_summaries(db, [repository], archives=True).get(repository_id)
+    except Exception as exc:
+        db.rollback()
+        logger.warning(
+            "Failed to compute storage summary",
+            repository_id=repository_id,
+            error=str(exc),
+            exc_info=True,
+        )
+        return None
+
+
+def storage_payload(summary: Optional[StorageSummary]) -> Optional[dict]:
+    """The `storage` object of a repository response (#981): the stored
+    size with its provenance and time, Borg's last manifest write, the
+    archive sums and the newest compact statistics. A None field is "not
+    measured yet" or "not reported by this Borg version"; a size of 0 is a
+    measurement (an emptied repository), so the two are distinct states. A
+    size with `measured_at` None comes from the formatted string (the
+    upgrade's backfill, or a row it did not reach), so its time is unknown;
+    `archives_consistent` False says the archive figures are withheld
+    because the rows and the count disagree, or because no listing has run
+    for the repository yet; None says the route did not compute them (the
+    list; the detail route does). `latest_archive_files` is the newest
+    archive's file count, not a sum. `compact` is the statistics of that
+    run as `parse_compact_stats` read them, including its
+    `size_precision`: `rounded` says its figures come from Borg's
+    formatted output, so they can differ from `size_bytes` by the rounding
+    of that text rather than by a change in the repository."""
+    if summary is None:
+        return None
+    return {
+        "size_bytes": summary.size_bytes,
+        "size_source": summary.size_source,
+        "measured_at": format_datetime(summary.measured_at),
+        "last_modified": format_datetime(summary.last_modified),
+        "archives_consistent": summary.archives_consistent,
+        "original_size": summary.original_size,
+        "compressed_size": summary.compressed_size,
+        "deduplicated_size": summary.deduplicated_size,
+        "latest_archive_files": summary.latest_archive_files,
+        "compact": summary.compact,
+        "compact_at": format_datetime(summary.compact_at),
+    }
 
 
 def _borg_result_error(result: Dict[str, Any]) -> Optional[str]:
@@ -2967,6 +3030,9 @@ async def get_repositories(
             repositories = (
                 db.query(Repository).filter(Repository.id.in_(repository_ids)).all()
             )
+        # the stored columns only, no query of its own (the archive figures
+        # come with the detail route, which guards its queries)
+        storage = storage_summaries(db, repositories, archives=False)
         for repo in repositories:
             # Running check, compact, or prune.
             running_kinds = {
@@ -3022,6 +3088,7 @@ async def get_repositories(
                     else {}
                 ),
                 "total_size": repo.total_size,
+                "storage": storage_payload(storage.get(repo.id)),
                 "archive_count": repo.archive_count,
                 "created_at": format_datetime(repo.created_at),
                 "updated_at": format_datetime(repo.updated_at),
@@ -4085,6 +4152,10 @@ async def get_repository(
         # Get repository statistics
         stats = await get_repository_stats(repository, db, bypass_lock=use_bypass_lock)
 
+        # computed before the payload is built: on a failure this rolls the
+        # session back, which would expire every row the payload still reads
+        storage = storage_payload(_storage_summary_or_none(db, repository))
+
         repository_payload = {
             "id": repository.id,
             "name": repository.name,
@@ -4097,6 +4168,7 @@ async def get_repository(
             **_agent_machine_summary(repository, db),
             "last_backup": format_datetime(repository.last_backup),
             "total_size": repository.total_size,
+            "storage": storage,
             "archive_count": repository.archive_count,
             "created_at": format_datetime(repository.created_at),
             "updated_at": format_datetime(repository.updated_at),

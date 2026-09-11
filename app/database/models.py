@@ -306,6 +306,10 @@ class Repository(Base):
     # borg2_index (repository object size), storage_used (store file bytes),
     # compact_stats (pack file bytes as `borg compact --stats` reported them).
     total_size_source = Column(String, nullable=True)
+    # The same measurement as a number, and when it was written; NULL on a
+    # row no size write has touched since the columns arrived.
+    total_size_bytes = Column(BigInteger, nullable=True)
+    total_size_measured_at = Column(DateTime, nullable=True)
     # repository.last_modified as Borg reports it: the last manifest write.
     borg_last_modified = Column(DateTime, nullable=True)
     archive_count = Column(Integer, default=0)

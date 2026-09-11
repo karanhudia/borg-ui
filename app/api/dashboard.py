@@ -30,6 +30,7 @@ from app.services.operations.job_facade import (
     latest_maintenance_jobs_by_repository,
     maintenance_jobs_started_since,
 )
+from app.services.storage_usage import stored_size_bytes
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
@@ -798,14 +799,14 @@ async def get_dashboard_overview(
 
         # Include all repos for size/archive totals
         for repo in repositories:
-            size_bytes = parse_size_to_bytes(repo.total_size)
+            size_bytes = repository_size_bytes(repo)
             total_size_bytes += size_bytes
             total_archives += repo.archive_count or 0
 
         # Show health for both repo modes, but with mode-specific semantics.
         for repo in full_mode_repos:
             # Parse size for this repo
-            size_bytes = parse_size_to_bytes(repo.total_size)
+            size_bytes = repository_size_bytes(repo)
             latest_restore_check = latest_restore_checks.get(repo.id)
             health = build_full_repository_health(
                 repo,
@@ -843,18 +844,6 @@ async def get_dashboard_overview(
                 repo_schedule = fallback_schedule
             repo_backup_plans = backup_plans_by_repo.get(repo.id, [])
 
-            # Calculate dedup ratio (if we have the data)
-            dedup_ratio = None
-            if (
-                hasattr(repo, "deduplicated_size")
-                and repo.deduplicated_size
-                and size_bytes > 0
-            ):
-                dedup_bytes = parse_size_to_bytes(repo.deduplicated_size)
-                dedup_ratio = (
-                    int((1 - (dedup_bytes / size_bytes)) * 100) if size_bytes > 0 else 0
-                )
-
             repo_health.append(
                 {
                     "id": repo.id,
@@ -877,7 +866,8 @@ async def get_dashboard_overview(
                         "latest_restore_check_status"
                     ],
                     "latest_restore_check_error": health["latest_restore_check_error"],
-                    "dedup_ratio": dedup_ratio,
+                    # nothing stores a per-repository deduplicated size
+                    "dedup_ratio": None,
                     "has_schedule": repo_schedule is not None,
                     "schedule_enabled": repo_schedule.enabled
                     if repo_schedule
@@ -896,7 +886,7 @@ async def get_dashboard_overview(
             )
 
         for repo in observe_only_repos:
-            size_bytes = parse_size_to_bytes(repo.total_size)
+            size_bytes = repository_size_bytes(repo)
             latest_restore_check = latest_restore_checks.get(repo.id)
             health = build_observe_repository_health(
                 repo,
@@ -1205,13 +1195,9 @@ async def get_dashboard_overview(
                         {
                             "name": repo.name,
                             "size": repo.total_size,
-                            "size_bytes": parse_size_to_bytes(repo.total_size),
+                            "size_bytes": repository_size_bytes(repo),
                             "percentage": round(
-                                (
-                                    parse_size_to_bytes(repo.total_size)
-                                    / total_size_bytes
-                                    * 100
-                                ),
+                                (repository_size_bytes(repo) / total_size_bytes * 100),
                                 1,
                             )
                             if total_size_bytes > 0
@@ -1264,39 +1250,10 @@ async def get_dashboard_overview(
         )
 
 
-def parse_size_to_bytes(size_str: str) -> int:
-    """Parse human-readable size string to bytes"""
-    if not size_str:
-        return 0
-
-    size_str = size_str.strip().upper()
-
-    # Remove spaces
-    size_str = size_str.replace(" ", "")
-
-    # Check units from longest to shortest to avoid matching 'B' in 'GB'
-    multipliers = [
-        ("PB", 1024**5),
-        ("TB", 1024**4),
-        ("GB", 1024**3),
-        ("MB", 1024**2),
-        ("KB", 1024),
-        ("B", 1),
-    ]
-
-    for unit, multiplier in multipliers:
-        if size_str.endswith(unit):
-            try:
-                number = float(size_str[: -len(unit)])
-                return int(number * multiplier)
-            except ValueError:
-                return 0
-
-    # Try parsing as plain number
-    try:
-        return int(float(size_str))
-    except ValueError:
-        return 0
+def repository_size_bytes(repo) -> int:
+    """The repository's measured size in bytes, by the one rule every size
+    reader applies (`storage_usage.stored_size_bytes`); 0 when unknown."""
+    return stored_size_bytes(repo) or 0
 
 
 def format_bytes(bytes_value: int) -> str:

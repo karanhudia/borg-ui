@@ -345,7 +345,12 @@ Rules:
   suppresses a duplicate listing. `history_merge` follows the listing on
   every plan so removed archives leave the database as well.
 - `stats` measures the repository read-only through the best source Borg
-  offers and records it in `repositories.total_size_source`: Borg 1
+  offers and records it in `repositories.total_size` (formatted),
+  `total_size_bytes`, `total_size_source` and `total_size_measured_at`,
+  through one writer (`storage_usage.set_repository_size`); the repository
+  responses carry a `storage` object (the stored figures in the list; the
+  detail adds the archive sums and the newest compact statistics), so
+  every size reader shows the same value and names its source: Borg 1
   `cache.stats.unique_csize` (`borg1_cache_stats`, deduplicated); Borg 2 the
   chunk-index sum through Borg's Python API next to the configured binary
   (`borg2_index`, the bytes of every indexed object), else a store-level

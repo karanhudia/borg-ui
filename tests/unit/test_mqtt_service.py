@@ -542,29 +542,6 @@ class TestBackupJobQueryService:
 class TestRepositoryStatePublisher:
     """Tests for RepositoryStatePublisher."""
 
-    @pytest.mark.parametrize(
-        "size_str,expected",
-        [
-            ("0", 0),
-            ("100", 100),
-            ("1 KB", 1024),
-            ("1KB", 1024),
-            ("2 MB", 2 * 1024**2),
-            ("3 GB", 3 * 1024**3),
-            ("4 TB", 4 * 1024**4),
-            ("5 PB", 5 * 1024**5),
-            ("1.5 GB", int(1.5 * 1024**3)),
-            ("", 0),
-            ("invalid", 0),
-            ("  2.5 MB  ", int(2.5 * 1024**2)),
-        ],
-    )
-    def test_parse_size_to_bytes(self, size_str, expected):
-        """Should parse various size formats correctly."""
-        publisher = RepositoryStatePublisher(Mock())
-        result = publisher.parse_size_to_bytes(size_str)
-        assert result == expected
-
     def test_get_repository_status_failed(self, db_session):
         """Should return 'failed' for repositories in failed set."""
         repo = Repository(
@@ -668,6 +645,36 @@ class TestRepositoryStatePublisher:
         assert result is True
         # Verify all expected methods were called
         assert mqtt_service.publish.call_count >= 5  # At least 5 topics
+
+    def test_publish_repository_data_reports_the_stored_size_number(self, db_session):
+        """The size topic carries the stored number where a measurement wrote
+        it; the formatted string is only the fallback for a row without one."""
+        repo = Repository(
+            name="Measured",
+            path="/repo/measured",
+            total_size="2.19 GB",
+            total_size_bytes=2_350_000_000,
+            archive_count=1,
+        )
+        db_session.add(repo)
+        db_session.commit()
+        db_session.refresh(repo)
+
+        mqtt_service = _create_mqtt_service_configured()
+        publisher = RepositoryStatePublisher(mqtt_service)
+
+        assert publisher.publish_repository_data(
+            repo,
+            failed_repository_ids=set(),
+            latest_jobs_by_repository={},
+            running_jobs_by_repository={},
+        )
+        sizes = [
+            call.args[1]
+            for call in mqtt_service.publish.call_args_list
+            if call.args and call.args[0] == f"repositories/{repo.id}/size"
+        ]
+        assert sizes == [{"total": 2_350_000_000}]
 
     def test_publish_repository_data_with_running_job(self, db_session):
         """Should include running job data in progress payload."""
@@ -1586,11 +1593,6 @@ class TestMQTTServiceStateSync:
 @pytest.mark.unit
 class TestMQTTServiceEdgeCases:
     """Tests for edge cases and error handling."""
-
-    def test_parse_size_with_none(self):
-        """Should handle None size string."""
-        publisher = RepositoryStatePublisher(Mock())
-        assert publisher.parse_size_to_bytes(None) == 0
 
     def test_repository_status_with_none_id(self):
         """Should handle repository with no ID."""

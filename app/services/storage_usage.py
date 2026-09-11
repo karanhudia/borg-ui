@@ -25,6 +25,8 @@ caller persists alongside.
 """
 
 import asyncio
+import re
+from decimal import ROUND_HALF_UP, Decimal
 import json
 import os
 import shutil
@@ -36,7 +38,7 @@ from urllib.parse import unquote, urlsplit
 
 import structlog
 
-from app.utils.datetime_utils import parse_borg_archive_time
+from app.utils.datetime_utils import parse_borg_archive_time, utc_now
 
 logger = structlog.get_logger()
 
@@ -45,6 +47,66 @@ SOURCE_BORG2_INDEX = "borg2_index"
 SOURCE_STORAGE_USED = "storage_used"
 # Written by the compact paths (maintenance_state), not measured here.
 SOURCE_COMPACT_STATS = "compact_stats"
+
+
+def format_bytes(bytes_size: int) -> str:
+    """Format bytes to human readable string (e.g., '1.23 GB')"""
+    for unit in ["B", "KB", "MB", "GB", "TB", "PB"]:
+        if bytes_size < 1024.0:
+            return f"{bytes_size:.2f} {unit}"
+        bytes_size /= 1024.0
+    return f"{bytes_size:.2f} EB"
+
+
+def set_repository_size(
+    repository, size_bytes: int, source: str, *, measured_at: Optional[datetime] = None
+) -> None:
+    """Write one size measurement to the four columns that carry it: the
+    formatted string the card shows, the number, its source and the time
+    it was written. Every writer goes through here so the four never
+    disagree."""
+    size_bytes = int(size_bytes)
+    repository.total_size = format_bytes(size_bytes)
+    repository.total_size_bytes = size_bytes
+    repository.total_size_source = source
+    repository.total_size_measured_at = measured_at or utc_now()
+
+
+# The units a stored size string may carry: what `format_bytes` prints
+# (base 1024, two decimals) and the shapes older releases wrote ("1.5GB",
+# "1 GiB", a bare byte count). The revision a9b8c7d6e5f4 backfill carries
+# its own copy of the strict form (a migration imports no app code).
+_SIZE_UNITS = {"": 0, "K": 1, "M": 2, "G": 3, "T": 4, "P": 5, "E": 6}
+_SIZE_TEXT = re.compile(
+    r"^\s*(?P<number>\d+(?:\.\d+)?)\s*(?P<unit>[KMGTPE]?)(?:I?B)?\s*$", re.IGNORECASE
+)
+
+
+def bytes_from_formatted(text: Optional[str]) -> Optional[int]:
+    """The byte count a stored size string stands for: a `format_bytes`
+    string as exact as its two decimals allow, or one of the older shapes
+    ("1.5GB", "1 GiB", "4096"); None for anything else ("Unknown", "N/A",
+    empty). For rows that predate `total_size_bytes`."""
+    if not text:
+        return None
+    match = _SIZE_TEXT.match(text)
+    if not match:
+        return None
+    # the pattern admits digits and one point only, so the value is finite
+    value = Decimal(match.group("number"))
+    exponent = _SIZE_UNITS[match.group("unit").upper()]
+    scaled = value * (Decimal(1024) ** exponent)
+    return int(scaled.to_integral_value(rounding=ROUND_HALF_UP))
+
+
+def stored_size_bytes(repository) -> Optional[int]:
+    """The one rule every size reader applies: the stored number where a
+    size write (or the backfill) has filled it, else the formatted string
+    parsed back, else None. Readers that need a number take `or 0`."""
+    size_bytes = repository.total_size_bytes
+    if size_bytes is not None:
+        return int(size_bytes)
+    return bytes_from_formatted(repository.total_size)
 
 
 def _port(parts) -> Optional[int]:

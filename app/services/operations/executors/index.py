@@ -16,7 +16,6 @@ from app.api.repositories import (
     _prepare_repository_borg_env,
     _repository_stats_borg_env,
     agent_timezone_for_repository,
-    format_bytes,
     get_operation_timeouts,
 )
 from app.config import settings
@@ -31,7 +30,7 @@ from app.services.operations.runner import Outcome, repository_busy
 from app.services.operations.series import infer_series, series_prefixes_for_repository
 from app.services.repository_command_lock import run_serialized_repository_command
 from app.services.repository_executor import is_agent_executor
-from app.services.storage_usage import measure_repository_size
+from app.services.storage_usage import measure_repository_size, set_repository_size
 from app.utils.borg_env import cleanup_temp_key_file, effective_repository_remote_path
 
 logger = structlog.get_logger()
@@ -531,9 +530,11 @@ async def run_stats(ctx) -> Outcome:
             ),
             scope="metadata",
         )
+        # `measure_repository_size` reports unknown as None and never 0, so
+        # this is "a size came back"; an emptied repository reads as unknown
+        # and keeps its stored size until a source can say "empty"
         if measured.bytes:
-            repository.total_size = format_bytes(measured.bytes)
-            repository.total_size_source = measured.source
+            set_repository_size(repository, measured.bytes, measured.source)
         if measured.last_modified:
             repository.borg_last_modified = measured.last_modified
         if system_settings is not None:

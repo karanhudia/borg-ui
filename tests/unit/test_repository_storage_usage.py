@@ -862,3 +862,110 @@ def test_interpreter_is_the_venv_python_behind_the_wrapper(tmp_path):
     assert storage_usage.borg2_interpreter(
         str(wrapper_dir / "borg2"), {"BORG2_BINARY": str(current)}
     ) == str(venv / "bin" / "python")
+
+
+@pytest.mark.unit
+def test_set_repository_size_writes_the_four_columns_together():
+    """Every size writer goes through one helper, so the formatted string,
+    the number, the source and the time never disagree."""
+    from datetime import datetime
+    from types import SimpleNamespace
+
+    from app.services.storage_usage import set_repository_size
+
+    repo = SimpleNamespace(
+        total_size=None,
+        total_size_bytes=None,
+        total_size_source=None,
+        total_size_measured_at=None,
+    )
+    before = datetime.utcnow()
+    set_repository_size(repo, 2048, "borg2_index")
+    assert repo.total_size == "2.00 KB"
+    assert repo.total_size_bytes == 2048
+    assert repo.total_size_source == "borg2_index"
+    assert repo.total_size_measured_at >= before
+
+    at = datetime(2026, 1, 1, 12, 0, 0)
+    set_repository_size(repo, 0, "compact_stats", measured_at=at)
+    assert repo.total_size == "0.00 B"
+    assert repo.total_size_bytes == 0
+    assert repo.total_size_source == "compact_stats"
+    assert repo.total_size_measured_at == at
+
+
+@pytest.mark.unit
+def test_stored_size_bytes_is_the_one_rule_every_reader_applies():
+    from types import SimpleNamespace
+
+    from app.services.storage_usage import bytes_from_formatted, stored_size_bytes
+
+    assert (
+        stored_size_bytes(
+            SimpleNamespace(total_size="2.19 GB", total_size_bytes=2_350_000_000)
+        )
+        == 2_350_000_000
+    )
+    assert (
+        stored_size_bytes(SimpleNamespace(total_size="1.00 KB", total_size_bytes=None))
+        == 1024
+    )
+    assert (
+        stored_size_bytes(SimpleNamespace(total_size="Unknown", total_size_bytes=None))
+        is None
+    )
+    assert (
+        stored_size_bytes(SimpleNamespace(total_size=None, total_size_bytes=None))
+        is None
+    )
+    assert bytes_from_formatted("2.40 TB") == 2_638_827_906_662
+    # the shapes older releases wrote
+    assert bytes_from_formatted("1.5GB") == 1_610_612_736
+    assert bytes_from_formatted("1 GiB") == 1_073_741_824
+    assert bytes_from_formatted("4096") == 4096
+    assert bytes_from_formatted("512 b") == 512
+    assert bytes_from_formatted("NaN KB") is None
+    assert bytes_from_formatted("-1.00 KB") is None
+    assert bytes_from_formatted("1.00 XB") is None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "text_value",
+    [
+        "2.40 TB",
+        "490.23 KB",
+        "0.00 B",
+        "1.5GB",
+        "1 GiB",
+        "4096",
+        "512 b",
+        "Unknown",
+        "N/A",
+        "",
+        None,
+        "-1 KB",
+        "1.00 XB",
+    ],
+)
+def test_the_migration_backfill_parses_like_the_service(text_value):
+    """The backfill carries its own copy of the parser (a migration imports
+    no app code); the two must agree, or `measured_at is None` stops
+    meaning what the docstrings say."""
+    import importlib.util
+    from pathlib import Path
+
+    from app.services import storage_usage
+    from app.services.storage_usage import bytes_from_formatted
+
+    versions = Path(__file__).resolve().parents[2] / "app/database/alembic/versions"
+    path = next(versions.glob("a9b8c7d6e5f4_*.py"))
+    spec = importlib.util.spec_from_file_location("size_bytes_migration", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.bytes_from_formatted(text_value) == bytes_from_formatted(text_value)
+    # a widened service pattern must be widened in the copy as well; the
+    # table above cannot know a shape added later
+    assert module._SIZE_TEXT.pattern == storage_usage._SIZE_TEXT.pattern
+    assert module._SIZE_TEXT.flags == storage_usage._SIZE_TEXT.flags
+    assert module._SIZE_UNITS == storage_usage._SIZE_UNITS
