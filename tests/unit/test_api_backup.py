@@ -2007,7 +2007,7 @@ class TestBackupLogs:
         agent_job = AgentJob(
             agent_machine_id=agent.id,
             operation_id=backup_job.id,
-            job_type="backup.create",
+            job_type="backup",
             status="completed",
             payload={},
             completed_at=datetime.now(),
@@ -2071,7 +2071,7 @@ class TestBackupLogs:
         agent_job = AgentJob(
             agent_machine_id=agent.id,
             operation_id=backup_job.id,
-            job_type="backup.create",
+            job_type="backup",
             status="completed",
             payload={},
             completed_at=datetime.now(),

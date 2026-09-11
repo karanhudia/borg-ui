@@ -1216,7 +1216,7 @@ class TestActivityLogContracts:
 
         agent_job = AgentJob(
             agent_machine_id=1,
-            job_type="script.run",
+            job_type="script",
             status="running",
             payload={},
         )

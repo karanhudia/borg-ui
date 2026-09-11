@@ -42,9 +42,16 @@ router = APIRouter(prefix="/api/activity", tags=["activity"])
 
 
 def _get_agent_job_for_backup(db: Session, operation_id: int) -> Optional[AgentJob]:
+    from app.services.repository_executor import BACKUP_AGENT_JOB_TYPE
+
+    # The same question `repository_executor.get_agent_job_for_backup` asks,
+    # and the same answer: only the transport row speaks for the backup.
     return (
         db.query(AgentJob)
-        .filter(AgentJob.operation_id == operation_id)
+        .filter(
+            AgentJob.operation_id == operation_id,
+            AgentJob.job_type == BACKUP_AGENT_JOB_TYPE,
+        )
         .order_by(AgentJob.id.desc())
         .first()
     )
