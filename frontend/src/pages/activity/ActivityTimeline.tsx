@@ -224,21 +224,89 @@ function UmbrellaBand({
   )
 }
 
+// The same shape the list settles into: a day label, then bands of a
+// header row and members on the rail, each with the shared meta columns
+// on the right. Nothing jumps when the rows arrive.
+function SkeletonRow({ header }: { header?: boolean }) {
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: ENTRY_COLUMNS,
+        columnGap: 1,
+        alignItems: 'center',
+        pr: 1,
+        py: header ? 0.75 : 1.25,
+      }}
+    >
+      <Skeleton width={40} height={20} sx={{ justifySelf: 'end', mr: 0.5 }} />
+      <Skeleton
+        variant="circular"
+        width={header ? 20 : 10}
+        height={header ? 20 : 10}
+        sx={{ mx: 'auto', position: 'relative', zIndex: 1 }}
+      />
+      <Box sx={{ display: 'flex', alignItems: 'center', columnGap: 1, minWidth: 0 }}>
+        {header ? (
+          <Skeleton width={220} height={20} />
+        ) : (
+          <>
+            <Box sx={{ display: 'grid', rowGap: 0.5 }}>
+              <Skeleton width={180} height={20} />
+              <Skeleton width={300} height={14} />
+            </Box>
+            <Skeleton width={96} height={24} sx={{ borderRadius: 999, ml: 1 }} />
+            <Box sx={{ ...metaGridSx(3), display: { xs: 'none', md: 'grid' } }}>
+              <Skeleton width={90} height={24} sx={{ borderRadius: 1 }} />
+              <Skeleton width={56} height={24} sx={{ borderRadius: 1 }} />
+              <Skeleton width={64} height={20} sx={{ justifySelf: 'end' }} />
+              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                {[0, 1, 2].map((index) => (
+                  <Skeleton key={index} variant="circular" width={18} height={18} />
+                ))}
+              </Box>
+            </Box>
+          </>
+        )}
+      </Box>
+    </Box>
+  )
+}
+
 function TimelineSkeleton() {
   return (
-    <Box data-testid="activity-skeleton" sx={{ display: 'grid', gap: 2, pt: 1 }}>
-      {[0, 1, 2, 3].map((index) => (
+    <Box
+      data-testid="activity-skeleton"
+      aria-busy
+      sx={{
+        position: 'relative',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 12,
+          bottom: 12,
+          left: { xs: 65, md: 77 },
+          width: 2,
+          bgcolor: 'divider',
+          opacity: 0.7,
+        },
+      }}
+    >
+      <Skeleton width={140} height={14} sx={{ ml: { xs: '84px', md: '96px' }, mb: 1 }} />
+      {[2, 1, 1].map((members, index) => (
         <Box
           key={index}
-          sx={{ display: 'grid', gridTemplateColumns: '60px 20px 1fr', columnGap: 1 }}
+          sx={{
+            my: 0.75,
+            borderRadius: 2,
+            boxShadow: (theme) => `inset 0 0 0 1px ${alpha(theme.palette.divider, 0.6)}`,
+            pb: 0.5,
+          }}
         >
-          <Skeleton width={40} sx={{ justifySelf: 'end' }} />
-          <Skeleton variant="circular" width={10} height={10} sx={{ mt: 1, mx: 'auto' }} />
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-            <Skeleton width={220} height={28} />
-            <Skeleton width={90} height={24} sx={{ borderRadius: 999 }} />
-            <Skeleton width={120} height={24} sx={{ borderRadius: 999 }} />
-          </Box>
+          <SkeletonRow header />
+          {Array.from({ length: members }, (_, member) => (
+            <SkeletonRow key={member} />
+          ))}
         </Box>
       ))}
     </Box>
