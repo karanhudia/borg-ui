@@ -17,7 +17,7 @@ export interface Job {
   type?: string
   status: string
   progress?: number
-  progress_message?: string
+  progress_message?: string | null
   started_at?: string | null
   completed_at?: string | null
   error_message?: string | null
@@ -49,6 +49,8 @@ export interface Job {
   kind?: string | null
   category?: OperationCategory | null
   trigger?: OperationTrigger | null
+  depends_on_id?: number | null
+  hook_type?: string | null
   progress_current?: number | null
   progress_total?: number | null
   followups?: Job[]

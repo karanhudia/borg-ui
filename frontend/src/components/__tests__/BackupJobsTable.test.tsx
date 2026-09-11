@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../../test/test-utils'
 import BackupJobsTable from '../BackupJobsTable'
@@ -187,6 +187,7 @@ describe('BackupJobsTable', () => {
         />
       )
 
+      fireEvent.click(screen.getByRole('button', { name: /1 step/ }))
       expect(screen.getByText('Sync archive list')).toBeInTheDocument()
     })
 

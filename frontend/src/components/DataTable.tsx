@@ -9,8 +9,6 @@ import {
   TableRow,
   TablePagination,
   Paper,
-  IconButton,
-  Tooltip,
   Box,
   Typography,
   Skeleton,
@@ -21,6 +19,9 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material'
+import RowActions, { type ActionButton } from './RowActions'
+
+export type { ActionButton }
 
 export interface Column<T> {
   id: string
@@ -33,16 +34,6 @@ export interface Column<T> {
   sortable?: boolean
   /** Span both columns in the mobile 2-col grid */
   mobileFullWidth?: boolean
-}
-
-export interface ActionButton<T> {
-  icon: React.ReactNode
-  label: string
-  onClick: (row: T) => void
-  color?: 'primary' | 'error' | 'warning' | 'success' | 'info' | 'default'
-  disabled?: (row: T) => boolean
-  show?: (row: T) => boolean
-  tooltip?: string | ((row: T) => string)
 }
 
 export interface DataTableProps<T> {
@@ -58,6 +49,8 @@ export interface DataTableProps<T> {
   getRowKey: (row: T) => string | number
   /** Extra content rendered beneath a row, spanning the full width. Return null/undefined to skip a row. */
   renderSubRow?: (row: T) => React.ReactNode
+  /** Leading columns the sub-row leaves empty, so its content lines up with the column after them. */
+  subRowIndent?: number
 
   // Styling
   headerBgColor?: string
@@ -91,15 +84,6 @@ export interface DataTableProps<T> {
   mobileBreakpoint?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
 }
 
-const ACTION_HOVER_BG_BY_COLOR: Record<string, string> = {
-  primary: 'rgba(59,130,246,0.12)',
-  error: 'rgba(239,68,68,0.12)',
-  warning: 'rgba(245,158,11,0.12)',
-  success: 'rgba(34,197,94,0.12)',
-  info: 'rgba(14,165,233,0.12)',
-  default: 'rgba(255,255,255,0.06)',
-}
-
 export default function DataTable<T>({
   data,
   columns,
@@ -107,6 +91,7 @@ export default function DataTable<T>({
   onRowClick,
   getRowKey,
   renderSubRow,
+  subRowIndent = 0,
   headerBgColor = 'background.default',
   enableHover = true,
   enablePointer = false,
@@ -359,51 +344,7 @@ export default function DataTable<T>({
     row: T,
     iconOpacity = 0.45,
     justify: 'flex-start' | 'flex-end' = 'flex-end'
-  ) => (
-    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: justify, flexWrap: 'nowrap' }}>
-      {actions?.map((action, idx) => {
-        const shouldShow = action.show ? action.show(row) : true
-        if (!shouldShow) return null
-
-        const isDisabled = action.disabled ? action.disabled(row) : false
-        const tooltipText =
-          typeof action.tooltip === 'function'
-            ? action.tooltip(row)
-            : action.tooltip || action.label
-
-        const hoverBg = ACTION_HOVER_BG_BY_COLOR[action.color || 'default']
-
-        return (
-          <Tooltip key={idx} title={tooltipText} arrow>
-            <span>
-              <IconButton
-                size="small"
-                color={action.color || 'default'}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  action.onClick(row)
-                }}
-                disabled={isDisabled}
-                aria-label={tooltipText}
-                sx={{
-                  borderRadius: 1,
-                  opacity: iconOpacity,
-                  transition: 'opacity 140ms ease, background-color 140ms ease',
-                  '&:hover': {
-                    opacity: 1,
-                    bgcolor: hoverBg,
-                  },
-                  '&.Mui-disabled': { opacity: 0.2 },
-                }}
-              >
-                {action.icon}
-              </IconButton>
-            </span>
-          </Tooltip>
-        )
-      })}
-    </Box>
-  )
+  ) => <RowActions row={row} actions={actions} iconOpacity={iconOpacity} justify={justify} />
 
   if (isMobile) {
     return (
@@ -654,8 +595,11 @@ export default function DataTable<T>({
                 </TableRow>
                 {subRow && (
                   <TableRow>
+                    {subRowIndent > 0 && <TableCell colSpan={subRowIndent} sx={{ pt: 0 }} />}
                     <TableCell
-                      colSpan={columns.length + (actions && actions.length > 0 ? 1 : 0)}
+                      colSpan={
+                        columns.length - subRowIndent + (actions && actions.length > 0 ? 1 : 0)
+                      }
                       sx={{ pt: 0 }}
                     >
                       {subRow}
