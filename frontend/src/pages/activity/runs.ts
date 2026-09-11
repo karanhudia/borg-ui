@@ -165,6 +165,9 @@ export interface Cluster {
   key: string
   umbrella: Umbrella
   items: ActivityItem[]
+  // The schedule a firing belongs to, compared whole: a prefix match would
+  // fold "weekly" into "weekly-prod".
+  schedule?: string
 }
 
 // Scheduled work fired together carries no shared run id, so runs of one
@@ -181,12 +184,13 @@ export function clusterRuns(items: ActivityItem[], t: TFunction): Cluster[] {
   for (const item of items) {
     const kind = umbrella(item, t)
     let key: string | null = null
+    let scheduleKey: string | null = null
     if (kind.kind === 'plan' && item.backup_plan_run_id != null) {
       key = `plan-run-${item.backup_plan_run_id}`
     } else if (kind.kind === 'schedule') {
       // Namespaced: a schedule id of 7 and a legacy schedule named "7" are
       // not the same firing.
-      const scheduleKey =
+      scheduleKey =
         item.schedule_id != null
           ? `id:${item.schedule_id}`
           : item.schedule_name != null
@@ -195,7 +199,7 @@ export function clusterRuns(items: ActivityItem[], t: TFunction): Cluster[] {
       const time = runTime(item)?.getTime() ?? 0
       const open = [...byKey.values()].find(
         (cluster) =>
-          cluster.key.startsWith(`schedule-${scheduleKey}-`) &&
+          cluster.schedule === scheduleKey &&
           Math.abs((runTime(cluster.items[0])?.getTime() ?? 0) - time) <= SCHEDULE_WINDOW_MS
       )
       key = open?.key ?? `schedule-${scheduleKey}-${time}`
@@ -211,6 +215,7 @@ export function clusterRuns(items: ActivityItem[], t: TFunction): Cluster[] {
           ? t('activity.umbrella.schedule', { name: runTitle(item, t) })
           : kind.label
       cluster = { key, umbrella: { ...kind, label }, items: [] }
+      if (scheduleKey !== null) cluster.schedule = scheduleKey
       byKey.set(key, cluster)
       clusters.push(cluster)
     }

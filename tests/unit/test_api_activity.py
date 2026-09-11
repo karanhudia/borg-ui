@@ -907,6 +907,33 @@ class TestRecentActivityHooks:
         assert stats.id in nested
         assert {h.id for h in hooks} <= nested
 
+    def test_ancestor_fetch_stops_when_the_filter_excludes_the_head(
+        self, test_client, admin_headers, test_db
+    ):
+        """A job_type filter that selects a follow-up but not its head must
+        return, with the follow-up hidden as before, not loop on the
+        parent it cannot load."""
+        backup, _hooks = self._seed(test_db)
+        stats = Operation(
+            repository_id=backup.repository_id,
+            kind="stats",
+            category="index",
+            status="completed",
+            trigger="followup",
+            priority=0,
+            run_id=backup.run_id,
+            depends_on_id=backup.id,
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+        )
+        test_db.add(stats)
+        test_db.commit()
+        response = test_client.get(
+            "/api/activity/recent?job_type=stats", headers=admin_headers
+        )
+        assert response.status_code == 200
+        assert response.json() == []
+
     def test_hook_scripts_stay_top_level_when_their_backup_is_not_listed(
         self, test_client, admin_headers, test_db
     ):

@@ -140,6 +140,15 @@ describe('clusterRuns', () => {
     )
     expect(clusters).toHaveLength(2)
   })
+
+  it('does not fold a schedule into another whose name it prefixes, in either order', () => {
+    const runs = [
+      item({ id: 1, trigger: 'schedule', schedule_name: 'weekly-prod' }),
+      item({ id: 2, trigger: 'schedule', schedule_name: 'weekly' }),
+    ]
+    expect(clusterRuns(runs, t)).toHaveLength(2)
+    expect(clusterRuns([...runs].reverse(), t)).toHaveLength(2)
+  })
 })
 
 describe('flattenRuns', () => {
