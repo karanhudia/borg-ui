@@ -324,6 +324,39 @@ Rules:
   exclusive operations wait. Index operations wait too unless
   `bypass_lock_on_list` or the repository's bypass setting allows them to
   run alongside.
+- No two of the shared index kinds (`archive_sync`, `history_merge`,
+  `stats`) run on one repository at the same time, and no `history_index`
+  starts next to one of them. The bypass settings do not change that: they
+  read past a backup's lock, not past another index job. Two chains of one
+  run (the backup's follow-ups and the prune's) otherwise started their
+  stats side by side, and on an agent's repository a listing next to the
+  stats' `rinfo` failed with rc 2, since Borg 1 holds the cache lock during
+  `info` and `list` and only the server's own Borg calls are serialised by
+  the metadata scope. A running `history_index` is governed by the lane
+  and bypass as above, so an hours-long index does not hold the hourly
+  listing; the metadata scope keeps its diff and the listing apart. Lane
+  capacity (`index_workers`) stays global. An index row left `running` by
+  a task the runner no longer has is requeued at the next tick, as at
+  startup, so it holds neither the repository nor a worker; after three
+  such requeues it fails instead, so a task that keeps dying ends in a
+  visible failure. `GET /queue` reports the state as `index_busy` per
+  repository.
+- The queue also reports `lane_holder` with the exclusive operation's kind
+  and ID. The board names that holder only while its operation is still
+  running in the current cache. SSE updates replace operation rows; both
+  busy flags keep their fetched values, and the track validates them against
+  those rows. A transition into `running` refetches the queue so newly
+  acquired lanes and index slots are reported together. While a shared
+  queue fetch is active, status events request one follow-up fetch instead of
+  racing optimistic updates against a snapshot of unknown age. The active
+  request finishes even during continuous progress events; progress ticks
+  do not request further fetches. Its follow-up supplies authoritative
+  state. Independent index
+  branches can contend even when they share a run ID; only a stage's actual
+  dependency ancestors are treated as expected predecessors. Without a
+  live named holder, the wait reason falls through to
+  other index work, the worker limit, or next in line. The frontend does not
+  maintain a second copy of the server's exclusive operation kinds.
 - Lower priority number runs first: manual and plan work at 0, scheduled at
   5, follow-ups at 10, reconcile at 20.
 - A failed or cancelled operation skips everything that depends on it with
@@ -436,7 +469,17 @@ Two more index kinds fill and maintain `archive_changes`:
   (the table in the spec, section 8.4), or the successor is reset to
   pending when the removed archive was never indexed, or the rows are
   simply dropped when there is no successor. The archive row is deleted
-  afterwards.
+  afterwards. Each deletion and its outcome are checkpointed in the
+  operation's parameters in the same transaction. Replayed operations
+  skip completed or previously missing IDs, so an ID reused by SQLite
+  cannot cause a replacement archive to be deleted. Targets also carry the
+  Borg identity and last-seen observation; a later listing that rediscovers
+  the same archive invalidates a delayed deletion. Last-seen timestamps
+  advance on every sighting, even across wall-clock rollback. Legacy
+  results missing required identities wait for a fresh listing. A persisted
+  `generation_id` UUID also distinguishes recreated archive rows when SQLite
+  IDs, Borg IDs, and timestamps all repeat. The migration adds a nullable
+  column; the next listing initializes existing rows, including absent ones.
 
 Only `history_index` is gated on the plan including `archive_history`; on
 Community installs the follow-up chains and the reconcile run omit it, and

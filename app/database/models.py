@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from sqlalchemy import (
     Column,
     Integer,
@@ -1341,6 +1343,9 @@ class Archive(Base):
         index=True,
     )
     borg_id = Column(String(64), nullable=False)
+    # Distinguishes recreated rows even if SQLite IDs and timestamps repeat.
+    # Migrated rows receive an identity on their next listing.
+    generation_id = Column(String(36), nullable=True, default=lambda: str(uuid4()))
     name = Column(String, nullable=False)
     series = Column(String, nullable=False, index=True)
     start = Column(DateTime, nullable=False, index=True)

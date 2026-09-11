@@ -1,5 +1,6 @@
 import type {
   OperationItem,
+  OperationKind,
   QueueLimits,
   QueueRepository,
   RebuildStage,
@@ -59,13 +60,35 @@ export type StageStatus = 'idle' | 'done' | 'running' | 'waiting' | 'failed' | '
 // Why a queued stage has not started, in the order a person would want to
 // hear it: the whole queue is paused, a foreground job owns this
 // repository, every index worker is busy, or it is simply next in line.
-export type WaitReason = 'paused' | 'lane_busy' | 'workers' | 'queued'
+// `lane_busy` names the server-reported holder while it is still running.
+export type WaitReason = 'paused' | 'lane_busy' | 'index_busy' | 'workers' | 'queued'
+// The index kinds that share a repository's index slot; `history_index`
+// holds the lane instead. A copy of what lanes.py derives (INDEX_KINDS
+// minus the exclusive one): keep the two in step when a kind is added.
+const SHARED_INDEX_KINDS = new Set<OperationItem['kind']>([
+  'archive_sync',
+  'history_merge',
+  'stats',
+])
+
+// Whether one of `operations` is running index work of the shared kind. The
+// track reads the server's `index_busy` against the operations it holds: an
+// SSE update that finishes that work clears the wait reason before the next
+// fetch, the same way the lane's holder is checked against them.
+export function indexBusyFrom(operations: OperationItem[]): boolean {
+  return operations.some((op) => op.status === 'running' && SHARED_INDEX_KINDS.has(op.kind))
+}
 
 export interface StageState {
   key: StageKey
   status: StageStatus
   operation: OperationItem | null
   reason: WaitReason | null
+  // The lane holder's kind, for the `lane_busy` wording. Any exclusive
+  // kind can hold a lane: a backup, but also a prune, a compact, a check
+  // or the file-history index. Optional so the partial stage literals in
+  // tests and stories stay valid; `deriveTrack` always sets it.
+  reasonKind?: OperationKind | null
 }
 
 export interface RepositoryTrack {
@@ -131,18 +154,46 @@ export function deriveTrack(
       (operation) => FOREGROUND_CATEGORIES.has(operation.category) && operation.status === 'running'
     ) ?? null
 
+  // The server chooses the holder. SSE may finish it before the next fetch;
+  // another running row cannot establish a replacement holder on its own.
+  const holder = repository.lane_holder ?? null
+  const holderRunning =
+    repository.lane_busy &&
+    holder !== null &&
+    repository.operations.some(
+      (operation) => operation.id === holder.id && operation.status === 'running'
+    )
+
+  const operationsById = new Map(
+    repository.operations.map((operation) => [operation.id, operation])
+  )
   const stages = STAGE_ORDER.map<StageState>((key) => {
     const operation = latest.get(key) ?? null
-    if (!operation) return { key, status: 'idle', operation: null, reason: null }
+    if (!operation) return { key, status: 'idle', operation: null, reason: null, reasonKind: null }
     const status = stageStatus(operation.status)
     let reason: WaitReason | null = null
+    let reasonKind: OperationKind | null = null
     if (status === 'waiting') {
+      // A running dependency is the expected predecessor, but independent
+      // branches can share a run ID and still compete for the index slot.
+      const predecessors = new Set<number>()
+      let dependencyId = operation.depends_on_id
+      while (dependencyId != null && !predecessors.has(dependencyId)) {
+        predecessors.add(dependencyId)
+        dependencyId = operationsById.get(dependencyId)?.depends_on_id ?? null
+      }
+      const otherIndexRunning =
+        repository.index_busy &&
+        indexBusyFrom(repository.operations.filter((candidate) => !predecessors.has(candidate.id)))
       if (paused) reason = 'paused'
-      else if (repository.lane_busy) reason = 'lane_busy'
+      else if (holderRunning) {
+        reasonKind = holder.kind
+        reason = 'lane_busy'
+      } else if (otherIndexRunning) reason = 'index_busy'
       else if (key === 'history' && limits.index_running >= limits.index_workers) reason = 'workers'
       else reason = 'queued'
     }
-    return { key, status, operation, reason }
+    return { key, status, operation, reason, reasonKind }
   })
 
   return {

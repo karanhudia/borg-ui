@@ -98,6 +98,49 @@ def test_index_kind_waits_without_bypass_and_runs_with_bypass(db, repo, settings
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("running_kind", ["archive_sync", "history_merge", "stats"])
+@pytest.mark.parametrize("waiting_kind", ["archive_sync", "history_merge", "stats"])
+def test_index_kinds_of_one_repository_run_one_at_a_time(
+    db, repo, settings, running_kind, waiting_kind
+):
+    """A listing next to a stats refresh of the same repository dies with
+    rc 2 on Borg 1 (the cache lock), and two chains of one run otherwise
+    start their stats side by side: while one of them runs, the next waits,
+    and bypass does not change that (it reads past a backup's lock, not past
+    another index job). Another repository is unaffected."""
+    _running(db, running_kind, repo)
+    op = enqueue(db, waiting_kind, repository_id=repo.id)
+    assert lanes.can_start(db, op, settings) is False
+    settings.bypass_lock_on_list = True
+    repo.bypass_lock = True
+    db.commit()
+    assert lanes.can_start(db, op, settings) is False
+    other = enqueue(db, waiting_kind, repository_id=_other_repo(db).id)
+    assert lanes.can_start(db, other, settings) is True
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("running_kind", ["archive_sync", "history_merge", "stats"])
+def test_history_index_waits_for_running_index_work_of_its_repository(
+    db, repo, settings, running_kind
+):
+    """The exclusive index kind is held back the same way."""
+    _running(db, running_kind, repo)
+    op = enqueue(db, "history_index", repository_id=repo.id)
+    assert lanes.can_start(db, op, settings) is False
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("kind", ["backup", "check", "prune", "restore"])
+def test_running_index_work_leaves_the_other_kinds_alone(db, repo, settings, kind):
+    """The rule is index against index; a backup or maintenance job of the
+    repository is governed by the lane as before."""
+    _running(db, "stats", repo)
+    op = enqueue(db, kind, repository_id=repo.id)
+    assert lanes.can_start(db, op, settings) is True
+
+
+@pytest.mark.unit
 def test_index_workers_limit(db, repo, settings):
     settings.index_workers = 1
     db.commit()

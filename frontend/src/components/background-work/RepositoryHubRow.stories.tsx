@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Box } from '@mui/material'
 import RepositoryHubRow from './RepositoryHubRow'
 import { deriveTrack } from './repositoryTrack'
-import { busyQueue, hubRepositories, hubRepository } from './storyFixtures'
+import { busyQueue, hubRepositories, hubRepository, op } from './storyFixtures'
 
 const trackFor = (repositoryId: number) => {
   const group = busyQueue.repositories.find((r) => r.repository_id === repositoryId)
@@ -65,6 +65,50 @@ export const Running: Story = {
 
 export const BackupHoldsTheLane: Story = {
   args: { repository: hubRepositories[1], track: trackFor(2) },
+}
+
+// A stats refresh of the repository is still running: its queued listing
+// waits for it (one index operation per repository) although a worker is
+// free, and the stage says so.
+export const IndexWorkHoldsTheRepository: Story = {
+  args: { repository: hubRepositories[5], track: trackFor(6) },
+}
+
+// Backup and prune follow-ups share a run, but their stats jobs are siblings.
+// The queued sibling must name the index contention even when it hides the
+// older running stats job in the one-cell-per-stage display.
+export const SiblingBranchesWaitWithinOneRun: Story = {
+  args: {
+    repository: hubRepositories[5],
+    track: deriveTrack(
+      {
+        repository_id: 6,
+        repository_name: 'media',
+        lane_busy: false,
+        index_busy: true,
+        operations: [
+          op({
+            id: 7,
+            kind: 'stats',
+            status: 'running',
+            repository_id: 6,
+            repository: 'media',
+            depends_on_id: 5,
+          }),
+          op({
+            id: 8,
+            kind: 'stats',
+            status: 'queued',
+            repository_id: 6,
+            repository: 'media',
+            depends_on_id: 6,
+          }),
+        ],
+      },
+      busyQueue.limits,
+      false
+    ),
+  },
 }
 
 export const FailedStage: Story = {

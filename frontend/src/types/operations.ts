@@ -82,10 +82,23 @@ export interface QueueLimits {
   max_concurrent_scheduled_checks: number
 }
 
+/** The running exclusive operation a repository's lane is taken by. */
+export interface LaneHolder {
+  kind: OperationKind
+  id: number
+}
+
 export interface QueueRepository {
   repository_id: number | null
   repository_name: string
   lane_busy: boolean
+  // Sent whenever `lane_busy` is true; optional so a page loaded before
+  // the server carried it keeps working (queued stages stay next in line
+  // until a running holder is known).
+  lane_holder?: LaneHolder | null
+  // A listing, merge or stats of the repository is running: the next index
+  // operation waits for it, whatever the lane and the worker count say.
+  index_busy: boolean
   operations: OperationItem[]
 }
 

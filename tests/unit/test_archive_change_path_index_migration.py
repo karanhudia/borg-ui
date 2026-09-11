@@ -13,12 +13,12 @@ from datetime import datetime
 
 import pytest
 from alembic import command
-from sqlalchemy import inspect, text
+from sqlalchemy import MetaData, Table, inspect, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import sessionmaker
 
 from app.database.db_upgrade import _alembic_config, _engine
-from app.database.models import Archive, ArchiveChange, Repository
+from app.database.models import ArchiveChange, Repository
 
 REVISION = "e4f5a6b7c8d9"
 PREVIOUS = "d3e4f5a6b7c8"
@@ -68,17 +68,22 @@ def _insert_long_path(url):
         repo_id = session.execute(
             Repository.__table__.insert().values(name="r", path="/srv/r")
         ).inserted_primary_key[0]
-        archive = Archive(
-            repository_id=repo_id,
-            borg_id="b",
-            name="a",
-            series="s",
-            start=datetime(2026, 9, 4),
-        )
-        session.add(archive)
-        session.flush()
+        # This historical revision predates the archive generation column.
+        # Reflect it so the current ORM cannot insert newer columns.
+        archives = Table("archives", MetaData(), autoload_with=session.connection())
+        archive_id = session.execute(
+            archives.insert().values(
+                repository_id=repo_id,
+                borg_id="b",
+                name="a",
+                series="s",
+                start=datetime(2026, 9, 4),
+                first_seen_at=datetime(2026, 9, 4),
+                last_seen_at=datetime(2026, 9, 4),
+            )
+        ).inserted_primary_key[0]
         session.add(
-            ArchiveChange(archive_id=archive.id, path=LONG_PATH, change="added")
+            ArchiveChange(archive_id=archive_id, path=LONG_PATH, change="added")
         )
         session.commit()
     except Exception:

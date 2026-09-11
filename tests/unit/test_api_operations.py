@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 import pytest
+from sqlalchemy import text
 
 from app.database.models import (
     Operation,
@@ -90,6 +91,151 @@ class TestOperationsList:
 
 @pytest.mark.unit
 class TestOperationsQueue:
+    def test_queue_reports_running_index_work_of_a_repository(
+        self, test_client, test_db, admin_headers
+    ):
+        """A running listing, merge or stats holds the repository's index
+        slot, not the lane; the board needs the difference to explain a
+        queued index stage next to free workers."""
+        repo = _repo(test_db)
+        _settings(test_db)
+        running = enqueue(test_db, "stats", repository_id=repo.id)
+        running.status = "running"
+        enqueue(test_db, "archive_sync", repository_id=repo.id)
+        test_db.commit()
+        system = enqueue(test_db, "package_install", repository_id=None)
+        system.status = "running"
+        test_db.commit()
+        body = test_client.get("/api/operations/queue", headers=admin_headers).json()
+        groups = {g["repository_id"]: g for g in body["repositories"]}
+        assert groups[repo.id]["lane_busy"] is False
+        assert groups[repo.id]["index_busy"] is True
+        # the system lane has no repository, so nothing of the sort
+        assert groups[None]["index_busy"] is False
+
+    def test_queue_names_the_maintenance_operation_that_holds_the_lane(
+        self, test_client, test_db, admin_headers
+    ):
+        """A prune holds the lane as much as a backup does; the payload says
+        which one it is, so the waiting stages do not have to guess."""
+        repo = _repo(test_db)
+        _settings(test_db)
+        prune = enqueue(test_db, "prune", repository_id=repo.id)
+        prune.status = "running"
+        waiting = enqueue(test_db, "stats", repository_id=repo.id)
+        test_db.commit()
+
+        body = test_client.get("/api/operations/queue", headers=admin_headers).json()
+        group = body["repositories"][0]
+
+        assert group["lane_busy"] is True
+        assert group["lane_holder"] == {"kind": "prune", "id": prune.id}
+        assert waiting.id in {o["id"] for o in group["operations"]}
+
+    def test_queue_reports_no_lane_holder_while_the_lane_is_free(
+        self, test_client, test_db, admin_headers
+    ):
+        """A running index operation shares the repository rather than
+        taking it, so it is not a holder and the lane stays free."""
+        repo = _repo(test_db)
+        _settings(test_db)
+        running = enqueue(test_db, "stats", repository_id=repo.id)
+        running.status = "running"
+        enqueue(test_db, "archive_sync", repository_id=repo.id)
+        test_db.commit()
+
+        body = test_client.get("/api/operations/queue", headers=admin_headers).json()
+        group = body["repositories"][0]
+
+        assert group["lane_busy"] is False
+        assert group["lane_holder"] is None
+
+    def test_queue_holder_is_the_operation_that_took_the_lane(
+        self, test_client, test_db, admin_headers
+    ):
+        """With two running exclusive rows the earliest start holds the
+        lane; a row without one falls behind it rather than winning on id."""
+        repo = _repo(test_db)
+        _settings(test_db)
+        later = enqueue(test_db, "check", repository_id=repo.id)
+        later.status = "running"
+        later.started_at = utc_now() - timedelta(minutes=1)
+        undated = enqueue(test_db, "compact", repository_id=repo.id)
+        undated.status = "running"
+        undated.started_at = None
+        earlier = enqueue(test_db, "prune", repository_id=repo.id)
+        earlier.status = "running"
+        earlier.started_at = utc_now() - timedelta(minutes=9)
+        test_db.commit()
+
+        body = test_client.get("/api/operations/queue", headers=admin_headers).json()
+        group = body["repositories"][0]
+
+        assert group["lane_holder"] == {"kind": "prune", "id": earlier.id}
+
+    def test_queue_holder_falls_back_to_the_lowest_id_without_starts(
+        self, test_client, test_db, admin_headers
+    ):
+        """A plan creates its post-backup prune and compact already running
+        and without a start, so two rows can tie on the sentinel; the
+        lowest id decides rather than the iteration order."""
+        repo = _repo(test_db)
+        _settings(test_db)
+        first = enqueue(test_db, "prune", repository_id=repo.id)
+        first.status = "running"
+        first.started_at = None
+        second = enqueue(test_db, "compact", repository_id=repo.id)
+        second.status = "running"
+        second.started_at = None
+        test_db.commit()
+
+        body = test_client.get("/api/operations/queue", headers=admin_headers).json()
+        group = body["repositories"][0]
+
+        assert first.id < second.id
+        assert group["lane_holder"] == {"kind": "prune", "id": first.id}
+
+    def test_queue_never_gives_the_system_group_a_lane_holder(
+        self, test_client, test_db, admin_headers
+    ):
+        """Work without a repository is listed under System, which has no
+        lane to take."""
+        _settings(test_db)
+        op = enqueue(test_db, "package_install")
+        op.status = "running"
+        test_db.commit()
+
+        body = test_client.get("/api/operations/queue", headers=admin_headers).json()
+        system = [g for g in body["repositories"] if g["repository_id"] is None][0]
+
+        assert system["lane_busy"] is False
+        assert system["lane_holder"] is None
+
+    def test_queue_survives_an_operation_kind_this_build_does_not_know(
+        self, test_client, test_db, admin_headers
+    ):
+        """A row left by a newer build costs its claim to the lane, not the
+        board: it stays in the listing, and the stages under it read as
+        merely queued rather than the whole page failing to load."""
+        repo = _repo(test_db)
+        _settings(test_db)
+        known = enqueue(test_db, "prune", repository_id=repo.id)
+        known.status = "running"
+        test_db.commit()
+        test_db.execute(
+            text("UPDATE operations SET kind = :kind WHERE id = :id"),
+            {"kind": "teleport", "id": known.id},
+        )
+        test_db.commit()
+
+        response = test_client.get("/api/operations/queue", headers=admin_headers)
+
+        assert response.status_code == 200
+        group = response.json()["repositories"][0]
+        assert known.id in {o["id"] for o in group["operations"]}
+        assert group["lane_busy"] is False
+        assert group["lane_holder"] is None
+
     def test_queue_groups_and_limits(self, test_client, test_db, admin_headers):
         repo = _repo(test_db)
         settings = _settings(test_db)
@@ -109,6 +255,9 @@ class TestOperationsQueue:
         assert group["repository_id"] == repo.id
         assert group["repository_name"] == "r"
         assert group["lane_busy"] is True
+        # the waiting stages name what holds the lane instead of guessing
+        assert group["lane_holder"] == {"kind": "history_index", "id": running.id}
+        assert group["index_busy"] is False
         assert {o["id"] for o in group["operations"]} == {running.id, recent.id}
         assert body["limits"]["index_workers"] == 3
         assert body["limits"]["index_running"] == 1

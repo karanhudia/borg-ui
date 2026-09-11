@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Box, Button, IconButton, Stack, Tooltip, Typography, useTheme } from '@mui/material'
 import { HardDrive, Minus, Plus, SearchX } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -120,6 +120,7 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
     setWindowSize(WINDOW_SIZE)
   }
 
+  const refetchAfterEvents = useRef(false)
   const queue = useQuery({
     queryKey: QUEUE_KEY,
     queryFn: () => operationsAPI.getQueue().then((r) => r.data),
@@ -131,15 +132,42 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
     refetchInterval: 30000,
   })
 
+  // Do not race optimistic events against a response whose snapshot time is
+  // unknown. Let active requests finish, then coalesce intervening events into
+  // one fresh read. Progress bursts cannot starve a slow initial request.
+  useEffect(() => {
+    if (!queue.isFetching && refetchAfterEvents.current) {
+      refetchAfterEvents.current = false
+      queryClient.invalidateQueries({ queryKey: QUEUE_KEY }, { cancelRefetch: false })
+    }
+  }, [queue.isFetching, queryClient])
+
   const onUpdated = useCallback(
     (updated: OperationItem) => {
-      queryClient.setQueryData<QueueResponse | undefined>(QUEUE_KEY, (current) => {
-        if (!current) return current
+      if (updated.category === 'index' && updated.status !== 'running') {
+        queryClient.invalidateQueries({ queryKey: HUB_KEY })
+      }
+      if (queryClient.isFetching({ queryKey: QUEUE_KEY }) > 0) {
+        refetchAfterEvents.current = true
+        return
+      }
+      const cached = queryClient.getQueryData<QueueResponse>(QUEUE_KEY)
+      const started =
+        updated.status === 'running' &&
+        !cached?.repositories.some((repository) =>
+          repository.operations.some(
+            (operation) => operation.id === updated.id && operation.status === 'running'
+          )
+        )
+      const applyUpdate = (current: QueueResponse): QueueResponse => {
         const known = current.repositories.some(
           (repo) =>
             repo.repository_id === updated.repository_id ||
             repo.operations.some((op) => op.id === updated.id)
         )
+        // Only the operations change here; `lane_busy` and `index_busy`
+        // keep their fetched values, and the track reads them against the
+        // operations at hand (see deriveTrack).
         const repositories = current.repositories.map((repo) => ({
           ...repo,
           operations: repo.operations.some((op) => op.id === updated.id)
@@ -160,25 +188,31 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
                   repository_id: updated.repository_id,
                   repository_name: updated.repository ?? 'System',
                   lane_busy: false,
+                  index_busy: false,
                   operations: [updated],
                 },
               ],
         }
-      })
-      // A finished index stage changes the numbers at rest, so refresh
-      // the hub once the queue has settled rather than on every progress
-      // tick.
-      if (updated.category === 'index' && updated.status !== 'running') {
-        queryClient.invalidateQueries({ queryKey: HUB_KEY })
       }
+      queryClient.setQueryData<QueueResponse | undefined>(QUEUE_KEY, (current) =>
+        current ? applyUpdate(current) : current
+      )
+      // A newly running operation can take either the exclusive lane or the
+      // shared index slot. Fetch both authoritative flags and the holder;
+      // subsequent running/progress events only update the cached rows.
+      if (started) queryClient.invalidateQueries({ queryKey: QUEUE_KEY })
     },
     [queryClient]
   )
 
   const onProgress = useCallback(
     (progress: OperationProgressEvent['data']) => {
-      queryClient.setQueryData<QueueResponse | undefined>(QUEUE_KEY, (current) => {
-        if (!current) return current
+      // The active response will supply progress. Unlike status transitions,
+      // progress ticks must not sustain a chain of follow-up requests.
+      if (queryClient.isFetching({ queryKey: QUEUE_KEY }) > 0) {
+        return
+      }
+      const applyProgress = (current: QueueResponse): QueueResponse => {
         return {
           ...current,
           repositories: current.repositories.map((repo) => ({
@@ -188,7 +222,10 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
             ),
           })),
         }
-      })
+      }
+      queryClient.setQueryData<QueueResponse | undefined>(QUEUE_KEY, (current) =>
+        current ? applyProgress(current) : current
+      )
     },
     [queryClient]
   )
