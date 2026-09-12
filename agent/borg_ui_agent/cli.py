@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 from agent.borg_ui_agent import __version__
 from agent.borg_ui_agent.borg import detect_borg_binaries, detect_platform
@@ -37,6 +38,9 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("status")
     subparsers.add_parser("once")
     subparsers.add_parser("unregister")
+
+    set_server = subparsers.add_parser("set-server")
+    set_server.add_argument("url")
 
     run = subparsers.add_parser("run")
     run.add_argument(
@@ -132,6 +136,35 @@ def _unregister(args: argparse.Namespace) -> int:
     return 0
 
 
+def _set_server(args: argparse.Namespace) -> int:
+    """Point this endpoint at a different Borg UI server.
+
+    Only `server_url` moves. The agent id, its credential and its name are
+    rewritten unchanged, so the endpoint keeps its identity and its history on
+    the new address instead of enrolling a second time.
+    """
+    parsed = urlparse(args.url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError(
+            f"invalid server URL: {args.url!r} (expected http:// or https:// and a host)"
+        )
+    config = load_config(args.config)
+    server_url = args.url.rstrip("/")
+    config_path = save_config(
+        AgentConfig(
+            server_url=server_url,
+            agent_id=config.agent_id,
+            agent_token=config.agent_token,
+            name=config.name,
+        ),
+        args.config,
+    )
+    print(f"Server: {server_url}")
+    print(f"Config: {config_path}")
+    print("Restart the service for this to take effect.")
+    return 0
+
+
 def _run(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     AgentRuntime(config).run_forever(
@@ -170,11 +203,19 @@ def main(argv: Optional[list[str]] = None) -> int:
             return _once(args)
         if args.command == "unregister":
             return _unregister(args)
+        if args.command == "set-server":
+            return _set_server(args)
         if args.command == "run":
             return _run(args)
         if args.command == "service-check":
             return _service_check(args)
-    except (AgentClientError, OSError, KeyError, ServiceSetupError) as exc:
+    except (
+        AgentClientError,
+        OSError,
+        KeyError,
+        ServiceSetupError,
+        ValueError,
+    ) as exc:
         parser.exit(1, f"borg-ui-agent: {exc}\n")
     parser.error(f"unknown command: {args.command}")
     return 2
