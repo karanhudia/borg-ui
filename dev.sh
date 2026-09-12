@@ -92,6 +92,7 @@ cmd_test() {
 
 cmd_clean() {
     print_warning "This will remove all containers, volumes, and images"
+    print_warning "The dev database lives in the borg-ui-dev-db volume and will be destroyed"
     read -p "Are you sure? (y/N) " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -134,7 +135,7 @@ cmd_backend() {
 
 cmd_db() {
     print_info "Opening database shell..."
-    docker-compose exec borg-ui bash -c "cd /app/data && sqlite3 borg.db"
+    docker-compose -f docker-compose.dev.yml exec app sqlite3 /data/db/borg.db
 }
 
 cmd_init() {

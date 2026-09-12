@@ -19,7 +19,11 @@ services:
       - "${DEV_PORT:-8083}:${DEV_PORT:-8083}"
     volumes:
       - ./app:/app/app                    # Hot-reload: local source mounted over image
-      - ./.local-data:/data               # Local dev data (db, ssh keys, logs)
+      - ./.local-data:/data               # Local dev data (ssh keys, logs, caches)
+      # SQLite lives on a named volume, not the macOS bind mount: WAL needs a
+      # real mmap of borg.db-shm, and virtiofs can drop it under an open
+      # connection, which surfaces as "disk I/O error" mid-query.
+      - borg-ui-dev-db:/data/db
       - ${LOCAL_STORAGE_PATH:-/}:/local:rw
       - /etc/localtime:/etc/localtime:ro
       - /var/run/docker.sock:/var/run/docker.sock:rw
@@ -27,7 +31,7 @@ services:
       - PUID=0
       - PORT=${DEV_PORT:-8083}
       - DATA_DIR=/data
-      - DATABASE_URL=sqlite:////data/borg.db
+      - DATABASE_URL=sqlite:////data/db/borg.db
       - SECRET_KEY=dev-secret-key-not-for-production
       - ENVIRONMENT=development
       - ENABLE_RELOAD=true
@@ -76,6 +80,10 @@ services:
   #     start_period: 10s
   #   networks:
   #     - borg_dev_network
+
+volumes:
+  borg-ui-dev-db:
+    name: borg-ui-dev-db
 
 networks:
   borg_dev_network:
