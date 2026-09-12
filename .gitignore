@@ -14,6 +14,8 @@
 /node_modules
 /package-lock.json
 /package.json
+# ...except the dependency-free scripts file that fronts ./scripts/dev.sh
+!/package.json
 
 # Built static files (generated during Docker build)
 /app/static/*

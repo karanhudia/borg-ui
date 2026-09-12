@@ -1,0 +1,7 @@
+{
+  "name": "borg-ui",
+  "private": true,
+  "scripts": {
+    "dev": "./scripts/dev.sh"
+  }
+}
