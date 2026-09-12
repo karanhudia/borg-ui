@@ -556,7 +556,7 @@ async def measure_repository_size(
     use_bypass_lock: bool = False,
 ) -> SizeResult:
     """Best available size and `last_modified` for a server-executed
-    repository. Never returns 0 bytes: unknown is `None`."""
+    repository. An empty Borg 2 index is 0 bytes; unknown is `None`."""
     from app.utils.borg_env import effective_repository_remote_path
 
     remote_path = effective_repository_remote_path(repository)
@@ -620,9 +620,9 @@ async def measure_repository_size(
     )
     if indexed is not None:
         return SizeResult(
-            bytes=indexed[0] or None,
+            bytes=indexed[0],
             objects=indexed[1],
-            source=SOURCE_BORG2_INDEX if indexed[0] else None,
+            source=SOURCE_BORG2_INDEX,
             last_modified=last_modified,
         )
 

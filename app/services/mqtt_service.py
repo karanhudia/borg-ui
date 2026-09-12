@@ -584,7 +584,7 @@ class RepositoryStatePublisher:
         """Publish all per-repository state topics from repository table."""
         try:
             success = True
-            size_bytes = stored_size_bytes(repository) or 0
+            size_bytes = stored_size_bytes(repository)
             if not self._mqtt_service.publish_repository_size(
                 repository.id,
                 size_bytes,
@@ -1118,7 +1118,7 @@ class MQTTService:
             payload["archive"] = archive
         return self.publish(f"repositories/{repository_id}/status", payload, qos=1)
 
-    def publish_repository_size(self, repository_id: int, total: int):
+    def publish_repository_size(self, repository_id: int, total: Optional[int]):
         if not self.config["enabled"]:
             return False
         return self.publish(

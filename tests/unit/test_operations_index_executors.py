@@ -1440,3 +1440,46 @@ async def test_agent_listing_reports_the_timeout_when_the_cancel_fails(
     db.commit()
     db.expire_all()
     assert db.get(type(repo), repo.id).total_size == "1.0 GB"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("index_result", [None, (0, 0), (2048, 3)])
+async def test_run_stats_persists_an_empty_borg2_index_but_not_failed_measurement(
+    db, repo, monkeypatch, index_result
+):
+    from app.core.borg2 import borg2
+    from app.services import storage_usage
+
+    repo.borg_version = 2
+    repo.total_size = "42.00 B"
+    repo.total_size_bytes = 42
+    repo.total_size_source = "compact_stats"
+    previous_measurement = datetime(2026, 1, 1)
+    repo.total_size_measured_at = previous_measurement
+    db.commit()
+    monkeypatch.setattr(
+        index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
+    )
+    monkeypatch.setattr(borg2, "rinfo", AsyncMock(return_value={"success": False}))
+    monkeypatch.setattr(
+        storage_usage, "borg2_index_size", AsyncMock(return_value=index_result)
+    )
+    monkeypatch.setattr(storage_usage, "storage_used", AsyncMock(return_value=None))
+
+    outcome = await index_exec.run_stats(_ctx(db, repo, kind="stats"))
+    db.expire_all()
+
+    assert outcome.status == "completed"
+    if index_result is None:
+        assert outcome.result["bytes"] is None
+        assert repo.total_size_bytes == 42
+        assert repo.total_size_measured_at == previous_measurement
+        assert repo.total_size_source == "compact_stats"
+    else:
+        assert outcome.result["bytes"] == index_result[0]
+        assert outcome.result["source"] == "borg2_index"
+        assert repo.total_size_bytes == index_result[0]
+        assert repo.total_size_source == "borg2_index"
+        assert repo.total_size_measured_at > previous_measurement
+        assert repo.total_size == ("0.00 B" if index_result[0] == 0 else "2.00 KB")

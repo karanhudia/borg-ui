@@ -530,10 +530,8 @@ async def run_stats(ctx) -> Outcome:
             ),
             scope="metadata",
         )
-        # `measure_repository_size` reports unknown as None and never 0, so
-        # this is "a size came back"; an emptied repository reads as unknown
-        # and keeps its stored size until a source can say "empty"
-        if measured.bytes:
+        # Preserve a successful empty measurement; only None is unknown.
+        if measured.bytes is not None:
             set_repository_size(repository, measured.bytes, measured.source)
         if measured.last_modified:
             repository.borg_last_modified = measured.last_modified

@@ -676,6 +676,27 @@ class TestRepositoryStatePublisher:
         ]
         assert sizes == [{"total": 2_350_000_000}]
 
+    @pytest.mark.parametrize("size_bytes", [None, 0])
+    def test_publish_repository_data_distinguishes_unknown_from_empty(
+        self, db_session, size_bytes
+    ):
+        repo = Repository(
+            name="Size state", path="/repo/size-state", total_size_bytes=size_bytes
+        )
+        db_session.add(repo)
+        db_session.commit()
+        mqtt_service = _create_mqtt_service_configured()
+        publisher = RepositoryStatePublisher(mqtt_service)
+
+        assert publisher.publish_repository_data(repo, set(), {}, {})
+
+        sizes = [
+            call.args[1]
+            for call in mqtt_service.publish.call_args_list
+            if call.args and call.args[0] == f"repositories/{repo.id}/size"
+        ]
+        assert sizes == [{"total": size_bytes}]
+
     def test_publish_repository_data_with_running_job(self, db_session):
         """Should include running job data in progress payload."""
         repo = Repository(name="Test", path="/repo")
