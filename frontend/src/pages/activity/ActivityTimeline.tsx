@@ -13,14 +13,17 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ActivityItem } from '../Activity'
-import type { ActionButton } from '../../components/RowActions'
+import RowActions, { type ActionButton } from '../../components/RowActions'
 import EmptyStateCard from '../../components/EmptyStateCard'
-import RunEntry from './RunEntry'
+import { hookFlow, isPreHook, type FlowNode } from '../../components/activity/runChainLanes'
+import RunEntry, { StepRow } from './RunEntry'
 import { ENTRY_COLUMNS, metaGridSx, outcomeColor, umbrellaColor } from './entryGrid'
 import { formatDurationSeconds, parseBackendDate } from '../../utils/dateUtils'
 import {
   ACTIVE_STATUSES,
+  chainStep,
   clusterRuns,
+  isPlanHook,
   outcomeLabel,
   dayLabel,
   flattenRuns,
@@ -100,12 +103,31 @@ function UmbrellaBand({
   const time = runTime(cluster.items[0])
   const accent = umbrellaColor(theme, cluster.umbrella.kind)
   const Icon = UMBRELLA_ICONS[cluster.umbrella.kind]
+  // A hook the plan ran around the whole plan belongs to the plan run, and
+  // the band is the plan run: it hangs from here as the band's own chain,
+  // not beside the repositories as another member.
+  const planHooks = useMemo(() => cluster.items.filter((item) => isPlanHook(item)), [cluster.items])
+  const members = useMemo(() => cluster.items.filter((item) => !isPlanHook(item)), [cluster.items])
+  // The plan ran them around its repositories, so they read around them:
+  // the pre ones above the members, the post ones below. Folding both into
+  // one strip at the top would put the post-backup script before the backup
+  // it followed.
+  const hookSteps = useMemo(
+    () => planHooks.map((hook) => ({ item: hook, op: chainStep(hook) })),
+    [planHooks]
+  )
+  const preHooks = hookFlow(hookSteps.filter((hook) => isPreHook(hook.op)).map((h) => h.op))
+  const postHooks = hookFlow(hookSteps.filter((hook) => !isPreHook(hook.op)).map((h) => h.op))
+  const hookActions = (node: FlowNode) => {
+    const item = hookSteps.find((hook) => hook.op.id === node.op.id)?.item
+    return item ? <RowActions row={item} actions={actions} iconOpacity={0.55} /> : null
+  }
   const steps = flattenRuns(cluster.items)
   const status = clusterStatus(steps)
   const span = clusterSpan(steps)
   const outcome = status === 'completed' ? null : outcomeLabel(status, t)
-  const repositories = repositoryCount(cluster.items)
-  const many = cluster.items.length > 1
+  const repositories = repositoryCount(members)
+  const many = members.length > 1 || planHooks.length > 0
   return (
     <Box
       data-testid="umbrella-band"
@@ -186,7 +208,7 @@ function UmbrellaBand({
             <Typography variant="body2" sx={{ color: 'text.secondary' }} noWrap>
               {[
                 repositories > 0 && t('activity.planRun.repositories', { count: repositories }),
-                t('activity.planRun.members', { count: cluster.items.length }),
+                t('activity.planRun.members', { count: members.length }),
               ]
                 .filter(Boolean)
                 .join(' · ')}
@@ -216,13 +238,19 @@ function UmbrellaBand({
           )}
         </Box>
       </Box>
-      {cluster.items.map((item) => (
+      {preHooks.map((node, index) => (
+        <StepRow key={`pre-${node.op.id ?? index}`} node={node} trailing={hookActions(node)} />
+      ))}
+      {members.map((item) => (
         <RunEntry
           key={getKey(item)}
           item={item}
           actions={actions}
           showRepository={showRepository}
         />
+      ))}
+      {postHooks.map((node, index) => (
+        <StepRow key={`post-${node.op.id ?? index}`} node={node} trailing={hookActions(node)} />
       ))}
     </Box>
   )

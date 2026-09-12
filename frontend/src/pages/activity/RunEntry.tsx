@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Box, LinearProgress, Tooltip, Typography, alpha, keyframes, useTheme } from '@mui/material'
 import { Terminal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -125,7 +125,10 @@ const timeSx = {
 // One step of the run, on the same rail and time column as the runs
 // themselves, so the journey reads as a timeline: when each hook, stage,
 // and refresh step started, and how long it took.
-function StepRow({ node }: { node: FlowNode }) {
+// `trailing` is for a step whose logs live nowhere else: a hook around one
+// backup is appended to that backup's log, but a hook around the whole plan
+// has no operation to be appended to, so its row carries its own actions.
+export function StepRow({ node, trailing }: { node: FlowNode; trailing?: React.ReactNode }) {
   const { t } = useTranslation()
   const { op, role } = node
   const started = op.started_at ? parseBackendDate(op.started_at) : null
@@ -212,6 +215,7 @@ function StepRow({ node }: { node: FlowNode }) {
             {op.progress_message}
           </Typography>
         )}
+        {trailing && <Box sx={{ ml: 'auto', pl: 1 }}>{trailing}</Box>}
       </Box>
     </Box>
   )

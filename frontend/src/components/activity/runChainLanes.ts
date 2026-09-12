@@ -59,6 +59,17 @@ const PRE_HOOKS = new Set(['pre-backup', 'source-pre-backup'])
 // enqueued, then whatever refresh the root enqueued directly. Hooks sit by
 // role rather than clock: a post-backup script can start a hair after the
 // inline prune, and still belongs beside the backup it wrapped.
+export const isPreHook = (op: RunChainOperation): boolean => PRE_HOOKS.has(op.hook_type ?? '')
+
+// The hooks a plan run wrapped around the whole plan, in the order they ran.
+// There is no operation between them: what they wrapped is the band they
+// hang from, and its members sit between the pre ones and the post ones.
+export function hookFlow(hooks: RunChainOperation[]): FlowNode[] {
+  return [...hooks]
+    .sort((a, b) => startOf(a) - startOf(b))
+    .map((op) => ({ role: 'hook' as const, op }))
+}
+
 export function buildFlow(root: RunChainOperation, steps: RunChainOperation[]): FlowNode[] {
   const hooks = steps.filter(isHook).sort((a, b) => startOf(a) - startOf(b))
   const pre = hooks.filter((hook) => PRE_HOOKS.has(hook.hook_type ?? ''))

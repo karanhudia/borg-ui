@@ -10,6 +10,11 @@ export const activityKey = (item: ActivityItem) => item.activity_key ?? `${item.
 
 export const ACTIVE_STATUSES = new Set(['running', 'pending', 'queued'])
 
+// A hook around one backup names that backup and rides under it. A hook
+// around the whole plan names only the run, and hangs from its band.
+export const isPlanHook = (item: ActivityItem): boolean =>
+  item.type === 'script_execution' && item.operation_id == null && item.backup_plan_run_id != null
+
 // The status dot already carries these: green and done, blue and moving,
 // hollow and waiting. A run spells its status out only when the word says
 // something the colour cannot, which is every way a run can end badly.
@@ -91,6 +96,26 @@ export function runTitle(item: ActivityItem, t: TFunction): string {
 
 // The chain a run draws beneath itself. An index run lists itself first
 // so the row reads as "Reconcile run" over all its steps.
+// One row of a chain as the chain widgets read it. A hook keeps the name of
+// the script that ran, which is the only thing telling two hooks apart.
+export function chainStep(step: ActivityItem): RunChainOperation {
+  return {
+    id: step.id,
+    kind: step.kind ?? step.type,
+    type: step.type,
+    hook_type: step.hook_type,
+    name: step.package_name,
+    status: step.status,
+    trigger: step.trigger,
+    depends_on_id: step.depends_on_id,
+    started_at: step.started_at,
+    completed_at: step.completed_at,
+    progress_current: step.progress_current,
+    progress_total: step.progress_total,
+    progress_message: step.progress_message,
+  }
+}
+
 export function runChain(item: ActivityItem): RunChainOperation {
   const followups = item.followups ?? []
   const steps = isIndexRun(item) ? [item, ...followups] : followups
@@ -101,21 +126,7 @@ export function runChain(item: ActivityItem): RunChainOperation {
     status: item.status,
     started_at: item.started_at,
     completed_at: item.completed_at,
-    followups: steps.map((step) => ({
-      id: step.id,
-      kind: step.kind ?? step.type,
-      type: step.type,
-      hook_type: step.hook_type,
-      name: step.package_name,
-      status: step.status,
-      trigger: step.trigger,
-      depends_on_id: step.depends_on_id,
-      started_at: step.started_at,
-      completed_at: step.completed_at,
-      progress_current: step.progress_current,
-      progress_total: step.progress_total,
-      progress_message: step.progress_message,
-    })),
+    followups: steps.map(chainStep),
   }
 }
 

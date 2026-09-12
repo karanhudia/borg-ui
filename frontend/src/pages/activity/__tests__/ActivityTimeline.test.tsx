@@ -260,16 +260,21 @@ describe('ActivityTimeline', () => {
     expect(bands[0]).toHaveTextContent('Manual')
     const plan = bands[1]
     expect(plan).toHaveTextContent('Plan · nightly')
-    expect(plan).toHaveTextContent('2 repositories · 3 runs')
+    // The repositories are the members; the plan's own hook is not one.
+    expect(plan).toHaveTextContent('2 repositories · 2 runs')
     // Once as the band's roll-up, once beside the failed member's duration.
     expect(within(plan).getAllByText(/^Failed/)).toHaveLength(2)
     expect(
       within(plan)
         .getAllByTestId('run-entry')
         .map((entry) => entry.getAttribute('data-status'))
-    ).toEqual(['completed', 'completed', 'failed'])
-    // A plan-level hook says which hook it was.
-    expect(within(plan).getAllByTestId('run-kind')[0]).toHaveTextContent('Pre-backup script')
+    ).toEqual(['completed', 'failed'])
+    // The hook the plan ran around the whole plan reads above the members it
+    // opened, and names the script that ran.
+    const steps = within(plan).getAllByTestId('run-step')
+    expect(steps).toHaveLength(1)
+    expect(steps[0]).toHaveTextContent('Pre-backup script')
+    expect(steps[0]).toHaveTextContent('Mount volumes')
   })
 
   it('groups a schedule firing across repositories by schedule and time', () => {

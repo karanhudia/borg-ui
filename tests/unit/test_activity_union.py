@@ -465,30 +465,27 @@ class TestFailedPlanRuns:
         assert body[0]["repository"] == plan.name
         assert body[0]["trigger"] == "plan"
 
-    def test_plan_level_hooks_ride_under_the_plan_run(
+    def test_a_clean_plan_run_gets_no_row_of_its_own(
         self, test_client, test_db, admin_headers
     ):
         from app.database.models import ScriptExecution
 
         _, run = self._plan_run(test_db, status="completed", error=None)
-        for hook in ("pre-backup", "post-backup"):
-            test_db.add(
-                ScriptExecution(
-                    backup_plan_id=run.backup_plan_id,
-                    backup_plan_run_id=run.id,
-                    hook_type=hook,
-                    status="completed",
-                    started_at=utc_now(),
-                )
+        test_db.add(
+            ScriptExecution(
+                backup_plan_id=run.backup_plan_id,
+                backup_plan_run_id=run.id,
+                hook_type="pre-backup",
+                status="completed",
+                started_at=utc_now(),
             )
+        )
         test_db.commit()
+        # The band names the run already; its plan-level hooks hang from
+        # there, so the feed returns the hook and no run row beside it.
         body = test_client.get("/api/activity/recent", headers=admin_headers).json()
-        # One run with its hooks as steps, not three rows side by side.
-        assert [i["type"] for i in body] == ["backup_plan_run"]
-        assert [f["hook_type"] for f in body[0]["followups"]] == [
-            "pre-backup",
-            "post-backup",
-        ]
+        assert [i["type"] for i in body] == ["script_execution"]
+        assert body[0]["backup_plan_run_id"] == run.id
 
     def test_failed_plan_run_is_silent_when_its_own_run_failed(
         self, test_client, test_db, admin_headers

@@ -854,16 +854,17 @@ async def list_recent_activity(
                 }
             )
 
-    # Two kinds of plan run need a row of their own. One that failed before
-    # its backups ran, or after they all succeeded, has no operation to carry
-    # its error (a scheduled plan refused by admission, a hook failure, a lost
-    # database). And one with plan-level hooks needs something for them to
-    # ride under: a hook around a backup rides under that backup, and a hook
-    # around the whole plan belongs to the run, not beside it.
-    if (not job_type or job_type == "backup_plan_run") and not repository_scoped:
-        run_query = db.query(BackupPlanRun)
-        if status:
-            run_query = run_query.filter(BackupPlanRun.status == status)
+    # A plan run that failed before its backups ran, or after they all
+    # succeeded, has no operation to carry its error (a scheduled plan refused
+    # by admission, a hook failure, a lost database), so it gets a row. A run
+    # that went fine needs none: its band already names it, and its plan-level
+    # hooks hang from that band.
+    if (
+        (not job_type or job_type == "backup_plan_run")
+        and (not status or status == "failed")
+        and not repository_scoped
+    ):
+        run_query = db.query(BackupPlanRun).filter(BackupPlanRun.status == "failed")
         if before is not None:
             run_query = run_query.filter(
                 func.coalesce(BackupPlanRun.completed_at, BackupPlanRun.created_at)
@@ -892,22 +893,8 @@ async def list_recent_activity(
             if run_ids
             else set()
         )
-        with_hooks = (
-            {
-                run_id
-                for (run_id,) in db.query(ScriptExecution.backup_plan_run_id)
-                .filter(
-                    ScriptExecution.backup_plan_run_id.in_(run_ids),
-                    ScriptExecution.operation_id.is_(None),
-                )
-                .distinct()
-            }
-            if run_ids
-            else set()
-        )
         for run in runs:
-            failed_alone = run.status == "failed" and run.id not in spoken_for
-            if not failed_alone and run.id not in with_hooks:
+            if run.id in spoken_for:
                 continue
             plan = (
                 db.get(BackupPlan, run.backup_plan_id) if run.backup_plan_id else None
@@ -917,7 +904,7 @@ async def list_recent_activity(
                     "activity_key": f"backup-plan-run-{run.id}",
                     "id": run.id,
                     "type": "backup_plan_run",
-                    "status": run.status,
+                    "status": "failed",
                     "started_at": run.started_at,
                     "completed_at": run.completed_at,
                     "error_message": run.error_message,
@@ -1034,16 +1021,10 @@ async def list_recent_activity(
     # and reads as part of the run rather than a manual script beside it.
     if collapse_runs:
         parents = {a["id"]: a for a in activities if a.get("kind") is not None}
-        plan_runs = {
-            a["backup_plan_run_id"]: a
-            for a in activities
-            if a["type"] == "backup_plan_run"
-        }
         top_level: List[dict] = []
         for activity in activities:
             parent = (
                 parents.get(activity.get("operation_id"))
-                or plan_runs.get(activity.get("backup_plan_run_id"))
                 if activity["type"] == "script_execution"
                 else None
             )
