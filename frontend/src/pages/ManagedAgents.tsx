@@ -36,7 +36,6 @@ import {
   ArrowUpCircle,
   Ban,
   CheckCircle,
-  Copy,
   Eye,
   Info,
   Pin,
@@ -75,6 +74,7 @@ import AgentManualUpgradeChip from './managed-agents/AgentManualUpgradeChip'
 import AgentUpgradeChip from './managed-agents/AgentUpgradeChip'
 import AgentPinControl from './managed-agents/AgentPinControl'
 import AgentUpgradeDialog from './managed-agents/AgentUpgradeDialog'
+import CopyableCodeBlock from './managed-agents/CopyableCodeBlock'
 import AgentUpgradeStateChip from './managed-agents/AgentUpgradeStateChip'
 import { canUpgradeNow } from './managed-agents/agentUpgradeEligibility'
 import BorgInstallModeRadioGroup from './managed-agents/BorgInstallModeRadioGroup'
@@ -970,68 +970,6 @@ export function AgentSetupHelpContent({
         </Box>
       </Box>
     </Stack>
-  )
-}
-
-function CopyableCodeBlock({
-  value,
-  copyLabel,
-  onCopy,
-}: {
-  value: string
-  copyLabel: string
-  onCopy: () => void
-}) {
-  return (
-    <Box sx={{ position: 'relative', minWidth: 0 }}>
-      <Box
-        component="code"
-        sx={{
-          display: 'block',
-          p: 1.5,
-          pr: 5.5,
-          borderRadius: 1,
-          border: '1px solid',
-          borderColor: 'divider',
-          bgcolor: 'action.hover',
-          color: 'text.primary',
-          overflowX: 'auto',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-          fontSize: '0.8rem',
-          fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
-        }}
-      >
-        {value}
-      </Box>
-      <Tooltip title={copyLabel}>
-        <IconButton
-          aria-label={copyLabel}
-          size="small"
-          onClick={onCopy}
-          sx={{
-            position: 'absolute',
-            top: 8,
-            right: 8,
-            border: '1px solid',
-            color: 'primary.main',
-            borderColor: (theme) => alpha(theme.palette.primary.main, 0.45),
-            bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
-            '&:hover': {
-              borderColor: 'primary.main',
-              bgcolor: (theme) => alpha(theme.palette.primary.main, 0.14),
-            },
-            '&:focus-visible': {
-              outline: '2px solid',
-              outlineColor: 'primary.main',
-              outlineOffset: 2,
-            },
-          }}
-        >
-          <Copy size={16} />
-        </IconButton>
-      </Tooltip>
-    </Box>
   )
 }
 
