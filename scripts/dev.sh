@@ -16,7 +16,12 @@ DEV_PORT=8083
 if [ -f .env ]; then
     _DEV_PORT=$(grep '^DEV_PORT=' .env | cut -d= -f2)
     [ -n "$_DEV_PORT" ] && DEV_PORT="$_DEV_PORT"
+    # Tunnel hostnames (Cloudflare, ngrok) the Vite dev server should accept.
+    # Comma-separated, e.g. VITE_ALLOWED_HOSTS=borgdev.example.com
+    _ALLOWED_HOSTS=$(grep '^VITE_ALLOWED_HOSTS=' .env | cut -d= -f2-)
+    [ -n "$_ALLOWED_HOSTS" ] && VITE_ALLOWED_HOSTS="$_ALLOWED_HOSTS"
 fi
+export VITE_ALLOWED_HOSTS
 
 # Stop Docker services and background jobs on exit
 trap 'echo "Stopping dev environment..."; docker-compose -p borg-ui-dev -f docker-compose.dev.yml down 2>/dev/null; kill $(jobs -p) 2>/dev/null' EXIT
