@@ -15,13 +15,13 @@ import { useTranslation } from 'react-i18next'
 import type { ActivityItem } from '../Activity'
 import type { ActionButton } from '../../components/RowActions'
 import EmptyStateCard from '../../components/EmptyStateCard'
-import StatusBadge from '../../components/StatusBadge'
 import RunEntry from './RunEntry'
-import { ENTRY_COLUMNS, metaGridSx, umbrellaColor } from './entryGrid'
+import { ENTRY_COLUMNS, metaGridSx, outcomeColor, umbrellaColor } from './entryGrid'
 import { formatDurationSeconds, parseBackendDate } from '../../utils/dateUtils'
 import {
   ACTIVE_STATUSES,
   clusterRuns,
+  outcomeLabel,
   dayLabel,
   flattenRuns,
   groupByDay,
@@ -103,9 +103,8 @@ function UmbrellaBand({
   const steps = flattenRuns(cluster.items)
   const status = clusterStatus(steps)
   const span = clusterSpan(steps)
-  const repositories = repositoryCount(
-    cluster.items.filter((item) => item.type !== 'script_execution')
-  )
+  const outcome = status === 'completed' ? null : outcomeLabel(status, t)
+  const repositories = repositoryCount(cluster.items)
   const many = cluster.items.length > 1
   return (
     <Box
@@ -193,23 +192,24 @@ function UmbrellaBand({
                 .join(' · ')}
             </Typography>
           )}
-          {/* The band carries no status dot of its own, so it keeps the
-              roll-up for everything except the all-clear, which its members'
-              green dots already say. A chain still running under a finished
-              member shows up here and nowhere else. */}
-          {many && status !== 'completed' && <StatusBadge status={status} />}
           {many && (
             <Box sx={metaGridSx(actions.length)}>
-              <Box />
+              {/* The same cell the members use: how it went, then how long it
+                  took. The band carries no status dot of its own, so it says
+                  everything but the all-clear its members' green dots already
+                  say -- a chain still running under a finished member shows
+                  up here and nowhere else. */}
               <Typography
                 variant="body2"
+                noWrap
                 sx={{
-                  color: 'text.secondary',
+                  color: (theme) =>
+                    outcome ? outcomeColor(theme, status) : theme.palette.text.secondary,
                   fontVariantNumeric: 'tabular-nums',
                   textAlign: 'right',
                 }}
               >
-                {span ?? ''}
+                {[outcome, span].filter(Boolean).join(' · ')}
               </Typography>
               <Box />
             </Box>

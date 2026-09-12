@@ -3,6 +3,7 @@ import { isToday, isYesterday } from 'date-fns'
 import type { ActivityItem } from '../Activity'
 import type { RunChainOperation } from '../../components/activity/RunChainRow'
 import { getTypeLabel } from '../../components/jobs/jobLabels'
+import { statusLabel } from '../../components/StatusBadge'
 import { formatDurationSeconds, parseBackendDate } from '../../utils/dateUtils'
 
 export const activityKey = (item: ActivityItem) => item.activity_key ?? `${item.type}-${item.id}`
@@ -13,6 +14,12 @@ export const ACTIVE_STATUSES = new Set(['running', 'pending', 'queued'])
 // hollow and waiting. A run spells its status out only when the word says
 // something the colour cannot, which is every way a run can end badly.
 export const QUIET_STATUSES = new Set(['completed', 'running', 'pending', 'queued'])
+
+// "Completed with Warnings" is a badge's worth of words; beside a duration it
+// only needs to say which way the run went.
+export function outcomeLabel(status: string, t: TFunction): string {
+  return status === 'completed_with_warnings' ? t('status.warnings') : statusLabel(status, t)
+}
 
 // A collapsed run and every step under it, so a summary sees the follow-up
 // chain and the hooks, not just the row that started them.
@@ -157,9 +164,15 @@ export function runDuration(item: ActivityItem): string | null {
 }
 
 // Distinct repositories among the listed runs, for the summary line.
+// A script and a plan run carry a name in the repository slot (the script's
+// own, the plan's) but ran against no repository of their own, so they must
+// not be counted as one.
+const NOT_A_REPOSITORY = new Set(['script_execution', 'backup_plan_run'])
+
 export function repositoryCount(items: ActivityItem[]): number {
   const keys = new Set<string>()
   for (const item of items) {
+    if (NOT_A_REPOSITORY.has(item.type)) continue
     const key = item.repository_id ?? item.repository_path ?? item.repository
     if (key != null) keys.add(String(key))
   }

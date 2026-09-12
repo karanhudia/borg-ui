@@ -854,58 +854,70 @@ async def list_recent_activity(
                 }
             )
 
-    # A plan run that failed before its backups ran, or after they all
-    # succeeded, has no operation of its own to say so: its error lives on the
-    # run. Without this the feed shows the run's pre-backup hook alone and the
-    # band reads as a success (a scheduled plan refused by admission, a hook
-    # failure, a lost database).
-    if (
-        (not job_type or job_type == "backup_plan_run")
-        and (not status or status == "failed")
-        and not repository_scoped
-    ):
-        failed_run_query = db.query(BackupPlanRun).filter(
-            BackupPlanRun.status == "failed"
-        )
+    # Two kinds of plan run need a row of their own. One that failed before
+    # its backups ran, or after they all succeeded, has no operation to carry
+    # its error (a scheduled plan refused by admission, a hook failure, a lost
+    # database). And one with plan-level hooks needs something for them to
+    # ride under: a hook around a backup rides under that backup, and a hook
+    # around the whole plan belongs to the run, not beside it.
+    if (not job_type or job_type == "backup_plan_run") and not repository_scoped:
+        run_query = db.query(BackupPlanRun)
+        if status:
+            run_query = run_query.filter(BackupPlanRun.status == status)
         if before is not None:
-            failed_run_query = failed_run_query.filter(
+            run_query = run_query.filter(
                 func.coalesce(BackupPlanRun.completed_at, BackupPlanRun.created_at)
                 < before
             )
-        failed_runs = (
-            failed_run_query.order_by(
+        runs = (
+            run_query.order_by(
                 BackupPlanRun.completed_at.desc(), BackupPlanRun.id.desc()
             )
             .limit(limit)
             .all()
         )
+        run_ids = [r.id for r in runs]
         # A run whose own operations failed already says so, in the same band
-        # and with more detail. This row is for the failure they do not show.
+        # and with more detail. The row is for the failure they do not show.
         spoken_for = (
             {
                 run_id
                 for (run_id,) in db.query(Operation.backup_plan_run_id)
                 .filter(
-                    Operation.backup_plan_run_id.in_([r.id for r in failed_runs]),
+                    Operation.backup_plan_run_id.in_(run_ids),
                     Operation.status == "failed",
                 )
                 .distinct()
             }
-            if failed_runs
+            if run_ids
             else set()
         )
-        for run in failed_runs:
-            if run.id in spoken_for:
+        with_hooks = (
+            {
+                run_id
+                for (run_id,) in db.query(ScriptExecution.backup_plan_run_id)
+                .filter(
+                    ScriptExecution.backup_plan_run_id.in_(run_ids),
+                    ScriptExecution.operation_id.is_(None),
+                )
+                .distinct()
+            }
+            if run_ids
+            else set()
+        )
+        for run in runs:
+            failed_alone = run.status == "failed" and run.id not in spoken_for
+            if not failed_alone and run.id not in with_hooks:
                 continue
             plan = (
                 db.get(BackupPlan, run.backup_plan_id) if run.backup_plan_id else None
             )
             activities.append(
                 {
-                    "activity_key": f"backup-plan-run-failed-{run.id}",
+                    "activity_key": f"backup-plan-run-{run.id}",
                     "id": run.id,
                     "type": "backup_plan_run",
-                    "status": "failed",
+                    "status": run.status,
                     "started_at": run.started_at,
                     "completed_at": run.completed_at,
                     "error_message": run.error_message,
@@ -1022,10 +1034,16 @@ async def list_recent_activity(
     # and reads as part of the run rather than a manual script beside it.
     if collapse_runs:
         parents = {a["id"]: a for a in activities if a.get("kind") is not None}
+        plan_runs = {
+            a["backup_plan_run_id"]: a
+            for a in activities
+            if a["type"] == "backup_plan_run"
+        }
         top_level: List[dict] = []
         for activity in activities:
             parent = (
                 parents.get(activity.get("operation_id"))
+                or plan_runs.get(activity.get("backup_plan_run_id"))
                 if activity["type"] == "script_execution"
                 else None
             )
@@ -1035,6 +1053,13 @@ async def list_recent_activity(
             activity["trigger"] = parent.get("trigger", activity["trigger"])
             activity.pop("_sort_at", None)
             parent["followups"].append(activity)
+        # Steps read in the order they happened: a pre-backup hook before the
+        # run it opened, a post-backup hook after it. The sources arrive
+        # newest-first, which is the order a feed wants and a chain does not.
+        for item in top_level:
+            item["followups"].sort(
+                key=lambda step: (step["started_at"] or datetime.min, step["id"])
+            )
         activities = top_level
 
     # The category and trigger filters apply to top-level rows only, after

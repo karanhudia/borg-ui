@@ -1,17 +1,7 @@
 import { useMemo, useState } from 'react'
-import {
-  Box,
-  LinearProgress,
-  Tooltip,
-  Typography,
-  alpha,
-  keyframes,
-  useTheme,
-  type Theme,
-} from '@mui/material'
+import { Box, LinearProgress, Tooltip, Typography, alpha, keyframes, useTheme } from '@mui/material'
 import { Terminal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { TFunction } from 'i18next'
 import type { ActivityItem } from '../Activity'
 import RepositoryCell from '../../components/RepositoryCell'
 import RowActions, { type ActionButton } from '../../components/RowActions'
@@ -31,8 +21,16 @@ import { CATEGORY_ICONS, categoryColor } from '../../components/categoryStyle'
 import { getSkipReasonLabel, getTransportLabel } from '../../components/jobs/jobLabels'
 import { formatDurationSeconds, formatElapsedTime, parseBackendDate } from '../../utils/dateUtils'
 import type { OperationCategory } from '../../types/operations'
-import { ACTIVE_STATUSES, QUIET_STATUSES, runChain, runDuration, runTime, runTitle } from './runs'
-import { ENTRY_COLUMNS, metaGridSx, statusColor } from './entryGrid'
+import {
+  ACTIVE_STATUSES,
+  QUIET_STATUSES,
+  outcomeLabel,
+  runChain,
+  runDuration,
+  runTime,
+  runTitle,
+} from './runs'
+import { ENTRY_COLUMNS, metaGridSx, outcomeColor, statusColor } from './entryGrid'
 
 const pulse = keyframes`
   0% { box-shadow: 0 0 0 0 var(--pulse-color); }
@@ -79,23 +77,6 @@ function StatusNode({ status, small = false }: { status: string; small?: boolean
       />
     </Tooltip>
   )
-}
-
-// The dot already carries these: green and done, blue and moving, hollow and
-// waiting. A row spells its status out only when the word says something the
-// colour cannot, which is every way a run can end badly.
-function outcomeColor(theme: Theme, status: string): string {
-  if (status === 'failed') return theme.palette.error.main
-  if (status === 'completed_with_warnings' || status === 'needs_backup') {
-    return theme.palette.warning.main
-  }
-  return theme.palette.text.secondary
-}
-
-// "Completed with Warnings" is a badge's worth of words; beside a duration it
-// only needs to say which way the run went.
-function outcomeLabel(status: string, t: TFunction): string {
-  return status === 'completed_with_warnings' ? t('status.warnings') : statusLabel(status, t)
 }
 
 // What ran, as a category-coloured token. A hook script says which hook

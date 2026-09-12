@@ -193,8 +193,9 @@ describe('ActivityTimeline', () => {
     })
     const band = screen.getByTestId('umbrella-band')
     // Both members finished; only the nested step is still running, and
-    // the band says so. Steps carry no status text of their own.
-    expect(within(band).getByText('Running')).toBeInTheDocument()
+    // the band says so, in the cell that also carries its span. Steps carry
+    // no status text of their own.
+    expect(within(band).getByText(/^Running/)).toBeInTheDocument()
   })
 
   it('groups the runs of one plan run under one band, in the order they happened', () => {

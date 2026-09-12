@@ -41,6 +41,15 @@ export function statusColor(theme: Theme, status: string): string {
   )
 }
 
+// The colour an outcome is spelled in, for the rows and the band alike.
+export function outcomeColor(theme: Theme, status: string): string {
+  if (status === 'failed') return theme.palette.error.main
+  if (status === 'completed_with_warnings' || status === 'needs_backup') {
+    return theme.palette.warning.main
+  }
+  return theme.palette.text.secondary
+}
+
 // One colour per umbrella, so a plan run, a schedule firing, and a manual
 // click read differently at a glance.
 export function umbrellaColor(theme: Theme, kind: UmbrellaKind): string {
