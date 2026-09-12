@@ -225,7 +225,15 @@ export function clusterRuns(items: ActivityItem[], t: TFunction): Cluster[] {
           ? `id:${item.schedule_id}`
           : item.schedule_name != null
             ? `name:${item.schedule_name}`
-            : `operation:${item.kind ?? item.type}`
+            : // A repository's own check and restore-check schedules are
+              // columns on the repository, not schedule rows, so they arrive
+              // without an id. They are still one schedule each -- the
+              // Schedule page lists them one card per repository, with their
+              // own cron and timezone -- so they are keyed by the repository
+              // they belong to. Keying them by operation alone merged two
+              // repositories' schedules whenever they happened to fire
+              // together, which reads as one schedule fanning out.
+              `repository:${item.repository_id ?? item.repository ?? 'none'}:${item.kind ?? item.type}`
       const time = runTime(item)?.getTime() ?? 0
       const open = [...byKey.values()].find(
         (cluster) =>

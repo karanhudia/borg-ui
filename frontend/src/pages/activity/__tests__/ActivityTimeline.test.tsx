@@ -277,7 +277,10 @@ describe('ActivityTimeline', () => {
     expect(steps[0]).toHaveTextContent('Mount volumes')
   })
 
-  it('groups a schedule firing across repositories by schedule and time', () => {
+  it("keeps two repositories' own check schedules apart", () => {
+    // A repository's check schedule is its own schedule, one card per
+    // repository on the Schedule page, with its own cron and timezone. Two of
+    // them firing in the same minute is a coincidence, not a fan-out.
     const fired = [
       run({
         id: 20,
@@ -302,12 +305,50 @@ describe('ActivityTimeline', () => {
         repository_path: '/mnt/photos',
         started_at: minutesAfterNoon(0, 1),
       }),
+    ]
+    renderTimeline({ items: [...fired].reverse() })
+    const bands = screen.getAllByTestId('umbrella-band')
+    expect(bands).toHaveLength(2)
+    bands.forEach((band) => {
+      expect(band).toHaveTextContent('Schedule · Repository Check')
+      expect(within(band).getAllByTestId('run-entry')).toHaveLength(1)
+    })
+  })
+
+  it('groups one schedule firing across repositories, and not its next firing', () => {
+    const fired = [
+      run({
+        id: 20,
+        kind: 'check',
+        type: 'check',
+        category: 'maintenance',
+        trigger: 'schedule',
+        schedule_id: 4,
+        schedule_name: null,
+        backup_plan_name: null,
+        started_at: minutesAfterNoon(0, 0),
+      }),
+      run({
+        id: 21,
+        kind: 'check',
+        type: 'check',
+        category: 'maintenance',
+        trigger: 'schedule',
+        schedule_id: 4,
+        schedule_name: null,
+        backup_plan_name: null,
+        repository: 'photos',
+        repository_id: 2,
+        repository_path: '/mnt/photos',
+        started_at: minutesAfterNoon(0, 1),
+      }),
       run({
         id: 22,
         kind: 'check',
         type: 'check',
         category: 'maintenance',
         trigger: 'schedule',
+        schedule_id: 4,
         schedule_name: null,
         backup_plan_name: null,
         started_at: minutesAfterNoon(0, 120),
