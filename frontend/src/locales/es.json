@@ -2195,7 +2195,12 @@
       "repositories": "{{count}} repositorios",
       "repositories_one": "{{count}} repositorio",
       "members": "{{count}} ejecuciones",
-      "members_one": "{{count}} ejecución"
+      "members_one": "{{count}} ejecución",
+      "trigger": {
+        "manual": "Manual",
+        "schedule": "Programado",
+        "retry": "Reintento"
+      }
     }
   },
   "availabilitySchedule": {

@@ -41,6 +41,7 @@ const run = (overrides: Partial<ActivityItem>): ActivityItem => ({
 const items: ActivityItem[] = [
   run({
     id: 1,
+    backup_plan_run_trigger: 'schedule',
     followups: [
       { ...run({ id: 11, kind: 'archive_sync', type: 'archive_sync', trigger: 'followup' }) },
     ],
@@ -119,6 +120,8 @@ describe('ActivityTimeline', () => {
     expect(within(rows[1]).getByTestId('run-kind')).toHaveTextContent('Backup')
     const bands = screen.getAllByTestId('umbrella-band')
     expect(bands[1]).toHaveTextContent('Plan · nightly')
+    // The scheduler fired it; the members only say "plan".
+    expect(bands[1]).toHaveTextContent('Scheduled')
     expect(bands[1]).toHaveAttribute('data-umbrella', 'plan')
     expect(within(rows[0]).getByTestId('run-kind')).toHaveTextContent('Prune')
     expect(bands[0]).toHaveTextContent('Schedule · weekly')

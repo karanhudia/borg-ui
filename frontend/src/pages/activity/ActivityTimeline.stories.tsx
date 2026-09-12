@@ -153,7 +153,12 @@ const items: ActivityItem[] = [
     started_at: at(0, 14, 2, 30),
     completed_at: at(0, 14, 2, 31),
   }),
-  base({ id: 11634, backup_plan_run_id: 217, followups: fanOut(11634, 11635, 11643) }),
+  base({
+    id: 11634,
+    backup_plan_run_id: 217,
+    backup_plan_run_trigger: 'schedule',
+    followups: fanOut(11634, 11635, 11643),
+  }),
   base({
     id: 11620,
     backup_plan_run_id: 217,

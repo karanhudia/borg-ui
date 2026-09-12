@@ -43,6 +43,7 @@ export interface ActivityItem {
   schedule_name?: string | null // Schedule name if triggered by schedule
   backup_plan_id?: number | null
   backup_plan_run_id?: number | null
+  backup_plan_run_trigger?: string | null // how the plan run started: manual, schedule, retry
   backup_plan_name?: string | null
   skip_reason?: 'minimum_interval_not_elapsed' | 'source_unavailable' | null
   has_logs?: boolean

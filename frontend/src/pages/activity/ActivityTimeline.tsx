@@ -145,6 +145,20 @@ function UmbrellaBand({
   const outcome = status === 'completed' ? null : outcomeLabel(status, t)
   const repositories = repositoryCount(members)
   const many = members.length > 1 || planHooks.length > 0
+  // "Plan · Nightly" is the run; whether the scheduler fired it or someone
+  // clicked Run is the one thing the members cannot say, so the band does.
+  const planTrigger =
+    cluster.umbrella.kind === 'plan'
+      ? (cluster.items.find((item) => item.backup_plan_run_trigger)?.backup_plan_run_trigger ??
+        null)
+      : null
+  const detail = [
+    planTrigger && t(`activity.planRun.trigger.${planTrigger}`, { defaultValue: planTrigger }),
+    many && repositories > 0 && t('activity.planRun.repositories', { count: repositories }),
+    many && t('activity.planRun.members', { count: members.length }),
+  ]
+    .filter(Boolean)
+    .join(' · ')
   return (
     <Box
       data-testid="umbrella-band"
@@ -221,14 +235,9 @@ function UmbrellaBand({
           >
             {cluster.umbrella.label}
           </Typography>
-          {many && (
+          {detail && (
             <Typography variant="body2" sx={{ color: 'text.secondary' }} noWrap>
-              {[
-                repositories > 0 && t('activity.planRun.repositories', { count: repositories }),
-                t('activity.planRun.members', { count: members.length }),
-              ]
-                .filter(Boolean)
-                .join(' · ')}
+              {detail}
             </Typography>
           )}
           {many && (

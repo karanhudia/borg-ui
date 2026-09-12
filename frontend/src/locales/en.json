@@ -2195,7 +2195,12 @@
       "repositories": "{{count}} repositories",
       "repositories_one": "{{count}} repository",
       "members": "{{count}} runs",
-      "members_one": "{{count}} run"
+      "members_one": "{{count}} run",
+      "trigger": {
+        "manual": "Manual",
+        "schedule": "Scheduled",
+        "retry": "Retry"
+      }
     }
   },
   "availabilitySchedule": {

@@ -2195,7 +2195,12 @@
       "repositories": "{{count}} Repositories",
       "repositories_one": "{{count}} Repository",
       "members": "{{count}} Läufe",
-      "members_one": "{{count}} Lauf"
+      "members_one": "{{count}} Lauf",
+      "trigger": {
+        "manual": "Manuell",
+        "schedule": "Geplant",
+        "retry": "Wiederholung"
+      }
     }
   },
   "availabilitySchedule": {
