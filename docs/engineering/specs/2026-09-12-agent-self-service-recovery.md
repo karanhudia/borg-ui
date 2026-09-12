@@ -1,7 +1,7 @@
 # Agent self-service recovery: server URL and uninstall
 
 **Date:** 2026-09-12
-**Status:** Draft, awaiting owner approval
+**Status:** Approved 2026-09-12
 **Owner:** karanhudia
 **Related docs:** `docs/managed-agents.md`, `docs/managed-agent-spec.md`,
 `docs/engineering/specs/2026-09-07-centralized-agent-upgrades.md`
@@ -326,7 +326,7 @@ condition is inverted. They are the tests that matter most in this change.
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| 1 | `set-server` and the URL dialog | Not started |
+| 1 | `set-server` and the URL dialog | Plan written, awaiting implementation ([plan](../plans/2026-09-12-agent-self-service-recovery-phase-1.md)) |
 | 2 | `uninstall.sh` and the uninstall dialog | Not started |
 
 ### 10.2 Phase 1 - change the server URL
