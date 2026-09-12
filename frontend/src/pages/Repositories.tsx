@@ -175,7 +175,13 @@ export default function Repositories() {
 
   // Filter, sort, and search state
   // `?q=` lets other pages (the background work hub) land on one repository.
-  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') ?? '')
+  const urlQuery = searchParams.get('q') ?? ''
+  const [searchQuery, setSearchQuery] = useState(urlQuery)
+  // The page stays mounted across `/repositories?q=a` -> `/repositories`, so
+  // the initial value alone would leave a stale search in place.
+  React.useEffect(() => {
+    setSearchQuery(urlQuery)
+  }, [urlQuery])
   const [sortBy, setSortBy] = useState<string>(() => {
     return localStorage.getItem('repos_sort') || 'name-asc'
   })
