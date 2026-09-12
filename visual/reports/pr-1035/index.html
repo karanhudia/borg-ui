@@ -1,0 +1,1024 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PR #1035 visual report</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f8fa;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #637083;
+      --border: #d8dee8;
+      --accent: #1769aa;
+      --changed: #b42318;
+      --added: #067647;
+      --removed: #7f56d9;
+      --shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 28px min(5vw, 56px);
+    }
+
+    main {
+      display: grid;
+      gap: 24px;
+      padding: 24px min(5vw, 56px) 48px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      font-size: clamp(1.6rem, 2.2vw, 2.4rem);
+      letter-spacing: 0;
+      line-height: 1.15;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-top: 22px;
+      max-width: 980px;
+    }
+
+    .metric {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 14px 16px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 1.6rem;
+      line-height: 1.1;
+    }
+
+    .metric span {
+      color: var(--muted);
+      display: block;
+      font-size: 0.88rem;
+      margin-top: 4px;
+    }
+
+    .meta {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .pill {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      display: inline-flex;
+      font-size: 0.84rem;
+      padding: 4px 10px;
+    }
+
+    .pill-ok { color: var(--added); border-color: #abefc6; background: #ecfdf3; }
+    .pill-changed { color: var(--changed); border-color: #fecdca; background: #fef3f2; }
+    .pill-info { color: var(--accent); border-color: #b9d6f2; background: #eff8ff; }
+
+    .section {
+      display: grid;
+      gap: 14px;
+    }
+
+    .section-title {
+      align-items: center;
+      display: flex;
+      gap: 10px;
+    }
+
+    .section-title h2 {
+      font-size: 1.08rem;
+      letter-spacing: 0;
+    }
+
+    .section-title span {
+      background: #e9eef5;
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      padding: 2px 9px;
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 12px 0;
+    }
+
+    .shot {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .shot-header {
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      justify-content: space-between;
+      padding: 14px 16px;
+    }
+
+    .shot-header h3 {
+      font-size: 0.96rem;
+      overflow-wrap: anywhere;
+    }
+
+    .shot-header p {
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .image-grid {
+      display: grid;
+      gap: 1px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      background: var(--border);
+    }
+
+    .image-grid.single {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    figure {
+      background: #f8fafc;
+      margin: 0;
+      min-width: 0;
+      padding: 12px;
+    }
+
+    figcaption {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    img {
+      background: white;
+      border: 1px solid #e5e7eb;
+      display: block;
+      height: auto;
+      max-width: 100%;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover { text-decoration: underline; }
+
+    @media (max-width: 820px) {
+      header { padding: 22px 18px; }
+      main { padding: 18px; }
+      .image-grid { grid-template-columns: minmax(0, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>PR #1035 visual report</h1>
+    <p class="subtitle">Generated Sep 12, 2026, 9:54 AM UTC</p>
+    <div class="meta">
+      <span class="pill pill-changed">Visual changes found</span>
+      
+      <span class="pill pill-info">Commit 4e642e31ba3c</span>
+      <a class="pill pill-info" href="https://github.com/karanhudia/borg-ui/actions/runs/34686666753">Workflow run</a>
+    </div>
+    <div class="summary">
+      <div class="metric"><strong>32</strong><span>Changed</span></div>
+      <div class="metric"><strong>0</strong><span>Added</span></div>
+      <div class="metric"><strong>0</strong><span>Removed</span></div>
+      <div class="metric"><strong>784</strong><span>Unchanged</span></div>
+      <div class="metric"><strong>816</strong><span>Current screenshots</span></div>
+      <div class="metric"><strong>816</strong><span>Baseline screenshots</span></div>
+    </div>
+  </header>
+  <main>
+    
+    <section class="section">
+      <div class="section-title">
+        <h2>Changed</h2>
+        <span>32</span>
+      </div>
+      
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-activitytimeline--dark--mobile.png</h3>
+        <p>24,600 px changed · 7.47%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-activitytimeline--dark--mobile.png"><img src="images/baseline/activity-activitytimeline--dark--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-activitytimeline--dark--mobile.png"><img src="images/actual/activity-activitytimeline--dark--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-activitytimeline--dark--mobile.png"><img src="images/diff/activity-activitytimeline--dark--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-activitytimeline--dark.png</h3>
+        <p>117,339 px changed · 11.46%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-activitytimeline--dark.png"><img src="images/baseline/activity-activitytimeline--dark.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-activitytimeline--dark.png"><img src="images/actual/activity-activitytimeline--dark.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-activitytimeline--dark.png"><img src="images/diff/activity-activitytimeline--dark.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-activitytimeline--global--mobile.png</h3>
+        <p>24,394 px changed · 7.41%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-activitytimeline--global--mobile.png"><img src="images/baseline/activity-activitytimeline--global--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-activitytimeline--global--mobile.png"><img src="images/actual/activity-activitytimeline--global--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-activitytimeline--global--mobile.png"><img src="images/diff/activity-activitytimeline--global--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-activitytimeline--global.png</h3>
+        <p>117,104 px changed · 11.44%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-activitytimeline--global.png"><img src="images/baseline/activity-activitytimeline--global.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-activitytimeline--global.png"><img src="images/actual/activity-activitytimeline--global.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-activitytimeline--global.png"><img src="images/diff/activity-activitytimeline--global.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-activitytimeline--loading.png</h3>
+        <p>8,536 px changed · 0.83%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-activitytimeline--loading.png"><img src="images/baseline/activity-activitytimeline--loading.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-activitytimeline--loading.png"><img src="images/actual/activity-activitytimeline--loading.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-activitytimeline--loading.png"><img src="images/diff/activity-activitytimeline--loading.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-activitytimeline--pinned--mobile.png</h3>
+        <p>49,511 px changed · 15.04%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-activitytimeline--pinned--mobile.png"><img src="images/baseline/activity-activitytimeline--pinned--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-activitytimeline--pinned--mobile.png"><img src="images/actual/activity-activitytimeline--pinned--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-activitytimeline--pinned--mobile.png"><img src="images/diff/activity-activitytimeline--pinned--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-activitytimeline--pinned.png</h3>
+        <p>108,028 px changed · 10.55%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-activitytimeline--pinned.png"><img src="images/baseline/activity-activitytimeline--pinned.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-activitytimeline--pinned.png"><img src="images/actual/activity-activitytimeline--pinned.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-activitytimeline--pinned.png"><img src="images/diff/activity-activitytimeline--pinned.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--dark--mobile.png</h3>
+        <p>1,302 px changed · 0.40%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-runchainrow--dark--mobile.png"><img src="images/baseline/activity-runchainrow--dark--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-runchainrow--dark--mobile.png"><img src="images/actual/activity-runchainrow--dark--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-runchainrow--dark--mobile.png"><img src="images/diff/activity-runchainrow--dark--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--dark.png</h3>
+        <p>1,302 px changed · 0.13%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-runchainrow--dark.png"><img src="images/baseline/activity-runchainrow--dark.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-runchainrow--dark.png"><img src="images/actual/activity-runchainrow--dark.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-runchainrow--dark.png"><img src="images/diff/activity-runchainrow--dark.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--failed--mobile.png</h3>
+        <p>8,408 px changed · 2.55%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-runchainrow--failed--mobile.png"><img src="images/baseline/activity-runchainrow--failed--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-runchainrow--failed--mobile.png"><img src="images/actual/activity-runchainrow--failed--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-runchainrow--failed--mobile.png"><img src="images/diff/activity-runchainrow--failed--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--failed.png</h3>
+        <p>8,401 px changed · 0.82%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-runchainrow--failed.png"><img src="images/baseline/activity-runchainrow--failed.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-runchainrow--failed.png"><img src="images/actual/activity-runchainrow--failed.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-runchainrow--failed.png"><img src="images/diff/activity-runchainrow--failed.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--running--mobile.png</h3>
+        <p>3,844 px changed · 1.17%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-runchainrow--running--mobile.png"><img src="images/baseline/activity-runchainrow--running--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-runchainrow--running--mobile.png"><img src="images/actual/activity-runchainrow--running--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-runchainrow--running--mobile.png"><img src="images/diff/activity-runchainrow--running--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--running.png</h3>
+        <p>3,829 px changed · 0.37%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-runchainrow--running.png"><img src="images/baseline/activity-runchainrow--running.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-runchainrow--running.png"><img src="images/actual/activity-runchainrow--running.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-runchainrow--running.png"><img src="images/diff/activity-runchainrow--running.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--single-lane--mobile.png</h3>
+        <p>1,279 px changed · 0.39%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-runchainrow--single-lane--mobile.png"><img src="images/baseline/activity-runchainrow--single-lane--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-runchainrow--single-lane--mobile.png"><img src="images/actual/activity-runchainrow--single-lane--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-runchainrow--single-lane--mobile.png"><img src="images/diff/activity-runchainrow--single-lane--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--single-lane.png</h3>
+        <p>1,279 px changed · 0.12%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-runchainrow--single-lane.png"><img src="images/baseline/activity-runchainrow--single-lane.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-runchainrow--single-lane.png"><img src="images/actual/activity-runchainrow--single-lane.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-runchainrow--single-lane.png"><img src="images/diff/activity-runchainrow--single-lane.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--succeeded--mobile.png</h3>
+        <p>1,289 px changed · 0.39%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-runchainrow--succeeded--mobile.png"><img src="images/baseline/activity-runchainrow--succeeded--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-runchainrow--succeeded--mobile.png"><img src="images/actual/activity-runchainrow--succeeded--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-runchainrow--succeeded--mobile.png"><img src="images/diff/activity-runchainrow--succeeded--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>activity-runchainrow--succeeded.png</h3>
+        <p>1,289 px changed · 0.13%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/activity-runchainrow--succeeded.png"><img src="images/baseline/activity-runchainrow--succeeded.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/activity-runchainrow--succeeded.png"><img src="images/actual/activity-runchainrow--succeeded.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/activity-runchainrow--succeeded.png"><img src="images/diff/activity-runchainrow--succeeded.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-backupjobstable--non-retryable-destructive-job--mobile.png</h3>
+        <p>975 px changed · 0.30%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-backupjobstable--non-retryable-destructive-job--mobile.png"><img src="images/baseline/components-backupjobstable--non-retryable-destructive-job--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-backupjobstable--non-retryable-destructive-job--mobile.png"><img src="images/actual/components-backupjobstable--non-retryable-destructive-job--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-backupjobstable--non-retryable-destructive-job--mobile.png"><img src="images/diff/components-backupjobstable--non-retryable-destructive-job--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-backupjobstable--pruned-archive--mobile.png</h3>
+        <p>1,444 px changed · 0.44%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-backupjobstable--pruned-archive--mobile.png"><img src="images/baseline/components-backupjobstable--pruned-archive--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-backupjobstable--pruned-archive--mobile.png"><img src="images/actual/components-backupjobstable--pruned-archive--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-backupjobstable--pruned-archive--mobile.png"><img src="images/diff/components-backupjobstable--pruned-archive--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-backupjobstable--pruned-archive.png</h3>
+        <p>1,468 px changed · 0.14%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-backupjobstable--pruned-archive.png"><img src="images/baseline/components-backupjobstable--pruned-archive.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-backupjobstable--pruned-archive.png"><img src="images/actual/components-backupjobstable--pruned-archive.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-backupjobstable--pruned-archive.png"><img src="images/diff/components-backupjobstable--pruned-archive.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-backupjobstable--retryable-failed-backup-job--mobile.png</h3>
+        <p>975 px changed · 0.30%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-backupjobstable--retryable-failed-backup-job--mobile.png"><img src="images/baseline/components-backupjobstable--retryable-failed-backup-job--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-backupjobstable--retryable-failed-backup-job--mobile.png"><img src="images/actual/components-backupjobstable--retryable-failed-backup-job--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-backupjobstable--retryable-failed-backup-job--mobile.png"><img src="images/diff/components-backupjobstable--retryable-failed-backup-job--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-backupjobstable--run-with-followups--mobile.png</h3>
+        <p>5,918 px changed · 1.80%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-backupjobstable--run-with-followups--mobile.png"><img src="images/baseline/components-backupjobstable--run-with-followups--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-backupjobstable--run-with-followups--mobile.png"><img src="images/actual/components-backupjobstable--run-with-followups--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-backupjobstable--run-with-followups--mobile.png"><img src="images/diff/components-backupjobstable--run-with-followups--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-backupjobstable--run-with-followups.png</h3>
+        <p>5,893 px changed · 0.58%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-backupjobstable--run-with-followups.png"><img src="images/baseline/components-backupjobstable--run-with-followups.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-backupjobstable--run-with-followups.png"><img src="images/actual/components-backupjobstable--run-with-followups.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-backupjobstable--run-with-followups.png"><img src="images/diff/components-backupjobstable--run-with-followups.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-backupjobstable--status-comparison--mobile.png</h3>
+        <p>2,925 px changed · 0.89%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-backupjobstable--status-comparison--mobile.png"><img src="images/baseline/components-backupjobstable--status-comparison--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-backupjobstable--status-comparison--mobile.png"><img src="images/actual/components-backupjobstable--status-comparison--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-backupjobstable--status-comparison--mobile.png"><img src="images/diff/components-backupjobstable--status-comparison--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-backupjobstable--status-comparison.png</h3>
+        <p>2,949 px changed · 0.29%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-backupjobstable--status-comparison.png"><img src="images/baseline/components-backupjobstable--status-comparison.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-backupjobstable--status-comparison.png"><img src="images/actual/components-backupjobstable--status-comparison.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-backupjobstable--status-comparison.png"><img src="images/diff/components-backupjobstable--status-comparison.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-backupjobstable--transport-modes--mobile.png</h3>
+        <p>2,193 px changed · 0.67%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-backupjobstable--transport-modes--mobile.png"><img src="images/baseline/components-backupjobstable--transport-modes--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-backupjobstable--transport-modes--mobile.png"><img src="images/actual/components-backupjobstable--transport-modes--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-backupjobstable--transport-modes--mobile.png"><img src="images/diff/components-backupjobstable--transport-modes--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-backupjobstable--transport-modes.png</h3>
+        <p>2,208 px changed · 0.22%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-backupjobstable--transport-modes.png"><img src="images/baseline/components-backupjobstable--transport-modes.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-backupjobstable--transport-modes.png"><img src="images/actual/components-backupjobstable--transport-modes.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-backupjobstable--transport-modes.png"><img src="images/diff/components-backupjobstable--transport-modes.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-backupplanrunspanel--disabled-due-to-active-run--mobile.png</h3>
+        <p>980 px changed · 0.30%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-backupplanrunspanel--disabled-due-to-active-run--mobile.png"><img src="images/baseline/components-backupplanrunspanel--disabled-due-to-active-run--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-backupplanrunspanel--disabled-due-to-active-run--mobile.png"><img src="images/actual/components-backupplanrunspanel--disabled-due-to-active-run--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-backupplanrunspanel--disabled-due-to-active-run--mobile.png"><img src="images/diff/components-backupplanrunspanel--disabled-due-to-active-run--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-backupplanrunspanel--disabled-no-failed-repositories--mobile.png</h3>
+        <p>980 px changed · 0.30%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-backupplanrunspanel--disabled-no-failed-repositories--mobile.png"><img src="images/baseline/components-backupplanrunspanel--disabled-no-failed-repositories--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-backupplanrunspanel--disabled-no-failed-repositories--mobile.png"><img src="images/actual/components-backupplanrunspanel--disabled-no-failed-repositories--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-backupplanrunspanel--disabled-no-failed-repositories--mobile.png"><img src="images/diff/components-backupplanrunspanel--disabled-no-failed-repositories--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-backupplanrunspanel--disabled-no-permission--mobile.png</h3>
+        <p>980 px changed · 0.30%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-backupplanrunspanel--disabled-no-permission--mobile.png"><img src="images/baseline/components-backupplanrunspanel--disabled-no-permission--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-backupplanrunspanel--disabled-no-permission--mobile.png"><img src="images/actual/components-backupplanrunspanel--disabled-no-permission--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-backupplanrunspanel--disabled-no-permission--mobile.png"><img src="images/diff/components-backupplanrunspanel--disabled-no-permission--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-backupplanrunspanel--retry-in-progress--mobile.png</h3>
+        <p>980 px changed · 0.30%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-backupplanrunspanel--retry-in-progress--mobile.png"><img src="images/baseline/components-backupplanrunspanel--retry-in-progress--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-backupplanrunspanel--retry-in-progress--mobile.png"><img src="images/actual/components-backupplanrunspanel--retry-in-progress--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-backupplanrunspanel--retry-in-progress--mobile.png"><img src="images/diff/components-backupplanrunspanel--retry-in-progress--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-backupplanrunspanel--retryable-backup-plan-run--mobile.png</h3>
+        <p>980 px changed · 0.30%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-backupplanrunspanel--retryable-backup-plan-run--mobile.png"><img src="images/baseline/components-backupplanrunspanel--retryable-backup-plan-run--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-backupplanrunspanel--retryable-backup-plan-run--mobile.png"><img src="images/actual/components-backupplanrunspanel--retryable-backup-plan-run--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-backupplanrunspanel--retryable-backup-plan-run--mobile.png"><img src="images/diff/components-backupplanrunspanel--retryable-backup-plan-run--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+    </section>
+    
+    <section class="section">
+      <div class="section-title">
+        <h2>Added</h2>
+        <span>0</span>
+      </div>
+      <p class="empty">No screenshots were added.</p>
+    </section>
+    
+    <section class="section">
+      <div class="section-title">
+        <h2>Removed</h2>
+        <span>0</span>
+      </div>
+      <p class="empty">No screenshots were removed.</p>
+    </section>
+  </main>
+</body>
+</html>
