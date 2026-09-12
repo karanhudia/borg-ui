@@ -854,6 +854,73 @@ async def list_recent_activity(
                 }
             )
 
+    # A plan run that failed before its backups ran, or after they all
+    # succeeded, has no operation of its own to say so: its error lives on the
+    # run. Without this the feed shows the run's pre-backup hook alone and the
+    # band reads as a success (a scheduled plan refused by admission, a hook
+    # failure, a lost database).
+    if (
+        (not job_type or job_type == "backup_plan_run")
+        and (not status or status == "failed")
+        and not repository_scoped
+    ):
+        failed_run_query = db.query(BackupPlanRun).filter(
+            BackupPlanRun.status == "failed"
+        )
+        if before is not None:
+            failed_run_query = failed_run_query.filter(
+                func.coalesce(BackupPlanRun.completed_at, BackupPlanRun.created_at)
+                < before
+            )
+        failed_runs = (
+            failed_run_query.order_by(
+                BackupPlanRun.completed_at.desc(), BackupPlanRun.id.desc()
+            )
+            .limit(limit)
+            .all()
+        )
+        # A run whose own operations failed already says so, in the same band
+        # and with more detail. This row is for the failure they do not show.
+        spoken_for = (
+            {
+                run_id
+                for (run_id,) in db.query(Operation.backup_plan_run_id)
+                .filter(
+                    Operation.backup_plan_run_id.in_([r.id for r in failed_runs]),
+                    Operation.status == "failed",
+                )
+                .distinct()
+            }
+            if failed_runs
+            else set()
+        )
+        for run in failed_runs:
+            if run.id in spoken_for:
+                continue
+            plan = (
+                db.get(BackupPlan, run.backup_plan_id) if run.backup_plan_id else None
+            )
+            activities.append(
+                {
+                    "activity_key": f"backup-plan-run-failed-{run.id}",
+                    "id": run.id,
+                    "type": "backup_plan_run",
+                    "status": "failed",
+                    "started_at": run.started_at,
+                    "completed_at": run.completed_at,
+                    "error_message": run.error_message,
+                    "repository": plan.name if plan else "Backup plan",
+                    "repository_path": None,
+                    "log_file_path": None,
+                    "triggered_by": "backup_plan",
+                    "backup_plan_id": run.backup_plan_id,
+                    "backup_plan_run_id": run.id,
+                    "backup_plan_name": plan.name if plan else None,
+                    "has_logs": False,
+                    "_sort_at": run.completed_at or run.created_at,
+                }
+            )
+
     # Fetch script executions
     # Script executions name their repository, so a repository-scoped view
     # keeps the ones that ran against it instead of dropping the source.

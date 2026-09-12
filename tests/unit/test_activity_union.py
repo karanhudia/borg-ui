@@ -432,3 +432,97 @@ class TestActivityPagination:
         ).json()
         assert len(older) == 1
         assert older[0]["id"] not in {item["id"] for item in page}
+
+
+@pytest.mark.unit
+class TestFailedPlanRuns:
+    def _plan_run(self, test_db, status="failed", error="boom"):
+        from app.database.models import BackupPlan, BackupPlanRun
+
+        plan = BackupPlan(name="nightly", enabled=True, source_directories="[]")
+        test_db.add(plan)
+        test_db.commit()
+        run = BackupPlanRun(
+            backup_plan_id=plan.id,
+            status=status,
+            trigger="schedule",
+            started_at=utc_now(),
+            completed_at=utc_now(),
+            error_message=error,
+        )
+        test_db.add(run)
+        test_db.commit()
+        return plan, run
+
+    def test_failed_plan_run_with_no_operations_is_listed(
+        self, test_client, test_db, admin_headers
+    ):
+        plan, run = self._plan_run(test_db)
+        body = test_client.get("/api/activity/recent", headers=admin_headers).json()
+        assert [i["type"] for i in body] == ["backup_plan_run"]
+        assert body[0]["status"] == "failed"
+        assert body[0]["error_message"] == "boom"
+        assert body[0]["repository"] == plan.name
+        assert body[0]["trigger"] == "plan"
+
+    def test_failed_plan_run_is_silent_when_its_own_run_failed(
+        self, test_client, test_db, admin_headers
+    ):
+        _, run = self._plan_run(test_db)
+        repo = _repo(test_db)
+        op = enqueue(test_db, "backup", repository_id=repo.id)
+        op.backup_plan_run_id = run.id
+        op.status = "failed"
+        op.started_at = utc_now()
+        test_db.commit()
+        # The backup says it failed, in the same band and with more detail.
+        body = test_client.get("/api/activity/recent", headers=admin_headers).json()
+        assert [i["type"] for i in body] == ["backup"]
+
+
+@pytest.mark.unit
+class TestPlanRunBookkeeping:
+    def test_locked_commit_is_retried_then_succeeds(self):
+        from sqlalchemy.exc import OperationalError
+
+        from app.services.backup_plan_execution_service import _commit_bookkeeping
+
+        class FlakyDb:
+            def __init__(self):
+                self.commits = 0
+                self.rollbacks = 0
+
+            def commit(self):
+                self.commits += 1
+                if self.commits < 3:
+                    raise OperationalError(
+                        "UPDATE", {}, Exception("database is locked")
+                    )
+
+            def rollback(self):
+                self.rollbacks += 1
+
+        db = FlakyDb()
+        _commit_bookkeeping(db, delay=0)
+        assert (db.commits, db.rollbacks) == (3, 2)
+
+    def test_other_errors_are_not_retried(self):
+        from sqlalchemy.exc import OperationalError
+
+        from app.services.backup_plan_execution_service import _commit_bookkeeping
+
+        class BrokenDb:
+            def __init__(self):
+                self.commits = 0
+
+            def commit(self):
+                self.commits += 1
+                raise OperationalError("UPDATE", {}, Exception("no such table"))
+
+            def rollback(self):
+                pass
+
+        db = BrokenDb()
+        with pytest.raises(OperationalError):
+            _commit_bookkeeping(db, delay=0)
+        assert db.commits == 1
