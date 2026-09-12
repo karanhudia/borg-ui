@@ -475,7 +475,7 @@
         "description": "Point this endpoint at a different Borg UI address. It keeps its identity, its credential and its history, so no new enrollment token is needed.",
         "fieldLabel": "New server URL",
         "fieldHelper": "Prefilled with this server's own address. Edit it if the endpoint should reach Borg UI somewhere else, for example through a reverse proxy.",
-        "invalidUrl": "Enter a full URL starting with http:// or https://, with no quote or pipe character.",
+        "invalidUrl": "Enter a full URL starting with http:// or https://, with no quote, pipe or backslash character.",
         "copyCommand": "Copy command",
         "runHint": "Run this on the endpoint, as a user who can sudo.",
         "statusHint": "Not sure what address the endpoint holds right now? Run borg-ui-agent status on it."

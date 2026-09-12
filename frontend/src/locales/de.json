@@ -475,7 +475,7 @@
         "description": "Richte diesen Endpunkt auf eine andere Borg-UI-Adresse aus. Identität, Zugangsdaten und Verlauf bleiben erhalten, ein neues Registrierungs-Token ist nicht nötig.",
         "fieldLabel": "Neue Server-URL",
         "fieldHelper": "Vorbelegt mit der eigenen Adresse dieses Servers. Ändere sie, wenn der Endpunkt Borg UI anderswo erreichen soll, etwa über einen Reverse Proxy.",
-        "invalidUrl": "Gib eine vollständige URL an, die mit http:// oder https:// beginnt, ohne Anführungszeichen oder Pipe-Zeichen.",
+        "invalidUrl": "Gib eine vollständige URL an, die mit http:// oder https:// beginnt, ohne Anführungszeichen, Pipe- oder Backslash-Zeichen.",
         "copyCommand": "Befehl kopieren",
         "runHint": "Führe dies auf dem Endpunkt aus, als Benutzer mit sudo-Rechten.",
         "statusHint": "Unklar, welche Adresse der Endpunkt gerade hält? Führe dort borg-ui-agent status aus."

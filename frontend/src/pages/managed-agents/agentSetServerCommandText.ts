@@ -46,12 +46,13 @@ function hasSetServerSubcommand(agentVersion: string | null | undefined): boolea
 /**
  * Whether a URL can be rendered into either command form safely.
  *
- * Beyond being an http or https URL with a host, it must carry no single quote
- * and no "|". The sed expression is wrapped in single quotes and delimited by
- * "|", so either character would break out of the expression. Neither appears
- * in a real server URL, so refusing is honest and cheaper than the escaping
- * that carrying them would need. The dialog renders no command until this
- * passes.
+ * Beyond being an http or https URL with a host, it must carry none of
+ * `'`, `|`, `"` or `\`. The sed expression is wrapped in single quotes and
+ * delimited by `|`, and the value it writes is a TOML string that
+ * `save_config` would itself have escaped. None of the four appears in a real
+ * server URL, and `new URL()` percent-encodes the last two anyway, so refusing
+ * them is honest and far cheaper than reproducing TOML escaping through a sed
+ * replacement. The dialog renders no command until this passes.
  */
 export function isSafeServerUrlForCommand(value: string): boolean {
   let parsed: URL
@@ -62,21 +63,35 @@ export function isSafeServerUrlForCommand(value: string): boolean {
   }
   if (!['http:', 'https:'].includes(parsed.protocol)) return false
   if (parsed.hostname === '') return false
-  return !/['|]/.test(value)
+  return !/['|"\\]/.test(value)
 }
 
 /**
- * Always double-quoted, with the characters the shell would still read inside
- * double quotes escaped.
+ * The URL as a shell double-quoted argument, for the subcommand form.
  *
- * Unconditional, not conditional like `shellQuote` in
- * `agentInstallCommandText.ts`: the sed half of the command is TOML rather than
- * shell, and `save_config` (`agent/borg_ui_agent/config.py`) always writes
- * `server_url = "..."`, so the replacement line has to reproduce those quotes
- * whatever the URL looks like.
+ * `"` and `\` cannot reach here, so only the two characters the shell still
+ * expands inside double quotes need escaping. A `$` is a legal URL sub-delim,
+ * so this is not theoretical.
  */
-function quote(value: string): string {
-  return `"${value.replace(/(["\\$`])/g, '\\$1')}"`
+function quoteForShell(value: string): string {
+  return `"${value.replace(/([$`])/g, '\\$1')}"`
+}
+
+/**
+ * The URL as a sed replacement, for the fallback form.
+ *
+ * Deliberately not the shell quoting above: the whole sed expression sits
+ * inside single quotes, so the shell expands nothing in it and a backslash
+ * added for the shell's benefit would land in the config file. What sed itself
+ * expands in a replacement is `&`, which stands for the entire matched line.
+ * Left unescaped, a URL carrying a query parameter separator rewrites
+ * `server_url` to the old line spliced into the new one, corrupting the config
+ * on a machine that is already unreachable.
+ *
+ * The double quotes are part of the TOML line, not shell quoting.
+ */
+function quoteForSedReplacement(value: string): string {
+  return `"${value.replace(/&/g, '\\&')}"`
 }
 
 /**
@@ -93,10 +108,10 @@ export function buildSetServerCommand(
 ): string {
   const url = newServerUrl.replace(/\/+$/, '')
   if (hasSetServerSubcommand(agentVersion)) {
-    return `sudo borg-ui-agent set-server ${quote(url)} && ${RESTART}`
+    return `sudo borg-ui-agent set-server ${quoteForShell(url)} && ${RESTART}`
   }
   return (
-    `sudo sed -i 's|^server_url = .*|server_url = ${quote(url)}|' ` +
+    `sudo sed -i 's|^server_url = .*|server_url = ${quoteForSedReplacement(url)}|' ` +
     `${AGENT_CONFIG_PATH} && ${RESTART}`
   )
 }

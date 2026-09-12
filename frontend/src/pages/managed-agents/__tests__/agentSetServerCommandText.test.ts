@@ -46,9 +46,26 @@ describe('buildSetServerCommand', () => {
     expect(command).not.toMatch(/[^\\]\$\(/)
   })
 
-  it('escapes a double quote and a backslash', () => {
-    const command = buildSetServerCommand('http://example.com/a"b\\c', '0.1.5')
-    expect(command).toContain('a\\"b\\\\c')
+  it('escapes an ampersand in the sed replacement', () => {
+    // Unescaped, sed expands "&" to the whole matched line, splicing the old
+    // server_url into the new one and corrupting the config of a machine that
+    // is already unreachable.
+    const command = buildSetServerCommand('http://example.com/?a=1&b=2', '0.1.4')
+    expect(command).toContain('server_url = "http://example.com/?a=1\\&b=2"')
+  })
+
+  it('leaves an ampersand alone in the subcommand form', () => {
+    // Inside shell double quotes "&" is literal, and sed is not involved.
+    const command = buildSetServerCommand('http://example.com/?a=1&b=2', '0.1.5')
+    expect(command).toContain('set-server "http://example.com/?a=1&b=2"')
+  })
+
+  it('adds no shell escaping to the sed form', () => {
+    // The sed expression sits inside single quotes, so the shell expands
+    // nothing in it and a backslash added for the shell would land in the
+    // config file.
+    const command = buildSetServerCommand('http://example.com/$x', '0.1.4')
+    expect(command).toContain('server_url = "http://example.com/$x"')
   })
 
   it('does not let a URL containing an equals sign break the sed replacement', () => {
@@ -71,11 +88,13 @@ describe('isSafeServerUrlForCommand', () => {
     expect(isSafeServerUrlForCommand('')).toBe(false)
   })
 
-  it('rejects a single quote and a pipe', () => {
-    // The sed expression is wrapped in single quotes and delimited by "|".
-    // Neither character appears in a real server URL, and escaping them inside
-    // a single-quoted sed expression is not worth the rendering it would need.
+  it('rejects the characters neither command form can carry', () => {
+    // The sed expression is wrapped in single quotes and delimited by "|", and
+    // the value it writes is a TOML string that save_config would itself have
+    // escaped. None of these appears in a real server URL.
     expect(isSafeServerUrlForCommand("http://example.com/a'b")).toBe(false)
     expect(isSafeServerUrlForCommand('http://example.com/a|b')).toBe(false)
+    expect(isSafeServerUrlForCommand('http://example.com/a"b')).toBe(false)
+    expect(isSafeServerUrlForCommand('http://example.com/a\\b')).toBe(false)
   })
 })
