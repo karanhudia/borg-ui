@@ -144,6 +144,32 @@ describe('ActivityTimeline', () => {
     expect(screen.getByText('No activity found')).toBeInTheDocument()
   })
 
+  it('names a step that was cancelled rather than skipped', () => {
+    // Both draw the same grey glyph, so the word is the only thing telling
+    // a reader which one this was.
+    renderTimeline({
+      items: [
+        run({
+          id: 1,
+          status: 'cancelled',
+          followups: [
+            run({
+              id: 11,
+              kind: 'prune',
+              type: 'prune',
+              trigger: 'followup',
+              status: 'skipped',
+            }),
+          ],
+        }),
+      ],
+    })
+    fireEvent.click(screen.getByRole('button', { name: /steps/ }))
+    const steps = screen.getAllByTestId('run-step')
+    expect(steps.some((step) => /Cancelled/.test(step.textContent ?? ''))).toBe(true)
+    expect(steps.some((step) => /Skipped/.test(step.textContent ?? ''))).toBe(true)
+  })
+
   it('spells a status out only when the dot cannot say it', () => {
     renderTimeline({
       items: [

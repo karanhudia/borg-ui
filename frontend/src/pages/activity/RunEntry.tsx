@@ -134,6 +134,10 @@ function StepRow({ node }: { node: FlowNode }) {
   const running = op.status === 'running'
   const muted = op.status === 'skipped' || op.status === 'cancelled'
   const hook = role === 'hook'
+  // The same rule the rows follow: a step names its state when the glyph
+  // cannot. Cancelled and skipped draw alike, so without the word they are
+  // the same step to a reader.
+  const outcome = QUIET_STATUSES.has(op.status) ? null : outcomeLabel(op.status, t)
   return (
     <Box
       data-testid="run-step"
@@ -186,16 +190,21 @@ function StepRow({ node }: { node: FlowNode }) {
             {op.name}
           </Typography>
         )}
-        {(progress || (elapsed != null && elapsed >= 1)) && (
+        {(outcome || progress || (elapsed != null && elapsed >= 1)) && (
           <Typography
             variant="caption"
             sx={{
-              color: running ? 'primary.main' : 'text.secondary',
+              color: (theme) =>
+                running
+                  ? theme.palette.primary.main
+                  : outcome
+                    ? outcomeColor(theme, op.status)
+                    : theme.palette.text.secondary,
               fontVariantNumeric: 'tabular-nums',
               lineHeight: 1.2,
             }}
           >
-            {progress ?? formatDurationSeconds(elapsed)}
+            {[outcome, progress ?? formatDurationSeconds(elapsed)].filter(Boolean).join(' · ')}
           </Typography>
         )}
         {running && op.progress_message && (

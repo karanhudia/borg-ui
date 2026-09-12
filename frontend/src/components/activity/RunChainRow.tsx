@@ -4,6 +4,8 @@ import { ChevronDown, ChevronRight, Terminal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import RunStatusIcon from './RunStatusIcon'
 import { subjectText } from '../../theme'
+import { outcomeColor } from '../../pages/activity/entryGrid'
+import { QUIET_STATUSES, outcomeLabel } from '../../pages/activity/runs'
 import { buildFlow, isHook, type FlowNode } from './runChainLanes'
 import {
   ACTIVE,
@@ -144,6 +146,9 @@ function Node({ node }: { node: FlowNode }) {
   const progress = nodeProgress(op)
   const hook = role === 'hook'
   const filled = role !== 'step'
+  // Cancelled and skipped draw the same grey glyph, so a step that ended any
+  // way but well says which.
+  const outcome = QUIET_STATUSES.has(op.status) ? null : outcomeLabel(op.status, t)
   const tint = failed
     ? theme.palette.error.main
     : running
@@ -193,16 +198,21 @@ function Node({ node }: { node: FlowNode }) {
         </Typography>
       )}
       {hook && <RunStatusIcon status={op.status} size={12} />}
-      {(progress || (elapsed != null && elapsed >= 1)) && (
+      {(outcome || progress || (elapsed != null && elapsed >= 1)) && (
         <Typography
           variant="caption"
           sx={{
             lineHeight: 1,
-            color: running ? 'primary.main' : 'text.secondary',
+            color: (theme) =>
+              running
+                ? theme.palette.primary.main
+                : outcome
+                  ? outcomeColor(theme, op.status)
+                  : theme.palette.text.secondary,
             fontVariantNumeric: 'tabular-nums',
           }}
         >
-          {progress ?? formatDurationSeconds(elapsed)}
+          {[outcome, progress ?? formatDurationSeconds(elapsed)].filter(Boolean).join(' · ')}
         </Typography>
       )}
     </Box>
