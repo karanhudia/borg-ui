@@ -140,70 +140,6 @@ async def _hand_over_to_service(ctx, claimed_at: Optional[datetime]) -> None:
         )
 
 
-async def _restore_start(ctx, claimed_at: Optional[datetime]) -> None:
-    """A service that never claimed the row (it ended the run before that
-    on a missing repository or a lock it gave up on, returned without a
-    verdict, or raised out of the call) left it with no start; the runner's
-    start is put back, whatever the status, so the run keeps its place in
-    the history and its duration. A start the service wrote stays. If the
-    first commit exhausts its retries, retry the guarded write in a fresh
-    transaction before returning control to the runner's finalization."""
-    if claimed_at is None:
-        return
-
-    restored = 0
-
-    def restore():
-        nonlocal restored
-        restored = (
-            ctx.db.query(Operation)
-            .filter(
-                Operation.id == ctx.operation_id,
-                Operation.started_at.is_(None),
-            )
-            .update({Operation.started_at: claimed_at}, synchronize_session=False)
-        )
-
-    for action in ("maintenance_restore_start", "maintenance_restore_start_recovery"):
-        try:
-            await commit_with_retry(
-                ctx.db,
-                prepare=restore,
-                logger=logger,
-                action=action,
-                operation_id=ctx.operation_id,
-            )
-            break
-        except asyncio.CancelledError:
-            # A shutdown drain must still be able to interrupt either retry.
-            ctx.db.rollback()
-            logger.warning(
-                "Maintenance start not restored, task cancelled",
-                operation_id=ctx.operation_id,
-            )
-            raise
-        except Exception as exc:
-            # Rollback discards the UPDATE as well as the failed transaction.
-            # Recovery must execute it again, keeping the NULL guard in case
-            # a service has since recorded its own start. Neither failure may
-            # replace the service's exception escaping the executor's finally.
-            ctx.db.rollback()
-            logger.warning(
-                "Maintenance start restore failed",
-                operation_id=ctx.operation_id,
-                action=action,
-                error=str(exc),
-            )
-    else:
-        return
-    if restored:
-        logger.info(
-            "Maintenance start restored, the service never claimed the row",
-            operation_id=ctx.operation_id,
-            kind=ctx.kind,
-        )
-
-
 async def _run(
     ctx,
     call: Callable[[BorgRouter, int], Awaitable[None]],
@@ -222,19 +158,18 @@ async def _run(
 
     if borg2_canceller is not None and _borg2_server_service(repository):
         canceller = borg2_canceller
-    handed_over = _hands_over(ctx, repository)
-    claimed_at = ctx.operation.started_at
-    if handed_over:
-        await _hand_over_to_service(ctx, claimed_at)
+    if _hands_over(ctx, repository):
+        # The row is left with no start until the service claims it. A
+        # service that never gets that far (a missing repository, a lock it
+        # gave up on, a raise) leaves it that way, and the runner puts the
+        # dispatch's start back when it writes the terminal state, so the
+        # run keeps its place in the history and its duration.
+        await _hand_over_to_service(ctx, ctx.operation.started_at)
     watcher = asyncio.create_task(cancel_watcher(ctx, canceller))
     try:
         await call(BorgRouter(repository), ctx.operation_id)
     finally:
         watcher.cancel()
-        if handed_over:
-            # Also on a raise or a cancel out of the call: the runner then
-            # writes the verdict, and the row must not lose its start.
-            await _restore_start(ctx, claimed_at)
 
     # The service ran in its own session and committed there. Expire this
     # one so the verdict it wrote is read back rather than assumed.

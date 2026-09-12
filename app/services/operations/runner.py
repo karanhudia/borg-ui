@@ -378,6 +378,13 @@ class OperationRunner:
             op = db.get(Operation, operation_id)
             if op is None or op.status != "running":
                 return
+            # The start this dispatch's claim wrote. An executor that hands
+            # its row to a service which claims it through `claim_running`
+            # (`executors/maintenance.py`) clears it first; a service that
+            # never gets that far leaves the row with no start, and the
+            # terminal writes below put this one back so the run keeps its
+            # place in the history and its duration.
+            claimed_at = op.started_at
             executor = self._get_executor(op.kind)
             ctx = OperationContext(self, db, op)
             outcome: Optional[Outcome]
@@ -386,6 +393,8 @@ class OperationRunner:
                 outcome = await executor(ctx)
             except asyncio.CancelledError:
                 op.status = "cancelled"
+                if op.started_at is None:
+                    op.started_at = claimed_at
                 op.completed_at = utc_now()
                 db.commit()
                 await broadcast_operation_updated(op, db)
@@ -467,6 +476,8 @@ class OperationRunner:
             op.result = outcome.result
             op.skip_reason = outcome.skip_reason
             op.error_message = outcome.error_message
+            if op.started_at is None:
+                op.started_at = claimed_at
             op.completed_at = utc_now()
             db.commit()
             await broadcast_operation_updated(op, db)
