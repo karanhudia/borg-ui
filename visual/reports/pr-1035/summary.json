@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-09-12T11:03:18.845Z",
+  "generatedAt": "2026-09-12T11:41:21.326Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1035 visual report",
-    "commitSha": "266ca550d2b6",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34689667803"
+    "commitSha": "f572c1ad88cc",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34691366210"
   },
   "totals": {
-    "baseline": 816,
-    "actual": 816,
-    "compared": 816,
+    "baseline": 812,
+    "actual": 812,
+    "compared": 812,
     "changed": 32,
     "added": 0,
     "removed": 0,
-    "unchanged": 784
+    "unchanged": 780
   },
   "changed": [
     {
@@ -1488,12 +1488,6 @@
       "fileName": "components-backupjobstable--retryable-failed-backup-job.png"
     },
     {
-      "fileName": "components-backupplanruncard--with-script-executions--mobile.png"
-    },
-    {
-      "fileName": "components-backupplanruncard--with-script-executions.png"
-    },
-    {
       "fileName": "components-backupplanrunspanel--disabled-due-to-active-run.png"
     },
     {
@@ -2065,12 +2059,6 @@
     },
     {
       "fileName": "components-richselect--search-enabled.png"
-    },
-    {
-      "fileName": "components-runningcloudstoragejobssection--active-jobs--mobile.png"
-    },
-    {
-      "fileName": "components-runningcloudstoragejobssection--active-jobs.png"
     },
     {
       "fileName": "components-schedulejobcard--disabled-manual-run--mobile.png"
