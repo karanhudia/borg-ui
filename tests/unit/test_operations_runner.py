@@ -906,19 +906,26 @@ async def test_deferral_waits_out_its_delay_despite_wakes(
     not_before = runner_module.deferred_until(row)
     assert not_before is not None and not_before > time.time()
 
-    # ten wakes in a row change nothing
+    # ten wakes in a row change nothing. The deadline is held far out rather
+    # than raced against the real 0.2s, which a loaded runner loses.
+    row.params = {**row.params, "deferred_until": time.time() + 60}
+    db.commit()
     await _drain(runner, rounds=10)
     db.expire_all()
     assert db.get(Operation, op.id).params["deferrals"] == 1
     assert len(attempts) == 1
 
-    await asyncio.sleep(0.25)
+    # once the deadline has passed, the next wake re-dispatches it
+    row = db.get(Operation, op.id)
+    row.params = {**row.params, "deferred_until": time.time() - 1}
+    db.commit()
+    before = time.time()
     await _drain(runner, rounds=1)
     db.expire_all()
     row = db.get(Operation, op.id)
     assert row.params["deferrals"] == 2 and len(attempts) == 2
-    # the second wait is longer than the first
-    assert runner_module.deferred_until(row) - not_before > 0.3
+    # the second wait is the doubled one, not the first delay again
+    assert runner_module.deferred_until(row) - before >= runner.deferral_delay_for(2)
 
     # the delay doubles and is capped
     assert runner.deferral_delay_for(1) == 0.2
