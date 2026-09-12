@@ -251,6 +251,37 @@ server host name, IP address, reverse-proxy URL, or HTTPS URL.
 Borg UI proposes a server URL in the Add Agent wizard. You can edit it before
 generating the command.
 
+### Moving an endpoint to a new server address
+
+If the Borg UI server moves, for example because its IP address changed or it
+went behind a reverse proxy, every enrolled agent still holds the old address
+and goes offline. Reinstalling does not fix this: `--reinstall` deliberately
+preserves `/etc/borg-ui-agent/config.toml`, which is where the old address
+lives.
+
+To see what address an endpoint currently holds, run this on that machine:
+
+```bash
+borg-ui-agent status
+```
+
+To move it, open **Managed Agents**, click **Change server URL** on that
+endpoint's card, enter the new address, and run the command it gives you on
+that machine. The endpoint keeps its identity, its credential and its history,
+so you do not need a new enrollment token and you do not get a second card in
+the fleet list.
+
+The command Borg UI shows depends on the agent version that endpoint last
+reported. From agent 0.1.5 onward it uses the subcommand:
+
+```bash
+sudo borg-ui-agent set-server "https://borg.example.com" && sudo systemctl restart borg-ui-agent
+```
+
+Older agents do not have that subcommand, so Borg UI shows an equivalent edit
+of the config file instead. Either way it is one command, and you do not have
+to choose between them.
+
 ## Enrollment Tokens and Agent Credentials
 
 Enrollment tokens are temporary setup credentials. They can expire after 1 hour,
