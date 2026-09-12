@@ -99,6 +99,12 @@ describe('Activity page', () => {
     expect(screen.getByTestId('activity-summary')).toHaveTextContent(
       '1 run · across 1 repository · index runs hidden'
     )
+    // Rows say how they went with a coloured dot, so the page says once
+    // what the colours mean.
+    const legend = screen.getByTestId('activity-legend')
+    expect(legend).toHaveTextContent('Completed')
+    expect(legend).toHaveTextContent('Failed')
+    expect(legend).toHaveTextContent('Warnings')
   })
 
   it('passes filters into the activity API and tracks them', async () => {

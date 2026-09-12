@@ -722,7 +722,9 @@
     "running": "In esecuzione",
     "pending": "In attesa",
     "cancelled": "Annullato",
-    "skipped": "Saltato"
+    "skipped": "Saltato",
+    "queued": "In coda",
+    "warnings": "Avvisi"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -3270,7 +3272,8 @@
       "rcloneSync": "Sync cloud",
       "rcloneHydrate": "Idratazione cloud",
       "scriptExecution": "Script",
-      "availabilityCheck": "Verifica disponibilità"
+      "availabilityCheck": "Verifica disponibilità",
+      "backupPlanRun": "Esecuzione del piano"
     },
     "scheduledById": "Pianificato (ID: {{id}})",
     "backupPlanByName": "Piano di backup: {{name}}",

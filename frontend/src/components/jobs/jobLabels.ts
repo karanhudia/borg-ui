@@ -24,6 +24,8 @@ export const getTypeLabel = (type: string, t: (key: string) => string): string =
       return t('backupJobsTable.types.scriptExecution')
     case 'availability_check':
       return t('backupJobsTable.types.availabilityCheck')
+    case 'backup_plan_run':
+      return t('backupJobsTable.types.backupPlanRun')
     default:
       return type
   }
@@ -55,6 +57,8 @@ export const getTypeColor = (
       return 'secondary'
     case 'availability_check':
       return 'default'
+    case 'backup_plan_run':
+      return 'error'
     default:
       return 'default'
   }

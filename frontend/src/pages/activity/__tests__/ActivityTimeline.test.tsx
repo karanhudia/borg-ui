@@ -144,6 +144,24 @@ describe('ActivityTimeline', () => {
     expect(screen.getByText('No activity found')).toBeInTheDocument()
   })
 
+  it('spells a status out only when the dot cannot say it', () => {
+    renderTimeline({
+      items: [
+        run({ id: 1, status: 'completed' }),
+        run({ id: 2, status: 'failed', repository: 'photos' }),
+        run({ id: 3, status: 'skipped', repository: 'downloads' }),
+      ],
+    })
+    const [ok, failed, skipped] = screen.getAllByTestId('run-entry')
+    // A clean run reads as a green dot and its duration, nothing more, but
+    // the dot still names itself for anyone not looking at the colour.
+    expect(within(ok).queryByText(/Completed/)).not.toBeInTheDocument()
+    expect(within(ok).getByRole('img', { name: 'Completed' })).toBeInTheDocument()
+    // How it ended rides in the cell that says how long it took.
+    expect(within(failed).getByText(/^Failed/)).toBeInTheDocument()
+    expect(within(skipped).getByText(/^Skipped/)).toBeInTheDocument()
+  })
+
   it('asks for the next page behind one load-more button', () => {
     const onLoadMore = vi.fn()
     const many = Array.from({ length: 70 }, (_, index) =>
@@ -216,8 +234,8 @@ describe('ActivityTimeline', () => {
     const plan = bands[1]
     expect(plan).toHaveTextContent('Plan · nightly')
     expect(plan).toHaveTextContent('2 repositories · 3 runs')
-    // Once on the band, once on the failed member.
-    expect(within(plan).getAllByText('Failed')).toHaveLength(2)
+    // Once as the band's roll-up, once beside the failed member's duration.
+    expect(within(plan).getAllByText(/^Failed/)).toHaveLength(2)
     expect(
       within(plan)
         .getAllByTestId('run-entry')

@@ -16,6 +16,7 @@ import { ActivityFilters } from './activity/ActivityFilters'
 import ActivityTimeline from './activity/ActivityTimeline'
 import RepositoryHeader from './activity/RepositoryHeader'
 import RunningNow from './activity/RunningNow'
+import StatusLegend from './activity/StatusLegend'
 import { activityKey, repositoryCount } from './activity/runs'
 import type {
   OperationCategory,
@@ -273,13 +274,22 @@ const Activity: React.FC = () => {
           trackFilter('trigger', value)
         }}
       />
-      <Typography
-        data-testid="activity-summary"
-        variant="body2"
-        sx={{ color: 'text.secondary', mt: -1.5, mb: 3 }}
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 1,
+          mt: -1.5,
+          mb: 3,
+        }}
       >
-        {isLoading && items.length === 0 ? <Skeleton width={220} /> : summary}
-      </Typography>
+        <Typography data-testid="activity-summary" variant="body2" sx={{ color: 'text.secondary' }}>
+          {isLoading && items.length === 0 ? <Skeleton width={220} /> : summary}
+        </Typography>
+        <StatusLegend />
+      </Box>
 
       <RunningNow items={items} actions={actionButtons} />
 

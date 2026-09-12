@@ -193,11 +193,13 @@ function UmbrellaBand({
                 .join(' · ')}
             </Typography>
           )}
+          {/* The band carries no status dot of its own, so it keeps the
+              roll-up for everything except the all-clear, which its members'
+              green dots already say. A chain still running under a finished
+              member shows up here and nowhere else. */}
+          {many && status !== 'completed' && <StatusBadge status={status} />}
           {many && (
             <Box sx={metaGridSx(actions.length)}>
-              <Box sx={{ minWidth: 0 }}>
-                <StatusBadge status={status} />
-              </Box>
               <Box />
               <Typography
                 variant="body2"
@@ -259,8 +261,6 @@ function SkeletonRow({ header }: { header?: boolean }) {
             </Box>
             <Skeleton width={96} height={24} sx={{ borderRadius: 999, ml: 1 }} />
             <Box sx={{ ...metaGridSx(3), display: { xs: 'none', md: 'grid' } }}>
-              <Skeleton width={90} height={24} sx={{ borderRadius: 1 }} />
-              <Skeleton width={56} height={24} sx={{ borderRadius: 1 }} />
               <Skeleton width={64} height={20} sx={{ justifySelf: 'end' }} />
               <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
                 {[0, 1, 2].map((index) => (

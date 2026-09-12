@@ -3,6 +3,7 @@ import { Box, ButtonBase, Typography, alpha, keyframes, useTheme } from '@mui/ma
 import { ChevronDown, ChevronRight, Terminal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import RunStatusIcon from './RunStatusIcon'
+import { subjectText } from '../../theme'
 import { buildFlow, isHook, type FlowNode } from './runChainLanes'
 import {
   ACTIVE,
@@ -112,7 +113,7 @@ export function RunChainSummary({ steps, expanded, onToggle }: RunChainSummaryPr
       <StatusBar steps={steps} />
       <Typography
         variant="caption"
-        sx={{ fontWeight: 600, color: 'text.primary', lineHeight: 1, whiteSpace: 'nowrap' }}
+        sx={{ fontWeight: 500, color: subjectText, lineHeight: 1, whiteSpace: 'nowrap' }}
       >
         {t('activity.followupsCollapsed', { count: steps.length })}
       </Typography>
@@ -163,7 +164,7 @@ function Node({ node }: { node: FlowNode }) {
           : filled
             ? alpha(tint, failed ? 0.1 : 0.07)
             : 'transparent',
-        color: muted ? 'text.disabled' : failed ? 'error.main' : 'text.primary',
+        color: muted ? 'text.disabled' : failed ? 'error.main' : subjectText,
         whiteSpace: 'nowrap',
       }}
     >

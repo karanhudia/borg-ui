@@ -9,6 +9,11 @@ export const activityKey = (item: ActivityItem) => item.activity_key ?? `${item.
 
 export const ACTIVE_STATUSES = new Set(['running', 'pending', 'queued'])
 
+// The status dot already carries these: green and done, blue and moving,
+// hollow and waiting. A run spells its status out only when the word says
+// something the colour cannot, which is every way a run can end badly.
+export const QUIET_STATUSES = new Set(['completed', 'running', 'pending', 'queued'])
+
 // A collapsed run and every step under it, so a summary sees the follow-up
 // chain and the hooks, not just the row that started them.
 export const flattenRuns = (items: ActivityItem[]): ActivityItem[] =>

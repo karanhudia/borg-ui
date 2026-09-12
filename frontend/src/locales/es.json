@@ -722,7 +722,9 @@
     "running": "En ejecución",
     "pending": "Pendiente",
     "cancelled": "Cancelado",
-    "skipped": "Omitido"
+    "skipped": "Omitido",
+    "queued": "En cola",
+    "warnings": "Advertencias"
   },
   "dashboard": {
     "title": "Panel",
@@ -3270,7 +3272,8 @@
       "rcloneSync": "Sincronización en la nube",
       "rcloneHydrate": "Hidratación en la nube",
       "scriptExecution": "Script",
-      "availabilityCheck": "Comprobación de disponibilidad"
+      "availabilityCheck": "Comprobación de disponibilidad",
+      "backupPlanRun": "Ejecución del plan"
     },
     "scheduledById": "Programado (ID: {{id}})",
     "backupPlanByName": "Plan de copia: {{name}}",
