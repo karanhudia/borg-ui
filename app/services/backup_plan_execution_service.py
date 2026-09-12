@@ -12,6 +12,7 @@ from typing import Any, Awaitable, Callable, Optional
 
 import structlog
 from fastapi import HTTPException
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
@@ -552,6 +553,32 @@ def _classify_agent_script_outcome(
         "failed",
         f"Plan {hook_type} agent script '{script_name}': {message}",
     )
+
+
+def _commit_bookkeeping(db: Session, *, attempts: int = 4, delay: float = 0.5) -> None:
+    """Commit a plan-run status write, waiting out a transiently locked
+    database.
+
+    These writes happen while a run is recording what went wrong, often
+    while the index operations of other repositories hold the SQLite write
+    lock. Losing one costs more than the wait: the row's real reason is
+    replaced by "database is locked", and the repositories it was about to
+    mark failed stay at `pending` forever.
+    """
+    for attempt in range(attempts):
+        try:
+            db.commit()
+            return
+        except OperationalError as exc:
+            if "database is locked" not in str(exc).lower() or attempt == attempts - 1:
+                raise
+            logger.warning(
+                "Plan run bookkeeping write locked, retrying",
+                attempt=attempt + 1,
+                error=str(exc),
+            )
+            db.rollback()
+            time.sleep(delay * (attempt + 1))
 
 
 def _http_detail_message(exc: HTTPException) -> Optional[str]:
@@ -1999,9 +2026,21 @@ class BackupPlanExecutionService:
                 repository_id=repository_context.repository_id,
                 error=str(exc),
             )
-            self._mark_repository_failed(
-                run_id, repository_context.repository_id, failure_text(exc)
-            )
+            try:
+                self._mark_repository_failed(
+                    run_id, repository_context.repository_id, failure_text(exc)
+                )
+            except Exception as bookkeeping_error:
+                # The repository failed; recording that must not take the rest
+                # of the run with it, or one locked write turns "check is
+                # active on the repository" into "database is locked" and the
+                # repositories still to run never get their turn.
+                logger.error(
+                    "Could not record backup plan repository failure",
+                    run_id=run_id,
+                    repository_id=repository_context.repository_id,
+                    error=str(bookkeeping_error),
+                )
             return "failed"
         finally:
             db.close()
@@ -2208,7 +2247,7 @@ class BackupPlanExecutionService:
                 child.status = "skipped"
                 child.completed_at = datetime.utcnow()
                 child.error_message = "Skipped after an earlier repository failed"
-                db.commit()
+                _commit_bookkeeping(db)
         finally:
             db.close()
 
@@ -2228,7 +2267,7 @@ class BackupPlanExecutionService:
                 child.status = "cancelled"
                 child.completed_at = datetime.utcnow()
                 child.error_message = CANCELLED_MESSAGE
-                db.commit()
+                _commit_bookkeeping(db)
         finally:
             db.close()
 
@@ -2249,7 +2288,7 @@ class BackupPlanExecutionService:
                 child.status = "failed"
                 child.completed_at = datetime.utcnow()
                 child.error_message = error_message
-                db.commit()
+                _commit_bookkeeping(db)
         finally:
             db.close()
 
@@ -2271,7 +2310,7 @@ class BackupPlanExecutionService:
                 child.status = "failed"
                 child.completed_at = now
                 child.error_message = error_message
-            db.commit()
+            _commit_bookkeeping(db)
         finally:
             db.close()
 
@@ -2293,7 +2332,7 @@ class BackupPlanExecutionService:
                 child.status = "skipped"
                 child.completed_at = now
                 child.error_message = error_message
-            db.commit()
+            _commit_bookkeeping(db)
         finally:
             db.close()
 
@@ -2382,7 +2421,7 @@ class BackupPlanExecutionService:
                 run.status = "failed"
                 run.error_message = error_message
                 run.completed_at = datetime.utcnow()
-                db.commit()
+                _commit_bookkeeping(db)
         finally:
             db.close()
 
