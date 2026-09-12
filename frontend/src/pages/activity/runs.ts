@@ -2,8 +2,7 @@ import type { TFunction } from 'i18next'
 import { isToday, isYesterday } from 'date-fns'
 import type { ActivityItem } from '../Activity'
 import type { RunChainOperation } from '../../components/activity/RunChainRow'
-import { getTypeLabel } from '../../components/jobs/jobLabels'
-import { statusLabel } from '../../components/StatusBadge'
+import { getTypeLabel, statusLabel } from '../../components/jobs/jobLabels'
 import { formatDurationSeconds, parseBackendDate } from '../../utils/dateUtils'
 
 export const activityKey = (item: ActivityItem) => item.activity_key ?? `${item.type}-${item.id}`

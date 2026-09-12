@@ -1,6 +1,6 @@
 import { Box, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
-import { statusLabel } from '../../components/StatusBadge'
+import { statusLabel } from '../../components/jobs/jobLabels'
 import { statusColor } from './entryGrid'
 
 // One entry per colour the rail can show, not one per status: skipped,

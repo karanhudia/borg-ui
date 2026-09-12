@@ -15,10 +15,9 @@ import {
 } from '../../components/activity/runChainText'
 import { buildFlow, type FlowNode } from '../../components/activity/runChainLanes'
 import RunStatusIcon from '../../components/activity/RunStatusIcon'
-import { statusLabel } from '../../components/StatusBadge'
 import { subjectText } from '../../theme'
 import { CATEGORY_ICONS, categoryColor } from '../../components/categoryStyle'
-import { getSkipReasonLabel, getTransportLabel } from '../../components/jobs/jobLabels'
+import { getSkipReasonLabel, getTransportLabel, statusLabel } from '../../components/jobs/jobLabels'
 import { formatDurationSeconds, formatElapsedTime, parseBackendDate } from '../../utils/dateUtils'
 import type { OperationCategory } from '../../types/operations'
 import {
