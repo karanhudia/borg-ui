@@ -174,7 +174,8 @@ export default function Repositories() {
   const announcedWipeJobsRef = useRef<Set<number>>(new Set())
 
   // Filter, sort, and search state
-  const [searchQuery, setSearchQuery] = useState('')
+  // `?q=` lets other pages (the background work hub) land on one repository.
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') ?? '')
   const [sortBy, setSortBy] = useState<string>(() => {
     return localStorage.getItem('repos_sort') || 'name-asc'
   })

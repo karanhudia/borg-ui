@@ -3736,6 +3736,7 @@
         "detailAllIndexed": "Every archive has its file history.",
         "detailHint": "Rebuild from File history to index these archives again.",
         "viewIndexRuns": "View index runs",
+        "openRepository": "Open repository",
         "historyAgentUnsupported": "Not available for agent repositories"
       },
       "rebuildMenuHint": "Every stage after the one you pick is rebuilt too. Earlier stages are kept. Stats always run last, because they total up what the other stages produced.",
