@@ -440,6 +440,96 @@ async def test_cancel_preserves_a_service_written_cancelled_status(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.parametrize("verdict", ["completed", "failed"])
+async def test_terminal_write_restores_a_start_the_executor_handed_over(
+    db, repo, runner, registry, verdict
+):
+    """A maintenance executor hands its row to a Borg 2 service by clearing
+    the start the dispatch wrote, so the service's `claim_running` matches
+    (executors/maintenance.py). A service that never claims leaves the row
+    with no start; the terminal write puts the dispatch's start back, so the
+    run keeps its place in the history and its duration."""
+    seen = {}
+
+    async def hands_the_row_over(ctx):
+        seen["claimed_at"] = ctx.operation.started_at
+        ctx.db.query(Operation).filter(Operation.id == ctx.operation_id).update(
+            {Operation.started_at: None}, synchronize_session=False
+        )
+        ctx.db.commit()
+        return Outcome(status=verdict)
+
+    registry["stats"] = hands_the_row_over
+    op = enqueue(db, "stats", repository_id=repo.id)
+    await _drain(runner)
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert row.status == verdict
+    assert seen["claimed_at"] is not None
+    assert row.started_at == seen["claimed_at"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_terminal_write_restores_the_start_when_the_executor_raises(
+    db, repo, runner, registry
+):
+    """The same, for an executor that raises after the hand-over (a service
+    that gave up on a lock): the failure the runner writes lands on a row
+    that still carries its start."""
+    seen = {}
+
+    async def hands_over_then_raises(ctx):
+        seen["claimed_at"] = ctx.operation.started_at
+        ctx.db.query(Operation).filter(Operation.id == ctx.operation_id).update(
+            {Operation.started_at: None}, synchronize_session=False
+        )
+        ctx.db.commit()
+        raise RuntimeError("database is locked")
+
+    registry["stats"] = hands_over_then_raises
+    op = enqueue(db, "stats", repository_id=repo.id)
+    await _drain(runner)
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert row.status == "failed"
+    assert row.started_at == seen["claimed_at"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cancelled_task_keeps_a_start_the_executor_handed_over(
+    db, repo, runner, registry
+):
+    """A shutdown drain cancels the task while the row is handed over. The
+    cancelled row keeps its start too: it ran, and the history says so."""
+    seen = {}
+    handed_over = asyncio.Event()
+
+    async def hands_over_then_waits(ctx):
+        seen["claimed_at"] = ctx.operation.started_at
+        ctx.db.query(Operation).filter(Operation.id == ctx.operation_id).update(
+            {Operation.started_at: None}, synchronize_session=False
+        )
+        ctx.db.commit()
+        handed_over.set()
+        await asyncio.sleep(60)
+        return Outcome()
+
+    registry["stats"] = hands_over_then_waits
+    op = enqueue(db, "stats", repository_id=repo.id)
+    await runner.tick()
+    await handed_over.wait()
+    runner.running_tasks[op.id].cancel()
+    await asyncio.gather(*runner.running_tasks.values(), return_exceptions=True)
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert row.status == "cancelled"
+    assert row.started_at == seen["claimed_at"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_cancel_refused_for_running_rows_this_process_does_not_own(
     db, repo, runner
 ):
