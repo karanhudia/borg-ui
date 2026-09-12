@@ -2070,8 +2070,8 @@
     "subtitle": "Every run on every repository, newest first",
     "actions": {
       "refresh": "Refresh activity",
-      "loadOlder": "Load older activity",
-      "loadingOlder": "Loading..."
+      "loadMore": "Load more",
+      "loadingMore": "Loading..."
     },
     "filters": {
       "type": "Type",
@@ -2173,7 +2173,6 @@
       "title": "Running now",
       "queued": "Queued"
     },
-    "showMore": "Show {{count}} more",
     "health": {
       "backup": "Backup",
       "check": "Check",

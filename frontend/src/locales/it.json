@@ -2070,8 +2070,8 @@
     "subtitle": "Ogni esecuzione su ogni repository, la più recente prima",
     "actions": {
       "refresh": "Aggiorna attività",
-      "loadOlder": "Carica attività precedenti",
-      "loadingOlder": "Caricamento..."
+      "loadMore": "Carica altri",
+      "loadingMore": "Caricamento..."
     },
     "filters": {
       "type": "Tipo",
@@ -2173,7 +2173,6 @@
       "title": "In corso",
       "queued": "In coda"
     },
-    "showMore": "Mostra altri {{count}}",
     "health": {
       "backup": "Backup",
       "check": "Verifica",

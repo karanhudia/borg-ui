@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Box, Button, Skeleton, Typography, alpha, useTheme } from '@mui/material'
 import {
   CalendarRange,
@@ -31,16 +31,15 @@ import {
   type UmbrellaKind,
 } from './runs'
 
-// Entries rendered before a "show more" step in. Each carries a chain and
-// its actions, so a few hundred at once would make the page sluggish.
-const WINDOW_SIZE = 60
-
 interface ActivityTimelineProps {
   items: ActivityItem[]
   loading: boolean
   actions: ActionButton<ActivityItem>[]
   showRepository: boolean
   getKey: (item: ActivityItem) => string
+  hasMore?: boolean
+  loadingMore?: boolean
+  onLoadMore?: () => void
 }
 
 const UMBRELLA_ICONS: Record<UmbrellaKind, typeof User> = {
@@ -92,6 +91,9 @@ function UmbrellaBand({
   actions: ActionButton<ActivityItem>[]
   showRepository: boolean
   getKey: (item: ActivityItem) => string
+  hasMore?: boolean
+  loadingMore?: boolean
+  onLoadMore?: () => void
 }) {
   const { t } = useTranslation()
   const theme = useTheme()
@@ -321,31 +323,15 @@ export default function ActivityTimeline({
   actions,
   showRepository,
   getKey,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
 }: ActivityTimelineProps) {
   const { t } = useTranslation()
-  const [limit, setLimit] = useState(WINDOW_SIZE)
   const days = useMemo(
     () => groupByDay(items).map((group) => ({ ...group, clusters: clusterRuns(group.items, t) })),
     [items, t]
   )
-  // The window closes on a cluster boundary, so a plan run or schedule
-  // firing never shows half its members with "show more" changing the rest.
-  const { groups, shown } = useMemo(() => {
-    let shown = 0
-    const groups: typeof days = []
-    for (const day of days) {
-      if (shown >= limit) break
-      const clusters: Cluster[] = []
-      for (const cluster of day.clusters) {
-        if (shown >= limit) break
-        clusters.push(cluster)
-        shown += cluster.items.length
-      }
-      groups.push({ ...day, clusters })
-    }
-    return { groups, shown }
-  }, [days, limit])
-  const hidden = items.length - shown
 
   if (loading && items.length === 0) return <TimelineSkeleton />
 
@@ -380,7 +366,7 @@ export default function ActivityTimeline({
         },
       }}
     >
-      {groups.map((group) => (
+      {days.map((group) => (
         <Box key={group.key} data-testid="activity-day" sx={{ mb: 2 }}>
           <Typography
             variant="overline"
@@ -411,10 +397,10 @@ export default function ActivityTimeline({
           </Box>
         </Box>
       ))}
-      {hidden > 0 && (
+      {hasMore && (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
-          <Button variant="outlined" size="small" onClick={() => setLimit((n) => n + WINDOW_SIZE)}>
-            {t('activity.showMore', { count: Math.min(hidden, WINDOW_SIZE) })}
+          <Button variant="outlined" size="small" onClick={onLoadMore} disabled={loadingMore}>
+            {t(loadingMore ? 'activity.actions.loadingMore' : 'activity.actions.loadMore')}
           </Button>
         </Box>
       )}

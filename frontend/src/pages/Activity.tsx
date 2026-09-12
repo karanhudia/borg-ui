@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { Box, Button, IconButton, Skeleton, Typography } from '@mui/material'
+import { Box, IconButton, Skeleton, Typography } from '@mui/material'
 import { History, RefreshCw } from 'lucide-react'
 import { activityAPI, repositoriesAPI } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
@@ -64,7 +64,7 @@ export interface ActivityItem {
 
 type Progress = OperationProgressEvent['data']
 
-const PAGE_SIZE = 100
+const PAGE_SIZE = 50
 
 function withProgress(item: ActivityItem, progress: Progress): ActivityItem {
   const patched =
@@ -289,14 +289,10 @@ const Activity: React.FC = () => {
         actions={actionButtons}
         showRepository={repositoryId === null}
         getKey={activityKey}
+        hasMore={hasNextPage}
+        loadingMore={isFetchingNextPage}
+        onLoadMore={() => fetchNextPage()}
       />
-      {hasNextPage && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-          <Button onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
-            {t(isFetchingNextPage ? 'activity.actions.loadingOlder' : 'activity.actions.loadOlder')}
-          </Button>
-        </Box>
-      )}
       {dialogs}
     </Box>
   )

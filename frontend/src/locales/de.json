@@ -2070,8 +2070,8 @@
     "subtitle": "Jeder Lauf auf jedem Repository, neueste zuerst",
     "actions": {
       "refresh": "Aktivität aktualisieren",
-      "loadOlder": "Ältere Aktivität laden",
-      "loadingOlder": "Wird geladen..."
+      "loadMore": "Mehr laden",
+      "loadingMore": "Wird geladen..."
     },
     "filters": {
       "type": "Typ",
@@ -2173,7 +2173,6 @@
       "title": "Läuft gerade",
       "queued": "In Warteschlange"
     },
-    "showMore": "{{count}} weitere anzeigen",
     "health": {
       "backup": "Backup",
       "check": "Prüfung",

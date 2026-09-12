@@ -70,8 +70,6 @@ const items: ActivityItem[] = [
   }),
 ]
 
-const noop = () => {}
-
 function renderTimeline(overrides: Partial<Parameters<typeof ActivityTimeline>[0]> = {}) {
   return renderWithProviders(
     <ActivityTimeline
@@ -146,30 +144,20 @@ describe('ActivityTimeline', () => {
     expect(screen.getByText('No activity found')).toBeInTheDocument()
   })
 
-  it('windows long lists behind a show-more button', () => {
+  it('asks for the next page behind one load-more button', () => {
+    const onLoadMore = vi.fn()
     const many = Array.from({ length: 70 }, (_, index) =>
       run({ id: index + 1, started_at: minutesAfterNoon(0, index), completed_at: null })
     )
-    renderTimeline({ items: many, actions: [{ icon: null, label: 'x', onClick: noop }] })
-    expect(screen.getAllByTestId('run-entry')).toHaveLength(60)
-    fireEvent.click(screen.getByRole('button', { name: 'Show 10 more' }))
+    const { unmount } = renderTimeline({ items: many })
+    // Everything loaded is rendered: the only "more" is the next page.
     expect(screen.getAllByTestId('run-entry')).toHaveLength(70)
-  })
+    expect(screen.queryByRole('button', { name: /more/i })).not.toBeInTheDocument()
+    unmount()
 
-  it('keeps a plan run whole across the show-more boundary', () => {
-    // Runs 60 and 61 belong to one plan run, so the first window carries
-    // both rather than showing the band with half its members.
-    const many = Array.from({ length: 70 }, (_, index) =>
-      run({
-        id: index + 1,
-        backup_plan_run_id: index === 59 || index === 60 ? 7 : null,
-        started_at: minutesAfterNoon(0, 70 - index),
-        completed_at: null,
-      })
-    )
-    renderTimeline({ items: many })
-    expect(screen.getAllByTestId('run-entry')).toHaveLength(61)
-    expect(screen.getByRole('button', { name: 'Show 9 more' })).toBeInTheDocument()
+    renderTimeline({ items: many, hasMore: true, onLoadMore })
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }))
+    expect(onLoadMore).toHaveBeenCalled()
   })
 
   it('rolls a running follow-up chain up into the band status', () => {
