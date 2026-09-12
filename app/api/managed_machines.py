@@ -758,9 +758,11 @@ async def create_agent_backup_job(
         )
 
     now = _now_utc()
+    from app.services.repository_executor import BACKUP_AGENT_JOB_TYPE
+
     job = AgentJob(
         agent_machine_id=agent.id,
-        job_type="backup",
+        job_type=BACKUP_AGENT_JOB_TYPE,
         status="queued",
         payload=_build_backup_job_payload(payload),
         created_at=now,
