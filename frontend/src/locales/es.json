@@ -338,7 +338,8 @@
         "cancelJob": "Cancelar trabajo",
         "revokeToken": "Revocar token",
         "upgradeAgent": "Actualizar este endpoint",
-        "pinAgentVersion": "Fijar la versión de este endpoint"
+        "pinAgentVersion": "Fijar la versión de este endpoint",
+        "changeServerUrl": "Cambiar la URL del servidor"
       },
       "noBorg": {
         "title": "No se informó de un binario Borg utilizable",
@@ -478,7 +479,8 @@
         "copyCommand": "Copiar comando",
         "runHint": "Ejecútalo en el endpoint, con un usuario que pueda usar sudo.",
         "statusHint": "¿No sabes qué dirección tiene ahora el endpoint? Ejecuta borg-ui-agent status en él."
-      }
+      },
+      "offlineStatusHint": "Ejecuta borg-ui-agent status en el endpoint para ver la dirección de servidor que tiene ahora."
     },
     "installCommand": {
       "title": "Comando de instalación",

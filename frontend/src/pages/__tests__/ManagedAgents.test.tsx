@@ -1606,3 +1606,61 @@ describe('AgentList fleet upgrades', () => {
     expect(onUpgradeMany.mock.calls[0][0]).toHaveLength(2)
   })
 })
+
+describe('ManagedAgents server URL recovery', () => {
+  const renderOffline = (agentVersion: string | null = '0.1.4') =>
+    renderWithProviders(
+      <AgentList
+        agents={[buildAgent({ status: 'offline', agent_version: agentVersion })]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+
+  it('opens the change server URL dialog from the card', async () => {
+    renderOffline()
+
+    await userEvent.click(screen.getByRole('button', { name: /change server url/i }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('textbox')).toHaveValue('https://borg-ui.example.com')
+    expect(within(dialog).getByText(/sed -i/)).toBeInTheDocument()
+  })
+
+  it('offers the subcommand form to an endpoint new enough for it', async () => {
+    renderOffline('0.1.5')
+
+    await userEvent.click(screen.getByRole('button', { name: /change server url/i }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/borg-ui-agent set-server/)).toBeInTheDocument()
+  })
+
+  it('points an offline card at borg-ui-agent status', () => {
+    renderOffline()
+
+    expect(screen.getByText(/borg-ui-agent status/)).toBeInTheDocument()
+  })
+
+  it('leaves the hint off an online card', () => {
+    renderWithProviders(
+      <AgentList
+        agents={[buildAgent({ status: 'online' })]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+
+    expect(screen.queryByText(/borg-ui-agent status/)).toBeNull()
+  })
+})

@@ -338,7 +338,8 @@
         "cancelJob": "Job abbrechen",
         "revokeToken": "Token widerrufen",
         "upgradeAgent": "Diesen Endpunkt aktualisieren",
-        "pinAgentVersion": "Version dieses Endpunkts festlegen"
+        "pinAgentVersion": "Version dieses Endpunkts festlegen",
+        "changeServerUrl": "Server-URL ändern"
       },
       "noBorg": {
         "title": "Keine verwendbare Borg-Binärdatei gemeldet",
@@ -478,7 +479,8 @@
         "copyCommand": "Befehl kopieren",
         "runHint": "Führe dies auf dem Endpunkt aus, als Benutzer mit sudo-Rechten.",
         "statusHint": "Unklar, welche Adresse der Endpunkt gerade hält? Führe dort borg-ui-agent status aus."
-      }
+      },
+      "offlineStatusHint": "Führe borg-ui-agent status auf dem Endpunkt aus, um die aktuell hinterlegte Serveradresse zu sehen."
     },
     "installCommand": {
       "title": "Installationsbefehl",
