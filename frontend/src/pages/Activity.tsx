@@ -82,6 +82,7 @@ function withProgress(item: ActivityItem, progress: Progress): ActivityItem {
   return { ...patched, followups: patched.followups.map((step) => withProgress(step, progress)) }
 }
 
+/** Display the filterable, cursor-paginated activity feed. */
 const Activity: React.FC = () => {
   const { t } = useTranslation()
   const { track, EventCategory, EventAction } = useAnalytics()

@@ -228,6 +228,7 @@ interface RunEntryProps {
   showRepository: boolean
 }
 
+/** Render a top-level activity row and its expandable follow-up chain. */
 export default function RunEntry({ item, actions, showRepository }: RunEntryProps) {
   const { t } = useTranslation()
   const theme = useTheme()

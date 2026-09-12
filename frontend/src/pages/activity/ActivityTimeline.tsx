@@ -118,6 +118,7 @@ function UmbrellaBand({
   )
   const preHooks = hookFlow(hookSteps.filter((hook) => isPreHook(hook.op)).map((h) => h.op))
   const postHooks = hookFlow(hookSteps.filter((hook) => !isPreHook(hook.op)).map((h) => h.op))
+  /** Resolve the row actions belonging to a plan-level hook node. */
   const hookActions = (node: FlowNode) => {
     const item = hookSteps.find((hook) => hook.op.id === node.op.id)?.item
     return item ? <RowActions row={item} actions={actions} iconOpacity={0.55} /> : null
@@ -345,6 +346,7 @@ function TimelineSkeleton() {
   )
 }
 
+/** Render activity items as chronological umbrella groups and standalone runs. */
 export default function ActivityTimeline({
   items,
   loading,

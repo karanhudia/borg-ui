@@ -135,6 +135,7 @@ export function RunChainSummary({ flow, expanded, onToggle }: RunChainSummaryPro
   )
 }
 
+/** Render one operation in the expanded chain flow. */
 function Node({ node }: { node: FlowNode }) {
   const { t } = useTranslation()
   const theme = useTheme()

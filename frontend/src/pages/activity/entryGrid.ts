@@ -9,6 +9,7 @@ export const ENTRY_COLUMNS = {
   md: '60px 20px minmax(0, 1fr)',
 } as const
 
+/** Build the responsive grid shared by entry metadata and action controls. */
 export function metaGridSx(actionCount: number) {
   return {
     // A phone has no room for the columns: the block wraps onto its own

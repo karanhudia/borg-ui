@@ -36,6 +36,7 @@ if settings.database_url.startswith("sqlite"):
 
     @event.listens_for(engine, "connect")
     def set_sqlite_pragma(dbapi_conn, connection_record):
+        """Configure each SQLite connection for integrity and lock tolerance."""
         cursor = dbapi_conn.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         # WAL lets readers proceed without blocking the single writer, and

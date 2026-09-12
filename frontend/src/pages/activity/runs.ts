@@ -115,6 +115,7 @@ export function chainStep(step: ActivityItem): RunChainOperation {
   }
 }
 
+/** Convert an activity item and its follow-ups into the chain renderer shape. */
 export function runChain(item: ActivityItem): RunChainOperation {
   const followups = item.followups ?? []
   const steps = isIndexRun(item) ? [item, ...followups] : followups
@@ -179,6 +180,7 @@ export function runDuration(item: ActivityItem): string | null {
 // not be counted as one.
 const NOT_A_REPOSITORY = new Set(['script_execution', 'backup_plan_run'])
 
+/** Count distinct repositories while excluding plan and script summary rows. */
 export function repositoryCount(items: ActivityItem[]): number {
   const keys = new Set<string>()
   for (const item of items) {

@@ -413,6 +413,7 @@ class TestActivityPagination:
     def test_before_cursor_pages_into_older_runs(
         self, test_client, test_db, admin_headers
     ):
+        """The before cursor exposes runs older than the first page."""
         repo = _repo(test_db)
         for hours in (1, 2, 3):
             op = enqueue(test_db, "prune", repository_id=repo.id)
@@ -468,6 +469,7 @@ class TestActivityPagination:
 @pytest.mark.unit
 class TestFailedPlanRuns:
     def _plan_run(self, test_db, status="failed", error="boom"):
+        """Create a plan run with the requested terminal state."""
         from app.database.models import BackupPlan, BackupPlanRun
 
         plan = BackupPlan(name="nightly", enabled=True, source_directories="[]")
@@ -488,6 +490,7 @@ class TestFailedPlanRuns:
     def test_failed_plan_run_with_no_operations_is_listed(
         self, test_client, test_db, admin_headers
     ):
+        """A failed plan run remains visible when no operation explains it."""
         plan, run = self._plan_run(test_db)
         body = test_client.get("/api/activity/recent", headers=admin_headers).json()
         assert [i["type"] for i in body] == ["backup_plan_run"]
@@ -499,6 +502,7 @@ class TestFailedPlanRuns:
     def test_a_clean_plan_run_gets_no_row_of_its_own(
         self, test_client, test_db, admin_headers
     ):
+        """A successful plan run relies on its member rows for activity."""
         from app.database.models import ScriptExecution
 
         _, run = self._plan_run(test_db, status="completed", error=None)
@@ -564,6 +568,7 @@ class TestFailedPlanRuns:
     def test_failed_plan_run_is_silent_when_its_own_run_failed(
         self, test_client, test_db, admin_headers
     ):
+        """A failed backup row suppresses the less specific plan-run row."""
         _, run = self._plan_run(test_db)
         repo = _repo(test_db)
         op = enqueue(test_db, "backup", repository_id=repo.id)
@@ -579,6 +584,7 @@ class TestFailedPlanRuns:
 @pytest.mark.unit
 class TestPlanRunBookkeeping:
     def test_a_locked_write_is_run_again_whole(self):
+        """A locked write replays its mutation in a new session."""
         from sqlalchemy.exc import OperationalError
 
         from app.services import backup_plan_execution_service as svc
@@ -587,23 +593,28 @@ class TestPlanRunBookkeeping:
 
         class FakeSession:
             def __init__(self):
+                """Track the lifecycle of one bookkeeping attempt."""
                 self.committed = False
                 self.rolled_back = False
                 self.closed = False
                 sessions.append(self)
 
             def commit(self):
+                """Record that this attempt reached its commit."""
                 self.committed = True
 
             def rollback(self):
+                """Record that this attempt was rolled back."""
                 self.rolled_back = True
 
             def close(self):
+                """Record that this attempt released its session."""
                 self.closed = True
 
         ran = []
 
         def work(db):
+            """Raise lock errors until the third mutation attempt."""
             ran.append(db)
             # The mutation itself is what the lock hits, on the flush the
             # commit drives. Retrying the commit alone would replay nothing.
@@ -656,23 +667,28 @@ class TestPlanRunBookkeeping:
         assert pending.status == "skipped"
 
     def test_other_errors_are_not_retried(self):
+        """A non-lock database error escapes without a retry."""
         from sqlalchemy.exc import OperationalError
 
         from app.services import backup_plan_execution_service as svc
 
         class FakeSession:
             def commit(self):
+                """Model a successful commit for the fake session."""
                 pass
 
             def rollback(self):
+                """Model a rollback for the fake session."""
                 pass
 
             def close(self):
+                """Model closing the fake session."""
                 pass
 
         ran = []
 
         def work(db):
+            """Raise a database error that is unrelated to locking."""
             ran.append(db)
             raise OperationalError("UPDATE", {}, Exception("no such table"))
 

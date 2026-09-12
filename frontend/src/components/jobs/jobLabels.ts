@@ -28,6 +28,7 @@ export const statusLabel = (status: string, t: (key: string) => string): string 
   }
 }
 
+/** Translate a backend operation type into its shared display label. */
 export const getTypeLabel = (type: string, t: (key: string) => string): string => {
   switch (type) {
     case 'backup':
@@ -59,6 +60,7 @@ export const getTypeLabel = (type: string, t: (key: string) => string): string =
   }
 }
 
+/** Map an operation type to the color used by its shared badge. */
 export const getTypeColor = (
   type: string
 ): 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning' => {

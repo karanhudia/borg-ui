@@ -1949,6 +1949,7 @@ class BackupPlanExecutionService:
         context: PlanRunContext,
         repository_context: RepositoryRunContext,
     ) -> str:
+        """Run one repository backup and record its terminal plan-run status."""
         db = SessionLocal()
         try:
             child = (
@@ -2267,7 +2268,10 @@ class BackupPlanExecutionService:
         return "completed" if maintenance_ok else "completed_with_warnings"
 
     def _mark_repository_skipped(self, run_id: int, repository_id: int) -> None:
+        """Mark a pending repository child as skipped."""
+
         def work(db: Session) -> None:
+            """Apply the skipped state in a fresh retryable session."""
             _update_children(
                 db,
                 run_id,
@@ -2278,7 +2282,10 @@ class BackupPlanExecutionService:
         _write_bookkeeping(work)
 
     def _mark_repository_cancelled(self, run_id: int, repository_id: int) -> None:
+        """Mark a pending repository child as cancelled."""
+
         def work(db: Session) -> None:
+            """Apply the cancelled state in a fresh retryable session."""
             _update_children(
                 db,
                 run_id,
@@ -2295,7 +2302,10 @@ class BackupPlanExecutionService:
     def _mark_repository_failed(
         self, run_id: int, repository_id: int, error_message: str
     ) -> None:
+        """Mark a pending or running repository child as failed."""
+
         def work(db: Session) -> None:
+            """Apply the failed state in a fresh retryable session."""
             _update_children(
                 db,
                 run_id,
@@ -2315,7 +2325,10 @@ class BackupPlanExecutionService:
     def _mark_pending_repositories_failed(
         self, run_id: int, error_message: str
     ) -> None:
+        """Fail every pending repository child for a plan run."""
+
         def work(db: Session) -> None:
+            """Apply the failed state to pending children in a fresh session."""
             _update_children(
                 db,
                 run_id,
@@ -2331,7 +2344,10 @@ class BackupPlanExecutionService:
     def _mark_pending_repositories_skipped(
         self, run_id: int, error_message: str
     ) -> None:
+        """Skip every pending repository child for a plan run."""
+
         def work(db: Session) -> None:
+            """Apply the skipped state to pending children in a fresh session."""
             _update_children(
                 db,
                 run_id,
@@ -2418,7 +2434,10 @@ class BackupPlanExecutionService:
             db.close()
 
     def _mark_run_failed(self, run_id: int, error_message: str) -> None:
+        """Fail a plan run unless it has already been cancelled."""
+
         def work(db: Session) -> None:
+            """Apply the run failure in a fresh retryable session."""
             run = db.query(BackupPlanRun).filter(BackupPlanRun.id == run_id).first()
             # A cancellation surfaces here as a generic hook/backup failure (the
             # agent script outcome classifies "canceled" as failed and raises).
