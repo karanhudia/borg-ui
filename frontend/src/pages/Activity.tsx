@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { Box, IconButton, Skeleton, Typography } from '@mui/material'
 import { History, RefreshCw } from 'lucide-react'
@@ -16,6 +16,7 @@ import { ActivityFilters } from './activity/ActivityFilters'
 import ActivityTimeline from './activity/ActivityTimeline'
 import RepositoryHeader from './activity/RepositoryHeader'
 import RunningNow from './activity/RunningNow'
+import StatusLegend from './activity/StatusLegend'
 import { activityKey, repositoryCount } from './activity/runs'
 import type {
   OperationCategory,
@@ -54,6 +55,7 @@ export interface ActivityItem {
   depends_on_id?: number | null
   operation_id?: number | null
   hook_type?: string | null
+  sort_at?: string | null
   progress_percent?: number | null
   progress_current?: number | null
   progress_total?: number | null
@@ -62,6 +64,8 @@ export interface ActivityItem {
 }
 
 type Progress = OperationProgressEvent['data']
+
+const PAGE_SIZE = 50
 
 function withProgress(item: ActivityItem, progress: Progress): ActivityItem {
   const patched =
@@ -78,6 +82,7 @@ function withProgress(item: ActivityItem, progress: Progress): ActivityItem {
   return { ...patched, followups: patched.followups.map((step) => withProgress(step, progress)) }
 }
 
+/** Display the filterable, cursor-paginated activity feed. */
 const Activity: React.FC = () => {
   const { t } = useTranslation()
   const { track, EventCategory, EventAction } = useAnalytics()
@@ -109,13 +114,18 @@ const Activity: React.FC = () => {
     data: activities,
     isLoading,
     refetch,
-  } = useQuery({
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ['activity', repositoryId, typeFilter, statusFilter, categoryFilter, triggerFilter],
-    queryFn: async () => {
+    initialPageParam: null as string | null,
+    queryFn: async ({ pageParam }) => {
       // The route filters by repository in SQL, per source, before each
       // source's own limit. Filtering here instead would hide a quiet
       // repository behind whatever the rest of the install did lately.
-      const params: Record<string, unknown> = { limit: 200 }
+      const params: Record<string, unknown> = { limit: PAGE_SIZE }
+      if (pageParam) params.before = pageParam
       if (repositoryId !== null) params.repository_id = repositoryId
       if (typeFilter !== 'all') params.job_type = typeFilter
       if (statusFilter !== 'all') params.status = statusFilter
@@ -124,9 +134,31 @@ const Activity: React.FC = () => {
       const response = await activityAPI.list(params)
       return response.data as ActivityItem[]
     },
-    refetchInterval: 3000,
+    // The cursor is the sort key the route paged by, not started_at: a
+    // skipped plan run sorts by when it was decided, not when it began.
+    // `Z` rather than `+00:00`, which a query string reads back as a space.
+    // The route never ends a page inside a group of rows sharing one
+    // timestamp, so the next page can start strictly before this one.
+    getNextPageParam: (lastPage) =>
+      lastPage.length < PAGE_SIZE
+        ? undefined
+        : (lastPage[lastPage.length - 1]?.sort_at?.replace('+00:00', 'Z') ?? undefined),
+    // History does not change, so stop polling once the user pages into it.
+    // Live rows keep arriving over SSE either way.
+    refetchInterval: (query) => ((query.state.data?.pages.length ?? 1) > 1 ? false : 3000),
   })
-  const items = useMemo(() => activities ?? [], [activities])
+  // A run whose parent sat just past a page edge is pulled into that page as
+  // an ancestor and comes back at the head of the next one. Keep the first
+  // copy, which is the one carrying its follow-up chain.
+  const items = useMemo(() => {
+    const seen = new Set<string>()
+    return (activities?.pages ?? []).flat().filter((item) => {
+      const key = activityKey(item)
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }, [activities])
 
   const { data: repositoriesData } = useQuery({
     queryKey: ['repositories'],
@@ -144,8 +176,13 @@ const Activity: React.FC = () => {
   // request per tick. Status changes are rarer and get a full refetch.
   const onProgress = useCallback(
     (progress: Progress) => {
-      queryClient.setQueriesData<ActivityItem[]>({ queryKey: ['activity'] }, (old) =>
-        Array.isArray(old) ? old.map((item) => withProgress(item, progress)) : old
+      queryClient.setQueriesData<{ pages: ActivityItem[][] }>({ queryKey: ['activity'] }, (old) =>
+        old?.pages
+          ? {
+              ...old,
+              pages: old.pages.map((page) => page.map((item) => withProgress(item, progress))),
+            }
+          : old
       )
     },
     [queryClient]
@@ -240,13 +277,22 @@ const Activity: React.FC = () => {
           trackFilter('trigger', value)
         }}
       />
-      <Typography
-        data-testid="activity-summary"
-        variant="body2"
-        sx={{ color: 'text.secondary', mt: -1.5, mb: 3 }}
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 1,
+          mt: -1.5,
+          mb: 3,
+        }}
       >
-        {isLoading && items.length === 0 ? <Skeleton width={220} /> : summary}
-      </Typography>
+        <Typography data-testid="activity-summary" variant="body2" sx={{ color: 'text.secondary' }}>
+          {isLoading && items.length === 0 ? <Skeleton width={220} /> : summary}
+        </Typography>
+        <StatusLegend />
+      </Box>
 
       <RunningNow items={items} actions={actionButtons} />
 
@@ -256,6 +302,9 @@ const Activity: React.FC = () => {
         actions={actionButtons}
         showRepository={repositoryId === null}
         getKey={activityKey}
+        hasMore={hasNextPage}
+        loadingMore={isFetchingNextPage}
+        onLoadMore={() => fetchNextPage()}
       />
       {dialogs}
     </Box>

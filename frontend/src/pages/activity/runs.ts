@@ -2,12 +2,28 @@ import type { TFunction } from 'i18next'
 import { isToday, isYesterday } from 'date-fns'
 import type { ActivityItem } from '../Activity'
 import type { RunChainOperation } from '../../components/activity/RunChainRow'
-import { getTypeLabel } from '../../components/jobs/jobLabels'
+import { getTypeLabel, statusLabel } from '../../components/jobs/jobLabels'
 import { formatDurationSeconds, parseBackendDate } from '../../utils/dateUtils'
 
 export const activityKey = (item: ActivityItem) => item.activity_key ?? `${item.type}-${item.id}`
 
 export const ACTIVE_STATUSES = new Set(['running', 'pending', 'queued'])
+
+// A hook around one backup names that backup and rides under it. A hook
+// around the whole plan names only the run, and hangs from its band.
+export const isPlanHook = (item: ActivityItem): boolean =>
+  item.type === 'script_execution' && item.operation_id == null && item.backup_plan_run_id != null
+
+// The status dot already carries these: green and done, blue and moving,
+// hollow and waiting. A run spells its status out only when the word says
+// something the colour cannot, which is every way a run can end badly.
+export const QUIET_STATUSES = new Set(['completed', 'running', 'pending', 'queued'])
+
+// "Completed with Warnings" is a badge's worth of words; beside a duration it
+// only needs to say which way the run went.
+export function outcomeLabel(status: string, t: TFunction): string {
+  return status === 'completed_with_warnings' ? t('status.warnings') : statusLabel(status, t)
+}
 
 // A collapsed run and every step under it, so a summary sees the follow-up
 // chain and the hooks, not just the row that started them.
@@ -79,6 +95,27 @@ export function runTitle(item: ActivityItem, t: TFunction): string {
 
 // The chain a run draws beneath itself. An index run lists itself first
 // so the row reads as "Reconcile run" over all its steps.
+// One row of a chain as the chain widgets read it. A hook keeps the name of
+// the script that ran, which is the only thing telling two hooks apart.
+export function chainStep(step: ActivityItem): RunChainOperation {
+  return {
+    id: step.id,
+    kind: step.kind ?? step.type,
+    type: step.type,
+    hook_type: step.hook_type,
+    name: step.package_name,
+    status: step.status,
+    trigger: step.trigger,
+    depends_on_id: step.depends_on_id,
+    started_at: step.started_at,
+    completed_at: step.completed_at,
+    progress_current: step.progress_current,
+    progress_total: step.progress_total,
+    progress_message: step.progress_message,
+  }
+}
+
+/** Convert an activity item and its follow-ups into the chain renderer shape. */
 export function runChain(item: ActivityItem): RunChainOperation {
   const followups = item.followups ?? []
   const steps = isIndexRun(item) ? [item, ...followups] : followups
@@ -89,21 +126,7 @@ export function runChain(item: ActivityItem): RunChainOperation {
     status: item.status,
     started_at: item.started_at,
     completed_at: item.completed_at,
-    followups: steps.map((step) => ({
-      id: step.id,
-      kind: step.kind ?? step.type,
-      type: step.type,
-      hook_type: step.hook_type,
-      name: step.package_name,
-      status: step.status,
-      trigger: step.trigger,
-      depends_on_id: step.depends_on_id,
-      started_at: step.started_at,
-      completed_at: step.completed_at,
-      progress_current: step.progress_current,
-      progress_total: step.progress_total,
-      progress_message: step.progress_message,
-    })),
+    followups: steps.map(chainStep),
   }
 }
 
@@ -152,9 +175,16 @@ export function runDuration(item: ActivityItem): string | null {
 }
 
 // Distinct repositories among the listed runs, for the summary line.
+// A script and a plan run carry a name in the repository slot (the script's
+// own, the plan's) but ran against no repository of their own, so they must
+// not be counted as one.
+const NOT_A_REPOSITORY = new Set(['script_execution', 'backup_plan_run'])
+
+/** Count distinct repositories while excluding plan and script summary rows. */
 export function repositoryCount(items: ActivityItem[]): number {
   const keys = new Set<string>()
   for (const item of items) {
+    if (NOT_A_REPOSITORY.has(item.type)) continue
     const key = item.repository_id ?? item.repository_path ?? item.repository
     if (key != null) keys.add(String(key))
   }
@@ -195,7 +225,15 @@ export function clusterRuns(items: ActivityItem[], t: TFunction): Cluster[] {
           ? `id:${item.schedule_id}`
           : item.schedule_name != null
             ? `name:${item.schedule_name}`
-            : `operation:${item.kind ?? item.type}`
+            : // A repository's own check and restore-check schedules are
+              // columns on the repository, not schedule rows, so they arrive
+              // without an id. They are still one schedule each -- the
+              // Schedule page lists them one card per repository, with their
+              // own cron and timezone -- so they are keyed by the repository
+              // they belong to. Keying them by operation alone merged two
+              // repositories' schedules whenever they happened to fire
+              // together, which reads as one schedule fanning out.
+              `repository:${item.repository_id ?? item.repository ?? 'none'}:${item.kind ?? item.type}`
       const time = runTime(item)?.getTime() ?? 0
       const open = [...byKey.values()].find(
         (cluster) =>

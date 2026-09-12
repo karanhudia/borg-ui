@@ -1,4 +1,10 @@
-import { createTheme } from '@mui/material/styles'
+import { createTheme, alpha } from '@mui/material/styles'
+import type { Theme } from '@mui/material/styles'
+
+// What a row is about: the repository, the script, the step. Blended rather
+// than full contrast, so a list of them does not read as a wall of emphasis
+// and the heading above them keeps the weight.
+export const subjectText = (theme: Theme) => alpha(theme.palette.text.primary, 0.82)
 
 // Create a custom theme for Borg UI
 export const theme = createTheme({

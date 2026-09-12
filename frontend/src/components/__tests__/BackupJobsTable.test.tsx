@@ -187,7 +187,7 @@ describe('BackupJobsTable', () => {
         />
       )
 
-      fireEvent.click(screen.getByRole('button', { name: /1 step/ }))
+      fireEvent.click(screen.getByRole('button', { name: /2 steps/ }))
       expect(screen.getByText('Sync archive list')).toBeInTheDocument()
     })
 

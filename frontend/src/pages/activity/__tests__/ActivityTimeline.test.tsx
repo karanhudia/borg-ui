@@ -70,8 +70,6 @@ const items: ActivityItem[] = [
   }),
 ]
 
-const noop = () => {}
-
 function renderTimeline(overrides: Partial<Parameters<typeof ActivityTimeline>[0]> = {}) {
   return renderWithProviders(
     <ActivityTimeline
@@ -116,7 +114,7 @@ describe('ActivityTimeline', () => {
   it('shows progress for a running run and folds a succeeded chain', () => {
     renderTimeline()
     const rows = screen.getAllByTestId('run-entry')
-    expect(within(rows[0]).getByText('1 step')).toBeInTheDocument()
+    expect(within(rows[0]).getByText('2 steps')).toBeInTheDocument()
     expect(within(rows[1]).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '42')
     expect(within(rows[1]).getByText(/42% · Pruning archive 3 of 7/)).toBeInTheDocument()
     // Steps open as timeline rows of their own, with the run itself in
@@ -146,30 +144,64 @@ describe('ActivityTimeline', () => {
     expect(screen.getByText('No activity found')).toBeInTheDocument()
   })
 
-  it('windows long lists behind a show-more button', () => {
+  it('names a step that was cancelled rather than skipped', () => {
+    // Both draw the same grey glyph, so the word is the only thing telling
+    // a reader which one this was.
+    renderTimeline({
+      items: [
+        run({
+          id: 1,
+          status: 'cancelled',
+          followups: [
+            run({
+              id: 11,
+              kind: 'prune',
+              type: 'prune',
+              trigger: 'followup',
+              status: 'skipped',
+            }),
+          ],
+        }),
+      ],
+    })
+    fireEvent.click(screen.getByRole('button', { name: /steps/ }))
+    const steps = screen.getAllByTestId('run-step')
+    expect(steps.some((step) => /Cancelled/.test(step.textContent ?? ''))).toBe(true)
+    expect(steps.some((step) => /Skipped/.test(step.textContent ?? ''))).toBe(true)
+  })
+
+  it('spells a status out only when the dot cannot say it', () => {
+    renderTimeline({
+      items: [
+        run({ id: 1, status: 'completed' }),
+        run({ id: 2, status: 'failed', repository: 'photos' }),
+        run({ id: 3, status: 'skipped', repository: 'downloads' }),
+      ],
+    })
+    const [ok, failed, skipped] = screen.getAllByTestId('run-entry')
+    // A clean run reads as a green dot and its duration, nothing more, but
+    // the dot still names itself for anyone not looking at the colour.
+    expect(within(ok).queryByText(/Completed/)).not.toBeInTheDocument()
+    expect(within(ok).getByRole('img', { name: 'Completed' })).toBeInTheDocument()
+    // How it ended rides in the cell that says how long it took.
+    expect(within(failed).getByText(/^Failed/)).toBeInTheDocument()
+    expect(within(skipped).getByText(/^Skipped/)).toBeInTheDocument()
+  })
+
+  it('asks for the next page behind one load-more button', () => {
+    const onLoadMore = vi.fn()
     const many = Array.from({ length: 70 }, (_, index) =>
       run({ id: index + 1, started_at: minutesAfterNoon(0, index), completed_at: null })
     )
-    renderTimeline({ items: many, actions: [{ icon: null, label: 'x', onClick: noop }] })
-    expect(screen.getAllByTestId('run-entry')).toHaveLength(60)
-    fireEvent.click(screen.getByRole('button', { name: 'Show 10 more' }))
+    const { unmount } = renderTimeline({ items: many })
+    // Everything loaded is rendered: the only "more" is the next page.
     expect(screen.getAllByTestId('run-entry')).toHaveLength(70)
-  })
+    expect(screen.queryByRole('button', { name: /more/i })).not.toBeInTheDocument()
+    unmount()
 
-  it('keeps a plan run whole across the show-more boundary', () => {
-    // Runs 60 and 61 belong to one plan run, so the first window carries
-    // both rather than showing the band with half its members.
-    const many = Array.from({ length: 70 }, (_, index) =>
-      run({
-        id: index + 1,
-        backup_plan_run_id: index === 59 || index === 60 ? 7 : null,
-        started_at: minutesAfterNoon(0, 70 - index),
-        completed_at: null,
-      })
-    )
-    renderTimeline({ items: many })
-    expect(screen.getAllByTestId('run-entry')).toHaveLength(61)
-    expect(screen.getByRole('button', { name: 'Show 9 more' })).toBeInTheDocument()
+    renderTimeline({ items: many, hasMore: true, onLoadMore })
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }))
+    expect(onLoadMore).toHaveBeenCalled()
   })
 
   it('rolls a running follow-up chain up into the band status', () => {
@@ -187,8 +219,9 @@ describe('ActivityTimeline', () => {
     })
     const band = screen.getByTestId('umbrella-band')
     // Both members finished; only the nested step is still running, and
-    // the band says so. Steps carry no status text of their own.
-    expect(within(band).getByText('Running')).toBeInTheDocument()
+    // the band says so, in the cell that also carries its span. Steps carry
+    // no status text of their own.
+    expect(within(band).getByText(/^Running/)).toBeInTheDocument()
   })
 
   it('groups the runs of one plan run under one band, in the order they happened', () => {
@@ -227,19 +260,27 @@ describe('ActivityTimeline', () => {
     expect(bands[0]).toHaveTextContent('Manual')
     const plan = bands[1]
     expect(plan).toHaveTextContent('Plan · nightly')
-    expect(plan).toHaveTextContent('2 repositories · 3 runs')
-    // Once on the band, once on the failed member.
-    expect(within(plan).getAllByText('Failed')).toHaveLength(2)
+    // The repositories are the members; the plan's own hook is not one.
+    expect(plan).toHaveTextContent('2 repositories · 2 runs')
+    // Once as the band's roll-up, once beside the failed member's duration.
+    expect(within(plan).getAllByText(/^Failed/)).toHaveLength(2)
     expect(
       within(plan)
         .getAllByTestId('run-entry')
         .map((entry) => entry.getAttribute('data-status'))
-    ).toEqual(['completed', 'completed', 'failed'])
-    // A plan-level hook says which hook it was.
-    expect(within(plan).getAllByTestId('run-kind')[0]).toHaveTextContent('Pre-backup script')
+    ).toEqual(['completed', 'failed'])
+    // The hook the plan ran around the whole plan reads above the members it
+    // opened, and names the script that ran.
+    const steps = within(plan).getAllByTestId('run-step')
+    expect(steps).toHaveLength(1)
+    expect(steps[0]).toHaveTextContent('Pre-backup script')
+    expect(steps[0]).toHaveTextContent('Mount volumes')
   })
 
-  it('groups a schedule firing across repositories by schedule and time', () => {
+  it("keeps two repositories' own check schedules apart", () => {
+    // A repository's check schedule is its own schedule, one card per
+    // repository on the Schedule page, with its own cron and timezone. Two of
+    // them firing in the same minute is a coincidence, not a fan-out.
     const fired = [
       run({
         id: 20,
@@ -264,12 +305,50 @@ describe('ActivityTimeline', () => {
         repository_path: '/mnt/photos',
         started_at: minutesAfterNoon(0, 1),
       }),
+    ]
+    renderTimeline({ items: [...fired].reverse() })
+    const bands = screen.getAllByTestId('umbrella-band')
+    expect(bands).toHaveLength(2)
+    bands.forEach((band) => {
+      expect(band).toHaveTextContent('Schedule · Repository Check')
+      expect(within(band).getAllByTestId('run-entry')).toHaveLength(1)
+    })
+  })
+
+  it('groups one schedule firing across repositories, and not its next firing', () => {
+    const fired = [
+      run({
+        id: 20,
+        kind: 'check',
+        type: 'check',
+        category: 'maintenance',
+        trigger: 'schedule',
+        schedule_id: 4,
+        schedule_name: null,
+        backup_plan_name: null,
+        started_at: minutesAfterNoon(0, 0),
+      }),
+      run({
+        id: 21,
+        kind: 'check',
+        type: 'check',
+        category: 'maintenance',
+        trigger: 'schedule',
+        schedule_id: 4,
+        schedule_name: null,
+        backup_plan_name: null,
+        repository: 'photos',
+        repository_id: 2,
+        repository_path: '/mnt/photos',
+        started_at: minutesAfterNoon(0, 1),
+      }),
       run({
         id: 22,
         kind: 'check',
         type: 'check',
         category: 'maintenance',
         trigger: 'schedule',
+        schedule_id: 4,
         schedule_name: null,
         backup_plan_name: null,
         started_at: minutesAfterNoon(0, 120),

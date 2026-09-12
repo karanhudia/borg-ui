@@ -722,7 +722,9 @@
     "running": "Running",
     "pending": "Pending",
     "cancelled": "Cancelled",
-    "skipped": "Skipped"
+    "skipped": "Skipped",
+    "queued": "Queued",
+    "warnings": "Warnings"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -2069,7 +2071,9 @@
     "title": "Activity",
     "subtitle": "Every run on every repository, newest first",
     "actions": {
-      "refresh": "Refresh activity"
+      "refresh": "Refresh activity",
+      "loadMore": "Load more",
+      "loadingMore": "Loading..."
     },
     "filters": {
       "type": "Type",
@@ -2171,7 +2175,6 @@
       "title": "Running now",
       "queued": "Queued"
     },
-    "showMore": "Show {{count}} more",
     "health": {
       "backup": "Backup",
       "check": "Check",
@@ -3269,7 +3272,8 @@
       "rcloneSync": "Cloud Sync",
       "rcloneHydrate": "Cloud Hydrate",
       "scriptExecution": "Script",
-      "availabilityCheck": "Availability check"
+      "availabilityCheck": "Availability check",
+      "backupPlanRun": "Plan run"
     },
     "scheduledById": "Scheduled (ID: {{id}})",
     "backupPlanByName": "Backup Plan: {{name}}",

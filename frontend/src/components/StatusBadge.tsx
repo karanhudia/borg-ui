@@ -2,6 +2,7 @@ import React from 'react'
 import { Chip, Tooltip } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { CircleMinus } from 'lucide-react'
+import { statusLabel } from './jobs/jobLabels'
 
 interface StatusBadgeProps {
   status: string
@@ -44,31 +45,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
     }
   }
 
-  const getStatusLabel = (status: string): string => {
-    switch (status.toLowerCase()) {
-      case 'completed':
-        return t('status.completed')
-      case 'completed_with_warnings':
-        return t('status.completedWithWarnings')
-      case 'needs_backup':
-        return t('status.needsBackup')
-      case 'failed':
-        return t('status.failed')
-      case 'running':
-      case 'in_progress':
-        return t('status.running')
-      case 'pending':
-        return t('status.pending')
-      case 'cancelled':
-        return t('status.cancelled')
-      case 'skipped':
-        return t('status.skipped')
-      default:
-        return status.charAt(0).toUpperCase() + status.slice(1)
-    }
-  }
-
-  const label = getStatusLabel(status)
+  const label = statusLabel(status, t)
 
   return (
     <Tooltip title={tooltip || label} arrow>

@@ -21,6 +21,7 @@ from app.database.models import (
     AgentJob,
     AgentJobLog,
     BackupPlan,
+    BackupPlanRepository,
     BackupPlanRun,
     AvailabilityScheduleSkip,
     Repository,
@@ -106,6 +107,11 @@ class ActivityItem(BaseModel):
     # it ran around. With collapse_runs a hook rides under that operation.
     operation_id: Optional[int] = None
     hook_type: Optional[str] = None
+    # The key the feed is sorted by. Pass the last item's value back as
+    # `before` to page into older history. The next page starts strictly
+    # before it, which is safe because a page never ends inside a group of
+    # rows sharing one timestamp: it carries the whole group.
+    sort_at: Optional[datetime] = None
     followups: List["ActivityItem"] = []
 
     class Config:
@@ -572,6 +578,7 @@ def _operation_activity_items(
     *,
     current_user: User,
     limit: int,
+    before: Optional[datetime],
     job_type: Optional[str],
     status: Optional[str],
     category: Optional[List[str]],
@@ -618,6 +625,8 @@ def _operation_activity_items(
             ~((Operation.category == "index") & (Operation.trigger != "followup"))
         )
     scoped = q
+    if before is not None:
+        q = q.filter(func.coalesce(Operation.started_at, Operation.created_at) < before)
     # Window by time, not id: rows backfilled from the legacy job tables
     # carry ids far above the backups they ran beside, so an id window kept
     # a plan's prune and dropped the backup it followed.
@@ -730,7 +739,8 @@ def _operation_activity_items(
 
 @router.get("/recent", response_model=List[ActivityItem])
 async def list_recent_activity(
-    limit: int = 200,
+    limit: int = 100,
+    before: Optional[datetime] = None,
     job_type: Optional[str] = None,  # Filter by type: 'backup', 'restore', etc.
     status: Optional[str] = None,  # Filter by status: 'running', 'completed', 'failed'
     category: Optional[List[str]] = Query(default=None),
@@ -769,13 +779,19 @@ async def list_recent_activity(
         and (not status or status == "skipped")
         and not repository_scoped
     ):
-        plan_skips = (
-            db.query(BackupPlanRun)
-            .filter(
-                BackupPlanRun.status == "skipped",
-                BackupPlanRun.trigger == "availability",
+        plan_skip_query = db.query(BackupPlanRun).filter(
+            BackupPlanRun.status == "skipped",
+            BackupPlanRun.trigger == "availability",
+        )
+        if before is not None:
+            plan_skip_query = plan_skip_query.filter(
+                func.coalesce(BackupPlanRun.completed_at, BackupPlanRun.created_at)
+                < before
             )
-            .order_by(BackupPlanRun.completed_at.desc(), BackupPlanRun.id.desc())
+        plan_skips = (
+            plan_skip_query.order_by(
+                BackupPlanRun.completed_at.desc(), BackupPlanRun.id.desc()
+            )
             .limit(limit)
             .all()
         )
@@ -805,9 +821,13 @@ async def list_recent_activity(
                 }
             )
 
+        automation_skip_query = db.query(AvailabilityScheduleSkip)
+        if before is not None:
+            automation_skip_query = automation_skip_query.filter(
+                AvailabilityScheduleSkip.occurred_at < before
+            )
         automation_skips = (
-            db.query(AvailabilityScheduleSkip)
-            .order_by(
+            automation_skip_query.order_by(
                 AvailabilityScheduleSkip.occurred_at.desc(),
                 AvailabilityScheduleSkip.id.desc(),
             )
@@ -837,6 +857,95 @@ async def list_recent_activity(
                 }
             )
 
+    # A plan run that failed before its backups ran, or after they all
+    # succeeded, has no operation to carry its error (a scheduled plan refused
+    # by admission, a hook failure, a lost database), so it gets a row. A run
+    # that went fine needs none: its band already names it, and its plan-level
+    # hooks hang from that band.
+    if (
+        (not job_type or job_type == "backup_plan_run")
+        and (not status or status == "failed")
+        and not repository_scoped
+    ):
+        from app.api.backup_plans import _can_view_plan
+        from app.api.operations import accessible_repository_ids
+
+        run_query = db.query(BackupPlanRun).filter(BackupPlanRun.status == "failed")
+        # A plan the reader can see is one whose every repository they may
+        # view, which is a walk over the plan's links rather than a join. Ruling
+        # out the plans touching no repository of theirs first keeps the window
+        # from filling with runs that would only be dropped below.
+        accessible = accessible_repository_ids(db, current_user)
+        if accessible is not None:
+            visible_plans = (
+                db.query(BackupPlanRepository.backup_plan_id)
+                .filter(BackupPlanRepository.repository_id.in_(accessible))
+                .distinct()
+            )
+            run_query = run_query.filter(
+                BackupPlanRun.backup_plan_id.in_(visible_plans)
+            )
+        if before is not None:
+            run_query = run_query.filter(
+                func.coalesce(BackupPlanRun.completed_at, BackupPlanRun.created_at)
+                < before
+            )
+        runs = (
+            run_query.order_by(
+                BackupPlanRun.completed_at.desc(), BackupPlanRun.id.desc()
+            )
+            .limit(limit)
+            .all()
+        )
+        run_ids = [r.id for r in runs]
+        # A run whose own operations failed already says so, in the same band
+        # and with more detail. The row is for the failure they do not show.
+        spoken_for = (
+            {
+                run_id
+                for (run_id,) in db.query(Operation.backup_plan_run_id)
+                .filter(
+                    Operation.backup_plan_run_id.in_(run_ids),
+                    Operation.status == "failed",
+                )
+                .distinct()
+            }
+            if run_ids
+            else set()
+        )
+        for run in runs:
+            if run.id in spoken_for:
+                continue
+            plan = (
+                db.get(BackupPlan, run.backup_plan_id) if run.backup_plan_id else None
+            )
+            # The row carries the plan's name and the error it failed with, and
+            # a plan spans repositories: only someone who may view all of them
+            # may read that. Filtered here rather than in the query because the
+            # rule walks the plan's repository links.
+            if plan is None or not _can_view_plan(db, current_user, plan):
+                continue
+            activities.append(
+                {
+                    "activity_key": f"backup-plan-run-{run.id}",
+                    "id": run.id,
+                    "type": "backup_plan_run",
+                    "status": "failed",
+                    "started_at": run.started_at,
+                    "completed_at": run.completed_at,
+                    "error_message": run.error_message,
+                    "repository": plan.name if plan else "Backup plan",
+                    "repository_path": None,
+                    "log_file_path": None,
+                    "triggered_by": "backup_plan",
+                    "backup_plan_id": run.backup_plan_id,
+                    "backup_plan_run_id": run.id,
+                    "backup_plan_name": plan.name if plan else None,
+                    "has_logs": False,
+                    "_sort_at": run.completed_at or run.created_at,
+                }
+            )
+
     # Fetch script executions
     # Script executions name their repository, so a repository-scoped view
     # keeps the ones that ran against it instead of dropping the source.
@@ -858,6 +967,8 @@ async def list_recent_activity(
             )
         if status:
             script_query = script_query.filter(ScriptExecution.status == status)
+        if before is not None:
+            script_query = script_query.filter(ScriptExecution.started_at < before)
         script_executions = (
             script_query.order_by(ScriptExecution.started_at.desc()).limit(limit).all()
         )
@@ -920,6 +1031,7 @@ async def list_recent_activity(
             db,
             current_user=current_user,
             limit=limit,
+            before=before,
             job_type=job_type,
             status=status,
             category=category,
@@ -948,6 +1060,13 @@ async def list_recent_activity(
             activity["trigger"] = parent.get("trigger", activity["trigger"])
             activity.pop("_sort_at", None)
             parent["followups"].append(activity)
+        # Steps read in the order they happened: a pre-backup hook before the
+        # run it opened, a post-backup hook after it. The sources arrive
+        # newest-first, which is the order a feed wants and a chain does not.
+        for item in top_level:
+            item["followups"].sort(
+                key=lambda step: (step["started_at"] or datetime.min, step["id"])
+            )
         activities = top_level
 
     # The category and trigger filters apply to top-level rows only, after
@@ -965,10 +1084,20 @@ async def list_recent_activity(
         reverse=True,
     )
 
-    # Apply limit to combined results
-    activities = activities[:limit]
+    # The limit cuts on a timestamp boundary, never inside one. Rows sharing
+    # a timestamp are common (a plan run and the hook it started, a batch of
+    # skips written together), and the next page starts strictly before the
+    # last row's time: any left on the far side of the cut would be stranded
+    # for good. The group has to have come back from its source to be carried,
+    # so this holds while no single timestamp holds more rows than a source
+    # fetches -- microsecond stamps, so it would take a batch written inside
+    # one microsecond to break it.
+    if len(activities) > limit:
+        boundary = activities[limit - 1]["_sort_at"]
+        tail = [a for a in activities[limit:] if a["_sort_at"] == boundary]
+        activities = activities[:limit] + tail
     for activity in activities:
-        activity.pop("_sort_at", None)
+        activity["sort_at"] = activity.pop("_sort_at", None) or activity["started_at"]
 
     return activities
 
