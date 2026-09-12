@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -1104,3 +1105,260 @@ def test_server_compact_stats_support_is_probed_per_binary_file(monkeypatch):
     assert borg2_core.compact_stats_supported("/opt/borg2") is False
     _Probe.stdout = "borg2 2.0.0b24\n"
     assert borg2_core.compact_stats_supported("/opt/borg2") is True
+
+
+class _RunnerContext:
+    """The slice of OperationContext the maintenance executor uses, for a row
+    the runner has already claimed."""
+
+    def __init__(self, db, operation):
+        self.db = db
+        self.operation = operation
+        self.operation_id = operation.id
+        self.repository_id = operation.repository_id
+        self.kind = operation.kind
+        self.params = dict(operation.params or {})
+
+    def cancelled(self):
+        return False
+
+    def log(self, line):
+        return None
+
+    async def progress(self, **kwargs):
+        return None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_runner_claimed_compact_runs_the_borg2_service(
+    db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
+):
+    """Regression for #1005: a compact the runner claimed (`running` with a
+    `started_at`) reaches the Borg 2 service through the maintenance
+    executor and runs, instead of the service skipping it as already
+    started and the executor reporting `service returned no result`."""
+    from app.services.operations.executors import maintenance
+
+    job = _runner_claimed_operation(db_session, borg_v2_repo_for_services, "compact")
+    runner_started_at = job.started_at
+
+    service = CompactV2Service()
+    service.log_dir = tmp_path
+    with (
+        patch("app.services.v2.compact_service.compact_v2_service", service),
+        patch("app.services.v2.compact_service.SessionLocal", testing_session_local),
+        patch(
+            "app.services.v2.compact_service.resolve_repo_ssh_key_file",
+            return_value=None,
+        ),
+        patch(
+            "app.services.v2.compact_service._get_borg2_binary", return_value="borg2"
+        ),
+        patch(
+            "app.services.v2.compact_service.compact_stats_supported",
+            return_value=False,
+        ),
+        patch(
+            "app.services.v2.compact_service._get_process_start_time", return_value=1
+        ),
+        patch(
+            "app.services.v2.compact_service.asyncio.create_subprocess_exec",
+            return_value=FakeProcess(returncode=0, stderr_lines=[]),
+        ) as spawn,
+    ):
+        outcome = await maintenance.run_compact(_RunnerContext(db_session, job))
+
+    assert spawn.called, "the service never ran borg"
+    assert outcome.status == "completed"
+    verification = testing_session_local()
+    refreshed = verification.get(Operation, job.id)
+    assert refreshed.status == "completed"
+    # the start is the service's own, recorded when it claimed the row
+    assert refreshed.started_at is not None
+    assert refreshed.started_at != runner_started_at
+    assert refreshed.completed_at is not None
+    verification.close()
+
+
+class _CommunicatingProcess:
+    """The process shape the prune service drives (`communicate`)."""
+
+    def __init__(self, returncode=0, stdout=b"", stderr=b""):
+        self.returncode = returncode
+        self.pid = 4321
+        self._out = (stdout, stderr)
+
+    async def communicate(self):
+        return self._out
+
+    async def wait(self):
+        return self.returncode
+
+    def terminate(self):
+        return None
+
+    def kill(self):
+        return None
+
+
+# a fixed past instant: the service's own stamp must differ from it on any
+# clock resolution
+_RUNNER_CLAIMED_AT = datetime(2026, 1, 1, 12, 0, 0)
+
+
+def _runner_claimed_operation(db_session, repository, kind, params=None):
+    job = Operation(
+        repository_id=repository.id,
+        kind=kind,
+        category="maintenance",
+        status="queued",
+        trigger="manual",
+        priority=10,
+        run_id=f"run-claimed-{kind}",
+        params=params or {},
+    )
+    db_session.add(job)
+    db_session.commit()
+    db_session.refresh(job)
+    db_session.query(Operation).filter(
+        Operation.id == job.id, Operation.status == "queued"
+    ).update(
+        {"status": "running", "started_at": _RUNNER_CLAIMED_AT},
+        synchronize_session=False,
+    )
+    db_session.commit()
+    db_session.refresh(job)
+    assert job.started_at == _RUNNER_CLAIMED_AT
+    return job
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_runner_claimed_check_runs_the_borg2_service(
+    db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
+):
+    """Regression for #1005, check: the real Borg 2 check service claims
+    and runs a row the runner claimed."""
+    from app.services.operations.executors import maintenance
+
+    job = _runner_claimed_operation(db_session, borg_v2_repo_for_services, "check")
+    runner_started_at = job.started_at
+    service = CheckV2Service()
+    service.log_dir = tmp_path
+    with (
+        patch("app.services.v2.check_service.check_v2_service", service),
+        patch("app.services.v2.check_service.SessionLocal", testing_session_local),
+        patch(
+            "app.services.v2.check_service.resolve_repo_ssh_key_file",
+            return_value=None,
+        ),
+        patch("app.services.v2.check_service._get_borg2_binary", return_value="borg2"),
+        patch("app.services.v2.check_service._get_process_start_time", return_value=1),
+        patch(
+            "app.services.v2.check_service.asyncio.create_subprocess_exec",
+            return_value=FakeProcess(returncode=0, stderr_lines=[]),
+        ) as spawn,
+    ):
+        outcome = await maintenance.run_check(_RunnerContext(db_session, job))
+
+    assert spawn.called, "the service never ran borg"
+    assert outcome.status == "completed"
+    verification = testing_session_local()
+    refreshed = verification.get(Operation, job.id)
+    assert refreshed.status == "completed"
+    assert refreshed.started_at is not None
+    assert refreshed.started_at != runner_started_at
+    verification.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_runner_claimed_prune_runs_the_borg2_service(
+    db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
+):
+    """Regression for #1005, prune: the real Borg 2 prune service claims and
+    runs a row the runner claimed."""
+    from unittest.mock import AsyncMock
+
+    from app.services.operations.executors import maintenance
+    from app.services.v2.prune_service import PruneV2Service
+
+    job = _runner_claimed_operation(
+        db_session, borg_v2_repo_for_services, "prune", params={"keep_daily": 7}
+    )
+    runner_started_at = job.started_at
+    service = PruneV2Service()
+    service.log_dir = tmp_path
+    spawn = AsyncMock(return_value=_CommunicatingProcess(0, stdout=b"pruned"))
+    with (
+        patch("app.services.v2.prune_service.prune_v2_service", service),
+        patch("app.services.v2.prune_service.SessionLocal", testing_session_local),
+        patch("app.services.v2.prune_service._get_borg2_binary", return_value="borg2"),
+        patch(
+            "app.services.v2.prune_service.build_repository_borg_env",
+            return_value=({}, None),
+        ),
+        patch(
+            "app.services.v2.prune_service.asyncio.create_subprocess_exec", new=spawn
+        ),
+    ):
+        outcome = await maintenance.run_prune(_RunnerContext(db_session, job))
+
+    assert spawn.called, "the service never ran borg"
+    assert outcome.status == "completed"
+    verification = testing_session_local()
+    refreshed = verification.get(Operation, job.id)
+    assert refreshed.status == "completed"
+    assert refreshed.started_at is not None
+    assert refreshed.started_at != runner_started_at
+    verification.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_runner_claimed_delete_archive_runs_the_borg2_service(
+    db_session, testing_session_local, borg_v2_repo_for_services
+):
+    """Regression for #1005, delete_archive: the real Borg 2 delete service
+    claims and runs a row the runner claimed (it is the one claiming
+    service without a cancellation poll)."""
+    from unittest.mock import AsyncMock
+
+    from app.services.operations.executors import maintenance
+    from app.services.v2.delete_archive_service import DeleteArchiveV2Service
+
+    job = _runner_claimed_operation(
+        db_session,
+        borg_v2_repo_for_services,
+        "delete_archive",
+        params={"archive_name": "aid:deadbeef"},
+    )
+    runner_started_at = job.started_at
+    service = DeleteArchiveV2Service()
+    delete = AsyncMock(return_value={"success": True, "stdout": "", "stderr": ""})
+    compact = AsyncMock(return_value={"success": True, "stdout": "", "stderr": ""})
+    with (
+        patch(
+            "app.services.v2.delete_archive_service.delete_archive_v2_service", service
+        ),
+        patch(
+            "app.services.v2.delete_archive_service.SessionLocal", testing_session_local
+        ),
+        patch(
+            "app.services.v2.delete_archive_service.build_repository_borg_env",
+            return_value=({}, None),
+        ),
+        patch("app.services.v2.delete_archive_service.borg2.delete_archive", delete),
+        patch("app.services.v2.delete_archive_service.borg2.compact", compact),
+    ):
+        outcome = await maintenance.run_delete_archive(_RunnerContext(db_session, job))
+
+    assert delete.await_count == 1, "the service never ran borg"
+    assert outcome.status == "completed"
+    verification = testing_session_local()
+    refreshed = verification.get(Operation, job.id)
+    assert refreshed.status == "completed"
+    assert refreshed.started_at is not None
+    assert refreshed.started_at != runner_started_at
+    verification.close()

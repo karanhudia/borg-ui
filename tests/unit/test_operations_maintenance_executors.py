@@ -1,6 +1,7 @@
 """Phase 5: the maintenance executors (spec 6.3, 7.4, section 13 phase 5)."""
 
 import asyncio
+from datetime import datetime
 
 import pytest
 from sqlalchemy import create_engine, event
@@ -9,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from app.database.models import Base, Operation, Repository
 from app.services.operations.executors import get_executor, load_default_executors
 from app.services.operations.job_facade import MaintenanceJobFacade
+from app.utils.datetime_utils import utc_now
 
 
 @pytest.fixture()
@@ -236,6 +238,163 @@ async def test_check_cancellation_terminates_the_tracked_borg_process(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "kind, router_method, v1_module, v2_module, v2_singleton",
+    [
+        ("prune", "prune", "prune_service", "v2.prune_service", "prune_v2_service"),
+        (
+            "compact",
+            "compact",
+            "compact_service",
+            "v2.compact_service",
+            "compact_v2_service",
+        ),
+    ],
+)
+async def test_borg2_cancellation_terminates_the_borg2_services_process(
+    db, monkeypatch, kind, router_method, v1_module, v2_module, v2_singleton
+):
+    """On a Borg 2 server repository the router runs the Borg 2 service,
+    which tracks its own process; the Borg 1 singleton the executor used to
+    hand the watcher knows nothing about it, so a cancel returned False for
+    the whole run and the row never read `cancelled` for the service to
+    poll. The watcher now calls the Borg 2 service's canceller there."""
+    import importlib
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.services.operations.executors import maintenance
+
+    v1 = getattr(importlib.import_module(f"app.services.{v1_module}"), v1_module)
+    v2 = getattr(importlib.import_module(f"app.services.{v2_module}"), v2_singleton)
+    repo = Repository(name=f"nas2-{kind}", path=f"/repo/nas2-{kind}", borg_version=2)
+    db.add(repo)
+    db.commit()
+    op = _operation(db, repo, kind=kind)
+    ctx = FakeContext(db, op)
+    ctx._cancelled = True
+
+    fake_process = MagicMock()
+    fake_process.pid = 4243
+    fake_process.wait = AsyncMock(return_value=None)
+    v2.running_processes[op.id] = fake_process
+    v1_cancel = AsyncMock(return_value=False)
+    monkeypatch.setattr(v1, f"cancel_{kind}", v1_cancel)
+
+    async def call(self, job_id, *args, **kwargs):
+        await asyncio.sleep(0.05)
+        job = MaintenanceJobFacade(db, db.get(Operation, job_id))
+        job.status = "cancelled"
+        db.commit()
+
+    monkeypatch.setattr(
+        f"app.core.borg_router.BorgRouter.{router_method}", call, raising=True
+    )
+    try:
+        await getattr(maintenance, f"run_{kind}")(ctx)
+        fake_process.terminate.assert_called_once()
+        v1_cancel.assert_not_awaited()
+    finally:
+        v2.running_processes.pop(op.id, None)
+
+
+@pytest.mark.asyncio
+async def test_a_killed_borg2_process_ends_the_row_cancelled_not_failed(
+    db, monkeypatch
+):
+    """The Borg 2 services record a killed process as `failed` with the
+    signal's exit as the error: they poll the row for `cancelled`, which the
+    runner's flag never writes. Once the service has returned the process is
+    dead, so the executor turns that failure into the user's cancel, and the
+    runner keeps `cancelled` because the row already says so."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.services.operations.executors import maintenance
+    from app.services.v2.prune_service import prune_v2_service
+
+    repo = Repository(name="nas2-killed", path="/repo/nas2-killed", borg_version=2)
+    db.add(repo)
+    db.commit()
+    op = _operation(db, repo, kind="prune")
+    ctx = FakeContext(db, op)
+    ctx._cancelled = True
+    fake_process = MagicMock()
+    fake_process.pid = 4245
+    fake_process.wait = AsyncMock(return_value=None)
+    prune_v2_service.running_processes[op.id] = fake_process
+
+    async def call(self, job_id, *args, **kwargs):
+        await asyncio.sleep(0.05)
+        # what the service writes after SIGTERM: not cancelled, failed
+        job = MaintenanceJobFacade(db, db.get(Operation, job_id))
+        job.status = "failed"
+        job.error_message = "Terminated"
+        db.commit()
+
+    monkeypatch.setattr("app.core.borg_router.BorgRouter.prune", call, raising=True)
+    try:
+        outcome = await maintenance.run_prune(ctx)
+    finally:
+        prune_v2_service.running_processes.pop(op.id, None)
+    fake_process.terminate.assert_called_once()
+    assert outcome.status == "failed" and outcome.error_message == "cancelled"
+    db.expire_all()
+    assert db.get(Operation, op.id).status == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_a_failure_without_a_cancel_stays_a_failure(db, repository, monkeypatch):
+    """The mapping is for the cancel case only."""
+    from app.services.operations.executors import maintenance
+
+    op = _operation(db, repository, kind="prune")
+    ctx = FakeContext(db, op)
+    monkeypatch.setattr(
+        "app.core.borg_router.BorgRouter.prune", _completing(db, "failed", "boom")
+    )
+    outcome = await maintenance.run_prune(ctx)
+    assert outcome.status == "failed" and outcome.error_message == "boom"
+    db.expire_all()
+    assert db.get(Operation, op.id).status == "failed"
+
+
+@pytest.mark.asyncio
+async def test_borg1_cancellation_keeps_the_borg1_canceller(
+    db, repository, monkeypatch
+):
+    """The Borg 1 route is unchanged: its own singleton tracks the process,
+    and the Borg 2 service is not consulted."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.services.operations.executors import maintenance
+    from app.services.prune_service import prune_service
+    from app.services.v2.prune_service import prune_v2_service
+
+    op = _operation(db, repository, kind="prune")
+    ctx = FakeContext(db, op)
+    ctx._cancelled = True
+    fake_process = MagicMock()
+    fake_process.pid = 4244
+    fake_process.wait = AsyncMock(return_value=None)
+    prune_service.running_processes[op.id] = fake_process
+    v2_cancel = AsyncMock(return_value=True)
+    monkeypatch.setattr(prune_v2_service, "cancel_prune", v2_cancel)
+
+    async def call(self, job_id, *args, **kwargs):
+        await asyncio.sleep(0.05)
+        job = MaintenanceJobFacade(db, db.get(Operation, job_id))
+        job.status = "cancelled"
+        db.commit()
+
+    monkeypatch.setattr("app.core.borg_router.BorgRouter.prune", call, raising=True)
+    try:
+        await maintenance.run_prune(ctx)
+        fake_process.terminate.assert_called_once()
+        v2_cancel.assert_not_awaited()
+    finally:
+        prune_service.running_processes.pop(op.id, None)
+
+
+@pytest.mark.asyncio
 async def test_cancel_watcher_retries_until_the_process_is_registered(
     db, repository, monkeypatch
 ):
@@ -344,6 +503,609 @@ async def test_prune_omits_keep_within_when_it_is_not_set(db, repository, monkey
     await maintenance.run_prune(ctx)
 
     assert "keep_within" not in seen["kwargs"]
+
+
+_RUNNER_CLAIMED_AT = datetime(2026, 1, 1, 12, 0, 0)
+
+
+def _runner_claimed(db, repository, kind="compact", params=None):
+    """A row the way `runner.tick` leaves it: queued, then claimed."""
+    op = _operation(db, repository, kind=kind, params=params)
+    op.status = "queued"
+    db.commit()
+    claimed = (
+        db.query(Operation)
+        .filter(Operation.id == op.id, Operation.status == "queued")
+        .update(
+            # a fixed past instant: the service's own stamp must differ from it
+            # on any clock resolution
+            {"status": "running", "started_at": _RUNNER_CLAIMED_AT},
+            synchronize_session=False,
+        )
+    )
+    assert claimed == 1
+    db.commit()
+    db.refresh(op)
+    assert op.started_at is not None
+    return op
+
+
+def _other_session(db):
+    """A second identity map on the test engine (the in-memory SQLite engine
+    shares one connection, so this is what `claim_running` in the service's
+    own session sees, not a second transaction)."""
+    return sessionmaker(bind=db.get_bind())()
+
+
+@pytest.fixture()
+def borg2_repository(db):
+    repo = Repository(name="nas2", path="/repo/nas2", borg_version=2)
+    db.add(repo)
+    db.commit()
+    return repo
+
+
+# kind -> (executor, router method, params)
+_CLAIMING = {
+    "check": ("run_check", "check", None),
+    "prune": ("run_prune", "prune", None),
+    "compact": ("run_compact", "compact", None),
+    "delete_archive": ("run_delete_archive", "delete_archive", {"archive_name": "a1"}),
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", sorted(_CLAIMING))
+async def test_run_hands_the_runner_claimed_row_to_a_claiming_service(
+    db, borg2_repository, monkeypatch, kind
+):
+    """The runner claims a row as `running` with a `started_at`; the Borg 2
+    server services claim it again through `claim_running`, which takes a
+    `running` row only without a start. The executor hands the row over in
+    that shape before the call, so the service's claim succeeds and the
+    stored start is the service's, not the runner's (#1005)."""
+    from app.services.operations.executors import maintenance
+    from app.services.operations.job_facade import claim_running
+
+    executor_name, router_method, params = _CLAIMING[kind]
+    op = _runner_claimed(db, borg2_repository, kind=kind, params=params)
+    runner_started_at = op.started_at
+    seen = {}
+
+    async def fake_service(self, job_id, *args, **kwargs):
+        other = _other_session(db)
+        try:
+            seen["started_at"] = utc_now()
+            seen["claimed"] = claim_running(other, job_id, kind, seen["started_at"])
+            other.commit()
+            job = MaintenanceJobFacade(other, other.get(Operation, job_id))
+            job.status = "completed"
+            other.commit()
+        finally:
+            other.close()
+
+    monkeypatch.setattr(
+        f"app.core.borg_router.BorgRouter.{router_method}", fake_service, raising=True
+    )
+
+    outcome = await getattr(maintenance, executor_name)(FakeContext(db, op))
+
+    assert outcome.status == "completed"
+    assert seen["claimed"] == 1
+    db.expire_all()
+    stored = db.get(Operation, op.id).started_at
+    assert stored == seen["started_at"]
+    assert stored != runner_started_at
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "borg_version, executor_type",
+    [(1, "server"), (2, "agent")],
+    ids=["borg1-server", "borg2-agent"],
+)
+async def test_run_keeps_the_runner_start_where_no_service_claims(
+    db, monkeypatch, borg_version, executor_type
+):
+    """A Borg 1 service writes its own start over the runner's and the agent
+    path stamps it from the agent's report; neither claims through
+    `claim_running`, so the runner's start is left in place (an agent that
+    never reports would otherwise end the run with no start at all)."""
+    from app.services.operations.executors import maintenance
+
+    repo = Repository(
+        name=f"r-{borg_version}-{executor_type}",
+        path=f"/repo/{executor_type}",
+        borg_version=borg_version,
+        executor_type=executor_type,
+    )
+    db.add(repo)
+    db.commit()
+    op = _runner_claimed(db, repo)
+    runner_started_at = op.started_at
+
+    async def fake_compact(self, job_id):
+        other = _other_session(db)
+        try:
+            assert other.get(Operation, job_id).started_at == runner_started_at
+            job = MaintenanceJobFacade(other, other.get(Operation, job_id))
+            job.status = "completed"
+            other.commit()
+        finally:
+            other.close()
+
+    monkeypatch.setattr(
+        "app.core.borg_router.BorgRouter.compact", fake_compact, raising=True
+    )
+
+    outcome = await maintenance.run_compact(FakeContext(db, op))
+
+    assert outcome.status == "completed"
+    db.expire_all()
+    assert db.get(Operation, op.id).started_at == runner_started_at
+
+
+@pytest.mark.asyncio
+async def test_run_leaves_a_row_a_cancel_made_terminal_alone(tmp_path, monkeypatch):
+    """A cancel that landed between the runner's claim and the hand-over
+    (committed by a request's session on its own connection, after the
+    runner's session loaded the row) made the row terminal; the guarded
+    UPDATE reads the table, not the runner session's copy, so its start
+    stays for the history. A file-backed database, so the two sessions
+    really are two connections."""
+    from app.services.operations.executors import maintenance
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'ops.db'}")
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine)
+    runner_db = factory()
+    repo = Repository(name="nas2", path="/repo/nas2", borg_version=2)
+    runner_db.add(repo)
+    runner_db.commit()
+    op = _runner_claimed(runner_db, repo)
+    started_at = op.started_at
+    ctx = FakeContext(runner_db, op)  # holds the row as `running`
+
+    request_db = factory()
+    request_db.query(Operation).filter(Operation.id == op.id).update(
+        {"status": "cancelled"}, synchronize_session=False
+    )
+    request_db.commit()
+    request_db.close()
+
+    async def fake_compact(self, job_id):
+        return None
+
+    monkeypatch.setattr(
+        "app.core.borg_router.BorgRouter.compact", fake_compact, raising=True
+    )
+
+    try:
+        await maintenance.run_compact(ctx)
+        runner_db.expire_all()
+        row = runner_db.get(Operation, op.id)
+        assert row.status == "cancelled"
+        assert row.started_at == started_at
+    finally:
+        runner_db.close()
+        engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_run_restores_the_runner_start_when_the_service_never_claimed(
+    db, borg2_repository, monkeypatch
+):
+    """A service that ends the run before it claims (a missing repository, a
+    lock it gave up on) writes a terminal status with no start; the runner's
+    start is put back so the run keeps its place in the history."""
+    from app.services.operations.executors import maintenance
+
+    op = _runner_claimed(db, borg2_repository)
+    runner_started_at = op.started_at
+
+    async def fake_compact(self, job_id):
+        other = _other_session(db)
+        try:
+            assert other.get(Operation, job_id).started_at is None
+            job = MaintenanceJobFacade(other, other.get(Operation, job_id))
+            job.status = "failed"
+            job.error_message = "Repository not found"
+            other.commit()
+        finally:
+            other.close()
+
+    monkeypatch.setattr(
+        "app.core.borg_router.BorgRouter.compact", fake_compact, raising=True
+    )
+
+    outcome = await maintenance.run_compact(FakeContext(db, op))
+
+    assert outcome.status == "failed"
+    db.expire_all()
+    assert db.get(Operation, op.id).started_at == runner_started_at
+
+
+@pytest.mark.asyncio
+async def test_run_restores_the_runner_start_when_the_service_raises(
+    db, borg2_repository, monkeypatch
+):
+    """A service that raises out of the call (a cancel arriving while it
+    retries a lock, before it claimed) leaves the row with no start; the
+    restore runs in the executor's `finally`, so the runner's verdict that
+    follows lands on a row that still has one."""
+    from app.services.operations.executors import maintenance
+
+    op = _runner_claimed(db, borg2_repository)
+    runner_started_at = op.started_at
+
+    async def fake_compact(self, job_id):
+        other = _other_session(db)
+        try:
+            assert other.get(Operation, job_id).started_at is None
+        finally:
+            other.close()
+        raise RuntimeError("database is locked")
+
+    monkeypatch.setattr(
+        "app.core.borg_router.BorgRouter.compact", fake_compact, raising=True
+    )
+
+    with pytest.raises(RuntimeError):
+        await maintenance.run_compact(FakeContext(db, op))
+
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert row.status == "running"  # the runner writes the verdict
+    assert row.started_at == runner_started_at
+
+
+@pytest.mark.asyncio
+async def test_run_restores_the_runner_start_when_the_service_gave_no_verdict(
+    db, borg2_repository, monkeypatch
+):
+    """A service that returns with the row still `running` (its own failure
+    write lost to a lock) never claimed it; the start comes back before the
+    executor reports the missing verdict."""
+    from app.services.operations.executors import maintenance
+
+    op = _runner_claimed(db, borg2_repository)
+    runner_started_at = op.started_at
+
+    async def fake_compact(self, job_id):
+        return None
+
+    monkeypatch.setattr(
+        "app.core.borg_router.BorgRouter.compact", fake_compact, raising=True
+    )
+
+    outcome = await maintenance.run_compact(FakeContext(db, op))
+
+    assert outcome.status == "failed"
+    assert outcome.error_message == "service returned no result"
+    db.expire_all()
+    assert db.get(Operation, op.id).started_at == runner_started_at
+
+
+@pytest.mark.asyncio
+async def test_run_does_not_clear_a_start_another_claim_wrote(tmp_path, monkeypatch):
+    """Between this dispatch loading the row and the hand-over, another
+    session rewrote the start (a service claiming the row through its own
+    path); the guarded UPDATE matches only the start this dispatch's claim
+    wrote, so that start stays. Two connections on a file-backed database."""
+    from app.services.operations.executors import maintenance
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'ops.db'}")
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine)
+    runner_db = factory()
+    repo = Repository(name="nas2", path="/repo/nas2", borg_version=2)
+    runner_db.add(repo)
+    runner_db.commit()
+    op = _runner_claimed(runner_db, repo)
+    ctx = FakeContext(runner_db, op)  # holds the runner's start
+
+    other_start = datetime(2026, 1, 2, 8, 30, 0)
+    other = factory()
+    other.query(Operation).filter(Operation.id == op.id).update(
+        {"started_at": other_start}, synchronize_session=False
+    )
+    other.commit()
+    other.close()
+
+    async def fake_compact(self, job_id):
+        service = factory()
+        try:
+            assert service.get(Operation, job_id).started_at == other_start
+            job = MaintenanceJobFacade(service, service.get(Operation, job_id))
+            job.status = "completed"
+            service.commit()
+        finally:
+            service.close()
+
+    monkeypatch.setattr(
+        "app.core.borg_router.BorgRouter.compact", fake_compact, raising=True
+    )
+
+    try:
+        outcome = await maintenance.run_compact(ctx)
+        assert outcome.status == "completed"
+        runner_db.expire_all()
+        assert runner_db.get(Operation, op.id).started_at == other_start
+    finally:
+        runner_db.close()
+        engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_run_does_not_touch_a_row_dispatched_without_a_start(
+    db, borg2_repository, monkeypatch
+):
+    """A row dispatched without a runner start (the inline shape) is not
+    the executor's to touch; the start the service writes stays."""
+    from app.services.operations.executors import maintenance
+    from app.services.operations.job_facade import claim_running
+
+    op = _operation(db, borg2_repository, kind="compact")  # running, no start
+    assert op.started_at is None
+    seen = {}
+
+    async def fake_compact(self, job_id):
+        other = _other_session(db)
+        try:
+            seen["started_at"] = utc_now()
+            assert claim_running(other, job_id, "compact", seen["started_at"]) == 1
+            other.commit()
+            job = MaintenanceJobFacade(other, other.get(Operation, job_id))
+            job.status = "completed"
+            other.commit()
+        finally:
+            other.close()
+
+    monkeypatch.setattr(
+        "app.core.borg_router.BorgRouter.compact", fake_compact, raising=True
+    )
+
+    outcome = await maintenance.run_compact(FakeContext(db, op))
+
+    assert outcome.status == "completed"
+    db.expire_all()
+    assert db.get(Operation, op.id).started_at == seen["started_at"]
+
+
+@pytest.mark.asyncio
+async def test_hand_over_commit_failure_propagates_before_the_service_runs(
+    db, borg2_repository, monkeypatch
+):
+    """A hand-over whose commit exhausts its retries raises out of `_run`
+    before the service is called; the row keeps the runner's start."""
+    from sqlalchemy.exc import OperationalError
+
+    from app.services.operations.executors import maintenance
+
+    op = _runner_claimed(db, borg2_repository)
+    started_at = op.started_at
+    called = []
+
+    async def failing_commit(session, **kwargs):
+        session.rollback()
+        raise OperationalError("UPDATE operations", {}, Exception("database is locked"))
+
+    monkeypatch.setattr(maintenance, "commit_with_retry", failing_commit)
+
+    async def fake_compact(self, job_id):
+        called.append(job_id)
+
+    monkeypatch.setattr(
+        "app.core.borg_router.BorgRouter.compact", fake_compact, raising=True
+    )
+
+    with pytest.raises(OperationalError):
+        await maintenance.run_compact(FakeContext(db, op))
+
+    assert called == []
+    db.expire_all()
+    assert db.get(Operation, op.id).started_at == started_at
+
+
+@pytest.mark.asyncio
+async def test_restore_failure_does_not_replace_the_services_error(
+    db, borg2_repository, monkeypatch
+):
+    """The restore runs in the executor's `finally`; when its own commit
+    fails, the service's failure is what reaches the runner."""
+    from sqlalchemy.exc import OperationalError
+
+    from app.services.operations.executors import maintenance
+
+    op = _runner_claimed(db, borg2_repository)
+    real = maintenance.commit_with_retry
+
+    async def commit(session, **kwargs):
+        if kwargs.get("action") == "maintenance_restore_start":
+            session.rollback()
+            raise OperationalError("UPDATE operations", {}, Exception("locked"))
+        return await real(session, **kwargs)
+
+    monkeypatch.setattr(maintenance, "commit_with_retry", commit)
+
+    async def fake_compact(self, job_id):
+        raise RuntimeError("borg2 compact failed")
+
+    monkeypatch.setattr(
+        "app.core.borg_router.BorgRouter.compact", fake_compact, raising=True
+    )
+
+    with pytest.raises(RuntimeError, match="borg2 compact failed"):
+        await maintenance.run_compact(FakeContext(db, op))
+
+    db.expire_all()
+    assert db.get(Operation, op.id).started_at == _RUNNER_CLAIMED_AT
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "service_result", ["raises", "failed", "completed", "no_verdict"]
+)
+async def test_restore_recovers_after_exhausting_commit_retries(
+    db, borg2_repository, monkeypatch, service_result
+):
+    """Recovery persists the start before returning the original service verdict."""
+    from sqlalchemy.exc import OperationalError
+
+    from app.services.operations.executors import maintenance
+    from app.utils import db_retries
+
+    op = _runner_claimed(db, borg2_repository)
+    operation_id = op.id
+    real_commit = db.commit
+    failed_commits = 0
+
+    def locked_commit():
+        nonlocal failed_commits
+        if failed_commits < 6:  # initial attempt plus all five retries
+            failed_commits += 1
+            raise OperationalError("COMMIT", {}, Exception("database is locked"))
+        real_commit()
+
+    async def no_sleep(delay):
+        return None
+
+    async def fake_compact(self, job_id):
+        with _other_session(db) as other:
+            job = MaintenanceJobFacade(other, other.get(Operation, job_id))
+            assert job.started_at is None
+            if service_result in ("failed", "completed"):
+                job.status = service_result
+                if service_result == "failed":
+                    job.error_message = "borg2 compact failed"
+                other.commit()
+        monkeypatch.setattr(db, "commit", locked_commit)
+        if service_result == "raises":
+            raise RuntimeError("borg2 compact failed")
+
+    monkeypatch.setattr(db_retries.asyncio, "sleep", no_sleep)
+    monkeypatch.setattr("app.core.borg_router.BorgRouter.compact", fake_compact)
+
+    if service_result == "raises":
+        with pytest.raises(RuntimeError, match="borg2 compact failed"):
+            await maintenance.run_compact(FakeContext(db, op))
+    else:
+        outcome = await maintenance.run_compact(FakeContext(db, op))
+        assert outcome.status == (
+            "completed" if service_result == "completed" else "failed"
+        )
+        if service_result == "failed":
+            assert outcome.error_message == "borg2 compact failed"
+        elif service_result == "no_verdict":
+            assert outcome.error_message == "service returned no result"
+
+    assert failed_commits == 6
+    with _other_session(db) as other:
+        assert other.get(Operation, operation_id).started_at == _RUNNER_CLAIMED_AT
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cancel_recovery", [False, True])
+async def test_failed_restore_recovery_preserves_service_error_or_cancellation(
+    db, borg2_repository, monkeypatch, cancel_recovery
+):
+    """Recovery is bounded and does not mask service errors or shutdown cancellation."""
+    from app.services.operations.executors import maintenance
+
+    op = _runner_claimed(db, borg2_repository)
+    real = maintenance.commit_with_retry
+    actions = []
+
+    async def commit(session, **kwargs):
+        action = kwargs["action"]
+        if action.startswith("maintenance_restore_start"):
+            actions.append(action)
+            kwargs["prepare"]()
+            if len(actions) == 2 and cancel_recovery:
+                raise asyncio.CancelledError()
+            raise RuntimeError("restore unavailable")
+        return await real(session, **kwargs)
+
+    async def fake_compact(self, job_id):
+        raise RuntimeError("borg2 compact failed")
+
+    monkeypatch.setattr(maintenance, "commit_with_retry", commit)
+    monkeypatch.setattr("app.core.borg_router.BorgRouter.compact", fake_compact)
+
+    if cancel_recovery:
+        with pytest.raises(asyncio.CancelledError):
+            await maintenance.run_compact(FakeContext(db, op))
+    else:
+        with pytest.raises(RuntimeError, match="borg2 compact failed"):
+            await maintenance.run_compact(FakeContext(db, op))
+
+    assert len(actions) == 2
+    assert not db.in_transaction()
+
+
+@pytest.mark.asyncio
+async def test_restore_recovery_keeps_a_start_written_between_attempts(
+    db, borg2_repository, monkeypatch
+):
+    """The recovery UPDATE preserves a service start committed after the rollback."""
+    from app.services.operations.executors import maintenance
+
+    op = _runner_claimed(db, borg2_repository)
+    operation_id = op.id
+    service_start = utc_now()
+    real = maintenance.commit_with_retry
+
+    async def commit(session, **kwargs):
+        if kwargs["action"] == "maintenance_restore_start":
+            kwargs["prepare"]()
+            session.rollback()
+            with _other_session(db) as other:
+                other.get(Operation, operation_id).started_at = service_start
+                other.commit()
+            raise RuntimeError("restore commit failed")
+        return await real(session, **kwargs)
+
+    monkeypatch.setattr(maintenance, "commit_with_retry", commit)
+    monkeypatch.setattr("app.core.borg_router.BorgRouter.compact", _completing(db))
+
+    outcome = await maintenance.run_compact(FakeContext(db, op))
+
+    assert outcome.status == "completed"
+    with _other_session(db) as other:
+        assert other.get(Operation, operation_id).started_at == service_start
+
+
+@pytest.mark.parametrize(
+    "kind, borg_version, executor_type, handed_over",
+    [
+        ("check", 2, "server", True),
+        ("prune", 2, "server", True),
+        ("compact", 2, "server", True),
+        ("delete_archive", 2, "server", True),
+        ("restore_check", 2, "server", False),
+        ("compact", 1, "server", False),
+        ("compact", 2, "agent", False),
+    ],
+)
+def test_hands_over_only_to_a_claiming_borg2_server_service(
+    db, kind, borg_version, executor_type, handed_over
+):
+    """The hand-over is for the four kinds whose Borg 2 server service claims
+    through `claim_running`; restore_check runs its own service without a
+    claim, Borg 1 services and the agent path write or report their own
+    start."""
+    from app.services.operations.executors import maintenance
+
+    repo = Repository(
+        name=f"{kind}-{borg_version}-{executor_type}",
+        path=f"/repo/{kind}",
+        borg_version=borg_version,
+        executor_type=executor_type,
+    )
+    db.add(repo)
+    db.commit()
+    op = _operation(db, repo, kind=kind, params={"archive_name": "a"})
+    assert maintenance._hands_over(FakeContext(db, op), repo) is handed_over
 
 
 @pytest.mark.asyncio
