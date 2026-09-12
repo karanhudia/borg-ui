@@ -555,21 +555,30 @@ def _classify_agent_script_outcome(
     )
 
 
-def _commit_bookkeeping(db: Session, *, attempts: int = 4, delay: float = 0.5) -> None:
-    """Commit a plan-run status write, waiting out a transiently locked
-    database.
+def _write_bookkeeping(
+    work: Callable[[Session], None], *, attempts: int = 4, delay: float = 0.5
+) -> None:
+    """Run one plan-run status write, waiting out a transiently locked database.
 
-    These writes happen while a run is recording what went wrong, often
-    while the index operations of other repositories hold the SQLite write
-    lock. Losing one costs more than the wait: the row's real reason is
-    replaced by "database is locked", and the repositories it was about to
-    mark failed stay at `pending` forever.
+    These writes happen while a run is recording what went wrong, often while
+    the index operations of other repositories hold the SQLite write lock.
+    Losing one costs more than the wait: the row's real reason is replaced by
+    "database is locked", and the repositories it was about to mark failed
+    stay at `pending` forever.
+
+    The whole read-and-mutate runs again on each attempt, in a session of its
+    own. Retrying the commit alone would do nothing: a rollback expires the
+    instances and discards their pending changes, so the second commit emits
+    no UPDATE and returns as if it had written.
     """
     for attempt in range(attempts):
+        db = SessionLocal()
         try:
+            work(db)
             db.commit()
             return
         except OperationalError as exc:
+            db.rollback()
             if "database is locked" not in str(exc).lower() or attempt == attempts - 1:
                 raise
             logger.warning(
@@ -577,8 +586,9 @@ def _commit_bookkeeping(db: Session, *, attempts: int = 4, delay: float = 0.5) -
                 attempt=attempt + 1,
                 error=str(exc),
             )
-            db.rollback()
             time.sleep(delay * (attempt + 1))
+        finally:
+            db.close()
 
 
 def _http_detail_message(exc: HTTPException) -> Optional[str]:
@@ -2232,34 +2242,28 @@ class BackupPlanExecutionService:
         return "completed" if maintenance_ok else "completed_with_warnings"
 
     def _mark_repository_skipped(self, run_id: int, repository_id: int) -> None:
-        db = SessionLocal()
-        try:
+        def work(db: Session) -> None:
             child = (
                 db.query(BackupPlanRunRepository)
                 .filter(
                     BackupPlanRunRepository.backup_plan_run_id == run_id,
                     BackupPlanRunRepository.repository_id == repository_id,
-                    BackupPlanRunRepository.status == "pending",
                 )
                 .first()
             )
             if child:
                 child.status = "skipped"
                 child.completed_at = datetime.utcnow()
-                child.error_message = "Skipped after an earlier repository failed"
-                _commit_bookkeeping(db)
-        finally:
-            db.close()
+
+        _write_bookkeeping(work)
 
     def _mark_repository_cancelled(self, run_id: int, repository_id: int) -> None:
-        db = SessionLocal()
-        try:
+        def work(db: Session) -> None:
             child = (
                 db.query(BackupPlanRunRepository)
                 .filter(
                     BackupPlanRunRepository.backup_plan_run_id == run_id,
                     BackupPlanRunRepository.repository_id == repository_id,
-                    BackupPlanRunRepository.status == "pending",
                 )
                 .first()
             )
@@ -2267,15 +2271,13 @@ class BackupPlanExecutionService:
                 child.status = "cancelled"
                 child.completed_at = datetime.utcnow()
                 child.error_message = CANCELLED_MESSAGE
-                _commit_bookkeeping(db)
-        finally:
-            db.close()
+
+        _write_bookkeeping(work)
 
     def _mark_repository_failed(
         self, run_id: int, repository_id: int, error_message: str
     ) -> None:
-        db = SessionLocal()
-        try:
+        def work(db: Session) -> None:
             child = (
                 db.query(BackupPlanRunRepository)
                 .filter(
@@ -2288,15 +2290,13 @@ class BackupPlanExecutionService:
                 child.status = "failed"
                 child.completed_at = datetime.utcnow()
                 child.error_message = error_message
-                _commit_bookkeeping(db)
-        finally:
-            db.close()
+
+        _write_bookkeeping(work)
 
     def _mark_pending_repositories_failed(
         self, run_id: int, error_message: str
     ) -> None:
-        db = SessionLocal()
-        try:
+        def work(db: Session) -> None:
             children = (
                 db.query(BackupPlanRunRepository)
                 .filter(
@@ -2310,15 +2310,13 @@ class BackupPlanExecutionService:
                 child.status = "failed"
                 child.completed_at = now
                 child.error_message = error_message
-            _commit_bookkeeping(db)
-        finally:
-            db.close()
+
+        _write_bookkeeping(work)
 
     def _mark_pending_repositories_skipped(
         self, run_id: int, error_message: str
     ) -> None:
-        db = SessionLocal()
-        try:
+        def work(db: Session) -> None:
             children = (
                 db.query(BackupPlanRunRepository)
                 .filter(
@@ -2332,9 +2330,8 @@ class BackupPlanExecutionService:
                 child.status = "skipped"
                 child.completed_at = now
                 child.error_message = error_message
-            _commit_bookkeeping(db)
-        finally:
-            db.close()
+
+        _write_bookkeeping(work)
 
     def _plan_backup_result(self, run_id: int) -> str:
         db = SessionLocal()
@@ -2410,20 +2407,18 @@ class BackupPlanExecutionService:
             db.close()
 
     def _mark_run_failed(self, run_id: int, error_message: str) -> None:
-        db = SessionLocal()
-        try:
+        def work(db: Session) -> None:
             run = db.query(BackupPlanRun).filter(BackupPlanRun.id == run_id).first()
             # A cancellation surfaces here as a generic hook/backup failure (the
             # agent script outcome classifies "canceled" as failed and raises).
-            # Don't overwrite the run's "cancelled" status with "failed" — same
+            # Don't overwrite the run's "cancelled" status with "failed" -- same
             # guard as _finalize_run.
             if run and run.status != "cancelled":
                 run.status = "failed"
                 run.error_message = error_message
                 run.completed_at = datetime.utcnow()
-                _commit_bookkeeping(db)
-        finally:
-            db.close()
+
+        _write_bookkeeping(work)
 
 
 backup_plan_execution_service = BackupPlanExecutionService()

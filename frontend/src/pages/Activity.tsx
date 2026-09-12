@@ -136,6 +136,8 @@ const Activity: React.FC = () => {
     // The cursor is the sort key the route paged by, not started_at: a
     // skipped plan run sorts by when it was decided, not when it began.
     // `Z` rather than `+00:00`, which a query string reads back as a space.
+    // The route never ends a page inside a group of rows sharing one
+    // timestamp, so the next page can start strictly before this one.
     getNextPageParam: (lastPage) =>
       lastPage.length < PAGE_SIZE
         ? undefined

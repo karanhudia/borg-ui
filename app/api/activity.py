@@ -107,7 +107,9 @@ class ActivityItem(BaseModel):
     operation_id: Optional[int] = None
     hook_type: Optional[str] = None
     # The key the feed is sorted by. Pass the last item's value back as
-    # `before` to page into older history.
+    # `before` to page into older history. The next page starts strictly
+    # before it, which is safe because a page never ends inside a group of
+    # rows sharing one timestamp: it carries the whole group.
     sort_at: Optional[datetime] = None
     followups: List["ActivityItem"] = []
 
@@ -893,12 +895,20 @@ async def list_recent_activity(
             if run_ids
             else set()
         )
+        from app.api.backup_plans import _can_view_plan
+
         for run in runs:
             if run.id in spoken_for:
                 continue
             plan = (
                 db.get(BackupPlan, run.backup_plan_id) if run.backup_plan_id else None
             )
+            # The row carries the plan's name and the error it failed with, and
+            # a plan spans repositories: only someone who may view all of them
+            # may read that. Filtered here rather than in the query because the
+            # rule walks the plan's repository links.
+            if plan is None or not _can_view_plan(db, current_user, plan):
+                continue
             activities.append(
                 {
                     "activity_key": f"backup-plan-run-{run.id}",
@@ -1058,8 +1068,15 @@ async def list_recent_activity(
         reverse=True,
     )
 
-    # Apply limit to combined results
-    activities = activities[:limit]
+    # The limit cuts on a timestamp boundary, never inside one. Rows sharing
+    # a timestamp are common (a plan run and the hook it started, a batch of
+    # skips written together), and the next page starts strictly before the
+    # last row's time: any left on the far side of the cut would be stranded
+    # for good.
+    if len(activities) > limit:
+        boundary = activities[limit - 1]["_sort_at"]
+        tail = [a for a in activities[limit:] if a["_sort_at"] == boundary]
+        activities = activities[:limit] + tail
     for activity in activities:
         activity["sort_at"] = activity.pop("_sort_at", None) or activity["started_at"]
 

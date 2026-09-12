@@ -430,8 +430,39 @@ class TestActivityPagination:
         older = test_client.get(
             f"/api/activity/recent?limit=2&before={cursor}", headers=admin_headers
         ).json()
-        assert len(older) == 1
-        assert older[0]["id"] not in {item["id"] for item in page}
+        # Inclusive, so the row the page ended on comes back with the one
+        # after it; the client drops what it has already shown.
+        keys = [i["activity_key"] for i in page] + [i["activity_key"] for i in older]
+        assert len(set(keys)) == 3
+
+    def test_rows_sharing_one_timestamp_are_not_stranded(
+        self, test_client, test_db, admin_headers
+    ):
+        """A page that ends inside a group of equal timestamps must not lose
+        the rest of that group: every one of them is reachable by paging."""
+        repo = _repo(test_db)
+        shared = utc_now() - timedelta(hours=1)
+        for _ in range(4):
+            op = enqueue(test_db, "prune", repository_id=repo.id)
+            op.status = "completed"
+            op.started_at = shared
+            test_db.commit()
+
+        seen: set[str] = set()
+        cursor = None
+        for _ in range(6):
+            url = "/api/activity/recent?limit=2"
+            if cursor:
+                url += f"&before={cursor}"
+            page = test_client.get(url, headers=admin_headers).json()
+            fresh = [i for i in page if i["activity_key"] not in seen]
+            seen.update(i["activity_key"] for i in page)
+            # The client stops when a page brings nothing new, which is what
+            # keeps an inclusive cursor from asking for the same second twice.
+            if len(page) < 2 or not fresh:
+                break
+            cursor = page[-1]["sort_at"].replace("+00:00", "Z")
+        assert len(seen) == 4
 
 
 @pytest.mark.unit
@@ -487,6 +518,49 @@ class TestFailedPlanRuns:
         assert [i["type"] for i in body] == ["script_execution"]
         assert body[0]["backup_plan_run_id"] == run.id
 
+    def test_a_failed_plan_run_is_hidden_from_a_viewer_of_only_one_repository(
+        self, test_client, test_db, test_user, auth_headers
+    ):
+        """The row names the plan and carries its error, and a plan spans
+        repositories: a viewer of one of them may not read it."""
+        from app.database.models import BackupPlanRepository
+
+        _, run = self._plan_run(test_db, error="ssh key rejected")
+        allowed = _repo(test_db)
+        denied = Repository(
+            name="denied", path="/tmp/denied", encryption="none", compression="lz4"
+        )
+        test_db.add(denied)
+        test_db.commit()
+        test_db.refresh(denied)
+        for repo in (allowed, denied):
+            test_db.add(
+                BackupPlanRepository(
+                    backup_plan_id=run.backup_plan_id,
+                    repository_id=repo.id,
+                    execution_order=repo.id,
+                )
+            )
+        test_db.add(
+            UserRepositoryPermission(
+                user_id=test_user.id, repository_id=allowed.id, role="viewer"
+            )
+        )
+        test_db.commit()
+
+        body = test_client.get("/api/activity/recent", headers=auth_headers).json()
+        assert body == []
+        # The same run is there for someone who may see both repositories.
+        test_db.add(
+            UserRepositoryPermission(
+                user_id=test_user.id, repository_id=denied.id, role="viewer"
+            )
+        )
+        test_db.commit()
+        body = test_client.get("/api/activity/recent", headers=auth_headers).json()
+        assert [i["type"] for i in body] == ["backup_plan_run"]
+        assert body[0]["error_message"] == "ssh key rejected"
+
     def test_failed_plan_run_is_silent_when_its_own_run_failed(
         self, test_client, test_db, admin_headers
     ):
@@ -504,47 +578,76 @@ class TestFailedPlanRuns:
 
 @pytest.mark.unit
 class TestPlanRunBookkeeping:
-    def test_locked_commit_is_retried_then_succeeds(self):
+    def test_a_locked_write_is_run_again_whole(self):
         from sqlalchemy.exc import OperationalError
 
-        from app.services.backup_plan_execution_service import _commit_bookkeeping
+        from app.services import backup_plan_execution_service as svc
 
-        class FlakyDb:
+        sessions = []
+
+        class FakeSession:
             def __init__(self):
-                self.commits = 0
-                self.rollbacks = 0
+                self.committed = False
+                self.rolled_back = False
+                self.closed = False
+                sessions.append(self)
 
             def commit(self):
-                self.commits += 1
-                if self.commits < 3:
-                    raise OperationalError(
-                        "UPDATE", {}, Exception("database is locked")
-                    )
+                self.committed = True
 
             def rollback(self):
-                self.rollbacks += 1
+                self.rolled_back = True
 
-        db = FlakyDb()
-        _commit_bookkeeping(db, delay=0)
-        assert (db.commits, db.rollbacks) == (3, 2)
+            def close(self):
+                self.closed = True
+
+        ran = []
+
+        def work(db):
+            ran.append(db)
+            # The mutation itself is what the lock hits, on the flush the
+            # commit drives. Retrying the commit alone would replay nothing.
+            if len(ran) < 3:
+                raise OperationalError("UPDATE", {}, Exception("database is locked"))
+
+        monkeypatched = svc.SessionLocal
+        svc.SessionLocal = FakeSession
+        try:
+            svc._write_bookkeeping(work, delay=0)
+        finally:
+            svc.SessionLocal = monkeypatched
+
+        # Three attempts, each reading and mutating again in its own session.
+        assert len(ran) == 3
+        assert [s.committed for s in sessions] == [False, False, True]
+        assert all(s.closed for s in sessions)
 
     def test_other_errors_are_not_retried(self):
         from sqlalchemy.exc import OperationalError
 
-        from app.services.backup_plan_execution_service import _commit_bookkeeping
+        from app.services import backup_plan_execution_service as svc
 
-        class BrokenDb:
-            def __init__(self):
-                self.commits = 0
-
+        class FakeSession:
             def commit(self):
-                self.commits += 1
-                raise OperationalError("UPDATE", {}, Exception("no such table"))
+                pass
 
             def rollback(self):
                 pass
 
-        db = BrokenDb()
-        with pytest.raises(OperationalError):
-            _commit_bookkeeping(db, delay=0)
-        assert db.commits == 1
+            def close(self):
+                pass
+
+        ran = []
+
+        def work(db):
+            ran.append(db)
+            raise OperationalError("UPDATE", {}, Exception("no such table"))
+
+        monkeypatched = svc.SessionLocal
+        svc.SessionLocal = FakeSession
+        try:
+            with pytest.raises(OperationalError):
+                svc._write_bookkeeping(work, delay=0)
+        finally:
+            svc.SessionLocal = monkeypatched
+        assert len(ran) == 1
