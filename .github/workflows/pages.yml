@@ -8,6 +8,7 @@ on:
       - "docs/**"
       - "frontend/src/**"
       - "frontend/.storybook/**"
+      - "frontend/package.json"
       - "frontend/package-lock.json"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
