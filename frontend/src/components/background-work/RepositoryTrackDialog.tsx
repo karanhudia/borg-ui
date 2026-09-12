@@ -217,6 +217,14 @@ export default function RepositoryTrackDialog({
           </Typography>
           <MuiLink
             component={RouterLink}
+            to={`/repositories?q=${encodeURIComponent(repositoryName)}`}
+            variant="body2"
+            sx={{ flexShrink: 0 }}
+          >
+            {t('operations.background.hub.openRepository')}
+          </MuiLink>
+          <MuiLink
+            component={RouterLink}
             to={`/activity?repository_id=${repositoryId}&category=index`}
             variant="body2"
             sx={{ flexShrink: 0 }}

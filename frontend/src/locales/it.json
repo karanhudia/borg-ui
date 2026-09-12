@@ -3736,6 +3736,7 @@
         "detailAllIndexed": "Ogni archivio ha la sua cronologia dei file.",
         "detailHint": "Ricostruisci da Cronologia dei file per indicizzare di nuovo questi archivi.",
         "viewIndexRuns": "Vedi esecuzioni di indicizzazione",
+        "openRepository": "Apri repository",
         "historyAgentUnsupported": "Non disponibile per i repository agente"
       },
       "rebuildMenuHint": "Ogni fase successiva a quella scelta viene ricostruita a sua volta. Le fasi precedenti restano. Le statistiche vengono sempre per ultime, perché sommano ciò che le altre fasi hanno prodotto.",

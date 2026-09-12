@@ -3736,6 +3736,7 @@
         "detailAllIndexed": "Todos los archivos tienen su historial de ficheros.",
         "detailHint": "Reconstruye desde Historial de ficheros para indexar estos archivos de nuevo.",
         "viewIndexRuns": "Ver ejecuciones de índice",
+        "openRepository": "Abrir repositorio",
         "historyAgentUnsupported": "No disponible para repositorios de agente"
       },
       "rebuildMenuHint": "Cada etapa posterior a la elegida también se reconstruye. Las anteriores se conservan. Las estadísticas siempre van al final, porque suman lo que produjeron las demás etapas.",
