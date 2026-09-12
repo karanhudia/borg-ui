@@ -2069,7 +2069,9 @@
     "title": "Actividad",
     "subtitle": "Cada ejecución en cada repositorio, la más reciente primero",
     "actions": {
-      "refresh": "Actualizar actividad"
+      "refresh": "Actualizar actividad",
+      "loadOlder": "Cargar actividad anterior",
+      "loadingOlder": "Cargando..."
     },
     "filters": {
       "type": "Tipo",

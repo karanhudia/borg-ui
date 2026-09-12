@@ -106,6 +106,9 @@ class ActivityItem(BaseModel):
     # it ran around. With collapse_runs a hook rides under that operation.
     operation_id: Optional[int] = None
     hook_type: Optional[str] = None
+    # The key the feed is sorted by. Pass the last item's value back as
+    # `before` to page into older history.
+    sort_at: Optional[datetime] = None
     followups: List["ActivityItem"] = []
 
     class Config:
@@ -572,6 +575,7 @@ def _operation_activity_items(
     *,
     current_user: User,
     limit: int,
+    before: Optional[datetime],
     job_type: Optional[str],
     status: Optional[str],
     category: Optional[List[str]],
@@ -618,6 +622,8 @@ def _operation_activity_items(
             ~((Operation.category == "index") & (Operation.trigger != "followup"))
         )
     scoped = q
+    if before is not None:
+        q = q.filter(func.coalesce(Operation.started_at, Operation.created_at) < before)
     # Window by time, not id: rows backfilled from the legacy job tables
     # carry ids far above the backups they ran beside, so an id window kept
     # a plan's prune and dropped the backup it followed.
@@ -730,7 +736,8 @@ def _operation_activity_items(
 
 @router.get("/recent", response_model=List[ActivityItem])
 async def list_recent_activity(
-    limit: int = 200,
+    limit: int = 100,
+    before: Optional[datetime] = None,
     job_type: Optional[str] = None,  # Filter by type: 'backup', 'restore', etc.
     status: Optional[str] = None,  # Filter by status: 'running', 'completed', 'failed'
     category: Optional[List[str]] = Query(default=None),
@@ -769,13 +776,19 @@ async def list_recent_activity(
         and (not status or status == "skipped")
         and not repository_scoped
     ):
-        plan_skips = (
-            db.query(BackupPlanRun)
-            .filter(
-                BackupPlanRun.status == "skipped",
-                BackupPlanRun.trigger == "availability",
+        plan_skip_query = db.query(BackupPlanRun).filter(
+            BackupPlanRun.status == "skipped",
+            BackupPlanRun.trigger == "availability",
+        )
+        if before is not None:
+            plan_skip_query = plan_skip_query.filter(
+                func.coalesce(BackupPlanRun.completed_at, BackupPlanRun.created_at)
+                < before
             )
-            .order_by(BackupPlanRun.completed_at.desc(), BackupPlanRun.id.desc())
+        plan_skips = (
+            plan_skip_query.order_by(
+                BackupPlanRun.completed_at.desc(), BackupPlanRun.id.desc()
+            )
             .limit(limit)
             .all()
         )
@@ -805,9 +818,13 @@ async def list_recent_activity(
                 }
             )
 
+        automation_skip_query = db.query(AvailabilityScheduleSkip)
+        if before is not None:
+            automation_skip_query = automation_skip_query.filter(
+                AvailabilityScheduleSkip.occurred_at < before
+            )
         automation_skips = (
-            db.query(AvailabilityScheduleSkip)
-            .order_by(
+            automation_skip_query.order_by(
                 AvailabilityScheduleSkip.occurred_at.desc(),
                 AvailabilityScheduleSkip.id.desc(),
             )
@@ -858,6 +875,8 @@ async def list_recent_activity(
             )
         if status:
             script_query = script_query.filter(ScriptExecution.status == status)
+        if before is not None:
+            script_query = script_query.filter(ScriptExecution.started_at < before)
         script_executions = (
             script_query.order_by(ScriptExecution.started_at.desc()).limit(limit).all()
         )
@@ -920,6 +939,7 @@ async def list_recent_activity(
             db,
             current_user=current_user,
             limit=limit,
+            before=before,
             job_type=job_type,
             status=status,
             category=category,
@@ -968,7 +988,7 @@ async def list_recent_activity(
     # Apply limit to combined results
     activities = activities[:limit]
     for activity in activities:
-        activity.pop("_sort_at", None)
+        activity["sort_at"] = activity.pop("_sort_at", None) or activity["started_at"]
 
     return activities
 

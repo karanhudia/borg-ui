@@ -95,7 +95,7 @@ describe('Activity page', () => {
     renderWithProviders(<Activity />)
     await screen.findByTestId('run-entry')
     expect(screen.getByTestId('umbrella-band')).toHaveTextContent('Plan · Nightly')
-    expect(activityAPI.list).toHaveBeenCalledWith({ limit: 200 })
+    expect(activityAPI.list).toHaveBeenCalledWith({ limit: 100 })
     expect(screen.getByTestId('activity-summary')).toHaveTextContent(
       '1 run · across 1 repository · index runs hidden'
     )
@@ -109,7 +109,7 @@ describe('Activity page', () => {
     fireEvent.mouseDown(screen.getByRole('combobox', { name: /^type$/i }))
     await user.click(await screen.findByRole('option', { name: /^Restore Check$/i }))
     await waitFor(() =>
-      expect(activityAPI.list).toHaveBeenLastCalledWith({ limit: 200, job_type: 'restore_check' })
+      expect(activityAPI.list).toHaveBeenLastCalledWith({ limit: 100, job_type: 'restore_check' })
     )
     expect(track).toHaveBeenCalledWith('Navigation', 'Filter', {
       filter_kind: 'type',
@@ -120,7 +120,7 @@ describe('Activity page', () => {
     await user.click(await screen.findByRole('option', { name: /^failed$/i }))
     await waitFor(() =>
       expect(activityAPI.list).toHaveBeenLastCalledWith({
-        limit: 200,
+        limit: 100,
         job_type: 'restore_check',
         status: 'failed',
       })

@@ -406,3 +406,29 @@ class TestActivityUnion:
             "/api/activity/recent?repository_id=99999", headers=admin_headers
         ).json()
         assert body == []
+
+
+@pytest.mark.unit
+class TestActivityPagination:
+    def test_before_cursor_pages_into_older_runs(
+        self, test_client, test_db, admin_headers
+    ):
+        repo = _repo(test_db)
+        for hours in (1, 2, 3):
+            op = enqueue(test_db, "prune", repository_id=repo.id)
+            op.status = "completed"
+            op.started_at = utc_now() - timedelta(hours=hours)
+            test_db.commit()
+
+        page = test_client.get(
+            "/api/activity/recent?limit=2", headers=admin_headers
+        ).json()
+        assert len(page) == 2
+        # `Z`, like the client: a query string reads `+00:00` back as a space.
+        cursor = page[-1]["sort_at"].replace("+00:00", "Z")
+
+        older = test_client.get(
+            f"/api/activity/recent?limit=2&before={cursor}", headers=admin_headers
+        ).json()
+        assert len(older) == 1
+        assert older[0]["id"] not in {item["id"] for item in page}

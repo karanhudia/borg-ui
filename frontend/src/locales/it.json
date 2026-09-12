@@ -2069,7 +2069,9 @@
     "title": "Attività",
     "subtitle": "Ogni esecuzione su ogni repository, la più recente prima",
     "actions": {
-      "refresh": "Aggiorna attività"
+      "refresh": "Aggiorna attività",
+      "loadOlder": "Carica attività precedenti",
+      "loadingOlder": "Caricamento..."
     },
     "filters": {
       "type": "Tipo",

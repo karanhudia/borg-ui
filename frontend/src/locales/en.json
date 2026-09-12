@@ -2069,7 +2069,9 @@
     "title": "Activity",
     "subtitle": "Every run on every repository, newest first",
     "actions": {
-      "refresh": "Refresh activity"
+      "refresh": "Refresh activity",
+      "loadOlder": "Load older activity",
+      "loadingOlder": "Loading..."
     },
     "filters": {
       "type": "Type",
