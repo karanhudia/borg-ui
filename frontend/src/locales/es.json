@@ -2172,8 +2172,7 @@
       "indexHidden": "ejecuciones de índice ocultas"
     },
     "runningNow": {
-      "title": "En ejecución",
-      "queued": "En cola"
+      "title": "En ejecución"
     },
     "health": {
       "backup": "Copia de seguridad",

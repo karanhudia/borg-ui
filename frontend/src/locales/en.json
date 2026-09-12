@@ -2172,8 +2172,7 @@
       "indexHidden": "index runs hidden"
     },
     "runningNow": {
-      "title": "Running now",
-      "queued": "Queued"
+      "title": "Running now"
     },
     "health": {
       "backup": "Backup",

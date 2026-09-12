@@ -2172,8 +2172,7 @@
       "indexHidden": "Indexläufe ausgeblendet"
     },
     "runningNow": {
-      "title": "Läuft gerade",
-      "queued": "In Warteschlange"
+      "title": "Läuft gerade"
     },
     "health": {
       "backup": "Backup",

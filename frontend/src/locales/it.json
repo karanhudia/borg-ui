@@ -2172,8 +2172,7 @@
       "indexHidden": "esecuzioni di indice nascoste"
     },
     "runningNow": {
-      "title": "In corso",
-      "queued": "In coda"
+      "title": "In corso"
     },
     "health": {
       "backup": "Backup",

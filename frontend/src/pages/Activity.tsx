@@ -15,7 +15,6 @@ import { CATEGORIES } from '../components/activity/categories'
 import { ActivityFilters } from './activity/ActivityFilters'
 import ActivityTimeline from './activity/ActivityTimeline'
 import RepositoryHeader from './activity/RepositoryHeader'
-import RunningNow from './activity/RunningNow'
 import StatusLegend from './activity/StatusLegend'
 import { activityKey, repositoryCount } from './activity/runs'
 import type {
@@ -293,8 +292,6 @@ const Activity: React.FC = () => {
         </Typography>
         <StatusLegend />
       </Box>
-
-      <RunningNow items={items} actions={actionButtons} />
 
       <ActivityTimeline
         items={items}

@@ -3,7 +3,6 @@ import { ThemeProvider } from '@mui/material/styles'
 import { Box, CssBaseline } from '@mui/material'
 import { getTheme } from '../../theme'
 import ActivityTimeline from './ActivityTimeline'
-import RunningNow from './RunningNow'
 import type { ActivityItem } from '../Activity'
 import type { ActionButton } from '../../components/RowActions'
 import { Eye, Download, Trash2 } from 'lucide-react'
@@ -285,7 +284,6 @@ const actions: ActionButton<ActivityItem>[] = [
 function Page({ dark = false, pinned = false }: { dark?: boolean; pinned?: boolean }) {
   const body = (
     <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
-      <RunningNow items={items} actions={actions} />
       <ActivityTimeline
         items={items}
         loading={false}
