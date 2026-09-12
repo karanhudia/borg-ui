@@ -555,6 +555,31 @@ def _classify_agent_script_outcome(
     )
 
 
+def _update_children(
+    db: Session,
+    run_id: int,
+    values: dict,
+    *,
+    repository_id: Optional[int] = None,
+    from_statuses: tuple[str, ...] = ("pending",),
+) -> None:
+    """Move a run's repository rows on, in one statement, and only from the
+    statuses they are allowed to move from.
+
+    A cancellation can commit between a reader's look and its write: a plan
+    worker that decided to skip a repository must not then overwrite the
+    "cancelled" someone else already recorded. The WHERE clause is what makes
+    that safe, so this has to stay one UPDATE rather than a read and a write.
+    """
+    q = db.query(BackupPlanRunRepository).filter(
+        BackupPlanRunRepository.backup_plan_run_id == run_id,
+        BackupPlanRunRepository.status.in_(from_statuses),
+    )
+    if repository_id is not None:
+        q = q.filter(BackupPlanRunRepository.repository_id == repository_id)
+    q.update(values, synchronize_session=False)
+
+
 def _write_bookkeeping(
     work: Callable[[Session], None], *, attempts: int = 4, delay: float = 0.5
 ) -> None:
@@ -2243,34 +2268,27 @@ class BackupPlanExecutionService:
 
     def _mark_repository_skipped(self, run_id: int, repository_id: int) -> None:
         def work(db: Session) -> None:
-            child = (
-                db.query(BackupPlanRunRepository)
-                .filter(
-                    BackupPlanRunRepository.backup_plan_run_id == run_id,
-                    BackupPlanRunRepository.repository_id == repository_id,
-                )
-                .first()
+            _update_children(
+                db,
+                run_id,
+                {"status": "skipped", "completed_at": datetime.utcnow()},
+                repository_id=repository_id,
             )
-            if child:
-                child.status = "skipped"
-                child.completed_at = datetime.utcnow()
 
         _write_bookkeeping(work)
 
     def _mark_repository_cancelled(self, run_id: int, repository_id: int) -> None:
         def work(db: Session) -> None:
-            child = (
-                db.query(BackupPlanRunRepository)
-                .filter(
-                    BackupPlanRunRepository.backup_plan_run_id == run_id,
-                    BackupPlanRunRepository.repository_id == repository_id,
-                )
-                .first()
+            _update_children(
+                db,
+                run_id,
+                {
+                    "status": "cancelled",
+                    "completed_at": datetime.utcnow(),
+                    "error_message": CANCELLED_MESSAGE,
+                },
+                repository_id=repository_id,
             )
-            if child:
-                child.status = "cancelled"
-                child.completed_at = datetime.utcnow()
-                child.error_message = CANCELLED_MESSAGE
 
         _write_bookkeeping(work)
 
@@ -2278,18 +2296,19 @@ class BackupPlanExecutionService:
         self, run_id: int, repository_id: int, error_message: str
     ) -> None:
         def work(db: Session) -> None:
-            child = (
-                db.query(BackupPlanRunRepository)
-                .filter(
-                    BackupPlanRunRepository.backup_plan_run_id == run_id,
-                    BackupPlanRunRepository.repository_id == repository_id,
-                )
-                .first()
+            _update_children(
+                db,
+                run_id,
+                {
+                    "status": "failed",
+                    "completed_at": datetime.utcnow(),
+                    "error_message": error_message,
+                },
+                repository_id=repository_id,
+                # This one runs after the repository's backup raised, so the
+                # child is running rather than pending by then.
+                from_statuses=("pending", "running"),
             )
-            if child:
-                child.status = "failed"
-                child.completed_at = datetime.utcnow()
-                child.error_message = error_message
 
         _write_bookkeeping(work)
 
@@ -2297,19 +2316,15 @@ class BackupPlanExecutionService:
         self, run_id: int, error_message: str
     ) -> None:
         def work(db: Session) -> None:
-            children = (
-                db.query(BackupPlanRunRepository)
-                .filter(
-                    BackupPlanRunRepository.backup_plan_run_id == run_id,
-                    BackupPlanRunRepository.status == "pending",
-                )
-                .all()
+            _update_children(
+                db,
+                run_id,
+                {
+                    "status": "failed",
+                    "completed_at": datetime.utcnow(),
+                    "error_message": error_message,
+                },
             )
-            now = datetime.utcnow()
-            for child in children:
-                child.status = "failed"
-                child.completed_at = now
-                child.error_message = error_message
 
         _write_bookkeeping(work)
 
@@ -2317,19 +2332,15 @@ class BackupPlanExecutionService:
         self, run_id: int, error_message: str
     ) -> None:
         def work(db: Session) -> None:
-            children = (
-                db.query(BackupPlanRunRepository)
-                .filter(
-                    BackupPlanRunRepository.backup_plan_run_id == run_id,
-                    BackupPlanRunRepository.status == "pending",
-                )
-                .all()
+            _update_children(
+                db,
+                run_id,
+                {
+                    "status": "skipped",
+                    "completed_at": datetime.utcnow(),
+                    "error_message": error_message,
+                },
             )
-            now = datetime.utcnow()
-            for child in children:
-                child.status = "skipped"
-                child.completed_at = now
-                child.error_message = error_message
 
         _write_bookkeeping(work)
 

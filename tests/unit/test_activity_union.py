@@ -622,6 +622,39 @@ class TestPlanRunBookkeeping:
         assert [s.committed for s in sessions] == [False, False, True]
         assert all(s.closed for s in sessions)
 
+    def test_a_terminal_child_is_not_moved_back(self, test_db):
+        """A worker deciding to skip a repository must not overwrite the
+        cancellation someone committed while it was deciding."""
+        from app.database.models import (
+            BackupPlan,
+            BackupPlanRun,
+            BackupPlanRunRepository,
+        )
+        from app.services.backup_plan_execution_service import _update_children
+
+        plan = BackupPlan(name="nightly", enabled=True, source_directories="[]")
+        test_db.add(plan)
+        test_db.commit()
+        run = BackupPlanRun(backup_plan_id=plan.id, status="running", trigger="manual")
+        test_db.add(run)
+        test_db.commit()
+        repo = _repo(test_db)
+        child = BackupPlanRunRepository(
+            backup_plan_run_id=run.id, repository_id=repo.id, status="cancelled"
+        )
+        pending = BackupPlanRunRepository(
+            backup_plan_run_id=run.id, repository_id=None, status="pending"
+        )
+        test_db.add_all([child, pending])
+        test_db.commit()
+
+        _update_children(test_db, run.id, {"status": "skipped"})
+        test_db.commit()
+        test_db.refresh(child)
+        test_db.refresh(pending)
+        assert child.status == "cancelled"
+        assert pending.status == "skipped"
+
     def test_other_errors_are_not_retried(self):
         from sqlalchemy.exc import OperationalError
 

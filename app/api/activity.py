@@ -21,6 +21,7 @@ from app.database.models import (
     AgentJob,
     AgentJobLog,
     BackupPlan,
+    BackupPlanRepository,
     BackupPlanRun,
     AvailabilityScheduleSkip,
     Repository,
@@ -866,7 +867,24 @@ async def list_recent_activity(
         and (not status or status == "failed")
         and not repository_scoped
     ):
+        from app.api.backup_plans import _can_view_plan
+        from app.api.operations import accessible_repository_ids
+
         run_query = db.query(BackupPlanRun).filter(BackupPlanRun.status == "failed")
+        # A plan the reader can see is one whose every repository they may
+        # view, which is a walk over the plan's links rather than a join. Ruling
+        # out the plans touching no repository of theirs first keeps the window
+        # from filling with runs that would only be dropped below.
+        accessible = accessible_repository_ids(db, current_user)
+        if accessible is not None:
+            visible_plans = (
+                db.query(BackupPlanRepository.backup_plan_id)
+                .filter(BackupPlanRepository.repository_id.in_(accessible))
+                .distinct()
+            )
+            run_query = run_query.filter(
+                BackupPlanRun.backup_plan_id.in_(visible_plans)
+            )
         if before is not None:
             run_query = run_query.filter(
                 func.coalesce(BackupPlanRun.completed_at, BackupPlanRun.created_at)
@@ -895,8 +913,6 @@ async def list_recent_activity(
             if run_ids
             else set()
         )
-        from app.api.backup_plans import _can_view_plan
-
         for run in runs:
             if run.id in spoken_for:
                 continue
@@ -1072,7 +1088,10 @@ async def list_recent_activity(
     # a timestamp are common (a plan run and the hook it started, a batch of
     # skips written together), and the next page starts strictly before the
     # last row's time: any left on the far side of the cut would be stranded
-    # for good.
+    # for good. The group has to have come back from its source to be carried,
+    # so this holds while no single timestamp holds more rows than a source
+    # fetches -- microsecond stamps, so it would take a batch written inside
+    # one microsecond to break it.
     if len(activities) > limit:
         boundary = activities[limit - 1]["_sort_at"]
         tail = [a for a in activities[limit:] if a["_sort_at"] == boundary]
