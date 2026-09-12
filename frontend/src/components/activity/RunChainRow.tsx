@@ -67,20 +67,28 @@ function StatusBar({ steps }: { steps: RunChainOperation[] }) {
 }
 
 interface RunChainSummaryProps {
-  steps: RunChainOperation[]
+  flow: FlowNode[]
   expanded: boolean
   onToggle: () => void
 }
 
 // The one-line strip that folds a chain: a segment per step coloured by
 // status, the count, a verdict, and how long the steps took.
-export function RunChainSummary({ steps, expanded, onToggle }: RunChainSummaryProps) {
+//
+// It counts what the expansion renders, the run's own node included: a
+// pre-backup hook, the backup, and a post-backup hook are three lines and
+// must not fold into "2 steps". The time is still the steps' own, since the
+// run's duration sits beside this strip already.
+export function RunChainSummary({ flow, expanded, onToggle }: RunChainSummaryProps) {
   const { t } = useTranslation()
-  const allSucceeded = !chainOpensByDefault(steps)
-  const failed = steps.filter((step) => step.status === 'failed').length
-  const active = steps.filter((step) => ACTIVE.has(step.status)).length
-  const cancelled = steps.filter((step) => step.status === 'cancelled').length
-  const total = chainSeconds(steps.filter((step) => !isHook(step)))
+  const nodes = flow.map((node) => node.op)
+  const allSucceeded = !chainOpensByDefault(nodes)
+  const failed = nodes.filter((step) => step.status === 'failed').length
+  const active = nodes.filter((step) => ACTIVE.has(step.status)).length
+  const cancelled = nodes.filter((step) => step.status === 'cancelled').length
+  const total = chainSeconds(
+    flow.filter((node) => node.role !== 'root' && !isHook(node.op)).map((node) => node.op)
+  )
   const summary = allSucceeded
     ? t('activity.runChain.allSucceeded')
     : [
@@ -110,12 +118,12 @@ export function RunChainSummary({ steps, expanded, onToggle }: RunChainSummaryPr
       }}
     >
       <Chevron size={14} aria-hidden />
-      <StatusBar steps={steps} />
+      <StatusBar steps={nodes} />
       <Typography
         variant="caption"
         sx={{ fontWeight: 500, color: subjectText, lineHeight: 1, whiteSpace: 'nowrap' }}
       >
-        {t('activity.followupsCollapsed', { count: steps.length })}
+        {t('activity.followupsCollapsed', { count: nodes.length })}
       </Typography>
       <Typography variant="caption" sx={{ lineHeight: 1, whiteSpace: 'nowrap' }}>
         {summary}
@@ -219,7 +227,7 @@ export default function RunChainRow({ operation }: RunChainRowProps) {
 
   return (
     <Box sx={{ pt: 0.25, pb: 0.25 }}>
-      <RunChainSummary steps={steps} expanded={expanded} onToggle={() => setOpen(!expanded)} />
+      <RunChainSummary flow={flow} expanded={expanded} onToggle={() => setOpen(!expanded)} />
       {expanded && (
         <Box
           data-testid="run-chain-flow"

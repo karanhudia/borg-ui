@@ -114,7 +114,7 @@ describe('ActivityTimeline', () => {
   it('shows progress for a running run and folds a succeeded chain', () => {
     renderTimeline()
     const rows = screen.getAllByTestId('run-entry')
-    expect(within(rows[0]).getByText('1 step')).toBeInTheDocument()
+    expect(within(rows[0]).getByText('2 steps')).toBeInTheDocument()
     expect(within(rows[1]).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '42')
     expect(within(rows[1]).getByText(/42% · Pruning archive 3 of 7/)).toBeInTheDocument()
     // Steps open as timeline rows of their own, with the run itself in

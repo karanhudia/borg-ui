@@ -371,7 +371,7 @@ export default function RunEntry({ item, actions, showRepository }: RunEntryProp
           {steps.length > 0 && (
             <Box sx={{ mt: 0.75 }}>
               <RunChainSummary
-                steps={steps}
+                flow={flow}
                 expanded={expanded}
                 onToggle={() => setOpen(!expanded)}
               />
