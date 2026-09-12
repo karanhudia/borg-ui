@@ -32,7 +32,7 @@ Vitest, Storybook.
 
 - No em dashes in UI copy, i18n strings, code comments, docs, or commit
   messages. Check added lines only, with
-  `git diff -U0 origin/main | grep -nP '\xe2\x80\x94'`.
+  `git diff -U0 origin/main | grep -n $'\u2014'` (BSD grep has no -P).
 - Every new i18n key must be added to all four locales:
   `frontend/src/locales/en.json`, `de.json`, `es.json`, `it.json`. The
   `frontend-locale-check` pre-push hook fails otherwise.
@@ -1310,7 +1310,7 @@ to choose between them.
 
 - [ ] **Step 2: Check for em dashes**
 
-Run: `git diff -U0 origin/main -- docs/managed-agents.md | grep -nP '\xe2\x80\x94'`
+Run: `git diff -U0 origin/main -- docs/managed-agents.md | grep -n $'\u2014'`
 Expected: no output.
 
 - [ ] **Step 3: Commit**
@@ -1330,7 +1330,7 @@ the output rather than asserting the result.
 - [ ] `pytest tests/unit/agent tests/unit/test_agent_runtime.py tests/unit/test_agent_installer_pins.py -q`
 - [ ] `cd frontend && yarn vitest run src/pages/managed-agents src/pages/__tests__/ManagedAgents.test.tsx`
 - [ ] `cd frontend && yarn tsc --noEmit && yarn lint`
-- [ ] `git diff -U0 origin/main | grep -nP '\xe2\x80\x94'` returns nothing
+- [ ] `git diff -U0 origin/main | grep -n $'\u2014'` (BSD grep has no -P) returns nothing
 - [ ] All four locales carry every new key (the `frontend-locale-check`
       pre-push hook is the backstop, but check before pushing)
 - [ ] Storybook rendered, light and dark, default and mobile, for

@@ -326,7 +326,7 @@ condition is inverted. They are the tests that matter most in this change.
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| 1 | `set-server` and the URL dialog | Plan written, awaiting implementation ([plan](../plans/2026-09-12-agent-self-service-recovery-phase-1.md)) |
+| 1 | `set-server` and the URL dialog | Implemented, awaiting the live gate ([plan](../plans/2026-09-12-agent-self-service-recovery-phase-1.md)) |
 | 2 | `uninstall.sh` and the uninstall dialog | Not started |
 
 ### 10.2 Phase 1 - change the server URL
