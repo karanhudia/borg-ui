@@ -253,6 +253,15 @@ export default function RunEntry({ item, actions, showRepository }: RunEntryProp
   const chain = useMemo(() => ({ ...runChain(item), label: runTitle(item, t) }), [item, t])
   const steps = useMemo(() => chain.followups ?? [], [chain])
   const flow = useMemo(() => buildFlow(chain, steps), [chain, steps])
+  // A step's logs and its error live on the row the feed sent, not on the
+  // chain shape, so keep those rows by key and hand each step its own
+  // actions. Without them an inline prune that failed reads "Failed" and
+  // nothing else, while its log sits on disk unreachable. Keyed by type and
+  // id together: a script execution and an operation can share an id.
+  const stepItems = useMemo(
+    () => new Map((item.followups ?? []).map((step) => [`${step.type}-${step.id}`, step])),
+    [item.followups]
+  )
   const [open, setOpen] = useState<boolean | null>(null)
   const expanded = open ?? chainOpensByDefault(steps)
   const isScript = item.type === 'script_execution' || item.type === 'package'
@@ -395,9 +404,20 @@ export default function RunEntry({ item, actions, showRepository }: RunEntryProp
 
       {steps.length > 0 && expanded && (
         <Box data-testid="run-steps" sx={{ mt: 0.5 }}>
-          {flow.map((node, index) => (
-            <StepRow key={`${node.role}-${node.op.id ?? index}`} node={node} />
-          ))}
+          {flow.map((node, index) => {
+            // The run's own node repeats the row above it, which carries the
+            // actions already; only the steps need their own.
+            const step = stepItems.get(`${node.op.type}-${node.op.id}`)
+            return (
+              <StepRow
+                key={`${node.role}-${node.op.id ?? index}`}
+                node={node}
+                trailing={
+                  step ? <RowActions row={step} actions={actions} iconOpacity={0.55} /> : null
+                }
+              />
+            )
+          })}
         </Box>
       )}
     </Box>

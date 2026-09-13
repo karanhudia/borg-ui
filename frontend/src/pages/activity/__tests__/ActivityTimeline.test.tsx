@@ -160,6 +160,33 @@ describe('ActivityTimeline', () => {
     expect(within(rows[0]).queryByRole('button', { name: 'Logs' })).not.toBeInTheDocument()
   })
 
+  it('offers the same actions on a step as on the run it hangs from', () => {
+    // A step's log lives behind its own row: the inline prune under a plan
+    // backup writes a log file of its own, and a failed one carries the only
+    // error saying why.
+    const onClick = vi.fn()
+    const actions: ActionButton<ActivityItem>[] = [
+      { icon: <span>L</span>, label: 'Logs', onClick, show: (item) => item.has_logs === true },
+    ]
+    renderTimeline({
+      actions,
+      items: [
+        run({
+          id: 1,
+          followups: [
+            run({ id: 11, kind: 'prune', type: 'prune', trigger: 'followup', status: 'failed' }),
+          ],
+        }),
+      ],
+    })
+    // A chain with a failure opens on its own.
+    const step = screen
+      .getAllByTestId('run-step')
+      .find((row) => /Prune/.test(row.textContent ?? ''))
+    fireEvent.click(within(step as HTMLElement).getByRole('button', { name: 'Logs' }))
+    expect(onClick).toHaveBeenCalledWith(expect.objectContaining({ id: 11, type: 'prune' }))
+  })
+
   it('renders a skeleton while loading and an empty state with nothing to show', () => {
     const { unmount } = renderTimeline({ items: [], loading: true })
     expect(screen.getByTestId('activity-skeleton')).toBeInTheDocument()
