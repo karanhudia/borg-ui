@@ -1448,6 +1448,40 @@ class TestActivityLogContracts:
             == "backend.errors.activity.noLogsAvailableForJob"
         )
 
+    def test_get_job_logs_falls_back_to_the_error_of_a_run_that_wrote_none(
+        self, test_client, admin_headers, test_db
+    ):
+        # An index step that dies on a locked repository never opens a log
+        # file, and its error message is the only account of what happened.
+        # The legacy job branch has always answered this way.
+        from app.database.models import Operation
+
+        repo = _create_activity_repository(test_db, "Errored Index Repo")
+        op = Operation(
+            repository_id=repo.id,
+            kind="archive_sync",
+            category="index",
+            status="failed",
+            trigger="followup",
+            priority=10,
+            run_id="run-errored-index",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            error_message="Failed to acquire the repository lock",
+        )
+        test_db.add(op)
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/activity/archive_sync/{op.id}/logs", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        assert [line["content"] for line in response.json()["lines"]] == [
+            "ERROR:",
+            "Failed to acquire the repository lock",
+        ]
+
     def test_download_job_logs_without_logs_returns_404(
         self, test_client, admin_headers, test_db
     ):
