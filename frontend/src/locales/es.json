@@ -338,7 +338,8 @@
         "cancelJob": "Cancelar trabajo",
         "revokeToken": "Revocar token",
         "upgradeAgent": "Actualizar este endpoint",
-        "pinAgentVersion": "Fijar la versión de este endpoint"
+        "pinAgentVersion": "Fijar la versión de este endpoint",
+        "changeServerUrl": "Cambiar la URL del servidor"
       },
       "noBorg": {
         "title": "No se informó de un binario Borg utilizable",
@@ -468,7 +469,18 @@
         "activeTooltip": "Fijado a Borg {{version}}, la versión que informa este endpoint.",
         "pending": "Borg {{version}} pendiente",
         "pendingTooltip": "Fijado a Borg {{version}}, pero este endpoint todavía no informa esa versión. La próxima actualización la instalará."
-      }
+      },
+      "setServerDialog": {
+        "title": "Cambiar la URL del servidor",
+        "description": "Apunta este endpoint a otra dirección de Borg UI. Conserva su identidad, su credencial y su historial, así que no hace falta un nuevo token de inscripción.",
+        "fieldLabel": "Nueva URL del servidor",
+        "fieldHelper": "Rellenada con la dirección propia de este servidor. Edítala si el endpoint debe llegar a Borg UI por otra vía, por ejemplo un proxy inverso.",
+        "invalidUrl": "Introduce una URL completa que empiece por http:// o https://, sin comillas, barra vertical ni barra invertida.",
+        "copyCommand": "Copiar comando",
+        "runHint": "Ejecútalo en el endpoint, con un usuario que pueda usar sudo.",
+        "statusHint": "¿No sabes qué dirección tiene ahora el endpoint? Ejecuta borg-ui-agent status en él."
+      },
+      "offlineStatusHint": "Ejecuta borg-ui-agent status en el endpoint para ver la dirección de servidor que tiene ahora."
     },
     "installCommand": {
       "title": "Comando de instalación",
