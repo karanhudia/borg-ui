@@ -5008,17 +5008,30 @@ class TestBorgEnvironmentSetup:
 
 
 @pytest.mark.unit
-def test_validate_agent_repository_operation_rejects_deleted_agent(test_db):
-    from app.services.repository_executor import validate_agent_repository_operation
+@pytest.mark.parametrize(
+    "deletion_marker",
+    [
+        pytest.param({"status": "deleted"}, id="status-deleted"),
+        pytest.param({"deleted_at": datetime.utcnow()}, id="deleted_at-set"),
+    ],
+)
+@pytest.mark.parametrize("validator", ["backup", "repository_operation", "script"])
+def test_agent_validators_reject_deleted_agent(test_db, deletion_marker, validator):
+    # Each marker alone must be enough: a row can carry either one depending
+    # on which code path deleted the agent.
+    from app.services.repository_executor import (
+        validate_agent_backup_repository,
+        validate_agent_repository_operation,
+        validate_agent_script,
+    )
 
     agent = AgentMachine(
         name="Gone Agent",
         agent_id="agt_gone",
         token_hash=get_password_hash("borgui_agent_secret"),
         token_prefix="borgui_agent_secret"[:20],
-        status="deleted",
-        deleted_at=datetime.utcnow(),
-        capabilities=["repository.info"],
+        capabilities=["repository.info", "script.run"],
+        **{"status": "online", **deletion_marker},
     )
     test_db.add(agent)
     test_db.commit()
@@ -5031,12 +5044,20 @@ def test_validate_agent_repository_operation_rejects_deleted_agent(test_db):
         execution_target="agent",
         agent_machine_id=agent.id,
         repository_type="local",
+        source_directories=json.dumps(["/data"]),
     )
     test_db.add(repo)
     test_db.commit()
 
     with pytest.raises(HTTPException) as exc_info:
-        validate_agent_repository_operation(test_db, repo, job_kind="repository.info")
+        if validator == "backup":
+            validate_agent_backup_repository(test_db, repo)
+        elif validator == "repository_operation":
+            validate_agent_repository_operation(
+                test_db, repo, job_kind="repository.info"
+            )
+        else:
+            validate_agent_script(agent)
 
     assert exc_info.value.status_code == 409
     assert exc_info.value.detail["key"] == "backend.errors.agents.agentNotQueueable"

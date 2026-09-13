@@ -922,15 +922,18 @@ def test_delete_agent_cancels_its_pending_jobs(
     test_client: TestClient, admin_headers, test_db
 ):
     agent = _agent(test_db)
-    queued = _agent_job(test_db, agent)
-    running = _agent_job(test_db, agent)
-    running.status = "running"
+    pending = {}
+    for status_value in ("queued", "claimed", "cancel_requested", "running"):
+        job = _agent_job(test_db, agent)
+        job.status = status_value
+        pending[status_value] = job
     done = _agent_job(test_db, agent)
     done.status = "completed"
     other_agent = _agent(
         test_db, name="Other", agent_id="agt_other", token_prefix="borgui_agent_other"
     )
     other_job = _agent_job(test_db, other_agent)
+    test_db.commit()
 
     response = test_client.delete(
         f"/api/managed-machines/agents/{agent.id}",
@@ -938,14 +941,32 @@ def test_delete_agent_cancels_its_pending_jobs(
     )
 
     assert response.status_code == 204
-    for job in (queued, running, done, other_job):
+    for job in (*pending.values(), done, other_job):
         test_db.refresh(job)
-    assert queued.status == "canceled"
-    assert queued.error_message == "Agent deleted"
-    assert queued.completed_at is not None
-    assert running.status == "canceled"
+    for status_value, job in pending.items():
+        assert job.status == "canceled", status_value
+        assert job.error_message == "Agent deleted", status_value
+        assert job.completed_at is not None, status_value
     assert done.status == "completed"
     assert other_job.status == "queued"
+
+
+def test_delete_agent_retry_cancels_jobs_left_behind(
+    test_client: TestClient, admin_headers, test_db
+):
+    # An agent deleted before this cleanup existed still has a queued job.
+    agent = _agent(test_db, status="deleted", deleted_at=datetime.now(timezone.utc))
+    leftover = _agent_job(test_db, agent)
+
+    response = test_client.delete(
+        f"/api/managed-machines/agents/{agent.id}",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 204
+    test_db.refresh(leftover)
+    assert leftover.status == "canceled"
+    assert leftover.error_message == "Agent deleted"
 
 
 def test_agent_job_logs_apply_log_save_policy(

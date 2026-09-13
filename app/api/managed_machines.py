@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, defer
 import structlog
 
 from app.api.agent_installer import agent_package_version
+from app.api.agents import FINAL_AGENT_JOB_STATUSES, _cancel_agent_job
 from app.core.agent_auth import AGENT_TOKEN_PREFIX_LENGTH
 from app.core.agent_versions import compute_agent_upgrade_status
 from app.core.agent_constants import (
@@ -1008,31 +1009,34 @@ async def delete_agent_machine(
             detail={"key": "backend.errors.agents.agentNotFound"},
         )
 
+    now = _now_utc()
+    # Nothing will ever claim this agent's pending jobs, and admission counts
+    # them as live work on their repositories until they end. Runs on every
+    # delete request, not only the first, so a retry still clears jobs an
+    # earlier (pre-fix) deletion left behind. The shared cancel path also
+    # finalizes the linked backup / operation rows.
+    pending_jobs = (
+        db.query(AgentJob)
+        .filter(
+            AgentJob.agent_machine_id == agent.id,
+            AgentJob.status.notin_(FINAL_AGENT_JOB_STATUSES),
+        )
+        .all()
+    )
+    for job in pending_jobs:
+        _cancel_agent_job(job, db, completed_at=now)
+        job.error_message = "Agent deleted"
+
     if agent.status != "deleted":
-        now = _now_utc()
         agent.status = "deleted"
         agent.deleted_at = now
         agent.updated_at = now
-        # Nothing will ever claim this agent's pending jobs, and admission
-        # counts them as live work on their repositories until they end.
-        db.query(AgentJob).filter(
-            AgentJob.agent_machine_id == agent.id,
-            AgentJob.status.in_(("queued", "claimed", "cancel_requested", "running")),
-        ).update(
-            {
-                AgentJob.status: "canceled",
-                AgentJob.error_message: "Agent deleted",
-                AgentJob.completed_at: now,
-                AgentJob.updated_at: now,
-            },
-            synchronize_session=False,
-        )
-        db.commit()
         logger.info(
             "Agent machine deleted",
             user=current_user.username,
             agent_id=agent.agent_id,
         )
+    db.commit()
 
 
 DEFAULT_AGENT_JOBS_LIMIT = 200
