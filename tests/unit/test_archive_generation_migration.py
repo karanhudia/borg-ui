@@ -11,7 +11,7 @@ from app.database.db_upgrade import _alembic_config, _engine
 from app.database.models import Archive, Repository
 from app.services.operations.executors.index import apply_listing
 
-PREVIOUS = "e1f2a3b4c5d6"
+PREVIOUS = "a9b8c7d6e5f4"
 REVISION = "f2a3b4c5d6e7"
 
 
