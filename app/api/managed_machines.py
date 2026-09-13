@@ -1013,6 +1013,20 @@ async def delete_agent_machine(
         agent.status = "deleted"
         agent.deleted_at = now
         agent.updated_at = now
+        # Nothing will ever claim this agent's pending jobs, and admission
+        # counts them as live work on their repositories until they end.
+        db.query(AgentJob).filter(
+            AgentJob.agent_machine_id == agent.id,
+            AgentJob.status.in_(("queued", "claimed", "cancel_requested", "running")),
+        ).update(
+            {
+                AgentJob.status: "canceled",
+                AgentJob.error_message: "Agent deleted",
+                AgentJob.completed_at: now,
+                AgentJob.updated_at: now,
+            },
+            synchronize_session=False,
+        )
         db.commit()
         logger.info(
             "Agent machine deleted",

@@ -271,7 +271,11 @@ def validate_agent_backup_repository(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"key": "backend.errors.agents.agentNotFound"},
         )
-    if agent.status in ("disabled", "revoked"):
+    if agent.deleted_at is not None or agent.status in (
+        "disabled",
+        "revoked",
+        "deleted",
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"key": "backend.errors.agents.agentNotQueueable"},
@@ -321,7 +325,11 @@ def validate_agent_repository_operation(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"key": "backend.errors.agents.agentNotFound"},
         )
-    if agent.status in ("disabled", "revoked"):
+    if agent.deleted_at is not None or agent.status in (
+        "disabled",
+        "revoked",
+        "deleted",
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"key": "backend.errors.agents.agentNotQueueable"},
@@ -529,7 +537,11 @@ def build_agent_script_payload(
 
 def validate_agent_script(agent: AgentMachine) -> None:
     """Ensure the agent is queueable and advertises the ``script.run`` capability."""
-    if agent.status in ("disabled", "revoked"):
+    if agent.deleted_at is not None or agent.status in (
+        "disabled",
+        "revoked",
+        "deleted",
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"key": "backend.errors.agents.agentNotQueueable"},

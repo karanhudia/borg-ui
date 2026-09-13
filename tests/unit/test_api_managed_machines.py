@@ -918,6 +918,36 @@ def test_delete_agent_hides_it_from_list_and_keeps_job_logs(
     assert logs.json()[0]["message"] == "still readable"
 
 
+def test_delete_agent_cancels_its_pending_jobs(
+    test_client: TestClient, admin_headers, test_db
+):
+    agent = _agent(test_db)
+    queued = _agent_job(test_db, agent)
+    running = _agent_job(test_db, agent)
+    running.status = "running"
+    done = _agent_job(test_db, agent)
+    done.status = "completed"
+    other_agent = _agent(
+        test_db, name="Other", agent_id="agt_other", token_prefix="borgui_agent_other"
+    )
+    other_job = _agent_job(test_db, other_agent)
+
+    response = test_client.delete(
+        f"/api/managed-machines/agents/{agent.id}",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 204
+    for job in (queued, running, done, other_job):
+        test_db.refresh(job)
+    assert queued.status == "canceled"
+    assert queued.error_message == "Agent deleted"
+    assert queued.completed_at is not None
+    assert running.status == "canceled"
+    assert done.status == "completed"
+    assert other_job.status == "queued"
+
+
 def test_agent_job_logs_apply_log_save_policy(
     test_client: TestClient, admin_headers, test_db
 ):

@@ -5004,3 +5004,38 @@ class TestBorgEnvironmentSetup:
 
         assert "BORG_RSH" in env
         assert "StrictHostKeyChecking=no" in env["BORG_RSH"]
+
+
+@pytest.mark.unit
+def test_validate_agent_repository_operation_rejects_deleted_agent(test_db):
+    from app.services.repository_executor import validate_agent_repository_operation
+
+    agent = AgentMachine(
+        name="Gone Agent",
+        agent_id="agt_gone",
+        token_hash=get_password_hash("borgui_agent_secret"),
+        token_prefix="borgui_agent_secret"[:20],
+        status="deleted",
+        deleted_at=datetime.utcnow(),
+        capabilities=["repository.info"],
+    )
+    test_db.add(agent)
+    test_db.commit()
+    repo = Repository(
+        name="Orphaned Agent Repo",
+        path="/agent/repo",
+        encryption="none",
+        compression="lz4",
+        executor_type="agent",
+        execution_target="agent",
+        agent_machine_id=agent.id,
+        repository_type="local",
+    )
+    test_db.add(repo)
+    test_db.commit()
+
+    with pytest.raises(HTTPException) as exc_info:
+        validate_agent_repository_operation(test_db, repo, job_kind="repository.info")
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail["key"] == "backend.errors.agents.agentNotQueueable"
