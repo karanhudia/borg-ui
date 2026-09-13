@@ -243,7 +243,18 @@ async def archives_heatmap(
         .all()
     )
     cron_expression, timezone_name = cron_for_repository(db, repository)
-    flags = anomalies.series_flags(rows) if pro else {a.id: [] for a in rows}
+    by_series: dict[str, list[Archive]] = {}
+    for a in rows:
+        by_series.setdefault(a.series, []).append(a)
+    # Outliers stay scoped to the series even though the days are not: a
+    # repository holding a 3 GB documents series and a 200 GB media series
+    # would otherwise compare each archive with whatever ran before it.
+    flags: dict[int, list[str]] = {}
+    if pro:
+        for archives in by_series.values():
+            flags.update(anomalies.series_flags(archives))
+    else:
+        flags = {a.id: [] for a in rows}
 
     def band(name: Optional[str], archives: list[Archive]) -> dict:
         days: dict[str, dict] = {}
@@ -276,10 +287,6 @@ async def archives_heatmap(
         if name is not None:
             out["series"] = name
         return out
-
-    by_series: dict[str, list[Archive]] = {}
-    for a in rows:
-        by_series.setdefault(a.series, []).append(a)
 
     retention_days = retention_days_for_repository(db, repository)
     retention_since = (

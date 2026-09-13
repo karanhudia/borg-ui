@@ -1051,7 +1051,8 @@
     "toasts": {
       "deleteFailed": "Failed to delete archive",
       "restoreFailed": "Failed to start restore",
-      "notSelected": "Repository or archive not selected"
+      "notSelected": "Repository or archive not selected",
+      "archiveUnavailable": "That archive is not in the list yet. Refresh and try again."
     },
     "sync": {
       "fresh": "Synced {{ago}}",

@@ -1051,7 +1051,8 @@
     "toasts": {
       "deleteFailed": "Error al eliminar el archivo",
       "restoreFailed": "Error al iniciar la restauración",
-      "notSelected": "Repositorio o archivo no seleccionado"
+      "notSelected": "Repositorio o archivo no seleccionado",
+      "archiveUnavailable": "Ese archivo aún no está en la lista. Actualiza e inténtalo de nuevo."
     },
     "sync": {
       "fresh": "Sincronizado {{ago}}",

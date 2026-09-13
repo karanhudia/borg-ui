@@ -302,6 +302,24 @@ class TestHeatmap:
         assert body["retention_since"] == "2026-09-04"
         assert body["repository"]["missed_days"] == ["2026-09-04"]
 
+    def test_outliers_compare_within_a_series(
+        self, test_client, test_db, admin_headers
+    ):
+        """The days are repository-wide, the comparison is not: a small archive
+        of one series must not be judged against a large series that happens to
+        have run before it."""
+        repo = _repo(test_db)
+        for d in range(1, 8):
+            _archive(test_db, repo, f"big{d}", d, series="media", size=1000)
+        _archive(test_db, repo, "docs1", 8, series="docs", size=10)
+        _pro(test_db)
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/archives/heatmap?until=2026-09-09T00:00:00",
+            headers=admin_headers,
+        )
+        days = {d["date"]: d for d in r.json()["repository"]["days"]}
+        assert days["2026-09-08"]["anomalies"] == []
+
     def test_outlier_flags_only_for_pro(self, test_client, test_db, admin_headers):
         repo = _repo(test_db)
         for d in range(1, 8):

@@ -465,9 +465,13 @@ const Archives: React.FC = () => {
   // archive of the repository, so the wizard opens on that archive with the
   // path already selected rather than at the root of the archive page.
   const handleRestoreSearchHit = (archiveId: number, path: string) => {
+    // The stored list is where the archive's borg id comes from, and Borg 2
+    // needs it: a restore keyed on a name matches every archive of the series.
+    // Missing means the list has not arrived or the archive was pruned since
+    // the index recorded it, so say that rather than "nothing selected".
     const row = storedArchives.find((archive) => archive.id === archiveId)
     if (!row) {
-      toast.error(t('archives.toasts.notSelected'))
+      toast.error(t('archives.toasts.archiveUnavailable'))
       return
     }
     setRestoreArchive(archiveRowToArchive(row))

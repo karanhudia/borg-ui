@@ -1051,7 +1051,8 @@
     "toasts": {
       "deleteFailed": "Archiv konnte nicht gelöscht werden",
       "restoreFailed": "Wiederherstellung konnte nicht gestartet werden",
-      "notSelected": "Repository oder Archiv nicht ausgewählt"
+      "notSelected": "Repository oder Archiv nicht ausgewählt",
+      "archiveUnavailable": "Dieses Archiv ist noch nicht in der Liste. Aktualisiere und versuche es erneut."
     },
     "sync": {
       "fresh": "Synchronisiert {{ago}}",
