@@ -30,7 +30,7 @@ from app.services.operations.job_facade import (
     refresh_job,
     resolve_maintenance_job,
 )
-from app.services.v2.process_cancel import terminate_tracked_process
+from app.services.process_cancel import terminate_tracked_process
 from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import (
     build_repository_borg_env,
@@ -103,7 +103,7 @@ class CompactV2Service:
     async def cancel_compact(self, job_id: int) -> bool:
         """Cancel a running borg2 compact job by terminating its tracked process."""
         return await terminate_tracked_process(
-            self.running_processes, job_id, "compact"
+            self.running_processes, job_id, "borg2 compact"
         )
 
     async def execute_compact(self, job_id: int, repository_id: int, _db=None):

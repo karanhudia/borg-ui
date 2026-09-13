@@ -30,6 +30,8 @@ from app.utils.borg_env import (
     effective_repository_remote_path,
 )
 
+from app.services.process_cancel import terminate_tracked_process
+
 logger = structlog.get_logger()
 
 
@@ -129,34 +131,9 @@ class RestoreCheckService:
 
     async def cancel_restore_check(self, job_id: int) -> bool:
         """Cancel a running restore check by terminating its tracked process."""
-        if job_id not in self.running_processes:
-            logger.warning(
-                "No running restore check process found for job", job_id=job_id
-            )
-            return False
-
-        process = self.running_processes[job_id]
-        try:
-            process.terminate()
-            logger.info(
-                "Sent SIGTERM to restore check process", job_id=job_id, pid=process.pid
-            )
-            try:
-                await asyncio.wait_for(process.wait(), timeout=5.0)
-            except asyncio.TimeoutError:
-                process.kill()
-                logger.warning(
-                    "Force killed restore check process (SIGKILL)",
-                    job_id=job_id,
-                    pid=process.pid,
-                )
-                await process.wait()
-            return True
-        except Exception as e:
-            logger.error(
-                "Failed to cancel restore check process", job_id=job_id, error=str(e)
-            )
-            return False
+        return await terminate_tracked_process(
+            self.running_processes, job_id, "restore check"
+        )
 
     def _save_job_logs(self, job, job_id: int, raw_logs: list[str]) -> None:
         if not raw_logs:

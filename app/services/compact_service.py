@@ -17,6 +17,8 @@ from app.utils.borg_env import (
     effective_repository_remote_path,
 )
 
+from app.services.process_cancel import terminate_tracked_process
+
 logger = structlog.get_logger()
 
 
@@ -48,32 +50,9 @@ class CompactService:
 
     async def cancel_compact(self, job_id: int) -> bool:
         """Cancel a running compact job by terminating its tracked process."""
-        if job_id not in self.running_processes:
-            logger.warning("No running compact process found for job", job_id=job_id)
-            return False
-
-        process = self.running_processes[job_id]
-        try:
-            process.terminate()
-            logger.info(
-                "Sent SIGTERM to compact process", job_id=job_id, pid=process.pid
-            )
-            try:
-                await asyncio.wait_for(process.wait(), timeout=5.0)
-            except asyncio.TimeoutError:
-                process.kill()
-                logger.warning(
-                    "Force killed compact process (SIGKILL)",
-                    job_id=job_id,
-                    pid=process.pid,
-                )
-                await process.wait()
-            return True
-        except Exception as e:
-            logger.error(
-                "Failed to cancel compact process", job_id=job_id, error=str(e)
-            )
-            return False
+        return await terminate_tracked_process(
+            self.running_processes, job_id, "compact"
+        )
 
     async def execute_compact(
         self, job_id: int, repository_id: int, db: Session = None

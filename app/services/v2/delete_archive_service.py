@@ -13,7 +13,7 @@ from app.database.database import SessionLocal
 from app.core.borg2 import borg2
 from app.config import settings
 from app.services.operations.job_facade import claim_running, resolve_maintenance_job
-from app.services.v2.process_cancel import terminate_tracked_process
+from app.services.process_cancel import terminate_tracked_process
 from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import (
     build_repository_borg_env,
@@ -39,7 +39,7 @@ class DeleteArchiveV2Service:
         holding it while the row says cancelled.
         """
         return await terminate_tracked_process(
-            self.running_processes, job_id, "delete_archive"
+            self.running_processes, job_id, "borg2 delete_archive"
         )
 
     async def execute_delete(
