@@ -11,6 +11,9 @@ describe('isInsecureCommandUrl', () => {
     ['https://borg-ui.example.com', false],
     ['http://localhost:8083', false],
     ['http://127.0.0.1:8083', false],
+    ['http://[::1]:8083', false],
+    ['https://[::1]:8083', false],
+    ['http://[2001:db8::1]:8083', true],
     ['not a url', false],
   ])('%s -> %s', (url, expected) => {
     expect(isInsecureCommandUrl(url)).toBe(expected)

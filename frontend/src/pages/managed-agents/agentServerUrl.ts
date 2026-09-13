@@ -38,8 +38,10 @@ export function resolveAgentServerUrl(
 
 export function isLocalAgentServerUrl(serverUrl: string): boolean {
   try {
-    const url = new URL(serverUrl)
-    return ['localhost', '127.0.0.1', '::1'].includes(url.hostname)
+    // URL.hostname keeps the brackets on an IPv6 literal, so http://[::1]:8083
+    // reports "[::1]" and never matched the bare "::1" this compared against.
+    const hostname = new URL(serverUrl).hostname.replace(/^\[|\]$/g, '')
+    return ['localhost', '127.0.0.1', '::1'].includes(hostname)
   } catch {
     return false
   }
