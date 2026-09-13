@@ -339,7 +339,8 @@
         "revokeToken": "Token widerrufen",
         "upgradeAgent": "Diesen Endpunkt aktualisieren",
         "pinAgentVersion": "Version dieses Endpunkts festlegen",
-        "changeServerUrl": "Server-URL ändern"
+        "changeServerUrl": "Server-URL ändern",
+        "uninstallAgent": "Agent deinstallieren"
       },
       "noBorg": {
         "title": "Keine verwendbare Borg-Binärdatei gemeldet",
@@ -480,7 +481,19 @@
         "runHint": "Führe dies auf dem Endpunkt aus, als Benutzer mit sudo-Rechten.",
         "statusHint": "Unklar, welche Adresse der Endpunkt gerade hält? Führe dort borg-ui-agent status aus."
       },
-      "offlineStatusHint": "Führe borg-ui-agent status auf dem Endpunkt aus, um die aktuell hinterlegte Serveradresse zu sehen."
+      "offlineStatusHint": "Führe borg-ui-agent status auf dem Endpunkt aus, um die aktuell hinterlegte Serveradresse zu sehen.",
+      "uninstallDialog": {
+        "title": "Agent deinstallieren",
+        "description": "Führen Sie dies auf dem Endpunkt aus, um Borg UI vollständig zu entfernen. Der Agent meldet sich zuerst ab, diese Karte aktualisiert sich also von selbst.",
+        "removesTitle": "Was entfernt wird",
+        "removesService": "Der borg-ui-agent-Dienst und sein Upgrade-Helfer",
+        "removesVenv": "Die virtuelle Umgebung unter /opt/borg-ui-agent",
+        "removesConfig": "Die Konfiguration unter /etc/borg-ui-agent, einschließlich der Zugangsdaten",
+        "removesUser": "Der dedizierte Dienstbenutzer borg-ui-agent, sofern die Installation einen angelegt hat",
+        "keepsBorg": "Ihre eigene Borg-Installation bleibt unangetastet. Entfernt werden nur Binärdateien, die dieses Installationsprogramm abgelegt hat.",
+        "keepsRepositories": "Ihre Backup-Repositories bleiben unangetastet.",
+        "copyCommand": "Befehl kopieren"
+      }
     },
     "installCommand": {
       "title": "Installationsbefehl",
