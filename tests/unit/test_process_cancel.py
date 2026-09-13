@@ -73,3 +73,29 @@ async def test_terminate_process_takes_a_process_the_caller_already_holds():
 
     assert await terminate_process(process, 7, "borg2 check") is True
     process.terminate.assert_called_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_cancelled_task_does_not_wait_forever_on_a_wedged_process(monkeypatch):
+    """The `except asyncio.CancelledError` handlers used to be `terminate()`
+    followed by a bare `await process.wait()`: no timeout and no SIGKILL, so a
+    Borg that ignores SIGTERM (it installs a handler to unlock the repository
+    cleanly) hung the task and held the lane forever. Going through the shared
+    routine gives those paths the escalation."""
+    monkeypatch.setattr("app.services.process_cancel._GRACE_SECONDS", 0.01)
+    process = MagicMock()
+    process.pid = 555
+    ignored_sigterm = asyncio.Event()
+
+    async def wait():
+        if not process.kill.called:
+            await ignored_sigterm.wait()
+        return None
+
+    process.wait = wait
+
+    result = await asyncio.wait_for(terminate_process(process, 7, "prune"), timeout=2.0)
+
+    assert result is True
+    process.kill.assert_called_once()

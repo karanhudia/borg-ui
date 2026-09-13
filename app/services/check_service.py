@@ -366,8 +366,7 @@ class CheckService:
             except asyncio.CancelledError:
                 logger.info("Check task cancelled", job_id=job_id)
                 cancelled = True
-                process.terminate()
-                await process.wait()
+                await terminate_process(process, job_id, "check")
                 raise
 
             # Wait for process to complete

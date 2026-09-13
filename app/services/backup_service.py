@@ -2452,8 +2452,7 @@ class BackupService:
             except asyncio.CancelledError:
                 logger.info("Backup task cancelled", job_id=job_id)
                 cancelled = True
-                process.terminate()
-                await process.wait()
+                await terminate_process(process, job_id, "backup")
                 raise
 
             # Wait for process to complete if not already terminated

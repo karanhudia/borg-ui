@@ -322,8 +322,7 @@ class CheckV2Service:
                 )
             except asyncio.CancelledError:
                 cancelled = True
-                process.terminate()
-                await process.wait()
+                await terminate_process(process, job_id, "borg2 check")
                 raise
 
             if process.returncode is None:

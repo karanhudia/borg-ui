@@ -261,8 +261,7 @@ class PruneService:
             except asyncio.CancelledError:
                 logger.info("Prune task cancelled", job_id=job_id)
                 cancelled = True
-                process.terminate()
-                await process.wait()
+                await terminate_process(process, job_id, "prune")
                 raise
 
             # Wait for process to complete

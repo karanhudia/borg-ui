@@ -379,8 +379,7 @@ class CompactV2Service:
                 )
             except asyncio.CancelledError:
                 cancelled = True
-                process.terminate()
-                await process.wait()
+                await terminate_process(process, job_id, "borg2 compact")
                 raise
 
             if process.returncode is None:

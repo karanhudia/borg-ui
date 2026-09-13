@@ -326,8 +326,7 @@ class CompactService:
             except asyncio.CancelledError:
                 logger.info("Compact task cancelled", job_id=job_id)
                 cancelled = True
-                process.terminate()
-                await process.wait()
+                await terminate_process(process, job_id, "compact")
                 raise
 
             # Wait for process to complete
