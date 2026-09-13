@@ -153,7 +153,7 @@ export const busyQueue: QueueResponse = {
       repository_id: 1,
       repository_name: 'offsite',
       lane_busy: false,
-      index_busy: false,
+      index_holder_ids: [],
       operations: [
         op({ id: 1, kind: 'import_connect', category: 'import', repository: 'offsite' }),
       ],
@@ -164,8 +164,8 @@ export const busyQueue: QueueResponse = {
       lane_busy: true,
       lane_holder: { kind: 'backup', id: 3 },
       // a stats is running here too; the lane's backup is what the stage
-      // names, since the lane wins over the index flag
-      index_busy: true,
+      // names, since the lane wins over the index work
+      index_holder_ids: [2],
       operations: [
         op({
           id: 2,
@@ -191,7 +191,7 @@ export const busyQueue: QueueResponse = {
       repository_id: 3,
       repository_name: 'photos',
       lane_busy: false,
-      index_busy: false,
+      index_holder_ids: [],
       operations: [
         op({
           id: 4,
@@ -210,7 +210,7 @@ export const busyQueue: QueueResponse = {
       repository_id: 4,
       repository_name: 'laptop',
       lane_busy: false,
-      index_busy: false,
+      index_holder_ids: [],
       operations: [
         op({ id: 5, status: 'completed', repository: 'laptop', repository_id: 4 }),
         op({
@@ -226,11 +226,11 @@ export const busyQueue: QueueResponse = {
     {
       // a stats of the repository still running: the next listing waits
       // for it (one index operation per repository), with a worker to
-      // spare. The listing is another chain's, or the flag would not apply.
+      // spare. The listing is another chain's, or it would not apply.
       repository_id: 6,
       repository_name: 'media',
       lane_busy: false,
-      index_busy: true,
+      index_holder_ids: [7],
       operations: [
         op({
           id: 7,

@@ -62,22 +62,6 @@ export type StageStatus = 'idle' | 'done' | 'running' | 'waiting' | 'failed' | '
 // repository, every index worker is busy, or it is simply next in line.
 // `lane_busy` names the server-reported holder while it is still running.
 export type WaitReason = 'paused' | 'lane_busy' | 'index_busy' | 'workers' | 'queued'
-// The index kinds that share a repository's index slot; `history_index`
-// holds the lane instead. A copy of what lanes.py derives (INDEX_KINDS
-// minus the exclusive one): keep the two in step when a kind is added.
-const SHARED_INDEX_KINDS = new Set<OperationItem['kind']>([
-  'archive_sync',
-  'history_merge',
-  'stats',
-])
-
-// Whether one of `operations` is running index work of the shared kind. The
-// track reads the server's `index_busy` against the operations it holds: an
-// SSE update that finishes that work clears the wait reason before the next
-// fetch, the same way the lane's holder is checked against them.
-export function indexBusyFrom(operations: OperationItem[]): boolean {
-  return operations.some((op) => op.status === 'running' && SHARED_INDEX_KINDS.has(op.kind))
-}
 
 export interface StageState {
   key: StageKey
@@ -182,9 +166,12 @@ export function deriveTrack(
         predecessors.add(dependencyId)
         dependencyId = operationsById.get(dependencyId)?.depends_on_id ?? null
       }
-      const otherIndexRunning =
-        repository.index_busy &&
-        indexBusyFrom(repository.operations.filter((candidate) => !predecessors.has(candidate.id)))
+      // The server names the shared index work; each one is checked against
+      // the rows at hand, so an SSE update that finishes it clears the wait
+      // reason before the next fetch, the way the lane's holder is checked.
+      const otherIndexRunning = (repository.index_holder_ids ?? []).some(
+        (id) => !predecessors.has(id) && operationsById.get(id)?.status === 'running'
+      )
       if (paused) reason = 'paused'
       else if (holderRunning) {
         reasonKind = holder.kind

@@ -85,7 +85,7 @@ export const SiblingBranchesWaitWithinOneRun: Story = {
         repository_id: 6,
         repository_name: 'media',
         lane_busy: false,
-        index_busy: true,
+        index_holder_ids: [7],
         operations: [
           op({
             id: 7,

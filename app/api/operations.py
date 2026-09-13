@@ -36,10 +36,7 @@ from app.services.operations.followups import (
     history_capability,
     history_enabled,
 )
-from app.services.operations.lanes import (
-    repositories_with_running_index_work,
-    running_count,
-)
+from app.services.operations.lanes import SHARED_INDEX_KINDS, running_count
 from app.services.operations.models import is_terminal, serialize_operation
 from app.services.operations.index_mode import mode_of as index_mode_of
 from app.services.operations.reconcile import (
@@ -133,10 +130,12 @@ class QueueRepository(BaseModel):
     # Which operation holds the lane, so the waiting stages can name it.
     # Set exactly when `lane_busy` is true: both come from one lookup.
     lane_holder: Optional[LaneHolder] = None
-    # A listing, merge or stats of the repository is running: the next index
-    # operation waits for it (one at a time per repository), whatever the
-    # lane and the worker count say.
-    index_busy: bool
+    # The running listing, merge and stats of the repository: the next index
+    # operation waits for them (one at a time per repository), whatever the
+    # lane and the worker count say. Named rather than counted, so the board
+    # can tell a stage's own predecessor from a competitor without knowing
+    # which kinds share the slot.
+    index_holder_ids: list[int]
     operations: list[OperationItem]
 
 
@@ -497,10 +496,15 @@ async def get_queue(
     # the operations the same row lists, and the two cannot drift apart
     # between two queries.
     holders: dict[int, Operation] = {}
+    # The running shared index work per repository, from the same rows and
+    # for the same reason.
+    index_holders: dict[int, list[int]] = {}
     for op in ops:
         groups.setdefault(op.repository_id, []).append(_item(op, repos, policy))
         if op.repository_id is None or op.status != "running":
             continue
+        if op.kind in SHARED_INDEX_KINDS:
+            index_holders.setdefault(op.repository_id, []).append(op.id)
         # A kind this build does not know (a row left by a newer one) is
         # passed over here rather than raised on: it stays in `operations`
         # and only loses its claim to the lane, so the stages under it read
@@ -520,11 +524,6 @@ async def get_queue(
             current.id,
         ):
             holders[op.repository_id] = op
-    # only the repositories in the response, which the query above already
-    # scoped to the caller's access
-    index_busy_ids = repositories_with_running_index_work(
-        db, repository_ids=[r for r in groups if r is not None]
-    )
     repositories = []
     for repository_id, items in groups.items():
         repo = repos.get(repository_id) if repository_id is not None else None
@@ -539,7 +538,7 @@ async def get_queue(
                     if holder is not None
                     else None
                 ),
-                index_busy=repository_id in index_busy_ids,
+                index_holder_ids=index_holders.get(repository_id, []),
                 operations=items,
             )
         )

@@ -168,7 +168,7 @@ describe('PipelineBoard', () => {
         repository_id: 2,
         repository_name: 'photos',
         lane_busy: false,
-        index_busy: false,
+        index_holder_ids: [],
         operations: [queueOp({ id: 2, repository_id: 2, repository: 'photos', status: 'running' })],
       },
     ])
@@ -187,7 +187,7 @@ describe('PipelineBoard', () => {
         repository_id: 1,
         repository_name: 'nas',
         lane_busy: true,
-        index_busy: false,
+        index_holder_ids: [],
         operations: [
           queueOp({
             kind: 'backup',
@@ -295,7 +295,7 @@ describe('PipelineBoard', () => {
         repository_id: null,
         repository_name: 'System',
         lane_busy: false,
-        index_busy: false,
+        index_holder_ids: [],
         operations: [
           queueOp({
             id: 9,
@@ -341,7 +341,7 @@ describe('PipelineBoard', () => {
         repository_id: 1,
         repository_name: 'nas',
         lane_busy: false,
-        index_busy: false,
+        index_holder_ids: [],
         operations: [queueOp({ id: 9, repository_id: 1, kind: 'archive_sync', status: 'failed' })],
       },
     ])
@@ -402,7 +402,7 @@ describe('PipelineBoard', () => {
         repository_id: 1,
         repository_name: 'nas',
         lane_busy: false,
-        index_busy: false,
+        index_holder_ids: [],
         operations: [queueOp({ id: 9, repository_id: 1, kind: 'history_merge', status: 'failed' })],
       },
     ])
@@ -423,7 +423,7 @@ describe('PipelineBoard', () => {
         repository_id: 1,
         repository_name: 'nas',
         lane_busy: false,
-        index_busy: false,
+        index_holder_ids: [],
         operations: [queueOp({ id: 9, repository_id: 1, kind: 'history_merge', status: 'failed' })],
       },
     ])
@@ -444,7 +444,7 @@ describe('PipelineBoard', () => {
         repository_id: 1,
         repository_name: 'nas',
         lane_busy: false,
-        index_busy: false,
+        index_holder_ids: [],
         operations: [queueOp({ id: 9, repository_id: 1, kind: 'history_merge', status: 'failed' })],
       },
     ])
@@ -469,7 +469,7 @@ describe('PipelineBoard', () => {
       repository_name: 'nas',
       lane_busy: false,
       lane_holder: null,
-      index_busy: false,
+      index_holder_ids: [],
       operations: [starting, waiting],
     }
     mockQueue([repository])
@@ -482,7 +482,7 @@ describe('PipelineBoard', () => {
         ...repository,
         lane_busy: kind === 'prune',
         lane_holder: kind === 'prune' ? { id: 9, kind } : null,
-        index_busy: kind === 'stats',
+        index_holder_ids: kind === 'stats' ? [9] : [],
         operations: [running, waiting],
       },
     ])
@@ -500,7 +500,7 @@ describe('PipelineBoard', () => {
       repository_id: 1,
       repository_name: 'nas',
       lane_busy: false,
-      index_busy: false,
+      index_holder_ids: [],
       operations: [starting, waiting],
     }
     mockQueue([repository])
@@ -509,7 +509,7 @@ describe('PipelineBoard', () => {
     const running = { ...starting, status: 'running' }
     const staleResponse = {
       data: {
-        repositories: [{ ...repository, index_busy: true, operations: [running, waiting] }],
+        repositories: [{ ...repository, index_holder_ids: [9], operations: [running, waiting] }],
         limits,
         paused: false,
       },
@@ -544,7 +544,7 @@ describe('PipelineBoard', () => {
       repository_id: 1,
       repository_name: 'nas',
       lane_busy: false,
-      index_busy: true,
+      index_holder_ids: [9],
       operations: [running, waiting],
     }
     mockQueue([repository])
@@ -563,7 +563,7 @@ describe('PipelineBoard', () => {
     mockQueue([
       {
         ...repository,
-        index_busy: false,
+        index_holder_ids: [],
         operations: [{ ...running, status: 'completed' }, waiting],
       },
     ])
@@ -583,7 +583,7 @@ describe('PipelineBoard', () => {
       repository_id: 1,
       repository_name: 'nas',
       lane_busy: false,
-      index_busy: false,
+      index_holder_ids: [],
       operations: [starting],
     }
     mockQueue([repository])
@@ -624,7 +624,7 @@ describe('PipelineBoard', () => {
       repository_id: 1,
       repository_name: 'nas',
       lane_busy: false,
-      index_busy: true,
+      index_holder_ids: [9],
       operations: [running],
     }
     const response = { data: { repositories: [repository], limits, paused: false } }
@@ -669,7 +669,7 @@ describe('PipelineBoard', () => {
             repository_id: 1,
             repository_name: 'nas',
             lane_busy: false,
-            index_busy: true,
+            index_holder_ids: [9],
             operations: [running],
           },
         ],
@@ -726,7 +726,7 @@ describe('PipelineBoard', () => {
         repository_id: 1,
         repository_name: 'nas',
         lane_busy: false,
-        index_busy: true,
+        index_holder_ids: [9],
         operations: [
           queueOp({ id: 9, repository_id: 1, kind: 'stats', status: 'running' }),
           // another chain's listing: the running stats is foreign work to it

@@ -339,13 +339,14 @@ Rules:
   a task the runner no longer has is requeued at the next tick, as at
   startup, so it holds neither the repository nor a worker; after three
   such requeues it fails instead, so a task that keeps dying ends in a
-  visible failure. `GET /queue` reports the state as `index_busy` per
-  repository.
+  visible failure. `GET /queue` names the running ones as
+  `index_holder_ids` per repository, so the board does not keep its own
+  copy of the shared-kind set (`SHARED_INDEX_KINDS` in `lanes.py`).
 - The queue also reports `lane_holder` with the exclusive operation's kind
   and ID. The board names that holder only while its operation is still
-  running in the current cache. SSE updates replace operation rows; both
-  busy flags keep their fetched values, and the track validates them against
-  those rows. A transition into `running` refetches the queue so newly
+  running in the current cache. SSE updates replace operation rows;
+  `lane_busy`, `lane_holder` and `index_holder_ids` keep their fetched
+  values, and the track validates them against those rows. A transition into `running` refetches the queue so newly
   acquired lanes and index slots are reported together. While a shared
   queue fetch is active, status events request one follow-up fetch instead of
   racing optimistic updates against a snapshot of unknown age. The active

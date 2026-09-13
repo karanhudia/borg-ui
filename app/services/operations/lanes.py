@@ -15,8 +15,10 @@ from app.services.operations.vocab import INDEX_KINDS, KINDS, is_exclusive
 _EXCLUSIVE_KINDS = tuple(k for k, spec in KINDS.items() if spec.exclusive)
 # The index kinds that share the repository lane: listing, merge and stats.
 # `history_index` is exclusive and holds the lane itself. Sorted, so the
-# `IN (...)` literal is the same text in every process.
-_SHARED_INDEX_KINDS = tuple(sorted(k for k in INDEX_KINDS if not KINDS[k].exclusive))
+# `IN (...)` literal is the same text in every process. Public: `/queue`
+# names the running ones so the board does not keep its own copy of the
+# set and drift from it when a kind is added.
+SHARED_INDEX_KINDS = tuple(sorted(k for k in INDEX_KINDS if not KINDS[k].exclusive))
 
 _DEFAULTS = {
     "max_concurrent_backups": 1,
@@ -104,27 +106,16 @@ def running_index_operation(db: Session, repository_id: int) -> bool:
     A row a dead task left `running` would hold the repository for good;
     the runner requeues such rows at every tick (as it does at startup),
     so the answer here is the state the runner is actually in."""
-    return repository_id in repositories_with_running_index_work(
-        db, repository_ids=(repository_id,)
+    return (
+        db.query(Operation.id)
+        .filter(
+            Operation.status == "running",
+            Operation.kind.in_(SHARED_INDEX_KINDS),
+            Operation.repository_id == repository_id,
+        )
+        .first()
+        is not None
     )
-
-
-def repositories_with_running_index_work(
-    db: Session, *, repository_ids: Optional[Iterable[int]] = None
-) -> set[int]:
-    """The repositories with a listing, merge or stats running, in one
-    query; `repository_ids` narrows it. See `running_index_operation`."""
-    q = db.query(Operation.repository_id).filter(
-        Operation.status == "running",
-        Operation.kind.in_(_SHARED_INDEX_KINDS),
-        Operation.repository_id.isnot(None),
-    )
-    if repository_ids is not None:
-        ids = tuple(repository_ids)
-        if not ids:
-            return set()
-        q = q.filter(Operation.repository_id.in_(ids))
-    return {row.repository_id for row in q.distinct()}
 
 
 def running_count(

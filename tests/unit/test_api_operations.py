@@ -109,9 +109,11 @@ class TestOperationsQueue:
         body = test_client.get("/api/operations/queue", headers=admin_headers).json()
         groups = {g["repository_id"]: g for g in body["repositories"]}
         assert groups[repo.id]["lane_busy"] is False
-        assert groups[repo.id]["index_busy"] is True
+        # named, not counted: the board tells its own predecessor from a
+        # competitor without knowing which kinds share the slot
+        assert groups[repo.id]["index_holder_ids"] == [running.id]
         # the system lane has no repository, so nothing of the sort
-        assert groups[None]["index_busy"] is False
+        assert groups[None]["index_holder_ids"] == []
 
     def test_queue_names_the_maintenance_operation_that_holds_the_lane(
         self, test_client, test_db, admin_headers
@@ -257,7 +259,7 @@ class TestOperationsQueue:
         assert group["lane_busy"] is True
         # the waiting stages name what holds the lane instead of guessing
         assert group["lane_holder"] == {"kind": "history_index", "id": running.id}
-        assert group["index_busy"] is False
+        assert group["index_holder_ids"] == []
         assert {o["id"] for o in group["operations"]} == {running.id, recent.id}
         assert body["limits"]["index_workers"] == 3
         assert body["limits"]["index_running"] == 1

@@ -96,9 +96,12 @@ export interface QueueRepository {
   // the server carried it keeps working (queued stages stay next in line
   // until a running holder is known).
   lane_holder?: LaneHolder | null
-  // A listing, merge or stats of the repository is running: the next index
-  // operation waits for it, whatever the lane and the worker count say.
-  index_busy: boolean
+  // The running listing, merge and stats of the repository: the next index
+  // operation waits for them, whatever the lane and the worker count say.
+  // Named rather than counted, so a stage can tell its own predecessor from
+  // a competitor. Optional so a page loaded before the server carried it
+  // keeps working (those stages stay next in line).
+  index_holder_ids?: number[]
   operations: OperationItem[]
 }
 

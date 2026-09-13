@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deriveTrack, indexBusyFrom } from '../repositoryTrack'
+import { deriveTrack } from '../repositoryTrack'
 import type { OperationItem, QueueLimits, QueueRepository } from '../../../types/operations'
 
 const op = (overrides: Partial<OperationItem>): OperationItem =>
@@ -59,7 +59,7 @@ const repo = (
   repository_id: 1,
   repository_name: 'nas',
   lane_busy: typeof busy === 'boolean' ? busy : false,
-  index_busy: false,
+  index_holder_ids: [],
   lane_holder,
   ...(typeof busy === 'object' ? busy : {}),
   operations,
@@ -332,7 +332,7 @@ describe('deriveTrack', () => {
           op({ id: 1, kind: 'stats', status: 'running', run_id: 'r1' }),
           op({ id: 2, kind: 'archive_sync', status: 'queued', run_id: 'r2' }),
         ],
-        { index_busy: true }
+        { index_holder_ids: [1] }
       ),
       limits,
       false
@@ -347,7 +347,7 @@ describe('deriveTrack', () => {
           op({ id: 1, kind: 'archive_sync', status: 'running' }),
           op({ id: 2, kind: 'stats', status: 'queued', depends_on_id: 1 }),
         ],
-        { index_busy: true }
+        { index_holder_ids: [1] }
       ),
       limits,
       false
@@ -357,20 +357,34 @@ describe('deriveTrack', () => {
 
   it('names the busy lane before the running index work', () => {
     const track = deriveTrack(
-      { ...held('backup', [op({ kind: 'stats', status: 'queued' })]), index_busy: true },
+      {
+        ...held('backup', [
+          op({ id: 1, kind: 'archive_sync', status: 'running' }),
+          op({ id: 2, kind: 'stats', status: 'queued' }),
+        ]),
+        index_holder_ids: [1],
+      },
       limits,
       false
     )
     expect(track.stages[3].reason).toBe('lane_busy')
   })
 
-  it('derives the index flag from the operations at hand', () => {
-    for (const kind of ['archive_sync', 'history_merge', 'stats'] as const) {
-      expect(indexBusyFrom([op({ kind, status: 'running' })])).toBe(true)
-    }
-    expect(indexBusyFrom([op({ kind: 'stats', status: 'completed' })])).toBe(false)
-    // history_index holds the lane, not the index slot
-    expect(indexBusyFrom([op({ kind: 'history_index', status: 'running' })])).toBe(false)
+  it('drops a named index holder that the rows at hand show as finished', () => {
+    // an SSE update lands before the next fetch; the id the server named is
+    // still in index_holder_ids, but its row is done
+    const track = deriveTrack(
+      repo(
+        [
+          op({ id: 1, kind: 'stats', status: 'completed', run_id: 'r1' }),
+          op({ id: 2, kind: 'archive_sync', status: 'queued', run_id: 'r2' }),
+        ],
+        { index_holder_ids: [1] }
+      ),
+      limits,
+      false
+    )
+    expect(track.stages[1].reason).toBe('queued')
   })
 
   it('names a running server holder even when its kind is unknown locally', () => {
@@ -399,7 +413,7 @@ describe('deriveTrack', () => {
           op({ id: 1, kind: 'stats', status: 'running', run_id: 'old' }),
           op({ id: 2, kind: 'archive_sync', status: 'queued', run_id: 'new' }),
         ],
-        { lane_busy: true, index_busy: true, lane_holder: { id: 99, kind: 'prune' } }
+        { lane_busy: true, index_holder_ids: [1], lane_holder: { id: 99, kind: 'prune' } }
       ),
       limits,
       false
@@ -414,7 +428,7 @@ describe('deriveTrack', () => {
           op({ id: 1, kind: 'stats', status: 'running', depends_on_id: 20 }),
           op({ id: 2, kind: 'stats', status: 'queued', depends_on_id: 21 }),
         ],
-        { index_busy: true }
+        { index_holder_ids: [1] }
       ),
       limits,
       false
@@ -431,7 +445,7 @@ describe('deriveTrack', () => {
           op({ id: 2, kind: 'history_merge', status: 'queued', depends_on_id: 1 }),
           op({ id: 3, kind: 'stats', status: 'queued', depends_on_id: 2 }),
         ],
-        { index_busy: true }
+        { index_holder_ids: [1] }
       ),
       limits,
       false

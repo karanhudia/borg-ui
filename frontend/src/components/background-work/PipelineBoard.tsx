@@ -165,7 +165,7 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
             repo.repository_id === updated.repository_id ||
             repo.operations.some((op) => op.id === updated.id)
         )
-        // Only the operations change here; `lane_busy` and `index_busy`
+        // Only the operations change here; `lane_busy` and `index_holder_ids`
         // keep their fetched values, and the track reads them against the
         // operations at hand (see deriveTrack).
         const repositories = current.repositories.map((repo) => ({
@@ -188,7 +188,7 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
                   repository_id: updated.repository_id,
                   repository_name: updated.repository ?? 'System',
                   lane_busy: false,
-                  index_busy: false,
+                  index_holder_ids: [],
                   operations: [updated],
                 },
               ],
