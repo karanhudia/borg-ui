@@ -1,7 +1,8 @@
 # Agent self-service recovery: server URL and uninstall
 
 **Date:** 2026-09-12
-**Status:** Approved 2026-09-12
+**Status:** Both phases merged 2026-09-13. Code complete; the two live
+gates in section 10 are still unrun and need real endpoints.
 **Owner:** karanhudia
 **Related docs:** `docs/managed-agents.md`, `docs/managed-agent-spec.md`,
 `docs/engineering/specs/2026-09-07-centralized-agent-upgrades.md`
@@ -330,7 +331,13 @@ condition is inverted. They are the tests that matter most in this change.
 | Phase | Scope | Status |
 | --- | --- | --- |
 | 1 | `set-server` and the URL dialog | Merged in #1039 ([plan](../plans/2026-09-12-agent-self-service-recovery-phase-1.md)). The 10.2 gate's subcommand half is still unrun: it needs an endpoint on agent 0.1.5. |
-| 2 | `uninstall.sh` and the uninstall dialog | In review, [PR #1043](https://github.com/karanhudia/borg-ui/pull/1043) ([plan](../plans/2026-09-13-agent-self-service-recovery-phase-2.md)), all five tasks committed, suites green, local CodeRabbit clean after three passes. The 10.3 live gate needs a real endpoint installed with `--service-user current`. |
+| 2 | `uninstall.sh` and the uninstall dialog | Merged in #1043 ([plan](../plans/2026-09-13-agent-self-service-recovery-phase-2.md)). The 10.3 live gate is still unrun: it needs a real endpoint installed with `--service-user current`, which is the case safety rule 2 exists for. |
+
+Both phases are in main. What remains is verification on real hardware, not
+code: the 10.2 gate's subcommand half on an endpoint running agent 0.1.5, and
+the 10.3 gate on an endpoint installed with `--service-user current`. Neither
+can be run from CI, and until they are the feature is unproven against a real
+machine however green the suites are.
 
 ### 10.2 Phase 1 - change the server URL
 
