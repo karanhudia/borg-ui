@@ -48,6 +48,8 @@ def test_set_server_strips_a_trailing_slash(config_path: Path) -> None:
         "borg.example.com",  # no scheme
         "ftp://borg.example.com",  # wrong scheme
         "http://",  # no host
+        "http://user@",  # userinfo but no host
+        "http://:8083",  # port but no host
         "",  # empty
     ],
 )

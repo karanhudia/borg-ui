@@ -144,7 +144,11 @@ def _set_server(args: argparse.Namespace) -> int:
     the new address instead of enrolling a second time.
     """
     parsed = urlparse(args.url)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+    # hostname, not netloc: "http://user@" and "http://:8083" both carry a
+    # truthy netloc with no host to connect to, and writing one strands the
+    # endpoint exactly as the wrong address did. Matches the check
+    # isSafeServerUrlForCommand makes before rendering the command.
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise ValueError(
             f"invalid server URL: {args.url!r} (expected http:// or https:// and a host)"
         )
