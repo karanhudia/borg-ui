@@ -493,7 +493,8 @@
         "keepsBorg": "Ihre eigene Borg-Installation bleibt unangetastet. Entfernt werden nur Binärdateien, die dieses Installationsprogramm abgelegt hat.",
         "keepsRepositories": "Ihre Backup-Repositories bleiben unangetastet.",
         "copyCommand": "Befehl kopieren"
-      }
+      },
+      "insecureCommandWarning": "Dieser Server ist über unverschlüsseltes HTTP erreichbar. Der Befehl lädt also ein Skript unverschlüsselt herunter und führt es als root aus. Wer sich im Netzwerkpfad befindet, kann den Inhalt austauschen. Stellen Sie den Server auf HTTPS um, bevor Sie dies außerhalb eines vertrauenswürdigen Netzwerks ausführen."
     },
     "installCommand": {
       "title": "Installationsbefehl",

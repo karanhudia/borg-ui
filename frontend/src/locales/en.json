@@ -493,7 +493,8 @@
         "keepsBorg": "Your own Borg installation is not touched. Only binaries this installer placed are removed.",
         "keepsRepositories": "Your backup repositories are not touched.",
         "copyCommand": "Copy command"
-      }
+      },
+      "insecureCommandWarning": "This server is reachable over plain HTTP, so this command downloads a script unencrypted and runs it as root. Anyone on the network path can replace what it downloads. Put the server behind HTTPS before running this outside a network you trust."
     },
     "installCommand": {
       "title": "Install command",

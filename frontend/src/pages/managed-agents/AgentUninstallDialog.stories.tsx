@@ -34,3 +34,7 @@ export const Default: Story = {}
 export const Mobile: Story = {
   parameters: { viewport: { defaultViewport: 'mobile1' } },
 }
+
+export const PlainHttpServer: Story = {
+  args: { serverUrl: 'http://192.168.1.82:8083' },
+}

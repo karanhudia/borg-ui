@@ -1260,7 +1260,12 @@ remove_service_user() {
     return 0
   fi
 
-  run_userdel "${DEDICATED_USER}"
+  # A swallowed failure here is the worst kind: the account survives and the
+  # script still reports a clean removal. systemctl's status stays unchecked on
+  # purpose, because disabling an already-absent unit is the idempotent case.
+  if ! run_userdel "${DEDICATED_USER}"; then
+    note_failure "could not delete the ${DEDICATED_USER} account"
+  fi
 }
 
 remove_agent_files() {
@@ -1320,9 +1325,15 @@ unregister() {
     return 0
   fi
 
-  if curl -fsS --max-time "${UNREGISTER_TIMEOUT}" -X POST \
-    -H "X-Borg-Agent-Authorization: Bearer ${token}" \
-    "${server%/}/api/agents/unregister" >/dev/null 2>&1; then
+  # The header goes in on stdin rather than as an argument: a command line is
+  # world-readable through ps, and this one runs as root. curl's config format
+  # escapes backslash and double quote inside a quoted value.
+  local quoted="${token//\\/\\\\}"
+  quoted="${quoted//\"/\\\"}"
+
+  if printf 'header = "X-Borg-Agent-Authorization: Bearer %s"\n' "${quoted}" \
+    | curl -fsS --max-time "${UNREGISTER_TIMEOUT}" -X POST --config - \
+      "${server%/}/api/agents/unregister" >/dev/null 2>&1; then
     echo "Server notified: this endpoint is now revoked."
   else
     echo "Could not reach ${server} to unregister. Removing locally anyway."

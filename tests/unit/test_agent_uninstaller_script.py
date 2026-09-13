@@ -291,6 +291,46 @@ def test_keep_user_leaves_the_dedicated_account_alone(
     assert state.exists()
 
 
+def test_a_failed_userdel_is_reported_rather_than_swallowed(
+    script: str, tmp_path: Path, call_log: Path
+):
+    """Otherwise an account that could not be deleted still ends the run with
+    "Borg UI agent removed." """
+    unit = tmp_path / "borg-ui-agent.service"
+    unit.write_text("[Service]\nUser=borg-ui-agent\n")
+
+    harness = "\n".join(
+        [
+            "set -uo pipefail",
+            "FAILURES=()",
+            'note_failure() { FAILURES+=("$1"); }',
+            'run_systemctl() { echo "systemctl $*" >>"${CALL_LOG}"; }',
+            'run_userdel() { echo "userdel $1" >>"${CALL_LOG}"; return 8; }',
+            _extract(script, "remove_service_user", "report"),
+            "remove_service_user",
+            "report",
+        ]
+    )
+    result = subprocess.run(
+        ["bash", "-c", harness],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={
+            "PATH": "/usr/bin:/bin",
+            "CALL_LOG": str(call_log),
+            "SERVICE_UNIT": str(unit),
+            "STATE_DIR": str(tmp_path / "state"),
+            "DEDICATED_USER": "borg-ui-agent",
+            "KEEP_USER": "0",
+        },
+    )
+
+    assert result.returncode != 0
+    assert "could not delete the borg-ui-agent account" in result.stderr
+    assert "Borg UI agent removed." not in result.stdout
+
+
 def test_keep_config_keeps_the_config_but_not_the_upgrade_trigger(
     script: str, tmp_path: Path, call_log: Path
 ):
@@ -384,12 +424,21 @@ def test_every_removal_tolerates_a_missing_target(
 
 
 _CURL_STUB = """
-curl() { echo "curl $*" >>"${CALL_LOG}"; return "${CURL_RC:-0}"; }
+curl() {
+  echo "curl $*" >>"${CALL_LOG}"
+  cat >>"${STDIN_LOG:-/dev/null}"
+  return "${CURL_RC:-0}"
+}
 """
 
 
 def _run_unregister(
-    script: str, *, call_log: Path, config: Path, curl_rc: str = "0"
+    script: str,
+    *,
+    call_log: Path,
+    config: Path,
+    curl_rc: str = "0",
+    stdin_log: Path | None = None,
 ) -> subprocess.CompletedProcess:
     harness = "\n".join(
         [
@@ -412,6 +461,7 @@ def _run_unregister(
             "CONFIG_FILE": str(config),
             "UNREGISTER_TIMEOUT": "5",
             "CURL_RC": curl_rc,
+            "STDIN_LOG": str(stdin_log) if stdin_log else "/dev/null",
         },
     )
 
@@ -430,12 +480,30 @@ def _write_config(tmp_path: Path) -> Path:
 def test_unregister_calls_the_server_recorded_in_the_config(
     script: str, tmp_path: Path, call_log: Path
 ):
-    result = _run_unregister(script, call_log=call_log, config=_write_config(tmp_path))
+    stdin_log = tmp_path / "stdin.log"
+    result = _run_unregister(
+        script, call_log=call_log, config=_write_config(tmp_path), stdin_log=stdin_log
+    )
 
     calls = call_log.read_text()
     assert result.returncode == 0, result.stderr
     assert "https://borg.example.com/api/agents/unregister" in calls
-    assert "X-Borg-Agent-Authorization: Bearer secret-token" in calls
+    assert "X-Borg-Agent-Authorization: Bearer secret-token" in stdin_log.read_text()
+
+
+def test_unregister_keeps_the_token_out_of_the_command_line(
+    script: str, tmp_path: Path, call_log: Path
+):
+    """A command line is world-readable through ps, and this runs as root, so a
+    local user on the endpoint could read the credential out of the process
+    table while the uninstall runs. The header goes in on stdin instead."""
+    stdin_log = tmp_path / "stdin.log"
+    _run_unregister(
+        script, call_log=call_log, config=_write_config(tmp_path), stdin_log=stdin_log
+    )
+
+    assert "secret-token" not in call_log.read_text()
+    assert "secret-token" in stdin_log.read_text()
 
 
 def test_unregister_never_echoes_the_token(script: str, tmp_path: Path, call_log: Path):

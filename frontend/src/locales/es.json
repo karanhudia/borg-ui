@@ -493,7 +493,8 @@
         "keepsBorg": "Su propia instalación de Borg no se toca. Solo se eliminan los binarios que colocó este instalador.",
         "keepsRepositories": "Sus repositorios de copia de seguridad no se tocan.",
         "copyCommand": "Copiar comando"
-      }
+      },
+      "insecureCommandWarning": "Este servidor es accesible por HTTP sin cifrar, así que este comando descarga un script sin cifrar y lo ejecuta como root. Cualquiera en la ruta de red puede sustituir lo que se descarga. Ponga el servidor tras HTTPS antes de ejecutar esto fuera de una red de confianza."
     },
     "installCommand": {
       "title": "Comando de instalación",

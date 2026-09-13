@@ -15,6 +15,7 @@ import ResponsiveDialog from '../../components/shared/ResponsiveDialog'
 import type { AgentMachineResponse } from '../../services/api'
 import CopyableCodeBlock from './CopyableCodeBlock'
 import { quoteForShell } from './agentSetServerCommandText'
+import InsecureCommandWarning from './InsecureCommandWarning'
 
 /**
  * Hands the operator the one command that removes Borg UI from an endpoint.
@@ -72,6 +73,7 @@ export default function AgentUninstallDialog({
               {t('managedAgents.page.uninstallDialog.description')}
             </Typography>
           </Stack>
+          <InsecureCommandWarning serverUrl={serverUrl} />
           <CopyableCodeBlock
             value={command}
             copyLabel={t('managedAgents.page.uninstallDialog.copyCommand')}

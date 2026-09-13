@@ -293,6 +293,14 @@ that endpoint's card, and run the command it gives you:
 curl -fsSL https://borg-ui.example.com/agent/uninstall.sh | sudo bash
 ```
 
+If this Borg UI server is reachable only over plain HTTP, the dialog says so.
+The command downloads a script and runs it as root, so anyone on the network
+path between the endpoint and the server can replace what it downloads. That
+is worth fixing with HTTPS or a tunnel before you run it across a network you
+do not control. It is a warning rather than a block, because a private LAN
+server on plain HTTP is a normal Borg UI setup and you are the one who can
+judge your own network.
+
 The script unregisters with the server first, so the card shows the endpoint as
 revoked without you clicking Delete. If the server cannot be reached, which is
 likely if you are removing an endpoint that has been stranded, it says so and

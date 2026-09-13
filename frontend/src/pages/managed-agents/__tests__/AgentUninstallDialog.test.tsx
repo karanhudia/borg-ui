@@ -51,6 +51,19 @@ describe('AgentUninstallDialog', () => {
     ).toBeInTheDocument()
   })
 
+  it('warns when the command would fetch over plain HTTP', () => {
+    render(
+      <AgentUninstallDialog
+        agent={agent}
+        open
+        serverUrl="http://192.168.1.82:8083"
+        onCopy={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    )
+    expect(screen.getByText(/runs it as root/i)).toBeInTheDocument()
+  })
+
   it('copies the command', async () => {
     const { onCopy } = renderDialog()
     await userEvent.click(screen.getByRole('button', { name: /copy/i }))

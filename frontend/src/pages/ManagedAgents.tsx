@@ -78,6 +78,7 @@ import AgentPinControl from './managed-agents/AgentPinControl'
 import AgentUpgradeDialog from './managed-agents/AgentUpgradeDialog'
 import AgentSetServerDialog from './managed-agents/AgentSetServerDialog'
 import AgentUninstallDialog from './managed-agents/AgentUninstallDialog'
+import InsecureCommandWarning from './managed-agents/InsecureCommandWarning'
 import CopyableCodeBlock from './managed-agents/CopyableCodeBlock'
 import AgentUpgradeStateChip from './managed-agents/AgentUpgradeStateChip'
 import { canUpgradeNow } from './managed-agents/agentUpgradeEligibility'
@@ -1531,6 +1532,7 @@ export function AgentReinstallDialog({
               {t('managedAgents.page.reinstallDialog.borgSelectionHint')}
             </Typography>
           </Box>
+          <InsecureCommandWarning serverUrl={serverUrl} />
           <CopyableCodeBlock
             value={command}
             copyLabel={t('managedAgents.page.reinstallDialog.copyCommand')}
