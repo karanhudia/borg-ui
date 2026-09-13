@@ -718,6 +718,9 @@ class TestCompactV2Service:
         assert refreshed.result["stats"]["repository_size"] == 502_000
         assert refreshed_repo.total_size == "490.23 KB"
         assert refreshed_repo.total_size_source == "compact_stats"
+        # the four size columns are restored together after the retry
+        assert refreshed_repo.total_size_bytes == 502_000
+        assert refreshed_repo.total_size_measured_at is not None
         verification.close()
 
     @pytest.mark.unit
