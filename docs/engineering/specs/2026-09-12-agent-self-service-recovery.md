@@ -327,7 +327,7 @@ condition is inverted. They are the tests that matter most in this change.
 | Phase | Scope | Status |
 | --- | --- | --- |
 | 1 | `set-server` and the URL dialog | Merged in #1039 ([plan](../plans/2026-09-12-agent-self-service-recovery-phase-1.md)). The 10.2 gate's subcommand half is still unrun: it needs an endpoint on agent 0.1.5. |
-| 2 | `uninstall.sh` and the uninstall dialog | Implemented on `worktree-agent-uninstall` ([plan](../plans/2026-09-13-agent-self-service-recovery-phase-2.md)), all five tasks committed, suites green. Awaiting the G2 gate, then review. The 10.3 live gate needs a real endpoint. |
+| 2 | `uninstall.sh` and the uninstall dialog | In review, [PR #1043](https://github.com/karanhudia/borg-ui/pull/1043) ([plan](../plans/2026-09-13-agent-self-service-recovery-phase-2.md)), all five tasks committed, suites green, local CodeRabbit clean after three passes. The 10.3 live gate needs a real endpoint installed with `--service-user current`. |
 
 ### 10.2 Phase 1 - change the server URL
 
