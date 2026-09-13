@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Box,
   Button,
@@ -24,6 +25,7 @@ import { formatBytes } from '../../utils/dateUtils'
 import { getBorgVersion } from '../../utils/repoCapabilities'
 import type { ArchiveDetailResponse } from '../../types/archives'
 import type { RestorePathMetadata } from '../../utils/restorePaths'
+import { cornerPanelSx, cornerStackSx } from './cornerStack'
 import type { Repository } from '@/types'
 
 interface ArchiveFilesTabProps {
@@ -35,13 +37,25 @@ interface ArchiveFilesTabProps {
    *  version, and restoring the current one instead would hand back the
    *  wrong bytes without saying so (spec 10.4). */
   onRestorePaths?: (paths: string[], items: RestorePathMetadata[], fromArchiveId?: number) => void
+  /** The page's bottom-right column. The selection bar renders into it so it
+   *  stacks under restore progress instead of covering it. Without one the
+   *  bar pins itself to the corner, which is what stories and tests see. */
+  cornerStack?: HTMLElement | null
+  /** Bump to drop the selection, as when a restore has gone out. Only the
+   *  selection resets: the folder, filter and cursor stay where they were. */
+  selectionResetToken?: number
 }
+
+const renderInCorner = (stack: HTMLElement | null | undefined, node: ReactElement) =>
+  stack ? createPortal(node, stack) : node
 
 export default function ArchiveFilesTab({
   repositoryId,
   repository,
   archive,
   onRestorePaths,
+  cornerStack,
+  selectionResetToken = 0,
 }: ArchiveFilesTabProps) {
   const { t } = useTranslation()
   const theme = useTheme()
@@ -127,6 +141,12 @@ export default function ArchiveFilesTab({
     }))
   }
   const [selectionOpen, setSelectionOpen] = useState(false)
+  useEffect(() => {
+    if (selectionResetToken === 0) return
+    setSelection({ selectedPaths: [], selectedItems: [] })
+    setSelectedEntries(new Map())
+    setSelectionOpen(false)
+  }, [selectionResetToken])
 
   const isTypingTarget = (target: EventTarget | null) => {
     const el = target as HTMLElement | null
@@ -224,190 +244,174 @@ export default function ArchiveFilesTab({
         </ResponsiveDialog>
       )}
 
-      {selectedCount > 0 && (
+      {selectedCount > 0 &&
         // Anchored bottom right like a Drive upload panel, so picking a file
         // never shifts the panels and the action stays in reach while a long
         // folder scrolls. Expanding it lists every path that will be restored.
-        <Box
-          role="toolbar"
-          aria-label={t('archives.files.selectionBar')}
-          sx={{
-            position: 'fixed',
-            right: { xs: 12, sm: 24 },
-            bottom: { xs: 12, sm: 24 },
-            left: { xs: 12, sm: 'auto' },
-            width: { sm: 380 },
-            maxWidth: 'calc(100vw - 24px)',
-            zIndex: (theme) => theme.zIndex.appBar,
-            borderRadius: 3,
-            overflow: 'hidden',
-            color: 'common.white',
-            bgcolor: (theme) =>
-              theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[900],
-            boxShadow: (theme) =>
-              `0 12px 32px ${alpha(theme.palette.common.black, 0.28)}, 0 0 0 1px ${alpha(theme.palette.common.white, 0.08)}`,
-            '@keyframes selection-bar-in': {
-              from: { opacity: 0, transform: 'translateY(12px)' },
-              to: { opacity: 1, transform: 'translateY(0)' },
-            },
-            animation: 'selection-bar-in 180ms ease-out',
-          }}
-        >
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', pl: 2, pr: 1, py: 1 }}>
-            <CheckSquare size={16} aria-hidden />
-            <Typography
-              variant="body2"
-              sx={{
-                fontWeight: 600,
-                flex: 1,
-                minWidth: 0,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                fontVariantNumeric: 'tabular-nums',
-              }}
-            >
-              {t('archives.files.selected', {
-                count: selectedCount,
-                size: formatBytes(selectedSize),
-              })}
-            </Typography>
-            <Tooltip
-              title={
-                selectionOpen ? t('archives.files.hideSelected') : t('archives.files.showSelected')
-              }
-            >
-              <IconButton
-                size="small"
-                aria-label={
+        renderInCorner(
+          cornerStack,
+          <Box
+            role="toolbar"
+            aria-label={t('archives.files.selectionBar')}
+            sx={cornerStack ? cornerPanelSx : { ...cornerStackSx, ...cornerPanelSx }}
+          >
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', pl: 2, pr: 1, py: 1 }}>
+              <CheckSquare size={16} aria-hidden />
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 600,
+                  flex: 1,
+                  minWidth: 0,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {t('archives.files.selected', {
+                  count: selectedCount,
+                  size: formatBytes(selectedSize),
+                })}
+              </Typography>
+              <Tooltip
+                title={
                   selectionOpen
                     ? t('archives.files.hideSelected')
                     : t('archives.files.showSelected')
                 }
-                aria-expanded={selectionOpen}
-                onClick={() => setSelectionOpen((open) => !open)}
-                sx={{ color: 'inherit', opacity: 0.8, '&:hover': { opacity: 1 } }}
               >
-                {selectionOpen ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-              </IconButton>
-            </Tooltip>
-            <Tooltip title={t('archives.files.clearSelection')}>
-              <IconButton
-                size="small"
-                aria-label={t('archives.files.clearSelection')}
-                onClick={clearSelection}
-                sx={{ color: 'inherit', opacity: 0.8, '&:hover': { opacity: 1 } }}
+                <IconButton
+                  size="small"
+                  aria-label={
+                    selectionOpen
+                      ? t('archives.files.hideSelected')
+                      : t('archives.files.showSelected')
+                  }
+                  aria-expanded={selectionOpen}
+                  onClick={() => setSelectionOpen((open) => !open)}
+                  sx={{ color: 'inherit', opacity: 0.8, '&:hover': { opacity: 1 } }}
+                >
+                  {selectionOpen ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                </IconButton>
+              </Tooltip>
+              <Tooltip title={t('archives.files.clearSelection')}>
+                <IconButton
+                  size="small"
+                  aria-label={t('archives.files.clearSelection')}
+                  onClick={clearSelection}
+                  sx={{ color: 'inherit', opacity: 0.8, '&:hover': { opacity: 1 } }}
+                >
+                  <X size={16} />
+                </IconButton>
+              </Tooltip>
+            </Stack>
+            {selectionOpen && (
+              <Box
+                component="ul"
+                sx={{
+                  listStyle: 'none',
+                  m: 0,
+                  p: 0,
+                  maxHeight: 260,
+                  overflowY: 'auto',
+                  borderTop: (theme) => `1px solid ${alpha(theme.palette.common.white, 0.1)}`,
+                }}
               >
-                <X size={16} />
-              </IconButton>
-            </Tooltip>
-          </Stack>
-          {selectionOpen && (
+                {selection.selectedPaths.map((path) => {
+                  const entry = selectedEntries.get(path)
+                  const name = entry?.name ?? path.split('/').filter(Boolean).pop() ?? path
+                  const Icon = entry?.type === 'directory' ? Folder : File
+                  return (
+                    <Stack
+                      component="li"
+                      key={path}
+                      direction="row"
+                      spacing={1.25}
+                      sx={{
+                        alignItems: 'center',
+                        pl: 2,
+                        pr: 0.75,
+                        py: 0.75,
+                        '&:hover': { bgcolor: (theme) => alpha(theme.palette.common.white, 0.06) },
+                      }}
+                    >
+                      <Box sx={{ opacity: 0.7, display: 'flex' }}>
+                        <Icon size={14} />
+                      </Box>
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: 500,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {name}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            display: 'block',
+                            opacity: 0.65,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            fontFamily: 'monospace',
+                          }}
+                        >
+                          {path}
+                        </Typography>
+                      </Box>
+                      {entry?.size != null && (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            opacity: 0.75,
+                            whiteSpace: 'nowrap',
+                            fontVariantNumeric: 'tabular-nums',
+                          }}
+                        >
+                          {formatBytes(entry.size)}
+                        </Typography>
+                      )}
+                      <IconButton
+                        size="small"
+                        aria-label={t('archives.files.removeFromSelection', { name })}
+                        onClick={() => removeFromSelection(path)}
+                        sx={{ color: 'inherit', opacity: 0.7, '&:hover': { opacity: 1 } }}
+                      >
+                        <X size={14} />
+                      </IconButton>
+                    </Stack>
+                  )
+                })}
+              </Box>
+            )}
             <Box
-              component="ul"
               sx={{
-                listStyle: 'none',
-                m: 0,
-                p: 0,
-                maxHeight: 260,
-                overflowY: 'auto',
+                px: 1.5,
+                py: 1,
                 borderTop: (theme) => `1px solid ${alpha(theme.palette.common.white, 0.1)}`,
+                display: 'flex',
+                justifyContent: 'flex-end',
               }}
             >
-              {selection.selectedPaths.map((path) => {
-                const entry = selectedEntries.get(path)
-                const name = entry?.name ?? path.split('/').filter(Boolean).pop() ?? path
-                const Icon = entry?.type === 'directory' ? Folder : File
-                return (
-                  <Stack
-                    component="li"
-                    key={path}
-                    direction="row"
-                    spacing={1.25}
-                    sx={{
-                      alignItems: 'center',
-                      pl: 2,
-                      pr: 0.75,
-                      py: 0.75,
-                      '&:hover': { bgcolor: (theme) => alpha(theme.palette.common.white, 0.06) },
-                    }}
-                  >
-                    <Box sx={{ opacity: 0.7, display: 'flex' }}>
-                      <Icon size={14} />
-                    </Box>
-                    <Box sx={{ minWidth: 0, flex: 1 }}>
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          fontWeight: 500,
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {name}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          display: 'block',
-                          opacity: 0.65,
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          fontFamily: 'monospace',
-                        }}
-                      >
-                        {path}
-                      </Typography>
-                    </Box>
-                    {entry?.size != null && (
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          opacity: 0.75,
-                          whiteSpace: 'nowrap',
-                          fontVariantNumeric: 'tabular-nums',
-                        }}
-                      >
-                        {formatBytes(entry.size)}
-                      </Typography>
-                    )}
-                    <IconButton
-                      size="small"
-                      aria-label={t('archives.files.removeFromSelection', { name })}
-                      onClick={() => removeFromSelection(path)}
-                      sx={{ color: 'inherit', opacity: 0.7, '&:hover': { opacity: 1 } }}
-                    >
-                      <X size={14} />
-                    </IconButton>
-                  </Stack>
-                )
-              })}
+              <Button
+                size="small"
+                variant="contained"
+                disableElevation
+                startIcon={<RotateCcw size={14} />}
+                onClick={restoreSelection}
+                sx={{ whiteSpace: 'nowrap' }}
+              >
+                {t('archives.files.restoreSelection')}
+              </Button>
             </Box>
-          )}
-          <Box
-            sx={{
-              px: 1.5,
-              py: 1,
-              borderTop: (theme) => `1px solid ${alpha(theme.palette.common.white, 0.1)}`,
-              display: 'flex',
-              justifyContent: 'flex-end',
-            }}
-          >
-            <Button
-              size="small"
-              variant="contained"
-              disableElevation
-              startIcon={<RotateCcw size={14} />}
-              onClick={restoreSelection}
-              sx={{ whiteSpace: 'nowrap' }}
-            >
-              {t('archives.files.restoreSelection')}
-            </Button>
           </Box>
-        </Box>
-      )}
+        )}
     </Box>
   )
 }

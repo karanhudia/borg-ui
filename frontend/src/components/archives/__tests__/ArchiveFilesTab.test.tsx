@@ -143,6 +143,23 @@ describe('ArchiveFilesTab', () => {
     expect(within(bar).getByRole('button', { name: /restore selection/i })).toBeInTheDocument()
   })
 
+  it('renders the selection bar into the page corner stack when given one', () => {
+    const stack = document.createElement('div')
+    document.body.appendChild(stack)
+    renderWithProviders(
+      <ArchiveFilesTab
+        repositoryId={7}
+        repository={repository}
+        archive={archive}
+        cornerStack={stack}
+      />
+    )
+    fireEvent.click(screen.getByTestId('archive-path-selector'))
+    const bar = screen.getByRole('toolbar', { name: /selection/i })
+    expect(stack).toContainElement(bar)
+    stack.remove()
+  })
+
   it('expands the bar to list every path that will be restored and lets one be removed', () => {
     renderWithProviders(
       <ArchiveFilesTab repositoryId={7} repository={repository} archive={archive} />
@@ -163,6 +180,30 @@ describe('ArchiveFilesTab', () => {
     fireEvent.click(screen.getByTestId('archive-path-selector'))
     fireEvent.click(screen.getByRole('button', { name: /clear selection/i }))
     expect(screen.queryByRole('toolbar', { name: /selection/i })).not.toBeInTheDocument()
+  })
+
+  it('drops the selection when the reset token changes', () => {
+    const { rerender } = renderWithProviders(
+      <ArchiveFilesTab
+        repositoryId={7}
+        repository={repository}
+        archive={archive}
+        selectionResetToken={0}
+      />
+    )
+    fireEvent.click(screen.getByTestId('archive-path-selector'))
+    expect(screen.getByRole('toolbar', { name: /selection/i })).toBeInTheDocument()
+    rerender(
+      <ArchiveFilesTab
+        repositoryId={7}
+        repository={repository}
+        archive={archive}
+        selectionResetToken={1}
+      />
+    )
+    expect(screen.queryByRole('toolbar', { name: /selection/i })).not.toBeInTheDocument()
+    // Only the selection went. The browser itself was not remounted.
+    expect(screen.getByTestId('archive-path-selector')).toBeInTheDocument()
   })
 
   describe('keyboard navigation', () => {
