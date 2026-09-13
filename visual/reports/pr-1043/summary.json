@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-09-13T06:53:09.946Z",
+  "generatedAt": "2026-09-13T07:17:49.623Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1043 visual report",
-    "commitSha": "b3272f0bb7af",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34743177413"
+    "commitSha": "c623f90b5f73",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34744476409"
   },
   "totals": {
-    "baseline": 824,
-    "actual": 828,
-    "compared": 824,
+    "baseline": 832,
+    "actual": 838,
+    "compared": 832,
     "changed": 11,
-    "added": 4,
+    "added": 6,
     "removed": 0,
-    "unchanged": 813
+    "unchanged": 821
   },
   "changed": [
     {
@@ -231,6 +231,14 @@
     {
       "fileName": "managed-agents-agentuninstalldialog--mobile.png",
       "actualPath": "images/actual/managed-agents-agentuninstalldialog--mobile.png"
+    },
+    {
+      "fileName": "managed-agents-agentuninstalldialog--plain-http-server--mobile.png",
+      "actualPath": "images/actual/managed-agents-agentuninstalldialog--plain-http-server--mobile.png"
+    },
+    {
+      "fileName": "managed-agents-agentuninstalldialog--plain-http-server.png",
+      "actualPath": "images/actual/managed-agents-agentuninstalldialog--plain-http-server.png"
     }
   ],
   "removed": [],
@@ -416,6 +424,18 @@
       "fileName": "backgroundwork-pipelineboard--idle.png"
     },
     {
+      "fileName": "backgroundwork-pipelineboard--lane-holder-missing--mobile.png"
+    },
+    {
+      "fileName": "backgroundwork-pipelineboard--lane-holder-missing.png"
+    },
+    {
+      "fileName": "backgroundwork-pipelineboard--maintenance-holds-the-lane--mobile.png"
+    },
+    {
+      "fileName": "backgroundwork-pipelineboard--maintenance-holds-the-lane.png"
+    },
+    {
       "fileName": "backgroundwork-pipelineboard--no-repositories--mobile.png"
     },
     {
@@ -488,6 +508,12 @@
       "fileName": "backgroundwork-repositoryhubrow--failed-stage.png"
     },
     {
+      "fileName": "backgroundwork-repositoryhubrow--index-work-holds-the-repository--mobile.png"
+    },
+    {
+      "fileName": "backgroundwork-repositoryhubrow--index-work-holds-the-repository.png"
+    },
+    {
       "fileName": "backgroundwork-repositoryhubrow--never-built--mobile.png"
     },
     {
@@ -504,6 +530,12 @@
     },
     {
       "fileName": "backgroundwork-repositoryhubrow--running.png"
+    },
+    {
+      "fileName": "backgroundwork-repositoryhubrow--sibling-branches-wait-within-one-run--mobile.png"
+    },
+    {
+      "fileName": "backgroundwork-repositoryhubrow--sibling-branches-wait-within-one-run.png"
     },
     {
       "fileName": "backgroundwork-repositoryhubrow--system-lane--mobile.png"
