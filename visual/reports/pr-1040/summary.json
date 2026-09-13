@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-09-13T05:33:00.335Z",
+  "generatedAt": "2026-09-13T05:46:41.295Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1040 visual report",
-    "commitSha": "d3104041c763",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34739942196"
+    "commitSha": "9ae42ec41164",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34740787570"
   },
   "totals": {
     "baseline": 812,
-    "actual": 812,
+    "actual": 824,
     "compared": 812,
-    "changed": 6,
-    "added": 0,
+    "changed": 13,
+    "added": 12,
     "removed": 0,
-    "unchanged": 806
+    "unchanged": 799
   },
   "changed": [
     {
@@ -123,9 +123,184 @@
         "width": 1280,
         "height": 800
       }
+    },
+    {
+      "fileName": "pages-managedagents--agent-fleet-upgrade-selection--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-fleet-upgrade-selection--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--agent-fleet-upgrade-selection--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--agent-fleet-upgrade-selection--mobile.png",
+      "diffPixels": 1139,
+      "totalPixels": 329160,
+      "diffRatio": 0.003460323247053105,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-managedagents--agent-fleet-upgrade-selection.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-fleet-upgrade-selection.png",
+      "actualPath": "images/actual/pages-managedagents--agent-fleet-upgrade-selection.png",
+      "diffPath": "images/diff/pages-managedagents--agent-fleet-upgrade-selection.png",
+      "diffPixels": 187978,
+      "totalPixels": 1024000,
+      "diffRatio": 0.183572265625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-managedagents--agent-fleet-version-states--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-fleet-version-states--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--agent-fleet-version-states--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--agent-fleet-version-states--mobile.png",
+      "diffPixels": 37309,
+      "totalPixels": 329160,
+      "diffRatio": 0.11334609308542958,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-managedagents--agent-fleet-version-states.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-fleet-version-states.png",
+      "actualPath": "images/actual/pages-managedagents--agent-fleet-version-states.png",
+      "diffPath": "images/diff/pages-managedagents--agent-fleet-version-states.png",
+      "diffPixels": 187264,
+      "totalPixels": 1024000,
+      "diffRatio": 0.182875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-managedagents--fleet-overview.png",
+      "baselinePath": "images/baseline/pages-managedagents--fleet-overview.png",
+      "actualPath": "images/actual/pages-managedagents--fleet-overview.png",
+      "diffPath": "images/diff/pages-managedagents--fleet-overview.png",
+      "diffPixels": 90217,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0881025390625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-managedagents--locked-community--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--locked-community--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--locked-community--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--locked-community--mobile.png",
+      "diffPixels": 538,
+      "totalPixels": 329160,
+      "diffRatio": 0.001634463482804715,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-managedagents--locked-community.png",
+      "baselinePath": "images/baseline/pages-managedagents--locked-community.png",
+      "actualPath": "images/actual/pages-managedagents--locked-community.png",
+      "diffPath": "images/diff/pages-managedagents--locked-community.png",
+      "diffPixels": 48154,
+      "totalPixels": 1024000,
+      "diffRatio": 0.047025390625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
     }
   ],
-  "added": [],
+  "added": [
+    {
+      "fileName": "managed-agents-agentsetserverdialog--current-agent--mobile.png",
+      "actualPath": "images/actual/managed-agents-agentsetserverdialog--current-agent--mobile.png"
+    },
+    {
+      "fileName": "managed-agents-agentsetserverdialog--current-agent.png",
+      "actualPath": "images/actual/managed-agents-agentsetserverdialog--current-agent.png"
+    },
+    {
+      "fileName": "managed-agents-agentsetserverdialog--mobile--mobile.png",
+      "actualPath": "images/actual/managed-agents-agentsetserverdialog--mobile--mobile.png"
+    },
+    {
+      "fileName": "managed-agents-agentsetserverdialog--mobile.png",
+      "actualPath": "images/actual/managed-agents-agentsetserverdialog--mobile.png"
+    },
+    {
+      "fileName": "managed-agents-agentsetserverdialog--older-agent--mobile.png",
+      "actualPath": "images/actual/managed-agents-agentsetserverdialog--older-agent--mobile.png"
+    },
+    {
+      "fileName": "managed-agents-agentsetserverdialog--older-agent.png",
+      "actualPath": "images/actual/managed-agents-agentsetserverdialog--older-agent.png"
+    },
+    {
+      "fileName": "managed-agents-agentsetserverdialog--unknown-version--mobile.png",
+      "actualPath": "images/actual/managed-agents-agentsetserverdialog--unknown-version--mobile.png"
+    },
+    {
+      "fileName": "managed-agents-agentsetserverdialog--unknown-version.png",
+      "actualPath": "images/actual/managed-agents-agentsetserverdialog--unknown-version.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-fleet-offline-recovery--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--agent-fleet-offline-recovery--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-fleet-offline-recovery-mobile--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--agent-fleet-offline-recovery-mobile--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-fleet-offline-recovery-mobile.png",
+      "actualPath": "images/actual/pages-managedagents--agent-fleet-offline-recovery-mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-fleet-offline-recovery.png",
+      "actualPath": "images/actual/pages-managedagents--agent-fleet-offline-recovery.png"
+    }
+  ],
   "removed": [],
   "unchanged": [
     {
@@ -2307,18 +2482,6 @@
       "fileName": "pages-managedagents--agent-diagnostics-timeout.png"
     },
     {
-      "fileName": "pages-managedagents--agent-fleet-upgrade-selection--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--agent-fleet-upgrade-selection.png"
-    },
-    {
-      "fileName": "pages-managedagents--agent-fleet-version-states--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--agent-fleet-version-states.png"
-    },
-    {
       "fileName": "pages-managedagents--agent-job-logs--mobile.png"
     },
     {
@@ -2344,15 +2507,6 @@
     },
     {
       "fileName": "pages-managedagents--fleet-overview--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--fleet-overview.png"
-    },
-    {
-      "fileName": "pages-managedagents--locked-community--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--locked-community.png"
     },
     {
       "fileName": "pages-managedagents--setup-help-details--mobile.png"
