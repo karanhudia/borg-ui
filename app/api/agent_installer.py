@@ -1095,6 +1095,268 @@ fi
 echo "Check status with: systemctl status borg-ui-agent"
 """
 
+UNINSTALLER_SCRIPT = r"""#!/usr/bin/env bash
+# Removes the Borg UI agent from this machine.
+#
+# Deliberately not `set -e`: every removal tolerates a missing target, and a
+# half-removed machine is worse than a fully reported one. Failures are
+# collected and printed at the end (spec section 6.5).
+set -uo pipefail
+
+# Overridable so the test harness can point the whole inventory at a tmpdir.
+# A real run is piped into `sudo bash` with none of these set, so each takes
+# its real path.
+AGENT_ROOT="${AGENT_ROOT:-/opt/borg-ui-agent}"
+CONFIG_DIR="${CONFIG_DIR:-/etc/borg-ui-agent}"
+CONFIG_FILE="${CONFIG_FILE:-${CONFIG_DIR}/config.toml}"
+UPGRADE_TRIGGER="${UPGRADE_TRIGGER:-${CONFIG_DIR}/upgrade-requested}"
+SERVICE_UNIT="${SERVICE_UNIT:-/etc/systemd/system/borg-ui-agent.service}"
+UPGRADE_UNIT="${UPGRADE_UNIT:-/etc/systemd/system/borg-ui-agent-upgrade.service}"
+UPGRADE_PATH_UNIT="${UPGRADE_PATH_UNIT:-/etc/systemd/system/borg-ui-agent-upgrade.path}"
+UPGRADE_CONF="${UPGRADE_CONF:-/etc/borg-ui-agent-upgrade.conf}"
+UPGRADE_HELPER="${UPGRADE_HELPER:-${AGENT_ROOT}/bin/borg-ui-agent-upgrade}"
+LEGACY_SUDOERS="${LEGACY_SUDOERS:-/etc/sudoers.d/borg-ui-agent-upgrade}"
+NO_REMOTE_UPGRADE_MARKER="${NO_REMOTE_UPGRADE_MARKER:-/etc/borg-ui-agent-no-remote-upgrade}"
+STATE_DIR="${STATE_DIR:-/var/lib/borg-ui-agent}"
+BORG1_LINK="${BORG1_LINK:-/usr/local/bin/borg}"
+BORG2_LINK="${BORG2_LINK:-/usr/local/bin/borg2}"
+DEDICATED_USER="${DEDICATED_USER:-borg-ui-agent}"
+UNREGISTER_TIMEOUT="${UNREGISTER_TIMEOUT:-5}"
+
+KEEP_BORG="0"
+KEEP_USER="0"
+KEEP_CONFIG="0"
+
+FAILURES=()
+
+note_failure() {
+  FAILURES+=("$1")
+}
+
+# Wrapped so the test harness can stub them. No logic of their own.
+run_systemctl() {
+  systemctl "$@" >/dev/null 2>&1
+}
+
+run_userdel() {
+  userdel --remove "$1" >/dev/null 2>&1
+}
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  curl -fsSL http://SERVER:PORT/agent/uninstall.sh | sudo bash
+
+Removes the Borg UI agent from this machine: the service, the upgrade helper,
+the virtualenv, the configuration, and the dedicated service user.
+
+Your own Borg installation and your backup repositories are never touched.
+
+Options:
+  --keep-borg     Leave the Borg binaries this installer placed, and their
+                  symlinks, in place
+  --keep-user     Leave the dedicated borg-ui-agent user and its state
+                  directory in place
+  --keep-config   Leave /etc/borg-ui-agent/config.toml in place, for a
+                  reinstall against the same registration
+  --help          Print this message
+
+A Borg installed by your distribution is never removed, with or without
+--keep-borg. A service user that is not the dedicated borg-ui-agent account is
+never deleted, with or without --keep-user.
+USAGE
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --keep-borg) KEEP_BORG="1"; shift ;;
+    --keep-user) KEEP_USER="1"; shift ;;
+    --keep-config) KEEP_CONFIG="1"; shift ;;
+    --help|-h) usage; exit 0 ;;
+    *)
+      echo "Unknown option: $1" >&2
+      echo "Run with --help for usage." >&2
+      exit 2
+      ;;
+  esac
+done
+stop_service() {
+  run_systemctl disable --now borg-ui-agent
+}
+
+# Split from stop_service on purpose. remove_service_user reads User= from this
+# unit to decide whether the account is ours to delete, so the unit has to
+# outlive that decision. Removing it earlier does not fail loudly: it makes the
+# dedicated-account removal a silent no-op on every real run.
+remove_service_unit() {
+  rm -f "${SERVICE_UNIT}" || note_failure "could not remove ${SERVICE_UNIT}"
+}
+
+# Spec section 6.2 says to reuse the installer's remove_upgrade_artifacts
+# (app/api/agent_installer.py:1050). The installer and the uninstaller are two
+# separate bash strings served to different machines, so there is no runtime to
+# share: what is reused is the inventory, item for item. If the installer's
+# list ever grows, this one has to grow with it, and a stale copy here leaves
+# an escalation path behind on a machine that is meant to be clean.
+remove_upgrade_artifacts() {
+  run_systemctl disable --now borg-ui-agent-upgrade.path
+  rm -f "${UPGRADE_PATH_UNIT}" "${UPGRADE_UNIT}" "${UPGRADE_HELPER}" \
+    "${UPGRADE_CONF}" "${UPGRADE_TRIGGER}" \
+    || note_failure "could not remove the upgrade artifacts"
+  # An install that predates the path unit granted the agent a sudoers rule.
+  # Take it away rather than leaving a live escalation behind on a machine
+  # that is supposed to have no Borg UI on it.
+  rm -f "${LEGACY_SUDOERS}" || note_failure "could not remove ${LEGACY_SUDOERS}"
+}
+
+# SAFETY RULE 1 (spec section 6.2). A link is ours only when it resolves to a
+# path under AGENT_ROOT, which is where the installer's forwarder scripts live.
+# The same test _classify_install_source uses to label a binary
+# "borg-ui-installer" in the UI, so the card and this script agree by
+# construction. A distro Borg at /usr/bin/borg, or a link an operator pointed
+# somewhere else, is left exactly as it is: removing a system-package Borg
+# would break Borg for everything else on the machine.
+remove_borg_links() {
+  if [[ "${KEEP_BORG}" == "1" ]]; then
+    echo "Leaving the Borg binaries and their symlinks in place."
+    return 0
+  fi
+
+  local link resolved root
+  root="$(cd "${AGENT_ROOT}" 2>/dev/null && pwd -P)" || root=""
+  for link in "${BORG1_LINK}" "${BORG2_LINK}"; do
+    [[ -L "${link}" ]] || continue
+    resolved="$(readlink -f "${link}" 2>/dev/null || true)"
+    if [[ -n "${root}" && "${resolved}" == "${root}"/* ]]; then
+      rm -f "${link}" || note_failure "could not remove ${link}"
+    else
+      echo "Leaving ${link} alone: it does not point into ${AGENT_ROOT}."
+    fi
+  done
+}
+
+# SAFETY RULE 2 (spec section 6.2). The account is deleted only when the unit
+# says the service ran as the dedicated account this installer creates. An
+# install run with --service-user current binds the unit to the operator's own
+# login account, and deleting that would take their home directory with it.
+# A missing unit tells us nothing, so it deletes nothing.
+remove_service_user() {
+  if [[ "${KEEP_USER}" == "1" ]]; then
+    echo "Leaving the service user and its state directory in place."
+    return 0
+  fi
+
+  rm -rf "${STATE_DIR}" || note_failure "could not remove ${STATE_DIR}"
+
+  local unit_user=""
+  if [[ -r "${SERVICE_UNIT}" ]]; then
+    unit_user="$(awk -F= '/^User=/ {print $2; exit}' "${SERVICE_UNIT}" 2>/dev/null || true)"
+  fi
+
+  if [[ "${unit_user}" != "${DEDICATED_USER}" ]]; then
+    if [[ -n "${unit_user}" ]]; then
+      echo "Leaving the '${unit_user}' account alone: only the dedicated ${DEDICATED_USER} account is removed."
+    fi
+    return 0
+  fi
+
+  # A swallowed failure here is the worst kind: the account survives and the
+  # script still reports a clean removal. systemctl's status stays unchecked on
+  # purpose, because disabling an already-absent unit is the idempotent case.
+  if ! run_userdel "${DEDICATED_USER}"; then
+    note_failure "could not delete the ${DEDICATED_USER} account"
+  fi
+}
+
+remove_agent_files() {
+  rm -rf "${AGENT_ROOT}" || note_failure "could not remove ${AGENT_ROOT}"
+  rm -f "${NO_REMOTE_UPGRADE_MARKER}" \
+    || note_failure "could not remove ${NO_REMOTE_UPGRADE_MARKER}"
+
+  if [[ "${KEEP_CONFIG}" == "1" ]]; then
+    # The operator asked to keep the file, not to keep the upgrade trigger:
+    # an unwatched trigger left behind is a request nothing will ever serve.
+    rm -f "${UPGRADE_TRIGGER}" || note_failure "could not remove ${UPGRADE_TRIGGER}"
+    echo "Keeping ${CONFIG_FILE}."
+    return 0
+  fi
+
+  rm -rf "${CONFIG_DIR}" || note_failure "could not remove ${CONFIG_DIR}"
+}
+
+report() {
+  # The early return is load-bearing, not just tidy: under `set -u`, bash 3.2
+  # (which macOS ships, and which runs these tests locally) aborts on
+  # "${FAILURES[@]}" when the array is empty. Expanding it only after the count
+  # check is what keeps the happy path working there. If you restructure this,
+  # check it on bash 3.2, not only on CI's bash 5.
+  if [[ ${#FAILURES[@]} -eq 0 ]]; then
+    echo "Borg UI agent removed."
+    return 0
+  fi
+  echo "Borg UI agent removed, with problems:" >&2
+  local failure
+  for failure in "${FAILURES[@]}"; do
+    echo "  - ${failure}" >&2
+  done
+  return 1
+}
+
+# Best effort, and deliberately so (spec section 6.4). The server marks the
+# machine revoked, so the card reflects reality without the operator clicking
+# Delete. A stranded agent cannot reach its server, which is a likely reason to
+# be uninstalling in the first place, so a failure here reports and continues.
+#
+# The token is read from the config and sent only to the server_url recorded in
+# that same file, never to a URL passed on the command line, so a pasted script
+# cannot be steered into exfiltrating the credential. It is never echoed.
+unregister() {
+  if [[ ! -r "${CONFIG_FILE}" ]]; then
+    echo "No readable config at ${CONFIG_FILE}; skipping the unregister call."
+    return 0
+  fi
+
+  local server token
+  server="$(awk -F'"' '/^server_url[[:space:]]*=/ {print $2; exit}' "${CONFIG_FILE}")"
+  token="$(awk -F'"' '/^agent_token[[:space:]]*=/ {print $2; exit}' "${CONFIG_FILE}")"
+
+  if [[ -z "${server}" || -z "${token}" ]]; then
+    echo "The config carries no server URL and token; skipping the unregister call."
+    return 0
+  fi
+
+  # The header goes in on stdin rather than as an argument: a command line is
+  # world-readable through ps, and this one runs as root. curl's config format
+  # escapes backslash and double quote inside a quoted value.
+  local quoted="${token//\\/\\\\}"
+  quoted="${quoted//\"/\\\"}"
+
+  if printf 'header = "X-Borg-Agent-Authorization: Bearer %s"\n' "${quoted}" \
+    | curl -fsS --max-time "${UNREGISTER_TIMEOUT}" -X POST --config - \
+      "${server%/}/api/agents/unregister" >/dev/null 2>&1; then
+    echo "Server notified: this endpoint is now revoked."
+  else
+    echo "Could not reach ${server} to unregister. Removing locally anyway."
+  fi
+  return 0
+}
+
+if [[ "$(id -u)" != "0" ]]; then
+  echo "This must run as root. Pipe it into 'sudo bash'." >&2
+  exit 1
+fi
+
+unregister
+stop_service
+remove_upgrade_artifacts
+remove_borg_links
+remove_service_user
+remove_service_unit
+remove_agent_files
+run_systemctl daemon-reload
+report
+"""
+
 
 def _installed_borg_version(interface_factory, label: str) -> str | None:
     """The exact Borg version this server runs, or None if it has none.
@@ -1273,6 +1535,22 @@ async def get_agent_installer_checksum(
     script = await asyncio.to_thread(render_installer_script, pins)
     digest = hashlib.sha256(script.encode("utf-8")).hexdigest()
     return Response(content=f"{digest}\n", media_type="text/plain")
+
+
+@router.get("/agent/uninstall.sh")
+async def get_agent_uninstaller() -> Response:
+    """The uninstaller this server serves, identical for every caller.
+
+    Unauthenticated, matching install.sh beside it. Acceptable because the
+    script is static: it carries no credential, no pins and no per-agent data,
+    and does nothing unless an operator with root on a machine chooses to run
+    it there. It reveals only that a Borg UI server is present, which
+    install.sh already reveals (spec section 8).
+
+    Takes no query parameters and touches no database, so unlike the installer
+    it needs neither a session nor a worker thread.
+    """
+    return Response(content=UNINSTALLER_SCRIPT, media_type="text/x-shellscript")
 
 
 @router.get("/agent/dist/")

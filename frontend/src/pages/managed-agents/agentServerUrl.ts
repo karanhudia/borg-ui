@@ -38,8 +38,10 @@ export function resolveAgentServerUrl(
 
 export function isLocalAgentServerUrl(serverUrl: string): boolean {
   try {
-    const url = new URL(serverUrl)
-    return ['localhost', '127.0.0.1', '::1'].includes(url.hostname)
+    // URL.hostname keeps the brackets on an IPv6 literal, so http://[::1]:8083
+    // reports "[::1]" and never matched the bare "::1" this compared against.
+    const hostname = new URL(serverUrl).hostname.replace(/^\[|\]$/g, '')
+    return ['localhost', '127.0.0.1', '::1'].includes(hostname)
   } catch {
     return false
   }
@@ -48,4 +50,19 @@ export function isLocalAgentServerUrl(serverUrl: string): boolean {
 export function normalizeAgentServerUrl(serverUrl: string): string {
   const parsed = stripApiSuffix(new URL(serverUrl))
   return parsed.origin + (parsed.pathname === '/' ? '' : parsed.pathname)
+}
+
+/**
+ * True when a command that pipes this server's script into a root shell would
+ * travel unencrypted across a network someone else can sit on.
+ *
+ * Loopback is exempt: there is no network path to attack, and a plain HTTP
+ * localhost server is the ordinary development and single-host setup.
+ */
+export function isInsecureCommandUrl(serverUrl: string): boolean {
+  try {
+    return new URL(serverUrl).protocol === 'http:' && !isLocalAgentServerUrl(serverUrl)
+  } catch {
+    return false
+  }
 }

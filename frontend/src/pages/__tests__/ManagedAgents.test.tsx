@@ -1641,6 +1641,15 @@ describe('ManagedAgents server URL recovery', () => {
     expect(within(dialog).getByText(/borg-ui-agent set-server/)).toBeInTheDocument()
   })
 
+  it('opens the uninstall dialog from the card', async () => {
+    renderOffline()
+
+    await userEvent.click(screen.getByRole('button', { name: /uninstall the agent/i }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/uninstall\.sh" \| sudo bash/)).toBeInTheDocument()
+  })
+
   it('points an offline card at borg-ui-agent status', () => {
     renderOffline()
 

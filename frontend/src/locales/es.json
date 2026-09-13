@@ -339,7 +339,8 @@
         "revokeToken": "Revocar token",
         "upgradeAgent": "Actualizar este endpoint",
         "pinAgentVersion": "Fijar la versión de este endpoint",
-        "changeServerUrl": "Cambiar la URL del servidor"
+        "changeServerUrl": "Cambiar la URL del servidor",
+        "uninstallAgent": "Desinstalar el agente"
       },
       "noBorg": {
         "title": "No se informó de un binario Borg utilizable",
@@ -480,7 +481,20 @@
         "runHint": "Ejecútalo en el endpoint, con un usuario que pueda usar sudo.",
         "statusHint": "¿No sabes qué dirección tiene ahora el endpoint? Ejecuta borg-ui-agent status en él."
       },
-      "offlineStatusHint": "Ejecuta borg-ui-agent status en el endpoint para ver la dirección de servidor que tiene ahora."
+      "offlineStatusHint": "Ejecuta borg-ui-agent status en el endpoint para ver la dirección de servidor que tiene ahora.",
+      "uninstallDialog": {
+        "title": "Desinstalar el agente",
+        "description": "Ejecute esto en el endpoint para eliminar Borg UI por completo. El agente se da de baja primero, así que esta tarjeta se actualiza sola.",
+        "removesTitle": "Qué se elimina",
+        "removesService": "El servicio borg-ui-agent y su asistente de actualización",
+        "removesVenv": "El entorno virtual en /opt/borg-ui-agent",
+        "removesConfig": "La configuración en /etc/borg-ui-agent, incluida la credencial",
+        "removesUser": "El usuario de servicio dedicado borg-ui-agent, si la instalación creó uno",
+        "keepsBorg": "Su propia instalación de Borg no se toca. Solo se eliminan los binarios que colocó este instalador.",
+        "keepsRepositories": "Sus repositorios de copia de seguridad no se tocan.",
+        "copyCommand": "Copiar comando"
+      },
+      "insecureCommandWarning": "Este servidor es accesible por HTTP sin cifrar, así que este comando descarga un script sin cifrar y lo ejecuta como root. Cualquiera en la ruta de red puede sustituir lo que se descarga. Ponga el servidor tras HTTPS antes de ejecutar esto fuera de una red de confianza."
     },
     "installCommand": {
       "title": "Comando de instalación",

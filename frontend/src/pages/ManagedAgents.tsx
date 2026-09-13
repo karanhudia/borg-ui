@@ -36,6 +36,7 @@ import {
   ArrowUpCircle,
   Ban,
   CheckCircle,
+  Eraser,
   Eye,
   Info,
   Link2,
@@ -76,6 +77,8 @@ import AgentUpgradeChip from './managed-agents/AgentUpgradeChip'
 import AgentPinControl from './managed-agents/AgentPinControl'
 import AgentUpgradeDialog from './managed-agents/AgentUpgradeDialog'
 import AgentSetServerDialog from './managed-agents/AgentSetServerDialog'
+import AgentUninstallDialog from './managed-agents/AgentUninstallDialog'
+import InsecureCommandWarning from './managed-agents/InsecureCommandWarning'
 import CopyableCodeBlock from './managed-agents/CopyableCodeBlock'
 import AgentUpgradeStateChip from './managed-agents/AgentUpgradeStateChip'
 import { canUpgradeNow } from './managed-agents/agentUpgradeEligibility'
@@ -1529,6 +1532,7 @@ export function AgentReinstallDialog({
               {t('managedAgents.page.reinstallDialog.borgSelectionHint')}
             </Typography>
           </Box>
+          <InsecureCommandWarning serverUrl={serverUrl} />
           <CopyableCodeBlock
             value={command}
             copyLabel={t('managedAgents.page.reinstallDialog.copyCommand')}
@@ -1584,6 +1588,7 @@ export function AgentList({
   const [deleteTarget, setDeleteTarget] = useState<AgentMachineResponse | null>(null)
   const [reinstallTarget, setReinstallTarget] = useState<AgentMachineResponse | null>(null)
   const [setServerTarget, setSetServerTarget] = useState<AgentMachineResponse | null>(null)
+  const [uninstallTarget, setUninstallTarget] = useState<AgentMachineResponse | null>(null)
   const [upgradeTargets, setUpgradeTargets] = useState<AgentMachineResponse[]>([])
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [pinTarget, setPinTarget] = useState<AgentMachineResponse | null>(null)
@@ -2132,6 +2137,32 @@ export function AgentList({
                       </IconButton>
                     </span>
                   </Tooltip>
+                  <Tooltip title={t('managedAgents.page.actions.uninstallAgent')} arrow>
+                    <IconButton
+                      size="small"
+                      aria-label={t('managedAgents.page.actions.uninstallAgent')}
+                      onClick={() => {
+                        trackSystem(EventAction.VIEW, {
+                          section: MANAGED_AGENTS_ANALYTICS_SECTION,
+                          operation: 'open_uninstall_dialog',
+                          status: agent.status,
+                        })
+                        setUninstallTarget(agent)
+                      }}
+                      sx={{
+                        width: { xs: 40, sm: 34 },
+                        height: { xs: 40, sm: 34 },
+                        borderRadius: 1.5,
+                        color: alpha(theme.palette.error.main, 0.6),
+                        '&:hover': {
+                          color: theme.palette.error.main,
+                          bgcolor: alpha(theme.palette.error.main, isDark ? 0.15 : 0.1),
+                        },
+                      }}
+                    >
+                      <Eraser size={16} />
+                    </IconButton>
+                  </Tooltip>
                   <Tooltip title={t('managedAgents.page.actions.deleteAgent')} arrow>
                     <span>
                       <IconButton
@@ -2213,6 +2244,13 @@ export function AgentList({
         defaultServerUrl={serverUrl}
         onCopy={onCopy}
         onCancel={() => setSetServerTarget(null)}
+      />
+      <AgentUninstallDialog
+        open={!!uninstallTarget}
+        agent={uninstallTarget}
+        serverUrl={serverUrl}
+        onCopy={onCopy}
+        onCancel={() => setUninstallTarget(null)}
       />
       <AgentDiagnosticsDialog
         open={!!diagnosticsTarget}

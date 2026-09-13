@@ -339,7 +339,8 @@
         "revokeToken": "Revoke token",
         "upgradeAgent": "Upgrade this endpoint",
         "pinAgentVersion": "Pin this endpoint's version",
-        "changeServerUrl": "Change server URL"
+        "changeServerUrl": "Change server URL",
+        "uninstallAgent": "Uninstall the agent"
       },
       "noBorg": {
         "title": "No usable Borg binary reported",
@@ -480,7 +481,20 @@
         "runHint": "Run this on the endpoint, as a user who can sudo.",
         "statusHint": "Not sure what address the endpoint holds right now? Run borg-ui-agent status on it."
       },
-      "offlineStatusHint": "Run borg-ui-agent status on the endpoint to see the server address it currently holds."
+      "offlineStatusHint": "Run borg-ui-agent status on the endpoint to see the server address it currently holds.",
+      "uninstallDialog": {
+        "title": "Uninstall the agent",
+        "description": "Run this on the endpoint to remove Borg UI from it completely. It unregisters itself first, so this card updates on its own.",
+        "removesTitle": "What this removes",
+        "removesService": "The borg-ui-agent service and its upgrade helper",
+        "removesVenv": "The virtualenv at /opt/borg-ui-agent",
+        "removesConfig": "The configuration at /etc/borg-ui-agent, including the credential",
+        "removesUser": "The dedicated borg-ui-agent service user, if the install created one",
+        "keepsBorg": "Your own Borg installation is not touched. Only binaries this installer placed are removed.",
+        "keepsRepositories": "Your backup repositories are not touched.",
+        "copyCommand": "Copy command"
+      },
+      "insecureCommandWarning": "This server is reachable over plain HTTP, so this command downloads a script unencrypted and runs it as root. Anyone on the network path can replace what it downloads. Put the server behind HTTPS before running this outside a network you trust."
     },
     "installCommand": {
       "title": "Install command",

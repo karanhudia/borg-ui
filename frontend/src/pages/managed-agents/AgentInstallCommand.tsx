@@ -8,6 +8,7 @@ import {
   type AgentServiceUserMode,
   type BorgInstallMode,
 } from './agentInstallCommandText'
+import InsecureCommandWarning from './InsecureCommandWarning'
 
 const spin = keyframes`
   from { transform: rotate(0deg); }
@@ -42,6 +43,7 @@ export default function AgentInstallCommand({
 
   return (
     <Stack spacing={1.5}>
+      <InsecureCommandWarning serverUrl={serverUrl} />
       <Typography
         variant="subtitle2"
         sx={{

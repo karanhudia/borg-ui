@@ -73,7 +73,10 @@ without further clicks.
   See section 6.2.
 - **Checksum verification of the pasted installer command.** The existing
   `install.sh` copy-paste path is unverified today and `uninstall.sh` inherits
-  that. Tightening both is real work and belongs in its own change.
+  that. Tightening both is real work and belongs in its own change. Amended
+  2026-09-13: the transport half of this, warning when the command would be
+  fetched over plain HTTP, was pulled into phase 2 on the owner's call. See
+  Appendix B.5. The checksum half is still out of scope.
 - **A general remote-command console.** Nothing here adds a new way for the
   server to run arbitrary work on an endpoint.
 
@@ -326,8 +329,8 @@ condition is inverted. They are the tests that matter most in this change.
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| 1 | `set-server` and the URL dialog | Implemented, awaiting the live gate ([plan](../plans/2026-09-12-agent-self-service-recovery-phase-1.md)) |
-| 2 | `uninstall.sh` and the uninstall dialog | Not started |
+| 1 | `set-server` and the URL dialog | Merged in #1039 ([plan](../plans/2026-09-12-agent-self-service-recovery-phase-1.md)). The 10.2 gate's subcommand half is still unrun: it needs an endpoint on agent 0.1.5. |
+| 2 | `uninstall.sh` and the uninstall dialog | In review, [PR #1043](https://github.com/karanhudia/borg-ui/pull/1043) ([plan](../plans/2026-09-13-agent-self-service-recovery-phase-2.md)), all five tasks committed, suites green, local CodeRabbit clean after three passes. The 10.3 live gate needs a real endpoint installed with `--service-user current`. |
 
 ### 10.2 Phase 1 - change the server URL
 
@@ -389,6 +392,18 @@ explicit `--purge`. Rejected on the owner's call: an operator removing an agent
 wants it gone, and a default that quietly leaves a service user and a data
 directory behind is the wrong surprise. The safety rules in section 6.2 are not
 part of this trade; they hold under every flag.
+
+**B.5 The HTTP warning, not an HTTP refusal.** Added 2026-09-13 on the owner's
+call, overriding the section 3 non-goal for the transport half only. A review
+of phase 2 asked that every command producer refuse to render a curl-to-sudo
+command for a non-HTTPS server. Refusing was rejected: Borg UI's ordinary
+self-hosted deployment is plain HTTP on a private address, and a refusal there
+leaves the operator no way to enrol, reinstall or remove an endpoint at all,
+turning a hardening into an outage. Instead all three producers, enrollment,
+reinstall and uninstall, render a warning naming the exposure and the fix.
+Loopback is exempt because there is no network path to attack. The operator is
+the party who can judge their own network, so they get the fact rather than a
+locked door. The `set-server` command is untouched: it downloads nothing.
 
 **B.4 No checksum on the pasted command.** `install.sh` is served alongside a
 `.sha256` that only the self-upgrade helper verifies, so the copy-paste path

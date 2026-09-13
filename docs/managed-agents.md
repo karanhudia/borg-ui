@@ -282,6 +282,58 @@ Older agents do not have that subcommand, so Borg UI shows an equivalent edit
 of the config file instead. Either way it is one command, and you do not have
 to choose between them.
 
+### Removing an endpoint
+
+`borg-ui-agent unregister` tells the server the endpoint is gone and deletes
+its config, but it leaves the service, the virtualenv and the rest on the
+machine. To remove everything, open **Managed Agents**, click **Uninstall** on
+that endpoint's card, and run the command it gives you:
+
+```bash
+curl -fsSL https://borg-ui.example.com/agent/uninstall.sh | sudo bash
+```
+
+If this Borg UI server is reachable only over plain HTTP, the dialog says so.
+The command downloads a script and runs it as root, so anyone on the network
+path between the endpoint and the server can replace what it downloads. That
+is worth fixing with HTTPS or a tunnel before you run it across a network you
+do not control. It is a warning rather than a block, because a private LAN
+server on plain HTTP is a normal Borg UI setup and you are the one who can
+judge your own network.
+
+The script unregisters with the server first, so the card shows the endpoint as
+revoked without you clicking Delete. If the server cannot be reached, which is
+likely if you are removing an endpoint that has been stranded, it says so and
+removes everything locally anyway.
+
+It removes the service and its upgrade helper, the virtualenv at
+`/opt/borg-ui-agent`, the configuration at `/etc/borg-ui-agent`, and the
+dedicated `borg-ui-agent` service user if the install created one.
+
+Two things it never removes, with or without flags:
+
+- **A Borg your distribution installed.** Only binaries this installer placed
+  under `/opt/borg-ui-agent` are removed, along with the `/usr/local/bin`
+  symlinks pointing at them. A Borg at `/usr/bin/borg` is left alone, because
+  removing it would break Borg for everything else on that machine.
+- **A service user that is not the dedicated account.** If the agent was
+  installed with `--service-user current`, it runs as your own login account,
+  and that account is never deleted.
+
+Your backup repositories are never touched.
+
+Flags, if you want to keep something:
+
+- `--keep-borg` leaves the Borg binaries this installer placed, and their
+  symlinks, in place
+- `--keep-user` leaves the dedicated service user and `/var/lib/borg-ui-agent`
+  in place
+- `--keep-config` leaves `/etc/borg-ui-agent/config.toml` in place, for a
+  reinstall against the same registration
+
+Running the script twice, or on a machine that was never fully installed, is
+safe: every removal tolerates a missing target.
+
 ## Enrollment Tokens and Agent Credentials
 
 Enrollment tokens are temporary setup credentials. They can expire after 1 hour,
