@@ -249,6 +249,7 @@ async def test_check_cancellation_terminates_the_tracked_borg_process(
             "v2.compact_service",
             "compact_v2_service",
         ),
+        ("check", "check", "check_service", "v2.check_service", "check_v2_service"),
     ],
 )
 async def test_borg2_cancellation_terminates_the_borg2_services_process(
@@ -336,6 +337,57 @@ async def test_a_killed_borg2_process_ends_the_row_cancelled_not_failed(
     finally:
         prune_v2_service.running_processes.pop(op.id, None)
     fake_process.terminate.assert_called_once()
+    assert outcome.status == "failed" and outcome.error_message == "cancelled"
+    db.expire_all()
+    assert db.get(Operation, op.id).status == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_borg2_delete_archive_cancellation_terminates_the_v2_process(
+    db, monkeypatch
+):
+    """`delete_archive` names its canceller `cancel_delete`, so it sits
+    outside the parametrised sweep above. Same gap: on a Borg 2 server
+    repository the router runs `delete_archive_v2_service`, whose process the
+    Borg 1 singleton never tracked."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.services.delete_archive_service import delete_archive_service
+    from app.services.operations.executors import maintenance
+    from app.services.v2.delete_archive_service import delete_archive_v2_service
+
+    repo = Repository(name="nas2-del", path="/repo/nas2-del", borg_version=2)
+    db.add(repo)
+    db.commit()
+    op = _operation(
+        db, repo, kind="delete_archive", params={"archive_name": "backup-1"}
+    )
+    ctx = FakeContext(db, op)
+    ctx._cancelled = True
+
+    fake_process = MagicMock()
+    fake_process.pid = 4246
+    fake_process.wait = AsyncMock(return_value=None)
+    delete_archive_v2_service.running_processes[op.id] = fake_process
+    v1_cancel = AsyncMock(return_value=False)
+    monkeypatch.setattr(delete_archive_service, "cancel_delete", v1_cancel)
+
+    async def call(self, job_id, *args, **kwargs):
+        await asyncio.sleep(0.05)
+        job = MaintenanceJobFacade(db, db.get(Operation, job_id))
+        job.status = "failed"
+        job.error_message = "Terminated"
+        db.commit()
+
+    monkeypatch.setattr(
+        "app.core.borg_router.BorgRouter.delete_archive", call, raising=True
+    )
+    try:
+        outcome = await maintenance.run_delete_archive(ctx)
+    finally:
+        delete_archive_v2_service.running_processes.pop(op.id, None)
+    fake_process.terminate.assert_called_once()
+    v1_cancel.assert_not_awaited()
     assert outcome.status == "failed" and outcome.error_message == "cancelled"
     db.expire_all()
     assert db.get(Operation, op.id).status == "cancelled"

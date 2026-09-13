@@ -25,6 +25,8 @@ from app.utils.restore_layout import (
     compute_restore_strip_components,
 )
 
+from app.services.process_cancel import terminate_tracked_process
+
 logger = structlog.get_logger()
 
 # Statuses that mean the restore job has already reached a terminal outcome.
@@ -1098,39 +1100,9 @@ class RestoreService:
         if agent_job_id is not None:
             return await self._cancel_agent_restore(job_id, agent_job_id)
 
-        if job_id not in self.running_processes:
-            logger.warning("No running process found for job", job_id=job_id)
-            return False
-
-        process = self.running_processes[job_id]
-
-        try:
-            # Try to terminate the process gracefully first
-            process.terminate()
-            logger.info(
-                "Sent SIGTERM to restore process", job_id=job_id, pid=process.pid
-            )
-
-            # Wait up to 5 seconds for graceful termination
-            try:
-                await asyncio.wait_for(process.wait(), timeout=5.0)
-                logger.info("Restore process terminated gracefully", job_id=job_id)
-            except asyncio.TimeoutError:
-                # Force kill if it doesn't terminate gracefully
-                process.kill()
-                logger.warning(
-                    "Force killed restore process (SIGKILL)",
-                    job_id=job_id,
-                    pid=process.pid,
-                )
-                await process.wait()
-
-            return True
-        except Exception as e:
-            logger.error(
-                "Failed to cancel restore process", job_id=job_id, error=str(e)
-            )
-            return False
+        return await terminate_tracked_process(
+            self.running_processes, job_id, "restore"
+        )
 
     async def _cancel_agent_restore(self, job_id: int, agent_job_id: int) -> bool:
         from app.database.models import AgentJob

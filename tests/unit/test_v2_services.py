@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from sqlalchemy.orm import sessionmaker
@@ -987,6 +987,63 @@ class TestDeleteArchiveV2Service:
         assert refreshed.status == "completed"
         assert refreshed.progress == 100
         verification.close()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_cancel_delete_terminates_the_tracked_process(
+        self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
+    ):
+        """#1028: the delete service had no cancellation path, so a cancel on
+        a Borg 2 server repository returned success while Borg ran on holding
+        the repository lock. It now hands `borg2` an `on_process` hook and
+        terminates whatever step is in flight."""
+        job = seed_job_operation(
+            db_session,
+            "delete_archive",
+            repository_id=borg_v2_repo_for_services.id,
+            repository_path=borg_v2_repo_for_services.path,
+            archive_name="old",
+            status="pending",
+        )
+        db_session.commit()
+        db_session.refresh(job)
+
+        service = DeleteArchiveV2Service()
+        service.log_dir = tmp_path
+        fake_process = MagicMock()
+        fake_process.pid = 5150
+        fake_process.wait = AsyncMock(return_value=None)
+        cancelled = {}
+
+        async def delete_archive(*args, on_process=None, **kwargs):
+            on_process(fake_process)
+            cancelled["result"] = await service.cancel_delete(job.id)
+            return {"success": False, "stderr": "Terminated"}
+
+        with (
+            patch(
+                "app.services.v2.delete_archive_service.SessionLocal",
+                testing_session_local,
+            ),
+            patch(
+                "app.services.v2.delete_archive_service.borg2.delete_archive",
+                delete_archive,
+            ),
+        ):
+            await service.execute_delete(job.id, borg_v2_repo_for_services.id, "old")
+
+        assert cancelled["result"] is True
+        fake_process.terminate.assert_called_once()
+        # The tracking map is emptied once the run is over.
+        assert job.id not in service.running_processes
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_cancel_delete_without_a_tracked_process_is_false(self, tmp_path):
+        """`cancel_watcher` reads a `False` as "not started yet, poll again"."""
+        service = DeleteArchiveV2Service()
+        service.log_dir = tmp_path
+        assert await service.cancel_delete(999) is False
 
 
 @pytest.mark.unit
