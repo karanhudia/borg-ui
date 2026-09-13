@@ -327,7 +327,7 @@ condition is inverted. They are the tests that matter most in this change.
 | Phase | Scope | Status |
 | --- | --- | --- |
 | 1 | `set-server` and the URL dialog | Merged in #1039 ([plan](../plans/2026-09-12-agent-self-service-recovery-phase-1.md)). The 10.2 gate's subcommand half is still unrun: it needs an endpoint on agent 0.1.5. |
-| 2 | `uninstall.sh` and the uninstall dialog | Planning |
+| 2 | `uninstall.sh` and the uninstall dialog | Implementing ([plan](../plans/2026-09-13-agent-self-service-recovery-phase-2.md)). Gate G1 answered 2026-09-13: test seams accepted, unregister timeout 5s. |
 
 ### 10.2 Phase 1 - change the server URL
 

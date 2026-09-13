@@ -1568,6 +1568,9 @@ catch.
 
 ## Open questions for the gate
 
+**Answered by the owner 2026-09-13:** 1 and 2 accepted as planned, both
+seams in. 3 confirmed at 5 seconds.
+
 1. Script paths are overridable through environment variables so the tests can
    run the real functions against a tmpdir (decision 1). Confirm that is
    acceptable in a script piped into `sudo bash`, given every variable takes
