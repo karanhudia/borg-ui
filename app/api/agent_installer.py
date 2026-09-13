@@ -1288,6 +1288,53 @@ report() {
   done
   return 1
 }
+
+# Best effort, and deliberately so (spec section 6.4). The server marks the
+# machine revoked, so the card reflects reality without the operator clicking
+# Delete. A stranded agent cannot reach its server, which is a likely reason to
+# be uninstalling in the first place, so a failure here reports and continues.
+#
+# The token is read from the config and sent only to the server_url recorded in
+# that same file, never to a URL passed on the command line, so a pasted script
+# cannot be steered into exfiltrating the credential. It is never echoed.
+unregister() {
+  if [[ ! -r "${CONFIG_FILE}" ]]; then
+    echo "No readable config at ${CONFIG_FILE}; skipping the unregister call."
+    return 0
+  fi
+
+  local server token
+  server="$(awk -F'"' '/^server_url[[:space:]]*=/ {print $2; exit}' "${CONFIG_FILE}")"
+  token="$(awk -F'"' '/^agent_token[[:space:]]*=/ {print $2; exit}' "${CONFIG_FILE}")"
+
+  if [[ -z "${server}" || -z "${token}" ]]; then
+    echo "The config carries no server URL and token; skipping the unregister call."
+    return 0
+  fi
+
+  if curl -fsS --max-time "${UNREGISTER_TIMEOUT}" -X POST \
+    -H "X-Borg-Agent-Authorization: Bearer ${token}" \
+    "${server%/}/api/agents/unregister" >/dev/null 2>&1; then
+    echo "Server notified: this endpoint is now revoked."
+  else
+    echo "Could not reach ${server} to unregister. Removing locally anyway."
+  fi
+  return 0
+}
+
+if [[ "${EUID:-$(id -u)}" != "0" ]]; then
+  echo "This must run as root. Pipe it into 'sudo bash'." >&2
+  exit 1
+fi
+
+unregister
+remove_service
+remove_upgrade_artifacts
+remove_borg_links
+remove_service_user
+remove_agent_files
+run_systemctl daemon-reload
+report
 """
 
 

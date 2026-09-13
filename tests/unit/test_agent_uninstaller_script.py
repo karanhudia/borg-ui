@@ -381,3 +381,89 @@ def test_every_removal_tolerates_a_missing_target(
     )
 
     assert result.returncode == 0, result.stderr
+
+
+_CURL_STUB = """
+curl() { echo "curl $*" >>"${CALL_LOG}"; return "${CURL_RC:-0}"; }
+"""
+
+
+def _run_unregister(
+    script: str, *, call_log: Path, config: Path, curl_rc: str = "0"
+) -> subprocess.CompletedProcess:
+    harness = "\n".join(
+        [
+            "set -uo pipefail",
+            "FAILURES=()",
+            'note_failure() { FAILURES+=("$1"); }',
+            _CURL_STUB,
+            _extract(script, "unregister"),
+            "unregister",
+        ]
+    )
+    return subprocess.run(
+        ["bash", "-c", harness],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={
+            "PATH": "/usr/bin:/bin",
+            "CALL_LOG": str(call_log),
+            "CONFIG_FILE": str(config),
+            "UNREGISTER_TIMEOUT": "5",
+            "CURL_RC": curl_rc,
+        },
+    )
+
+
+def _write_config(tmp_path: Path) -> Path:
+    config = tmp_path / "config.toml"
+    config.write_text(
+        'server_url = "https://borg.example.com"\n'
+        'agent_id = "agt_abc"\n'
+        'agent_token = "secret-token"\n'
+        'name = "db-01"\n'
+    )
+    return config
+
+
+def test_unregister_calls_the_server_recorded_in_the_config(
+    script: str, tmp_path: Path, call_log: Path
+):
+    result = _run_unregister(script, call_log=call_log, config=_write_config(tmp_path))
+
+    calls = call_log.read_text()
+    assert result.returncode == 0, result.stderr
+    assert "https://borg.example.com/api/agents/unregister" in calls
+    assert "X-Borg-Agent-Authorization: Bearer secret-token" in calls
+
+
+def test_unregister_never_echoes_the_token(script: str, tmp_path: Path, call_log: Path):
+    """Spec section 8. The token reaches curl and nothing else."""
+    result = _run_unregister(script, call_log=call_log, config=_write_config(tmp_path))
+
+    assert "secret-token" not in result.stdout
+    assert "secret-token" not in result.stderr
+
+
+def test_unregister_continues_when_the_server_is_unreachable(
+    script: str, tmp_path: Path, call_log: Path
+):
+    """Spec section 6.4. A stranded agent is a likely reason to be
+    uninstalling, and it must not block local cleanup."""
+    result = _run_unregister(
+        script, call_log=call_log, config=_write_config(tmp_path), curl_rc="7"
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (
+        "could not" in result.stdout.lower() or "not notified" in result.stdout.lower()
+    )
+
+
+def test_unregister_skips_a_missing_config(script: str, tmp_path: Path, call_log: Path):
+    """Safe on a partially installed or already-unregistered machine."""
+    result = _run_unregister(script, call_log=call_log, config=tmp_path / "absent.toml")
+
+    assert result.returncode == 0, result.stderr
+    assert call_log.read_text() == ""
