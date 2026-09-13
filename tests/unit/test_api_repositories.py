@@ -28,6 +28,7 @@ from app.core.security import get_password_hash
 from app.services.operations.maintenance_start import active_maintenance_operation
 from app.database.models import (
     AgentJob,
+    AgentJobLog,
     AgentMachine,
     Operation,
     LicensingState,
@@ -5039,3 +5040,60 @@ def test_validate_agent_repository_operation_rejects_deleted_agent(test_db):
 
     assert exc_info.value.status_code == 409
     assert exc_info.value.detail["key"] == "backend.errors.agents.agentNotQueueable"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_wait_for_agent_job_failure_surfaces_borg_stderr(test_db):
+    from datetime import timezone
+
+    from app.services.repository_executor import (
+        wait_for_agent_repository_operation_job,
+    )
+
+    agent = AgentMachine(
+        name="Pi",
+        agent_id="agt_pi_stderr",
+        token_hash=get_password_hash("borgui_agent_secret"),
+        token_prefix="borgui_agent_secret"[:20],
+        status="online",
+    )
+    test_db.add(agent)
+    test_db.commit()
+    now = datetime.now(timezone.utc)
+    job = AgentJob(
+        agent_machine_id=agent.id,
+        job_type="repository",
+        status="failed",
+        payload={"schema_version": 1, "job_kind": "repository.info"},
+        error_message="repository.info exited with code 2",
+        created_at=now,
+        updated_at=now,
+    )
+    test_db.add(job)
+    test_db.commit()
+    test_db.add(
+        AgentJobLog(
+            agent_job_id=job.id,
+            sequence=2,
+            stream="stderr",
+            message=(
+                "Failed to create/acquire the lock /repo/lock.exclusive "
+                "(Permission denied).\nTraceback (most recent call last):\n  ..."
+            ),
+            created_at=now,
+            received_at=now,
+        )
+    )
+    test_db.commit()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await wait_for_agent_repository_operation_job(
+            test_db, job.id, timeout_seconds=1
+        )
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.detail["message"] == (
+        "repository.info exited with code 2: "
+        "Failed to create/acquire the lock /repo/lock.exclusive (Permission denied)."
+    )

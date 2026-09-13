@@ -10,7 +10,7 @@ import structlog
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.database.models import AgentJob, AgentMachine, Repository
+from app.database.models import AgentJob, AgentJobLog, AgentMachine, Repository
 from app.services.agent_job_dispatcher import dispatch_agent_cancel_if_connected
 from app.services.job_admission import (
     OPERATION_BACKUP,
@@ -417,6 +417,26 @@ def get_agent_archive_browse_job(
     )
 
 
+def _agent_job_failure_message(db: Session, agent_job: AgentJob) -> Optional[str]:
+    """The agent only reports "exited with code N"; borg's actual reason is in
+    the stderr log. Its first line is the human-readable error, so surface it."""
+    stderr = (
+        db.query(AgentJobLog.message)
+        .filter(
+            AgentJobLog.agent_job_id == agent_job.id, AgentJobLog.stream == "stderr"
+        )
+        .order_by(AgentJobLog.sequence.desc())
+        .first()
+    )
+    first_line = (stderr[0] if stderr else "").strip().splitlines()
+    if not first_line:
+        return agent_job.error_message
+    reason = first_line[0].strip()
+    if not agent_job.error_message:
+        return reason
+    return f"{agent_job.error_message}: {reason}"
+
+
 async def wait_for_agent_repository_operation_job(
     db: Session,
     agent_job_id: int,
@@ -440,7 +460,7 @@ async def wait_for_agent_repository_operation_job(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail={
                     "key": "backend.errors.agents.repositoryOperationFailed",
-                    "message": agent_job.error_message,
+                    "message": _agent_job_failure_message(db, agent_job),
                 },
             )
         await asyncio.sleep(poll_interval_seconds)
