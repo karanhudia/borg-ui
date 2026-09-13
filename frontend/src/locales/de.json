@@ -1028,6 +1028,20 @@
     "mountTimeout": "Einhänge-Timeout: Große Repositories benötigen möglicherweise mehr Zeit zum Einhängen.",
     "mountFailed": "Fehler beim Einhängen des Archivs: {{error}}",
     "restoreStarted": "Wiederherstellungsaufgabe gestartet! Überprüfe den Aktivitäts-Tab, um den Fortschritt zu überwachen.",
+    "restorePanel": {
+      "label": "Wiederherstellungsfortschritt",
+      "pending": "Wiederherstellung wartet",
+      "running": "Wird wiederhergestellt…",
+      "completed": "Wiederherstellung abgeschlossen",
+      "completed_with_warnings": "Wiederherstellung mit Warnungen abgeschlossen",
+      "failed": "Wiederherstellung fehlgeschlagen",
+      "cancelled": "Wiederherstellung abgebrochen",
+      "restoringTo": "Bisher {{count}} Dateien nach {{path}}",
+      "restoredTo": "{{count}} Dateien nach {{path}} wiederhergestellt",
+      "noDetails": "Keine Details gemeldet.",
+      "viewActivity": "In Aktivität anzeigen",
+      "dismiss": "Schließen"
+    },
     "mountSuccess": "Archiv erfolgreich eingehängt!\n\nEinhängepunkt befindet sich im Container. Um auf Dateien zuzugreifen, ausführen:\n\n{{command}}",
     "toasts": {
       "deleteFailed": "Archiv konnte nicht gelöscht werden",

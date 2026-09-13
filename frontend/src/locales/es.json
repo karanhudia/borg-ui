@@ -1028,6 +1028,20 @@
     "mountTimeout": "Tiempo de espera de montaje: Los repositorios grandes pueden necesitar más tiempo para montarse.",
     "mountFailed": "Error al montar el archivo: {{error}}",
     "restoreStarted": "¡Trabajo de restauración iniciado! Comprueba la pestaña de Actividad para monitorizar el progreso.",
+    "restorePanel": {
+      "label": "Progreso de la restauración",
+      "pending": "Restauración en cola",
+      "running": "Restaurando…",
+      "completed": "Restauración completada",
+      "completed_with_warnings": "Restauración completada con avisos",
+      "failed": "Restauración fallida",
+      "cancelled": "Restauración cancelada",
+      "restoringTo": "{{count}} archivos hasta ahora en {{path}}",
+      "restoredTo": "{{count}} archivos restaurados en {{path}}",
+      "noDetails": "No se informaron detalles.",
+      "viewActivity": "Ver en Actividad",
+      "dismiss": "Cerrar"
+    },
     "mountSuccess": "¡Archivo montado correctamente!\n\nEl montaje está dentro del contenedor. Para acceder a los archivos, ejecuta:\n\n{{command}}",
     "toasts": {
       "deleteFailed": "Error al eliminar el archivo",

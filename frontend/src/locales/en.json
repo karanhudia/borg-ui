@@ -1028,6 +1028,20 @@
     "mountTimeout": "Mount timeout: Large repositories may need more time to mount.",
     "mountFailed": "Failed to mount archive: {{error}}",
     "restoreStarted": "Restore job started! Check the Activity tab to monitor progress.",
+    "restorePanel": {
+      "label": "Restore progress",
+      "pending": "Restore queued",
+      "running": "Restoring…",
+      "completed": "Restore complete",
+      "completed_with_warnings": "Restore completed with warnings",
+      "failed": "Restore failed",
+      "cancelled": "Restore cancelled",
+      "restoringTo": "{{count}} files so far to {{path}}",
+      "restoredTo": "{{count}} files restored to {{path}}",
+      "noDetails": "No details were reported.",
+      "viewActivity": "View in Activity",
+      "dismiss": "Dismiss"
+    },
     "mountSuccess": "Archive mounted successfully!\n\nMount is inside the container. To access files, run:\n\n{{command}}",
     "toasts": {
       "deleteFailed": "Failed to delete archive",

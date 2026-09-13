@@ -1028,6 +1028,20 @@
     "mountTimeout": "Timeout mount: I repository di grandi dimensioni potrebbero richiedere più tempo per il mount.",
     "mountFailed": "Impossibile montare l'archivio: {{error}}",
     "restoreStarted": "Job di ripristino avviato! Controlla la scheda Attività per monitorare i progressi.",
+    "restorePanel": {
+      "label": "Avanzamento del ripristino",
+      "pending": "Ripristino in coda",
+      "running": "Ripristino in corso…",
+      "completed": "Ripristino completato",
+      "completed_with_warnings": "Ripristino completato con avvisi",
+      "failed": "Ripristino non riuscito",
+      "cancelled": "Ripristino annullato",
+      "restoringTo": "{{count}} file finora in {{path}}",
+      "restoredTo": "{{count}} file ripristinati in {{path}}",
+      "noDetails": "Nessun dettaglio riportato.",
+      "viewActivity": "Vedi in Attività",
+      "dismiss": "Chiudi"
+    },
     "mountSuccess": "Archivio montato con successo!\n\nIl mount è all'interno del container. Per accedere ai file, esegui:\n\n{{command}}",
     "toasts": {
       "deleteFailed": "Impossibile eliminare l'archivio",

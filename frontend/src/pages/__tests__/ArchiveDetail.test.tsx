@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen, fireEvent } from '@testing-library/react'
+import { screen, fireEvent, within } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
 import ArchiveDetail from '../ArchiveDetail'
-import { archivesAPI, repositoriesAPI } from '../../services/api'
+import { archivesAPI, repositoriesAPI, restoreAPI } from '../../services/api'
 
 let mockParams = { repositoryId: '7', archiveId: '12' }
 
@@ -34,14 +34,23 @@ vi.mock('../../components/RestoreWizard', () => ({
     open,
     initialSelectedPaths,
     archive,
+    onRestore,
   }: {
     open: boolean
     initialSelectedPaths?: string[]
     archive?: { name?: string } | null
+    onRestore: (data: unknown) => void
   }) =>
     open ? (
       <div>
         Wizard: {(initialSelectedPaths ?? []).join(',')} from {archive?.name}
+        <button
+          onClick={() =>
+            onRestore({ selected_paths: ['home/karan/docs'], restore_strategy: 'original' })
+          }
+        >
+          Start restore
+        </button>
       </div>
     ) : null,
 }))
@@ -53,6 +62,10 @@ vi.mock('../../services/api', () => ({
   },
   repositoriesAPI: {
     getRepositories: vi.fn(),
+  },
+  restoreAPI: {
+    getRestoreStatus: vi.fn(),
+    startRestore: vi.fn(),
   },
 }))
 
@@ -111,6 +124,47 @@ describe('ArchiveDetail', () => {
     vi.mocked(repositoriesAPI.getRepositories).mockResolvedValue({
       data: { repositories: [{ id: 7, name: 'nas', path: '/data/nas', mode: 'full' }] },
     } as never)
+    vi.mocked(restoreAPI.startRestore).mockReset()
+    vi.mocked(restoreAPI.getRestoreStatus).mockReset()
+  })
+
+  it('follows the started restore in the bottom-right panel until dismissed', async () => {
+    vi.mocked(archivesAPI.getArchive).mockResolvedValue({ data: archive } as never)
+    vi.mocked(restoreAPI.startRestore).mockResolvedValue({ data: { job_id: 42 } } as never)
+    vi.mocked(restoreAPI.getRestoreStatus).mockResolvedValue({
+      data: {
+        id: 42,
+        status: 'completed',
+        destination: '/tmp/out',
+        progress_details: { nfiles: 3, current_file: '', progress_percent: 100 },
+      },
+    } as never)
+    renderRoute('/archives/7/12?tab=files')
+    fireEvent.click(await screen.findByRole('button', { name: /restore selection/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /start restore/i }))
+
+    const panel = await screen.findByRole('status', { name: /restore progress/i })
+    await within(panel).findByText('Restore complete')
+    expect(panel).toHaveTextContent('3 files restored to /tmp/out')
+    expect(vi.mocked(restoreAPI.getRestoreStatus)).toHaveBeenCalledWith(42)
+
+    fireEvent.click(within(panel).getByRole('button', { name: /dismiss/i }))
+    expect(screen.queryByRole('status', { name: /restore progress/i })).not.toBeInTheDocument()
+  })
+
+  it('shows the failure reason when the restore fails', async () => {
+    vi.mocked(archivesAPI.getArchive).mockResolvedValue({ data: archive } as never)
+    vi.mocked(restoreAPI.startRestore).mockResolvedValue({ data: { job_id: 43 } } as never)
+    vi.mocked(restoreAPI.getRestoreStatus).mockResolvedValue({
+      data: { id: 43, status: 'failed', destination: '/tmp/out', error_message: 'disk full' },
+    } as never)
+    renderRoute('/archives/7/12?tab=files')
+    fireEvent.click(await screen.findByRole('button', { name: /restore selection/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /start restore/i }))
+
+    const panel = await screen.findByRole('status', { name: /restore progress/i })
+    await within(panel).findByText('Restore failed')
+    expect(panel).toHaveTextContent('disk full')
   })
 
   it('shows the archive header and defaults to the Changes tab', async () => {

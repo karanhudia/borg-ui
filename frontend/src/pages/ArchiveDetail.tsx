@@ -32,6 +32,7 @@ import DeleteArchiveDialog from '../components/DeleteArchiveDialog'
 import MountArchiveDialog from '../components/MountArchiveDialog'
 import MountSuccessToast from '../components/MountSuccessToast'
 import RestoreWizard, { type RestoreData } from '../components/RestoreWizard'
+import RestoreProgressPanel from '../components/archives/RestoreProgressPanel'
 import { resyncStoredArchives } from '../utils/archiveResync'
 import { usePlan } from '../hooks/usePlan'
 import type { RestorePathMetadata } from '../utils/restorePaths'
@@ -83,6 +84,13 @@ export default function ArchiveDetail() {
   // "Restore this" in a file's history points at an older archive of the
   // series. Null means the archive on screen.
   const [restoreFromArchiveId, setRestoreFromArchiveId] = useState<number | null>(null)
+  // Bumped when a restore starts so the Files tab drops its selection bar:
+  // a "1 selected, Restore selection" panel left on screen reads as a
+  // restore that never went out.
+  const [selectionEpoch, setSelectionEpoch] = useState(0)
+  // The job started from this page. Its progress and outcome sit in the
+  // bottom-right panel until dismissed, so a restore never happens unseen.
+  const [restoreJobId, setRestoreJobId] = useState<number | null>(null)
 
   const openRestore = (paths?: string[], items?: RestorePathMetadata[], fromArchiveId?: number) => {
     setRestorePreselection(paths && paths.length > 0 ? { paths, items: items ?? [] } : null)
@@ -212,9 +220,10 @@ export default function ArchiveDetail() {
         data.path_metadata
       )
     },
-    onSuccess: () => {
-      toast.success(t('archives.restoreStarted'), { duration: 6000 })
+    onSuccess: (res) => {
       setShowRestoreWizard(false)
+      setSelectionEpoch((n) => n + 1)
+      setRestoreJobId(res.data.job_id)
       queryClient.refetchQueries({ queryKey: ['restore-jobs'] })
     },
     onError: (error: unknown) => {
@@ -464,6 +473,7 @@ export default function ArchiveDetail() {
         )}
         {activeTab === 'files' && repository && (
           <ArchiveFilesTab
+            key={selectionEpoch}
             repositoryId={repositoryId}
             repository={repository}
             archive={archive}
@@ -504,6 +514,15 @@ export default function ArchiveDetail() {
             initialSelectedItems={restorePreselection?.items}
           />
         </>
+      )}
+
+      {restoreJobId != null && (
+        <RestoreProgressPanel
+          key={restoreJobId}
+          jobId={restoreJobId}
+          repositoryId={repositoryId}
+          onDismiss={() => setRestoreJobId(null)}
+        />
       )}
     </Box>
   )
