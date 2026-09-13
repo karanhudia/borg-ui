@@ -13,6 +13,7 @@ import structlog
 import socket
 import re
 
+from app.services.storage_usage import format_bytes
 from app.database.models import NotificationSettings, Repository, SystemSettings
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
@@ -120,15 +121,6 @@ def _notification_applies_to_repository(
     return repo.id in setting_repo_ids
 
 
-def _format_bytes(bytes_value: int) -> str:
-    """Format bytes into human-readable size."""
-    for unit in ["B", "KB", "MB", "GB", "TB"]:
-        if bytes_value < 1024.0:
-            return f"{bytes_value:.2f} {unit}"
-        bytes_value /= 1024.0
-    return f"{bytes_value:.2f} PB"
-
-
 def _format_duration(started_at: datetime, completed_at: datetime) -> str:
     """
     Format duration as human-readable string.
@@ -165,7 +157,7 @@ def _calculate_compression_ratio(original_size: int, compressed_size: int) -> st
     savings_bytes = original_size - compressed_size
     ratio = (savings_bytes / original_size) * 100
 
-    return f"{ratio:.1f}% (saved {_format_bytes(savings_bytes)})"
+    return f"{ratio:.1f}% (saved {format_bytes(savings_bytes)})"
 
 
 def _calculate_backup_speed(total_bytes: int, duration_seconds: int) -> str:
@@ -653,7 +645,7 @@ class NotificationService:
         # Add expected size if provided
         if expected_size:
             content_blocks.append(
-                {"label": "Expected Size", "value": _format_bytes(expected_size)}
+                {"label": "Expected Size", "value": format_bytes(expected_size)}
             )
 
         # Create timestamp in the configured report timezone
@@ -824,12 +816,12 @@ class NotificationService:
                 stats_html += f"""
                 <div class="stat-card">
                     <div class="stat-label">Original Size</div>
-                    <div class="stat-value">{_format_bytes(stats["original_size"])}</div>
+                    <div class="stat-value">{format_bytes(stats["original_size"])}</div>
                 </div>"""
                 stats_blocks.append(
                     {
                         "label": "Original Size",
-                        "value": _format_bytes(stats["original_size"]),
+                        "value": format_bytes(stats["original_size"]),
                     }
                 )
 
@@ -837,12 +829,12 @@ class NotificationService:
                 stats_html += f"""
                 <div class="stat-card">
                     <div class="stat-label">Compressed</div>
-                    <div class="stat-value">{_format_bytes(stats["compressed_size"])}</div>
+                    <div class="stat-value">{format_bytes(stats["compressed_size"])}</div>
                 </div>"""
                 stats_blocks.append(
                     {
                         "label": "Compressed",
-                        "value": _format_bytes(stats["compressed_size"]),
+                        "value": format_bytes(stats["compressed_size"]),
                     }
                 )
 
@@ -850,12 +842,12 @@ class NotificationService:
                 stats_html += f"""
                 <div class="stat-card">
                     <div class="stat-label">Deduplicated</div>
-                    <div class="stat-value">{_format_bytes(stats["deduplicated_size"])}</div>
+                    <div class="stat-value">{format_bytes(stats["deduplicated_size"])}</div>
                 </div>"""
                 stats_blocks.append(
                     {
                         "label": "Deduplicated",
-                        "value": _format_bytes(stats["deduplicated_size"]),
+                        "value": format_bytes(stats["deduplicated_size"]),
                     }
                 )
 
@@ -1205,12 +1197,12 @@ class NotificationService:
                 stats_html += f"""
                 <div class="stat-card">
                     <div class="stat-label">Original Size</div>
-                    <div class="stat-value">{_format_bytes(stats["original_size"])}</div>
+                    <div class="stat-value">{format_bytes(stats["original_size"])}</div>
                 </div>"""
                 stats_blocks.append(
                     {
                         "label": "Original Size",
-                        "value": _format_bytes(stats["original_size"]),
+                        "value": format_bytes(stats["original_size"]),
                     }
                 )
 
@@ -1218,12 +1210,12 @@ class NotificationService:
                 stats_html += f"""
                 <div class="stat-card">
                     <div class="stat-label">Compressed Size</div>
-                    <div class="stat-value">{_format_bytes(stats["compressed_size"])}</div>
+                    <div class="stat-value">{format_bytes(stats["compressed_size"])}</div>
                 </div>"""
                 stats_blocks.append(
                     {
                         "label": "Compressed Size",
-                        "value": _format_bytes(stats["compressed_size"]),
+                        "value": format_bytes(stats["compressed_size"]),
                     }
                 )
 
@@ -1231,12 +1223,12 @@ class NotificationService:
                 stats_html += f"""
                 <div class="stat-card">
                     <div class="stat-label">Deduplicated Size</div>
-                    <div class="stat-value">{_format_bytes(stats["deduplicated_size"])}</div>
+                    <div class="stat-value">{format_bytes(stats["deduplicated_size"])}</div>
                 </div>"""
                 stats_blocks.append(
                     {
                         "label": "Deduplicated Size",
-                        "value": _format_bytes(stats["deduplicated_size"]),
+                        "value": format_bytes(stats["deduplicated_size"]),
                     }
                 )
 

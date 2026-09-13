@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 import structlog
 from sqlalchemy.orm import Session
+from app.services.storage_usage import format_bytes
 from app.database.models import Repository, RepositoryScript, SystemSettings
 from app.database.database import SessionLocal
 from app.config import settings
@@ -561,14 +562,6 @@ class BackupService:
         except Exception as e:
             logger.error("Failed to update archive stats", job_id=job_id, error=str(e))
 
-    def _format_bytes(self, bytes_value: int) -> str:
-        """Format bytes to human readable string"""
-        for unit in ["B", "KB", "MB", "GB", "TB"]:
-            if bytes_value < 1024.0:
-                return f"{bytes_value:.2f} {unit}"
-            bytes_value /= 1024.0
-        return f"{bytes_value:.2f} PB"
-
     async def _calculate_source_size(
         self,
         source_paths: list[str],
@@ -735,7 +728,7 @@ class BackupService:
                             "Background size calculation completed and job updated",
                             job_id=job_id,
                             total_expected_size=total_expected_size,
-                            size_formatted=self._format_bytes(total_expected_size),
+                            size_formatted=format_bytes(total_expected_size),
                         )
                     else:
                         logger.info(

@@ -30,7 +30,7 @@ from app.services.operations.job_facade import (
     latest_maintenance_jobs_by_repository,
     maintenance_jobs_started_since,
 )
-from app.services.storage_usage import stored_size_bytes
+from app.services.storage_usage import format_bytes, stored_size_bytes
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
@@ -1254,15 +1254,6 @@ def repository_size_bytes(repo) -> int:
     """The repository's measured size in bytes, by the one rule every size
     reader applies (`storage_usage.stored_size_bytes`); 0 when unknown."""
     return stored_size_bytes(repo) or 0
-
-
-def format_bytes(bytes_value: int) -> str:
-    """Format bytes to human-readable string"""
-    for unit in ["B", "KB", "MB", "GB", "TB", "PB"]:
-        if bytes_value < 1024.0:
-            return f"{bytes_value:.1f} {unit}"
-        bytes_value /= 1024.0
-    return f"{bytes_value:.1f} PB"
 
 
 def calculate_average_dedup(repositories: List[Repository]) -> int:

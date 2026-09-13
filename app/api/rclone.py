@@ -30,6 +30,7 @@ from app.core.security import (
     get_current_download_user,
     get_current_user,
 )
+from app.services.storage_usage import format_bytes
 from app.database.database import get_db
 from app.database.models import (
     RepositoryStorage,
@@ -2149,15 +2150,6 @@ def _remote_oauth_token_status(remote: RcloneRemote) -> dict[str, Any] | None:
     return _oauth_token_status_from_config_values(remote.provider, values)
 
 
-def _format_bytes(bytes_size: int) -> str:
-    value = float(bytes_size)
-    for unit in ["B", "KB", "MB", "GB", "TB", "PB"]:
-        if value < 1024.0:
-            return f"{value:.2f} {unit}"
-        value /= 1024.0
-    return f"{value:.2f} EB"
-
-
 def _parse_about_size_value(value: str, unit: str | None) -> int | None:
     try:
         parsed = float(value)
@@ -2238,11 +2230,11 @@ def _serialize_remote_storage(remote: RcloneRemote) -> dict[str, Any] | None:
 
     return {
         "total": remote.storage_total,
-        "total_formatted": _format_bytes(remote.storage_total),
+        "total_formatted": format_bytes(remote.storage_total),
         "used": remote.storage_used,
-        "used_formatted": _format_bytes(remote.storage_used),
+        "used_formatted": format_bytes(remote.storage_used),
         "available": remote.storage_available,
-        "available_formatted": _format_bytes(remote.storage_available),
+        "available_formatted": format_bytes(remote.storage_available),
         "percent_used": remote.storage_percent_used,
         "last_check": _iso(remote.last_storage_check),
     }

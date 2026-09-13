@@ -1069,14 +1069,6 @@ async def _update_agent_repository_stats(
         return False
 
 
-# Helper function to format bytes to human readable format
-# `format_bytes` now lives next to the parser that reads its output and the
-# writer that keeps the size columns in agreement (`storage_usage`); it is
-# imported above and re-exported here for the callers that have always
-# taken it from this module.
-__all__ = ["format_bytes"]
-
-
 def _decode_json_list_field(value):
     """Normalize repository JSON-list fields that may already be decoded."""
     if value in (None, ""):

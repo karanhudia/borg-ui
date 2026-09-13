@@ -110,16 +110,6 @@ class TestBackupService:
         assert backup_service.running_processes == {}
         assert backup_service.error_msgids == {}
 
-    def test_format_bytes(self, backup_service):
-        """Test _format_bytes method"""
-        assert backup_service._format_bytes(0) == "0.00 B"
-        assert backup_service._format_bytes(1024) == "1.00 KB"
-        assert backup_service._format_bytes(1024 * 1024) == "1.00 MB"
-        assert backup_service._format_bytes(1024 * 1024 * 1024) == "1.00 GB"
-        assert backup_service._format_bytes(1024 * 1024 * 1024 * 1024) == "1.00 TB"
-        assert backup_service._format_bytes(500) == "500.00 B"
-        assert backup_service._format_bytes(1536) == "1.50 KB"
-
     @pytest.mark.skip(
         reason="rotate_logs() signature changed - needs rewrite for new log management system"
     )

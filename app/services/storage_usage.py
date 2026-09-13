@@ -50,12 +50,16 @@ SOURCE_COMPACT_STATS = "compact_stats"
 
 
 def format_bytes(bytes_size: int) -> str:
-    """Format bytes to human readable string (e.g., '1.23 GB')"""
+    """Format bytes to human readable string (e.g., '1.23 GB'). The one
+    byte formatter: `bytes_from_formatted` reads what this writes, and the
+    stored size string is compared against it, so a second spelling of the
+    same rounding is a second answer to the same question."""
+    value = float(bytes_size)
     for unit in ["B", "KB", "MB", "GB", "TB", "PB"]:
-        if bytes_size < 1024.0:
-            return f"{bytes_size:.2f} {unit}"
-        bytes_size /= 1024.0
-    return f"{bytes_size:.2f} EB"
+        if value < 1024.0:
+            return f"{value:.2f} {unit}"
+        value /= 1024.0
+    return f"{value:.2f} EB"
 
 
 def set_repository_size(

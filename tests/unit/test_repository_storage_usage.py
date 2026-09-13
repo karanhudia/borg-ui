@@ -895,6 +895,28 @@ def test_set_repository_size_writes_the_four_columns_together():
 
 
 @pytest.mark.unit
+def test_format_bytes_is_the_one_writer_of_a_size_string():
+    """Every module that renders a byte count shares this function: the
+    repository card, the dashboard totals, the SSH and rclone storage
+    figures, the notification bodies and the backup service's messages.
+    Two decimals, base 1024, and the top unit is EB (a value past PB used
+    to come back labelled PB in two of the copies)."""
+    from app.services.storage_usage import bytes_from_formatted, format_bytes
+
+    assert format_bytes(0) == "0.00 B"
+    assert format_bytes(999) == "999.00 B"
+    assert format_bytes(1024) == "1.00 KB"
+    assert format_bytes(1536) == "1.50 KB"
+    assert format_bytes(1024**2) == "1.00 MB"
+    assert format_bytes(5 * 1024**3) == "5.00 GB"
+    assert format_bytes(1024**4) == "1.00 TB"
+    assert format_bytes(1024**5) == "1.00 PB"
+    assert format_bytes(1024**6) == "1.00 EB"
+    # the parser reads back what this writes, to the precision it prints
+    assert bytes_from_formatted(format_bytes(1024**3)) == 1024**3
+
+
+@pytest.mark.unit
 def test_stored_size_bytes_is_the_one_rule_every_reader_applies():
     from types import SimpleNamespace
 

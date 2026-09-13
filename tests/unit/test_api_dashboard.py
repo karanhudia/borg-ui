@@ -312,14 +312,17 @@ class TestDashboardHelpers:
     @pytest.mark.parametrize(
         "size_value, expected",
         [
-            (0, "0.0 B"),
-            (512, "512.0 B"),
-            (1024, "1.0 KB"),
-            (1024 * 1024, "1.0 MB"),
-            (1024 * 1024 * 1024, "1.0 GB"),
+            (0, "0.00 B"),
+            (512, "512.00 B"),
+            (1024, "1.00 KB"),
+            (1024 * 1024, "1.00 MB"),
+            (1024 * 1024 * 1024, "1.00 GB"),
         ],
     )
     def test_format_bytes(self, size_value, expected):
+        """The dashboard formats its totals with the one formatter
+        (`storage_usage.format_bytes`), so a total reads the way every other
+        size on the page does."""
         assert format_bytes(size_value) == expected
 
     def test_full_repository_health_keeps_unconfigured_restore_check_unknown(self):
@@ -1051,7 +1054,7 @@ class TestDashboardScheduleAndOverview:
         }
 
         assert data["storage"]["total_archives"] == 7
-        assert data["storage"]["total_size"] == "1.5 TB"
+        assert data["storage"]["total_size"] == "1.50 TB"
         repo_health = {item["name"]: item for item in data["repository_health"]}
         assert repo_health["Full Repo"]["health_status"] == "critical"
         assert repo_health["Full Repo"]["schedule_name"] == "Nightly Full Repo"
