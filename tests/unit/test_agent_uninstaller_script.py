@@ -467,3 +467,117 @@ def test_unregister_skips_a_missing_config(script: str, tmp_path: Path, call_log
 
     assert result.returncode == 0, result.stderr
     assert call_log.read_text() == ""
+
+
+_FULL_RUN_STUBS = """
+systemctl() { echo "systemctl $*" >>"${CALL_LOG}"; }
+userdel() { echo "userdel $*" >>"${CALL_LOG}"; }
+curl() { echo "curl $*" >>"${CALL_LOG}"; return "${CURL_RC:-0}"; }
+id() { echo 0; }
+"""
+
+
+def _run_whole_script(
+    script: str, *, env: dict[str, str], args: tuple[str, ...] = ()
+) -> subprocess.CompletedProcess:
+    """Runs the script's own main sequence, not a sequence the test invented.
+
+    The ordering of that sequence is itself load-bearing: remove_service_user
+    reads User= from the unit, so anything that removes the unit before it runs
+    silently turns the dedicated-account removal into a no-op. A test that
+    calls the functions in an order of its own choosing cannot see that.
+    """
+    return subprocess.run(
+        ["bash", "-s", "--", *args],
+        input=_FULL_RUN_STUBS + script,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={"PATH": "/usr/bin:/bin", **env},
+    )
+
+
+def _installed_machine(tmp_path: Path, *, unit_user: str) -> dict[str, str]:
+    agent_root = tmp_path / "opt" / "borg-ui-agent"
+    (agent_root / "bin").mkdir(parents=True)
+    config_dir = tmp_path / "etc" / "borg-ui-agent"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.toml").write_text('server_url = "http://x"\n')
+    unit = tmp_path / "borg-ui-agent.service"
+    unit.write_text(f"[Service]\nUser={unit_user}\n")
+    state = tmp_path / "var" / "lib" / "borg-ui-agent"
+    state.mkdir(parents=True)
+
+    return {
+        "AGENT_ROOT": str(agent_root),
+        "CONFIG_DIR": str(config_dir),
+        "CONFIG_FILE": str(config_dir / "config.toml"),
+        "UPGRADE_TRIGGER": str(config_dir / "upgrade-requested"),
+        "SERVICE_UNIT": str(unit),
+        "UPGRADE_UNIT": str(tmp_path / "upgrade.service"),
+        "UPGRADE_PATH_UNIT": str(tmp_path / "upgrade.path"),
+        "UPGRADE_CONF": str(tmp_path / "upgrade.conf"),
+        "UPGRADE_HELPER": str(agent_root / "bin" / "borg-ui-agent-upgrade"),
+        "LEGACY_SUDOERS": str(tmp_path / "sudoers"),
+        "NO_REMOTE_UPGRADE_MARKER": str(tmp_path / "marker"),
+        "STATE_DIR": str(state),
+        "BORG1_LINK": str(tmp_path / "borg"),
+        "BORG2_LINK": str(tmp_path / "borg2"),
+        "DEDICATED_USER": "borg-ui-agent",
+    }
+
+
+def test_the_main_sequence_deletes_the_dedicated_user(
+    script: str, tmp_path: Path, call_log: Path
+):
+    """The whole point of the dedicated-account branch, run in the order the
+    script actually runs it. remove_service_user reads User= from the unit, so
+    a sequence that removes the unit first leaves the account behind forever
+    while every isolated test still passes."""
+    env = _installed_machine(tmp_path, unit_user="borg-ui-agent")
+
+    result = _run_whole_script(script, env={"CALL_LOG": str(call_log), **env})
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "userdel" in call_log.read_text()
+    assert not Path(env["AGENT_ROOT"]).exists()
+    assert not Path(env["CONFIG_DIR"]).exists()
+    assert not Path(env["STATE_DIR"]).exists()
+
+
+def test_the_main_sequence_removes_the_state_dir_for_any_service_user(
+    script: str, tmp_path: Path, call_log: Path
+):
+    """Spec section 6.2 lists /var/lib/borg-ui-agent under what is always
+    removed. Only the account deletion is conditional on which user it is."""
+    env = _installed_machine(tmp_path, unit_user="someoperator")
+
+    result = _run_whole_script(script, env={"CALL_LOG": str(call_log), **env})
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "userdel" not in call_log.read_text()
+    assert not Path(env["STATE_DIR"]).exists()
+
+
+def test_keep_user_still_keeps_the_state_dir(
+    script: str, tmp_path: Path, call_log: Path
+):
+    env = _installed_machine(tmp_path, unit_user="borg-ui-agent")
+
+    result = _run_whole_script(
+        script, env={"CALL_LOG": str(call_log), **env}, args=("--keep-user",)
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "userdel" not in call_log.read_text()
+    assert Path(env["STATE_DIR"]).exists()
+
+
+def test_the_main_sequence_is_idempotent(script: str, tmp_path: Path, call_log: Path):
+    """Spec section 6.5: a second run exits zero."""
+    env = _installed_machine(tmp_path, unit_user="borg-ui-agent")
+
+    _run_whole_script(script, env={"CALL_LOG": str(call_log), **env})
+    second = _run_whole_script(script, env={"CALL_LOG": str(call_log), **env})
+
+    assert second.returncode == 0, second.stderr + second.stdout

@@ -1180,8 +1180,15 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
-remove_service() {
+stop_service() {
   run_systemctl disable --now borg-ui-agent
+}
+
+# Split from stop_service on purpose. remove_service_user reads User= from this
+# unit to decide whether the account is ours to delete, so the unit has to
+# outlive that decision. Removing it earlier does not fail loudly: it makes the
+# dedicated-account removal a silent no-op on every real run.
+remove_service_unit() {
   rm -f "${SERVICE_UNIT}" || note_failure "could not remove ${SERVICE_UNIT}"
 }
 
@@ -1239,6 +1246,8 @@ remove_service_user() {
     return 0
   fi
 
+  rm -rf "${STATE_DIR}" || note_failure "could not remove ${STATE_DIR}"
+
   local unit_user=""
   if [[ -r "${SERVICE_UNIT}" ]]; then
     unit_user="$(awk -F= '/^User=/ {print $2; exit}' "${SERVICE_UNIT}" 2>/dev/null || true)"
@@ -1251,7 +1260,6 @@ remove_service_user() {
     return 0
   fi
 
-  rm -rf "${STATE_DIR}" || note_failure "could not remove ${STATE_DIR}"
   run_userdel "${DEDICATED_USER}"
 }
 
@@ -1322,16 +1330,17 @@ unregister() {
   return 0
 }
 
-if [[ "${EUID:-$(id -u)}" != "0" ]]; then
+if [[ "$(id -u)" != "0" ]]; then
   echo "This must run as root. Pipe it into 'sudo bash'." >&2
   exit 1
 fi
 
 unregister
-remove_service
+stop_service
 remove_upgrade_artifacts
 remove_borg_links
 remove_service_user
+remove_service_unit
 remove_agent_files
 run_systemctl daemon-reload
 report
