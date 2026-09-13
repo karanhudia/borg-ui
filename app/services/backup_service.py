@@ -57,7 +57,10 @@ from app.utils.ssh_utils import (
     resolve_ssh_key_file_by_id,
 )  # Backward-compatible patch target for tests
 
-from app.services.process_cancel import terminate_tracked_process
+from app.services.process_cancel import (
+    terminate_process,
+    terminate_tracked_process,
+)
 
 logger = structlog.get_logger()
 
@@ -1125,12 +1128,7 @@ class BackupService:
         try:
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
         except asyncio.TimeoutError as exc:
-            process.terminate()
-            try:
-                await asyncio.wait_for(process.wait(), timeout=5)
-            except asyncio.TimeoutError:
-                process.kill()
-                await process.wait()
+            await terminate_process(process, job_id, f"filesystem snapshot {action}")
             raise RuntimeError(
                 f"Filesystem snapshot {action} timed out after 300 seconds"
             ) from exc
@@ -2093,15 +2091,7 @@ class BackupService:
                             job_id=job_id,
                         )
                         cancelled = True
-                        process.terminate()
-                        try:
-                            await asyncio.wait_for(process.wait(), timeout=5.0)
-                        except asyncio.TimeoutError:
-                            logger.warning(
-                                "Process didn't terminate, killing it", job_id=job_id
-                            )
-                            process.kill()
-                            await process.wait()
+                        await terminate_process(process, job_id, "backup")
                         break
 
             async def stream_logs():

@@ -15,7 +15,10 @@ from app.services.operations.job_facade import (
     refresh_job,
     resolve_maintenance_job,
 )
-from app.services.process_cancel import terminate_tracked_process
+from app.services.process_cancel import (
+    terminate_process,
+    terminate_tracked_process,
+)
 from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import (
     build_repository_borg_env,
@@ -188,12 +191,7 @@ class PruneV2Service:
                     refresh_job(db, job)
                     if job.status == "cancelled":
                         logger.info("Borg2 prune cancelled, terminating", job_id=job_id)
-                        process.terminate()
-                        try:
-                            await asyncio.wait_for(process.wait(), timeout=5.0)
-                        except asyncio.TimeoutError:
-                            process.kill()
-                            await process.wait()
+                        await terminate_process(process, job_id, "borg2 prune")
                         break
 
             check_task = asyncio.create_task(check_cancellation())

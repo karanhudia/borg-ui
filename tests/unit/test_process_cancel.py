@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.services.process_cancel import terminate_tracked_process
+from app.services.process_cancel import terminate_process, terminate_tracked_process
 
 
 @pytest.mark.unit
@@ -60,3 +60,16 @@ async def test_a_process_that_raises_on_terminate_is_false():
     process.terminate.side_effect = ProcessLookupError("no such process")
 
     assert await terminate_tracked_process({7: process}, 7, "prune") is False
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_terminate_process_takes_a_process_the_caller_already_holds():
+    """The services call this from inside their own run, where the process is
+    a local rather than a `running_processes` entry."""
+    process = MagicMock()
+    process.pid = 444
+    process.wait = AsyncMock(return_value=None)
+
+    assert await terminate_process(process, 7, "borg2 check") is True
+    process.terminate.assert_called_once()
