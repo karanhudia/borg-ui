@@ -187,6 +187,9 @@ async def test_run_archive_sync_updates_repository_columns(db, repo, monkeypatch
         "new": 1,
         "info_filled": 1,
         "removed_archive_ids": [],
+        "removed_archive_borg_ids": {},
+        "removed_archive_last_seen_at": {},
+        "removed_archive_generations": {},
     }
     db.refresh(repo)
     assert repo.archive_count == 1
@@ -1438,3 +1441,32 @@ async def test_agent_listing_reports_the_timeout_when_the_cancel_fails(
     db.commit()
     db.expire_all()
     assert db.get(type(repo), repo.id).total_size == "1.0 GB"
+
+
+@pytest.mark.unit
+async def test_archive_sync_reports_stable_identities_for_removed_archives(
+    db, repo, monkeypatch
+):
+    index_exec.apply_listing(db, repo, [BORG1_ENTRY], timezone_name="UTC")
+    removed = db.query(Archive).one()
+    removed_id = removed.id
+    monkeypatch.setattr(
+        index_exec,
+        "list_archives_for_repository",
+        AsyncMock(return_value=(True, [], "UTC")),
+    )
+    monkeypatch.setattr(index_exec, "fill_archive_info", AsyncMock(return_value=0))
+    monkeypatch.setattr(
+        index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
+    )
+
+    outcome = await index_exec.run_archive_sync(_ctx(db, repo))
+
+    assert outcome.result["removed_archive_ids"] == [removed_id]
+    assert outcome.result["removed_archive_borg_ids"] == {str(removed_id): "aa11"}
+    assert outcome.result["removed_archive_last_seen_at"] == {
+        str(removed_id): removed.last_seen_at.isoformat()
+    }
+    assert outcome.result["removed_archive_generations"] == {
+        str(removed_id): removed.generation_id
+    }

@@ -3625,7 +3625,8 @@
       "pauseAdminOnly": "Nur Administratoren können Hintergrundarbeiten pausieren.",
       "reason": {
         "paused": "Pausiert",
-        "lane_busy": "Wartet, bis das Backup dieses Repositorys fertig ist",
+        "lane_busy": "{{kind}} läuft noch",
+        "index_busy": "Wartet, bis die andere Index-Arbeit dieses Repositorys fertig ist",
         "workers": "Wartet auf einen Index-Worker",
         "queued": "Als Nächstes dran"
       },

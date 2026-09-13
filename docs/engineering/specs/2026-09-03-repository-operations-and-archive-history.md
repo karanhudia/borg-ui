@@ -482,6 +482,15 @@ SSE event, a `log()` sink writing to `log_file_path`, and a
   `legacy_running_exclusive(repository_id)`, which is deleted in phase 9.
 - Non-exclusive index kinds may run alongside an exclusive operation only if
   `bypass_lock_on_list` is enabled; otherwise they wait too.
+- No two of the non-exclusive index kinds (`archive_sync`, `history_merge`,
+  `stats`) run on one repository at the same time, and no `history_index`
+  starts next to one of them; the bypass settings do not change that (#1003:
+  two chains of one run started their stats side by side, and on an agent's
+  repository a listing next to the stats' `rinfo` failed with rc 2 on the
+  Borg 1 cache lock). A running `history_index` holds the lane as before.
+  An index row left `running` by a task the runner no longer has is
+  requeued at the next tick, as at startup (bounded: it fails after three
+  requeues), so it holds neither the repository nor a worker.
 - `rclone_sync` uses `run_serialized_repository_command(scope="rclone")` as
   it does today and ignores the lane.
 - Executors also wrap Borg calls in
@@ -556,7 +565,12 @@ On startup, before the runner starts:
   `failed` with `error_message = "interrupted by restart"`. Local
   repositories get the existing lock-break attempt; remote ones do not, as
   documented in `job-system.md`.
-- `running` index operations: set back to `queued`. They are idempotent.
+- `running` index operations: use the same recovery budget as the runtime
+  sweep of abandoned tasks. Each retry increments `params.requeues`; an
+  operation is requeued at most three times, with backoff based on the larger
+  of the requeue and admission-deferral counts. A further interruption marks the
+  operation failed while retaining its start time and progress. Restarting
+  cannot bypass this retry budget; executor checkpoints remain in params.
 - `queued` operations are left alone.
 
 This replaces the per-table startup cleanup for each kind as it migrates.
@@ -569,6 +583,11 @@ via `ctx.cancelled()`; Borg executors also terminate the child process, as
 the existing cancel paths do. Dependants become `skipped`. A cancel that
 arrives while the admission is refusing the operation wins over the
 deferral (7.1 step 5): the row ends `cancelled` instead of being requeued.
+
+If the terminal database write fails, the runner retains an accepted cancel
+request. The runtime sweep completes that cancellation after the database
+recovers, without restarting the index executor or dispatching its dependants.
+It clears the request only after committing the terminal state.
 
 ### 7.8 Retention
 
@@ -591,8 +610,10 @@ as today. Replaces the size half of `update_repository_stats`.
 2. Upsert rows into `archives` by `(repository_id, borg_id)`. Update
    `last_seen_at`. Compute `series`.
 3. Rows in `archives` not present in the list are collected as
-   `result["removed_archive_ids"]` and left in place; `history_merge`
-   consumes and deletes them.
+   `result["removed_archive_ids"]` and left in place. The result also carries
+   `removed_archive_borg_ids`, mapping each row ID (as a JSON object key) to
+   its Borg ID, captured while the listing owns the metadata lane.
+   `history_merge` consumes and deletes matching rows.
 4. For up to `INDEX_ARCHIVE_INFO_PER_RUN` archives, oldest first, run
    per-archive `borg info` and fill sizes, `end`, and duration: archives
    without stats first, archives missing only `end` into the slots left
@@ -631,8 +652,15 @@ with the `borg-live-debug` skill.
 
 ### 8.4 `history_merge`
 
-Input: archives that `archive_sync` reported removed. For each removed
-archive `R`, find its successor `S` in the same series by `start`.
+Input: archives that `archive_sync` reported removed. A target must match
+both its row ID and Borg ID in the listing result, within the same repository.
+Another chain can delete the original and SQLite can reuse its row ID before
+this merge starts or retries. Missing or mismatching identities are skipped.
+Legacy results containing only row IDs are also skipped: the next listing
+rediscovers remaining stale rows and supplies their identities for cleanup.
+
+For each matching removed archive `R`, find its successor `S` in the same
+series by `start`.
 
 If `S` exists, fold `R`'s rows into `S`:
 
@@ -652,8 +680,20 @@ If `S` does not exist (the newest archive was removed), `R`'s rows are
 simply deleted.
 
 Then delete the `archives` row for `R`, which cascades to its remaining
-rows. All of this is SQL inside one transaction per removed archive. No
-Borg call, no lane.
+rows. All of this is SQL inside one transaction per removed archive,
+including a completion checkpoint in the operation's params. Replay preserves
+completed outcome counts and never revisits checkpointed targets, including
+skipped targets. This stage makes no Borg call and uses the repository's
+metadata lane. Removal targets must match the repository, database ID,
+Borg ID, persisted row-generation UUID, and last-seen observation captured
+by the parent listing. Each
+sighting advances the observation timestamp even if the wall clock does
+not advance, protecting archives rediscovered before a delayed merge.
+The row-generation UUID remains independent of SQLite ID reuse and wall time,
+so deleting and recreating the same Borg archive cannot revive an old target.
+The next listing initializes migrated rows whose generation is NULL, including
+absent rows. Legacy results missing any required identity skip deletion until
+a fresh listing can report the missing rows safely.
 
 The visible effect is honest: a change that happened in a pruned archive now
 shows at the next surviving archive, which is the earliest place the user can

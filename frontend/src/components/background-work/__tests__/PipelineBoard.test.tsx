@@ -1,14 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import PipelineBoard from '../PipelineBoard'
+import BackgroundWorkTab from '../../BackgroundWorkTab'
 import { archivesAPI, operationsAPI } from '../../../services/api'
 import type { HubRepository } from '../../../types/operations'
 
 vi.mock('../../../services/api', () => ({
   operationsAPI: {
     getQueue: vi.fn(),
+    pause: vi.fn().mockResolvedValue({ data: { paused: true } }),
+    resume: vi.fn(),
     getRepositories: vi.fn(),
     getRepositoryDetail: vi.fn(),
     reconcileNow: vi.fn(),
@@ -19,6 +22,8 @@ vi.mock('../../../services/api', () => ({
     resync: vi.fn(),
   },
 }))
+
+import { useOperationEvents } from '../../../hooks/useOperationEvents'
 
 vi.mock('../../../hooks/useOperationEvents', () => ({
   useOperationEvents: vi.fn(),
@@ -32,12 +37,22 @@ vi.mock('../../shared/PlanGate', () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
-function renderBoard(props: Partial<React.ComponentProps<typeof PipelineBoard>> = {}) {
+vi.mock('../../../hooks/useAuthorization', () => ({
+  useAuthorization: () => ({
+    globalRoleRank: new Map([['admin', 3]]),
+    currentGlobalRole: 'admin',
+  }),
+}))
+
+function renderBoard(
+  props: Partial<React.ComponentProps<typeof PipelineBoard>> = {},
+  withParent = false
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <PipelineBoard canManage {...props} />
+        {withParent ? <BackgroundWorkTab /> : <PipelineBoard canManage {...props} />}
       </MemoryRouter>
     </QueryClientProvider>
   )
@@ -153,6 +168,7 @@ describe('PipelineBoard', () => {
         repository_id: 2,
         repository_name: 'photos',
         lane_busy: false,
+        index_busy: false,
         operations: [queueOp({ id: 2, repository_id: 2, repository: 'photos', status: 'running' })],
       },
     ])
@@ -171,6 +187,7 @@ describe('PipelineBoard', () => {
         repository_id: 1,
         repository_name: 'nas',
         lane_busy: true,
+        index_busy: false,
         operations: [
           queueOp({
             kind: 'backup',
@@ -186,12 +203,99 @@ describe('PipelineBoard', () => {
     expect(within(row).getByRole('link', { name: /view runs/i })).toBeInTheDocument()
   })
 
+  it('names the operation a waiting stage is held up by', async () => {
+    // the lane belongs to whichever exclusive operation runs; saying
+    // "backup" while a prune holds it contradicts the row above
+    mockQueue([
+      {
+        repository_id: 1,
+        repository_name: 'nas',
+        lane_busy: true,
+        lane_holder: { kind: 'prune', id: 5 },
+        operations: [
+          queueOp({
+            id: 5,
+            kind: 'prune',
+            category: 'maintenance',
+            status: 'running',
+            started_at: new Date().toISOString(),
+          }),
+          queueOp({ id: 6, kind: 'stats', category: 'index', status: 'queued' }),
+        ],
+      },
+    ])
+    renderBoard()
+    const row = (await screen.findAllByTestId('repository-row'))[0]
+    expect(within(row).getByText(/prune still running/i)).toBeInTheDocument()
+    // backup is the kind the old wording named whatever held the lane
+    expect(within(row).queryByText(/backup still running/i)).not.toBeInTheDocument()
+    expect(within(row).queryByText(/\{\{kind\}\}/)).not.toBeInTheDocument()
+  })
+
+  it('falls through to next in line when the payload carries no holder', async () => {
+    mockQueue([
+      {
+        repository_id: 1,
+        repository_name: 'nas',
+        lane_busy: true,
+        operations: [
+          queueOp({
+            id: 5,
+            kind: 'backup',
+            category: 'backup',
+            status: 'running',
+            started_at: new Date().toISOString(),
+          }),
+          queueOp({ id: 6, kind: 'stats', category: 'index', status: 'queued' }),
+        ],
+      },
+    ])
+    renderBoard()
+    const row = (await screen.findAllByTestId('repository-row'))[0]
+    expect(within(row).getByText(/next in line/i)).toBeInTheDocument()
+  })
+
+  it('stops naming a holder the same payload shows as finished', async () => {
+    // an event can mark the holder completed in the cache before the queue
+    // is refetched; the row must not wait for an operation it lists as
+    // done; a different running backup is not evidence that it holds the lane
+    mockQueue([
+      {
+        repository_id: 1,
+        repository_name: 'nas',
+        lane_busy: true,
+        lane_holder: { kind: 'prune', id: 5 },
+        operations: [
+          queueOp({
+            id: 5,
+            kind: 'prune',
+            category: 'maintenance',
+            status: 'completed',
+          }),
+          queueOp({
+            id: 7,
+            kind: 'backup',
+            category: 'backup',
+            status: 'running',
+            started_at: new Date().toISOString(),
+          }),
+          queueOp({ id: 6, kind: 'stats', category: 'index', status: 'queued' }),
+        ],
+      },
+    ])
+    renderBoard()
+    const row = (await screen.findAllByTestId('repository-row'))[0]
+    expect(within(row).getByText(/next in line/i)).toBeInTheDocument()
+    expect(within(row).queryByText(/prune still running/i)).not.toBeInTheDocument()
+  })
+
   it('adds a system lane below the repositories for work with no repository', async () => {
     mockQueue([
       {
         repository_id: null,
         repository_name: 'System',
         lane_busy: false,
+        index_busy: false,
         operations: [
           queueOp({
             id: 9,
@@ -237,6 +341,7 @@ describe('PipelineBoard', () => {
         repository_id: 1,
         repository_name: 'nas',
         lane_busy: false,
+        index_busy: false,
         operations: [queueOp({ id: 9, repository_id: 1, kind: 'archive_sync', status: 'failed' })],
       },
     ])
@@ -297,6 +402,7 @@ describe('PipelineBoard', () => {
         repository_id: 1,
         repository_name: 'nas',
         lane_busy: false,
+        index_busy: false,
         operations: [queueOp({ id: 9, repository_id: 1, kind: 'history_merge', status: 'failed' })],
       },
     ])
@@ -317,6 +423,7 @@ describe('PipelineBoard', () => {
         repository_id: 1,
         repository_name: 'nas',
         lane_busy: false,
+        index_busy: false,
         operations: [queueOp({ id: 9, repository_id: 1, kind: 'history_merge', status: 'failed' })],
       },
     ])
@@ -337,6 +444,7 @@ describe('PipelineBoard', () => {
         repository_id: 1,
         repository_name: 'nas',
         lane_busy: false,
+        index_busy: false,
         operations: [queueOp({ id: 9, repository_id: 1, kind: 'history_merge', status: 'failed' })],
       },
     ])
@@ -348,6 +456,301 @@ describe('PipelineBoard', () => {
     fireEvent.click(await screen.findByRole('button', { name: /retry/i }))
     await waitFor(() => expect(archivesAPI.resync).toHaveBeenCalledWith(1))
     expect(archivesAPI.rebuild).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { kind: 'stats', category: 'index', caption: /other index work to finish/i },
+    { kind: 'prune', category: 'maintenance', caption: /prune still running/i },
+  ])('refreshes queue ownership when SSE starts $kind', async ({ kind, category, caption }) => {
+    const starting = queueOp({ id: 9, kind, category, status: 'queued', run_id: 'r1' })
+    const waiting = queueOp({ id: 10, kind: 'archive_sync', status: 'queued', run_id: 'r2' })
+    const repository = {
+      repository_id: 1,
+      repository_name: 'nas',
+      lane_busy: false,
+      lane_holder: null,
+      index_busy: false,
+      operations: [starting, waiting],
+    }
+    mockQueue([repository])
+    renderBoard()
+    expect(await screen.findByText(/next in line/i)).toBeInTheDocument()
+
+    const running = { ...starting, status: 'running' }
+    mockQueue([
+      {
+        ...repository,
+        lane_busy: kind === 'prune',
+        lane_holder: kind === 'prune' ? { id: 9, kind } : null,
+        index_busy: kind === 'stats',
+        operations: [running, waiting],
+      },
+    ])
+    const calls = vi.mocked(useOperationEvents).mock.calls
+    const onUpdated = calls[calls.length - 1]?.[0]
+    act(() => onUpdated?.(running as never))
+
+    expect(await screen.findByText(caption)).toBeInTheDocument()
+  })
+
+  it('keeps an SSE completion when an older running queue response arrives later', async () => {
+    const starting = queueOp({ id: 9, kind: 'stats', status: 'queued', run_id: 'r1' })
+    const waiting = queueOp({ id: 10, kind: 'archive_sync', status: 'queued', run_id: 'r1' })
+    const repository = {
+      repository_id: 1,
+      repository_name: 'nas',
+      lane_busy: false,
+      index_busy: false,
+      operations: [starting, waiting],
+    }
+    mockQueue([repository])
+    renderBoard()
+    expect(await screen.findByTestId('stage-stats')).toHaveAttribute('data-status', 'waiting')
+    const running = { ...starting, status: 'running' }
+    const staleResponse = {
+      data: {
+        repositories: [{ ...repository, index_busy: true, operations: [running, waiting] }],
+        limits,
+        paused: false,
+      },
+    }
+    let finishRequest!: (value: typeof staleResponse) => void
+    vi.mocked(operationsAPI.getQueue).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishRequest = resolve as typeof finishRequest
+        }) as never
+    )
+    const calls = vi.mocked(useOperationEvents).mock.calls
+    const onUpdated = calls[calls.length - 1]?.[0]
+    act(() => onUpdated?.(running as never))
+    await waitFor(() => expect(operationsAPI.getQueue).toHaveBeenCalledTimes(2))
+    mockQueue([{ ...repository, operations: [{ ...running, status: 'completed' }, waiting] }])
+    act(() => onUpdated?.({ ...running, status: 'completed' } as never))
+    await act(async () => {
+      finishRequest(staleResponse)
+    })
+    await waitFor(() => expect(screen.getByText(/next in line/i)).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByTestId('stage-stats')).toHaveAttribute('data-status', 'done')
+    )
+    expect(screen.queryByText(/other index work to finish/i)).not.toBeInTheDocument()
+  })
+
+  it('keeps an SSE completion during a refetch started by the parent pause control', async () => {
+    const running = queueOp({ id: 9, kind: 'stats', status: 'running', run_id: 'r1' })
+    const waiting = queueOp({ id: 10, kind: 'archive_sync', status: 'queued', run_id: 'r2' })
+    const repository = {
+      repository_id: 1,
+      repository_name: 'nas',
+      lane_busy: false,
+      index_busy: true,
+      operations: [running, waiting],
+    }
+    mockQueue([repository])
+    renderBoard({}, true)
+    expect(await screen.findByText(/other index work to finish/i)).toBeInTheDocument()
+    const staleResponse = { data: { repositories: [repository], limits, paused: false } }
+    let finishRequest!: (value: typeof staleResponse) => void
+    vi.mocked(operationsAPI.getQueue).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishRequest = resolve as typeof finishRequest
+        }) as never
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^pause$/i }))
+    await waitFor(() => expect(finishRequest).toBeDefined())
+    mockQueue([
+      {
+        ...repository,
+        index_busy: false,
+        operations: [{ ...running, status: 'completed' }, waiting],
+      },
+    ])
+    const calls = vi.mocked(useOperationEvents).mock.calls
+    act(() => calls[calls.length - 1]?.[0]({ ...running, status: 'completed' } as never))
+    await act(async () => {
+      finishRequest(staleResponse)
+    })
+    await waitFor(() =>
+      expect(screen.queryByText(/other index work to finish/i)).not.toBeInTheDocument()
+    )
+  })
+
+  it('accepts a completed server snapshot newer than a running event received during the fetch', async () => {
+    const starting = queueOp({ id: 9, kind: 'stats', status: 'queued' })
+    const repository = {
+      repository_id: 1,
+      repository_name: 'nas',
+      lane_busy: false,
+      index_busy: false,
+      operations: [starting],
+    }
+    mockQueue([repository])
+    renderBoard()
+    expect(await screen.findByTestId('stage-stats')).toHaveAttribute('data-status', 'waiting')
+    const completedResponse = {
+      data: {
+        repositories: [{ ...repository, operations: [{ ...starting, status: 'completed' }] }],
+        limits,
+        paused: false,
+      },
+    }
+    let finishRequest!: (value: typeof completedResponse) => void
+    vi.mocked(operationsAPI.getQueue)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishRequest = resolve as typeof finishRequest
+          }) as never
+      )
+      .mockResolvedValue(completedResponse as never)
+    const calls = vi.mocked(useOperationEvents).mock.calls
+    const onUpdated = calls[calls.length - 1]?.[0]
+    act(() => onUpdated?.({ ...starting, status: 'running' } as never))
+    await waitFor(() => expect(finishRequest).toBeDefined())
+    act(() => onUpdated?.({ ...starting, status: 'running' } as never))
+    await act(async () => {
+      finishRequest(completedResponse)
+    })
+    await waitFor(() =>
+      expect(screen.getByTestId('stage-stats')).toHaveAttribute('data-status', 'done')
+    )
+  })
+
+  it('lets a slow initial queue fetch finish during a burst of progress events', async () => {
+    const running = queueOp({ id: 9, kind: 'stats', status: 'running', progress_percent: 50 })
+    const repository = {
+      repository_id: 1,
+      repository_name: 'nas',
+      lane_busy: false,
+      index_busy: true,
+      operations: [running],
+    }
+    const response = { data: { repositories: [repository], limits, paused: false } }
+    let finishRequest!: (value: typeof response) => void
+    vi.mocked(operationsAPI.getQueue)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishRequest = resolve as typeof finishRequest
+          }) as never
+      )
+      .mockResolvedValue(response as never)
+    renderBoard({}, true)
+    await waitFor(() => expect(finishRequest).toBeDefined())
+    const calls = vi.mocked(useOperationEvents).mock.calls
+    const onProgress = calls[calls.length - 1]?.[1]
+    for (let current = 1; current <= 10; current++) {
+      act(() =>
+        onProgress?.({
+          id: 9,
+          progress_current: current,
+          progress_total: 20,
+          progress_percent: current * 5,
+          progress_message: `Archive ${current}`,
+        })
+      )
+    }
+    expect(operationsAPI.getQueue).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      finishRequest(response)
+    })
+    expect(await screen.findByTestId('stage-stats')).toHaveAttribute('data-status', 'running')
+    expect(operationsAPI.getQueue).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not chain more refetches when progress continues during the follow-up request', async () => {
+    const running = queueOp({ id: 9, kind: 'stats', status: 'running' })
+    const response = {
+      data: {
+        repositories: [
+          {
+            repository_id: 1,
+            repository_name: 'nas',
+            lane_busy: false,
+            index_busy: true,
+            operations: [running],
+          },
+        ],
+        limits,
+        paused: false,
+      },
+    }
+    let finishInitial!: (value: typeof response) => void
+    let finishFollowup!: (value: typeof response) => void
+    vi.mocked(operationsAPI.getQueue)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishInitial = resolve as typeof finishInitial
+          }) as never
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishFollowup = resolve as typeof finishFollowup
+          }) as never
+      )
+      .mockResolvedValue(response as never)
+    renderBoard({}, true)
+    await waitFor(() => expect(finishInitial).toBeDefined())
+    const calls = vi.mocked(useOperationEvents).mock.calls
+    const handlers = calls[calls.length - 1]
+    act(() => handlers?.[0](running as never))
+    await act(async () => {
+      finishInitial(response)
+    })
+    await waitFor(() => expect(finishFollowup).toBeDefined())
+    for (let current = 1; current <= 10; current++) {
+      act(() =>
+        handlers?.[1]({
+          id: 9,
+          progress_current: current,
+          progress_total: 20,
+          progress_percent: current * 5,
+          progress_message: `Archive ${current}`,
+        })
+      )
+    }
+    await act(async () => {
+      finishFollowup(response)
+    })
+    expect(await screen.findByTestId('stage-stats')).toHaveAttribute('data-status', 'running')
+    expect(operationsAPI.getQueue).toHaveBeenCalledTimes(2)
+  })
+
+  it('follows the running index work through SSE updates between two fetches', async () => {
+    mockQueue([
+      {
+        repository_id: 1,
+        repository_name: 'nas',
+        lane_busy: false,
+        index_busy: true,
+        operations: [
+          queueOp({ id: 9, repository_id: 1, kind: 'stats', status: 'running' }),
+          // another chain's listing: the running stats is foreign work to it
+          queueOp({
+            id: 10,
+            repository_id: 1,
+            kind: 'archive_sync',
+            status: 'queued',
+            run_id: 'r2',
+          }),
+        ],
+      },
+    ])
+    renderBoard()
+    expect(await screen.findByText(/other index work to finish/i)).toBeInTheDocument()
+    const calls = vi.mocked(useOperationEvents).mock.calls
+    const onUpdated = calls[calls.length - 1]?.[0]
+    expect(onUpdated).toBeDefined()
+    act(() => {
+      onUpdated?.(queueOp({ id: 9, repository_id: 1, kind: 'stats', status: 'completed' }) as never)
+    })
+    await waitFor(() =>
+      expect(screen.queryByText(/other index work to finish/i)).not.toBeInTheDocument()
+    )
   })
 
   it('has no rebuild form below the table, only the per-row menus', async () => {

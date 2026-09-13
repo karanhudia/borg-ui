@@ -3625,7 +3625,8 @@
       "pauseAdminOnly": "Solo gli amministratori possono mettere in pausa il lavoro in background.",
       "reason": {
         "paused": "In pausa",
-        "lane_busy": "In attesa che il backup di questo repository finisca",
+        "lane_busy": "{{kind}} ancora in esecuzione",
+        "index_busy": "In attesa che termini l'altro lavoro di indice di questo repository",
         "workers": "In attesa di un worker di indicizzazione",
         "queued": "Prossimo in coda"
       },

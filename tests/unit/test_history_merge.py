@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -15,6 +15,7 @@ from app.database.models import (
     SystemSettings,
 )
 from app.services.operations.executors import history
+from app.services.operations.executors import index as index_exec
 
 
 @pytest.fixture()
@@ -25,7 +26,15 @@ def db():
     def _fk_on(dbapi_conn, record):
         dbapi_conn.execute("PRAGMA foreign_keys=ON")
 
-    Base.metadata.create_all(engine)
+    # The operations migration creates archives without AUTOINCREMENT,
+    # although fresh model-created databases enable it. Exercise that schema.
+    archive_options = Archive.__table__.dialect_options["sqlite"]
+    original_autoincrement = archive_options["autoincrement"]
+    try:
+        archive_options["autoincrement"] = False
+        Base.metadata.create_all(engine)
+    finally:
+        archive_options["autoincrement"] = original_autoincrement
     session = sessionmaker(bind=engine)()
     try:
         yield session
@@ -82,7 +91,21 @@ def _ops(db, repo, removed_ids):
         trigger="reconcile",
         priority=20,
         run_id="run",
-        result={"removed_archive_ids": removed_ids},
+        result={
+            "removed_archive_ids": removed_ids,
+            "removed_archive_generations": {
+                str(a.id): a.generation_id
+                for a in db.query(Archive).filter(Archive.id.in_(removed_ids)).all()
+            },
+            "removed_archive_last_seen_at": {
+                str(a.id): a.last_seen_at.isoformat()
+                for a in db.query(Archive).filter(Archive.id.in_(removed_ids)).all()
+            },
+            "removed_archive_borg_ids": {
+                str(a.id): a.borg_id
+                for a in db.query(Archive).filter(Archive.id.in_(removed_ids)).all()
+            },
+        },
     )
     db.add(parent)
     db.commit()
@@ -277,7 +300,7 @@ async def test_dependency_that_is_not_archive_sync_merges_nothing(db, repo):
     )
     db.add(child)
     db.commit()
-    assert history.removed_archive_ids_from_dependency(db, child) == []
+    assert history.removed_archive_targets_from_dependency(db, child) == []
 
 
 @pytest.mark.unit
@@ -333,3 +356,256 @@ async def test_fold_result_is_capped_like_an_indexed_archive(db, repo, monkeypat
     assert sum(x.summary_count for x in summary) == 3
     db.refresh(s)
     assert s.history_rows == len(rows) and s.history_truncated is True
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("interrupt_after_delete", [False, True])
+async def test_replay_preserves_new_archive_reusing_deleted_id(
+    db, repo, interrupt_after_delete
+):
+    removed = _archive(db, repo, "removed", 1)
+    removed_id = removed.id
+    op = _ops(db, repo, [removed_id])
+    operation_id = op.id
+    repository_id = repo.id
+    ctx = _ctx(db, repo, op)
+    if interrupt_after_delete:
+        ctx.progress.side_effect = RuntimeError("progress unavailable")
+        with pytest.raises(RuntimeError, match="progress unavailable"):
+            await history.run_history_merge(ctx)
+    else:
+        await history.run_history_merge(ctx)
+    # The runner's terminal write did not commit. Only executor checkpoints
+    # survive a new session, as when an abandoned operation is requeued.
+    db.rollback()
+    db.expunge_all()
+    op = db.get(Operation, operation_id)
+    repo = db.get(Repository, repository_id)
+    replacement = _archive(db, repo, "replacement", 2)
+    assert replacement.id == removed_id
+    _row(db, replacement, "keep", "added", after=9)
+
+    out = await history.run_history_merge(_ctx(db, repo, op))
+
+    assert db.get(Archive, removed_id) is not None
+    assert db.query(ArchiveChange).filter_by(archive_id=removed_id).one().path == "keep"
+    assert out.result == {"merged": 1, "folded": 0, "reset": 0, "dropped": 1}
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("foreign_target", [False, True])
+async def test_replay_does_not_revisit_previously_skipped_ids(db, repo, foreign_target):
+    if foreign_target:
+        other = Repository(name="other", path="/tmp/other", encryption="none")
+        db.add(other)
+        db.commit()
+        target = _archive(db, other, "foreign", 1)
+        target_id = target.id
+    else:
+        target_id = 1
+    op = _ops(db, repo, [target_id])
+    await history.run_history_merge(_ctx(db, repo, op))
+    if foreign_target:
+        db.delete(target)
+        db.commit()
+    replacement = _archive(db, repo, "replacement", 2)
+    assert replacement.id == target_id
+
+    out = await history.run_history_merge(_ctx(db, repo, op))
+
+    assert db.get(Archive, target_id) is not None
+    assert out.result["merged"] == 0
+
+
+@pytest.mark.unit
+async def test_failed_merge_commit_does_not_checkpoint_uncommitted_deletion(db, repo):
+    removed = _archive(db, repo, "removed", 1)
+    removed_id = removed.id
+    op = _ops(db, repo, [removed_id])
+    with patch.object(db, "commit", side_effect=RuntimeError("disk full")):
+        with pytest.raises(RuntimeError, match="disk full"):
+            await history.run_history_merge(_ctx(db, repo, op))
+    assert db.get(Archive, removed_id) is not None
+
+    out = await history.run_history_merge(_ctx(db, repo, op))
+
+    assert db.get(Archive, removed_id) is None
+    assert out.result == {"merged": 1, "folded": 0, "reset": 0, "dropped": 1}
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("partially_merged", [False, True])
+async def test_overtaking_chain_cannot_make_merge_delete_reused_unvisited_id(
+    db, repo, partially_merged
+):
+    first = _archive(db, repo, "first", 1, series="first")
+    second = _archive(db, repo, "second", 2, series="second")
+    removed_ids = [first.id, second.id]
+    delayed = _ops(db, repo, removed_ids)
+    delayed_id = delayed.id
+    repository_id = repo.id
+    if partially_merged:
+        ctx = _ctx(db, repo, delayed)
+        ctx.progress.side_effect = RuntimeError("progress unavailable")
+        with pytest.raises(RuntimeError, match="progress unavailable"):
+            await history.run_history_merge(ctx)
+    # Another chain runs before this merge first starts, or during its retry
+    # backoff. Its listing rediscovers and its merge deletes the remaining rows.
+    _, remaining = index_exec.apply_listing(db, repo, [], timezone_name="UTC")
+    overtaking = _ops(db, repo, remaining)
+    await history.run_history_merge(_ctx(db, repo, overtaking))
+    first_new = _archive(db, repo, "first-new", 3)
+    second_new = _archive(db, repo, "second-new", 4)
+    assert [first_new.id, second_new.id] == removed_ids
+    _row(db, second_new, "keep", "added", after=9)
+    db.rollback()
+    db.expunge_all()
+    repo = db.get(Repository, repository_id)
+    delayed = db.get(Operation, delayed_id)
+
+    out = await history.run_history_merge(_ctx(db, repo, delayed))
+
+    assert [a.borg_id for a in db.query(Archive).order_by(Archive.id)] == [
+        "id-first-new",
+        "id-second-new",
+    ]
+    assert db.query(ArchiveChange).one().path == "keep"
+    assert out.result["merged"] == int(partially_merged)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "missing_identity",
+    [
+        "removed_archive_borg_ids",
+        "removed_archive_last_seen_at",
+        "removed_archive_generations",
+    ],
+)
+async def test_legacy_targets_wait_for_a_listing_with_complete_identities(
+    db, repo, missing_identity
+):
+    removed = _archive(db, repo, "removed", 1)
+    removed_id = removed.id
+    legacy = _ops(db, repo, [removed_id])
+    parent = db.get(Operation, legacy.depends_on_id)
+    parent.result = {k: v for k, v in parent.result.items() if k != missing_identity}
+    db.commit()
+
+    out = await history.run_history_merge(_ctx(db, repo, legacy))
+
+    assert out.result["merged"] == 0
+    assert db.get(Archive, removed_id) is not None
+    _, rediscovered = index_exec.apply_listing(db, repo, [], timezone_name="UTC")
+    assert rediscovered == [removed_id]
+    followup = _ops(db, repo, rediscovered)
+    out = await history.run_history_merge(_ctx(db, repo, followup))
+    assert out.result["merged"] == 1
+    assert db.get(Archive, removed_id) is None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("partially_merged", [False, True])
+@pytest.mark.parametrize("clock_delta", [-1, 0, 1])
+async def test_delayed_merge_preserves_rediscovered_archive(
+    db, repo, monkeypatch, partially_merged, clock_delta
+):
+    first = _archive(db, repo, "first", 1, series="first")
+    revived = _archive(db, repo, "revived", 2, series="revived")
+    revived_id = revived.id
+    last_seen = datetime(2026, 9, 10, 12)
+    revived.last_seen_at = last_seen
+    db.commit()
+    _row(db, revived, "keep", "added", after=9)
+    delayed = _ops(db, repo, [first.id, revived_id])
+    if partially_merged:
+        ctx = _ctx(db, repo, delayed)
+        ctx.progress.side_effect = RuntimeError("progress unavailable")
+        with pytest.raises(RuntimeError, match="progress unavailable"):
+            await history.run_history_merge(ctx)
+
+    # A later successful listing sees the same archive in the same DB row.
+    # Its observation must invalidate deletion even if wall time is unchanged
+    # or moves backward, and even when the merge is resuming after a failure.
+    monkeypatch.setattr(
+        index_exec, "utc_now", lambda: last_seen + timedelta(seconds=clock_delta)
+    )
+    index_exec.apply_listing(
+        db,
+        repo,
+        [
+            {
+                "id": revived.borg_id,
+                "name": "revived",
+                "start": revived.start.isoformat(),
+            }
+        ],
+        timezone_name="UTC",
+    )
+    db.expire_all()
+
+    for _ in range(2):
+        out = await history.run_history_merge(_ctx(db, repo, delayed))
+        assert db.get(Archive, revived_id) is not None
+        assert (
+            db.query(ArchiveChange).filter_by(archive_id=revived_id).one().path
+            == "keep"
+        )
+        assert out.result["merged"] == 1
+
+    # A fresh absence observation may still legitimately remove it later.
+    _, absent = index_exec.apply_listing(db, repo, [], timezone_name="UTC")
+    followup = _ops(db, repo, absent)
+    out = await history.run_history_merge(_ctx(db, repo, followup))
+    assert out.result["merged"] == 1
+    assert db.get(Archive, revived_id) is None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("partially_merged", [False, True])
+async def test_delayed_merge_preserves_recreated_archive_with_identical_timestamps(
+    db, repo, monkeypatch, partially_merged
+):
+    first = _archive(db, repo, "first", 1, series="first")
+    old = _archive(db, repo, "recreated", 2, series="recreated")
+    old_id = old.id
+    captured_time = datetime(2026, 9, 12, 12)
+    old.last_seen_at = captured_time
+    db.commit()
+    delayed = _ops(db, repo, [first.id, old_id])
+    if partially_merged:
+        ctx = _ctx(db, repo, delayed)
+        ctx.progress.side_effect = RuntimeError("progress unavailable")
+        with pytest.raises(RuntimeError, match="progress unavailable"):
+            await history.run_history_merge(ctx)
+
+    _, absent = index_exec.apply_listing(db, repo, [], timezone_name="UTC")
+    overtaking = _ops(db, repo, absent)
+    await history.run_history_merge(_ctx(db, repo, overtaking))
+    monkeypatch.setattr(index_exec, "utc_now", lambda: captured_time)
+    index_exec.apply_listing(
+        db,
+        repo,
+        [
+            {"id": "id-first-new", "name": "first-new", "start": "2026-09-01T02:00:00"},
+            {
+                "id": "id-recreated",
+                "name": "recreated",
+                "start": "2026-09-02T02:00:00",
+                "comment": "new metadata",
+            },
+        ],
+        timezone_name="UTC",
+    )
+    replacement = db.query(Archive).filter_by(borg_id="id-recreated").one()
+    assert replacement.id == old_id
+    assert replacement.last_seen_at == captured_time
+    _row(db, replacement, "keep", "added", after=9)
+    db.expire_all()
+
+    for _ in range(2):
+        await history.run_history_merge(_ctx(db, repo, delayed))
+        replacement = db.get(Archive, old_id)
+        assert replacement is not None
+        assert replacement.comment == "new metadata"
+        assert db.query(ArchiveChange).filter_by(archive_id=old_id).one().path == "keep"

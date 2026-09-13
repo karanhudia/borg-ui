@@ -97,6 +97,12 @@ export const hubRepositories: HubRepository[] = [
     archives: 15,
     history: { indexed: 15, pending: 0, failed: 0, skipped: 0, truncated: 0, rows: 62 },
   }),
+  hubRepository({
+    repository_id: 6,
+    repository_name: 'media',
+    archives: 22,
+    history: { indexed: 22, pending: 0, failed: 0, skipped: 0, truncated: 0, rows: 3140 },
+  }),
 ]
 
 export const hubResponse: HubResponse = {
@@ -147,6 +153,7 @@ export const busyQueue: QueueResponse = {
       repository_id: 1,
       repository_name: 'offsite',
       lane_busy: false,
+      index_busy: false,
       operations: [
         op({ id: 1, kind: 'import_connect', category: 'import', repository: 'offsite' }),
       ],
@@ -155,6 +162,10 @@ export const busyQueue: QueueResponse = {
       repository_id: 2,
       repository_name: 'nas',
       lane_busy: true,
+      lane_holder: { kind: 'backup', id: 3 },
+      // a stats is running here too; the lane's backup is what the stage
+      // names, since the lane wins over the index flag
+      index_busy: true,
       operations: [
         op({
           id: 2,
@@ -180,6 +191,7 @@ export const busyQueue: QueueResponse = {
       repository_id: 3,
       repository_name: 'photos',
       lane_busy: false,
+      index_busy: false,
       operations: [
         op({
           id: 4,
@@ -198,6 +210,7 @@ export const busyQueue: QueueResponse = {
       repository_id: 4,
       repository_name: 'laptop',
       lane_busy: false,
+      index_busy: false,
       operations: [
         op({ id: 5, status: 'completed', repository: 'laptop', repository_id: 4 }),
         op({
@@ -207,6 +220,34 @@ export const busyQueue: QueueResponse = {
           repository: 'laptop',
           repository_id: 4,
           error_message: 'borg list timed out',
+        }),
+      ],
+    },
+    {
+      // a stats of the repository still running: the next listing waits
+      // for it (one index operation per repository), with a worker to
+      // spare. The listing is another chain's, or the flag would not apply.
+      repository_id: 6,
+      repository_name: 'media',
+      lane_busy: false,
+      index_busy: true,
+      operations: [
+        op({
+          id: 7,
+          kind: 'stats',
+          status: 'running',
+          repository: 'media',
+          repository_id: 6,
+          started_at: minutesAgo(1),
+        }),
+        op({
+          id: 8,
+          kind: 'archive_sync',
+          status: 'queued',
+          repository: 'media',
+          repository_id: 6,
+          run_id: 'r2',
+          trigger: 'followup',
         }),
       ],
     },
@@ -231,4 +272,58 @@ export const emptyQueue: QueueResponse = {
     max_concurrent_scheduled_checks: 4,
   },
   paused: false,
+}
+
+// The same queue with a prune holding the lane instead of a backup: the
+// waiting stages name the prune (issue: the wording used to say "backup"
+// whatever held the lane).
+export const maintenanceLaneQueue: QueueResponse = {
+  ...busyQueue,
+  repositories: busyQueue.repositories.map((repository) =>
+    repository.repository_id === 2
+      ? {
+          ...repository,
+          lane_holder: { kind: 'prune' as const, id: 3 },
+          operations: [
+            // the prune that holds the lane, and an index stage queued
+            // behind it: the caption under that stage names the prune
+            ...repository.operations.map((operation) =>
+              operation.id === 3
+                ? { ...operation, kind: 'prune' as const, category: 'maintenance' as const }
+                : // admission holds index work back while a prune runs, so
+                  // the stats row of the busy fixture waits here too
+                  { ...operation, status: 'queued' as const, started_at: null }
+            ),
+            op({
+              id: 31,
+              kind: 'archive_sync',
+              status: 'queued',
+              repository: 'nas',
+              repository_id: 2,
+              started_at: null,
+            }),
+          ],
+        }
+      : repository
+  ),
+}
+
+// The lane is taken, but the payload does not say by what: a page loaded
+// before the server carried the holder, or one whose holder has finished
+// since. The caption falls through to next in line until the next fetch.
+export const missingLaneHolderQueue: QueueResponse = {
+  ...busyQueue,
+  repositories: busyQueue.repositories.map((repository) =>
+    repository.repository_id === 2
+      ? {
+          ...repository,
+          lane_holder: null,
+          operations: repository.operations.map((operation) =>
+            operation.id === 2
+              ? { ...operation, status: 'queued' as const, started_at: null }
+              : operation
+          ),
+        }
+      : repository
+  ),
 }

@@ -37,9 +37,12 @@ POLL_INTERVAL_WHEN_DISABLED_MINUTES = 5
 def has_active_index_work(db: Session, repository_id: int) -> bool:
     """True when a reconcile run for the repository would only pile up: index
     work is already waiting to start, or an archive sync is in flight. A
-    running history index or stats refresh does not count. History can take
-    hours, and holding the hourly sync behind it would leave the archive
-    list stale while nothing is wrong."""
+    running history index, merge or stats refresh does not count. History
+    can take hours, and holding the hourly sync behind it would leave the
+    archive list stale while nothing is wrong; a merge or stats is bounded
+    by the info timeout, and the run queued behind it starts once it is
+    done (the tick runs the index operations of one repository one at a
+    time)."""
     waiting = db.query(Operation.id).filter(
         Operation.repository_id == repository_id,
         Operation.category == "index",

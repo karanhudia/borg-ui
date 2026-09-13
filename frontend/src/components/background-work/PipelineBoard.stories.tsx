@@ -5,7 +5,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Box } from '@mui/material'
 import PipelineBoard from './PipelineBoard'
 import api from '../../services/api'
-import { busyQueue, emptyQueue, hubDetail, hubResponse } from './storyFixtures'
+import {
+  busyQueue,
+  emptyQueue,
+  hubDetail,
+  hubResponse,
+  maintenanceLaneQueue,
+  missingLaneHolderQueue,
+} from './storyFixtures'
 import type { HubResponse, QueueResponse } from '../../types/operations'
 
 function StoryProviders({
@@ -60,6 +67,26 @@ type Story = StoryObj<typeof meta>
 export const Busy: Story = {
   render: () => (
     <StoryProviders queue={busyQueue} hub={hubResponse}>
+      <PipelineBoard canManage />
+    </StoryProviders>
+  ),
+}
+
+// A prune holds the lane: the queued stages name it instead of claiming a
+// backup is running.
+export const MaintenanceHoldsTheLane: Story = {
+  render: () => (
+    <StoryProviders queue={maintenanceLaneQueue} hub={hubResponse}>
+      <PipelineBoard canManage />
+    </StoryProviders>
+  ),
+}
+
+// Without a current holder, queued stages stay next in line until the
+// next fetch supplies one.
+export const LaneHolderMissing: Story = {
+  render: () => (
+    <StoryProviders queue={missingLaneHolderQueue} hub={hubResponse}>
       <PipelineBoard canManage />
     </StoryProviders>
   ),
