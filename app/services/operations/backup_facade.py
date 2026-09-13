@@ -590,17 +590,17 @@ def archive_borg_id_for(db: Session, job: "BackupJobFacade") -> Optional[str]:
 
     The sync links each new archive to its backup; rows stored before that
     link existed fall back to the same-name row nearest the job's start.
-    `Archive.name` is the full name for both Borg versions.
+    `Archive.name` is the full name for both Borg versions. One query on the
+    repository index per job, so a 200-row job list stays cheap.
     """
-    linked = (
-        db.query(Archive.borg_id).filter(Archive.backup_operation_id == job.id).scalar()
-    )
-    if linked:
-        return linked
+    # ponytail: one lookup per listed job; batch by repository if the job
+    # lists ever get slow.
     if not job.archive_name or job.repository_id is None:
         return None
     rows = (
-        db.query(Archive.id, Archive.borg_id, Archive.start)
+        db.query(
+            Archive.id, Archive.borg_id, Archive.start, Archive.backup_operation_id
+        )
         .filter(
             Archive.repository_id == job.repository_id,
             Archive.name == job.archive_name,
@@ -609,7 +609,8 @@ def archive_borg_id_for(db: Session, job: "BackupJobFacade") -> Optional[str]:
     )
     if not rows:
         return None
-    return _nearest_start(rows, job.started_at).borg_id
+    linked = [r for r in rows if r.backup_operation_id == job.id]
+    return (linked[0] if linked else _nearest_start(rows, job.started_at)).borg_id
 
 
 def newest_per_group(db: Session, model, group_column, order_column, filters) -> list:
