@@ -42,6 +42,10 @@ def db():
         ("nas-20260902_020000", "nas"),
         ("nas-2026-09-02", "nas"),
         ("nas-1756778400", "nas"),
+        # a template carrying both a date and an epoch: stripping once left
+        # the date on and made every archive its own series (issue #943)
+        ("nas-2026-04-30-1777586400", "nas"),
+        ("nas-2026-04-30T02:00:00-1777586400", "nas"),
         ("docs-laptop-2026-09-02T02:00:00+02:00", "docs-laptop"),
         ("2026-09-02T02:00:00", None),
         ("nas", None),

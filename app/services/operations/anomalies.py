@@ -2,7 +2,7 @@
 repository status routes call them and decide which flags the plan may show."""
 
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional, Sequence
+from typing import Iterable, Optional, Sequence
 from zoneinfo import ZoneInfo
 
 from croniter import croniter
@@ -83,56 +83,38 @@ def expected_days_from_cron(
     return days
 
 
-def expected_days_from_gap(
-    first: datetime, last: datetime, until: datetime, gap: timedelta
-) -> set[date]:
-    """Expected days at cadence `gap`, phased on `last` rather than `first`.
-
-    The newest archive is the best evidence of when the backup currently runs;
-    anchoring on the oldest lets a schedule that moved drift out of phase and
-    report a missed day for the offset between the old time and the new one.
-    """
-    step = max(gap, timedelta(days=1))
-    days: set[date] = set()
-    current = last
-    while current >= first and len(days) < MAX_EXPECTED_DAYS:
-        days.add(current.date())
-        current -= step
-    current = last + step
-    while current < until and len(days) < MAX_EXPECTED_DAYS:
-        days.add(current.date())
-        current += step
-    return days
-
-
 def missed_run_days(
     starts: Sequence[datetime],
     *,
     until: datetime,
     cron_expression: Optional[str] = None,
     timezone_name: Optional[str] = None,
+    run_days: Iterable[date] = (),
+    retention_since: Optional[date] = None,
 ) -> set[date]:
-    """Days inside the series cadence with no archive. Cadence is the cron
-    when known, else the median gap of the last 14 archives. A day is only
-    counted once its expected run time has passed."""
-    if not starts:
+    """Days a run was expected and nothing says it happened.
+
+    A missed day needs evidence, not absence (issue #943). An archive that is
+    not there was as likely pruned as never written, so a day is only flagged
+    when all four hold: the cadence is known from a schedule or plan cron, no
+    archive is retained for the day, no completed backup run is on record for
+    it, and the day is inside the retention window (`retention_since`, None
+    when nothing prunes the repository). Without a cron the cadence is a
+    guess, so nothing is flagged.
+    """
+    if not starts or not cron_expression:
         return set()
     first = min(starts)
-    present = {s.date() for s in starts}
-    if cron_expression:
-        # Start the iteration just before the first archive so its own day
-        # counts as expected. Days after `until` are excluded by the helper.
-        expected = expected_days_from_cron(
-            cron_expression, first - timedelta(seconds=1), until, timezone_name
-        )
-    else:
-        gap = median_gap(starts)
-        if gap is None:
-            return set()
-        # `until` directly: the helper already stops at the last expected time
-        # before it, so subtracting a gap would hide a run that is already due.
-        expected = expected_days_from_gap(first, max(starts), until, gap)
-    return {d for d in expected if d not in present and d >= first.date()}
+    known = {s.date() for s in starts} | set(run_days)
+    # Start the iteration just before the first archive so its own day
+    # counts as expected. Days after `until` are excluded by the helper.
+    expected = expected_days_from_cron(
+        cron_expression, first - timedelta(seconds=1), until, timezone_name
+    )
+    floor = (
+        first.date() if retention_since is None else max(first.date(), retention_since)
+    )
+    return {d for d in expected if d not in known and d >= floor}
 
 
 def overdue_after(
@@ -152,8 +134,11 @@ def series_flags(archives: Sequence) -> dict[int, list[str]]:
     for i, archive in enumerate(ordered):
         previous = ordered[max(0, i - OUTLIER_WINDOW) : i]
         found: list[str] = []
+        # Deliberately not deduplicated_size: a retention keep absorbs the
+        # unique data of every neighbour pruned around it, so its median makes
+        # every normal archive next to it read as unusually small (issue #943).
         if size_outlier(
-            [p.deduplicated_size for p in previous], archive.deduplicated_size
+            [p.original_size for p in previous], archive.original_size
         ) or size_outlier([p.nfiles for p in previous], archive.nfiles):
             found.append("size_outlier")
         if duration_outlier(

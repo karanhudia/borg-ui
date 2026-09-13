@@ -46,6 +46,7 @@ def _archive(
         series=series,
         start=datetime(2026, 9, day, 2),
         history_state=state,
+        original_size=size,
         deduplicated_size=size,
         duration_seconds=dur,
         nfiles=nfiles,
@@ -196,32 +197,110 @@ class TestArchiveList:
 
 @pytest.mark.unit
 class TestHeatmap:
-    def test_counts_sizes_and_missed_days_for_community(
+    def test_repository_band_holds_every_archive(
         self, test_client, test_db, admin_headers
     ):
+        """The band is the archive index, not an inference over it: an archive
+        whose name puts it in a one-archive series is still in the repository
+        band and still counted (issue #943)."""
         repo = _repo(test_db)
         for d in (1, 2, 4):
             _archive(test_db, repo, f"a{d}", d)
-        _archive(test_db, repo, "a5", 5, size=10)
+        _archive(test_db, repo, "old-a5", 5, series="old", size=10)
         r = test_client.get(
-            f"/api/repositories/{repo.id}/archives/heatmap?since=2026-09-01T00:00:00&until=2026-09-06T00:00:00",
+            f"/api/repositories/{repo.id}/archives/heatmap",
             headers=admin_headers,
         )
         assert r.status_code == 200
         body = r.json()
-        series = {s["series"]: s for s in body["series"]}["nas"]
-        days = {d["date"]: d for d in series["days"]}
+        band = body["repository"]
+        assert band["count"] == 4
+        days = {d["date"]: d for d in band["days"]}
+        assert set(days) == {"2026-09-01", "2026-09-02", "2026-09-04", "2026-09-05"}
         assert (
             days["2026-09-01"]["count"] == 1
             and days["2026-09-01"]["deduplicated_size"] == 100
         )
-        assert "2026-09-03" in series["missed_days"]
-        assert days["2026-09-05"]["anomalies"] == []
+        assert {s["series"] for s in body["series"]} == {"nas", "old"}
         assert body["flags_available"] == {
             "missed_run": True,
             "size_outlier": False,
             "duration_outlier": False,
         }
+
+    def test_no_missed_days_without_a_cron(self, test_client, test_db, admin_headers):
+        """Nothing schedules this repository, so an absent day is as likely a
+        prune as a failure and the heatmap says nothing (issue #943)."""
+        repo = _repo(test_db)
+        for d in (1, 2, 4):
+            _archive(test_db, repo, f"a{d}", d)
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/archives/heatmap?until=2026-09-06T00:00:00",
+            headers=admin_headers,
+        )
+        body = r.json()
+        assert body["cadence_known"] is False
+        assert body["repository"]["missed_days"] == []
+
+    def test_plan_cron_gives_the_cadence(self, test_client, test_db, admin_headers):
+        repo = _repo(test_db)
+        _plan(test_db, repo, cron_expression="0 2 * * *")
+        for d in (1, 2, 4):
+            _archive(test_db, repo, f"a{d}", d)
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/archives/heatmap?until=2026-09-06T00:00:00",
+            headers=admin_headers,
+        )
+        body = r.json()
+        assert body["cadence_known"] is True
+        assert body["repository"]["missed_days"] == ["2026-09-03", "2026-09-05"]
+
+    def test_a_completed_backup_clears_the_day(
+        self, test_client, test_db, admin_headers
+    ):
+        """The run happened and its archive was pruned; the operation row is
+        the evidence (#966) that keeps the day out of the red."""
+        repo = _repo(test_db)
+        _plan(test_db, repo, cron_expression="0 2 * * *")
+        for d in (1, 2, 4):
+            _archive(test_db, repo, f"a{d}", d)
+        seed_job_operation(
+            test_db,
+            "backup",
+            repository_id=repo.id,
+            status="completed",
+            started_at=datetime(2026, 9, 3, 2, 0),
+            completed_at=datetime(2026, 9, 3, 2, 30),
+        )
+        test_db.commit()
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/archives/heatmap?until=2026-09-06T00:00:00",
+            headers=admin_headers,
+        )
+        assert r.json()["repository"]["missed_days"] == ["2026-09-05"]
+
+    def test_days_beyond_retention_are_not_missed(
+        self, test_client, test_db, admin_headers
+    ):
+        """With prune keeping two daily archives, older days have no archive by
+        design, so they carry no claim either way."""
+        repo = _repo(test_db)
+        _plan(
+            test_db,
+            repo,
+            cron_expression="0 2 * * *",
+            run_prune_after=True,
+            prune_keep_daily=2,
+        )
+        _archive(test_db, repo, "a1", 1)
+        _archive(test_db, repo, "a5", 5)
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/archives/heatmap?until=2026-09-06T00:00:00",
+            headers=admin_headers,
+        )
+        body = r.json()
+        assert body["retention_since"] == "2026-09-04"
+        assert body["repository"]["missed_days"] == ["2026-09-04"]
 
     def test_outlier_flags_only_for_pro(self, test_client, test_db, admin_headers):
         repo = _repo(test_db)
@@ -230,11 +309,10 @@ class TestHeatmap:
         _archive(test_db, repo, "a8", 8, size=10)
         _pro(test_db)
         r = test_client.get(
-            f"/api/repositories/{repo.id}/archives/heatmap?since=2026-09-01T00:00:00&until=2026-09-09T00:00:00",
+            f"/api/repositories/{repo.id}/archives/heatmap?until=2026-09-09T00:00:00",
             headers=admin_headers,
         )
-        series = r.json()["series"][0]
-        days = {d["date"]: d for d in series["days"]}
+        days = {d["date"]: d for d in r.json()["repository"]["days"]}
         assert days["2026-09-08"]["anomalies"] == ["size_outlier"]
         assert r.json()["flags_available"]["size_outlier"] is True
 

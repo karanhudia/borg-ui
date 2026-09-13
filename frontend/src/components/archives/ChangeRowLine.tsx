@@ -3,17 +3,12 @@ import { Folder } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import ChangeBadge from './ChangeBadge'
 import { changeColor } from './changeStyle'
+import { splitPath } from './pathParts'
 import { formatBytes } from '../../utils/dateUtils'
 import type { ChangeRow } from '../../types/archives'
 
 interface ChangeRowLineProps {
   row: ChangeRow
-}
-
-function splitPath(path: string): { dir: string; name: string } {
-  const index = path.lastIndexOf('/')
-  if (index < 0) return { dir: '', name: path }
-  return { dir: path.slice(0, index + 1), name: path.slice(index + 1) }
 }
 
 function signedDelta(before: number | null, after: number | null): string | null {

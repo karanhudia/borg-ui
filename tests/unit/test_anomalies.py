@@ -43,51 +43,66 @@ def test_median_gap_uses_last_fourteen():
 
 
 @pytest.mark.unit
-def test_expected_days_from_cron_and_gap():
+def test_expected_days_from_cron():
     days = an.expected_days_from_cron(
         "0 2 * * *", datetime(2026, 9, 1), datetime(2026, 9, 4), "UTC"
     )
     assert days == {date(2026, 9, 1), date(2026, 9, 2), date(2026, 9, 3)}
-    # first, last, until: the cadence is phased on the newest archive.
-    days = an.expected_days_from_gap(
-        datetime(2026, 9, 1, 2),
-        datetime(2026, 9, 7, 2),
-        datetime(2026, 9, 8),
-        timedelta(days=2),
-    )
-    assert days == {
-        date(2026, 9, 1),
-        date(2026, 9, 3),
-        date(2026, 9, 5),
-        date(2026, 9, 7),
-    }
-    # sub-daily cadence is capped at one expected day per day
-    days = an.expected_days_from_gap(
-        datetime(2026, 9, 1),
-        datetime(2026, 9, 2, 18),
-        datetime(2026, 9, 3),
-        timedelta(hours=6),
-    )
-    assert days == {date(2026, 9, 1), date(2026, 9, 2)}
 
 
 @pytest.mark.unit
-def test_missed_run_days_from_cron_and_from_gap():
+def test_missed_run_days_needs_a_cron():
+    """Without a cron from a schedule or plan the cadence is a guess, and a
+    guess flagged pruned days as missed runs (issue #943)."""
     starts = [datetime(2026, 9, d, 2) for d in (1, 2, 4, 5)]
     missed = an.missed_run_days(
         starts, until=datetime(2026, 9, 6), cron_expression="0 2 * * *"
     )
     assert missed == {date(2026, 9, 3)}
-    missed = an.missed_run_days(starts, until=datetime(2026, 9, 6))
-    assert missed == {date(2026, 9, 3)}
+    assert an.missed_run_days(starts, until=datetime(2026, 9, 6)) == set()
     assert (
-        an.missed_run_days([datetime(2026, 9, 1)], until=datetime(2026, 9, 6)) == set()
+        an.missed_run_days(
+            [datetime(2026, 9, 1)], until=datetime(2026, 9, 6), cron_expression=None
+        )
+        == set()
     )
     # a day whose expected run is not yet due is not missed
     missed = an.missed_run_days(
         starts, until=datetime(2026, 9, 6, 1), cron_expression="0 2 * * *"
     )
     assert date(2026, 9, 6) not in missed
+
+
+@pytest.mark.unit
+def test_a_completed_run_is_not_a_missed_day():
+    """The archive of a run that happened may have been pruned since; the run
+    record is the evidence that keeps the day out of the red (issue #943)."""
+    starts = [datetime(2026, 9, d, 2) for d in (1, 2, 4, 5)]
+    assert (
+        an.missed_run_days(
+            starts,
+            until=datetime(2026, 9, 6),
+            cron_expression="0 2 * * *",
+            run_days=[date(2026, 9, 3)],
+        )
+        == set()
+    )
+
+
+@pytest.mark.unit
+def test_days_outside_the_retention_window_are_not_missed():
+    """Beyond the daily keeps the repository is expected to have no archive,
+    so an absent day there says nothing about whether a run happened."""
+    starts = [datetime(2026, 9, d, 2) for d in (1, 5)]
+    assert an.missed_run_days(
+        starts, until=datetime(2026, 9, 6), cron_expression="0 2 * * *"
+    ) == {date(2026, 9, 2), date(2026, 9, 3), date(2026, 9, 4)}
+    assert an.missed_run_days(
+        starts,
+        until=datetime(2026, 9, 6),
+        cron_expression="0 2 * * *",
+        retention_since=date(2026, 9, 4),
+    ) == {date(2026, 9, 4)}
 
 
 @pytest.mark.unit
@@ -113,7 +128,8 @@ def test_series_flags_per_archive():
     mk = lambda i, size, dur: SimpleNamespace(
         id=i,
         start=datetime(2026, 9, i),
-        deduplicated_size=size,
+        original_size=size,
+        deduplicated_size=1,
         nfiles=10,
         duration_seconds=dur,
     )
@@ -130,12 +146,40 @@ def test_series_flags_per_archive():
         SimpleNamespace(
             id=8,
             start=datetime(2026, 9, 8),
-            deduplicated_size=100,
+            original_size=100,
+            deduplicated_size=1,
             nfiles=1,
             duration_seconds=10.0,
         )
     ]
     assert an.series_flags(archives)[8] == ["size_outlier"]
+
+
+@pytest.mark.unit
+def test_size_outlier_ignores_deduplicated_size():
+    """A retention keep absorbs the unique data of the archives pruned around
+    it, so its deduplicated size dwarfs a normal archive's and flagged every
+    healthy daily archive next to it (issue #943)."""
+    keeps = [
+        SimpleNamespace(
+            id=i,
+            start=datetime(2026, 9, i),
+            original_size=100,
+            deduplicated_size=20_000,
+            nfiles=10,
+            duration_seconds=10.0,
+        )
+        for i in range(1, 8)
+    ]
+    daily = SimpleNamespace(
+        id=8,
+        start=datetime(2026, 9, 8),
+        original_size=100,
+        deduplicated_size=700,
+        nfiles=10,
+        duration_seconds=10.0,
+    )
+    assert an.series_flags([*keeps, daily])[8] == []
 
 
 @pytest.mark.unit
@@ -161,40 +205,3 @@ def test_cron_days_stay_in_utc_for_a_non_utc_schedule():
         timezone_name="Europe/Berlin",
     )
     assert missed == {date(2026, 9, 3), date(2026, 9, 5)}
-
-
-@pytest.mark.unit
-def test_gap_cadence_counts_a_run_that_is_already_due():
-    """`until - gap` hid the newest expected run even once it was overdue.
-    expected_days_from_gap already stops at the last expected time before
-    `until`, so the subtraction only cost a day of coverage."""
-    starts = [datetime(2026, 9, d, 2) for d in (1, 2, 4, 5)]
-
-    missed = an.missed_run_days(starts, until=datetime(2026, 9, 6, 10))
-    assert missed == {date(2026, 9, 3), date(2026, 9, 6)}
-
-    # Not yet due at 01:00, when the 02:00 run has not come round.
-    missed = an.missed_run_days(starts, until=datetime(2026, 9, 6, 1))
-    assert missed == {date(2026, 9, 3)}
-
-
-@pytest.mark.unit
-def test_gap_projection_is_anchored_on_the_newest_archive():
-    """Anchoring on the oldest archive lets a schedule that moved drift out of
-    phase: a year of 02:00 backups that switched to 20:00 would project today's
-    run at 02:00 and flag today as missed for eighteen hours, every day. The
-    cadence is phased on the most recent archive instead."""
-    starts = [datetime(2026, 8, d, 2) for d in range(1, 29)]
-    starts += [datetime(2026, 8, d, 20) for d in range(29, 32)]
-    starts.append(datetime(2026, 9, 1, 20))
-
-    # Just after the 20:00 run landed: nothing is missed.
-    assert an.missed_run_days(starts, until=datetime(2026, 9, 1, 20, 30)) == set()
-
-    # The next day, before 20:00, the run is not due yet either.
-    assert an.missed_run_days(starts, until=datetime(2026, 9, 2, 10)) == set()
-
-    # Once it is due and has not landed, it is missed.
-    assert an.missed_run_days(starts, until=datetime(2026, 9, 2, 20, 30)) == {
-        date(2026, 9, 2)
-    }

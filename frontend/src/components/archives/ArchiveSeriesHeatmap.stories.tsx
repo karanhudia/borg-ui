@@ -1,11 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import ArchiveSeriesHeatmap from './ArchiveSeriesHeatmap'
-import type { HeatmapResponse } from '../../types/archives'
+import type { HeatmapDay, HeatmapResponse } from '../../types/archives'
 
-const day = (
-  date: string,
-  overrides: Partial<HeatmapResponse['series'][number]['days'][number]> = {}
-) => ({
+const day = (date: string, overrides: Partial<HeatmapDay> = {}): HeatmapDay => ({
   date,
   count: 1,
   deduplicated_size: 41_200_000_000,
@@ -14,6 +11,36 @@ const day = (
   anomalies: [] as string[],
   ...overrides,
 })
+
+const band = (days: HeatmapDay[], missed: string[] = []) => ({
+  days,
+  missed_days: missed,
+  first: days[0]?.date ?? null,
+  last: days[days.length - 1]?.date ?? null,
+  count: days.reduce((sum, d) => sum + d.count, 0),
+})
+
+const series = (name: string, days: HeatmapDay[]) => {
+  const { days: bandDays, first, last, count } = band(days)
+  return { days: bandDays, first, last, count, series: name }
+}
+
+const response = (
+  days: HeatmapDay[],
+  options: Partial<HeatmapResponse> & { missed?: string[] } = {}
+): HeatmapResponse => {
+  const { missed = [], ...overrides } = options
+  return {
+    since: null,
+    until: null,
+    repository: band(days, missed),
+    series: [series('nightly', days)],
+    cadence_known: true,
+    retention_since: null,
+    flags_available: { missed_run: true, size_outlier: true, duration_outlier: true },
+    ...overrides,
+  }
+}
 
 const meta = {
   title: 'Components/Archives/ArchiveSeriesHeatmap',
@@ -27,77 +54,35 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
+const recent = [
+  day('2026-08-30'),
+  day('2026-09-01', { anomalies: ['size_outlier'] }),
+  day('2026-09-02', { count: 2, archive_ids: [12, 13] }),
+]
+
 export const Default: Story = {
   args: {
-    data: {
-      since: '2026-08-01',
-      until: '2026-09-04',
-      series: [
-        {
-          series: 'nightly',
-          days: [
-            day('2026-08-30'),
-            day('2026-08-31', { count: 0, archive_ids: [] }),
-            day('2026-09-01', { anomalies: ['size_outlier'] }),
-            day('2026-09-02'),
-          ],
-          missed_days: ['2026-08-31'],
-          first: '2026-08-01T02:00:00Z',
-          last: '2026-09-02T02:00:00Z',
-        },
-        {
-          series: 'weekly-offsite',
-          days: [day('2026-08-30', { count: 2 })],
-          missed_days: [],
-          first: '2026-08-30T02:00:00Z',
-          last: '2026-08-30T02:00:00Z',
-        },
-      ],
-      flags_available: { missed_run: true, size_outlier: true, duration_outlier: true },
-    },
+    data: response(recent, {
+      missed: ['2026-08-31'],
+      series: [series('nightly', recent), series('weekly-offsite', [day('2026-08-30')])],
+    }),
   },
 }
 
-export const SingleSeries: Story = {
+export const NoScheduleKnown: Story = {
   args: {
-    data: {
-      since: null,
-      until: null,
-      series: [
-        {
-          series: 'nightly',
-          days: [day('2026-09-01'), day('2026-09-02'), day('2026-09-03')],
-          missed_days: [],
-          first: '2026-09-01T02:00:00Z',
-          last: '2026-09-03T02:00:00Z',
-        },
-      ],
-      flags_available: { missed_run: true, size_outlier: false, duration_outlier: false },
-    },
+    data: response(recent, { cadence_known: false }),
   },
 }
 
 export const Empty: Story = {
   args: {
-    data: {
-      since: null,
-      until: null,
-      series: [
-        {
-          series: 'nightly',
-          days: [],
-          missed_days: [],
-          first: null,
-          last: null,
-        },
-      ],
-      flags_available: { missed_run: false, size_outlier: false, duration_outlier: false },
-    },
+    data: response([], { series: [] }),
   },
 }
 
 const nightlyYear = (() => {
-  const days = []
+  const days: HeatmapDay[] = []
   const start = new Date()
   start.setDate(start.getDate() - 364)
   for (let i = 0; i < 365; i++) {
@@ -115,33 +100,16 @@ const nightlyYear = (() => {
 
 export const FullYear: Story = {
   args: {
-    data: {
-      since: null,
-      until: null,
+    data: response(nightlyYear, {
+      missed: nightlyYear.length > 30 ? [nightlyYear[30].date] : [],
       series: [
-        {
-          series: 'nightly',
-          days: nightlyYear,
-          missed_days: nightlyYear.length > 30 ? [nightlyYear[30].date] : [],
-          first: nightlyYear[0]?.date ?? null,
-          last: nightlyYear[nightlyYear.length - 1]?.date ?? null,
-        },
-        {
-          series: 'weekly-offsite',
-          days: nightlyYear.filter((_d, i) => i % 7 === 0),
-          missed_days: [],
-          first: nightlyYear[0]?.date ?? null,
-          last: nightlyYear[nightlyYear.length - 1]?.date ?? null,
-        },
-        {
-          series: 'Downloads-backup',
-          days: nightlyYear.slice(0, 2),
-          missed_days: [],
-          first: nightlyYear[0]?.date ?? null,
-          last: nightlyYear[1]?.date ?? null,
-        },
+        series('nightly', nightlyYear),
+        series(
+          'weekly-offsite',
+          nightlyYear.filter((_d, i) => i % 7 === 0)
+        ),
+        series('old-prefix-2026-04-30-1777586400', nightlyYear.slice(0, 1)),
       ],
-      flags_available: { missed_run: true, size_outlier: true, duration_outlier: true },
-    },
+    }),
   },
 }

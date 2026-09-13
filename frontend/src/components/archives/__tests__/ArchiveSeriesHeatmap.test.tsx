@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import ArchiveSeriesHeatmap from '../ArchiveSeriesHeatmap'
-import type { HeatmapResponse, HeatmapSeries } from '../../../types/archives'
+import type { HeatmapDay, HeatmapResponse } from '../../../types/archives'
 
 const day = (date: string, overrides = {}) => ({
   date,
@@ -13,87 +13,117 @@ const day = (date: string, overrides = {}) => ({
   ...overrides,
 })
 
-const series = (name: string, days: HeatmapSeries['days'], missed: string[] = []) => ({
-  series: name,
+const band = (days: HeatmapDay[], missed: string[] = []) => ({
   days,
   missed_days: missed,
   first: days[0]?.date ?? null,
   last: days[days.length - 1]?.date ?? null,
+  count: days.reduce((sum, d) => sum + d.count, 0),
 })
+
+const series = (name: string, days: HeatmapDay[]) => ({ ...band(days), series: name })
+
+const days = [day('2026-09-01'), day('2026-09-02', { count: 0, archive_ids: [] })]
 
 const data: HeatmapResponse = {
   since: '2026-08-01',
   until: '2026-09-04',
-  series: [
-    series(
-      'nightly',
-      [day('2026-09-01'), day('2026-09-02', { count: 0, archive_ids: [] })],
-      ['2026-09-02']
-    ),
-  ],
+  repository: band(days, ['2026-09-02']),
+  series: [series('nightly', days)],
+  cadence_known: true,
+  retention_since: null,
   flags_available: { missed_run: true, size_outlier: false, duration_outlier: false },
 }
 
 describe('ArchiveSeriesHeatmap', () => {
-  it('renders one band per series', () => {
+  it('draws the repository band, not one band per inferred series', () => {
     render(<ArchiveSeriesHeatmap data={data} onSelectDay={vi.fn()} />)
-    expect(screen.getByText('nightly')).toBeInTheDocument()
+    expect(screen.getByText('All archives (1)')).toBeInTheDocument()
+    expect(screen.queryByText('nightly')).not.toBeInTheDocument()
   })
 
   it('opens the archive for a day that has one', () => {
     const onSelectDay = vi.fn()
     render(<ArchiveSeriesHeatmap data={data} onSelectDay={onSelectDay} />)
-    fireEvent.click(screen.getByTestId('heatmap-day-nightly-2026-09-01'))
+    fireEvent.click(screen.getByTestId('heatmap-day-repository-2026-09-01'))
     expect(onSelectDay).toHaveBeenCalledWith(expect.objectContaining({ archive_ids: [12] }))
   })
 
   it('does not select an empty day', () => {
     const onSelectDay = vi.fn()
     render(<ArchiveSeriesHeatmap data={data} onSelectDay={onSelectDay} />)
-    fireEvent.click(screen.getByTestId('heatmap-day-nightly-2026-09-02'))
+    fireEvent.click(screen.getByTestId('heatmap-day-repository-2026-09-02'))
     expect(onSelectDay).not.toHaveBeenCalled()
   })
 
   it('marks a missed day so it reads as a gap rather than an empty cell', () => {
     render(<ArchiveSeriesHeatmap data={data} onSelectDay={vi.fn()} />)
-    expect(screen.getByTestId('heatmap-day-nightly-2026-09-02')).toHaveAttribute(
+    expect(screen.getByTestId('heatmap-day-repository-2026-09-02')).toHaveAttribute(
       'data-missed',
       'true'
     )
   })
 
   it('draws one shared month axis above the bands', () => {
-    render(<ArchiveSeriesHeatmap data={data} onSelectDay={vi.fn()} />)
+    const split: HeatmapResponse = {
+      ...data,
+      series: [series('nightly', days), series('weekly-offsite', [day('2026-08-20')])],
+    }
+    render(<ArchiveSeriesHeatmap data={split} onSelectDay={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: /group by series/i }))
     const axis = screen.getByTestId('heatmap-month-axis')
-    expect(axis).toHaveTextContent(/Sep/)
     expect(axis).toHaveTextContent(/Aug/)
+    expect(axis).toHaveTextContent(/Jul/)
   })
 
   it('keys cells by local date so a day never shifts across midnight', () => {
     // 2026-09-01 in UTC is still 2026-09-01 wherever the browser sits; the
     // cell must exist under that date and no cell may claim 2026-08-31.
     render(<ArchiveSeriesHeatmap data={data} onSelectDay={vi.fn()} />)
-    expect(screen.getByTestId('heatmap-day-nightly-2026-09-01')).toHaveAttribute('data-count', '1')
-    expect(screen.getByTestId('heatmap-day-nightly-2026-08-31')).toHaveAttribute('data-count', '0')
+    expect(screen.getByTestId('heatmap-day-repository-2026-09-01')).toHaveAttribute(
+      'data-count',
+      '1'
+    )
+    expect(screen.getByTestId('heatmap-day-repository-2026-08-31')).toHaveAttribute(
+      'data-count',
+      '0'
+    )
   })
 
-  it('folds series with only a few archives behind a disclosure', () => {
-    const tiny: HeatmapResponse = {
+  it('keeps every archive visible however the names were split (issue #943)', () => {
+    const archives = [day('2026-04-30'), day('2026-05-31'), day('2026-06-30')]
+    const split: HeatmapResponse = {
       ...data,
+      repository: band([...archives, ...days]),
       series: [
-        series(
-          'nightly',
-          [1, 2, 3, 4, 5, 6].map((n) => day(`2026-09-0${n}`))
-        ),
-        series('Downloads-backup', [day('2026-08-20')]),
-        series('downloads backup', [day('2026-08-21')]),
+        series('nightly', days),
+        ...archives.map((a, i) => series(`old-prefix-${a.date}-17${i}`, [a])),
       ],
     }
-    render(<ArchiveSeriesHeatmap data={tiny} onSelectDay={vi.fn()} />)
-    expect(screen.queryByText('Downloads-backup')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /show 2 smaller series/i }))
-    expect(screen.getByText('Downloads-backup')).toBeInTheDocument()
-    expect(screen.getByText('downloads backup')).toBeInTheDocument()
+    render(<ArchiveSeriesHeatmap data={split} onSelectDay={vi.fn()} />)
+    // Four archives in the band, not one: the three singleton series are part
+    // of the count and part of the calendar.
+    expect(screen.getByText('All archives (4)')).toBeInTheDocument()
+    expect(screen.getByTestId('heatmap-day-repository-2026-04-30')).toHaveAttribute(
+      'data-count',
+      '1'
+    )
+  })
+
+  it('offers the series split as a grouping below the band', () => {
+    const split: HeatmapResponse = {
+      ...data,
+      series: [series('nightly', days), series('weekly-offsite', [day('2026-08-20')])],
+    }
+    render(<ArchiveSeriesHeatmap data={split} onSelectDay={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: /group by series \(2\)/i }))
+    expect(screen.getByText('nightly')).toBeInTheDocument()
+    expect(screen.getByText('weekly-offsite')).toBeInTheDocument()
+  })
+
+  it('does not offer a split when there is only one series', () => {
+    render(<ArchiveSeriesHeatmap data={data} onSelectDay={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: /group by series/i })).not.toBeInTheDocument()
   })
 
   it('places the legend under the bands', () => {
@@ -101,17 +131,23 @@ describe('ArchiveSeriesHeatmap', () => {
     expect(screen.getByText('Less')).toBeInTheDocument()
     expect(screen.getByText(/missed run/i)).toBeInTheDocument()
   })
+
+  it('says no day is judged when no schedule gives the cadence', () => {
+    const unscheduled: HeatmapResponse = {
+      ...data,
+      repository: band(days),
+      cadence_known: false,
+    }
+    render(<ArchiveSeriesHeatmap data={unscheduled} onSelectDay={vi.fn()} />)
+    expect(screen.getByText(/no schedule known/i)).toBeInTheDocument()
+    expect(screen.queryByText(/missed day/i)).not.toBeInTheDocument()
+  })
 })
 
 describe('ArchiveSeriesHeatmap days with several archives', () => {
   const multi: HeatmapResponse = {
     ...data,
-    series: [
-      series('nightly', [
-        day('2026-09-01', { count: 2, archive_ids: [12, 13] }),
-        day('2026-09-02'),
-      ]),
-    ],
+    repository: band([day('2026-09-01', { count: 2, archive_ids: [12, 13] }), day('2026-09-02')]),
   }
   const lookup = (id: number) =>
     ({
@@ -130,7 +166,7 @@ describe('ArchiveSeriesHeatmap days with several archives', () => {
         archiveLookup={lookup}
       />
     )
-    fireEvent.click(screen.getByTestId('heatmap-day-nightly-2026-09-01'))
+    fireEvent.click(screen.getByTestId('heatmap-day-repository-2026-09-01'))
     expect(onSelectDay).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('menuitem', { name: /14:00/ }))
     expect(onSelectArchive).toHaveBeenCalledWith(13)
@@ -139,7 +175,7 @@ describe('ArchiveSeriesHeatmap days with several archives', () => {
   it('still opens a single-archive day directly', () => {
     const onSelectDay = vi.fn()
     render(<ArchiveSeriesHeatmap data={multi} onSelectDay={onSelectDay} archiveLookup={lookup} />)
-    fireEvent.click(screen.getByTestId('heatmap-day-nightly-2026-09-02'))
+    fireEvent.click(screen.getByTestId('heatmap-day-repository-2026-09-02'))
     expect(onSelectDay).toHaveBeenCalled()
   })
 
