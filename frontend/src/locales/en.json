@@ -338,7 +338,8 @@
         "cancelJob": "Cancel job",
         "revokeToken": "Revoke token",
         "upgradeAgent": "Upgrade this endpoint",
-        "pinAgentVersion": "Pin this endpoint's version"
+        "pinAgentVersion": "Pin this endpoint's version",
+        "changeServerUrl": "Change server URL"
       },
       "noBorg": {
         "title": "No usable Borg binary reported",
@@ -468,7 +469,18 @@
         "activeTooltip": "Pinned to Borg {{version}}, which this endpoint reports.",
         "pending": "Borg {{version}} pending",
         "pendingTooltip": "Pinned to Borg {{version}}, which this endpoint does not report yet. The next upgrade installs it."
-      }
+      },
+      "setServerDialog": {
+        "title": "Change server URL",
+        "description": "Point this endpoint at a different Borg UI address. It keeps its identity, its credential and its history, so no new enrollment token is needed.",
+        "fieldLabel": "New server URL",
+        "fieldHelper": "Prefilled with this server's own address. Edit it if the endpoint should reach Borg UI somewhere else, for example through a reverse proxy.",
+        "invalidUrl": "Enter a full URL starting with http:// or https://, with no quote, pipe or backslash character.",
+        "copyCommand": "Copy command",
+        "runHint": "Run this on the endpoint, as a user who can sudo.",
+        "statusHint": "Not sure what address the endpoint holds right now? Run borg-ui-agent status on it."
+      },
+      "offlineStatusHint": "Run borg-ui-agent status on the endpoint to see the server address it currently holds."
     },
     "installCommand": {
       "title": "Install command",
@@ -722,7 +734,9 @@
     "running": "Running",
     "pending": "Pending",
     "cancelled": "Cancelled",
-    "skipped": "Skipped"
+    "skipped": "Skipped",
+    "queued": "Queued",
+    "warnings": "Warnings"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -2069,7 +2083,9 @@
     "title": "Activity",
     "subtitle": "Every run on every repository, newest first",
     "actions": {
-      "refresh": "Refresh activity"
+      "refresh": "Refresh activity",
+      "loadMore": "Load more",
+      "loadingMore": "Loading..."
     },
     "filters": {
       "type": "Type",
@@ -2168,10 +2184,8 @@
       "indexHidden": "index runs hidden"
     },
     "runningNow": {
-      "title": "Running now",
-      "queued": "Queued"
+      "title": "Running now"
     },
-    "showMore": "Show {{count}} more",
     "health": {
       "backup": "Backup",
       "check": "Check",
@@ -2193,7 +2207,13 @@
       "repositories": "{{count}} repositories",
       "repositories_one": "{{count}} repository",
       "members": "{{count}} runs",
-      "members_one": "{{count}} run"
+      "members_one": "{{count}} run",
+      "trigger": {
+        "manual": "Manual",
+        "schedule": "Scheduled",
+        "retry": "Retry",
+        "availability": "Availability"
+      }
     }
   },
   "availabilitySchedule": {
@@ -3269,7 +3289,8 @@
       "rcloneSync": "Cloud Sync",
       "rcloneHydrate": "Cloud Hydrate",
       "scriptExecution": "Script",
-      "availabilityCheck": "Availability check"
+      "availabilityCheck": "Availability check",
+      "backupPlanRun": "Plan run"
     },
     "scheduledById": "Scheduled (ID: {{id}})",
     "backupPlanByName": "Backup Plan: {{name}}",
@@ -3737,6 +3758,7 @@
         "detailAllIndexed": "Every archive has its file history.",
         "detailHint": "Rebuild from File history to index these archives again.",
         "viewIndexRuns": "View index runs",
+        "openRepository": "Open repository",
         "historyAgentUnsupported": "Not available for agent repositories"
       },
       "rebuildMenuHint": "Every stage after the one you pick is rebuilt too. Earlier stages are kept. Stats always run last, because they total up what the other stages produced.",

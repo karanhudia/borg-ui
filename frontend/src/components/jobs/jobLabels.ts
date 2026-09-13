@@ -1,5 +1,34 @@
 import type { Job } from '../../types/jobs'
 
+/** The words for a status, wherever it is shown: a badge, a tooltip, or the
+ *  accessible name of a status dot that shows no words of its own. */
+export const statusLabel = (status: string, t: (key: string) => string): string => {
+  switch (status.toLowerCase()) {
+    case 'completed':
+      return t('status.completed')
+    case 'completed_with_warnings':
+      return t('status.completedWithWarnings')
+    case 'needs_backup':
+      return t('status.needsBackup')
+    case 'failed':
+      return t('status.failed')
+    case 'running':
+    case 'in_progress':
+      return t('status.running')
+    case 'pending':
+      return t('status.pending')
+    case 'queued':
+      return t('status.queued')
+    case 'cancelled':
+      return t('status.cancelled')
+    case 'skipped':
+      return t('status.skipped')
+    default:
+      return status.charAt(0).toUpperCase() + status.slice(1)
+  }
+}
+
+/** Translate a backend operation type into its shared display label. */
 export const getTypeLabel = (type: string, t: (key: string) => string): string => {
   switch (type) {
     case 'backup':
@@ -24,11 +53,14 @@ export const getTypeLabel = (type: string, t: (key: string) => string): string =
       return t('backupJobsTable.types.scriptExecution')
     case 'availability_check':
       return t('backupJobsTable.types.availabilityCheck')
+    case 'backup_plan_run':
+      return t('backupJobsTable.types.backupPlanRun')
     default:
       return type
   }
 }
 
+/** Map an operation type to the color used by its shared badge. */
 export const getTypeColor = (
   type: string
 ): 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning' => {
@@ -55,6 +87,8 @@ export const getTypeColor = (
       return 'secondary'
     case 'availability_check':
       return 'default'
+    case 'backup_plan_run':
+      return 'error'
     default:
       return 'default'
   }

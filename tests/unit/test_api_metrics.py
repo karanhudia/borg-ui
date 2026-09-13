@@ -647,6 +647,8 @@ class TestMetricValues:
         content = response.text
 
         assert 'borg_repository_archive_count{repository="Empty Repo"} 0' in content
+        # "0" is not a size the parser accepts as measured... it is: a bare
+        # byte count, so the gauge carries it
         assert 'borg_repository_size_bytes{repository="Empty Repo"} 0' in content
 
     def test_metrics_sorted_consistently(self, test_client, test_db):
@@ -667,3 +669,31 @@ class TestMetricValues:
 
         # Should be in same order
         assert names1 == names2
+
+
+@pytest.mark.unit
+def test_repository_size_gauge_reports_the_stored_number(test_client, test_db):
+    """The gauge and the MQTT size topic read the same stored number; the
+    formatted string is only the fallback for a row without one."""
+    from app.database.models import Repository
+
+    measured = Repository(
+        name="measured",
+        path="/repos/measured",
+        total_size="2.19 GB",
+        total_size_bytes=2_350_000_000,
+    )
+    legacy = Repository(name="legacy", path="/repos/legacy", total_size="1.00 KB")
+    test_db.add_all([measured, legacy])
+    test_db.commit()
+
+    unmeasured = Repository(name="unmeasured", path="/repos/unmeasured")
+    test_db.add(unmeasured)
+    test_db.commit()
+
+    content = test_client.get("/metrics").text
+    assert 'borg_repository_size_bytes{repository="measured"} 2350000000' in content
+    assert 'borg_repository_size_bytes{repository="legacy"} 1024' in content
+    # a repository nobody measured has no sample at all, so an alert on a
+    # size of zero cannot fire on it
+    assert 'borg_repository_size_bytes{repository="unmeasured"}' not in content

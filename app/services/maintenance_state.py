@@ -9,7 +9,11 @@ from app.services.borg2_compact_stats import (
     PRECISION_EXACT,
     PRECISION_ROUNDED,
 )
-from app.services.storage_usage import SOURCE_COMPACT_STATS, SOURCE_STORAGE_USED
+from app.services.storage_usage import (
+    SOURCE_COMPACT_STATS,
+    SOURCE_STORAGE_USED,
+    set_repository_size,
+)
 
 logger = structlog.get_logger()
 
@@ -57,10 +61,7 @@ def apply_compact_stats(job, repository, stats: Optional[dict]) -> bool:
         isinstance(size, int) and not isinstance(size, bool) and 0 <= size < MAX_COUNT
     ):
         return False
-    from app.api.repositories import format_bytes
-
-    repository.total_size = format_bytes(size)
-    repository.total_size_source = SOURCE_COMPACT_STATS
+    set_repository_size(repository, size, SOURCE_COMPACT_STATS)
     return True
 
 

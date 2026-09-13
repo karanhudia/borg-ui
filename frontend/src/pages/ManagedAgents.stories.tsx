@@ -691,6 +691,49 @@ export const AgentFleetVersionStates: Story = {
   ),
 }
 
+const offlineAgents = [
+  {
+    ...agents[0],
+    id: 93,
+    agent_id: 'agt_offline_93',
+    name: 'Stranded NAS',
+    status: 'offline',
+    agent_version: '0.1.4',
+    available_agent_version: '0.1.5',
+  },
+  {
+    ...agents[1],
+    id: 94,
+    agent_id: 'agt_offline_94',
+    name: 'Relocated Server',
+    status: 'offline',
+    agent_version: '0.1.5',
+    available_agent_version: '0.1.5',
+  },
+]
+
+export const AgentFleetOfflineRecovery: Story = {
+  name: 'Agent list with offline endpoints and the server URL hint',
+  render: () => (
+    <AgentList
+      agents={offlineAgents}
+      serverUrl="https://borg-ui.example.com"
+      onCopy={() => {}}
+      onRevoke={() => {}}
+      onDelete={() => {}}
+      onViewLogs={() => {}}
+      isRevoking={false}
+      isDeleting={false}
+    />
+  ),
+}
+
+export const AgentFleetOfflineRecoveryMobile: Story = {
+  ...AgentFleetOfflineRecovery,
+  name: 'Agent list with offline endpoints, mobile',
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+}
+
 export const AgentFleetUpgradeSelection: Story = {
   name: 'Agent list with endpoints selected for a fleet upgrade',
   // The bulk bar is hidden at zero selected, so the snapshot has to tick a box

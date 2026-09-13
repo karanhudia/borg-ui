@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from agent.borg_ui_agent import __version__
 from agent.borg_ui_agent.backup import (
     BackupCreatePayload,
     build_borg_env,
@@ -1114,7 +1115,7 @@ def test_session_runtime_connects_with_websocket_url_and_sends_hello(monkeypatch
         "type": "hello",
         "agent_id": "agt_123",
         "hostname": "host.local",
-        "agent_version": "0.1.4",
+        "agent_version": __version__,
         "timezone": None,
         "borg_versions": [],
         "capabilities": get_capabilities(),

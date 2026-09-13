@@ -550,6 +550,8 @@ class TestRepositoryHelperContracts:
                 is True
             )
         assert repo.total_size == "4.00 KB" and repo.total_size_source == "storage_used"
+        assert repo.total_size_bytes == 4096
+        assert repo.total_size_measured_at is not None
         assert [c.kwargs["job_kind"] for c in mock_queue.call_args_list][-2:] == [
             "repository.storage_usage",
             "repository.disk_usage",

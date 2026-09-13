@@ -23,6 +23,7 @@ from app.database.models import (
 )
 from app.services.operations.backup_facade import latest_backup_job_for_repository
 from app.services.operations.job_facade import legacy_status
+from app.services.storage_usage import stored_size_bytes
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
@@ -114,32 +115,6 @@ def _extract_metrics_token(
     return None
 
 
-def parse_size_string(size_str: str) -> int:
-    """Convert size string like '1.5 GB' to bytes"""
-    if not size_str:
-        return 0
-
-    size_str = size_str.strip()
-    # Check longer units first to avoid matching 'B' in 'GB'
-    units = [
-        ("PB", 1024**5),
-        ("TB", 1024**4),
-        ("GB", 1024**3),
-        ("MB", 1024**2),
-        ("KB", 1024),
-        ("B", 1),
-    ]
-
-    try:
-        for unit, multiplier in units:
-            if unit in size_str:
-                number = float(size_str.replace(unit, "").strip())
-                return int(number * multiplier)
-        return int(float(size_str))
-    except:
-        return 0
-
-
 def timestamp_to_unix(dt: datetime) -> int:
     """Convert datetime to Unix timestamp"""
     if not dt:
@@ -200,7 +175,12 @@ async def get_metrics(
         lines.append("# HELP borg_repository_size_bytes Repository total size in bytes")
         lines.append("# TYPE borg_repository_size_bytes gauge")
         for repo in repositories:
-            size_bytes = parse_size_string(repo.total_size or "0")
+            # a repository nobody has measured yet gets no sample: 0 is the
+            # size of an emptied repository, and an alert on "dropped to
+            # zero" must not fire on an import that was never measured
+            size_bytes = stored_size_bytes(repo)
+            if size_bytes is None:
+                continue
             lines.append(
                 f'borg_repository_size_bytes{{repository="{repo.name}"}} {size_bytes}'
             )

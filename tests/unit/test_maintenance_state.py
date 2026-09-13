@@ -93,6 +93,8 @@ def test_apply_compact_completion_persists_stats_and_fills_an_unmeasured_size():
 
     assert job.stats == stats
     assert repo.total_size == "490.23 KB"
+    assert repo.total_size_bytes == 502_000
+    assert repo.total_size_measured_at is not None
     # value and provenance move together: the label names pack file bytes
     assert repo.total_size_source == "compact_stats"
 

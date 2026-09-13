@@ -24,6 +24,7 @@ from app.database.models import (
     ScheduledJob,
 )
 from app.core.authorization import authorize_request
+from app.services.storage_usage import format_bytes
 from app.core.security import get_current_user, encrypt_secret, decrypt_secret
 from app.config import settings
 from app.utils.ssh_host_keys import (
@@ -74,15 +75,6 @@ def _is_ssh_dns_resolution_error(error_msg: str) -> bool:
     return any(
         marker in normalized_error for marker in SSH_DNS_RESOLUTION_ERROR_MARKERS
     )
-
-
-def format_bytes(bytes_size: int) -> str:
-    """Format bytes to human readable string (e.g., '1.23 GB')"""
-    for unit in ["B", "KB", "MB", "GB", "TB", "PB"]:
-        if bytes_size < 1024.0:
-            return f"{bytes_size:.2f} {unit}"
-        bytes_size /= 1024.0
-    return f"{bytes_size:.2f} EB"
 
 
 async def _run_df_command(

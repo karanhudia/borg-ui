@@ -485,8 +485,13 @@ class CompactV2Service:
             # A pre-phase-5 legacy row has no statistics attribute at all.
             final_stats = getattr(job, "stats", None)
             repository_last_compact = repository.last_compact
-            repository_total_size = repository.total_size
-            repository_total_size_source = repository.total_size_source
+            # the four size columns move together (`set_repository_size`)
+            repository_size_columns = (
+                repository.total_size,
+                repository.total_size_bytes,
+                repository.total_size_source,
+                repository.total_size_measured_at,
+            )
 
             def persist_final_state():
                 job.status = final_status
@@ -504,8 +509,12 @@ class CompactV2Service:
                     # Only a size this compact wrote is restored after a
                     # rolled-back attempt; one it left alone may have been
                     # measured by a follow-up in the meantime.
-                    repository.total_size = repository_total_size
-                    repository.total_size_source = repository_total_size_source
+                    (
+                        repository.total_size,
+                        repository.total_size_bytes,
+                        repository.total_size_source,
+                        repository.total_size_measured_at,
+                    ) = repository_size_columns
 
             await commit_with_retry(
                 db,

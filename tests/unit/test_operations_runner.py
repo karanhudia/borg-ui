@@ -734,6 +734,96 @@ async def test_cancel_preserves_a_service_written_cancelled_status(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.parametrize("verdict", ["completed", "failed"])
+async def test_terminal_write_restores_a_start_the_executor_handed_over(
+    db, repo, runner, registry, verdict
+):
+    """A maintenance executor hands its row to a Borg 2 service by clearing
+    the start the dispatch wrote, so the service's `claim_running` matches
+    (executors/maintenance.py). A service that never claims leaves the row
+    with no start; the terminal write puts the dispatch's start back, so the
+    run keeps its place in the history and its duration."""
+    seen = {}
+
+    async def hands_the_row_over(ctx):
+        seen["claimed_at"] = ctx.operation.started_at
+        ctx.db.query(Operation).filter(Operation.id == ctx.operation_id).update(
+            {Operation.started_at: None}, synchronize_session=False
+        )
+        ctx.db.commit()
+        return Outcome(status=verdict)
+
+    registry["stats"] = hands_the_row_over
+    op = enqueue(db, "stats", repository_id=repo.id)
+    await _drain(runner)
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert row.status == verdict
+    assert seen["claimed_at"] is not None
+    assert row.started_at == seen["claimed_at"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_terminal_write_restores_the_start_when_the_executor_raises(
+    db, repo, runner, registry
+):
+    """The same, for an executor that raises after the hand-over (a service
+    that gave up on a lock): the failure the runner writes lands on a row
+    that still carries its start."""
+    seen = {}
+
+    async def hands_over_then_raises(ctx):
+        seen["claimed_at"] = ctx.operation.started_at
+        ctx.db.query(Operation).filter(Operation.id == ctx.operation_id).update(
+            {Operation.started_at: None}, synchronize_session=False
+        )
+        ctx.db.commit()
+        raise RuntimeError("database is locked")
+
+    registry["stats"] = hands_over_then_raises
+    op = enqueue(db, "stats", repository_id=repo.id)
+    await _drain(runner)
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert row.status == "failed"
+    assert row.started_at == seen["claimed_at"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cancelled_task_keeps_a_start_the_executor_handed_over(
+    db, repo, runner, registry
+):
+    """A shutdown drain cancels the task while the row is handed over. The
+    cancelled row keeps its start too: it ran, and the history says so."""
+    seen = {}
+    handed_over = asyncio.Event()
+
+    async def hands_over_then_waits(ctx):
+        seen["claimed_at"] = ctx.operation.started_at
+        ctx.db.query(Operation).filter(Operation.id == ctx.operation_id).update(
+            {Operation.started_at: None}, synchronize_session=False
+        )
+        ctx.db.commit()
+        handed_over.set()
+        await asyncio.sleep(60)
+        return Outcome()
+
+    registry["stats"] = hands_over_then_waits
+    op = enqueue(db, "stats", repository_id=repo.id)
+    await runner.tick()
+    await handed_over.wait()
+    runner.running_tasks[op.id].cancel()
+    await asyncio.gather(*runner.running_tasks.values(), return_exceptions=True)
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert row.status == "cancelled"
+    assert row.started_at == seen["claimed_at"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_cancel_refused_for_running_rows_this_process_does_not_own(
     db, repo, runner
 ):
@@ -1200,19 +1290,26 @@ async def test_deferral_waits_out_its_delay_despite_wakes(
     not_before = runner_module.deferred_until(row)
     assert not_before is not None and not_before > time.time()
 
-    # ten wakes in a row change nothing
+    # ten wakes in a row change nothing. The deadline is held far out rather
+    # than raced against the real 0.2s, which a loaded runner loses.
+    row.params = {**row.params, "deferred_until": time.time() + 60}
+    db.commit()
     await _drain(runner, rounds=10)
     db.expire_all()
     assert db.get(Operation, op.id).params["deferrals"] == 1
     assert len(attempts) == 1
 
-    await asyncio.sleep(0.25)
+    # once the deadline has passed, the next wake re-dispatches it
+    row = db.get(Operation, op.id)
+    row.params = {**row.params, "deferred_until": time.time() - 1}
+    db.commit()
+    before = time.time()
     await _drain(runner, rounds=1)
     db.expire_all()
     row = db.get(Operation, op.id)
     assert row.params["deferrals"] == 2 and len(attempts) == 2
-    # the second wait is longer than the first
-    assert runner_module.deferred_until(row) - not_before > 0.3
+    # the second wait is the doubled one, not the first delay again
+    assert runner_module.deferred_until(row) - before >= runner.deferral_delay_for(2)
 
     # the delay doubles and is capped
     assert runner.deferral_delay_for(1) == 0.2

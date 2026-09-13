@@ -21,7 +21,6 @@ from app.services.job_admission import (
 from app.services.operations.backup_facade import (
     admission_ignore_for,
     backup_job_link_columns,
-    is_backup_operation,
     resolve_backup_job,
 )
 
@@ -444,6 +443,13 @@ async def wait_for_agent_repository_operation_job(
     )
 
 
+# `agent_jobs.job_type` of the row that carries a backup to its agent. Named
+# once: the writers set it and `get_agent_job_for_backup` reads it, and a
+# mismatch between them fails silently — the cancel route would find no job
+# and refuse, the log endpoints would serve nothing.
+BACKUP_AGENT_JOB_TYPE = "backup"
+
+
 def queue_agent_backup_job(
     db: Session,
     backup_job,
@@ -479,7 +485,7 @@ def queue_agent_backup_job(
     now = datetime.utcnow()
     agent_job = AgentJob(
         agent_machine_id=agent.id,
-        job_type="backup",
+        job_type=BACKUP_AGENT_JOB_TYPE,
         status="queued",
         payload=build_agent_backup_payload(
             repository,
@@ -544,15 +550,23 @@ def queue_agent_script_job(
     *,
     script_name: str,
     env: Optional[dict[str, str]] = None,
-    backup_job_id: Optional[int] = None,
 ) -> AgentJob:
     """Enqueue a ``script.run`` job for a resolved agent. Not a borg operation, so
-    it carries no repository admission — it wraps a plan run, not the borg call."""
+    it carries no repository admission — it wraps a plan run, not the borg call.
+
+    It carries no backup link either. `agent_jobs` has one link column,
+    `operation_id`, and every reader of it — the agent's own reports, the
+    reaper, the cancel path — takes the row it points at to *be* that
+    operation's transport job: a script row wearing the same link would
+    fail a finished backup, overwrite its log and be cancelled in its
+    place. What ties a hook to the run it belongs to is its
+    `script_executions` row, through the plan run and the `agent_job_id`
+    the caller writes back onto it.
+    """
     validate_agent_script(agent)
     now = datetime.utcnow()
     agent_job = AgentJob(
         agent_machine_id=agent.id,
-        backup_job_id=backup_job_id,
         job_type="script",
         status="queued",
         payload=build_agent_script_payload(script_name, env),
@@ -635,15 +649,19 @@ async def wait_for_agent_script_job(
 
 
 def get_agent_job_for_backup(db: Session, backup_job: Any) -> Optional[AgentJob]:
-    """The transport job for a backup, whichever shape the backup has."""
-    column = (
-        AgentJob.operation_id
-        if is_backup_operation(backup_job)
-        else AgentJob.backup_job_id
-    )
+    """The transport job that carries a backup to its agent.
+
+    `agent_jobs` has one link column, so the lookup names the kind it wants
+    rather than trusting the link alone: the caller cancels this job, reads
+    its logs and decides the backup's fate from its status, none of which
+    may land on a row that merely belongs to the same run.
+    """
     return (
         db.query(AgentJob)
-        .filter(column == backup_job.id)
+        .filter(
+            AgentJob.operation_id == backup_job.id,
+            AgentJob.job_type == BACKUP_AGENT_JOB_TYPE,
+        )
         .order_by(AgentJob.id.desc())
         .first()
     )

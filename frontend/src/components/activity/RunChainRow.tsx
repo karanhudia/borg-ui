@@ -3,6 +3,9 @@ import { Box, ButtonBase, Typography, alpha, keyframes, useTheme } from '@mui/ma
 import { ChevronDown, ChevronRight, Terminal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import RunStatusIcon from './RunStatusIcon'
+import { subjectText } from '../../theme'
+import { outcomeColor } from '../../pages/activity/entryGrid'
+import { QUIET_STATUSES, outcomeLabel } from '../../pages/activity/runs'
 import { buildFlow, isHook, type FlowNode } from './runChainLanes'
 import {
   ACTIVE,
@@ -66,20 +69,28 @@ function StatusBar({ steps }: { steps: RunChainOperation[] }) {
 }
 
 interface RunChainSummaryProps {
-  steps: RunChainOperation[]
+  flow: FlowNode[]
   expanded: boolean
   onToggle: () => void
 }
 
 // The one-line strip that folds a chain: a segment per step coloured by
 // status, the count, a verdict, and how long the steps took.
-export function RunChainSummary({ steps, expanded, onToggle }: RunChainSummaryProps) {
+//
+// It counts what the expansion renders, the run's own node included: a
+// pre-backup hook, the backup, and a post-backup hook are three lines and
+// must not fold into "2 steps". The time is still the steps' own, since the
+// run's duration sits beside this strip already.
+export function RunChainSummary({ flow, expanded, onToggle }: RunChainSummaryProps) {
   const { t } = useTranslation()
-  const allSucceeded = !chainOpensByDefault(steps)
-  const failed = steps.filter((step) => step.status === 'failed').length
-  const active = steps.filter((step) => ACTIVE.has(step.status)).length
-  const cancelled = steps.filter((step) => step.status === 'cancelled').length
-  const total = chainSeconds(steps.filter((step) => !isHook(step)))
+  const nodes = flow.map((node) => node.op)
+  const allSucceeded = !chainOpensByDefault(nodes)
+  const failed = nodes.filter((step) => step.status === 'failed').length
+  const active = nodes.filter((step) => ACTIVE.has(step.status)).length
+  const cancelled = nodes.filter((step) => step.status === 'cancelled').length
+  const total = chainSeconds(
+    flow.filter((node) => node.role !== 'root' && !isHook(node.op)).map((node) => node.op)
+  )
   const summary = allSucceeded
     ? t('activity.runChain.allSucceeded')
     : [
@@ -109,12 +120,12 @@ export function RunChainSummary({ steps, expanded, onToggle }: RunChainSummaryPr
       }}
     >
       <Chevron size={14} aria-hidden />
-      <StatusBar steps={steps} />
+      <StatusBar steps={nodes} />
       <Typography
         variant="caption"
-        sx={{ fontWeight: 600, color: 'text.primary', lineHeight: 1, whiteSpace: 'nowrap' }}
+        sx={{ fontWeight: 500, color: subjectText, lineHeight: 1, whiteSpace: 'nowrap' }}
       >
-        {t('activity.followupsCollapsed', { count: steps.length })}
+        {t('activity.followupsCollapsed', { count: nodes.length })}
       </Typography>
       <Typography variant="caption" sx={{ lineHeight: 1, whiteSpace: 'nowrap' }}>
         {summary}
@@ -124,6 +135,7 @@ export function RunChainSummary({ steps, expanded, onToggle }: RunChainSummaryPr
   )
 }
 
+/** Render one operation in the expanded chain flow. */
 function Node({ node }: { node: FlowNode }) {
   const { t } = useTranslation()
   const theme = useTheme()
@@ -135,6 +147,9 @@ function Node({ node }: { node: FlowNode }) {
   const progress = nodeProgress(op)
   const hook = role === 'hook'
   const filled = role !== 'step'
+  // Cancelled and skipped draw the same grey glyph, so a step that ended any
+  // way but well says which.
+  const outcome = QUIET_STATUSES.has(op.status) ? null : outcomeLabel(op.status, t)
   const tint = failed
     ? theme.palette.error.main
     : running
@@ -163,7 +178,7 @@ function Node({ node }: { node: FlowNode }) {
           : filled
             ? alpha(tint, failed ? 0.1 : 0.07)
             : 'transparent',
-        color: muted ? 'text.disabled' : failed ? 'error.main' : 'text.primary',
+        color: muted ? 'text.disabled' : failed ? 'error.main' : subjectText,
         whiteSpace: 'nowrap',
       }}
     >
@@ -184,16 +199,21 @@ function Node({ node }: { node: FlowNode }) {
         </Typography>
       )}
       {hook && <RunStatusIcon status={op.status} size={12} />}
-      {(progress || (elapsed != null && elapsed >= 1)) && (
+      {(outcome || progress || (elapsed != null && elapsed >= 1)) && (
         <Typography
           variant="caption"
           sx={{
             lineHeight: 1,
-            color: running ? 'primary.main' : 'text.secondary',
+            color: (theme) =>
+              running
+                ? theme.palette.primary.main
+                : outcome
+                  ? outcomeColor(theme, op.status)
+                  : theme.palette.text.secondary,
             fontVariantNumeric: 'tabular-nums',
           }}
         >
-          {progress ?? formatDurationSeconds(elapsed)}
+          {[outcome, progress ?? formatDurationSeconds(elapsed)].filter(Boolean).join(' · ')}
         </Typography>
       )}
     </Box>
@@ -218,7 +238,7 @@ export default function RunChainRow({ operation }: RunChainRowProps) {
 
   return (
     <Box sx={{ pt: 0.25, pb: 0.25 }}>
-      <RunChainSummary steps={steps} expanded={expanded} onToggle={() => setOpen(!expanded)} />
+      <RunChainSummary flow={flow} expanded={expanded} onToggle={() => setOpen(!expanded)} />
       {expanded && (
         <Box
           data-testid="run-chain-flow"

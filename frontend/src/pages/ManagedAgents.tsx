@@ -36,9 +36,9 @@ import {
   ArrowUpCircle,
   Ban,
   CheckCircle,
-  Copy,
   Eye,
   Info,
+  Link2,
   Pin,
   Plus,
   RefreshCw,
@@ -75,6 +75,8 @@ import AgentManualUpgradeChip from './managed-agents/AgentManualUpgradeChip'
 import AgentUpgradeChip from './managed-agents/AgentUpgradeChip'
 import AgentPinControl from './managed-agents/AgentPinControl'
 import AgentUpgradeDialog from './managed-agents/AgentUpgradeDialog'
+import AgentSetServerDialog from './managed-agents/AgentSetServerDialog'
+import CopyableCodeBlock from './managed-agents/CopyableCodeBlock'
 import AgentUpgradeStateChip from './managed-agents/AgentUpgradeStateChip'
 import { canUpgradeNow } from './managed-agents/agentUpgradeEligibility'
 import BorgInstallModeRadioGroup from './managed-agents/BorgInstallModeRadioGroup'
@@ -973,68 +975,6 @@ export function AgentSetupHelpContent({
   )
 }
 
-function CopyableCodeBlock({
-  value,
-  copyLabel,
-  onCopy,
-}: {
-  value: string
-  copyLabel: string
-  onCopy: () => void
-}) {
-  return (
-    <Box sx={{ position: 'relative', minWidth: 0 }}>
-      <Box
-        component="code"
-        sx={{
-          display: 'block',
-          p: 1.5,
-          pr: 5.5,
-          borderRadius: 1,
-          border: '1px solid',
-          borderColor: 'divider',
-          bgcolor: 'action.hover',
-          color: 'text.primary',
-          overflowX: 'auto',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-          fontSize: '0.8rem',
-          fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
-        }}
-      >
-        {value}
-      </Box>
-      <Tooltip title={copyLabel}>
-        <IconButton
-          aria-label={copyLabel}
-          size="small"
-          onClick={onCopy}
-          sx={{
-            position: 'absolute',
-            top: 8,
-            right: 8,
-            border: '1px solid',
-            color: 'primary.main',
-            borderColor: (theme) => alpha(theme.palette.primary.main, 0.45),
-            bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
-            '&:hover': {
-              borderColor: 'primary.main',
-              bgcolor: (theme) => alpha(theme.palette.primary.main, 0.14),
-            },
-            '&:focus-visible': {
-              outline: '2px solid',
-              outlineColor: 'primary.main',
-              outlineOffset: 2,
-            },
-          }}
-        >
-          <Copy size={16} />
-        </IconButton>
-      </Tooltip>
-    </Box>
-  )
-}
-
 const AGENT_STATUS_ACCENT: Record<string, string> = {
   online: '#059669',
   offline: '#6b7280',
@@ -1643,6 +1583,7 @@ export function AgentList({
   const isDark = theme.palette.mode === 'dark'
   const [deleteTarget, setDeleteTarget] = useState<AgentMachineResponse | null>(null)
   const [reinstallTarget, setReinstallTarget] = useState<AgentMachineResponse | null>(null)
+  const [setServerTarget, setSetServerTarget] = useState<AgentMachineResponse | null>(null)
   const [upgradeTargets, setUpgradeTargets] = useState<AgentMachineResponse[]>([])
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [pinTarget, setPinTarget] = useState<AgentMachineResponse | null>(null)
@@ -1956,6 +1897,20 @@ export function AgentList({
                   </Box>
                 )}
 
+                {agent.status !== 'online' && (
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      display: 'block',
+                      mb: 1.5,
+                      color: 'text.secondary',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {t('managedAgents.page.offlineStatusHint')}
+                  </Typography>
+                )}
+
                 {!hasUsableBorg && (
                   <Alert
                     severity="warning"
@@ -2128,6 +2083,32 @@ export function AgentList({
                       <RefreshCw size={16} />
                     </IconButton>
                   </Tooltip>
+                  <Tooltip title={t('managedAgents.page.actions.changeServerUrl')} arrow>
+                    <IconButton
+                      size="small"
+                      aria-label={t('managedAgents.page.actions.changeServerUrl')}
+                      onClick={() => {
+                        trackSystem(EventAction.VIEW, {
+                          section: MANAGED_AGENTS_ANALYTICS_SECTION,
+                          operation: 'open_set_server_dialog',
+                          status: agent.status,
+                        })
+                        setSetServerTarget(agent)
+                      }}
+                      sx={{
+                        width: { xs: 40, sm: 34 },
+                        height: { xs: 40, sm: 34 },
+                        borderRadius: 1.5,
+                        color: alpha(theme.palette.primary.main, 0.75),
+                        '&:hover': {
+                          color: theme.palette.primary.main,
+                          bgcolor: alpha(theme.palette.primary.main, isDark ? 0.15 : 0.1),
+                        },
+                      }}
+                    >
+                      <Link2 size={16} />
+                    </IconButton>
+                  </Tooltip>
                   <Tooltip title={t('managedAgents.page.actions.revokeAccess')} arrow>
                     <span>
                       <IconButton
@@ -2225,6 +2206,13 @@ export function AgentList({
         serverUrl={serverUrl}
         onCopy={onCopy}
         onCancel={() => setReinstallTarget(null)}
+      />
+      <AgentSetServerDialog
+        open={!!setServerTarget}
+        agent={setServerTarget}
+        defaultServerUrl={serverUrl}
+        onCopy={onCopy}
+        onCancel={() => setSetServerTarget(null)}
       />
       <AgentDiagnosticsDialog
         open={!!diagnosticsTarget}

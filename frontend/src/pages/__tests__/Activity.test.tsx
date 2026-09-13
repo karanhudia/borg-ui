@@ -95,10 +95,16 @@ describe('Activity page', () => {
     renderWithProviders(<Activity />)
     await screen.findByTestId('run-entry')
     expect(screen.getByTestId('umbrella-band')).toHaveTextContent('Plan · Nightly')
-    expect(activityAPI.list).toHaveBeenCalledWith({ limit: 200 })
+    expect(activityAPI.list).toHaveBeenCalledWith({ limit: 50 })
     expect(screen.getByTestId('activity-summary')).toHaveTextContent(
       '1 run · across 1 repository · index runs hidden'
     )
+    // Rows say how they went with a coloured dot, so the page says once
+    // what the colours mean.
+    const legend = screen.getByTestId('activity-legend')
+    expect(legend).toHaveTextContent('Completed')
+    expect(legend).toHaveTextContent('Failed')
+    expect(legend).toHaveTextContent('Warnings')
   })
 
   it('passes filters into the activity API and tracks them', async () => {
@@ -109,7 +115,7 @@ describe('Activity page', () => {
     fireEvent.mouseDown(screen.getByRole('combobox', { name: /^type$/i }))
     await user.click(await screen.findByRole('option', { name: /^Restore Check$/i }))
     await waitFor(() =>
-      expect(activityAPI.list).toHaveBeenLastCalledWith({ limit: 200, job_type: 'restore_check' })
+      expect(activityAPI.list).toHaveBeenLastCalledWith({ limit: 50, job_type: 'restore_check' })
     )
     expect(track).toHaveBeenCalledWith('Navigation', 'Filter', {
       filter_kind: 'type',
@@ -120,7 +126,7 @@ describe('Activity page', () => {
     await user.click(await screen.findByRole('option', { name: /^failed$/i }))
     await waitFor(() =>
       expect(activityAPI.list).toHaveBeenLastCalledWith({
-        limit: 200,
+        limit: 50,
         job_type: 'restore_check',
         status: 'failed',
       })

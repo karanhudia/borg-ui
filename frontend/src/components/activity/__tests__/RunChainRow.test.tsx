@@ -32,7 +32,8 @@ describe('RunChainRow', () => {
         }}
       />
     )
-    expect(screen.getByText('2 steps')).toBeInTheDocument()
+    // The run itself, then its two follow-ups: three lines when open.
+    expect(screen.getByText('3 steps')).toBeInTheDocument()
     expect(screen.getByText('All succeeded')).toBeInTheDocument()
     expect(screen.queryAllByTestId('run-chain-followup')).toHaveLength(0)
 
@@ -59,7 +60,8 @@ describe('RunChainRow', () => {
       />
     )
     expect(screen.getByText('14/38')).toBeInTheDocument()
-    expect(screen.getByText('1 in progress')).toBeInTheDocument()
+    // The backup and the step under it are both still going.
+    expect(screen.getByText('2 in progress')).toBeInTheDocument()
   })
 
   it('stays open and counts failures when a step failed', () => {
@@ -86,10 +88,10 @@ describe('RunChainRow', () => {
         }}
       />
     )
-    expect(screen.getByText('2 cancelled')).toBeInTheDocument()
+    expect(screen.getByText('3 cancelled')).toBeInTheDocument()
   })
 
-  it('uses the singular for one step', () => {
+  it('counts the run and its one follow-up', () => {
     render(
       <RunChainRow
         operation={{
@@ -99,7 +101,7 @@ describe('RunChainRow', () => {
         }}
       />
     )
-    expect(screen.getByText('1 step')).toBeInTheDocument()
+    expect(screen.getByText('2 steps')).toBeInTheDocument()
   })
 
   it('has no controls beyond the toggle', () => {
@@ -127,7 +129,7 @@ describe('RunChainRow', () => {
       />
     )
     await user.tab()
-    expect(screen.getByRole('button', { name: /2 steps/ })).toHaveFocus()
+    expect(screen.getByRole('button', { name: /3 steps/ })).toHaveFocus()
     await user.keyboard('{Enter}')
     expect(screen.getAllByTestId('run-chain-followup')).toHaveLength(2)
     await user.keyboard('{Enter}')

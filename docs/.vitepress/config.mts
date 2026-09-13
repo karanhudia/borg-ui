@@ -102,6 +102,12 @@ export default defineConfig({
           { text: 'Architecture', link: '/SPECIFICATION' },
           { text: 'Job System', link: '/architecture/job-system' },
           { text: 'Development', link: '/development' },
+          {
+            text: 'Storybook',
+            link: 'https://docs.borgui.com/storybook/',
+            target: '_blank',
+            rel: 'noreferrer',
+          },
           { text: 'Testing', link: '/testing' },
           { text: 'Contributing', link: '/contributing' },
         ],

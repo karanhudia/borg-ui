@@ -18,7 +18,6 @@ from app.api.dashboard import (
     build_restore_check_health,
     format_bytes,
     get_recent_jobs,
-    parse_size_to_bytes,
 )
 from app.database.models import (
     Operation,
@@ -289,22 +288,6 @@ class TestDashboardSummary:
 class TestDashboardHelpers:
     """Test dashboard helper functions directly."""
 
-    @pytest.mark.parametrize(
-        "size_string, expected",
-        [
-            ("0", 0),
-            ("512 B", 512),
-            ("1 KB", 1024),
-            ("1.5 MB", 1572864),
-            ("2 GB", 2147483648),
-            ("3 TB", 3298534883328),
-            ("bad-value", 0),
-            (None, 0),
-        ],
-    )
-    def test_parse_size_to_bytes(self, size_string, expected):
-        assert parse_size_to_bytes(size_string) == expected
-
     def test_maintenance_repository_name_falls_back_from_id_to_path(self):
         from types import SimpleNamespace
 
@@ -329,14 +312,17 @@ class TestDashboardHelpers:
     @pytest.mark.parametrize(
         "size_value, expected",
         [
-            (0, "0.0 B"),
-            (512, "512.0 B"),
-            (1024, "1.0 KB"),
-            (1024 * 1024, "1.0 MB"),
-            (1024 * 1024 * 1024, "1.0 GB"),
+            (0, "0.00 B"),
+            (512, "512.00 B"),
+            (1024, "1.00 KB"),
+            (1024 * 1024, "1.00 MB"),
+            (1024 * 1024 * 1024, "1.00 GB"),
         ],
     )
     def test_format_bytes(self, size_value, expected):
+        """The dashboard formats its totals with the one formatter
+        (`storage_usage.format_bytes`), so a total reads the way every other
+        size on the page does."""
         assert format_bytes(size_value) == expected
 
     def test_full_repository_health_keeps_unconfigured_restore_check_unknown(self):
@@ -1068,7 +1054,7 @@ class TestDashboardScheduleAndOverview:
         }
 
         assert data["storage"]["total_archives"] == 7
-        assert data["storage"]["total_size"] == "1.5 TB"
+        assert data["storage"]["total_size"] == "1.50 TB"
         repo_health = {item["name"]: item for item in data["repository_health"]}
         assert repo_health["Full Repo"]["health_status"] == "critical"
         assert repo_health["Full Repo"]["schedule_name"] == "Nightly Full Repo"
@@ -1326,3 +1312,18 @@ class TestDashboardScheduleAndOverview:
         assert repo_health["health_status"] == "warning"
         assert repo_health["dimension_health"]["backup"] == "warning"
         assert repo_health["warnings"] == ["Last backup 20 days ago"]
+
+
+@pytest.mark.unit
+def test_repository_size_bytes_prefers_the_stored_number():
+    from types import SimpleNamespace
+
+    from app.api.dashboard import repository_size_bytes
+
+    measured = SimpleNamespace(total_size="2.19 GB", total_size_bytes=2_350_000_000)
+    assert repository_size_bytes(measured) == 2_350_000_000
+    # a row from before the column: the string, rounded to its two decimals
+    legacy = SimpleNamespace(total_size="1.00 KB", total_size_bytes=None)
+    assert repository_size_bytes(legacy) == 1024
+    empty = SimpleNamespace(total_size=None, total_size_bytes=None)
+    assert repository_size_bytes(empty) == 0

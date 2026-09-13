@@ -36,14 +36,18 @@ if settings.database_url.startswith("sqlite"):
 
     @event.listens_for(engine, "connect")
     def set_sqlite_pragma(dbapi_conn, connection_record):
+        """Configure each SQLite connection for integrity and lock tolerance."""
         cursor = dbapi_conn.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         # WAL lets readers proceed without blocking the single writer, and
         # busy_timeout retries a transiently-locked write instead of raising
         # "database is locked" -- both matter under the concurrent multi-repo
-        # maintenance load that a plan run creates.
+        # maintenance load that a plan run creates. 5s was not enough: an
+        # index run writing an archive list holds the lock for longer than
+        # that, and the plan run beside it died recording why a repository
+        # was busy.
         cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA busy_timeout=5000")
+        cursor.execute("PRAGMA busy_timeout=30000")
         cursor.close()
 
 

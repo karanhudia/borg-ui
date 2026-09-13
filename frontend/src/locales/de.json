@@ -338,7 +338,8 @@
         "cancelJob": "Job abbrechen",
         "revokeToken": "Token widerrufen",
         "upgradeAgent": "Diesen Endpunkt aktualisieren",
-        "pinAgentVersion": "Version dieses Endpunkts festlegen"
+        "pinAgentVersion": "Version dieses Endpunkts festlegen",
+        "changeServerUrl": "Server-URL ändern"
       },
       "noBorg": {
         "title": "Keine verwendbare Borg-Binärdatei gemeldet",
@@ -468,7 +469,18 @@
         "activeTooltip": "Auf Borg {{version}} festgelegt, und dieser Endpunkt meldet diese Version.",
         "pending": "Borg {{version}} ausstehend",
         "pendingTooltip": "Auf Borg {{version}} festgelegt, aber dieser Endpunkt meldet die Version noch nicht. Das nächste Upgrade installiert sie."
-      }
+      },
+      "setServerDialog": {
+        "title": "Server-URL ändern",
+        "description": "Richte diesen Endpunkt auf eine andere Borg-UI-Adresse aus. Identität, Zugangsdaten und Verlauf bleiben erhalten, ein neues Registrierungs-Token ist nicht nötig.",
+        "fieldLabel": "Neue Server-URL",
+        "fieldHelper": "Vorbelegt mit der eigenen Adresse dieses Servers. Ändere sie, wenn der Endpunkt Borg UI anderswo erreichen soll, etwa über einen Reverse Proxy.",
+        "invalidUrl": "Gib eine vollständige URL an, die mit http:// oder https:// beginnt, ohne Anführungszeichen, Pipe- oder Backslash-Zeichen.",
+        "copyCommand": "Befehl kopieren",
+        "runHint": "Führe dies auf dem Endpunkt aus, als Benutzer mit sudo-Rechten.",
+        "statusHint": "Unklar, welche Adresse der Endpunkt gerade hält? Führe dort borg-ui-agent status aus."
+      },
+      "offlineStatusHint": "Führe borg-ui-agent status auf dem Endpunkt aus, um die aktuell hinterlegte Serveradresse zu sehen."
     },
     "installCommand": {
       "title": "Installationsbefehl",
@@ -722,7 +734,9 @@
     "running": "Läuft",
     "pending": "Ausstehend",
     "cancelled": "Abgebrochen",
-    "skipped": "Übersprungen"
+    "skipped": "Übersprungen",
+    "queued": "In Warteschlange",
+    "warnings": "Warnungen"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -2069,7 +2083,9 @@
     "title": "Aktivität",
     "subtitle": "Jeder Lauf auf jedem Repository, neueste zuerst",
     "actions": {
-      "refresh": "Aktivität aktualisieren"
+      "refresh": "Aktivität aktualisieren",
+      "loadMore": "Mehr laden",
+      "loadingMore": "Wird geladen..."
     },
     "filters": {
       "type": "Typ",
@@ -2168,10 +2184,8 @@
       "indexHidden": "Indexläufe ausgeblendet"
     },
     "runningNow": {
-      "title": "Läuft gerade",
-      "queued": "In Warteschlange"
+      "title": "Läuft gerade"
     },
-    "showMore": "{{count}} weitere anzeigen",
     "health": {
       "backup": "Backup",
       "check": "Prüfung",
@@ -2193,7 +2207,13 @@
       "repositories": "{{count}} Repositories",
       "repositories_one": "{{count}} Repository",
       "members": "{{count}} Läufe",
-      "members_one": "{{count}} Lauf"
+      "members_one": "{{count}} Lauf",
+      "trigger": {
+        "manual": "Manuell",
+        "schedule": "Geplant",
+        "retry": "Wiederholung",
+        "availability": "Verfügbarkeit"
+      }
     }
   },
   "availabilitySchedule": {
@@ -3269,7 +3289,8 @@
       "rcloneSync": "Cloud-Sync",
       "rcloneHydrate": "Cloud-Hydratisierung",
       "scriptExecution": "Skript",
-      "availabilityCheck": "Verfügbarkeitsprüfung"
+      "availabilityCheck": "Verfügbarkeitsprüfung",
+      "backupPlanRun": "Plan-Lauf"
     },
     "scheduledById": "Geplant (ID: {{id}})",
     "backupPlanByName": "Backup-Plan: {{name}}",
@@ -3737,6 +3758,7 @@
         "detailAllIndexed": "Jedes Archiv hat seinen Dateiverlauf.",
         "detailHint": "Baue ab Dateiverlauf neu auf, um diese Archive erneut zu indizieren.",
         "viewIndexRuns": "Indexläufe anzeigen",
+        "openRepository": "Repository öffnen",
         "historyAgentUnsupported": "Für Agent-Repositories nicht verfügbar"
       },
       "rebuildMenuHint": "Jede Stufe nach der gewählten wird ebenfalls neu aufgebaut. Frühere Stufen bleiben erhalten. Statistiken laufen immer zuletzt, weil sie zusammenzählen, was die anderen Stufen erzeugt haben.",

@@ -338,7 +338,8 @@
         "cancelJob": "Cancelar trabajo",
         "revokeToken": "Revocar token",
         "upgradeAgent": "Actualizar este endpoint",
-        "pinAgentVersion": "Fijar la versión de este endpoint"
+        "pinAgentVersion": "Fijar la versión de este endpoint",
+        "changeServerUrl": "Cambiar la URL del servidor"
       },
       "noBorg": {
         "title": "No se informó de un binario Borg utilizable",
@@ -468,7 +469,18 @@
         "activeTooltip": "Fijado a Borg {{version}}, la versión que informa este endpoint.",
         "pending": "Borg {{version}} pendiente",
         "pendingTooltip": "Fijado a Borg {{version}}, pero este endpoint todavía no informa esa versión. La próxima actualización la instalará."
-      }
+      },
+      "setServerDialog": {
+        "title": "Cambiar la URL del servidor",
+        "description": "Apunta este endpoint a otra dirección de Borg UI. Conserva su identidad, su credencial y su historial, así que no hace falta un nuevo token de inscripción.",
+        "fieldLabel": "Nueva URL del servidor",
+        "fieldHelper": "Rellenada con la dirección propia de este servidor. Edítala si el endpoint debe llegar a Borg UI por otra vía, por ejemplo un proxy inverso.",
+        "invalidUrl": "Introduce una URL completa que empiece por http:// o https://, sin comillas, barra vertical ni barra invertida.",
+        "copyCommand": "Copiar comando",
+        "runHint": "Ejecútalo en el endpoint, con un usuario que pueda usar sudo.",
+        "statusHint": "¿No sabes qué dirección tiene ahora el endpoint? Ejecuta borg-ui-agent status en él."
+      },
+      "offlineStatusHint": "Ejecuta borg-ui-agent status en el endpoint para ver la dirección de servidor que tiene ahora."
     },
     "installCommand": {
       "title": "Comando de instalación",
@@ -722,7 +734,9 @@
     "running": "En ejecución",
     "pending": "Pendiente",
     "cancelled": "Cancelado",
-    "skipped": "Omitido"
+    "skipped": "Omitido",
+    "queued": "En cola",
+    "warnings": "Advertencias"
   },
   "dashboard": {
     "title": "Panel",
@@ -2069,7 +2083,9 @@
     "title": "Actividad",
     "subtitle": "Cada ejecución en cada repositorio, la más reciente primero",
     "actions": {
-      "refresh": "Actualizar actividad"
+      "refresh": "Actualizar actividad",
+      "loadMore": "Cargar más",
+      "loadingMore": "Cargando..."
     },
     "filters": {
       "type": "Tipo",
@@ -2168,10 +2184,8 @@
       "indexHidden": "ejecuciones de índice ocultas"
     },
     "runningNow": {
-      "title": "En ejecución",
-      "queued": "En cola"
+      "title": "En ejecución"
     },
-    "showMore": "Mostrar {{count}} más",
     "health": {
       "backup": "Copia de seguridad",
       "check": "Verificación",
@@ -2193,7 +2207,13 @@
       "repositories": "{{count}} repositorios",
       "repositories_one": "{{count}} repositorio",
       "members": "{{count}} ejecuciones",
-      "members_one": "{{count}} ejecución"
+      "members_one": "{{count}} ejecución",
+      "trigger": {
+        "manual": "Manual",
+        "schedule": "Programado",
+        "retry": "Reintento",
+        "availability": "Disponibilidad"
+      }
     }
   },
   "availabilitySchedule": {
@@ -3269,7 +3289,8 @@
       "rcloneSync": "Sincronización en la nube",
       "rcloneHydrate": "Hidratación en la nube",
       "scriptExecution": "Script",
-      "availabilityCheck": "Comprobación de disponibilidad"
+      "availabilityCheck": "Comprobación de disponibilidad",
+      "backupPlanRun": "Ejecución del plan"
     },
     "scheduledById": "Programado (ID: {{id}})",
     "backupPlanByName": "Plan de copia: {{name}}",
@@ -3737,6 +3758,7 @@
         "detailAllIndexed": "Todos los archivos tienen su historial de ficheros.",
         "detailHint": "Reconstruye desde Historial de ficheros para indexar estos archivos de nuevo.",
         "viewIndexRuns": "Ver ejecuciones de índice",
+        "openRepository": "Abrir repositorio",
         "historyAgentUnsupported": "No disponible para repositorios de agente"
       },
       "rebuildMenuHint": "Cada etapa posterior a la elegida también se reconstruye. Las anteriores se conservan. Las estadísticas siempre van al final, porque suman lo que produjeron las demás etapas.",

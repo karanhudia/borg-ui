@@ -22,6 +22,7 @@ from app.services.operations.backup_facade import (
     newest_backup_job,
 )
 from app.utils.datetime_utils import serialize_datetime
+from app.services.storage_usage import stored_size_bytes
 
 import paho.mqtt.client as mqtt
 
@@ -583,7 +584,7 @@ class RepositoryStatePublisher:
         """Publish all per-repository state topics from repository table."""
         try:
             success = True
-            size_bytes = self.parse_size_to_bytes(repository.total_size or "0")
+            size_bytes = stored_size_bytes(repository)
             if not self._mqtt_service.publish_repository_size(
                 repository.id,
                 size_bytes,
@@ -709,35 +710,6 @@ class RepositoryStatePublisher:
                 exc_info=True,
             )
             return False
-
-    @staticmethod
-    def parse_size_to_bytes(size_str: str) -> int:
-        """Parse human-readable size string to bytes."""
-        if not size_str:
-            return 0
-
-        normalized = size_str.strip().upper().replace(" ", "")
-        multipliers = [
-            ("PB", 1024**5),
-            ("TB", 1024**4),
-            ("GB", 1024**3),
-            ("MB", 1024**2),
-            ("KB", 1024),
-            ("B", 1),
-        ]
-
-        for unit, multiplier in multipliers:
-            if normalized.endswith(unit):
-                try:
-                    number = float(normalized[: -len(unit)])
-                    return int(number * multiplier)
-                except ValueError:
-                    return 0
-
-        try:
-            return int(float(normalized))
-        except ValueError:
-            return 0
 
     @staticmethod
     def get_repository_status(
@@ -1146,7 +1118,7 @@ class MQTTService:
             payload["archive"] = archive
         return self.publish(f"repositories/{repository_id}/status", payload, qos=1)
 
-    def publish_repository_size(self, repository_id: int, total: int):
+    def publish_repository_size(self, repository_id: int, total: Optional[int]):
         if not self.config["enabled"]:
             return False
         return self.publish(
@@ -1448,10 +1420,6 @@ class MQTTService:
     def _fetch_running_backup_jobs_by_repository(self, db: Session) -> Dict[str, Any]:
         """Return latest running backup job row per repository path."""
         return self._job_query_service.fetch_running_backup_jobs_by_repository(db)
-
-    def _parse_size_to_bytes(self, size_str: str) -> int:
-        """Parse human-readable size string to bytes."""
-        return self._repository_state_publisher.parse_size_to_bytes(size_str)
 
     def _get_repository_status(
         self,

@@ -1,6 +1,7 @@
 import React from 'react'
 import { Box, Stack, Typography, Tooltip } from '@mui/material'
 import { HardDrive } from 'lucide-react'
+import { subjectText } from '../theme'
 import { useTranslation } from 'react-i18next'
 
 interface RepositoryCellProps {
@@ -38,7 +39,9 @@ export const RepositoryCell: React.FC<RepositoryCellProps> = ({
           <Typography
             variant="body2"
             sx={{
-              fontWeight: 500,
+              // Not the secondary colour the stack sets for the icon and the
+              // path: the name is the row's subject.
+              color: subjectText,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',

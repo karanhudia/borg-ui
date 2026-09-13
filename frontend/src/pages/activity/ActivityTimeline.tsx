@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
-import { Box, Button, Skeleton, Typography, alpha, useTheme } from '@mui/material'
+import { useMemo } from 'react'
+import { Box, Button, Chip, Skeleton, Typography, alpha, useTheme } from '@mui/material'
 import {
+  Activity as ActivityIcon,
   CalendarRange,
   Clock,
   CornerDownRight,
@@ -13,15 +14,18 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ActivityItem } from '../Activity'
-import type { ActionButton } from '../../components/RowActions'
+import RowActions, { type ActionButton } from '../../components/RowActions'
 import EmptyStateCard from '../../components/EmptyStateCard'
-import StatusBadge from '../../components/StatusBadge'
-import RunEntry from './RunEntry'
-import { ENTRY_COLUMNS, metaGridSx, umbrellaColor } from './entryGrid'
+import { hookFlow, isPreHook, type FlowNode } from '../../components/activity/runChainLanes'
+import RunEntry, { StepRow } from './RunEntry'
+import { ENTRY_COLUMNS, metaGridSx, outcomeColor, umbrellaColor } from './entryGrid'
 import { formatDurationSeconds, parseBackendDate } from '../../utils/dateUtils'
 import {
   ACTIVE_STATUSES,
+  chainStep,
   clusterRuns,
+  isPlanHook,
+  outcomeLabel,
   dayLabel,
   flattenRuns,
   groupByDay,
@@ -31,16 +35,15 @@ import {
   type UmbrellaKind,
 } from './runs'
 
-// Entries rendered before a "show more" step in. Each carries a chain and
-// its actions, so a few hundred at once would make the page sluggish.
-const WINDOW_SIZE = 60
-
 interface ActivityTimelineProps {
   items: ActivityItem[]
   loading: boolean
   actions: ActionButton<ActivityItem>[]
   showRepository: boolean
   getKey: (item: ActivityItem) => string
+  hasMore?: boolean
+  loadingMore?: boolean
+  onLoadMore?: () => void
 }
 
 const UMBRELLA_ICONS: Record<UmbrellaKind, typeof User> = {
@@ -53,6 +56,21 @@ const UMBRELLA_ICONS: Record<UmbrellaKind, typeof User> = {
   retry: RotateCcw,
   other: Zap,
 }
+
+const isActive = (item: ActivityItem): boolean =>
+  flattenRuns([item]).some((step) => ACTIVE_STATUSES.has(step.status))
+const isLive = (cluster: Cluster): boolean => cluster.items.some(isActive)
+
+// A section label sits on the content edge: time column, gap, rail, gap.
+const sectionLabelSx = {
+  display: 'block',
+  color: 'text.secondary',
+  letterSpacing: '0.08em',
+  fontSize: '0.6875rem',
+  lineHeight: 1,
+  pl: { xs: '84px', md: '96px' },
+  mb: 0.5,
+} as const
 
 function clusterStatus(items: ActivityItem[]): string {
   if (items.some((item) => ACTIVE_STATUSES.has(item.status))) return 'running'
@@ -92,19 +110,55 @@ function UmbrellaBand({
   actions: ActionButton<ActivityItem>[]
   showRepository: boolean
   getKey: (item: ActivityItem) => string
+  hasMore?: boolean
+  loadingMore?: boolean
+  onLoadMore?: () => void
 }) {
   const { t } = useTranslation()
   const theme = useTheme()
   const time = runTime(cluster.items[0])
   const accent = umbrellaColor(theme, cluster.umbrella.kind)
   const Icon = UMBRELLA_ICONS[cluster.umbrella.kind]
+  // A hook the plan ran around the whole plan belongs to the plan run, and
+  // the band is the plan run: it hangs from here as the band's own chain,
+  // not beside the repositories as another member.
+  const planHooks = useMemo(() => cluster.items.filter((item) => isPlanHook(item)), [cluster.items])
+  const members = useMemo(() => cluster.items.filter((item) => !isPlanHook(item)), [cluster.items])
+  // The plan ran them around its repositories, so they read around them:
+  // the pre ones above the members, the post ones below. Folding both into
+  // one strip at the top would put the post-backup script before the backup
+  // it followed.
+  const hookSteps = useMemo(
+    () => planHooks.map((hook) => ({ item: hook, op: chainStep(hook) })),
+    [planHooks]
+  )
+  const preHooks = hookFlow(hookSteps.filter((hook) => isPreHook(hook.op)).map((h) => h.op))
+  const postHooks = hookFlow(hookSteps.filter((hook) => !isPreHook(hook.op)).map((h) => h.op))
+  /** Resolve the row actions belonging to a plan-level hook node. */
+  const hookActions = (node: FlowNode) => {
+    const item = hookSteps.find((hook) => hook.op.id === node.op.id)?.item
+    return item ? <RowActions row={item} actions={actions} iconOpacity={0.55} /> : null
+  }
   const steps = flattenRuns(cluster.items)
   const status = clusterStatus(steps)
   const span = clusterSpan(steps)
-  const repositories = repositoryCount(
-    cluster.items.filter((item) => item.type !== 'script_execution')
-  )
-  const many = cluster.items.length > 1
+  const outcome = status === 'completed' ? null : outcomeLabel(status, t)
+  const repositories = repositoryCount(members)
+  const many = members.length > 1 || planHooks.length > 0
+  // "Plan · Nightly" is the run; whether the scheduler fired it or someone
+  // clicked Run is the one thing the members cannot say, so the band does.
+  const planTrigger =
+    cluster.umbrella.kind === 'plan'
+      ? (cluster.items.find((item) => item.backup_plan_run_trigger)?.backup_plan_run_trigger ??
+        null)
+      : null
+  const detail = [
+    planTrigger && t(`activity.planRun.trigger.${planTrigger}`, { defaultValue: planTrigger }),
+    many && repositories > 0 && t('activity.planRun.repositories', { count: repositories }),
+    many && t('activity.planRun.members', { count: members.length }),
+  ]
+    .filter(Boolean)
+    .join(' · ')
   return (
     <Box
       data-testid="umbrella-band"
@@ -181,44 +235,48 @@ function UmbrellaBand({
           >
             {cluster.umbrella.label}
           </Typography>
-          {many && (
+          {detail && (
             <Typography variant="body2" sx={{ color: 'text.secondary' }} noWrap>
-              {[
-                repositories > 0 && t('activity.planRun.repositories', { count: repositories }),
-                t('activity.planRun.members', { count: cluster.items.length }),
-              ]
-                .filter(Boolean)
-                .join(' · ')}
+              {detail}
             </Typography>
           )}
           {many && (
             <Box sx={metaGridSx(actions.length)}>
-              <Box sx={{ minWidth: 0 }}>
-                <StatusBadge status={status} />
-              </Box>
-              <Box />
+              {/* The same cell the members use: how it went, then how long it
+                  took. The band carries no status dot of its own, so it says
+                  everything but the all-clear its members' green dots already
+                  say -- a chain still running under a finished member shows
+                  up here and nowhere else. */}
               <Typography
                 variant="body2"
+                noWrap
                 sx={{
-                  color: 'text.secondary',
+                  color: (theme) =>
+                    outcome ? outcomeColor(theme, status) : theme.palette.text.secondary,
                   fontVariantNumeric: 'tabular-nums',
                   textAlign: 'right',
                 }}
               >
-                {span ?? ''}
+                {[outcome, span].filter(Boolean).join(' · ')}
               </Typography>
               <Box />
             </Box>
           )}
         </Box>
       </Box>
-      {cluster.items.map((item) => (
+      {preHooks.map((node, index) => (
+        <StepRow key={`pre-${node.op.id ?? index}`} node={node} trailing={hookActions(node)} />
+      ))}
+      {members.map((item) => (
         <RunEntry
           key={getKey(item)}
           item={item}
           actions={actions}
           showRepository={showRepository}
         />
+      ))}
+      {postHooks.map((node, index) => (
+        <StepRow key={`post-${node.op.id ?? index}`} node={node} trailing={hookActions(node)} />
       ))}
     </Box>
   )
@@ -257,8 +315,6 @@ function SkeletonRow({ header }: { header?: boolean }) {
             </Box>
             <Skeleton width={96} height={24} sx={{ borderRadius: 999, ml: 1 }} />
             <Box sx={{ ...metaGridSx(3), display: { xs: 'none', md: 'grid' } }}>
-              <Skeleton width={90} height={24} sx={{ borderRadius: 1 }} />
-              <Skeleton width={56} height={24} sx={{ borderRadius: 1 }} />
               <Skeleton width={64} height={20} sx={{ justifySelf: 'end' }} />
               <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
                 {[0, 1, 2].map((index) => (
@@ -315,37 +371,38 @@ function TimelineSkeleton() {
   )
 }
 
+/** Render activity items as chronological umbrella groups and standalone runs. */
 export default function ActivityTimeline({
   items,
   loading,
   actions,
   showRepository,
   getKey,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
 }: ActivityTimelineProps) {
   const { t } = useTranslation()
-  const [limit, setLimit] = useState(WINDOW_SIZE)
-  const days = useMemo(
-    () => groupByDay(items).map((group) => ({ ...group, clusters: clusterRuns(group.items, t) })),
-    [items, t]
+  // Whatever is running is pinned above the days, drawn exactly as it will
+  // be drawn once it finishes and drops into its day. One representation:
+  // a plan in its follow-up phase is one band with a chain, not five cards.
+  const { live, days } = useMemo(() => {
+    const live: Cluster[] = []
+    const days = groupByDay(items)
+      .map((group) => {
+        const clusters = clusterRuns(group.items, t)
+        live.push(...clusters.filter(isLive))
+        return { ...group, clusters: clusters.filter((cluster) => !isLive(cluster)) }
+      })
+      .filter((group) => group.clusters.length > 0)
+    return { live, days }
+  }, [items, t])
+  // Runs, not steps: a backup in its cleanup phase is one thing running.
+  const liveRuns = live.reduce(
+    (count, cluster) =>
+      count + cluster.items.filter((item) => !isPlanHook(item) && isActive(item)).length,
+    0
   )
-  // The window closes on a cluster boundary, so a plan run or schedule
-  // firing never shows half its members with "show more" changing the rest.
-  const { groups, shown } = useMemo(() => {
-    let shown = 0
-    const groups: typeof days = []
-    for (const day of days) {
-      if (shown >= limit) break
-      const clusters: Cluster[] = []
-      for (const cluster of day.clusters) {
-        if (shown >= limit) break
-        clusters.push(cluster)
-        shown += cluster.items.length
-      }
-      groups.push({ ...day, clusters })
-    }
-    return { groups, shown }
-  }, [days, limit])
-  const hidden = items.length - shown
 
   if (loading && items.length === 0) return <TimelineSkeleton />
 
@@ -380,22 +437,42 @@ export default function ActivityTimeline({
         },
       }}
     >
-      {groups.map((group) => (
-        <Box key={group.key} data-testid="activity-day" sx={{ mb: 2 }}>
+      {live.length > 0 && (
+        <Box data-testid="running-now" sx={{ mb: 2 }}>
           <Typography
             variant="overline"
             component="h2"
             sx={{
-              display: 'block',
-              color: 'text.secondary',
-              letterSpacing: '0.08em',
-              fontSize: '0.6875rem',
-              lineHeight: 1,
-              // Time column, gap, rail, gap: the label sits on the content edge.
-              pl: { xs: '84px', md: '96px' },
-              mb: 0.5,
+              ...sectionLabelSx,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.75,
+              color: 'primary.main',
             }}
           >
+            <ActivityIcon size={12} />
+            {t('activity.runningNow.title')}
+            <Chip
+              size="small"
+              label={liveRuns}
+              color="primary"
+              sx={{ height: 16, fontSize: '0.625rem', '& .MuiChip-label': { px: 0.75 } }}
+            />
+          </Typography>
+          {live.map((cluster) => (
+            <UmbrellaBand
+              key={cluster.key}
+              cluster={cluster}
+              actions={actions}
+              showRepository={showRepository}
+              getKey={getKey}
+            />
+          ))}
+        </Box>
+      )}
+      {days.map((group) => (
+        <Box key={group.key} data-testid="activity-day" sx={{ mb: 2 }}>
+          <Typography variant="overline" component="h2" sx={sectionLabelSx}>
             {dayLabel(group.date, t)}
           </Typography>
           <Box>
@@ -411,10 +488,10 @@ export default function ActivityTimeline({
           </Box>
         </Box>
       ))}
-      {hidden > 0 && (
+      {hasMore && (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
-          <Button variant="outlined" size="small" onClick={() => setLimit((n) => n + WINDOW_SIZE)}>
-            {t('activity.showMore', { count: Math.min(hidden, WINDOW_SIZE) })}
+          <Button variant="outlined" size="small" onClick={onLoadMore} disabled={loadingMore}>
+            {t(loadingMore ? 'activity.actions.loadingMore' : 'activity.actions.loadMore')}
           </Button>
         </Box>
       )}

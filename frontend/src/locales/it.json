@@ -338,7 +338,8 @@
         "cancelJob": "Annulla processo",
         "revokeToken": "Revoca token",
         "upgradeAgent": "Aggiorna questo endpoint",
-        "pinAgentVersion": "Blocca la versione di questo endpoint"
+        "pinAgentVersion": "Blocca la versione di questo endpoint",
+        "changeServerUrl": "Cambia URL del server"
       },
       "noBorg": {
         "title": "Nessun binario Borg utilizzabile segnalato",
@@ -468,7 +469,18 @@
         "activeTooltip": "Fissato a Borg {{version}}, la versione che questo endpoint segnala.",
         "pending": "Borg {{version}} in attesa",
         "pendingTooltip": "Fissato a Borg {{version}}, ma questo endpoint non segnala ancora quella versione. Il prossimo aggiornamento la installerà."
-      }
+      },
+      "setServerDialog": {
+        "title": "Cambia URL del server",
+        "description": "Punta questo endpoint a un altro indirizzo di Borg UI. Mantiene identità, credenziale e cronologia, quindi non serve un nuovo token di registrazione.",
+        "fieldLabel": "Nuovo URL del server",
+        "fieldHelper": "Precompilato con l'indirizzo di questo server. Modificalo se l'endpoint deve raggiungere Borg UI altrove, per esempio tramite un reverse proxy.",
+        "invalidUrl": "Inserisci un URL completo che inizi con http:// o https://, senza virgolette, barra verticale o barra rovesciata.",
+        "copyCommand": "Copia comando",
+        "runHint": "Esegui questo comando sull'endpoint, con un utente che può usare sudo.",
+        "statusHint": "Non sai quale indirizzo ha ora l'endpoint? Esegui borg-ui-agent status su di esso."
+      },
+      "offlineStatusHint": "Esegui borg-ui-agent status sull'endpoint per vedere l'indirizzo del server che ha ora."
     },
     "installCommand": {
       "title": "Comando di installazione",
@@ -722,7 +734,9 @@
     "running": "In esecuzione",
     "pending": "In attesa",
     "cancelled": "Annullato",
-    "skipped": "Saltato"
+    "skipped": "Saltato",
+    "queued": "In coda",
+    "warnings": "Avvisi"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -2069,7 +2083,9 @@
     "title": "Attività",
     "subtitle": "Ogni esecuzione su ogni repository, la più recente prima",
     "actions": {
-      "refresh": "Aggiorna attività"
+      "refresh": "Aggiorna attività",
+      "loadMore": "Carica altri",
+      "loadingMore": "Caricamento..."
     },
     "filters": {
       "type": "Tipo",
@@ -2168,10 +2184,8 @@
       "indexHidden": "esecuzioni di indice nascoste"
     },
     "runningNow": {
-      "title": "In corso",
-      "queued": "In coda"
+      "title": "In corso"
     },
-    "showMore": "Mostra altri {{count}}",
     "health": {
       "backup": "Backup",
       "check": "Verifica",
@@ -2193,7 +2207,13 @@
       "repositories": "{{count}} repository",
       "repositories_one": "{{count}} repository",
       "members": "{{count}} esecuzioni",
-      "members_one": "{{count}} esecuzione"
+      "members_one": "{{count}} esecuzione",
+      "trigger": {
+        "manual": "Manuale",
+        "schedule": "Pianificato",
+        "retry": "Nuovo tentativo",
+        "availability": "Disponibilità"
+      }
     }
   },
   "availabilitySchedule": {
@@ -3269,7 +3289,8 @@
       "rcloneSync": "Sync cloud",
       "rcloneHydrate": "Idratazione cloud",
       "scriptExecution": "Script",
-      "availabilityCheck": "Verifica disponibilità"
+      "availabilityCheck": "Verifica disponibilità",
+      "backupPlanRun": "Esecuzione del piano"
     },
     "scheduledById": "Pianificato (ID: {{id}})",
     "backupPlanByName": "Piano di backup: {{name}}",
@@ -3737,6 +3758,7 @@
         "detailAllIndexed": "Ogni archivio ha la sua cronologia dei file.",
         "detailHint": "Ricostruisci da Cronologia dei file per indicizzare di nuovo questi archivi.",
         "viewIndexRuns": "Vedi esecuzioni di indicizzazione",
+        "openRepository": "Apri repository",
         "historyAgentUnsupported": "Non disponibile per i repository agente"
       },
       "rebuildMenuHint": "Ogni fase successiva a quella scelta viene ricostruita a sua volta. Le fasi precedenti restano. Le statistiche vengono sempre per ultime, perché sommano ciò che le altre fasi hanno prodotto.",

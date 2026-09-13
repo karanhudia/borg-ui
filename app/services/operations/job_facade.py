@@ -404,7 +404,10 @@ def claim_running(db: Session, job_id: int, kind: str, started_at: datetime) -> 
     with no `started_at` before this ever runs, so "running" alone isn't
     "already claimed" - only a "running" row that already has a `started_at`
     is, and matching it here would let two concurrent claims both report
-    success."""
+    success. The runner path produces the same shape on purpose: the
+    maintenance executor clears the start its claim wrote before it calls
+    the service (`executors/maintenance.py`), and there the single-dispatch
+    guarantee rests on the runner's own queued-to-running claim."""
     return (
         db.query(Operation)
         .filter(
