@@ -85,7 +85,9 @@ export default function ArchiveContentsDialog({
     error: listingError,
     refetch,
   } = useQuery({
-    queryKey: ['archive-contents', repository?.id, archive?.name, currentPath],
+    // Keyed by id as well as name: a Borg 2 series repeats names, and the
+    // id may be empty when the caller only knows the name.
+    queryKey: ['archive-contents', repository?.id, archive?.id, archive?.name, currentPath],
     queryFn: async () => {
       if (!repository || !archive) {
         throw new Error('Repository or archive not selected')
