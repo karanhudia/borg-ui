@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { alpha, Box, Link as MuiLink, Typography } from '@mui/material'
+import { alpha, Alert, Box, Button, Link as MuiLink, Typography } from '@mui/material'
 import { Hourglass, ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
@@ -8,6 +8,8 @@ import { BorgApiClient, type Repository } from '../services/borgApi/client'
 import { Archive } from '../types'
 import { formatDateCompact, formatBytes as formatBytesUtil } from '../utils/dateUtils'
 import { normalizeBrowserPath } from '../utils/storageBrowserPaths'
+import { getApiErrorDetail } from '../utils/apiErrors'
+import { translateBackendKey } from '../utils/translateBackendKey'
 import StorageBrowserDialog, { type StorageBrowserItem } from './StorageBrowserDialog'
 import type { ArchiveRow } from '../types/archives'
 
@@ -77,7 +79,12 @@ export default function ArchiveContentsDialog({
     jobIdRef.current = null
   }, [currentPath])
 
-  const { data: archiveContents, isFetching } = useQuery({
+  const {
+    data: archiveContents,
+    isFetching,
+    error: listingError,
+    refetch,
+  } = useQuery({
     queryKey: ['archive-contents', repository?.id, archive?.name, currentPath],
     queryFn: async () => {
       if (!repository || !archive) {
@@ -100,6 +107,23 @@ export default function ArchiveContentsDialog({
   })
 
   const isAwaitingAgent = archiveContents?.status === 202
+
+  // A failed listing (wrong selector, agent down) must say so and offer a
+  // retry rather than falling through to the "no information" placeholder.
+  const errorBanner =
+    listingError && !isFetching ? (
+      <Alert
+        severity="error"
+        sx={{ flexShrink: 0 }}
+        action={
+          <Button color="inherit" size="small" onClick={() => refetch()}>
+            {t('archiveContents.retry')}
+          </Button>
+        }
+      >
+        {translateBackendKey(getApiErrorDetail(listingError), 'archiveContents.loadFailed')}
+      </Alert>
+    ) : null
 
   const canaryDescription = t('archiveContents.managedCanaryDescription')
   const items = useMemo<StorageBrowserItem[] | null>(() => {
@@ -178,6 +202,7 @@ export default function ArchiveContentsDialog({
           </MuiLink>
         ) : undefined
       }
+      error={errorBanner}
       banner={
         isInsideCanaryPath ? (
           <Box

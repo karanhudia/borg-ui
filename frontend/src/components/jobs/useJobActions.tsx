@@ -340,7 +340,9 @@ export function useJobActions<T extends Job = Job>({
         }
         setArchiveView({
           archive: {
-            id: job.archive_name,
+            // The borg id, not the name: a Borg 2 series repeats names and
+            // the client selects by `aid:<id>`. Empty falls back to the name.
+            id: job.archive_borg_id ?? '',
             archive: job.archive_name,
             name: job.archive_name,
             start: job.started_at || '',

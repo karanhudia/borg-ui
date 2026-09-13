@@ -142,15 +142,20 @@ vi.mock('../DeleteJobDialog', () => ({
 vi.mock('../ArchiveContentsDialog', () => ({
   default: ({
     open,
+    archive,
     onDownloadFile,
   }: {
     open: boolean
+    archive: { id: string; name: string } | null
     onDownloadFile?: (archiveName: string, filePath: string) => void
   }) =>
     open ? (
-      <button onClick={() => onDownloadFile?.('archive-77', '/srv/notes.txt')}>
-        Download File
-      </button>
+      <div>
+        <span data-testid="archive-id">{archive?.id}</span>
+        <button onClick={() => onDownloadFile?.('archive-77', '/srv/notes.txt')}>
+          Download File
+        </button>
+      </div>
     ) : null,
 }))
 
@@ -266,6 +271,57 @@ describe('BackupJobsTable action internals', () => {
     const downloadCall = downloadArchiveFileMock.mock.calls[0]
     expect(downloadCall[1]).toBe('archive-77')
     expect(downloadCall[2]).toBe('/srv/notes.txt')
+  })
+
+  it('opens the archive by its borg id, not its name', async () => {
+    // A Borg 2 series repeats names, so the client addresses the archive by
+    // id (aid:<id>); the name is never a valid id.
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={[
+          {
+            id: 13,
+            repository: '/backup/repo77',
+            repository_path: '/backup/repo77',
+            type: 'backup',
+            status: 'completed',
+            started_at: '2026-04-01T10:00:00Z',
+            archive_name: 'daily',
+            archive_borg_id: 'bbbb2222bbbb2222',
+          },
+        ]}
+        actions={{ viewArchive: true }}
+      />
+    )
+
+    await user.click(await screen.findByRole('button', { name: /view archive/i }))
+    expect(await screen.findByTestId('archive-id')).toHaveTextContent('bbbb2222bbbb2222')
+  })
+
+  it('leaves the archive id empty when the backend has no stored row', async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={[
+          {
+            id: 14,
+            repository: '/backup/repo77',
+            repository_path: '/backup/repo77',
+            type: 'backup',
+            status: 'completed',
+            started_at: '2026-04-01T10:00:00Z',
+            archive_name: 'daily',
+          },
+        ]}
+        actions={{ viewArchive: true }}
+      />
+    )
+
+    await user.click(await screen.findByRole('button', { name: /view archive/i }))
+    expect(await screen.findByTestId('archive-id')).toHaveTextContent('')
   })
 
   it('confirms and calls retry for failed manual backup jobs', async () => {

@@ -152,6 +152,35 @@ describe('ArchiveContentsDialog', () => {
     expect(screen.queryByText(/takes a little longer/i)).not.toBeInTheDocument()
   })
 
+  it('shows the error and retries when the listing fails', async () => {
+    mockGetArchiveContents
+      .mockRejectedValueOnce({
+        response: { data: { detail: 'Archive daily not found' } },
+      })
+      .mockResolvedValue({
+        status: 200,
+        data: { items: [{ name: 'file.txt', path: 'file.txt', type: 'file', size: 5 }] },
+      } as AxiosResponse)
+
+    renderWithProviders(
+      <ArchiveContentsDialog
+        open={true}
+        archive={mockArchive}
+        repository={mockRepository}
+        {...mockHandlers}
+      />
+    )
+
+    expect(await screen.findByText(/Archive daily not found/)).toBeInTheDocument()
+    expect(screen.queryByText('No archive information available')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }))
+
+    expect(await screen.findByText('file.txt')).toBeInTheDocument()
+    expect(mockGetArchiveContents).toHaveBeenCalledTimes(2)
+    expect(screen.queryByText(/Archive daily not found/)).not.toBeInTheDocument()
+  })
+
   it('displays empty archive message when no items', async () => {
     mockGetArchiveContents.mockResolvedValue({
       data: { items: [] },
