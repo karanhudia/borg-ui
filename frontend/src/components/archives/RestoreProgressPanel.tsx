@@ -62,8 +62,9 @@ export default function RestoreProgressPanel({
 
 interface RestoreProgressPanelViewProps {
   job: RestoreStatus | undefined
-  /** The status request itself failed. The job may still be running, so
-   *  this is not the same as a failed restore. */
+  /** The status request failed. The job may still be running, so this is
+   *  not the same as a failed restore. A job already seen finishing keeps
+   *  its outcome: nothing newer can arrive for it. */
   statusUnavailable?: boolean
   repositoryId: number
   onDismiss: () => void
@@ -77,7 +78,8 @@ export function RestoreProgressPanelView({
   onDismiss,
 }: RestoreProgressPanelViewProps) {
   const { t } = useTranslation()
-  const status = statusUnavailable && !job ? 'unavailable' : (job?.status ?? 'pending')
+  const settled = job != null && TERMINAL.has(job.status)
+  const status = statusUnavailable && !settled ? 'unavailable' : (job?.status ?? 'pending')
   const done = TERMINAL.has(status) || status === 'unavailable'
   const failed = status === 'failed' || status === 'cancelled' || status === 'unavailable'
   const percent = job?.progress_details?.progress_percent ?? 0

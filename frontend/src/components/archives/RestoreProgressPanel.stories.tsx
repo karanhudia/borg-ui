@@ -10,9 +10,13 @@ const meta: Meta<typeof RestoreProgressPanelView> = {
   args: { repositoryId: 7, onDismiss: () => {} },
   parameters: { layout: 'fullscreen' },
   decorators: [
+    // The column is position: fixed, so the story root would have no height
+    // and the snapshot runner would wait forever for it to become visible.
     (Story) => (
-      <Box sx={cornerStackSx}>
-        <Story />
+      <Box sx={{ minHeight: '100vh' }}>
+        <Box sx={cornerStackSx}>
+          <Story />
+        </Box>
       </Box>
     ),
   ],

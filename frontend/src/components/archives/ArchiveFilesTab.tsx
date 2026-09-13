@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import {
   Box,
@@ -41,6 +41,9 @@ interface ArchiveFilesTabProps {
    *  stacks under restore progress instead of covering it. Without one the
    *  bar pins itself to the corner, which is what stories and tests see. */
   cornerStack?: HTMLElement | null
+  /** Bump to drop the selection, as when a restore has gone out. Only the
+   *  selection resets: the folder, filter and cursor stay where they were. */
+  selectionResetToken?: number
 }
 
 const renderInCorner = (stack: HTMLElement | null | undefined, node: ReactElement) =>
@@ -52,6 +55,7 @@ export default function ArchiveFilesTab({
   archive,
   onRestorePaths,
   cornerStack,
+  selectionResetToken = 0,
 }: ArchiveFilesTabProps) {
   const { t } = useTranslation()
   const theme = useTheme()
@@ -137,6 +141,12 @@ export default function ArchiveFilesTab({
     }))
   }
   const [selectionOpen, setSelectionOpen] = useState(false)
+  useEffect(() => {
+    if (selectionResetToken === 0) return
+    setSelection({ selectedPaths: [], selectedItems: [] })
+    setSelectedEntries(new Map())
+    setSelectionOpen(false)
+  }, [selectionResetToken])
 
   const isTypingTarget = (target: EventTarget | null) => {
     const el = target as HTMLElement | null

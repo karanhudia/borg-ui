@@ -182,6 +182,30 @@ describe('ArchiveFilesTab', () => {
     expect(screen.queryByRole('toolbar', { name: /selection/i })).not.toBeInTheDocument()
   })
 
+  it('drops the selection when the reset token changes', () => {
+    const { rerender } = renderWithProviders(
+      <ArchiveFilesTab
+        repositoryId={7}
+        repository={repository}
+        archive={archive}
+        selectionResetToken={0}
+      />
+    )
+    fireEvent.click(screen.getByTestId('archive-path-selector'))
+    expect(screen.getByRole('toolbar', { name: /selection/i })).toBeInTheDocument()
+    rerender(
+      <ArchiveFilesTab
+        repositoryId={7}
+        repository={repository}
+        archive={archive}
+        selectionResetToken={1}
+      />
+    )
+    expect(screen.queryByRole('toolbar', { name: /selection/i })).not.toBeInTheDocument()
+    // Only the selection went. The browser itself was not remounted.
+    expect(screen.getByTestId('archive-path-selector')).toBeInTheDocument()
+  })
+
   describe('keyboard navigation', () => {
     function renderTab() {
       const { container } = renderWithProviders(

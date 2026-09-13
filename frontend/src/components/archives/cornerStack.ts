@@ -15,6 +15,11 @@ export const cornerStackSx: SystemStyleObject<Theme> = {
   display: 'flex',
   flexDirection: 'column',
   gap: 1.5,
+  // Cards stay until dismissed, so enough restores could climb past the top
+  // of the window. The column scrolls instead.
+  maxHeight: 'calc(100dvh - 24px)',
+  overflowY: 'auto',
+  overscrollBehavior: 'contain',
   pointerEvents: 'none',
   '& > *': { pointerEvents: 'auto' },
 }

@@ -85,9 +85,9 @@ export default function ArchiveDetail() {
   // "Restore this" in a file's history points at an older archive of the
   // series. Null means the archive on screen.
   const [restoreFromArchiveId, setRestoreFromArchiveId] = useState<number | null>(null)
-  // Bumped when a restore starts so the Files tab drops its selection bar:
-  // a "1 selected, Restore selection" panel left on screen reads as a
-  // restore that never went out.
+  // Bumped when a restore starts so the Files tab drops its selection: a
+  // "1 selected, Restore selection" bar left on screen reads as a restore
+  // that never went out.
   const [selectionEpoch, setSelectionEpoch] = useState(0)
   // Jobs started from this page, oldest first. Each gets a card in the
   // bottom-right column until dismissed, so a restore never happens unseen
@@ -478,7 +478,6 @@ export default function ArchiveDetail() {
         )}
         {activeTab === 'files' && repository && (
           <ArchiveFilesTab
-            key={selectionEpoch}
             repositoryId={repositoryId}
             repository={repository}
             archive={archive}
@@ -486,6 +485,7 @@ export default function ArchiveDetail() {
               openRestore(paths, items, fromArchiveId)
             }
             cornerStack={cornerStack}
+            selectionResetToken={selectionEpoch}
           />
         )}
         {activeTab === 'info' && <ArchiveInfoTab archive={archive} />}
