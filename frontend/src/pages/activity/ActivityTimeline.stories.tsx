@@ -3,7 +3,6 @@ import { ThemeProvider } from '@mui/material/styles'
 import { Box, CssBaseline } from '@mui/material'
 import { getTheme } from '../../theme'
 import ActivityTimeline from './ActivityTimeline'
-import RunningNow from './RunningNow'
 import type { ActivityItem } from '../Activity'
 import type { ActionButton } from '../../components/RowActions'
 import { Eye, Download, Trash2 } from 'lucide-react'
@@ -154,7 +153,12 @@ const items: ActivityItem[] = [
     started_at: at(0, 14, 2, 30),
     completed_at: at(0, 14, 2, 31),
   }),
-  base({ id: 11634, backup_plan_run_id: 217, followups: fanOut(11634, 11635, 11643) }),
+  base({
+    id: 11634,
+    backup_plan_run_id: 217,
+    backup_plan_run_trigger: 'schedule',
+    followups: fanOut(11634, 11635, 11643),
+  }),
   base({
     id: 11620,
     backup_plan_run_id: 217,
@@ -285,7 +289,6 @@ const actions: ActionButton<ActivityItem>[] = [
 function Page({ dark = false, pinned = false }: { dark?: boolean; pinned?: boolean }) {
   const body = (
     <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
-      <RunningNow items={items} actions={actions} />
       <ActivityTimeline
         items={items}
         loading={false}

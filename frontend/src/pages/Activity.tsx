@@ -15,7 +15,6 @@ import { CATEGORIES } from '../components/activity/categories'
 import { ActivityFilters } from './activity/ActivityFilters'
 import ActivityTimeline from './activity/ActivityTimeline'
 import RepositoryHeader from './activity/RepositoryHeader'
-import RunningNow from './activity/RunningNow'
 import StatusLegend from './activity/StatusLegend'
 import { activityKey, repositoryCount } from './activity/runs'
 import type {
@@ -44,6 +43,7 @@ export interface ActivityItem {
   schedule_name?: string | null // Schedule name if triggered by schedule
   backup_plan_id?: number | null
   backup_plan_run_id?: number | null
+  backup_plan_run_trigger?: string | null // how the plan run started: manual, schedule, retry
   backup_plan_name?: string | null
   skip_reason?: 'minimum_interval_not_elapsed' | 'source_unavailable' | null
   has_logs?: boolean
@@ -293,8 +293,6 @@ const Activity: React.FC = () => {
         </Typography>
         <StatusLegend />
       </Box>
-
-      <RunningNow items={items} actions={actionButtons} />
 
       <ActivityTimeline
         items={items}

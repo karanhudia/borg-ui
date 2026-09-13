@@ -41,6 +41,7 @@ const run = (overrides: Partial<ActivityItem>): ActivityItem => ({
 const items: ActivityItem[] = [
   run({
     id: 1,
+    backup_plan_run_trigger: 'schedule',
     followups: [
       { ...run({ id: 11, kind: 'archive_sync', type: 'archive_sync', trigger: 'followup' }) },
     ],
@@ -84,42 +85,65 @@ function renderTimeline(overrides: Partial<Parameters<typeof ActivityTimeline>[0
 }
 
 describe('ActivityTimeline', () => {
-  it('groups runs by day', () => {
+  it('pins what is running above the days, drawn like any other band', () => {
     renderTimeline()
+    const live = screen.getByTestId('running-now')
+    expect(live).toHaveTextContent('Running now1')
+    expect(within(live).getByTestId('umbrella-band')).toHaveTextContent('Schedule · weekly')
+    // The running prune started yesterday, but lives up top until it ends.
+    expect(screen.queryByText('Yesterday')).not.toBeInTheDocument()
+    expect(screen.getByText('Today')).toBeInTheDocument()
+    expect(screen.getAllByTestId('run-entry')).toHaveLength(2)
+    expect(screen.getAllByTestId('umbrella-band')[0]).toBe(
+      within(live).getByTestId('umbrella-band')
+    )
+  })
+
+  it('groups runs by day once nothing is running', () => {
+    renderTimeline({
+      items: items.map((item) => ({
+        ...item,
+        status: 'completed',
+        completed_at: item.started_at,
+        followups: item.followups?.map((step) => ({ ...step, status: 'completed' })),
+      })),
+    })
+    expect(screen.queryByTestId('running-now')).not.toBeInTheDocument()
     expect(screen.getByText('Today')).toBeInTheDocument()
     expect(screen.getByText('Yesterday')).toBeInTheDocument()
-    expect(screen.getAllByTestId('run-entry')).toHaveLength(2)
   })
 
   it('shows the repository, what ran, and what it belongs to', () => {
     renderTimeline()
     const rows = screen.getAllByTestId('run-entry')
-    expect(within(rows[0]).getByText('nas')).toBeInTheDocument()
-    expect(within(rows[0]).getByTestId('run-kind')).toHaveTextContent('Backup')
+    expect(within(rows[1]).getByText('nas')).toBeInTheDocument()
+    expect(within(rows[1]).getByTestId('run-kind')).toHaveTextContent('Backup')
     const bands = screen.getAllByTestId('umbrella-band')
-    expect(bands[0]).toHaveTextContent('Plan · nightly')
-    expect(bands[0]).toHaveAttribute('data-umbrella', 'plan')
-    expect(within(rows[1]).getByTestId('run-kind')).toHaveTextContent('Prune')
-    expect(bands[1]).toHaveTextContent('Schedule · weekly')
-    expect(bands[1]).toHaveAttribute('data-umbrella', 'schedule')
+    expect(bands[1]).toHaveTextContent('Plan · nightly')
+    // The scheduler fired it; the members only say "plan".
+    expect(bands[1]).toHaveTextContent('Scheduled')
+    expect(bands[1]).toHaveAttribute('data-umbrella', 'plan')
+    expect(within(rows[0]).getByTestId('run-kind')).toHaveTextContent('Prune')
+    expect(bands[0]).toHaveTextContent('Schedule · weekly')
+    expect(bands[0]).toHaveAttribute('data-umbrella', 'schedule')
   })
 
   it('leads with the archive instead of the repository when the scope is pinned', () => {
     renderTimeline({ showRepository: false })
     const rows = screen.getAllByTestId('run-entry')
-    expect(within(rows[0]).queryByText('nas')).not.toBeInTheDocument()
-    expect(within(rows[0]).getByText('nas-2026-09-05')).toBeInTheDocument()
+    expect(within(rows[1]).queryByText('nas')).not.toBeInTheDocument()
+    expect(within(rows[1]).getByText('nas-2026-09-05')).toBeInTheDocument()
   })
 
   it('shows progress for a running run and folds a succeeded chain', () => {
     renderTimeline()
     const rows = screen.getAllByTestId('run-entry')
-    expect(within(rows[0]).getByText('2 steps')).toBeInTheDocument()
-    expect(within(rows[1]).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '42')
-    expect(within(rows[1]).getByText(/42% · Pruning archive 3 of 7/)).toBeInTheDocument()
+    expect(within(rows[1]).getByText('2 steps')).toBeInTheDocument()
+    expect(within(rows[0]).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '42')
+    expect(within(rows[0]).getByText(/42% · Pruning archive 3 of 7/)).toBeInTheDocument()
     // Steps open as timeline rows of their own, with the run itself in
     // sequence, each on the rail with its start time.
-    const steps = within(rows[1]).getAllByTestId('run-step')
+    const steps = within(rows[0]).getAllByTestId('run-step')
     expect(steps.map((step) => step.getAttribute('data-role'))).toEqual(['root', 'step'])
     expect(steps[1]).toHaveTextContent('Fold removed history')
   })
@@ -131,9 +155,9 @@ describe('ActivityTimeline', () => {
     ]
     renderTimeline({ actions })
     const rows = screen.getAllByTestId('run-entry')
-    fireEvent.click(within(rows[0]).getByRole('button', { name: 'Logs' }))
+    fireEvent.click(within(rows[1]).getByRole('button', { name: 'Logs' }))
     expect(onClick).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }))
-    expect(within(rows[1]).queryByRole('button', { name: 'Logs' })).not.toBeInTheDocument()
+    expect(within(rows[0]).queryByRole('button', { name: 'Logs' })).not.toBeInTheDocument()
   })
 
   it('renders a skeleton while loading and an empty state with nothing to show', () => {

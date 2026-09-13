@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
-import { Box, Button, Skeleton, Typography, alpha, useTheme } from '@mui/material'
+import { Box, Button, Chip, Skeleton, Typography, alpha, useTheme } from '@mui/material'
 import {
+  Activity as ActivityIcon,
   CalendarRange,
   Clock,
   CornerDownRight,
@@ -55,6 +56,21 @@ const UMBRELLA_ICONS: Record<UmbrellaKind, typeof User> = {
   retry: RotateCcw,
   other: Zap,
 }
+
+const isActive = (item: ActivityItem): boolean =>
+  flattenRuns([item]).some((step) => ACTIVE_STATUSES.has(step.status))
+const isLive = (cluster: Cluster): boolean => cluster.items.some(isActive)
+
+// A section label sits on the content edge: time column, gap, rail, gap.
+const sectionLabelSx = {
+  display: 'block',
+  color: 'text.secondary',
+  letterSpacing: '0.08em',
+  fontSize: '0.6875rem',
+  lineHeight: 1,
+  pl: { xs: '84px', md: '96px' },
+  mb: 0.5,
+} as const
 
 function clusterStatus(items: ActivityItem[]): string {
   if (items.some((item) => ACTIVE_STATUSES.has(item.status))) return 'running'
@@ -129,6 +145,20 @@ function UmbrellaBand({
   const outcome = status === 'completed' ? null : outcomeLabel(status, t)
   const repositories = repositoryCount(members)
   const many = members.length > 1 || planHooks.length > 0
+  // "Plan · Nightly" is the run; whether the scheduler fired it or someone
+  // clicked Run is the one thing the members cannot say, so the band does.
+  const planTrigger =
+    cluster.umbrella.kind === 'plan'
+      ? (cluster.items.find((item) => item.backup_plan_run_trigger)?.backup_plan_run_trigger ??
+        null)
+      : null
+  const detail = [
+    planTrigger && t(`activity.planRun.trigger.${planTrigger}`, { defaultValue: planTrigger }),
+    many && repositories > 0 && t('activity.planRun.repositories', { count: repositories }),
+    many && t('activity.planRun.members', { count: members.length }),
+  ]
+    .filter(Boolean)
+    .join(' · ')
   return (
     <Box
       data-testid="umbrella-band"
@@ -205,14 +235,9 @@ function UmbrellaBand({
           >
             {cluster.umbrella.label}
           </Typography>
-          {many && (
+          {detail && (
             <Typography variant="body2" sx={{ color: 'text.secondary' }} noWrap>
-              {[
-                repositories > 0 && t('activity.planRun.repositories', { count: repositories }),
-                t('activity.planRun.members', { count: members.length }),
-              ]
-                .filter(Boolean)
-                .join(' · ')}
+              {detail}
             </Typography>
           )}
           {many && (
@@ -358,9 +383,25 @@ export default function ActivityTimeline({
   onLoadMore,
 }: ActivityTimelineProps) {
   const { t } = useTranslation()
-  const days = useMemo(
-    () => groupByDay(items).map((group) => ({ ...group, clusters: clusterRuns(group.items, t) })),
-    [items, t]
+  // Whatever is running is pinned above the days, drawn exactly as it will
+  // be drawn once it finishes and drops into its day. One representation:
+  // a plan in its follow-up phase is one band with a chain, not five cards.
+  const { live, days } = useMemo(() => {
+    const live: Cluster[] = []
+    const days = groupByDay(items)
+      .map((group) => {
+        const clusters = clusterRuns(group.items, t)
+        live.push(...clusters.filter(isLive))
+        return { ...group, clusters: clusters.filter((cluster) => !isLive(cluster)) }
+      })
+      .filter((group) => group.clusters.length > 0)
+    return { live, days }
+  }, [items, t])
+  // Runs, not steps: a backup in its cleanup phase is one thing running.
+  const liveRuns = live.reduce(
+    (count, cluster) =>
+      count + cluster.items.filter((item) => !isPlanHook(item) && isActive(item)).length,
+    0
   )
 
   if (loading && items.length === 0) return <TimelineSkeleton />
@@ -396,22 +437,42 @@ export default function ActivityTimeline({
         },
       }}
     >
-      {days.map((group) => (
-        <Box key={group.key} data-testid="activity-day" sx={{ mb: 2 }}>
+      {live.length > 0 && (
+        <Box data-testid="running-now" sx={{ mb: 2 }}>
           <Typography
             variant="overline"
             component="h2"
             sx={{
-              display: 'block',
-              color: 'text.secondary',
-              letterSpacing: '0.08em',
-              fontSize: '0.6875rem',
-              lineHeight: 1,
-              // Time column, gap, rail, gap: the label sits on the content edge.
-              pl: { xs: '84px', md: '96px' },
-              mb: 0.5,
+              ...sectionLabelSx,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.75,
+              color: 'primary.main',
             }}
           >
+            <ActivityIcon size={12} />
+            {t('activity.runningNow.title')}
+            <Chip
+              size="small"
+              label={liveRuns}
+              color="primary"
+              sx={{ height: 16, fontSize: '0.625rem', '& .MuiChip-label': { px: 0.75 } }}
+            />
+          </Typography>
+          {live.map((cluster) => (
+            <UmbrellaBand
+              key={cluster.key}
+              cluster={cluster}
+              actions={actions}
+              showRepository={showRepository}
+              getKey={getKey}
+            />
+          ))}
+        </Box>
+      )}
+      {days.map((group) => (
+        <Box key={group.key} data-testid="activity-day" sx={{ mb: 2 }}>
+          <Typography variant="overline" component="h2" sx={sectionLabelSx}>
             {dayLabel(group.date, t)}
           </Typography>
           <Box>

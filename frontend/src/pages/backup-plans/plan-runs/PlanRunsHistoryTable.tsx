@@ -198,6 +198,16 @@ export function PlanRunsHistoryTable({
                           —
                         </Typography>
                       )}
+                      {/* Who started it, under when: the scheduler or a click. */}
+                      <Typography
+                        variant="caption"
+                        data-testid="plan-run-trigger"
+                        sx={{ display: 'block', color: 'text.secondary' }}
+                      >
+                        {t(`activity.planRun.trigger.${run.trigger}`, {
+                          defaultValue: run.trigger,
+                        })}
+                      </Typography>
                     </TableCell>
                     <TableCell>
                       <Stack

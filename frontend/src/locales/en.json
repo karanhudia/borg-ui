@@ -2172,8 +2172,7 @@
       "indexHidden": "index runs hidden"
     },
     "runningNow": {
-      "title": "Running now",
-      "queued": "Queued"
+      "title": "Running now"
     },
     "health": {
       "backup": "Backup",
@@ -2196,7 +2195,13 @@
       "repositories": "{{count}} repositories",
       "repositories_one": "{{count}} repository",
       "members": "{{count}} runs",
-      "members_one": "{{count}} run"
+      "members_one": "{{count}} run",
+      "trigger": {
+        "manual": "Manual",
+        "schedule": "Scheduled",
+        "retry": "Retry",
+        "availability": "Availability"
+      }
     }
   },
   "availabilitySchedule": {

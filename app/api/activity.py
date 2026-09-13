@@ -85,6 +85,9 @@ class ActivityItem(BaseModel):
     backup_plan_id: Optional[int] = None  # BackupPlan ID if triggered by a plan
     backup_plan_run_id: Optional[int] = None  # BackupPlanRun ID if triggered by a plan
     backup_plan_name: Optional[str] = None  # BackupPlan name if triggered by a plan
+    # How the plan run itself started ("manual", "schedule", "retry"): the
+    # operations under it all say "plan", which is the run, not the reason.
+    backup_plan_run_trigger: Optional[str] = None
     skip_reason: Optional[str] = None
 
     # Type-specific metadata
@@ -252,14 +255,14 @@ def _operation_log_sources(db: Session, job_type: str, op) -> dict:
             "output_text": [job.logs, job.error_message],
             "file_path": getattr(op, "log_file_path", None),
             "exit_code": None,
-            "text": text,
+            "text": text or _operation_error_text(op),
             "has_logs": backup_job_has_logs(db, job),
         }
     return {
         "output_text": [op.error_message],
         "file_path": op.log_file_path,
         "exit_code": None,
-        "text": _read_operation_log(op),
+        "text": _read_operation_log(op) or _operation_error_text(op),
     }
 
 
@@ -286,6 +289,14 @@ def _get_operation_or_404(
         if repo is not None:
             check_repo_access(db, current_user, repo, "viewer")
     return op
+
+
+def _operation_error_text(op: Operation) -> str:
+    """What a reader gets when an operation failed before writing a line: an
+    index step that died on a locked repository never opens a log file, and
+    its error message is the only account of what happened. The legacy job
+    branch below has always answered this way."""
+    return f"ERROR:\n{op.error_message}" if op.error_message else ""
 
 
 def _read_operation_log(op: Operation) -> str:
@@ -515,6 +526,43 @@ def _trigger_for_non_operation_item(item: dict) -> str:
     return "schedule" if item.get("triggered_by") == "schedule" else "manual"
 
 
+def _matches_trigger(item: dict, trigger: List[str]) -> bool:
+    """A plan run answers to how it was started too: asking for scheduled
+    runs must find the plan the scheduler fired, not just the legacy jobs."""
+    return item["trigger"] in trigger or (
+        item["trigger"] == "plan" and item.get("backup_plan_run_trigger") in trigger
+    )
+
+
+def _attach_run_context(db: Session, items: List[dict]) -> None:
+    """Name what the rows only point at: the schedule a scheduled run belongs
+    to and how a plan run was started. Batched, one query per table."""
+    run_ids = {i["backup_plan_run_id"] for i in items if i.get("backup_plan_run_id")}
+    if run_ids:
+        triggers = dict(
+            db.query(BackupPlanRun.id, BackupPlanRun.trigger)
+            .filter(BackupPlanRun.id.in_(tuple(run_ids)))
+            .all()
+        )
+        for item in items:
+            if item.get("backup_plan_run_id") in triggers:
+                item["backup_plan_run_trigger"] = triggers[item["backup_plan_run_id"]]
+    schedule_ids = {
+        i["schedule_id"]
+        for i in items
+        if i.get("schedule_id") and not i.get("schedule_name")
+    }
+    if schedule_ids:
+        names = dict(
+            db.query(ScheduledJob.id, ScheduledJob.name)
+            .filter(ScheduledJob.id.in_(tuple(schedule_ids)))
+            .all()
+        )
+        for item in items:
+            if not item.get("schedule_name") and item.get("schedule_id") in names:
+                item["schedule_name"] = names[item["schedule_id"]]
+
+
 def _apply_legacy_activity_shape(
     db: Session, op: Operation, item: dict, *, log_save_policy: str
 ) -> None:
@@ -695,6 +743,7 @@ def _operation_activity_items(
         item["_trigger"] = op.trigger
         item["_run_id"] = op.run_id
         by_id[op.id] = item
+    _attach_run_context(db, list(by_id.values()))
 
     def _visible(item: dict) -> bool:
         if category:
@@ -702,7 +751,7 @@ def _operation_activity_items(
                 return False
         elif item["category"] == "index":
             return False
-        if trigger and item["trigger"] not in trigger:
+        if trigger and not _matches_trigger(item, trigger):
             return False
         return True
 
@@ -1033,6 +1082,7 @@ async def list_recent_activity(
         )
         activity.setdefault("trigger", _trigger_for_non_operation_item(activity))
         activity.setdefault("followups", [])
+    _attach_run_context(db, activities)
     activities.extend(
         _operation_activity_items(
             db,
@@ -1083,7 +1133,7 @@ async def list_recent_activity(
     if category:
         activities = [a for a in activities if a["category"] in category]
     if trigger:
-        activities = [a for a in activities if a["trigger"] in trigger]
+        activities = [a for a in activities if _matches_trigger(a, trigger)]
 
     # Sort by start time, falling back to creation time for pending jobs.
     activities.sort(

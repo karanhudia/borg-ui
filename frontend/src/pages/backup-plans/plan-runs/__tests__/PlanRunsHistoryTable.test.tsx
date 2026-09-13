@@ -135,4 +135,21 @@ describe('PlanRunsHistoryTable', () => {
 
     expect(screen.queryByRole('button', { name: /show scripts/i })).not.toBeInTheDocument()
   })
+
+  it('says how each run started', () => {
+    render(
+      <PlanRunsHistoryTable
+        runs={[makeRun({ id: 1, trigger: 'schedule' }), makeRun({ id: 2, trigger: 'manual' })]}
+        cancelling={null}
+        onViewLogs={vi.fn()}
+        onCancel={vi.fn()}
+        t={t}
+      />
+    )
+    // The test `t` falls back to the key's default, which is the raw trigger.
+    expect(screen.getAllByTestId('plan-run-trigger').map((el) => el.textContent)).toEqual([
+      'schedule',
+      'manual',
+    ])
+  })
 })
