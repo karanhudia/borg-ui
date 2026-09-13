@@ -33,6 +33,7 @@ import MountArchiveDialog from '../components/MountArchiveDialog'
 import MountSuccessToast from '../components/MountSuccessToast'
 import RestoreWizard, { type RestoreData } from '../components/RestoreWizard'
 import RestoreProgressPanel from '../components/archives/RestoreProgressPanel'
+import { cornerStackSx } from '../components/archives/cornerStack'
 import { resyncStoredArchives } from '../utils/archiveResync'
 import { usePlan } from '../hooks/usePlan'
 import type { RestorePathMetadata } from '../utils/restorePaths'
@@ -88,9 +89,13 @@ export default function ArchiveDetail() {
   // a "1 selected, Restore selection" panel left on screen reads as a
   // restore that never went out.
   const [selectionEpoch, setSelectionEpoch] = useState(0)
-  // The job started from this page. Its progress and outcome sit in the
-  // bottom-right panel until dismissed, so a restore never happens unseen.
-  const [restoreJobId, setRestoreJobId] = useState<number | null>(null)
+  // Jobs started from this page, oldest first. Each gets a card in the
+  // bottom-right column until dismissed, so a restore never happens unseen
+  // and a second one does not erase the first one's outcome.
+  const [restoreJobIds, setRestoreJobIds] = useState<number[]>([])
+  // The column itself. Held in state, not a ref, so the Files tab re-renders
+  // with the node once it exists and can portal its selection bar into it.
+  const [cornerStack, setCornerStack] = useState<HTMLDivElement | null>(null)
 
   const openRestore = (paths?: string[], items?: RestorePathMetadata[], fromArchiveId?: number) => {
     setRestorePreselection(paths && paths.length > 0 ? { paths, items: items ?? [] } : null)
@@ -223,7 +228,7 @@ export default function ArchiveDetail() {
     onSuccess: (res) => {
       setShowRestoreWizard(false)
       setSelectionEpoch((n) => n + 1)
-      setRestoreJobId(res.data.job_id)
+      setRestoreJobIds((ids) => [...ids, res.data.job_id])
       queryClient.refetchQueries({ queryKey: ['restore-jobs'] })
     },
     onError: (error: unknown) => {
@@ -480,6 +485,7 @@ export default function ArchiveDetail() {
             onRestorePaths={(paths, items, fromArchiveId) =>
               openRestore(paths, items, fromArchiveId)
             }
+            cornerStack={cornerStack}
           />
         )}
         {activeTab === 'info' && <ArchiveInfoTab archive={archive} />}
@@ -516,14 +522,16 @@ export default function ArchiveDetail() {
         </>
       )}
 
-      {restoreJobId != null && (
-        <RestoreProgressPanel
-          key={restoreJobId}
-          jobId={restoreJobId}
-          repositoryId={repositoryId}
-          onDismiss={() => setRestoreJobId(null)}
-        />
-      )}
+      <Box ref={setCornerStack} sx={cornerStackSx}>
+        {restoreJobIds.map((jobId) => (
+          <RestoreProgressPanel
+            key={jobId}
+            jobId={jobId}
+            repositoryId={repositoryId}
+            onDismiss={() => setRestoreJobIds((ids) => ids.filter((id) => id !== jobId))}
+          />
+        ))}
+      </Box>
     </Box>
   )
 }

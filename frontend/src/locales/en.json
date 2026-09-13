@@ -1038,6 +1038,7 @@
       "cancelled": "Restore cancelled",
       "unavailable": "Restore status unavailable",
       "unavailableHint": "Could not read the job status. The restore may still be running. Check the Activity page.",
+      "waiting": "Waiting for the job to start…",
       "restoringTo_one": "{{count}} file so far to {{path}}",
       "restoringTo_other": "{{count}} files so far to {{path}}",
       "restoredTo_one": "{{count}} file restored to {{path}}",

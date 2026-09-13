@@ -14,6 +14,7 @@ import {
 import { AlertTriangle, CheckCircle2, Loader2, RotateCcw, X } from 'lucide-react'
 import { restoreAPI } from '../../services/api'
 import { translateBackendKey } from '../../utils/translateBackendKey'
+import { cornerPanelSx } from './cornerStack'
 
 export interface RestoreStatus {
   id: number
@@ -35,10 +36,10 @@ interface RestoreProgressPanelProps {
   onDismiss: () => void
 }
 
-/** Bottom-right floating panel, the same slot the Files tab uses for its
- *  selection bar, so a restore never shifts the page. It follows one job
- *  from pending through running to its final state and stays there until
- *  dismissed, so a fast restore does not vanish before anyone reads it. */
+/** One card in the page's bottom-right column, so a restore never shifts
+ *  the page. It follows one job from pending through running to its final
+ *  state and stays there until dismissed, so a fast restore does not vanish
+ *  before anyone reads it. */
 export default function RestoreProgressPanel({
   jobId,
   repositoryId,
@@ -93,26 +94,8 @@ export function RestoreProgressPanelView({
       aria-live="polite"
       aria-label={t('archives.restorePanel.label')}
       sx={{
-        position: 'fixed',
-        right: { xs: 12, sm: 24 },
-        bottom: { xs: 12, sm: 24 },
-        left: { xs: 12, sm: 'auto' },
-        width: { sm: 380 },
-        maxWidth: 'calc(100vw - 24px)',
-        zIndex: (theme) => theme.zIndex.appBar + 1,
-        borderRadius: 3,
-        overflow: 'hidden',
-        color: 'common.white',
-        bgcolor: (theme) =>
-          theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[900],
-        boxShadow: (theme) =>
-          `0 12px 32px ${alpha(theme.palette.common.black, 0.28)}, 0 0 0 1px ${alpha(theme.palette.common.white, 0.08)}`,
-        '@keyframes restore-panel-in': {
-          from: { opacity: 0, transform: 'translateY(12px)' },
-          to: { opacity: 1, transform: 'translateY(0)' },
-        },
+        ...cornerPanelSx,
         '@keyframes restore-panel-spin': { to: { transform: 'rotate(360deg)' } },
-        animation: 'restore-panel-in 180ms ease-out',
       }}
     >
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', pl: 2, pr: 1, py: 1 }}>
@@ -169,9 +152,14 @@ export function RestoreProgressPanelView({
               sx={{ opacity: 0.85, fontVariantNumeric: 'tabular-nums' }}
               noWrap
             >
-              {done
-                ? t('archives.restorePanel.restoredTo', { count: nfiles, path: job?.destination })
-                : t('archives.restorePanel.restoringTo', { count: nfiles, path: job?.destination })}
+              {!job
+                ? t('archives.restorePanel.waiting')
+                : done
+                  ? t('archives.restorePanel.restoredTo', { count: nfiles, path: job.destination })
+                  : t('archives.restorePanel.restoringTo', {
+                      count: nfiles,
+                      path: job.destination,
+                    })}
             </Typography>
             {!done && job?.progress_details?.current_file && (
               <Typography

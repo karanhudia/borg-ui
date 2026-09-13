@@ -1038,6 +1038,7 @@
       "cancelled": "Wiederherstellung abgebrochen",
       "unavailable": "Status nicht verfügbar",
       "unavailableHint": "Der Auftragsstatus konnte nicht gelesen werden. Die Wiederherstellung läuft möglicherweise noch. Siehe Aktivität.",
+      "waiting": "Warten auf den Start des Auftrags…",
       "restoringTo_one": "Bisher {{count}} Datei nach {{path}}",
       "restoringTo_other": "Bisher {{count}} Dateien nach {{path}}",
       "restoredTo_one": "{{count}} Datei nach {{path}} wiederhergestellt",

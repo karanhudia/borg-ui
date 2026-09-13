@@ -143,6 +143,23 @@ describe('ArchiveFilesTab', () => {
     expect(within(bar).getByRole('button', { name: /restore selection/i })).toBeInTheDocument()
   })
 
+  it('renders the selection bar into the page corner stack when given one', () => {
+    const stack = document.createElement('div')
+    document.body.appendChild(stack)
+    renderWithProviders(
+      <ArchiveFilesTab
+        repositoryId={7}
+        repository={repository}
+        archive={archive}
+        cornerStack={stack}
+      />
+    )
+    fireEvent.click(screen.getByTestId('archive-path-selector'))
+    const bar = screen.getByRole('toolbar', { name: /selection/i })
+    expect(stack).toContainElement(bar)
+    stack.remove()
+  })
+
   it('expands the bar to list every path that will be restored and lets one be removed', () => {
     renderWithProviders(
       <ArchiveFilesTab repositoryId={7} repository={repository} archive={archive} />

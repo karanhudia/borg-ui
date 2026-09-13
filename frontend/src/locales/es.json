@@ -1038,6 +1038,7 @@
       "cancelled": "Restauración cancelada",
       "unavailable": "Estado no disponible",
       "unavailableHint": "No se pudo leer el estado del trabajo. La restauración puede seguir en curso. Consulta Actividad.",
+      "waiting": "Esperando a que empiece el trabajo…",
       "restoringTo_one": "{{count}} archivo hasta ahora en {{path}}",
       "restoringTo_other": "{{count}} archivos hasta ahora en {{path}}",
       "restoredTo_one": "{{count}} archivo restaurado en {{path}}",

@@ -1038,6 +1038,7 @@
       "cancelled": "Ripristino annullato",
       "unavailable": "Stato non disponibile",
       "unavailableHint": "Impossibile leggere lo stato del job. Il ripristino potrebbe essere ancora in corso. Controlla Attività.",
+      "waiting": "In attesa dell'avvio del job…",
       "restoringTo_one": "{{count}} file finora in {{path}}",
       "restoringTo_other": "{{count}} file finora in {{path}}",
       "restoredTo_one": "{{count}} file ripristinato in {{path}}",
