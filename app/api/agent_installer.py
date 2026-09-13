@@ -1095,6 +1095,93 @@ fi
 echo "Check status with: systemctl status borg-ui-agent"
 """
 
+UNINSTALLER_SCRIPT = r"""#!/usr/bin/env bash
+# Removes the Borg UI agent from this machine.
+#
+# Deliberately not `set -e`: every removal tolerates a missing target, and a
+# half-removed machine is worse than a fully reported one. Failures are
+# collected and printed at the end (spec section 6.5).
+set -uo pipefail
+
+# Overridable so the test harness can point the whole inventory at a tmpdir.
+# A real run is piped into `sudo bash` with none of these set, so each takes
+# its real path.
+AGENT_ROOT="${AGENT_ROOT:-/opt/borg-ui-agent}"
+CONFIG_DIR="${CONFIG_DIR:-/etc/borg-ui-agent}"
+CONFIG_FILE="${CONFIG_FILE:-${CONFIG_DIR}/config.toml}"
+UPGRADE_TRIGGER="${UPGRADE_TRIGGER:-${CONFIG_DIR}/upgrade-requested}"
+SERVICE_UNIT="${SERVICE_UNIT:-/etc/systemd/system/borg-ui-agent.service}"
+UPGRADE_UNIT="${UPGRADE_UNIT:-/etc/systemd/system/borg-ui-agent-upgrade.service}"
+UPGRADE_PATH_UNIT="${UPGRADE_PATH_UNIT:-/etc/systemd/system/borg-ui-agent-upgrade.path}"
+UPGRADE_CONF="${UPGRADE_CONF:-/etc/borg-ui-agent-upgrade.conf}"
+UPGRADE_HELPER="${UPGRADE_HELPER:-${AGENT_ROOT}/bin/borg-ui-agent-upgrade}"
+LEGACY_SUDOERS="${LEGACY_SUDOERS:-/etc/sudoers.d/borg-ui-agent-upgrade}"
+NO_REMOTE_UPGRADE_MARKER="${NO_REMOTE_UPGRADE_MARKER:-/etc/borg-ui-agent-no-remote-upgrade}"
+STATE_DIR="${STATE_DIR:-/var/lib/borg-ui-agent}"
+BORG1_LINK="${BORG1_LINK:-/usr/local/bin/borg}"
+BORG2_LINK="${BORG2_LINK:-/usr/local/bin/borg2}"
+DEDICATED_USER="${DEDICATED_USER:-borg-ui-agent}"
+UNREGISTER_TIMEOUT="${UNREGISTER_TIMEOUT:-5}"
+
+KEEP_BORG="0"
+KEEP_USER="0"
+KEEP_CONFIG="0"
+
+FAILURES=()
+
+note_failure() {
+  FAILURES+=("$1")
+}
+
+# Wrapped so the test harness can stub them. No logic of their own.
+run_systemctl() {
+  systemctl "$@" >/dev/null 2>&1
+}
+
+run_userdel() {
+  userdel --remove "$1" >/dev/null 2>&1
+}
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  curl -fsSL http://SERVER:PORT/agent/uninstall.sh | sudo bash
+
+Removes the Borg UI agent from this machine: the service, the upgrade helper,
+the virtualenv, the configuration, and the dedicated service user.
+
+Your own Borg installation and your backup repositories are never touched.
+
+Options:
+  --keep-borg     Leave the Borg binaries this installer placed, and their
+                  symlinks, in place
+  --keep-user     Leave the dedicated borg-ui-agent user and its state
+                  directory in place
+  --keep-config   Leave /etc/borg-ui-agent/config.toml in place, for a
+                  reinstall against the same registration
+  --help          Print this message
+
+A Borg installed by your distribution is never removed, with or without
+--keep-borg. A service user that is not the dedicated borg-ui-agent account is
+never deleted, with or without --keep-user.
+USAGE
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --keep-borg) KEEP_BORG="1"; shift ;;
+    --keep-user) KEEP_USER="1"; shift ;;
+    --keep-config) KEEP_CONFIG="1"; shift ;;
+    --help|-h) usage; exit 0 ;;
+    *)
+      echo "Unknown option: $1" >&2
+      echo "Run with --help for usage." >&2
+      exit 2
+      ;;
+  esac
+done
+"""
+
 
 def _installed_borg_version(interface_factory, label: str) -> str | None:
     """The exact Borg version this server runs, or None if it has none.
@@ -1273,6 +1360,22 @@ async def get_agent_installer_checksum(
     script = await asyncio.to_thread(render_installer_script, pins)
     digest = hashlib.sha256(script.encode("utf-8")).hexdigest()
     return Response(content=f"{digest}\n", media_type="text/plain")
+
+
+@router.get("/agent/uninstall.sh")
+async def get_agent_uninstaller() -> Response:
+    """The uninstaller this server serves, identical for every caller.
+
+    Unauthenticated, matching install.sh beside it. Acceptable because the
+    script is static: it carries no credential, no pins and no per-agent data,
+    and does nothing unless an operator with root on a machine chooses to run
+    it there. It reveals only that a Borg UI server is present, which
+    install.sh already reveals (spec section 8).
+
+    Takes no query parameters and touches no database, so unlike the installer
+    it needs neither a session nor a worker thread.
+    """
+    return Response(content=UNINSTALLER_SCRIPT, media_type="text/x-shellscript")
 
 
 @router.get("/agent/dist/")
