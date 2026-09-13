@@ -14,6 +14,7 @@ import LockErrorDialog from '../LockErrorDialog'
 import { activityAPI, repositoriesAPI } from '../../services/api'
 import { buildDownloadUrl } from '@/utils/downloadUrl'
 import { downloadArchiveFile } from '../../utils/downloadArchiveFile'
+import { isV2Repo } from '../../utils/repoCapabilities'
 import ArchiveContentsDialog from '../ArchiveContentsDialog'
 import type { Repository as FullRepository, Archive } from '../../types'
 import { getBackupJobRetryDisabledReason, shouldShowRetryAction } from './jobLabels'
@@ -510,7 +511,13 @@ export function useJobActions<T extends Job = Job>({
         onClose={() => setArchiveView(null)}
         onDownloadFile={(archiveName, filePath, size) => {
           if (!archiveView?.repository) return
-          return downloadArchiveFile(archiveView.repository, archiveName, filePath, {
+          // Same rule as the Archives page: a Borg 2 archive is addressed by
+          // id (the backend wraps it as aid:<hex>); Borg 1 names are unique.
+          const archiveRef =
+            isV2Repo(archiveView.repository) && archiveView.archive.id
+              ? archiveView.archive.id
+              : archiveName
+          return downloadArchiveFile(archiveView.repository, archiveRef, filePath, {
             totalSize: size ?? undefined,
           })
         }}

@@ -300,6 +300,34 @@ describe('BackupJobsTable action internals', () => {
     expect(await screen.findByTestId('archive-id')).toHaveTextContent('bbbb2222bbbb2222')
   })
 
+  it('downloads from a Borg 2 archive by its borg id', async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={[
+          {
+            id: 15,
+            repository: '/backup/repo77',
+            repository_path: '/backup/repo77',
+            type: 'backup',
+            status: 'completed',
+            started_at: '2026-04-01T10:00:00Z',
+            archive_name: 'daily',
+            archive_borg_id: 'bbbb2222bbbb2222',
+          },
+        ]}
+        actions={{ viewArchive: true }}
+      />
+    )
+
+    await user.click(await screen.findByRole('button', { name: /view archive/i }))
+    await user.click(await screen.findByRole('button', { name: /download file/i }))
+
+    await waitFor(() => expect(downloadArchiveFileMock).toHaveBeenCalled())
+    expect(downloadArchiveFileMock.mock.calls[0][1]).toBe('bbbb2222bbbb2222')
+  })
+
   it('leaves the archive id empty when the backend has no stored row', async () => {
     const user = userEvent.setup()
 
