@@ -19,6 +19,7 @@ from app.services.operations.job_facade import (
     refresh_job,
     resolve_maintenance_job,
 )
+from app.services.v2.process_cancel import terminate_tracked_process
 from app.core.borg2 import _get_borg2_binary
 from app.core.borg_errors import is_borg_warning_exit_code
 from app.config import settings
@@ -53,6 +54,10 @@ class CheckV2Service:
         self.log_dir = Path(settings.data_dir) / "logs"
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.running_processes: dict = {}
+
+    async def cancel_check(self, job_id: int) -> bool:
+        """Cancel a running borg2 check job by terminating its tracked process."""
+        return await terminate_tracked_process(self.running_processes, job_id, "check")
 
     async def execute_check(self, job_id: int, repository_id: int, _db=None):
         """Execute borg2 check with progress streaming into an operation row."""

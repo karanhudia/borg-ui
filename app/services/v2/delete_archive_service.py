@@ -13,6 +13,7 @@ from app.database.database import SessionLocal
 from app.core.borg2 import borg2
 from app.config import settings
 from app.services.operations.job_facade import claim_running, resolve_maintenance_job
+from app.services.v2.process_cancel import terminate_tracked_process
 from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import (
     build_repository_borg_env,
@@ -27,6 +28,19 @@ class DeleteArchiveV2Service:
     def __init__(self):
         self.log_dir = Path(settings.data_dir) / "logs"
         self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.running_processes: dict = {}
+
+    async def cancel_delete(self, job_id: int) -> bool:
+        """Cancel a running borg2 delete by terminating its tracked process.
+
+        Whichever of the two steps is in flight - the delete itself or the
+        mandatory compact that follows it - is the one tracked, so a cancel
+        during either releases the repository lock instead of leaving Borg
+        holding it while the row says cancelled.
+        """
+        return await terminate_tracked_process(
+            self.running_processes, job_id, "delete_archive"
+        )
 
     async def execute_delete(
         self, job_id: int, repository_id: int, archive_name: str, _db=None
@@ -94,6 +108,9 @@ class DeleteArchiveV2Service:
 
             env, temp_key_file = build_repository_borg_env(repo, db, keepalive=True)
 
+            def track(process):
+                self.running_processes[job_id] = process
+
             # Step 1: delete the archive
             delete_result = await borg2.delete_archive(
                 repository=repo.path,
@@ -101,6 +118,7 @@ class DeleteArchiveV2Service:
                 passphrase=repo.passphrase,
                 remote_path=effective_repository_remote_path(repo),
                 env=env,
+                on_process=track,
             )
 
             if not delete_result["success"]:
@@ -145,6 +163,7 @@ class DeleteArchiveV2Service:
                 passphrase=repo.passphrase,
                 remote_path=effective_repository_remote_path(repo),
                 env=env,
+                on_process=track,
             )
 
             if not compact_result["success"]:
@@ -205,6 +224,7 @@ class DeleteArchiveV2Service:
             except Exception:
                 pass
         finally:
+            self.running_processes.pop(job_id, None)
             cleanup_temp_key_file(temp_key_file)
             db.close()
 

@@ -42,7 +42,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import structlog
 
@@ -264,8 +264,15 @@ class Borg2Interface:
         timeout: int = 3600,
         cwd: Optional[str] = None,
         env: Optional[Dict] = None,
+        on_process: Optional[Callable[[asyncio.subprocess.Process], None]] = None,
     ) -> Dict:
-        """Execute a borg2 command and capture output."""
+        """Execute a borg2 command and capture output.
+
+        `on_process` receives the spawned process so a caller that needs to
+        cancel the command (the maintenance services) can track and terminate
+        it. A terminated process comes back as an ordinary failure with the
+        signal's return code.
+        """
         logger.info("Executing borg2 command", command=" ".join(cmd), cwd=cwd)
         exec_env = self._base_env(env)
         try:
@@ -276,6 +283,8 @@ class Borg2Interface:
                 cwd=cwd,
                 env=exec_env,
             )
+            if on_process is not None:
+                on_process(process)
             stdout, stderr = await asyncio.wait_for(
                 process.communicate(), timeout=timeout
             )
@@ -684,6 +693,7 @@ class Borg2Interface:
         passphrase: Optional[str] = None,
         remote_path: Optional[str] = None,
         env: Optional[Dict] = None,
+        on_process: Optional[Callable[[asyncio.subprocess.Process], None]] = None,
     ) -> Dict:
         """Delete a single archive.
 
@@ -696,7 +706,7 @@ class Borg2Interface:
         exec_env = env.copy() if env else {}
         if passphrase:
             exec_env["BORG_PASSPHRASE"] = passphrase
-        return await self._run(cmd, env=exec_env or None)
+        return await self._run(cmd, env=exec_env or None, on_process=on_process)
 
     async def prune_archives(
         self,
@@ -748,6 +758,7 @@ class Borg2Interface:
         passphrase: Optional[str] = None,
         remote_path: Optional[str] = None,
         env: Optional[Dict] = None,
+        on_process: Optional[Callable[[asyncio.subprocess.Process], None]] = None,
     ) -> Dict:
         """Compact repository to free space.
 
@@ -760,7 +771,7 @@ class Borg2Interface:
         exec_env = env.copy() if env else {}
         if passphrase:
             exec_env["BORG_PASSPHRASE"] = passphrase
-        return await self._run(cmd, env=exec_env or None)
+        return await self._run(cmd, env=exec_env or None, on_process=on_process)
 
     async def check_repository(
         self,
