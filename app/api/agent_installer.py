@@ -1180,6 +1180,114 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+remove_service() {
+  run_systemctl disable --now borg-ui-agent
+  rm -f "${SERVICE_UNIT}" || note_failure "could not remove ${SERVICE_UNIT}"
+}
+
+# Spec section 6.2 says to reuse the installer's remove_upgrade_artifacts
+# (app/api/agent_installer.py:1050). The installer and the uninstaller are two
+# separate bash strings served to different machines, so there is no runtime to
+# share: what is reused is the inventory, item for item. If the installer's
+# list ever grows, this one has to grow with it, and a stale copy here leaves
+# an escalation path behind on a machine that is meant to be clean.
+remove_upgrade_artifacts() {
+  run_systemctl disable --now borg-ui-agent-upgrade.path
+  rm -f "${UPGRADE_PATH_UNIT}" "${UPGRADE_UNIT}" "${UPGRADE_HELPER}" \
+    "${UPGRADE_CONF}" "${UPGRADE_TRIGGER}" \
+    || note_failure "could not remove the upgrade artifacts"
+  # An install that predates the path unit granted the agent a sudoers rule.
+  # Take it away rather than leaving a live escalation behind on a machine
+  # that is supposed to have no Borg UI on it.
+  rm -f "${LEGACY_SUDOERS}" || note_failure "could not remove ${LEGACY_SUDOERS}"
+}
+
+# SAFETY RULE 1 (spec section 6.2). A link is ours only when it resolves to a
+# path under AGENT_ROOT, which is where the installer's forwarder scripts live.
+# The same test _classify_install_source uses to label a binary
+# "borg-ui-installer" in the UI, so the card and this script agree by
+# construction. A distro Borg at /usr/bin/borg, or a link an operator pointed
+# somewhere else, is left exactly as it is: removing a system-package Borg
+# would break Borg for everything else on the machine.
+remove_borg_links() {
+  if [[ "${KEEP_BORG}" == "1" ]]; then
+    echo "Leaving the Borg binaries and their symlinks in place."
+    return 0
+  fi
+
+  local link resolved root
+  root="$(cd "${AGENT_ROOT}" 2>/dev/null && pwd -P)" || root=""
+  for link in "${BORG1_LINK}" "${BORG2_LINK}"; do
+    [[ -L "${link}" ]] || continue
+    resolved="$(readlink -f "${link}" 2>/dev/null || true)"
+    if [[ -n "${root}" && "${resolved}" == "${root}"/* ]]; then
+      rm -f "${link}" || note_failure "could not remove ${link}"
+    else
+      echo "Leaving ${link} alone: it does not point into ${AGENT_ROOT}."
+    fi
+  done
+}
+
+# SAFETY RULE 2 (spec section 6.2). The account is deleted only when the unit
+# says the service ran as the dedicated account this installer creates. An
+# install run with --service-user current binds the unit to the operator's own
+# login account, and deleting that would take their home directory with it.
+# A missing unit tells us nothing, so it deletes nothing.
+remove_service_user() {
+  if [[ "${KEEP_USER}" == "1" ]]; then
+    echo "Leaving the service user and its state directory in place."
+    return 0
+  fi
+
+  local unit_user=""
+  if [[ -r "${SERVICE_UNIT}" ]]; then
+    unit_user="$(awk -F= '/^User=/ {print $2; exit}' "${SERVICE_UNIT}" 2>/dev/null || true)"
+  fi
+
+  if [[ "${unit_user}" != "${DEDICATED_USER}" ]]; then
+    if [[ -n "${unit_user}" ]]; then
+      echo "Leaving the '${unit_user}' account alone: only the dedicated ${DEDICATED_USER} account is removed."
+    fi
+    return 0
+  fi
+
+  rm -rf "${STATE_DIR}" || note_failure "could not remove ${STATE_DIR}"
+  run_userdel "${DEDICATED_USER}"
+}
+
+remove_agent_files() {
+  rm -rf "${AGENT_ROOT}" || note_failure "could not remove ${AGENT_ROOT}"
+  rm -f "${NO_REMOTE_UPGRADE_MARKER}" \
+    || note_failure "could not remove ${NO_REMOTE_UPGRADE_MARKER}"
+
+  if [[ "${KEEP_CONFIG}" == "1" ]]; then
+    # The operator asked to keep the file, not to keep the upgrade trigger:
+    # an unwatched trigger left behind is a request nothing will ever serve.
+    rm -f "${UPGRADE_TRIGGER}" || note_failure "could not remove ${UPGRADE_TRIGGER}"
+    echo "Keeping ${CONFIG_FILE}."
+    return 0
+  fi
+
+  rm -rf "${CONFIG_DIR}" || note_failure "could not remove ${CONFIG_DIR}"
+}
+
+report() {
+  # The early return is load-bearing, not just tidy: under `set -u`, bash 3.2
+  # (which macOS ships, and which runs these tests locally) aborts on
+  # "${FAILURES[@]}" when the array is empty. Expanding it only after the count
+  # check is what keeps the happy path working there. If you restructure this,
+  # check it on bash 3.2, not only on CI's bash 5.
+  if [[ ${#FAILURES[@]} -eq 0 ]]; then
+    echo "Borg UI agent removed."
+    return 0
+  fi
+  echo "Borg UI agent removed, with problems:" >&2
+  local failure
+  for failure in "${FAILURES[@]}"; do
+    echo "  - ${failure}" >&2
+  done
+  return 1
+}
 """
 
 
