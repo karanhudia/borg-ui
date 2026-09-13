@@ -44,16 +44,26 @@ export default function RestoreProgressPanel({
   repositoryId,
   onDismiss,
 }: RestoreProgressPanelProps) {
-  const { data: job } = useQuery({
+  const { data: job, isError } = useQuery({
     queryKey: ['restore-status', jobId],
     queryFn: () => restoreAPI.getRestoreStatus(jobId).then((res) => res.data as RestoreStatus),
     refetchInterval: (query) => (TERMINAL.has(query.state.data?.status ?? '') ? false : 2000),
   })
-  return <RestoreProgressPanelView job={job} repositoryId={repositoryId} onDismiss={onDismiss} />
+  return (
+    <RestoreProgressPanelView
+      job={job}
+      statusUnavailable={isError}
+      repositoryId={repositoryId}
+      onDismiss={onDismiss}
+    />
+  )
 }
 
 interface RestoreProgressPanelViewProps {
   job: RestoreStatus | undefined
+  /** The status request itself failed. The job may still be running, so
+   *  this is not the same as a failed restore. */
+  statusUnavailable?: boolean
   repositoryId: number
   onDismiss: () => void
 }
@@ -61,13 +71,14 @@ interface RestoreProgressPanelViewProps {
 /** The panel without polling, so stories can show each state. */
 export function RestoreProgressPanelView({
   job,
+  statusUnavailable = false,
   repositoryId,
   onDismiss,
 }: RestoreProgressPanelViewProps) {
   const { t } = useTranslation()
-  const status = job?.status ?? 'pending'
-  const done = TERMINAL.has(status)
-  const failed = status === 'failed' || status === 'cancelled'
+  const status = statusUnavailable && !job ? 'unavailable' : (job?.status ?? 'pending')
+  const done = TERMINAL.has(status) || status === 'unavailable'
+  const failed = status === 'failed' || status === 'cancelled' || status === 'unavailable'
   const percent = job?.progress_details?.progress_percent ?? 0
   const nfiles = job?.progress_details?.nfiles ?? 0
 
@@ -142,12 +153,14 @@ export function RestoreProgressPanelView({
       <Box sx={{ px: 2, pt: 1.5, pb: 1.5 }}>
         {failed ? (
           <Typography variant="body2" sx={{ opacity: 0.85, whiteSpace: 'pre-wrap' }}>
-            {job?.error_message
-              ? job.error_message
-                  .split('\n')
-                  .map((line) => translateBackendKey(line))
-                  .join('\n')
-              : t('archives.restorePanel.noDetails')}
+            {status === 'unavailable'
+              ? t('archives.restorePanel.unavailableHint')
+              : job?.error_message
+                ? job.error_message
+                    .split('\n')
+                    .map((line) => translateBackendKey(line))
+                    .join('\n')
+                : t('archives.restorePanel.noDetails')}
           </Typography>
         ) : (
           <>

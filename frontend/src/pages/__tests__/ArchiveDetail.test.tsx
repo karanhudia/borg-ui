@@ -152,6 +152,19 @@ describe('ArchiveDetail', () => {
     expect(screen.queryByRole('status', { name: /restore progress/i })).not.toBeInTheDocument()
   })
 
+  it('says so when the job status cannot be read', async () => {
+    vi.mocked(archivesAPI.getArchive).mockResolvedValue({ data: archive } as never)
+    vi.mocked(restoreAPI.startRestore).mockResolvedValue({ data: { job_id: 44 } } as never)
+    vi.mocked(restoreAPI.getRestoreStatus).mockRejectedValue(new Error('500'))
+    renderRoute('/archives/7/12?tab=files')
+    fireEvent.click(await screen.findByRole('button', { name: /restore selection/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /start restore/i }))
+
+    const panel = await screen.findByRole('status', { name: /restore progress/i })
+    await within(panel).findByText('Restore status unavailable')
+    expect(panel).toHaveTextContent('may still be running')
+  })
+
   it('shows the failure reason when the restore fails', async () => {
     vi.mocked(archivesAPI.getArchive).mockResolvedValue({ data: archive } as never)
     vi.mocked(restoreAPI.startRestore).mockResolvedValue({ data: { job_id: 43 } } as never)

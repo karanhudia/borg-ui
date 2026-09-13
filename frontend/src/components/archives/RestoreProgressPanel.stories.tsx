@@ -48,3 +48,5 @@ export const Failed: Story = {
     },
   },
 }
+
+export const StatusUnavailable: Story = { args: { job: undefined, statusUnavailable: true } }
