@@ -912,6 +912,11 @@ def test_format_bytes_is_the_one_writer_of_a_size_string():
     assert format_bytes(1024**4) == "1.00 TB"
     assert format_bytes(1024**5) == "1.00 PB"
     assert format_bytes(1024**6) == "1.00 EB"
+    # Past 2**53 the arithmetic is float, so a count just under a boundary
+    # carries to the next unit: 1 byte short of an exabyte reads "1.00 EB"
+    # rather than "1024.00 PB". Deliberate. Exact arithmetic here would buy
+    # a worse-reading string at a size no repository reaches.
+    assert format_bytes(1024**6 - 1) == "1.00 EB"
     # the parser reads back what this writes, to the precision it prints
     assert bytes_from_formatted(format_bytes(1024**3)) == 1024**3
 
