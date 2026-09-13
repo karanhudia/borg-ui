@@ -30,7 +30,24 @@ describe('AgentUninstallDialog', () => {
   it('renders the uninstall command', () => {
     renderDialog()
     expect(
-      screen.getByText('curl -fsSL https://borg-ui.example.com/agent/uninstall.sh | sudo bash')
+      screen.getByText('curl -fsSL "https://borg-ui.example.com/agent/uninstall.sh" | sudo bash')
+    ).toBeInTheDocument()
+  })
+
+  it('quotes the URL, which is pasted into a root shell', () => {
+    render(
+      <AgentUninstallDialog
+        agent={agent}
+        open
+        serverUrl="https://borg-ui.example.com/a$b"
+        onCopy={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    )
+    expect(
+      screen.getByText(
+        'curl -fsSL "https://borg-ui.example.com/a\\$b/agent/uninstall.sh" | sudo bash'
+      )
     ).toBeInTheDocument()
   })
 

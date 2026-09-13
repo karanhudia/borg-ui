@@ -67,13 +67,14 @@ export function isSafeServerUrlForCommand(value: string): boolean {
 }
 
 /**
- * The URL as a shell double-quoted argument, for the subcommand form.
+ * The URL as a shell double-quoted argument, for the subcommand form and for
+ * any other command this page hands an operator.
  *
  * `"` and `\` cannot reach here, so only the two characters the shell still
  * expands inside double quotes need escaping. A `$` is a legal URL sub-delim,
  * so this is not theoretical.
  */
-function quoteForShell(value: string): string {
+export function quoteForShell(value: string): string {
   return `"${value.replace(/([$`])/g, '\\$1')}"`
 }
 

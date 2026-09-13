@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next'
 import ResponsiveDialog from '../../components/shared/ResponsiveDialog'
 import type { AgentMachineResponse } from '../../services/api'
 import CopyableCodeBlock from './CopyableCodeBlock'
+import { quoteForShell } from './agentSetServerCommandText'
 
 /**
  * Hands the operator the one command that removes Borg UI from an endpoint.
@@ -37,7 +38,9 @@ export default function AgentUninstallDialog({
   onCancel: () => void
 }) {
   const { t } = useTranslation()
-  const command = `curl -fsSL ${serverUrl}/agent/uninstall.sh | sudo bash`
+  // Quoted through the same helper as the phase 1 command: a `$` is a legal
+  // URL sub-delim, and this string is pasted into a root shell.
+  const command = `curl -fsSL ${quoteForShell(`${serverUrl}/agent/uninstall.sh`)} | sudo bash`
 
   const removals = [
     t('managedAgents.page.uninstallDialog.removesService'),
