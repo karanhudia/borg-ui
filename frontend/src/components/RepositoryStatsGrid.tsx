@@ -20,6 +20,7 @@ export default function RepositoryStatsGrid({
       archiveCount={archivesCount}
       archivesLoading={archivesLoading}
       borgVersion={borgVersion}
+      surface="header"
     />
   )
 }

@@ -9,6 +9,7 @@ export interface RepositoryStatsProps {
   archiveCount?: number
   archivesLoading?: boolean
   compact?: boolean
+  surface?: 'header' | 'dialog'
 }
 
 function StorageValue({
@@ -61,6 +62,7 @@ export default function RepositoryStats({
   archiveCount,
   archivesLoading = false,
   compact = false,
+  surface = 'dialog',
 }: RepositoryStatsProps) {
   const { t } = useTranslation()
   const source = storage?.size_source
@@ -74,41 +76,88 @@ export default function RepositoryStats({
     ? t('repositoryStats.measuredAt', { date: formatDateTimeFull(storage.measured_at) })
     : undefined
   const compactStats = storage?.compact
-  const stats: Array<{ id: string; label: string; value: React.ReactNode; tooltip?: string }> = [
-    ...(archiveCount === undefined
+  const archiveStat =
+    archiveCount === undefined
       ? []
       : [
           {
             id: 'archives',
-            label: t('repositoryStats.archives'),
+            label:
+              surface === 'header'
+                ? t('repositoryStatsGrid.totalArchives')
+                : t('repositoryStats.archives'),
             value: archivesLoading ? (
               <Skeleton variant="text" width={40} />
             ) : (
               archiveCount.toLocaleString()
             ),
           },
-        ]),
-    {
-      id: 'repository-size',
-      label: repositoryLabel,
-      value: <StorageValue value={storage?.size_bytes} />,
-      tooltip: measuredTooltip,
-    },
-    {
-      id: 'original-size',
-      label: t('repositoryStats.originalSize'),
-      value: <StorageValue value={storage?.original_size} />,
-    },
+        ]
+  const repositoryStat = {
+    id: 'repository-size',
+    label: repositoryLabel,
+    value: <StorageValue value={storage?.size_bytes} />,
+    tooltip: measuredTooltip,
+  }
+  const originalStat = {
+    id: 'original-size',
+    label:
+      surface === 'header'
+        ? t('repositoryStatsGrid.originalSize')
+        : t('repositoryStats.originalSize'),
+    value: <StorageValue value={storage?.original_size} />,
+  }
+
+  if (surface === 'header') {
+    const finalStat =
+      borgVersion === 2
+        ? {
+            id: 'files',
+            label: t('repositoryStatsGrid.numberOfFiles'),
+            value:
+              storage?.latest_archive_files == null
+                ? t('repositoryStats.unknown')
+                : storage.latest_archive_files.toLocaleString(),
+          }
+        : {
+            id: 'compressed-size',
+            label: t('repositoryStatsGrid.compressedSize'),
+            value: <StorageValue value={storage?.compressed_size} />,
+          }
+    const headerStats = [...archiveStat, repositoryStat, originalStat, finalStat]
+    return (
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+          gap: 2,
+        }}
+      >
+        {headerStats.map(({ id, ...stat }) => (
+          <Stat key={id} {...stat} />
+        ))}
+      </Box>
+    )
+  }
+
+  const stats: Array<{ id: string; label: string; value: React.ReactNode; tooltip?: string }> = [
+    ...archiveStat,
+    repositoryStat,
+    originalStat,
     {
       id: 'compressed-size',
       label: t('repositoryStats.compressedSize'),
       value: <StorageValue value={storage?.compressed_size} unsupported={borgVersion === 2} />,
     },
-    {
-      id: 'deduplicated-size',
-      label: t('repositoryStats.deduplicatedSize'),
-      value: <StorageValue value={storage?.deduplicated_size} />,
-    },
+    ...(source === 'borg1_cache_stats'
+      ? []
+      : [
+          {
+            id: 'deduplicated-size',
+            label: t('repositoryStats.deduplicatedSize'),
+            value: <StorageValue value={storage?.deduplicated_size} />,
+          },
+        ]),
     {
       id: 'files',
       label: t('repositoryStats.files'),
