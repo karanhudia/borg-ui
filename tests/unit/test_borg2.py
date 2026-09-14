@@ -8,6 +8,7 @@ from app.core.borg2 import (
     BORG2_ENCRYPTION_MODES,
     borg2,
     borg2_encryption_flags,
+    borg2_speaks_encryption_flags,
     normalize_repo_info_encryption,
 )
 
@@ -168,6 +169,26 @@ def test_every_offered_encryption_mode_can_be_translated():
     from are the same table, so a mode can never be offered without flags."""
     for mode in BORG2_ENCRYPTION_MODES:
         assert borg2_encryption_flags(mode)[0] == "--encryption"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "version, speaks",
+    [
+        ("2.0.0b21", False),
+        ("2.0.0b22", True),
+        ("2.0.0b24", True),
+        ("2.0.0", True),
+        # Only a version that reads as an older Borg 2 is refused: nothing
+        # readable is not evidence of an old binary, and the message would
+        # name an empty version.
+        ("", True),
+        (None, True),
+        ("unknown", True),
+    ],
+)
+def test_only_a_readably_old_borg2_is_refused_the_split_flags(version, speaks):
+    assert borg2_speaks_encryption_flags(version) is speaks
 
 
 @pytest.mark.unit

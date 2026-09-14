@@ -102,15 +102,19 @@ ENCRYPTION_FLAGS_SINCE_BETA = 22
 def borg2_speaks_encryption_flags(version: Optional[str]) -> bool:
     """Whether this Borg 2 version accepts what `borg2_encryption_flags` emits.
 
-    An unreadable or absent version is accepted: it is not evidence of an old
-    binary, and refusing on silence would block every endpoint that reports no
-    version at all.
+    Only a version that reads as an older Borg 2 is refused. An absent or
+    unreadable one is accepted: it is not evidence of an old binary, and
+    blocking on it would stop an endpoint whose Borg is fine - and say so with
+    an empty version number in the message. An endpoint that reports a Borg
+    major never omits the version (`detect_borg_binaries` keeps the two
+    together or drops the binary), so this covers a hand-made heartbeat only.
     """
-    from app.services.borg2_compact_stats import borg2_beta_at_least
+    from app.services.borg2_compact_stats import borg2_beta_at_least, parse_borg_version
 
-    if not version:
+    token = parse_borg_version(version or "")
+    if token is None:
         return True
-    return borg2_beta_at_least(version, ENCRYPTION_FLAGS_SINCE_BETA)
+    return borg2_beta_at_least(token, ENCRYPTION_FLAGS_SINCE_BETA)
 
 
 def borg2_encryption_flags(mode: str) -> List[str]:
