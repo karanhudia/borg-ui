@@ -93,7 +93,7 @@ export default function AgentPinControl({
             {t('managedAgents.page.pinControl.hint')}
           </Typography>
           <FormControl fullWidth>
-            <InputLabel id="agent-pin-version-label">
+            <InputLabel id="agent-pin-version-label" shrink>
               {t('managedAgents.page.pinControl.agentVersionLabel')}
             </InputLabel>
             <Select
@@ -117,7 +117,7 @@ export default function AgentPinControl({
             </Select>
           </FormControl>
           <FormControl fullWidth>
-            <InputLabel id="agent-pin-borg-label">
+            <InputLabel id="agent-pin-borg-label" shrink>
               {t('managedAgents.page.pinControl.borgVersionLabel')}
             </InputLabel>
             <Select
