@@ -569,7 +569,9 @@ const Archives: React.FC = () => {
     navigate(`/archives/${selectedRepositoryId}/${day.archive_ids[0]}`)
   }
 
-  const repositoryStorage = repositoryDetail?.data?.storage ?? selectedRepository?.storage
+  const repositoryStorage = repositoryDetail?.data
+    ? repositoryDetail.data.storage
+    : selectedRepository?.storage
 
   // Get last restore job for selected repository
   const lastRestoreJob = React.useMemo(() => {
@@ -703,13 +705,16 @@ const Archives: React.FC = () => {
 
       {/* ── Context panel: stats + last restore ── */}
       {selectedRepositoryId &&
-        (loadingRepoInfo || repositoryDetailPending || repositoryStorage || lastRestoreJob) && (
+        (loadingRepoInfo ||
+          repositoryDetailPending ||
+          repositoryStorage !== undefined ||
+          lastRestoreJob) && (
           <Box sx={{ ...panelSx, mb: 3 }}>
             {/* Stats */}
             <Box sx={{ p: 2.5 }}>
               {loadingRepoInfo || repositoryDetailPending ? (
                 <RepositoryStatsGridSkeleton />
-              ) : repositoryStorage ? (
+              ) : repositoryStorage !== undefined ? (
                 <RepositoryStatsGrid
                   storage={repositoryStorage}
                   archivesCount={archivesList.length}

@@ -1,4 +1,4 @@
-import { Box, Card, CardContent, Tooltip, Typography } from '@mui/material'
+import { Box, Card, CardContent, Skeleton, Tooltip, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { formatBytes, formatDateTimeFull } from '../utils/dateUtils'
 import type { RepositoryStorageSummary } from '../types'
@@ -7,6 +7,7 @@ export interface RepositoryStatsProps {
   storage?: RepositoryStorageSummary | null
   borgVersion?: number
   archiveCount?: number
+  archivesLoading?: boolean
   compact?: boolean
 }
 
@@ -58,6 +59,7 @@ export default function RepositoryStats({
   storage,
   borgVersion,
   archiveCount,
+  archivesLoading = false,
   compact = false,
 }: RepositoryStatsProps) {
   const { t } = useTranslation()
@@ -72,28 +74,43 @@ export default function RepositoryStats({
     ? t('repositoryStats.measuredAt', { date: formatDateTimeFull(storage.measured_at) })
     : undefined
   const compactStats = storage?.compact
-  const stats: Array<{ label: string; value: React.ReactNode; tooltip?: string }> = [
+  const stats: Array<{ id: string; label: string; value: React.ReactNode; tooltip?: string }> = [
     ...(archiveCount === undefined
       ? []
-      : [{ label: t('repositoryStats.archives'), value: archiveCount.toLocaleString() }]),
+      : [
+          {
+            id: 'archives',
+            label: t('repositoryStats.archives'),
+            value: archivesLoading ? (
+              <Skeleton variant="text" width={40} />
+            ) : (
+              archiveCount.toLocaleString()
+            ),
+          },
+        ]),
     {
+      id: 'repository-size',
       label: repositoryLabel,
       value: <StorageValue value={storage?.size_bytes} />,
       tooltip: measuredTooltip,
     },
     {
+      id: 'original-size',
       label: t('repositoryStats.originalSize'),
       value: <StorageValue value={storage?.original_size} />,
     },
     {
+      id: 'compressed-size',
       label: t('repositoryStats.compressedSize'),
       value: <StorageValue value={storage?.compressed_size} unsupported={borgVersion === 2} />,
     },
     {
+      id: 'deduplicated-size',
       label: t('repositoryStats.deduplicatedSize'),
       value: <StorageValue value={storage?.deduplicated_size} />,
     },
     {
+      id: 'files',
       label: t('repositoryStats.files'),
       value:
         storage?.latest_archive_files == null
@@ -104,6 +121,7 @@ export default function RepositoryStats({
   if (compact && borgVersion === 2)
     stats.push(
       {
+        id: 'compact-source-data',
         label: t('repositoryStats.compactSourceData'),
         value: <StorageValue value={compactStats?.original_size} />,
         tooltip: storage?.compact_at
@@ -111,10 +129,12 @@ export default function RepositoryStats({
           : undefined,
       },
       {
+        id: 'compact-deduplicated',
         label: t('repositoryStats.compactDeduplicated'),
         value: <StorageValue value={compactStats?.deduplicated_size} />,
       },
       {
+        id: 'compression-factor',
         label: t('repositoryStats.compressionFactor'),
         value:
           compactStats?.compression_factor == null
@@ -130,8 +150,8 @@ export default function RepositoryStats({
         gap: 2,
       }}
     >
-      {stats.map((stat) => (
-        <Stat key={stat.label} {...stat} />
+      {stats.map(({ id, ...stat }) => (
+        <Stat key={id} {...stat} />
       ))}
     </Box>
   )

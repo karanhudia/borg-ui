@@ -32,4 +32,12 @@ describe('RepositoryStats', () => {
     expect(screen.getAllByText('unknown').length).toBeGreaterThan(0)
     expect(screen.queryByText('0 B')).not.toBeInTheDocument()
   })
+
+  it('keeps the archive count in a loading state until archives finish loading', () => {
+    const { container } = render(
+      <RepositoryStats archiveCount={35} archivesLoading storage={null} />
+    )
+    expect(screen.queryByText('35')).not.toBeInTheDocument()
+    expect(container.querySelector('.MuiSkeleton-root')).toBeInTheDocument()
+  })
 })

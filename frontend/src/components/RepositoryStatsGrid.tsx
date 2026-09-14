@@ -12,8 +12,14 @@ export default function RepositoryStatsGrid({
   storage,
   archivesCount,
   borgVersion,
+  archivesLoading,
 }: RepositoryStatsGridProps) {
   return (
-    <RepositoryStats storage={storage} archiveCount={archivesCount} borgVersion={borgVersion} />
+    <RepositoryStats
+      storage={storage}
+      archiveCount={archivesCount}
+      archivesLoading={archivesLoading}
+      borgVersion={borgVersion}
+    />
   )
 }
