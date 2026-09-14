@@ -19,19 +19,18 @@ import CalendarMonth from '@mui/icons-material/CalendarMonth'
 import CheckIcon from '@mui/icons-material/Check'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import FileDownload from '@mui/icons-material/FileDownload'
-import Info from '@mui/icons-material/Info'
 import Lock from '@mui/icons-material/Lock'
 import Storage from '@mui/icons-material/Storage'
 import { useTranslation } from 'react-i18next'
 import { formatDateShort } from '../utils/dateUtils'
 import { repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
-import RepositoryStatsV1 from './RepositoryStatsV1'
+import RepositoryStats from './RepositoryStats'
+import RepositoryStatsV1, { type CacheStats } from './RepositoryStatsV1'
 import RepositoryStatsV2, { type ArchiveEntry } from './RepositoryStatsV2'
-import type { CacheStats } from './RepositoryStatsV1'
 import PlanGate from './shared/PlanGate'
 import UpgradePrompt from './UpgradePrompt'
-import { Repository } from '../types'
+import { Repository, RepositoryStorageSummary } from '../types'
 import { isV2Repo } from '../utils/repoCapabilities'
 import { generateBorgInitCommand } from '../utils/borgUtils'
 
@@ -43,10 +42,7 @@ interface RepositoryInfo {
     last_modified?: string
     location?: string
   }
-  cache?: {
-    stats?: CacheStats
-  }
-  // Borg 2: per-archive stats (from `borg2 info --json`)
+  cache?: { stats?: CacheStats }
   archives?: ArchiveEntry[]
 }
 
@@ -54,6 +50,7 @@ interface RepositoryInfoDialogProps {
   open: boolean
   repository: Repository | null
   repositoryInfo: RepositoryInfo | null
+  storage?: RepositoryStorageSummary | null
   isLoading: boolean
   onClose: () => void
   onRunRecoveryCheck?: (repository: Repository) => void
@@ -304,6 +301,7 @@ export default function RepositoryInfoDialog({
   open,
   repository,
   repositoryInfo,
+  storage,
   isLoading,
   onClose,
   onRunRecoveryCheck,
@@ -536,32 +534,34 @@ export default function RepositoryInfoDialog({
                     </CardContent>
                   </Card>
 
-                  {/* Storage Statistics */}
-                  {isV2Repo(displayRepository) ? (
-                    <RepositoryStatsV2 archives={displayRepositoryInfo.archives || []} />
-                  ) : displayRepositoryInfo.cache?.stats &&
-                    (displayRepositoryInfo.cache.stats.total_size ?? 0) > 0 ? (
-                    <RepositoryStatsV1 stats={displayRepositoryInfo.cache.stats} />
+                  {storage === undefined ? (
+                    isV2Repo(displayRepository) ? (
+                      <RepositoryStatsV2 archives={displayRepositoryInfo.archives || []} />
+                    ) : displayRepositoryInfo.cache?.stats &&
+                      (displayRepositoryInfo.cache.stats.total_size ?? 0) > 0 ? (
+                      <RepositoryStatsV1 stats={displayRepositoryInfo.cache.stats} />
+                    ) : (
+                      <Alert severity="info">
+                        <Typography variant="body2" gutterBottom sx={{ fontWeight: 600 }}>
+                          {t('dialogs.repositoryInfo.noBackupsYet')}
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                          {t('repositoryInfoDialog.noArchivesDescription')}
+                        </Typography>
+                      </Alert>
+                    )
                   ) : (
-                    <Alert severity="info" icon={<Info />}>
-                      <Typography
-                        variant="body2"
-                        gutterBottom
-                        sx={{
-                          fontWeight: 600,
-                        }}
-                      >
-                        {t('dialogs.repositoryInfo.noBackupsYet')}
+                    <>
+                      <Typography variant="h6" sx={{ fontWeight: 600, mt: 1 }}>
+                        {t('dialogs.repositoryInfo.storageStatistics')}
                       </Typography>
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          color: 'text.secondary',
-                        }}
-                      >
-                        {t('repositoryInfoDialog.noArchivesDescription')}
-                      </Typography>
-                    </Alert>
+                      <RepositoryStats
+                        storage={storage}
+                        borgVersion={displayRepository.borg_version}
+                        archiveCount={displayRepository.archive_count}
+                        compact
+                      />
+                    </>
                   )}
                 </Box>
               </PlanGate>

@@ -32,7 +32,12 @@ import {
 import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
 import BorgVersionChip from './BorgVersionChip'
 import { getRepoCapabilities } from '../utils/repoCapabilities'
-import { formatDateShort, formatDateTimeFull, formatElapsedTime } from '../utils/dateUtils'
+import {
+  formatBytes,
+  formatDateShort,
+  formatDateTimeFull,
+  formatElapsedTime,
+} from '../utils/dateUtils'
 import { formatUploadRatelimit } from '../utils/uploadRatelimit'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAnalytics } from '../hooks/useAnalytics'
@@ -228,9 +233,25 @@ export default function RepositoryCard({
       tooltip: '',
     },
     {
-      label: t('repositoryCard.totalSize'),
-      value: repository.total_size || 'N/A',
-      tooltip: '',
+      label:
+        repository.storage === undefined
+          ? t('repositoryCard.totalSize')
+          : repository.storage?.size_source === 'borg1_cache_stats'
+            ? t('repositoryStats.deduplicatedSize')
+            : repository.storage?.size_source === 'storage_used'
+              ? t('repositoryStats.storageUsed')
+              : t('repositoryStats.repositorySize'),
+      value:
+        repository.storage === undefined
+          ? repository.total_size || 'N/A'
+          : repository.storage?.size_bytes === null || repository.storage?.size_bytes === undefined
+            ? t('repositoryStats.unknown')
+            : formatBytes(repository.storage.size_bytes),
+      tooltip: repository.storage?.measured_at
+        ? t('repositoryStats.measuredAt', {
+            date: formatDateTimeFull(repository.storage.measured_at),
+          })
+        : '',
     },
     {
       label: t('repositoryCard.lastBackup'),

@@ -1,5 +1,6 @@
 import type { RepositoryData } from '../../services/api'
 import type { IndexMode } from '../../types/operations'
+import type { RepositoryStorageSummary } from '../../types'
 
 export interface Repository extends RepositoryData {
   id: number
@@ -22,6 +23,7 @@ export interface Repository extends RepositoryData {
   schedule_timezone?: string | null
   next_run?: string | null
   total_size: string | null
+  storage?: RepositoryStorageSummary | null
   archive_count: number
   created_at: string
   updated_at: string | null

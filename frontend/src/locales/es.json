@@ -2951,6 +2951,22 @@
     },
     "confirmDelete": "¿Estás seguro de que deseas eliminar \"{{name}}\"?"
   },
+  "repositoryStats": {
+    "archives": "Archivos",
+    "repositorySize": "Tamaño del repositorio",
+    "storageUsed": "Almacenamiento usado",
+    "deduplicatedSize": "Tamaño deduplicado",
+    "originalSize": "Tamaño de datos de origen",
+    "compressedSize": "Tamaño comprimido",
+    "files": "Archivos de la última copia",
+    "unknown": "desconocido",
+    "notReported": "no informado por esta versión de Borg",
+    "measuredAt": "Medido {{date}}",
+    "compactSourceData": "Datos de origen de compactación",
+    "compactDeduplicated": "Tamaño deduplicado de compactación",
+    "compressionFactor": "Factor de compresión",
+    "compactedAt": "Compactación {{date}}"
+  },
   "repositoryCard": {
     "archives": "Archivos",
     "totalSize": "Tamaño total",

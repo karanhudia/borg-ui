@@ -113,6 +113,43 @@ export const Default: Story = {
   ),
 }
 
+export const Borg1DeduplicatedSize: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...sampleRepository,
+      borg_version: 1,
+      storage: {
+        size_bytes: 842_600_000_000,
+        size_source: 'borg1_cache_stats',
+        measured_at: '2026-05-15T16:30:00.000Z',
+        last_modified: null,
+        archives_consistent: null,
+        original_size: null,
+        compressed_size: null,
+        deduplicated_size: null,
+        latest_archive_files: null,
+        compact: null,
+        compact_at: null,
+      },
+    },
+  },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
+export const SizeNotMeasured: Story = {
+  args: { ...defaultArgs, repository: { ...sampleRepository, total_size: null, storage: null } },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
 export const WithoutBreakLockAccess: Story = {
   args: {
     ...defaultArgs,

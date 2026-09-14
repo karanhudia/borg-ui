@@ -87,6 +87,7 @@ export interface Repository {
   check_extra_flags?: string | null
   archive_count?: number
   total_size?: string | null
+  storage?: RepositoryStorageSummary | null
   last_backup?: string | null
   last_check?: string | null
   last_compact?: string | null
@@ -103,6 +104,27 @@ export interface Repository {
   source_ssh_connection_id?: number | null
   rclone_storage?: RcloneStorage | null
   [key: string]: unknown
+}
+
+export type RepositorySizeSource =
+  'borg1_cache_stats' | 'borg2_index' | 'storage_used' | 'compact_stats'
+
+export interface RepositoryStorageSummary {
+  size_bytes: number | null
+  size_source: RepositorySizeSource | null
+  measured_at: string | null
+  last_modified: string | null
+  archives_consistent: boolean | null
+  original_size: number | null
+  compressed_size: number | null
+  deduplicated_size: number | null
+  latest_archive_files: number | null
+  compact: {
+    original_size?: number | null
+    deduplicated_size?: number | null
+    compression_factor?: number | null
+  } | null
+  compact_at: string | null
 }
 
 export interface RcloneStorage {

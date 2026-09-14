@@ -304,6 +304,12 @@ export default function Repositories() {
     retry: false,
   })
 
+  const { data: repositoryDetail } = useQuery({
+    queryKey: ['repository-detail', viewingInfoRepository?.id],
+    queryFn: () => repositoriesAPI.getRepository(viewingInfoRepository!.id),
+    enabled: !!viewingInfoRepository,
+  })
+
   // Fresh info carries the authoritative archive list, and the backend syncs
   // archive_count/last_backup from it — refetch the list so the card catches
   // up with the dialog instead of rendering the stale stored count.
@@ -1111,6 +1117,7 @@ export default function Repositories() {
         open={!!viewingInfoRepository}
         repository={viewingInfoRepository}
         repositoryInfo={repositoryInfo?.data?.info || null}
+        storage={repositoryDetail?.data?.storage ?? viewingInfoRepository?.storage}
         isLoading={loadingInfo}
         onClose={() => setViewingInfoRepository(null)}
         onRunRecoveryCheck={(repository) => handleCheckRepository(repository as Repository)}
