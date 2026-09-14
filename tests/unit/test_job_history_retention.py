@@ -6,14 +6,15 @@ fall at cleanup_retention_days regardless of status — age comes from the
 freshest timestamp, so genuinely live work never looks old.
 """
 
+import os
 from datetime import timedelta
 from pathlib import Path
 
 from unittest.mock import patch
 
 import pytest
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine, event, text
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.database.models import (
     AgentJob,
@@ -37,6 +38,7 @@ from app.services.job_history_retention import (
     archive_names_from_prune_output,
     mark_jobs_of_pruned_archives,
     purge_job_rows,
+    reduce_consumed_agent_job_results,
     run_retention,
     sweep_pruned_archive_records,
 )
@@ -1253,3 +1255,237 @@ def test_sweep_ignores_a_prune_payload_from_a_dropped_table(db):
 
     db.expunge_all()
     assert db.get(OperationBackupDetails, pruned_id).archive_pruned_at is None
+
+
+# -- consumed machine-parsed results ---------------------------------------
+
+_LISTING_RESULT = {
+    "return_code": 0,
+    "command": ["borg", "list", "--json"],
+    "stdout": '{"archives": [{"name": "a1"}]}',
+    "stderr": "",
+    "data": {"archives": [{"name": "a1"}]},
+}
+_CONSUMED_LISTING = {
+    "return_code": 0,
+    "command": ["borg", "list", "--json"],
+    "stderr": "",
+}
+
+
+_FULL = object()  # the helper's default: a full listing result
+
+
+def _parsed_job(
+    db,
+    machine,
+    job_kind="repository.list_archives",
+    *,
+    age_hours=2,
+    status="completed",
+    result=_FULL,
+    job_type="repository",
+):
+    when = utc_now() - timedelta(hours=age_hours)
+    job = AgentJob(
+        agent_machine_id=machine.id,
+        job_type=job_type,
+        status=status,
+        payload={"job_kind": job_kind, "repository": {"id": 1}},
+        result=dict(_LISTING_RESULT) if result is _FULL else result,
+        created_at=when,
+        updated_at=when,
+        completed_at=when,
+    )
+    db.add(job)
+    db.commit()
+    return job
+
+
+def _result_of(db, job_id):
+    db.expire_all()
+    return db.get(AgentJob, job_id).result
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "job_kind",
+    [
+        "repository.list_archives",
+        "repository.rinfo",
+        "repository.info",
+        "repository.archive_info",
+    ],
+)
+def test_unread_machine_parsed_results_are_reduced_after_the_grace(db, job_kind):
+    machine = _machine(db)
+    job = _parsed_job(db, machine, job_kind)
+    assert reduce_consumed_agent_job_results(db, utc_now() - timedelta(hours=1)) == 1
+    assert _result_of(db, job.id) == _CONSUMED_LISTING
+    # nothing left to reduce: the row dropped out of the filter (updated_at
+    # is put back first, or the grace alone would hide the bumped row)
+    db.query(AgentJob).update(
+        {AgentJob.updated_at: utc_now() - timedelta(hours=2)},
+        synchronize_session=False,
+    )
+    db.commit()
+    assert reduce_consumed_agent_job_results(db, utc_now() - timedelta(hours=1)) == 0
+
+
+@pytest.mark.unit
+def test_results_inside_the_grace_wait_for_their_reader(db):
+    machine = _machine(db)
+    job = _parsed_job(db, machine, age_hours=0)
+    assert reduce_consumed_agent_job_results(db, utc_now() - timedelta(hours=1)) == 0
+    assert _result_of(db, job.id) == _LISTING_RESULT
+
+
+@pytest.mark.unit
+def test_reduction_leaves_other_results_alone(db):
+    machine = _machine(db)
+    kept = [
+        _parsed_job(db, machine, status="failed"),
+        _parsed_job(db, machine, "repository.list_archive_contents"),
+        _parsed_job(db, machine, "repository.prune"),
+        _parsed_job(db, machine, job_type="backup"),
+    ]
+    assert reduce_consumed_agent_job_results(db, utc_now() - timedelta(hours=1)) == 0
+    for job in kept:
+        assert _result_of(db, job.id) == _LISTING_RESULT
+
+
+@pytest.mark.unit
+def test_reduction_skips_results_without_output(db):
+    """A row with no output to drop is not rewritten: the filter, not the
+    reducer, decides. Includes shapes the agent never sends."""
+    machine = _machine(db)
+    kept = {
+        "reduced": _parsed_job(db, machine, result=dict(_CONSUMED_LISTING)),
+        "none": _parsed_job(db, machine, result=None),
+        "string": _parsed_job(db, machine, result="not a dict"),
+        "list": _parsed_job(db, machine, result=[1, 2]),
+    }
+    assert reduce_consumed_agent_job_results(db, utc_now() - timedelta(hours=1)) == 0
+    assert _result_of(db, kept["reduced"].id) == _CONSUMED_LISTING
+    assert _result_of(db, kept["none"].id) is None
+    assert _result_of(db, kept["string"].id) == "not a dict"
+    assert _result_of(db, kept["list"].id) == [1, 2]
+
+
+@pytest.mark.unit
+def test_reduction_reads_either_copy_of_the_output(db):
+    """A result with only one of the two copies still carries the output."""
+    machine = _machine(db)
+    stdout_only = _parsed_job(db, machine, result={**_LISTING_RESULT, "data": None})
+    data_only = _parsed_job(
+        db,
+        machine,
+        result={k: v for k, v in _LISTING_RESULT.items() if k != "stdout"},
+    )
+    warning = _parsed_job(
+        db,
+        machine,
+        status="completed_with_warnings",
+        result={**_LISTING_RESULT, "return_code": 1},
+    )
+    assert reduce_consumed_agent_job_results(db, utc_now() - timedelta(hours=1)) == 3
+    assert _result_of(db, stdout_only.id) == _CONSUMED_LISTING
+    assert _result_of(db, data_only.id) == _CONSUMED_LISTING
+    assert _result_of(db, warning.id) == {**_CONSUMED_LISTING, "return_code": 1}
+
+
+@pytest.mark.unit
+def test_reduction_walks_the_rows_in_chunks(db, monkeypatch):
+    monkeypatch.setattr("app.services.job_history_retention.CHUNK_SIZE", 2)
+    machine = _machine(db)
+    jobs = [_parsed_job(db, machine) for _ in range(5)]
+    assert reduce_consumed_agent_job_results(db, utc_now() - timedelta(hours=1)) == 5
+    for job in jobs:
+        assert _result_of(db, job.id) == _CONSUMED_LISTING
+
+
+@pytest.mark.unit
+def test_reduction_failure_keeps_the_pass_going(db):
+    """A failed chunk is rolled back and counted as not reduced; the session
+    stays usable for the phases after it."""
+    from sqlalchemy.exc import OperationalError
+
+    machine = _machine(db)
+    job = _parsed_job(db, machine)
+
+    @event.listens_for(db.get_bind(), "before_cursor_execute")
+    def _fail_updates(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith("UPDATE"):
+            raise OperationalError(statement, parameters, Exception("locked"))
+
+    assert reduce_consumed_agent_job_results(db, utc_now() - timedelta(hours=1)) == 0
+    assert _result_of(db, job.id) == _LISTING_RESULT
+    assert db.query(AgentJob).count() == 1
+
+
+@pytest.mark.unit
+def test_run_retention_reduces_unread_results(db):
+    _settings(db)
+    machine = _machine(db)
+    old = _parsed_job(db, machine, age_hours=2)
+    young = _parsed_job(db, machine, age_hours=0)
+    results = run_retention(db)
+    assert results["agent_results_reduced"] == 1
+    assert _result_of(db, old.id) == _CONSUMED_LISTING
+    assert _result_of(db, young.id) == _LISTING_RESULT
+
+
+POSTGRES_URL = os.getenv("BORG_TEST_POSTGRES_URL")
+requires_postgres = pytest.mark.skipif(
+    not POSTGRES_URL, reason="BORG_TEST_POSTGRES_URL is not set"
+)
+
+
+@requires_postgres
+class TestConsumedResultsOnPostgres:
+    """The reducer's filter reads JSON columns, which are spelled per dialect
+    (json_extract on SQLite, ->> on PostgreSQL). SQLite is covered above;
+    this one holds the PostgreSQL spelling: rows with output are reduced,
+    rows without are left alone, and a second pass finds nothing."""
+
+    def test_reduce_reads_the_json_columns(self):
+        engine = create_engine(POSTGRES_URL)
+        # like the sibling PostgreSQL suites: start from an empty schema
+        with engine.begin() as conn:
+            conn.execute(text("DROP SCHEMA public CASCADE"))
+            conn.execute(text("CREATE SCHEMA public"))
+        Base.metadata.create_all(engine)
+        db = Session(bind=engine)
+        try:
+            machine = _machine(db)
+            reduced = [
+                _parsed_job(db, machine),
+                _parsed_job(db, machine, result={**_LISTING_RESULT, "data": None}),
+            ]
+            already = _parsed_job(db, machine, result=dict(_CONSUMED_LISTING))
+            none = _parsed_job(db, machine, result=None)
+            string = _parsed_job(db, machine, result="not a dict")
+            young = _parsed_job(db, machine, age_hours=0)
+            cutoff = utc_now() - timedelta(hours=1)
+
+            assert reduce_consumed_agent_job_results(db, cutoff) == 2
+            for job in reduced:
+                assert _result_of(db, job.id) == _CONSUMED_LISTING
+            assert _result_of(db, already.id) == _CONSUMED_LISTING
+            assert _result_of(db, none.id) is None
+            assert _result_of(db, string.id) == "not a dict"
+            assert _result_of(db, young.id) == _LISTING_RESULT
+
+            # the reduced rows dropped out of the filter, not just out of
+            # the grace (the reduction bumped their updated_at)
+            db.query(AgentJob).filter(
+                AgentJob.id.in_([job.id for job in reduced])
+            ).update(
+                {AgentJob.updated_at: utc_now() - timedelta(hours=2)},
+                synchronize_session=False,
+            )
+            db.commit()
+            assert reduce_consumed_agent_job_results(db, cutoff) == 0
+        finally:
+            db.close()
+            engine.dispose()
