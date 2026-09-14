@@ -16,6 +16,8 @@ from app.utils.borg_env import (
     effective_repository_remote_path,
 )
 
+from app.services.process_cancel import terminate_process
+
 logger = structlog.get_logger()
 
 
@@ -174,15 +176,7 @@ class DeleteArchiveService:
                             "Delete job cancelled, terminating process", job_id=job_id
                         )
                         cancelled = True
-                        process.terminate()
-                        try:
-                            await asyncio.wait_for(process.wait(), timeout=5.0)
-                        except asyncio.TimeoutError:
-                            logger.warning(
-                                "Process didn't terminate, killing it", job_id=job_id
-                            )
-                            process.kill()
-                            await process.wait()
+                        await terminate_process(process, job_id, "delete_archive")
                         break
 
             async def stream_logs():

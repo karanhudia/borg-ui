@@ -19,7 +19,10 @@ from app.services.operations.job_facade import (
     refresh_job,
     resolve_maintenance_job,
 )
-from app.services.process_cancel import terminate_tracked_process
+from app.services.process_cancel import (
+    terminate_process,
+    terminate_tracked_process,
+)
 from app.core.borg2 import _get_borg2_binary
 from app.core.borg_errors import is_borg_warning_exit_code
 from app.config import settings
@@ -221,12 +224,7 @@ class CheckV2Service:
                     if job.status == "cancelled":
                         logger.info("Borg2 check cancelled, terminating", job_id=job_id)
                         cancelled = True
-                        process.terminate()
-                        try:
-                            await asyncio.wait_for(process.wait(), timeout=5.0)
-                        except asyncio.TimeoutError:
-                            process.kill()
-                            await process.wait()
+                        await terminate_process(process, job_id, "borg2 check")
                         break
 
             async def stream_logs():
@@ -324,8 +322,7 @@ class CheckV2Service:
                 )
             except asyncio.CancelledError:
                 cancelled = True
-                process.terminate()
-                await process.wait()
+                await terminate_process(process, job_id, "borg2 check")
                 raise
 
             if process.returncode is None:

@@ -26,7 +26,16 @@ async def terminate_tracked_process(
     if process is None:
         logger.warning("No running process found for job", job_id=job_id, kind=label)
         return False
+    return await terminate_process(process, job_id, label)
 
+
+async def terminate_process(process, job_id: int, label: str) -> bool:
+    """Terminate a process a caller already holds.
+
+    The services call this from inside their own run, where the process is a
+    local; `terminate_tracked_process` is the same thing reached through the
+    `running_processes` map, which is what an outside canceller has.
+    """
     try:
         process.terminate()
         logger.info(

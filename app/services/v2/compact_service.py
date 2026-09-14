@@ -30,7 +30,10 @@ from app.services.operations.job_facade import (
     refresh_job,
     resolve_maintenance_job,
 )
-from app.services.process_cancel import terminate_tracked_process
+from app.services.process_cancel import (
+    terminate_process,
+    terminate_tracked_process,
+)
 from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import (
     build_repository_borg_env,
@@ -248,12 +251,7 @@ class CompactV2Service:
                             "Borg2 compact cancelled, terminating", job_id=job_id
                         )
                         cancelled = True
-                        process.terminate()
-                        try:
-                            await asyncio.wait_for(process.wait(), timeout=5.0)
-                        except asyncio.TimeoutError:
-                            process.kill()
-                            await process.wait()
+                        await terminate_process(process, job_id, "borg2 compact")
                         break
 
             async def stream_logs():
@@ -381,8 +379,7 @@ class CompactV2Service:
                 )
             except asyncio.CancelledError:
                 cancelled = True
-                process.terminate()
-                await process.wait()
+                await terminate_process(process, job_id, "borg2 compact")
                 raise
 
             if process.returncode is None:
