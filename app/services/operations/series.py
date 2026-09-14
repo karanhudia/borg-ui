@@ -159,7 +159,9 @@ def crons_for_repository(
     return crons
 
 
-_WITHIN_UNIT_DAYS = {"H": 1 / 24, "d": 1, "w": 7, "m": 31, "y": 366}
+# Borg's own units: `interval("1m")` is 744 hours and `interval("1y")` 8760,
+# so a month is 31 days and a year 365.
+_WITHIN_UNIT_DAYS = {"H": 1 / 24, "d": 1, "w": 7, "m": 31, "y": 365}
 
 
 def keep_within_days(value: Optional[str]) -> Optional[float]:

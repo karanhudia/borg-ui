@@ -45,31 +45,36 @@ function useSearchMocks() {
   useEffect(() => {
     const mock = new MockAdapter(api, { onNoMatch: 'passthrough' })
     mock.onGet(/\/search/).reply(200, { query: 'pdf', results, truncated: false })
-    mock.onGet(/\/history/).reply(200, {
-      path: results[0].path,
-      entries: [
-        {
-          archive_id: 9,
-          archive_name: 'nightly-2026-09-10',
-          series: 'nightly',
-          start: '2026-09-10T14:00:05Z',
-          change: 'modified',
-          size_before: 240_000,
-          size_after: 244_000,
-        },
-        {
-          archive_id: 3,
-          archive_name: 'nightly-2026-04-30',
-          series: 'nightly',
-          start: '2026-04-30T14:00:05Z',
-          change: 'added',
-          size_before: null,
-          size_after: 240_000,
-        },
-      ],
-      present: [{ series: 'nightly', from_archive_id: 3, to_archive_id: 9 }],
-      coverage: { indexed: 12, total: 12, exhausted: 0, capability: 'available' },
-    })
+    // Echo the requested path, or picking the second or third result would
+    // read back the first one's history.
+    mock.onGet(/\/history/).reply((config) => [
+      200,
+      {
+        path: (config.params?.path as string) ?? results[0].path,
+        entries: [
+          {
+            archive_id: 9,
+            archive_name: 'nightly-2026-09-10',
+            series: 'nightly',
+            start: '2026-09-10T14:00:05Z',
+            change: 'modified',
+            size_before: 240_000,
+            size_after: 244_000,
+          },
+          {
+            archive_id: 3,
+            archive_name: 'nightly-2026-04-30',
+            series: 'nightly',
+            start: '2026-04-30T14:00:05Z',
+            change: 'added',
+            size_before: null,
+            size_after: 240_000,
+          },
+        ],
+        present: [{ series: 'nightly', from_archive_id: 3, to_archive_id: 9 }],
+        coverage: { indexed: 12, total: 12, exhausted: 0, capability: 'available' },
+      },
+    ])
     mock.onGet(/\/archives(\?|$)/).reply(200, { archives: [], series: [] })
     return () => {
       mock.restore()

@@ -13,6 +13,7 @@ from app.database.models import (
 from app.services.operations.series import (
     crons_for_repository,
     infer_series,
+    keep_within_days,
     retention_days_for_repository,
     series_prefixes_for_repository,
     strip_timestamp,
@@ -202,3 +203,16 @@ def test_a_disabled_plan_link_gives_no_cadence_but_keeps_its_prefix(db):
     assert crons_for_repository(db, repo) == []
     assert retention_days_for_repository(db, repo) is None
     assert series_prefixes_for_repository(db, repo) == ["photos-plan"]
+
+
+@pytest.mark.unit
+def test_keep_within_days_matches_borg_units():
+    """Borg's own `interval()` reads 1m as 744 hours and 1y as 8760, so a
+    month is 31 days and a year 365, not 366."""
+    assert keep_within_days("48H") == 2
+    assert keep_within_days("30d") == 30
+    assert keep_within_days("4w") == 28
+    assert keep_within_days("1m") == 31
+    assert keep_within_days("1y") == 365
+    assert keep_within_days("nonsense") is None
+    assert keep_within_days(None) is None
