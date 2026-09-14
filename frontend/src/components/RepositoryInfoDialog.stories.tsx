@@ -46,3 +46,10 @@ export const FailedInfoRecoveryUnavailable: Story = {
     canRunRecoveryCheck: false,
   },
 }
+
+export const FailedInfoWithAgentReason: Story = {
+  args: {
+    errorMessage:
+      "repository.info exited with code 2: Failed to create/acquire the lock /mnt/borg/broken/lock.exclusive ([Errno 13] Permission denied: '/mnt/borg/broken/lock.exclusive.5ic2kcji.tmp').",
+  },
+}

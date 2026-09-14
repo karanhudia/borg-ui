@@ -313,6 +313,13 @@ export default function Repositories() {
     }
   }, [repositoryInfo, queryClient])
 
+  // Agent-run info failures carry borg's own reason in detail.message.
+  const infoErrorMessage = React.useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const detail = (infoError as any)?.response?.data?.detail
+    return typeof detail?.message === 'string' && detail.message ? detail.message : null
+  }, [infoError])
+
   // Handle repository info error
   React.useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1111,6 +1118,7 @@ export default function Repositories() {
           viewingInfoRepository ? permissions.canDo(viewingInfoRepository.id, 'maintenance') : false
         }
         isRecoveryCheckStarting={checkRepositoryMutation.isPending}
+        errorMessage={infoErrorMessage}
       />
 
       {/* Prune Repository Dialog */}

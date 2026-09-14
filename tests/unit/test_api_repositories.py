@@ -28,6 +28,7 @@ from app.core.security import get_password_hash
 from app.services.operations.maintenance_start import active_maintenance_operation
 from app.database.models import (
     AgentJob,
+    AgentJobLog,
     AgentMachine,
     Operation,
     LicensingState,
@@ -5004,3 +5005,116 @@ class TestBorgEnvironmentSetup:
 
         assert "BORG_RSH" in env
         assert "StrictHostKeyChecking=no" in env["BORG_RSH"]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "deletion_marker",
+    [
+        pytest.param({"status": "deleted"}, id="status-deleted"),
+        pytest.param({"deleted_at": datetime.utcnow()}, id="deleted_at-set"),
+    ],
+)
+@pytest.mark.parametrize("validator", ["backup", "repository_operation", "script"])
+def test_agent_validators_reject_deleted_agent(test_db, deletion_marker, validator):
+    # Each marker alone must be enough: a row can carry either one depending
+    # on which code path deleted the agent.
+    from app.services.repository_executor import (
+        validate_agent_backup_repository,
+        validate_agent_repository_operation,
+        validate_agent_script,
+    )
+
+    agent = AgentMachine(
+        name="Gone Agent",
+        agent_id="agt_gone",
+        token_hash=get_password_hash("borgui_agent_secret"),
+        token_prefix="borgui_agent_secret"[:20],
+        capabilities=["repository.info", "script.run"],
+        **{"status": "online", **deletion_marker},
+    )
+    test_db.add(agent)
+    test_db.commit()
+    repo = Repository(
+        name="Orphaned Agent Repo",
+        path="/agent/repo",
+        encryption="none",
+        compression="lz4",
+        executor_type="agent",
+        execution_target="agent",
+        agent_machine_id=agent.id,
+        repository_type="local",
+        source_directories=json.dumps(["/data"]),
+    )
+    test_db.add(repo)
+    test_db.commit()
+
+    with pytest.raises(HTTPException) as exc_info:
+        if validator == "backup":
+            validate_agent_backup_repository(test_db, repo)
+        elif validator == "repository_operation":
+            validate_agent_repository_operation(
+                test_db, repo, job_kind="repository.info"
+            )
+        else:
+            validate_agent_script(agent)
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail["key"] == "backend.errors.agents.agentNotQueueable"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_wait_for_agent_job_failure_surfaces_borg_stderr(test_db):
+    from datetime import timezone
+
+    from app.services.repository_executor import (
+        wait_for_agent_repository_operation_job,
+    )
+
+    agent = AgentMachine(
+        name="Pi",
+        agent_id="agt_pi_stderr",
+        token_hash=get_password_hash("borgui_agent_secret"),
+        token_prefix="borgui_agent_secret"[:20],
+        status="online",
+    )
+    test_db.add(agent)
+    test_db.commit()
+    now = datetime.now(timezone.utc)
+    job = AgentJob(
+        agent_machine_id=agent.id,
+        job_type="repository",
+        status="failed",
+        payload={"schema_version": 1, "job_kind": "repository.info"},
+        error_message="repository.info exited with code 2",
+        created_at=now,
+        updated_at=now,
+    )
+    test_db.add(job)
+    test_db.commit()
+    test_db.add(
+        AgentJobLog(
+            agent_job_id=job.id,
+            sequence=2,
+            stream="stderr",
+            message=(
+                "Failed to create/acquire the lock /repo/lock.exclusive "
+                "(Permission denied).\nTraceback (most recent call last):\n  ..."
+            ),
+            created_at=now,
+            received_at=now,
+        )
+    )
+    test_db.commit()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await wait_for_agent_repository_operation_job(
+            test_db, job.id, timeout_seconds=1
+        )
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.detail["message"] == (
+        "repository.info exited with code 2: "
+        "Failed to create/acquire the lock /repo/lock.exclusive (Permission denied)."
+    )
