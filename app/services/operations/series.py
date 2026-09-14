@@ -184,7 +184,10 @@ def retention_days_for_repository(db: Session, repository: Repository) -> Option
         source
         for source in list(_schedules_for(db, repository))
         + list(_plans_for(db, repository))
-        if source.run_prune_after
+        # A disabled source never runs its prune, so its keeps say nothing
+        # about what is retained; counting them widened the window and put
+        # genuinely pruned days back in the red (PR #1051 review).
+        if source.enabled and source.run_prune_after
     ]
     if not sources:
         return None

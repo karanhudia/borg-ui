@@ -13,6 +13,7 @@ from app.database.models import (
 from app.services.operations.series import (
     crons_for_repository,
     infer_series,
+    retention_days_for_repository,
     series_prefixes_for_repository,
     strip_timestamp,
     template_prefix,
@@ -133,3 +134,35 @@ def test_series_prefixes_come_from_schedules_and_plans(db):
         "0 3 * * 0",
     ]
     assert series_prefixes_for_repository(db, other) == ["other-o"]
+
+
+@pytest.mark.unit
+def test_retention_window_ignores_disabled_sources(db):
+    """A disabled schedule never runs its prune, so its keeps must not widen
+    the window and put genuinely pruned days back in the red."""
+    repo = Repository(name="nas", path="/tmp/nas", encryption="none", compression="lz4")
+    db.add(repo)
+    db.commit()
+    db.add_all(
+        [
+            ScheduledJob(
+                name="nightly",
+                cron_expression="0 2 * * *",
+                repository_id=repo.id,
+                enabled=True,
+                run_prune_after=True,
+                prune_keep_daily=7,
+            ),
+            ScheduledJob(
+                name="retired",
+                cron_expression="0 3 * * *",
+                repository_id=repo.id,
+                enabled=False,
+                run_prune_after=True,
+                prune_keep_daily=365,
+            ),
+        ]
+    )
+    db.commit()
+
+    assert retention_days_for_repository(db, repo) == 7
