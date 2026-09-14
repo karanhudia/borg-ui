@@ -56,19 +56,17 @@ def test_missed_run_days_needs_a_cron():
     guess flagged pruned days as missed runs (issue #943)."""
     starts = [datetime(2026, 9, d, 2) for d in (1, 2, 4, 5)]
     missed = an.missed_run_days(
-        starts, until=datetime(2026, 9, 6), cron_expression="0 2 * * *"
+        starts, until=datetime(2026, 9, 6), crons=[("0 2 * * *", None)]
     )
     assert missed == {date(2026, 9, 3)}
     assert an.missed_run_days(starts, until=datetime(2026, 9, 6)) == set()
     assert (
-        an.missed_run_days(
-            [datetime(2026, 9, 1)], until=datetime(2026, 9, 6), cron_expression=None
-        )
+        an.missed_run_days([datetime(2026, 9, 1)], until=datetime(2026, 9, 6), crons=[])
         == set()
     )
     # a day whose expected run is not yet due is not missed
     missed = an.missed_run_days(
-        starts, until=datetime(2026, 9, 6, 1), cron_expression="0 2 * * *"
+        starts, until=datetime(2026, 9, 6, 1), crons=[("0 2 * * *", None)]
     )
     assert date(2026, 9, 6) not in missed
 
@@ -82,7 +80,7 @@ def test_a_completed_run_is_not_a_missed_day():
         an.missed_run_days(
             starts,
             until=datetime(2026, 9, 6),
-            cron_expression="0 2 * * *",
+            crons=[("0 2 * * *", None)],
             run_days=[date(2026, 9, 3)],
         )
         == set()
@@ -95,12 +93,12 @@ def test_days_outside_the_retention_window_are_not_missed():
     so an absent day there says nothing about whether a run happened."""
     starts = [datetime(2026, 9, d, 2) for d in (1, 5)]
     assert an.missed_run_days(
-        starts, until=datetime(2026, 9, 6), cron_expression="0 2 * * *"
+        starts, until=datetime(2026, 9, 6), crons=[("0 2 * * *", None)]
     ) == {date(2026, 9, 2), date(2026, 9, 3), date(2026, 9, 4)}
     assert an.missed_run_days(
         starts,
         until=datetime(2026, 9, 6),
-        cron_expression="0 2 * * *",
+        crons=[("0 2 * * *", None)],
         retention_since=date(2026, 9, 4),
     ) == {date(2026, 9, 4)}
 
@@ -201,7 +199,6 @@ def test_cron_days_stay_in_utc_for_a_non_utc_schedule():
     missed = an.missed_run_days(
         starts,
         until=datetime(2026, 9, 6),
-        cron_expression="0 1 * * *",
-        timezone_name="Europe/Berlin",
+        crons=[("0 1 * * *", "Europe/Berlin")],
     )
     assert missed == {date(2026, 9, 3), date(2026, 9, 5)}

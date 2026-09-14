@@ -129,7 +129,7 @@ describe('ArchiveSeriesHeatmap', () => {
   it('places the legend under the bands', () => {
     render(<ArchiveSeriesHeatmap data={data} onSelectDay={vi.fn()} />)
     expect(screen.getByText('Less')).toBeInTheDocument()
-    expect(screen.getByText(/missed run/i)).toBeInTheDocument()
+    expect(screen.getByText(/nothing on record/i)).toBeInTheDocument()
   })
 
   it('says no day is judged when no schedule gives the cadence', () => {
@@ -140,7 +140,7 @@ describe('ArchiveSeriesHeatmap', () => {
     }
     render(<ArchiveSeriesHeatmap data={unscheduled} onSelectDay={vi.fn()} />)
     expect(screen.getByText(/no schedule known/i)).toBeInTheDocument()
-    expect(screen.queryByText(/missed day/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/\(\d+ days?\)/)).not.toBeInTheDocument()
   })
 })
 
@@ -179,8 +179,8 @@ describe('ArchiveSeriesHeatmap days with several archives', () => {
     expect(onSelectDay).toHaveBeenCalled()
   })
 
-  it('totals the missed days in the legend', () => {
+  it('totals the unrecorded days in the legend', () => {
     render(<ArchiveSeriesHeatmap data={data} onSelectDay={vi.fn()} />)
-    expect(screen.getByText(/1 missed day/)).toBeInTheDocument()
+    expect(screen.getByText(/Nothing on record \(1 day\)/)).toBeInTheDocument()
   })
 })

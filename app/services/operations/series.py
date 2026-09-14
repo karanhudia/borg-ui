@@ -123,16 +123,21 @@ def series_prefixes_for_repository(db: Session, repository: Repository) -> list[
     return sorted(prefixes, key=len, reverse=True)
 
 
-def cron_for_repository(
+def crons_for_repository(
     db: Session, repository: Repository
-) -> tuple[Optional[str], Optional[str]]:
-    """Cron expression and timezone of the first enabled cron schedule or
-    backup plan that targets the repository, for the missed-run rule
-    (spec 9.5). A repository backed up by a plan has no `ScheduledJob`, so
-    reading schedules alone left the cadence unknown (issue #943)."""
+) -> list[tuple[str, Optional[str]]]:
+    """Cron expression and timezone of every enabled cron schedule and backup
+    plan that targets the repository, for the missed-run rule (spec 9.5).
+
+    A repository backed up by a plan has no `ScheduledJob`, so reading
+    schedules alone left the cadence unknown (issue #943). A repository with
+    more than one cadence expects the days of all of them, so every match is
+    returned rather than whichever row came first.
+    """
+    crons: list[tuple[str, Optional[str]]] = []
     for job in _schedules_for(db, repository):
         if job.enabled and job.schedule_mode == "cron" and job.cron_expression:
-            return job.cron_expression, job.timezone
+            crons.append((job.cron_expression, job.timezone))
     for plan in _plans_for(db, repository):
         if (
             plan.enabled
@@ -140,8 +145,8 @@ def cron_for_repository(
             and plan.schedule_mode == "cron"
             and plan.cron_expression
         ):
-            return plan.cron_expression, plan.timezone
-    return None, None
+            crons.append((plan.cron_expression, plan.timezone))
+    return crons
 
 
 _WITHIN_UNIT_DAYS = {"H": 1 / 24, "d": 1, "w": 7, "m": 31, "y": 366}

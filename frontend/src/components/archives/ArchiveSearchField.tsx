@@ -193,7 +193,13 @@ export default function ArchiveSearchField({
               fullWidth
               autoFocus
               value={refined}
-              onChange={(e) => setRefined(e.target.value)}
+              onChange={(e) => {
+                setRefined(e.target.value)
+                // The detail pane follows the list: a refined search can drop
+                // the selected path, and a stale one could still start a
+                // restore.
+                setSelectedPath(null)
+              }}
               placeholder={t('archives.search.placeholder')}
               slotProps={{
                 input: {

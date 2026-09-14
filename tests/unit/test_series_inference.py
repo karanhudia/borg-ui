@@ -11,7 +11,7 @@ from app.database.models import (
     ScheduledJobRepository,
 )
 from app.services.operations.series import (
-    cron_for_repository,
+    crons_for_repository,
     infer_series,
     series_prefixes_for_repository,
     strip_timestamp,
@@ -126,5 +126,10 @@ def test_series_prefixes_come_from_schedules_and_plans(db):
     assert prefixes == sorted(
         {"nightly", "weekly-nas", "photos-plan-nas"}, key=len, reverse=True
     )
-    assert cron_for_repository(db, repo)[0] == "0 2 * * *"
+    # Every cadence targeting the repository counts, not whichever row came
+    # first: the heatmap unions their expected days (PR #1051 review).
+    assert sorted(c for c, _ in crons_for_repository(db, repo)) == [
+        "0 2 * * *",
+        "0 3 * * 0",
+    ]
     assert series_prefixes_for_repository(db, other) == ["other-o"]

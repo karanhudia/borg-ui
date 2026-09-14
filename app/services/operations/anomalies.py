@@ -87,8 +87,7 @@ def missed_run_days(
     starts: Sequence[datetime],
     *,
     until: datetime,
-    cron_expression: Optional[str] = None,
-    timezone_name: Optional[str] = None,
+    crons: Sequence[tuple[str, Optional[str]]] = (),
     run_days: Iterable[date] = (),
     retention_since: Optional[date] = None,
 ) -> set[date]:
@@ -101,16 +100,21 @@ def missed_run_days(
     it, and the day is inside the retention window (`retention_since`, None
     when nothing prunes the repository). Without a cron the cadence is a
     guess, so nothing is flagged.
+
+    `crons` holds every cadence targeting the repository; a day expected by
+    any one of them is expected.
     """
-    if not starts or not cron_expression:
+    if not starts or not crons:
         return set()
     first = min(starts)
     known = {s.date() for s in starts} | set(run_days)
     # Start the iteration just before the first archive so its own day
     # counts as expected. Days after `until` are excluded by the helper.
-    expected = expected_days_from_cron(
-        cron_expression, first - timedelta(seconds=1), until, timezone_name
-    )
+    expected: set[date] = set()
+    for cron_expression, timezone_name in crons:
+        expected |= expected_days_from_cron(
+            cron_expression, first - timedelta(seconds=1), until, timezone_name
+        )
     floor = (
         first.date() if retention_since is None else max(first.date(), retention_since)
     )

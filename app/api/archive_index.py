@@ -44,7 +44,7 @@ from app.services.operations.index_mode import mode_of as index_mode_of
 from app.services.operations.reconcile import RECONCILE_CHAIN, enqueue_reconcile_run
 from app.services.operations.repository_status import repository_status
 from app.services.operations.series import (
-    cron_for_repository,
+    crons_for_repository,
     retention_days_for_repository,
 )
 from app.services.operations.vocab import PRIORITY_RECONCILE, SUCCESS_STATUSES
@@ -242,7 +242,7 @@ async def archives_heatmap(
         .order_by(Archive.start.asc(), Archive.id.asc())
         .all()
     )
-    cron_expression, timezone_name = cron_for_repository(db, repository)
+    crons = crons_for_repository(db, repository)
     by_series: dict[str, list[Archive]] = {}
     for a in rows:
         by_series.setdefault(a.series, []).append(a)
@@ -297,8 +297,7 @@ async def archives_heatmap(
     missed = anomalies.missed_run_days(
         [a.start for a in rows],
         until=until,
-        cron_expression=cron_expression,
-        timezone_name=timezone_name,
+        crons=crons,
         run_days=completed_backup_days(db, repository, since, until),
         retention_since=retention_since,
     )
@@ -309,7 +308,7 @@ async def archives_heatmap(
         "until": until,
         "repository": repository_band,
         "series": [band(name, archives) for name, archives in by_series.items()],
-        "cadence_known": cron_expression is not None,
+        "cadence_known": bool(crons),
         "retention_since": retention_since.isoformat() if retention_since else None,
         "flags_available": {
             "missed_run": True,
