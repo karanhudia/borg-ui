@@ -20,7 +20,7 @@ import ArchivePathSelector, {
 } from '../ArchivePathSelector'
 import ArchiveFileDetailsPane from './ArchiveFileDetailsPane'
 import ResponsiveDialog from '../shared/ResponsiveDialog'
-import { downloadArchiveFile } from '../../utils/downloadArchiveFile'
+import { downloadArchiveFile, downloadArchiveFolder } from '../../utils/downloadArchiveFile'
 import { formatBytes } from '../../utils/dateUtils'
 import { getBorgVersion } from '../../utils/repoCapabilities'
 import type { ArchiveDetailResponse } from '../../types/archives'
@@ -202,6 +202,9 @@ export default function ArchiveFilesTab({
       }
       onDownload={() =>
         lastClicked && downloadArchiveFile(repository, archiveRef, lastClicked.path)
+      }
+      onDownloadFolder={() =>
+        lastClicked && downloadArchiveFolder(repository, archiveRef, lastClicked.path)
       }
     />
   )

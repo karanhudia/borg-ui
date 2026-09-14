@@ -20,6 +20,8 @@ const repositoryErrorKeys = [
   'backend.errors.repo.remoteBorg2Incompatible',
 ] as const
 
+const backupPlanErrorKeys = ['backend.errors.backupPlans.nameExists'] as const
+
 function lookup(locale: unknown, key: string): unknown {
   return key.split('.').reduce<unknown>((value, segment) => {
     if (typeof value !== 'object' || value === null || !(segment in value)) {
@@ -39,6 +41,25 @@ describe('backend repository translations', () => {
         expect(value, `${localeName}:${key}`).not.toBe(key)
       }
     }
+  })
+
+  it('defines backup plan error keys in every bundled locale', () => {
+    for (const [localeName, locale] of Object.entries(locales)) {
+      for (const key of backupPlanErrorKeys) {
+        const value = lookup(locale, key)
+
+        expect(value, `${localeName}:${key}`).toEqual(expect.any(String))
+        expect(value, `${localeName}:${key}`).not.toBe(key)
+      }
+    }
+  })
+
+  it('translates duplicate backup plan names', async () => {
+    await i18n.changeLanguage('en')
+
+    expect(translateBackendKey({ key: 'backend.errors.backupPlans.nameExists' })).toBe(
+      'A backup plan with this name already exists.'
+    )
   })
 
   it('translates Borg 2 initialization failures with backend error params', async () => {

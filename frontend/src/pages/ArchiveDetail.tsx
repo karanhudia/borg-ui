@@ -42,7 +42,7 @@ import type { Archive, Repository } from '@/types'
 
 type DetailTab = 'changes' | 'files' | 'info'
 
-const DETAIL_TABS: DetailTab[] = ['changes', 'files', 'info']
+const DETAIL_TABS: DetailTab[] = ['files', 'changes', 'info']
 
 function getDefaultMountPoint(archiveName: string): string {
   return archiveName.replace(/[/:]/g, '_').replace(/\s+/g, '_')
@@ -61,11 +61,11 @@ export default function ArchiveDetail() {
   const validParams = Number.isFinite(repositoryId) && Number.isFinite(archiveId)
 
   // A tab the page does not have would leave the header without a selected
-  // tab and the body without any panel, so anything unknown reads as changes.
+  // tab and the body without any panel, so anything unknown reads as files.
   const requestedTab = searchParams.get('tab')
   const activeTab: DetailTab = DETAIL_TABS.includes(requestedTab as DetailTab)
     ? (requestedTab as DetailTab)
-    : 'changes'
+    : 'files'
   const setActiveTab = (tab: DetailTab) => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev)
@@ -463,8 +463,8 @@ export default function ArchiveDetail() {
         onChange={(_e, value) => setActiveTab(value)}
         sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
       >
-        <Tab label={tabLabel} value="changes" />
         <Tab label={t('archives.detail.tabFiles')} value="files" />
+        <Tab label={tabLabel} value="changes" />
         <Tab label={t('archives.detail.tabInfo')} value="info" />
       </Tabs>
 

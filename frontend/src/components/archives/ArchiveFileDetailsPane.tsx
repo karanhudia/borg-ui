@@ -22,6 +22,7 @@ interface ArchiveFileDetailsPaneProps {
   // entry says which archive that version lives in.
   onRestore: (entry: HistoryEntry) => void
   onDownload: () => void
+  onDownloadFolder?: () => void
 }
 
 function SectionTitle({ children }: { children: string }) {
@@ -42,6 +43,7 @@ export default function ArchiveFileDetailsPane({
   selectedEntry,
   onRestore,
   onDownload,
+  onDownloadFolder = onDownload,
 }: ArchiveFileDetailsPaneProps) {
   const { t } = useTranslation()
   const theme = useTheme()
@@ -138,15 +140,15 @@ export default function ArchiveFileDetailsPane({
         >
           {selectedPath}
         </Typography>
-        {isFile && (
+        {(isFile || selectedEntry.type === 'directory') && (
           <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
             <Button
               variant="outlined"
               size="small"
               startIcon={<Download size={14} />}
-              onClick={onDownload}
+              onClick={isFile ? onDownload : onDownloadFolder}
             >
-              {t('archives.files.download')}
+              {isFile ? t('archives.files.download') : t('archives.files.downloadFolder')}
             </Button>
           </Stack>
         )}

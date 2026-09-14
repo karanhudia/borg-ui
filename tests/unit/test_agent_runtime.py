@@ -2584,6 +2584,56 @@ def test_repository_extract_file_payload_builds_agent_extract_stdout_command():
 
 
 @pytest.mark.unit
+def test_repository_export_tar_payload_builds_streaming_tar_commands():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.export_archive_tar",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": {
+                "archive": "archive-1",
+                "directory_path": "/docs/Projects",
+                "strip_components": 1,
+            },
+        }
+    )
+    v2_payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.export_archive_tar",
+            "repository": {"path": "/agent/v2-repo", "borg_version": 2},
+            "operation": {
+                "archive": "aid:archive-2",
+                "directory_path": "docs/Projects",
+                "strip_components": 1,
+            },
+        }
+    )
+
+    assert "repository.export_archive_tar" in get_capabilities()
+    assert payload.build_command() == [
+        "borg",
+        "export-tar",
+        "--strip-components",
+        "1",
+        "/agent/repo::archive-1",
+        "-",
+        "--",
+        "docs/Projects",
+    ]
+    assert v2_payload.build_command() == [
+        "borg2",
+        "-r",
+        "/agent/v2-repo",
+        "export-tar",
+        "--strip-components",
+        "1",
+        "aid:archive-2",
+        "-",
+        "--",
+        "docs/Projects",
+    ]
+
+
+@pytest.mark.unit
 def test_repository_extract_file_job_returns_base64_content(monkeypatch):
     def fake_run(cmd, *, capture_output, env, timeout):
         assert cmd == [

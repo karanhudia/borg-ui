@@ -23,6 +23,7 @@ interface ArchiveContentsDialogProps {
     filePath: string,
     size?: number | null
   ) => void | Promise<void>
+  onDownloadFolder?: (archiveName: string, folderPath: string) => void | Promise<void>
   /** Stored archive rows, used to find the numeric DB id for "Open full page".
    *  The action is hidden when the archive has no matching row. */
   storedArchives?: ArchiveRow[]
@@ -55,6 +56,7 @@ export default function ArchiveContentsDialog({
   repository,
   onClose,
   onDownloadFile,
+  onDownloadFolder,
   storedArchives,
 }: ArchiveContentsDialogProps) {
   const { t } = useTranslation()
@@ -250,8 +252,23 @@ export default function ArchiveContentsDialog({
             }
           : undefined
       }
+      onDownloadFolder={
+        onDownloadFolder && archive
+          ? async (folderPath) => {
+              setDownloading(true)
+              try {
+                await onDownloadFolder(archive.name, folderPath)
+              } catch {
+                // The download utility presents failures to the user.
+              } finally {
+                setDownloading(false)
+              }
+            }
+          : undefined
+      }
       downloadBusy={downloading}
       downloadLabel={t('archiveContents.downloadFile')}
+      folderDownloadLabel={t('archives.files.downloadFolder')}
       formatSize={formatBytesUtil}
       formatModified={formatDateCompact}
     />

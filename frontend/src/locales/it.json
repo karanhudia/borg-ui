@@ -1159,6 +1159,7 @@
       "permissions": "Permessi",
       "restore": "Ripristina",
       "download": "Scarica",
+      "downloadFolder": "Scarica cartella",
       "history": "Cronologia",
       "firstSeen": "Visto per la prima volta",
       "unchanged": "Invariato",
@@ -5156,16 +5157,20 @@
     "noInfo": "Nessuna informazione sull'archivio disponibile",
     "root": "Radice",
     "downloadFile": "Scarica file",
+    "downloadFolder": "Scarica cartella",
     "managedCanaryLabel": "Canary Borg UI",
     "managedCanaryDescription": "File canary gestiti per i controlli di ripristino. Borg UI li aggiunge ai backup mentre la modalità canary è attiva.",
     "managedCanaryBanner": "Questa cartella è gestita da Borg UI per i controlli di ripristino canary. Puoi lasciarla invariata.",
     "managedCanaryProbeDisabled": "I percorsi canary vengono verificati automaticamente dalla modalità canary.",
     "includedByParent": "Incluso con {{parent}}. Deseleziona {{parent}} per scegliere gli elementi al suo interno.",
     "failedToDownloadFile": "Impossibile scaricare il file",
+    "failedToDownloadFolder": "Impossibile scaricare la cartella",
     "downloadPreparing": "Preparazione del download di {{name}}…",
+    "downloadFolderPreparing": "Preparazione del download della cartella {{name}}…",
     "downloadingBytes": "Download… {{size}}",
     "downloadingPercent": "Download… {{percent}}% ({{size}})",
-    "downloadComplete": "{{name}} scaricato"
+    "downloadComplete": "{{name}} scaricato",
+    "downloadFolderComplete": "{{name}} scaricato"
   },
   "codeEditor": {
     "loading": "Caricamento editor..."
@@ -5901,6 +5906,7 @@
       },
       "backupPlans": {
         "nameRequired": "Il nome del piano di backup è obbligatorio.",
+        "nameExists": "Esiste già un piano di backup con questo nome.",
         "clearLegacyRepositoryNotSelected": "Impossibile cancellare le impostazioni sorgente legacy per un repository non selezionato in questo piano di backup.",
         "retryUnsupported": "Questa esecuzione del piano di backup non può essere ritentata."
       },

@@ -1159,6 +1159,7 @@
       "permissions": "Permisos",
       "restore": "Restaurar",
       "download": "Descargar",
+      "downloadFolder": "Descargar carpeta",
       "history": "Historial",
       "firstSeen": "Visto por primera vez",
       "unchanged": "Sin cambios",
@@ -5156,16 +5157,20 @@
     "noInfo": "No hay información de archivo disponible",
     "root": "Raíz",
     "downloadFile": "Descargar archivo",
+    "downloadFolder": "Descargar carpeta",
     "managedCanaryLabel": "Canario de Borg UI",
     "managedCanaryDescription": "Archivos canarios administrados para comprobaciones de restauración. Borg UI los añade a las copias mientras el modo canario está activado.",
     "managedCanaryBanner": "Esta carpeta la administra Borg UI para comprobaciones canarias de restauración. Es seguro dejarla intacta.",
     "managedCanaryProbeDisabled": "Las rutas canarias se verifican automáticamente mediante el modo canario.",
     "includedByParent": "Incluido con {{parent}}. Anula la selección de {{parent}} para elegir elementos dentro.",
     "failedToDownloadFile": "No se pudo descargar el archivo",
+    "failedToDownloadFolder": "No se pudo descargar la carpeta",
     "downloadPreparing": "Preparando la descarga de {{name}}…",
+    "downloadFolderPreparing": "Preparando la descarga de la carpeta {{name}}…",
     "downloadingBytes": "Descargando… {{size}}",
     "downloadingPercent": "Descargando… {{percent}} % ({{size}})",
-    "downloadComplete": "{{name}} descargado"
+    "downloadComplete": "{{name}} descargado",
+    "downloadFolderComplete": "{{name}} descargado"
   },
   "codeEditor": {
     "loading": "Cargando editor..."
@@ -5901,6 +5906,7 @@
       },
       "backupPlans": {
         "nameRequired": "El nombre del plan de copia de seguridad es obligatorio.",
+        "nameExists": "Ya existe un plan de copia de seguridad con este nombre.",
         "clearLegacyRepositoryNotSelected": "No se pueden borrar los ajustes de origen heredados de un repositorio que no está seleccionado en este plan de copia.",
         "retryUnsupported": "Esta ejecución del plan de copia no se puede reintentar."
       },

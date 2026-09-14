@@ -1159,6 +1159,7 @@
       "permissions": "Berechtigungen",
       "restore": "Wiederherstellen",
       "download": "Herunterladen",
+      "downloadFolder": "Ordner herunterladen",
       "history": "Verlauf",
       "firstSeen": "Zuerst gesehen",
       "unchanged": "Unverändert",
@@ -5156,16 +5157,20 @@
     "noInfo": "Keine Archivinformationen verfügbar",
     "root": "Wurzel",
     "downloadFile": "Datei herunterladen",
+    "downloadFolder": "Ordner herunterladen",
     "managedCanaryLabel": "Borg UI Canary",
     "managedCanaryDescription": "Verwaltete Canary-Dateien für Restore-Prüfungen. Borg UI fügt sie zu Backups hinzu, solange der Canary-Modus aktiviert ist.",
     "managedCanaryBanner": "Dieser Ordner wird von Borg UI für Canary-Restore-Prüfungen verwaltet. Du kannst ihn unverändert lassen.",
     "managedCanaryProbeDisabled": "Canary-Pfade werden automatisch vom Canary-Modus geprüft.",
     "includedByParent": "In {{parent}} enthalten. Hebe die Auswahl von {{parent}} auf, um Einträge darin auszuwählen.",
     "failedToDownloadFile": "Datei konnte nicht heruntergeladen werden",
+    "failedToDownloadFolder": "Ordner konnte nicht heruntergeladen werden",
     "downloadPreparing": "Download von {{name}} wird vorbereitet…",
+    "downloadFolderPreparing": "Ordner-Download von {{name}} wird vorbereitet…",
     "downloadingBytes": "Lädt… {{size}}",
     "downloadingPercent": "Lädt… {{percent}} % ({{size}})",
-    "downloadComplete": "{{name}} heruntergeladen"
+    "downloadComplete": "{{name}} heruntergeladen",
+    "downloadFolderComplete": "{{name}} heruntergeladen"
   },
   "codeEditor": {
     "loading": "Editor wird geladen..."
@@ -5901,6 +5906,7 @@
       },
       "backupPlans": {
         "nameRequired": "Der Name des Backup-Plans ist erforderlich.",
+        "nameExists": "Ein Backup-Plan mit diesem Namen existiert bereits.",
         "clearLegacyRepositoryNotSelected": "Legacy-Quelleinstellungen können nicht für ein Repository gelöscht werden, das in diesem Backup-Plan nicht ausgewählt ist.",
         "retryUnsupported": "Dieser Backup-Plan-Lauf kann nicht erneut versucht werden."
       },

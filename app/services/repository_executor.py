@@ -42,6 +42,7 @@ REPOSITORY_OPERATION_CAPABILITIES = {
     "repository.break_lock",
     "repository.list_archive_contents",
     "repository.extract_archive_file",
+    "repository.export_archive_tar",
     "repository.restore",
     "repository.check",
     "repository.prune",

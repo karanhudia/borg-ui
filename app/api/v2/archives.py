@@ -11,10 +11,16 @@ from typing import Optional
 import tempfile  # noqa: F401 - retained as a patch target in download endpoint tests
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 import structlog
 
 from app.api.archive_download import extract_file_download
+from app.api.archives import (
+    _content_disposition_attachment,
+    _stream_agent_archive_tar,
+    _tar_strip_components,
+)
 from app.database.database import get_db
 from app.database.models import User, Repository, SystemSettings
 from app.services.operations.enqueue import enqueue
@@ -689,6 +695,86 @@ async def download_file_from_archive(
         raise HTTPException(
             status_code=500, detail=f"Failed to download file: {str(e)}"
         )
+
+
+@router.get("/download-folder")
+async def download_folder_from_archive(
+    repository: str,
+    archive: str,
+    directory_path: str,
+    current_user: User = Depends(get_current_download_user),
+    db: Session = Depends(get_db),
+):
+    """Download one Borg 2 archived directory as a streaming tar file."""
+    if not directory_path.strip().strip("/"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="directory_path is required",
+        )
+    repo = _get_v2_repo(repository, db, current_user)
+    archive_selector = _get_archive_selector(archive)
+    try:
+        if is_agent_executor(repo):
+            return await _stream_agent_archive_tar(
+                db, repo, archive_selector, directory_path
+            )
+        if _repo_needs_custom_env(repo):
+            with repository_borg_env(repo, db) as env:
+                stream = borg2.export_archive_tar(
+                    repo.path,
+                    archive_selector,
+                    directory_path,
+                    passphrase=repo.passphrase,
+                    remote_path=effective_repository_remote_path(repo),
+                    env=env,
+                    strip_components=_tar_strip_components(directory_path),
+                )
+                return await _tar_download_response(stream, directory_path)
+        stream = borg2.export_archive_tar(
+            repo.path,
+            archive_selector,
+            directory_path,
+            passphrase=repo.passphrase,
+            remote_path=effective_repository_remote_path(repo),
+            strip_components=_tar_strip_components(directory_path),
+        )
+        return await _tar_download_response(stream, directory_path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to download folder: {str(e)}"
+        )
+
+
+async def _tar_download_response(stream, directory_path: str) -> StreamingResponse:
+    """Prime a tar byte stream so Borg failures are HTTP errors, not empty 200s."""
+    iterator = stream.__aiter__()
+    try:
+        first_chunk = await anext(iterator)
+    except StopAsyncIteration:
+        if stream.return_code not in (None, 0):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to download folder: {stream.stderr or 'Borg export failed'}",
+            )
+        first_chunk = None
+
+    async def body():
+        try:
+            if first_chunk is not None:
+                yield first_chunk
+            async for chunk in iterator:
+                yield chunk
+        finally:
+            await stream.close()
+
+    filename = f"{os.path.basename(directory_path.rstrip('/')) or 'archive'}.tar"
+    return StreamingResponse(
+        body(),
+        media_type="application/x-tar",
+        headers={"Content-Disposition": _content_disposition_attachment(filename)},
+    )
 
 
 # ── Delete job status ──────────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from fastapi.responses import StreamingResponse
 
 from app.database.models import (
     LicensingState,
@@ -906,6 +907,64 @@ class TestV2ArchiveRoutes:
 
         assert response.status_code == 200
         assert response.content == b"hello borg2"
+
+    def test_download_folder_streams_a_tar_from_borg2(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db)
+
+        class TarStream:
+            return_code = 0
+            stderr = ""
+
+            def __aiter__(self):
+                async def chunks():
+                    yield b"tar-bytes"
+
+                return chunks()
+
+            async def close(self):
+                return None
+
+        with patch(
+            "app.api.v2.archives.borg2.export_archive_tar", return_value=TarStream()
+        ) as export:
+            response = test_client.get(
+                f"/api/v2/archives/download-folder?repository={repo.id}&archive=archive-1&directory_path=/documents/Projects",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        assert response.content == b"tar-bytes"
+        assert response.headers["content-type"].startswith("application/x-tar")
+        assert 'filename="Projects.tar"' in response.headers["content-disposition"]
+        assert export.call_args.kwargs["strip_components"] == 1
+
+    def test_download_folder_delegates_agent_repositories(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db)
+        agent_response = StreamingResponse(iter([b"agent-tar"]))
+
+        with (
+            patch("app.api.v2.archives.is_agent_executor", return_value=True),
+            patch(
+                "app.api.v2.archives._stream_agent_archive_tar",
+                new=AsyncMock(return_value=agent_response),
+            ) as stream_agent,
+            patch("app.api.v2.archives.borg2.export_archive_tar") as export,
+        ):
+            response = test_client.get(
+                f"/api/v2/archives/download-folder?repository={repo.id}&archive=archive-1&directory_path=/Documents",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        assert response.content == b"agent-tar"
+        stream_agent.assert_awaited_once_with(test_db, repo, "archive-1", "/Documents")
+        export.assert_not_called()
 
     def test_download_file_uses_archive_id_selector(
         self, test_client: TestClient, admin_headers, test_db, tmp_path

@@ -26,6 +26,18 @@ export const Folder: Story = {
   },
 }
 
+export const Directory: Story = {
+  args: {
+    selectedPath: 'home/karan/Documents/Projects',
+    selectedEntry: {
+      name: 'Projects',
+      type: 'directory',
+      path: 'home/karan/Documents/Projects',
+    },
+    onDownloadFolder: () => {},
+  },
+}
+
 export const File: Story = {
   args: {
     selectedPath: 'home/karan/docs/invoices.xlsx',

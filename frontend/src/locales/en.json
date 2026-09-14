@@ -1159,6 +1159,7 @@
       "permissions": "Permissions",
       "restore": "Restore",
       "download": "Download",
+      "downloadFolder": "Download folder",
       "history": "History",
       "firstSeen": "First seen",
       "unchanged": "Unchanged",
@@ -5156,16 +5157,20 @@
     "noInfo": "No archive information available",
     "root": "Root",
     "downloadFile": "Download file",
+    "downloadFolder": "Download folder",
     "managedCanaryLabel": "Borg UI canary",
     "managedCanaryDescription": "Managed restore-check canary files. Borg UI adds these to backups while canary mode is enabled.",
     "managedCanaryBanner": "This folder is managed by Borg UI for canary restore checks. It is safe to leave untouched.",
     "managedCanaryProbeDisabled": "Canary paths are verified automatically by canary mode.",
     "includedByParent": "Included with {{parent}}. Unselect {{parent}} to choose items inside it.",
     "failedToDownloadFile": "Failed to download file",
+    "failedToDownloadFolder": "Failed to download folder",
     "downloadPreparing": "Preparing download of {{name}}…",
+    "downloadFolderPreparing": "Preparing folder download of {{name}}…",
     "downloadingBytes": "Downloading… {{size}}",
     "downloadingPercent": "Downloading… {{percent}}% ({{size}})",
-    "downloadComplete": "Downloaded {{name}}"
+    "downloadComplete": "Downloaded {{name}}",
+    "downloadFolderComplete": "Downloaded {{name}}"
   },
   "codeEditor": {
     "loading": "Loading editor..."
@@ -5901,6 +5906,7 @@
       },
       "backupPlans": {
         "nameRequired": "Backup plan name is required.",
+        "nameExists": "A backup plan with this name already exists.",
         "clearLegacyRepositoryNotSelected": "Cannot clear legacy source settings for a repository that is not selected in this backup plan.",
         "retryUnsupported": "This backup plan run cannot be retried."
       },

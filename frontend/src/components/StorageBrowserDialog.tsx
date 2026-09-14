@@ -53,8 +53,10 @@ interface StorageBrowserDialogProps {
   onClose: () => void
   onNavigate: (path: string) => void
   onDownloadFile?: (path: string, size?: number | null) => void
+  onDownloadFolder?: (path: string) => void
   downloadBusy?: boolean
   downloadLabel?: string
+  folderDownloadLabel?: string
   formatSize?: (size: number) => string
   formatModified?: (modified: string) => string
 }
@@ -165,8 +167,10 @@ export default function StorageBrowserDialog({
   onClose,
   onNavigate,
   onDownloadFile,
+  onDownloadFolder,
   downloadBusy = false,
   downloadLabel,
+  folderDownloadLabel,
   formatSize = defaultFormatSize,
   formatModified,
 }: StorageBrowserDialogProps) {
@@ -350,9 +354,6 @@ export default function StorageBrowserDialog({
                             disableHoverListener={!folder.tooltip}
                           >
                             <Box
-                              component="button"
-                              type="button"
-                              onClick={() => onNavigate(normalizeBrowserPath(folder.path))}
                               sx={{
                                 width: '100%',
                                 display: 'flex',
@@ -361,10 +362,8 @@ export default function StorageBrowserDialog({
                                 gap: 1.5,
                                 p: 1.5,
                                 borderRadius: 1,
-                                cursor: 'pointer',
                                 userSelect: 'none',
                                 textAlign: 'left',
-                                font: 'inherit',
                                 color: 'text.primary',
                                 border: '1px solid',
                                 borderColor: (theme) =>
@@ -381,56 +380,91 @@ export default function StorageBrowserDialog({
                                       ? alpha(theme.palette.info.main, 0.14)
                                       : alpha(theme.palette.primary.main, 0.2),
                                 },
-                                '&:focus-visible': {
-                                  outline: '2px solid',
-                                  outlineColor: 'primary.main',
-                                  outlineOffset: 2,
-                                },
                               }}
                             >
-                              <Stack
-                                direction="row"
-                                spacing={1.5}
+                              <Box
+                                component="button"
+                                type="button"
+                                onClick={() => onNavigate(normalizeBrowserPath(folder.path))}
                                 sx={{
-                                  alignItems: 'center',
-                                  minWidth: 0,
                                   flex: 1,
+                                  minWidth: 0,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  gap: 1.5,
+                                  cursor: 'pointer',
+                                  userSelect: 'none',
+                                  textAlign: 'left',
+                                  font: 'inherit',
+                                  color: 'text.primary',
+                                  border: 0,
+                                  backgroundColor: 'transparent',
+                                  '&:focus-visible': {
+                                    outline: '2px solid',
+                                    outlineColor: 'primary.main',
+                                    outlineOffset: 2,
+                                  },
                                 }}
                               >
-                                {highlighted ? (
-                                  <ShieldCheck size={20} />
-                                ) : (
-                                  <FileTypeIcon name={folder.name} type="directory" size={28} />
-                                )}
-                                <Typography
-                                  variant="body2"
-                                  noWrap
+                                <Stack
+                                  direction="row"
+                                  spacing={1.5}
                                   sx={{
-                                    fontWeight: 500,
+                                    alignItems: 'center',
+                                    minWidth: 0,
+                                    flex: 1,
                                   }}
                                 >
-                                  {folder.name}
-                                </Typography>
-                                {folder.badgeLabel ? (
-                                  <Chip
-                                    label={folder.badgeLabel}
-                                    size="small"
-                                    color={folder.tone || 'default'}
-                                    variant="outlined"
-                                    sx={{ height: 22, flexShrink: 0 }}
-                                  />
+                                  {highlighted ? (
+                                    <ShieldCheck size={20} />
+                                  ) : (
+                                    <FileTypeIcon name={folder.name} type="directory" size={28} />
+                                  )}
+                                  <Typography
+                                    variant="body2"
+                                    noWrap
+                                    sx={{
+                                      fontWeight: 500,
+                                    }}
+                                  >
+                                    {folder.name}
+                                  </Typography>
+                                  {folder.badgeLabel ? (
+                                    <Chip
+                                      label={folder.badgeLabel}
+                                      size="small"
+                                      color={folder.tone || 'default'}
+                                      variant="outlined"
+                                      sx={{ height: 22, flexShrink: 0 }}
+                                    />
+                                  ) : null}
+                                </Stack>
+                                {renderSize(folder.size) ? (
+                                  <Typography
+                                    variant="body2"
+                                    sx={{
+                                      color: 'text.secondary',
+                                      ml: 2,
+                                    }}
+                                  >
+                                    {renderSize(folder.size)}
+                                  </Typography>
                                 ) : null}
-                              </Stack>
-                              {renderSize(folder.size) ? (
-                                <Typography
-                                  variant="body2"
-                                  sx={{
-                                    color: 'text.secondary',
-                                    ml: 2,
-                                  }}
+                              </Box>
+                              {onDownloadFolder ? (
+                                <IconButton
+                                  size="small"
+                                  sx={{ color: 'text.secondary', flexShrink: 0 }}
+                                  disabled={downloadBusy}
+                                  onClick={() =>
+                                    onDownloadFolder(folder.downloadPath || folder.path)
+                                  }
+                                  title={folderDownloadLabel}
+                                  aria-label={folderDownloadLabel}
                                 >
-                                  {renderSize(folder.size)}
-                                </Typography>
+                                  <Download size={16} />
+                                </IconButton>
                               ) : null}
                             </Box>
                           </Tooltip>

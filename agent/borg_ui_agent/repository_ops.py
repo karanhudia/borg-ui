@@ -43,6 +43,7 @@ REPOSITORY_JOB_KINDS = {
     "repository.break_lock",
     "repository.list_archive_contents",
     "repository.extract_archive_file",
+    "repository.export_archive_tar",
     "repository.restore",
     "repository.check",
     "repository.prune",
@@ -310,11 +311,37 @@ class RepositoryOperationPayload:
                 file_path,
             ]
 
+        if self.job_kind == "repository.export_archive_tar":
+            archive = _operation_archive(self.operation, self.job_kind)
+            directory_path = _operation_directory_path(self.operation, self.job_kind)
+            strip_components = _operation_strip_components(
+                self.operation, self.job_kind
+            )
+            if self.borg_version == 2:
+                cmd = [
+                    *self._base_borg2("export-tar"),
+                ]
+                if strip_components:
+                    cmd.extend(["--strip-components", str(strip_components)])
+                return [*cmd, archive, "-", "--", directory_path]
+            cmd = [
+                *self._base_borg1("export-tar"),
+            ]
+            if strip_components:
+                cmd.extend(["--strip-components", str(strip_components)])
+            return [
+                *cmd,
+                f"{self.repository_path}::{archive}",
+                "-",
+                "--",
+                directory_path,
+            ]
+
         if self.job_kind == "repository.restore":
             archive = _operation_archive(self.operation, self.job_kind)
             operation = self.operation or {}
             paths = _restore_paths(operation)
-            strip_components = _restore_strip_components(operation)
+            strip_components = _operation_strip_components(operation, self.job_kind)
             # Mirror BorgRouter.build_restore_extract_command so agent-side
             # restores behave identically to server-side ones. Borg only emits
             # JSON progress events when --progress is paired with --log-json, so
@@ -499,6 +526,18 @@ def _operation_file_path(operation: dict[str, Any] | None, job_kind: str) -> str
     return normalized
 
 
+def _operation_directory_path(operation: dict[str, Any] | None, job_kind: str) -> str:
+    if not isinstance(operation, dict):
+        raise ValueError(f"{job_kind} requires operation.directory_path")
+    directory_path = operation.get("directory_path")
+    if not isinstance(directory_path, str) or not directory_path.strip():
+        raise ValueError(f"{job_kind} requires operation.directory_path")
+    normalized = directory_path.strip().strip("/")
+    if not normalized:
+        raise ValueError(f"{job_kind} requires operation.directory_path")
+    return normalized
+
+
 def _restore_paths(operation: dict[str, Any] | None) -> list[str]:
     paths = (operation or {}).get("paths")
     if paths is None:
@@ -508,16 +547,16 @@ def _restore_paths(operation: dict[str, Any] | None) -> list[str]:
     return [path for path in paths if isinstance(path, str) and path.strip()]
 
 
-def _restore_strip_components(operation: dict[str, Any] | None) -> Optional[int]:
+def _operation_strip_components(
+    operation: dict[str, Any] | None, job_kind: str
+) -> Optional[int]:
     value = (operation or {}).get("strip_components")
     if value is None:
         return None
     try:
         number = int(value)
     except (TypeError, ValueError) as exc:
-        raise ValueError(
-            "repository.restore strip_components must be an integer"
-        ) from exc
+        raise ValueError(f"{job_kind} strip_components must be an integer") from exc
     return number if number > 0 else None
 
 
@@ -637,7 +676,10 @@ def execute_repository_operation_job(
         finally:
             _remove_temp_file(rclone_config_path)
 
-    if payload.job_kind == "repository.extract_archive_file":
+    if payload.job_kind in {
+        "repository.extract_archive_file",
+        "repository.export_archive_tar",
+    }:
         try:
             return _execute_binary_output_repository_operation(
                 job_id, payload, client, cmd, env, should_cancel=should_cancel

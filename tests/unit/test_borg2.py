@@ -99,6 +99,29 @@ async def test_extract_archive_uses_restore_umask():
 
 
 @pytest.mark.unit
+def test_export_archive_tar_builds_stdout_command():
+    stream = borg2.export_archive_tar(
+        repository="/repo",
+        archive="aid:archive-1",
+        directory_path="/documents/Projects",
+        strip_components=1,
+    )
+
+    assert stream.cmd == [
+        "borg2",
+        "-r",
+        "/repo",
+        "export-tar",
+        "--strip-components",
+        "1",
+        "aid:archive-1",
+        "-",
+        "--",
+        "documents/Projects",
+    ]
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_rcreate_injects_managed_rclone_config_into_process_env(
     monkeypatch, tmp_path

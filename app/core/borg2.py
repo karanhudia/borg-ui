@@ -47,7 +47,7 @@ from typing import Callable, Dict, List, Optional
 import structlog
 
 from app.config import settings
-from app.core.borg_stream import CommandLineStream
+from app.core.borg_stream import CommandByteStream, CommandLineStream
 from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.ssh_utils import public_key_only_ssh_args
 
@@ -708,6 +708,30 @@ class Borg2Interface:
         return await self._run(
             cmd, timeout=settings.backup_timeout, cwd=destination, env=exec_env or None
         )
+
+    def export_archive_tar(
+        self,
+        repository: str,
+        archive: str,
+        directory_path: str,
+        *,
+        passphrase: Optional[str] = None,
+        remote_path: Optional[str] = None,
+        env: Optional[Dict] = None,
+        timeout: int = 3600,
+        strip_components: int = 0,
+    ) -> "CommandByteStream":
+        """Stream one archived directory as an uncompressed tar to stdout."""
+        cmd = [self.borg_cmd, "-r", repository, "export-tar"]
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
+        if strip_components:
+            cmd.extend(["--strip-components", str(strip_components)])
+        cmd.extend([archive, "-", "--", directory_path.strip("/")])
+        exec_env = env.copy() if env else {}
+        if passphrase:
+            exec_env["BORG_PASSPHRASE"] = passphrase
+        return CommandByteStream(cmd, env=self._base_env(exec_env), timeout=timeout)
 
     async def delete_archive(
         self,
