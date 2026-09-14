@@ -324,25 +324,33 @@ export function useJobActions<T extends Job = Job>({
   }
 
   if (actions.viewArchive !== false) {
+    const findArchiveRepo = (job: T) => {
+      const allRepos = repositoriesData?.data?.repositories || repositories || []
+      const repoPath = job.repository_path || job.repository
+      return allRepos.find((r: FullRepository) => r.path === repoPath || r.name === repoPath) as
+        FullRepository | undefined
+    }
+    // A Borg 2 archive is addressed by id (a series repeats names) and the id
+    // comes from the stored archive row, which the sync writes moments after
+    // the backup. Until then the shortcut has nothing valid to open.
+    const awaitingArchiveId = (job: T) => {
+      const repo = findArchiveRepo(job)
+      return !!repo && isV2Repo(repo) && !job.archive_borg_id
+    }
     actionButtons.push({
       icon: <FolderOpen size={18} />,
       label: t('backupJobsTable.actions.viewArchive'),
       onClick: (job) => {
-        if (!job.archive_name) return
-        // Find repository from available data
-        const allRepos = repositoriesData?.data?.repositories || repositories || []
-        const repoPath = job.repository_path || job.repository
-        const repo = allRepos.find(
-          (r: FullRepository) => r.path === repoPath || r.name === repoPath
-        ) as FullRepository | undefined
+        if (!job.archive_name || awaitingArchiveId(job)) return
+        const repo = findArchiveRepo(job)
         if (!repo) {
           toast.error(t('backupJobsTable.toasts.repositoryNotFound'))
           return
         }
         setArchiveView({
           archive: {
-            // The borg id, not the name: a Borg 2 series repeats names and
-            // the client selects by `aid:<id>`. Empty falls back to the name.
+            // The borg id, not the name: the client selects by `aid:<id>`.
+            // Empty only for Borg 1, where the client uses the unique name.
             id: job.archive_borg_id ?? '',
             archive: job.archive_name,
             name: job.archive_name,
@@ -354,11 +362,13 @@ export function useJobActions<T extends Job = Job>({
       },
       color: 'success',
       // the row outlives its archive: the button stays, greyed out, and says why
-      disabled: (job) => !!job.archive_pruned_at,
+      disabled: (job) => !!job.archive_pruned_at || awaitingArchiveId(job),
       tooltip: (job) =>
         job.archive_pruned_at
           ? t('backupJobsTable.actions.viewArchivePruned')
-          : t('backupJobsTable.actions.viewArchive'),
+          : awaitingArchiveId(job)
+            ? t('backupJobsTable.actions.viewArchiveUnindexed')
+            : t('backupJobsTable.actions.viewArchive'),
       show: (job) =>
         !!job.archive_name &&
         (job.type === 'backup' || !job.type) &&

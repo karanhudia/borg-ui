@@ -191,6 +191,12 @@ describe('BackupJobsTable action internals', () => {
             path: '/backup/repo77',
             borg_version: 2,
           },
+          {
+            id: 78,
+            name: 'Repo 78',
+            path: '/backup/repo78',
+            borg_version: 1,
+          },
         ],
       },
     })
@@ -258,6 +264,7 @@ describe('BackupJobsTable action internals', () => {
             status: 'completed',
             started_at: '2026-04-01T10:00:00Z',
             archive_name: 'archive-77',
+            archive_borg_id: 'aaaa7777aaaa7777',
           },
         ]}
         actions={{ viewArchive: true }}
@@ -269,7 +276,7 @@ describe('BackupJobsTable action internals', () => {
 
     await waitFor(() => expect(downloadArchiveFileMock).toHaveBeenCalled())
     const downloadCall = downloadArchiveFileMock.mock.calls[0]
-    expect(downloadCall[1]).toBe('archive-77')
+    expect(downloadCall[1]).toBe('aaaa7777aaaa7777')
     expect(downloadCall[2]).toBe('/srv/notes.txt')
   })
 
@@ -328,9 +335,7 @@ describe('BackupJobsTable action internals', () => {
     expect(downloadArchiveFileMock.mock.calls[0][1]).toBe('bbbb2222bbbb2222')
   })
 
-  it('leaves the archive id empty when the backend has no stored row', async () => {
-    const user = userEvent.setup()
-
+  it('disables the shortcut for a Borg 2 backup whose archive is not indexed yet', async () => {
     renderWithProviders(
       <BackupJobsTable
         jobs={[
@@ -342,6 +347,33 @@ describe('BackupJobsTable action internals', () => {
             status: 'completed',
             started_at: '2026-04-01T10:00:00Z',
             archive_name: 'daily',
+          },
+        ]}
+        actions={{ viewArchive: true }}
+      />
+    )
+
+    const button = await screen.findByRole('button', { name: /view archive/i })
+    await waitFor(() => expect(button).toBeDisabled())
+    expect(button).toHaveAttribute('title', expect.stringMatching(/not indexed yet/i))
+    expect(button).toBeDisabled()
+    expect(screen.queryByTestId('archive-id')).not.toBeInTheDocument()
+  })
+
+  it('opens a Borg 1 archive by name when there is no stored row', async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={[
+          {
+            id: 16,
+            repository: '/backup/repo78',
+            repository_path: '/backup/repo78',
+            type: 'backup',
+            status: 'completed',
+            started_at: '2026-04-01T10:00:00Z',
+            archive_name: 'nightly',
           },
         ]}
         actions={{ viewArchive: true }}

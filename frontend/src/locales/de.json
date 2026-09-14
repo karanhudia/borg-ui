@@ -3288,6 +3288,7 @@
       "viewLogs": "Protokolle anzeigen",
       "viewArchive": "Archiv anzeigen",
       "viewArchivePruned": "Archiv wurde entfernt",
+      "viewArchiveUnindexed": "Archiv noch nicht indiziert, nach der nächsten Synchronisierung erneut versuchen",
       "downloadLogs": "Protokolle herunterladen",
       "errorDetails": "Fehlerdetails",
       "cancel": "Abbrechen",

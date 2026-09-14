@@ -3288,6 +3288,7 @@
       "viewLogs": "Ver registros",
       "viewArchive": "Ver archivo",
       "viewArchivePruned": "Archivo eliminado",
+      "viewArchiveUnindexed": "Archivo aún no indexado, reintenta tras la próxima sincronización",
       "downloadLogs": "Descargar registros",
       "errorDetails": "Detalles del error",
       "cancel": "Cancelar",

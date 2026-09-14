@@ -3288,6 +3288,7 @@
       "viewLogs": "View Logs",
       "viewArchive": "View Archive",
       "viewArchivePruned": "Archive pruned",
+      "viewArchiveUnindexed": "Archive not indexed yet, retry after the next sync",
       "downloadLogs": "Download Logs",
       "errorDetails": "Error Details",
       "cancel": "Cancel",
