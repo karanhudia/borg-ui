@@ -102,6 +102,28 @@ class TestBorgWrapper:
             "home/user/file.txt",
         ]
 
+    def test_export_archive_tar_builds_stdout_command(self):
+        borg = BorgInterface()
+        stream = borg.export_archive_tar(
+            "/repo",
+            "archive-1",
+            "/home/user/Documents",
+            bypass_lock=True,
+            strip_components=2,
+        )
+
+        assert stream.cmd == [
+            "borg",
+            "export-tar",
+            "--bypass-lock",
+            "--strip-components",
+            "2",
+            "/repo::archive-1",
+            "-",
+            "--",
+            "home/user/Documents",
+        ]
+
 
 @pytest.mark.unit
 class TestBorgErrorParsing:

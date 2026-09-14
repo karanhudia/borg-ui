@@ -180,11 +180,11 @@ describe('ArchiveDetail', () => {
     expect(panel).toHaveTextContent('disk full')
   })
 
-  it('shows the archive header and defaults to the Changes tab', async () => {
+  it('shows the archive header and defaults to the Files tab', async () => {
     vi.mocked(archivesAPI.getArchive).mockResolvedValue({ data: archive } as never)
     renderRoute('/archives/7/12')
     expect(await screen.findByText('nas-2026-09-02T02:00')).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /changes/i })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: /files/i })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('labels the Changes tab with the totals the route returns', async () => {
@@ -193,11 +193,19 @@ describe('ArchiveDetail', () => {
     expect(await screen.findByRole('tab', { name: 'Changes (+4 −2 ~3)' })).toBeInTheDocument()
   })
 
-  it('falls back to the Changes tab for a tab the page does not have', async () => {
+  it('falls back to the Files tab for a tab the page does not have', async () => {
     vi.mocked(archivesAPI.getArchive).mockResolvedValue({ data: archive } as never)
     renderRoute('/archives/7/12?tab=unknown')
     expect(await screen.findByText('nas-2026-09-02T02:00')).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /changes/i })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: /files/i })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('lists Files before Changes in the archive navigation', async () => {
+    vi.mocked(archivesAPI.getArchive).mockResolvedValue({ data: archive } as never)
+    renderRoute('/archives/7/12')
+    await screen.findByText('nas-2026-09-02T02:00')
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Files', 'Changes', 'Info'])
   })
 
   it('switches to the Info tab', async () => {
@@ -285,9 +293,9 @@ describe('ArchiveDetail', () => {
           ],
         },
       })
+      fireEvent.click(await screen.findByRole('tab', { name: /changes/i }))
       // The mode panel only renders once the repository has resolved, so it
-      // is the signal that the fallback window has closed. The Changes tab
-      // itself is present from the first paint and would prove nothing.
+      // is the signal that the fallback window has closed.
       expect(await screen.findByText(/archives only/i)).toBeInTheDocument()
       expect(archivesAPI.getChanges).not.toHaveBeenCalled()
     })

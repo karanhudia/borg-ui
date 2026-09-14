@@ -42,6 +42,7 @@ describe('ArchiveContentsDialog', () => {
   const mockHandlers = {
     onClose: vi.fn(),
     onDownloadFile: vi.fn(),
+    onDownloadFolder: vi.fn(),
   }
 
   let mockGetArchiveContents: ReturnType<typeof vi.fn>
@@ -482,6 +483,27 @@ describe('ArchiveContentsDialog', () => {
 
     await waitFor(() =>
       expect(mockHandlers.onDownloadFile).toHaveBeenCalledWith(mockArchive.name, '/file.txt', 512)
+    )
+  })
+
+  it('calls onDownloadFolder from the normal archive viewer', async () => {
+    mockGetArchiveContents.mockResolvedValue({
+      data: { items: [{ name: 'Documents', path: '/Documents', type: 'directory' }] },
+    } as AxiosResponse)
+
+    renderWithProviders(
+      <ArchiveContentsDialog
+        open
+        archive={mockArchive}
+        repository={mockRepository}
+        {...mockHandlers}
+      />
+    )
+
+    await waitFor(() => expect(screen.getByText('Documents')).toBeInTheDocument())
+    fireEvent.click(screen.getByTitle('Download folder'))
+    await waitFor(() =>
+      expect(mockHandlers.onDownloadFolder).toHaveBeenCalledWith(mockArchive.name, '/Documents')
     )
   })
 

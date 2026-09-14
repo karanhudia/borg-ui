@@ -202,6 +202,23 @@ export class BorgApiClient {
     })
   }
 
+  /** Fetch one archived directory as a streamed tar file. */
+  fetchArchiveFolder(
+    archiveId: string,
+    directoryPath: string,
+    options?: { onDownloadProgress?: (event: AxiosProgressEvent) => void }
+  ) {
+    return httpClient.get(`${this.v}/archives/download-folder`, {
+      params: {
+        repository: this.repoId,
+        archive: archiveId,
+        directory_path: directoryPath,
+      },
+      responseType: 'blob',
+      onDownloadProgress: options?.onDownloadProgress,
+    })
+  }
+
   // ── Backup operations ────────────────────────────────────────────────────
 
   runBackup(options: BackupOptions = {}): Promise<AxiosResponse> {

@@ -91,4 +91,25 @@ describe('ArchiveFileDetailsPane', () => {
     expect(onDownload).toHaveBeenCalled()
     expect(onRestore).not.toHaveBeenCalled()
   })
+
+  it('offers a tar download for a selected directory', () => {
+    const onDownloadFolder = vi.fn()
+    renderWithProviders(
+      <ArchiveFileDetailsPane
+        repositoryId={7}
+        selectedPath="home/karan/Documents/Projects"
+        selectedEntry={{
+          name: 'Projects',
+          type: 'directory',
+          path: 'home/karan/Documents/Projects',
+        }}
+        onRestore={vi.fn()}
+        onDownload={vi.fn()}
+        onDownloadFolder={onDownloadFolder}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /download folder/i }))
+    expect(onDownloadFolder).toHaveBeenCalledOnce()
+  })
 })

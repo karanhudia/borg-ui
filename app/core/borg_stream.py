@@ -101,3 +101,33 @@ class CommandLineStream:
         if self._process is not None and self._process.returncode is None:
             self._process.kill()
         await self._finish()
+
+
+class CommandByteStream(CommandLineStream):
+    """Async iterator for binary Borg output such as ``export-tar -``.
+
+    It deliberately shares the process lifecycle and idle/deadline safeguards
+    with line streams, but must not decode or trim the bytes that form a tar.
+    """
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        await self._start()
+        deadline = asyncio.get_running_loop().time() + self.max_duration
+        try:
+            while True:
+                remaining = deadline - asyncio.get_running_loop().time()
+                if remaining <= 0:
+                    raise asyncio.TimeoutError()
+                chunk = await asyncio.wait_for(
+                    self._process.stdout.read(64 * 1024),
+                    timeout=min(self.timeout, remaining),
+                )
+                if not chunk:
+                    break
+                yield chunk
+        except asyncio.TimeoutError:
+            if self._process is not None and self._process.returncode is None:
+                self._process.kill()
+            raise
+        finally:
+            await self._finish()

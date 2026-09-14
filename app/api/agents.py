@@ -392,6 +392,7 @@ def _is_terminal_backup_status(status_value: Optional[str]) -> bool:
 REQUEST_SCOPED_REPOSITORY_JOB_KINDS = frozenset(
     {
         "repository.extract_archive_file",
+        "repository.export_archive_tar",
         "repository.list_archive_contents",
         "repository.list_archives",
         "repository.info",

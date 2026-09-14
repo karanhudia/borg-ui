@@ -33,6 +33,21 @@ function usePendingBrowse() {
   }, [])
 }
 
+function useDirectoryBrowse() {
+  useEffect(() => {
+    const mock = new MockAdapter(httpClient, { onNoMatch: 'passthrough' })
+    mock.onGet(/\/browse\//).reply(200, {
+      items: [
+        { name: 'Documents', path: '/Documents', type: 'directory' },
+        { name: 'readme.txt', path: '/readme.txt', type: 'file', size: 1024 },
+      ],
+    })
+    return () => {
+      mock.restore()
+    }
+  }, [])
+}
+
 const meta = {
   title: 'Components/ArchiveContentsDialog',
   component: ArchiveContentsDialog,
@@ -95,4 +110,21 @@ export const WithFullPageLink: Story = {
     onClose: () => {},
   },
   render: (args) => <AwaitingAgentStory {...args} />,
+}
+
+function DirectoryDownloadStory(args: ComponentProps<typeof ArchiveContentsDialog>) {
+  useDirectoryBrowse()
+  return <ArchiveContentsDialog {...args} />
+}
+
+export const DirectoryDownload: Story = {
+  args: {
+    open: true,
+    archive,
+    repository,
+    onClose: () => {},
+    onDownloadFile: () => {},
+    onDownloadFolder: () => {},
+  },
+  render: (args) => <DirectoryDownloadStory {...args} />,
 }

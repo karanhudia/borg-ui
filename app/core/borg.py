@@ -5,7 +5,7 @@ import os
 import structlog
 from typing import Dict, List
 from app.config import settings
-from app.core.borg_stream import CommandLineStream
+from app.core.borg_stream import CommandByteStream, CommandLineStream
 from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.ssh_utils import public_key_only_ssh_args
 
@@ -656,6 +656,33 @@ class BorgInterface:
         if passphrase:
             exec_env["BORG_PASSPHRASE"] = passphrase
         return CommandLineStream(cmd, env=exec_env, timeout=timeout)
+
+    def export_archive_tar(
+        self,
+        repository: str,
+        archive: str,
+        directory_path: str,
+        *,
+        remote_path: str = None,
+        passphrase: str = None,
+        bypass_lock: bool = False,
+        env: dict = None,
+        timeout: int = 3600,
+        strip_components: int = 0,
+    ) -> "CommandByteStream":
+        """Stream one archived directory as an uncompressed tar to stdout."""
+        cmd = [self.borg_cmd, "export-tar"]
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
+        if bypass_lock:
+            cmd.append("--bypass-lock")
+        if strip_components:
+            cmd.extend(["--strip-components", str(strip_components)])
+        cmd.extend([f"{repository}::{archive}", "-", "--", directory_path.strip("/")])
+        exec_env = self._build_exec_env(env)
+        if passphrase:
+            exec_env["BORG_PASSPHRASE"] = passphrase
+        return CommandByteStream(cmd, env=exec_env, timeout=timeout)
 
     async def extract_archive(
         self,

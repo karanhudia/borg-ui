@@ -907,6 +907,39 @@ class TestV2ArchiveRoutes:
         assert response.status_code == 200
         assert response.content == b"hello borg2"
 
+    def test_download_folder_streams_a_tar_from_borg2(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db)
+
+        class TarStream:
+            return_code = 0
+            stderr = ""
+
+            def __aiter__(self):
+                async def chunks():
+                    yield b"tar-bytes"
+
+                return chunks()
+
+            async def close(self):
+                return None
+
+        with patch(
+            "app.api.v2.archives.borg2.export_archive_tar", return_value=TarStream()
+        ) as export:
+            response = test_client.get(
+                f"/api/v2/archives/download-folder?repository={repo.id}&archive=archive-1&directory_path=/documents/Projects",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        assert response.content == b"tar-bytes"
+        assert response.headers["content-type"].startswith("application/x-tar")
+        assert 'filename="Projects.tar"' in response.headers["content-disposition"]
+        assert export.call_args.kwargs["strip_components"] == 1
+
     def test_download_file_uses_archive_id_selector(
         self, test_client: TestClient, admin_headers, test_db, tmp_path
     ):

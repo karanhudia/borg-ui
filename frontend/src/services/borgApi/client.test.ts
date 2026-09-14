@@ -65,6 +65,20 @@ describe('BorgApiClient', () => {
     })
   })
 
+  it('fetches archive folders as tar blobs for the current backend', async () => {
+    const clientModule = await import('./client')
+    const getMock = vi.spyOn(clientModule.httpClient, 'get').mockResolvedValue({} as never)
+    const { BorgApiClient } = clientModule
+    const client = new BorgApiClient({ id: 9, borg_version: 2 } as never)
+
+    client.fetchArchiveFolder('archive-2', '/srv/Documents')
+
+    expect(getMock).toHaveBeenCalledWith('/v2/archives/download-folder', {
+      params: { repository: 9, archive: 'archive-2', directory_path: '/srv/Documents' },
+      responseType: 'blob',
+    })
+  })
+
   it('uses v1 routes for non-v2 repositories', async () => {
     const clientModule = await import('./client')
     const getMock = vi.spyOn(clientModule.httpClient, 'get').mockResolvedValue({} as never)
