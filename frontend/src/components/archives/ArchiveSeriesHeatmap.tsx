@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next'
 import { addDays, addWeeks, format, max, min, parseISO, startOfWeek, subWeeks } from 'date-fns'
 import HeatmapLegend from './HeatmapLegend'
 import { formatBytes, formatDurationSeconds, parseBackendDate } from '../../utils/dateUtils'
-import type { HeatmapDay, HeatmapResponse, HeatmapSeries } from '../../types/archives'
+import type { HeatmapBand, HeatmapDay, HeatmapResponse } from '../../types/archives'
 
 export interface HeatmapArchiveSummary {
   name: string
@@ -49,9 +49,6 @@ const LABEL_WIDTH = 200
 const WEEKDAY_WIDTH = 18
 const WEEKS_BY_DEFAULT = 52
 const MAX_COUNT_STEP = 4
-// A series with fewer archives than this is folded behind a disclosure so a
-// mis-inferred name (spec 6.6) does not push real series off the screen.
-export const SMALL_SERIES_THRESHOLD = 5
 
 function countScale(count: number): number {
   if (count <= 0) return 0
@@ -89,8 +86,8 @@ function cellSizeFor(containerWidth: number, weeks: number): number {
   return Math.max(MIN_CELL, Math.min(MAX_CELL, Math.floor(available / weeks) - GAP))
 }
 
-function buildWindow(series: HeatmapSeries[], today: Date, cell: number): Window {
-  const dates = series.flatMap((s) => [...s.days.map((d) => d.date), ...s.missed_days])
+function buildWindow(band: HeatmapResponse['repository'], today: Date, cell: number): Window {
+  const dates = [...band.days.map((d) => d.date), ...band.missed_days]
   const earliest = dates.length > 0 ? min(dates.map((d) => parseISO(d))) : today
   const defaultStart = subWeeks(today, WEEKS_BY_DEFAULT - 1)
   const start = startOfWeek(min([earliest, defaultStart]), { weekStartsOn: 1 })
@@ -142,17 +139,25 @@ function MonthAxis({ window }: { window: Window }) {
 function WeekdayColumn({ cell }: { cell: number }) {
   const monday = startOfWeek(new Date(), { weekStartsOn: 1 })
   return (
-    <Box sx={{ width: WEEKDAY_WIDTH, flexShrink: 0 }}>
+    // The same geometry as a grid column, so the letters line up with the
+    // rows they name: gaps between the seven cells, none after the last.
+    <Box
+      sx={{
+        width: WEEKDAY_WIDTH,
+        flexShrink: 0,
+        display: 'grid',
+        gridTemplateRows: `repeat(7, ${cell}px)`,
+        rowGap: `${GAP}px`,
+      }}
+    >
       {[0, 1, 2, 3, 4, 5, 6].map((offset) => (
         <Typography
           key={offset}
           variant="caption"
           sx={{
-            display: 'block',
             height: cell,
             lineHeight: `${cell}px`,
             fontSize: cell >= 14 ? 10 : 8,
-            mb: `${GAP}px`,
             color: 'text.secondary',
             visibility: offset % 2 === 0 ? 'visible' : 'hidden',
           }}
@@ -164,35 +169,43 @@ function WeekdayColumn({ cell }: { cell: number }) {
   )
 }
 
-function SeriesBand({
-  series,
+function Band({
+  id,
+  label,
+  band,
+  missedDays = [],
   window,
   onSelectDay,
   onOpenChooser,
 }: {
-  series: HeatmapSeries
+  // Stable key for the cell test ids; the label is translated, the id is not.
+  id: string
+  label: string
+  band: HeatmapBand
+  missedDays?: string[]
   window: Window
   onSelectDay: (day: HeatmapDay) => void
   onOpenChooser: (anchor: HTMLElement, day: HeatmapDay) => void
 }) {
   const { t } = useTranslation()
   const theme = useTheme()
-  const byDate = useMemo(() => new Map(series.days.map((d) => [d.date, d])), [series.days])
-  const missed = useMemo(() => new Set(series.missed_days), [series.missed_days])
+  const byDate = useMemo(() => new Map(band.days.map((d) => [d.date, d])), [band.days])
+  const missed = useMemo(() => new Set(missedDays), [missedDays])
   const todayIso = isoDay(window.today)
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+    // The label names the whole band, so it sits against the middle of the
+    // seven weekday rows rather than the top one.
+    <Box sx={{ display: 'flex', alignItems: 'center' }}>
       <Typography
         variant="body2"
-        title={series.series}
+        title={label}
         sx={{
           width: LABEL_WIDTH,
           flexShrink: 0,
           pr: 2,
           fontWeight: 600,
           lineHeight: 1.3,
-          mt: '-2px',
           display: '-webkit-box',
           WebkitLineClamp: 3,
           WebkitBoxOrient: 'vertical',
@@ -204,7 +217,7 @@ function SeriesBand({
           zIndex: 1,
         }}
       >
-        {series.series}
+        {label}
       </Typography>
       <WeekdayColumn cell={window.cell} />
       <Box
@@ -234,7 +247,7 @@ function SeriesBand({
           const cell = (
             <Box
               key={iso}
-              data-testid={`heatmap-day-${series.series}-${iso}`}
+              data-testid={`heatmap-day-${id}-${iso}`}
               data-missed={isMissed}
               data-count={count}
               role={hasArchives ? 'button' : undefined}
@@ -320,21 +333,21 @@ export default function ArchiveSeriesHeatmap({
 }: ArchiveSeriesHeatmapProps) {
   const { t } = useTranslation()
   const [chooser, setChooser] = useState<Chooser | null>(null)
-  const missedTotal = data.series.reduce((sum, s) => sum + s.missed_days.length, 0)
-  const [showSmall, setShowSmall] = useState(false)
+  const missedTotal = data.repository.missed_days.length
+  const [showSeries, setShowSeries] = useState(false)
   const [scrollRef, containerWidth] = useContainerWidth()
   const today = useMemo(() => new Date(), [])
-  const weeks = useMemo(() => buildWindow(data.series, today, MIN_CELL).weeks, [data.series, today])
+  const weeks = useMemo(
+    () => buildWindow(data.repository, today, MIN_CELL).weeks,
+    [data.repository, today]
+  )
   const cell = cellSizeFor(containerWidth, weeks)
-  const window = useMemo(() => buildWindow(data.series, today, cell), [data.series, today, cell])
-
-  const archiveCount = (series: HeatmapSeries) =>
-    series.days.reduce((sum, day) => sum + day.count, 0)
-  const large = data.series.filter((s) => archiveCount(s) >= SMALL_SERIES_THRESHOLD)
-  const small = data.series.filter((s) => archiveCount(s) < SMALL_SERIES_THRESHOLD)
-  // With nothing above the threshold there is nothing to fold behind.
-  const visible = large.length === 0 ? data.series : showSmall ? [...large, ...small] : large
-  const folded = large.length === 0 ? [] : small
+  const window = useMemo(
+    () => buildWindow(data.repository, today, cell),
+    [data.repository, today, cell]
+  )
+  // One series is the repository under another name; there is nothing to split.
+  const splittable = data.series.length > 1
 
   useEffect(() => {
     // The newest week sits at the right edge, which is where the eye
@@ -361,15 +374,27 @@ export default function ArchiveSeriesHeatmap({
           <MonthAxis window={window} />
         </Box>
         <Stack spacing={1.5}>
-          {visible.map((series) => (
-            <SeriesBand
-              key={series.series}
-              series={series}
-              window={window}
-              onSelectDay={onSelectDay}
-              onOpenChooser={(anchor, day) => setChooser({ anchor, day })}
-            />
-          ))}
+          <Band
+            id="repository"
+            label={t('archives.heatmap.allArchives', { count: data.repository.count })}
+            band={data.repository}
+            missedDays={data.repository.missed_days}
+            window={window}
+            onSelectDay={onSelectDay}
+            onOpenChooser={(anchor, day) => setChooser({ anchor, day })}
+          />
+          {showSeries &&
+            data.series.map((series) => (
+              <Band
+                key={series.series}
+                id={series.series}
+                label={series.series}
+                band={series}
+                window={window}
+                onSelectDay={onSelectDay}
+                onOpenChooser={(anchor, day) => setChooser({ anchor, day })}
+              />
+            ))}
         </Stack>
       </Box>
       <Menu open={chooser != null} anchorEl={chooser?.anchor} onClose={() => setChooser(null)}>
@@ -410,21 +435,25 @@ export default function ArchiveSeriesHeatmap({
           )
         })}
       </Menu>
-      {folded.length > 0 && (
+      {splittable && (
         <Box>
-          <Button size="small" variant="text" onClick={() => setShowSmall((value) => !value)}>
-            {showSmall
-              ? t('archives.heatmap.hideSmaller')
-              : t('archives.heatmap.showSmaller', { count: folded.length })}
+          <Button size="small" variant="text" onClick={() => setShowSeries((value) => !value)}>
+            {showSeries
+              ? t('archives.heatmap.hideSeries')
+              : t('archives.heatmap.showSeries', { count: data.series.length })}
           </Button>
-          {showSmall && (
+          {showSeries && (
             <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
-              {t('archives.heatmap.smallerNote', { count: SMALL_SERIES_THRESHOLD })}
+              {t('archives.heatmap.seriesNote')}
             </Typography>
           )}
         </Box>
       )}
-      <HeatmapLegend flagsAvailable={data.flags_available} missedTotal={missedTotal} />
+      <HeatmapLegend
+        flagsAvailable={data.flags_available}
+        missedTotal={missedTotal}
+        cadenceKnown={data.cadence_known}
+      />
     </Stack>
   )
 }

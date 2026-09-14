@@ -1,7 +1,7 @@
 """Database-backed archive routes (spec section 9.2): list, detail,
 heatmap, status, rebuild, and (Pro) changes, history, search."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -43,8 +43,11 @@ from app.services.operations.index_mode import filter_kinds
 from app.services.operations.index_mode import mode_of as index_mode_of
 from app.services.operations.reconcile import RECONCILE_CHAIN, enqueue_reconcile_run
 from app.services.operations.repository_status import repository_status
-from app.services.operations.series import cron_for_repository
-from app.services.operations.vocab import PRIORITY_RECONCILE
+from app.services.operations.series import (
+    crons_for_repository,
+    retention_days_for_repository,
+)
+from app.services.operations.vocab import PRIORITY_RECONCILE, SUCCESS_STATUSES
 
 router = APIRouter()
 
@@ -141,6 +144,27 @@ def _naive_utc(value: Optional[datetime]) -> Optional[datetime]:
     return value.astimezone(timezone.utc).replace(tzinfo=None)
 
 
+def completed_backup_days(
+    db: Session, repository: Repository, since: Optional[datetime], until: datetime
+) -> set[date]:
+    """Days with a completed backup operation on this repository.
+
+    Run evidence for the missed-run rule: the archive of such a run may have
+    been pruned since (#966 keeps the row and marks `archive_pruned_at`), and
+    a day that provably ran is not a missed day (issue #943).
+    """
+    ran_at = func.coalesce(Operation.started_at, Operation.created_at)
+    q = db.query(ran_at).filter(
+        Operation.repository_id == repository.id,
+        Operation.kind == "backup",
+        Operation.status.in_(tuple(SUCCESS_STATUSES)),
+        ran_at <= until,
+    )
+    if since is not None:
+        q = q.filter(ran_at >= since)
+    return {value.date() for (value,) in q.all() if value is not None}
+
+
 def _archives_query(db: Session, repository: Repository, series, since, until):
     q = db.query(Archive).filter(Archive.repository_id == repository.id)
     if series:
@@ -200,24 +224,39 @@ async def archives_heatmap(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """The archive index drawn as a calendar.
+
+    One band for the repository holding every archive the index has, the same
+    set and the same window the list shows, plus the same archives grouped by
+    series for readers who want the split. Series inference is a naming
+    heuristic (spec 6.6) and must never decide whether an archive is visible
+    (issue #943), so the window has no default either: what the list shows,
+    the heatmap shows.
+    """
     repository = _repo(db, current_user, repo_id)
     until = _naive_utc(until) or utc_now().replace(tzinfo=None)
-    since = _naive_utc(since) or until - timedelta(days=365)
+    since = _naive_utc(since)
     pro = history_enabled(db)
     rows = (
         _archives_query(db, repository, None, since, until)
-        .order_by(Archive.series.asc(), Archive.start.asc())
+        .order_by(Archive.start.asc(), Archive.id.asc())
         .all()
     )
-    cron_expression, timezone_name = cron_for_repository(db, repository)
+    crons = crons_for_repository(db, repository)
     by_series: dict[str, list[Archive]] = {}
     for a in rows:
         by_series.setdefault(a.series, []).append(a)
-    out = []
-    for name, archives in by_series.items():
-        flags = (
-            anomalies.series_flags(archives) if pro else {a.id: [] for a in archives}
-        )
+    # Outliers stay scoped to the series even though the days are not: a
+    # repository holding a 3 GB documents series and a 200 GB media series
+    # would otherwise compare each archive with whatever ran before it.
+    flags: dict[int, list[str]] = {}
+    if pro:
+        for archives in by_series.values():
+            flags.update(anomalies.series_flags(archives))
+    else:
+        flags = {a.id: [] for a in rows}
+
+    def band(name: Optional[str], archives: list[Archive]) -> dict:
         days: dict[str, dict] = {}
         for a in archives:
             key = a.start.date().isoformat()
@@ -239,25 +278,38 @@ async def archives_heatmap(
             for flag in flags.get(a.id, []):
                 if flag not in day["anomalies"]:
                     day["anomalies"].append(flag)
-        missed = anomalies.missed_run_days(
-            [a.start for a in archives],
-            until=until,
-            cron_expression=cron_expression,
-            timezone_name=timezone_name,
-        )
-        out.append(
-            {
-                "series": name,
-                "days": list(days.values()),
-                "missed_days": sorted(d.isoformat() for d in missed),
-                "first": archives[0].start,
-                "last": archives[-1].start,
-            }
-        )
+        out = {
+            "days": list(days.values()),
+            "first": archives[0].start if archives else None,
+            "last": archives[-1].start if archives else None,
+            "count": len(archives),
+        }
+        if name is not None:
+            out["series"] = name
+        return out
+
+    retention_days = retention_days_for_repository(db, repository)
+    retention_since = (
+        (until - timedelta(days=retention_days)).date()
+        if retention_days is not None
+        else None
+    )
+    missed = anomalies.missed_run_days(
+        [a.start for a in rows],
+        until=until,
+        crons=crons,
+        run_days=completed_backup_days(db, repository, since, until),
+        retention_since=retention_since,
+    )
+    repository_band = band(None, rows)
+    repository_band["missed_days"] = sorted(d.isoformat() for d in missed)
     return {
         "since": since,
         "until": until,
-        "series": out,
+        "repository": repository_band,
+        "series": [band(name, archives) for name, archives in by_series.items()],
+        "cadence_known": bool(crons),
+        "retention_since": retention_since.isoformat() if retention_since else None,
         "flags_available": {
             "missed_run": True,
             "size_outlier": pro,

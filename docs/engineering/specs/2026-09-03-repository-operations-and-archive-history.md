@@ -66,7 +66,8 @@ a live Borg call, and only the archive count and newest timestamp are stored.
   the user restore any version.
 - A user searches for a filename and finds it across all archives, including
   files that no longer exist anywhere except in old backups.
-- Archives are shown per series as a calendar heatmap. Gaps and size
+- Archives are shown as a calendar heatmap of the repository, optionally
+  grouped by series. Gaps and size
   anomalies are visible at a glance.
 - Activity remains the ledger of what happened. A separate Background work
   tab shows what Borg UI is doing now.
@@ -730,7 +731,7 @@ list responses when `collapse_runs=true`).
 | POST | `/repositories/{id}/rebuild` | Body `{"from": "stats" \| "archives" \| "history"}`. Invalidates that stage and later ones, enqueues a manual run at priority 20. `history` sets all archives `pending` and deletes their change rows. |
 | GET | `/repositories/{id}/status` | Repository status per category from repository evidence: one cell per applicable category with status, `completed_at`, `age_seconds`, `threshold_days`, `overdue`, `running` and `source`; evidence precedence and overdue rules in section 10.2. Not polled: the card reads `last_prune` and `last_index` from the repositories list payload, computed once per page from the same evidence. |
 | GET | `/repositories/{id}/archives` | From `archives`. Query: `series`, `since`, `until`. Includes `sync_state` (`fresh`, `syncing`, `stale`, `never`). |
-| GET | `/repositories/{id}/archives/heatmap` | Per series, per day: count, total deduplicated size, anomaly flags. |
+| GET | `/repositories/{id}/archives/heatmap` | Per day: count, total deduplicated size, anomaly flags. One `repository` band holding every archive in the window (the same set the list shows, no default window) with its `missed_days`, plus the same days grouped by `series`. Series inference never decides visibility. |
 | GET | `/repositories/{id}/archives/{archive_id}` | One archive with history state. |
 | GET | `/repositories/{id}/archives/{archive_id}/changes` | Query: `compare_to` (archive id, default predecessor), `path_prefix`, `change[]`, `limit`, `cursor`. Folds intermediate deltas when `compare_to` is not the predecessor. |
 | GET | `/repositories/{id}/history` | Query: `path`. Returns every archive that touched the path with change and sizes, plus computed "present" ranges. |
@@ -765,11 +766,15 @@ debounced list refetch per burst of finished index or prune operations,
 Computed in `app/services/operations/anomalies.py`, returned by the heatmap
 route. Pure functions with unit tests.
 
-- `missed_run`: a day inside a series' expected cadence with no archive.
-  Cadence is the schedule or plan cron when known, else the median gap of
-  the last 14 archives.
-- `size_outlier`: `deduplicated_size` or `nfiles` below 60 percent of the
-  median of the previous 7 archives in the series.
+- `missed_run`: a day the repository's cadence expected, with no archive,
+  no completed backup operation on record, and inside the retention window
+  of the prune settings that target it. Cadence comes from a schedule or
+  plan cron; without one nothing is flagged, since an absent archive is
+  prune evidence as much as failure evidence (issue #943).
+- `size_outlier`: `original_size` or `nfiles` below 60 percent of the
+  median of the previous 7 archives. Deliberately not `deduplicated_size`:
+  a retention keep absorbs the unique data of every archive pruned around
+  it, so its median makes healthy archives read as unusually small.
 - `duration_outlier`: `duration_seconds` above 250 percent of the median of
   the previous 7.
 - `overdue_<category>`: last terminal operation in a category older than

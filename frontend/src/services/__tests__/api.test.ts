@@ -137,7 +137,10 @@ describe('archivesAPI stored-archive methods', () => {
     mock.onGet('/repositories/7/archives/heatmap').reply(200, {
       since: null,
       until: null,
+      repository: { days: [], missed_days: [], first: null, last: null, count: 0 },
       series: [],
+      cadence_known: true,
+      retention_since: null,
       flags_available: { missed_run: true, size_outlier: true, duration_outlier: true },
     })
     await archivesApiClient.getHeatmap(7)

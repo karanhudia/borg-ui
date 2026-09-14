@@ -1051,7 +1051,8 @@
     "toasts": {
       "deleteFailed": "Failed to delete archive",
       "restoreFailed": "Failed to start restore",
-      "notSelected": "Repository or archive not selected"
+      "notSelected": "Repository or archive not selected",
+      "archiveUnavailable": "That archive is not in the list yet. Refresh and try again."
     },
     "sync": {
       "fresh": "Synced {{ago}}",
@@ -1071,30 +1072,35 @@
       "none": "No archives",
       "archives_one": "{{count}} archive",
       "archives_other": "{{count}} archives",
-      "missed": "Scheduled run did not happen",
+      "missed": "Expected run, no archive and no run on record",
       "sizeOutlier": "Unusually small",
       "durationOutlier": "Unusually slow",
       "legendLess": "Less",
       "legendMore": "More",
       "tooltip": "{{count}} on {{date}} · {{size}} · {{duration}}",
-      "showSmaller": "Show {{count}} smaller series",
-      "hideSmaller": "Hide smaller series",
-      "smallerNote": "Series with fewer than {{count}} archives are folded here. Names that differ only by case or punctuation are the same backup under different names.",
-      "missedTotal_one": "{{count}} missed day",
-      "missedTotal_other": "{{count}} missed days",
+      "missedTotal_one": "{{count}} day",
+      "missedTotal_other": "{{count}} days",
       "pickArchive": "{{count}} archives on {{date}}",
-      "legendMissed": "Missed run"
+      "legendMissed": "Nothing on record",
+      "allArchives_one": "All archives ({{count}})",
+      "allArchives_other": "All archives ({{count}})",
+      "showSeries": "Group by series ({{count}})",
+      "hideSeries": "Hide series",
+      "seriesNote": "Series are inferred from archive names, so a naming change can split one backup line in two. Every archive is in the band above regardless.",
+      "cadenceUnknown": "no schedule known, so no day is judged"
     },
     "search": {
       "placeholder": "Search files in this repository",
       "title": "Search results",
-      "columnPath": "Path",
-      "columnLastSeen": "Last seen",
-      "columnPresent": "Present",
       "present": "In latest",
       "absent": "Not in latest",
       "empty": "No matching files",
-      "truncated": "Showing the first {{count}} matches"
+      "truncated": "Showing the first {{count}} matches",
+      "lastSeen": "Last seen {{date}}",
+      "inArchives_one": "in {{count}} archive",
+      "inArchives_other": "in {{count}} archives",
+      "selectPrompt": "Pick a file to see the archives it was backed up in.",
+      "typeToSearch": "Type a file name to search this repository."
     },
     "detail": {
       "tabChanges": "Changes",

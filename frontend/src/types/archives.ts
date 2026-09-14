@@ -57,18 +57,26 @@ export interface HeatmapDay {
   anomalies: string[]
 }
 
-export interface HeatmapSeries {
-  series: string
+export interface HeatmapBand {
   days: HeatmapDay[]
-  missed_days: string[]
   first: string | null
   last: string | null
+  count: number
+}
+
+export interface HeatmapSeries extends HeatmapBand {
+  series: string
 }
 
 export interface HeatmapResponse {
   since: string | null
   until: string | null
+  // Every archive the index holds, the same set the list shows. Series are a
+  // grouping of these, never a filter on them.
+  repository: HeatmapBand & { missed_days: string[] }
   series: HeatmapSeries[]
+  cadence_known: boolean
+  retention_since: string | null
   flags_available: {
     missed_run: boolean
     size_outlier: boolean

@@ -6,12 +6,19 @@ import type { HeatmapResponse } from '../../types/archives'
 interface HeatmapLegendProps {
   flagsAvailable: HeatmapResponse['flags_available']
   missedTotal?: number
+  // Without a schedule or plan cron the cadence is unknown, so no day is
+  // judged and "0 missed days" would be a claim the data cannot make.
+  cadenceKnown?: boolean
 }
 
 const SCALE_STEPS = [0.25, 0.425, 0.6, 0.775, 0.95]
 const SWATCH = 10
 
-export default function HeatmapLegend({ flagsAvailable, missedTotal }: HeatmapLegendProps) {
+export default function HeatmapLegend({
+  flagsAvailable,
+  missedTotal,
+  cadenceKnown = true,
+}: HeatmapLegendProps) {
   const { t } = useTranslation()
   const theme = useTheme()
 
@@ -68,8 +75,12 @@ export default function HeatmapLegend({ flagsAvailable, missedTotal }: HeatmapLe
           {swatch(sample)}
           <Typography variant="caption" color="text.secondary">
             {key === 'missed' ? t('archives.heatmap.legendMissed') : t(`archives.heatmap.${key}`)}
-            {key === 'missed' && available && missedTotal != null
-              ? ` (${t('archives.heatmap.missedTotal', { count: missedTotal })})`
+            {key === 'missed' && available
+              ? cadenceKnown
+                ? missedTotal != null
+                  ? ` (${t('archives.heatmap.missedTotal', { count: missedTotal })})`
+                  : ''
+                : ` (${t('archives.heatmap.cadenceUnknown')})`
               : ''}
           </Typography>
           {!available && (

@@ -111,6 +111,12 @@ const Archives: React.FC = () => {
 
   // Restore functionality
   const [restoreArchive, setRestoreArchive] = useState<Archive | null>(null)
+  // A restore started from a search hit already knows its file, so the wizard
+  // opens on the destination step with that path selected.
+  const [restorePreselection, setRestorePreselection] = useState<{
+    paths: string[]
+    items: RestorePathMetadata[]
+  } | null>(null)
   const [showRestoreWizard, setShowRestoreWizard] = useState<boolean>(false)
 
   const [viewMode, setViewMode] = useState<ArchivesViewMode>(getInitialViewMode)
@@ -444,6 +450,7 @@ const Archives: React.FC = () => {
   const handleRestoreArchiveClick = React.useCallback(
     (archive: Archive) => {
       setRestoreArchive(archive)
+      setRestorePreselection(null)
       setShowRestoreWizard(true)
       trackArchive(EventAction.VIEW, selectedRepository || undefined, {
         surface: 'restore_wizard',
@@ -453,6 +460,24 @@ const Archives: React.FC = () => {
     },
     [selectedRepository, trackArchive, EventAction]
   )
+
+  // "Restore this" on a file the search found: the version lives in one
+  // archive of the repository, so the wizard opens on that archive with the
+  // path already selected rather than at the root of the archive page.
+  const handleRestoreSearchHit = (archiveId: number, path: string) => {
+    // The stored list is where the archive's borg id comes from, and Borg 2
+    // needs it: a restore keyed on a name matches every archive of the series.
+    // Missing means the list has not arrived or the archive was pruned since
+    // the index recorded it, so say that rather than "nothing selected".
+    const row = storedArchives.find((archive) => archive.id === archiveId)
+    if (!row) {
+      toast.error(t('archives.toasts.archiveUnavailable'))
+      return
+    }
+    setRestoreArchive(archiveRowToArchive(row))
+    setRestorePreselection({ paths: [path], items: [{ path, type: 'file' }] })
+    setShowRestoreWizard(true)
+  }
 
   // Handle restore from wizard
   const handleRestoreFromWizard = (data: RestoreData) => {
@@ -598,6 +623,10 @@ const Archives: React.FC = () => {
     borderRadius: 3,
     border: '1px solid',
     borderColor: isDark ? alpha('#fff', 0.07) : alpha('#000', 0.07),
+    // The card owns its surface. Without it the page background shows through
+    // and any child that needs an opaque backdrop (the heatmap's sticky label
+    // column) paints a paper-coloured rectangle inside the card.
+    bgcolor: 'background.paper',
     overflow: 'hidden',
   }
 
@@ -725,6 +754,7 @@ const Archives: React.FC = () => {
               <ArchiveSearchField
                 repositoryId={selectedRepositoryId}
                 newestArchiveIdBySeries={newestArchiveIdBySeries}
+                onRestorePath={handleRestoreSearchHit}
               />
             </Box>
             <Button
@@ -888,6 +918,8 @@ const Archives: React.FC = () => {
           repository={selectedRepository}
           repositoryType={selectedRepository.repository_type || 'local'}
           onRestore={handleRestoreFromWizard}
+          initialSelectedPaths={restorePreselection?.paths}
+          initialSelectedItems={restorePreselection?.items}
         />
       )}
     </Box>
