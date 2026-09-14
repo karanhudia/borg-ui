@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-09-13T18:43:31.239Z",
+  "generatedAt": "2026-09-14T05:00:57.342Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1048 visual report",
-    "commitSha": "bd1790b7c669",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34775013256"
+    "commitSha": "893528740821",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34807626464"
   },
   "totals": {
-    "baseline": 850,
-    "actual": 852,
-    "compared": 850,
+    "baseline": 852,
+    "actual": 854,
+    "compared": 852,
     "changed": 4,
     "added": 2,
     "removed": 0,
-    "unchanged": 846
+    "unchanged": 848
   },
   "changed": [
     {
@@ -1660,6 +1660,12 @@
     },
     {
       "fileName": "components-repositoryinfodialog--failed-info-recovery.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--failed-info-with-agent-reason--mobile.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--failed-info-with-agent-reason.png"
     },
     {
       "fileName": "components-repositorywipedialog--compact-failure-recovery--mobile.png"
