@@ -124,6 +124,56 @@ async def test_mount_borg_archive_success(mount_service_fixture, mock_db_session
 
 
 @pytest.mark.asyncio
+async def test_mount_borg_archive_uses_unique_path_when_explicit_target_is_occupied(
+    mount_service_fixture, mock_db_session, tmp_path
+):
+    """An occupied explicit target must not displace its existing mount."""
+    repo = Repository(
+        id=1, name="TestRepo", path="/backups/repo", repository_type="local"
+    )
+
+    def query_side_effect(model):
+        query = MagicMock()
+        if model == Repository:
+            query.filter.return_value.first.return_value = repo
+        elif model == SystemSettings:
+            query.first.return_value = SystemSettings(mount_timeout=10)
+        return query
+
+    mock_db_session.query.side_effect = query_side_effect
+    occupied_mount_point = tmp_path / "archive"
+    occupied_mount_point.mkdir()
+    (occupied_mount_point / "existing-mount-content").write_text("mounted")
+
+    mock_process = AsyncMock()
+    mock_process.pid = 12345
+    mock_process.returncode = None
+    mock_process.kill = MagicMock()
+    mount_output = MagicMock()
+    mount_output.__contains__.return_value = True
+
+    with (
+        patch("app.services.mount_service.asyncio.sleep", return_value=None),
+        patch(
+            "app.services.mount_service.asyncio.create_subprocess_exec",
+            return_value=mock_process,
+        ) as mock_exec,
+        patch("app.services.mount_service.subprocess.run") as mock_run,
+    ):
+        mock_run.return_value = MagicMock(returncode=0, stdout=mount_output)
+
+        mounted_path, _ = await mount_service_fixture.mount_borg_archive(
+            repository_id=1, mount_point=str(occupied_mount_point)
+        )
+
+    assert mounted_path.startswith(f"{occupied_mount_point}_")
+    assert occupied_mount_point.is_dir()
+    assert (occupied_mount_point / "existing-mount-content").exists()
+    assert all(call.args[0][0] != "fusermount" for call in mock_run.call_args_list)
+    assert mounted_path in mock_exec.call_args.args
+
+
+@pytest.mark.asyncio
 async def test_mount_borg_archive_uses_borg2_binary_for_v2_repo(
     mount_service_fixture, mock_db_session
 ):

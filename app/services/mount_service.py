@@ -1008,21 +1008,16 @@ class MountService:
                     # Absolute path provided - validate it
                     self._validate_mount_point(mount_point)
 
-                # If directory exists and is not empty, it's likely stale - clean it first
+                # Reuse empty directories, but never displace an existing mount (or
+                # obscure user data) at an explicit target. Match the auto-path
+                # behavior by allocating a unique sibling directory instead.
                 if os.path.exists(mount_point):
                     if os.path.isdir(mount_point) and not os.listdir(mount_point):
                         # Empty directory, reuse it
                         pass
-                    elif os.path.isdir(mount_point):
-                        # Directory exists with content - might be old mount, try to unmount
-                        try:
-                            subprocess.run(
-                                ["fusermount", "-uz", mount_point],
-                                capture_output=True,
-                                timeout=5,
-                            )
-                        except:
-                            pass
+                    else:
+                        mount_point = f"{mount_point}_{uuid.uuid4().hex[:8]}"
+                        os.makedirs(mount_point, exist_ok=True)
                 else:
                     os.makedirs(mount_point, exist_ok=True)
             else:
