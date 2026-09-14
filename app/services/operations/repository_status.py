@@ -672,6 +672,10 @@ class StorageSummary:
     measured_at: Optional[datetime] = None
     last_modified: Optional[datetime] = None
     archives_consistent: Optional[bool] = None
+    # whether a listing has ever completed for the repository: tells a
+    # withheld figure that will catch up from one nothing has produced,
+    # and a settled empty repository from an unlisted one; on every route
+    archives_listed: Optional[bool] = None
     original_size: Optional[int] = None
     compressed_size: Optional[int] = None
     deduplicated_size: Optional[int] = None
@@ -849,9 +853,11 @@ def storage_summaries(
         sums = _archive_sums(db, current)
         files = _latest_archive_files(db, current)
         compacts = _latest_compact_stats(db, ids)
-        listed = _listed_repositories(db, ids)
     else:
-        sums, files, compacts, listed = {}, {}, {}, set()
+        sums, files, compacts = {}, {}, {}
+    # on every route: the card reads it to tell a settled, empty repository
+    # (listed, 0 archives) from one no listing has reached yet
+    listed = _listed_repositories(db, ids)
     result: dict[int, StorageSummary] = {}
     for repository in repos:
         count, filled_original, original, filled_compressed, compressed = sums.get(
@@ -882,6 +888,7 @@ def storage_summaries(
             measured_at=repository.total_size_measured_at,
             last_modified=repository.borg_last_modified,
             archives_consistent=consistent,
+            archives_listed=repository.id in listed,
             # a consistent, empty repository has a measured original size
             # of 0 (every archive pruned), which is not "not measured yet"
             original_size=(

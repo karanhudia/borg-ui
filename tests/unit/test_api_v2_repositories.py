@@ -674,10 +674,6 @@ class TestV2RepositoryRoutes:
                 "list_archives",
                 side_effect=fake_list_archives,
             ),
-            patch(
-                "app.api.v2.repositories.calculate_path_size_bytes",
-                new=AsyncMock(return_value=0),
-            ),
         ):
             archives_result, info_result = await asyncio.gather(
                 repositories_v2_api.list_archives(
@@ -871,9 +867,13 @@ class TestV2RepositoryRoutes:
         assert response.status_code == 500
         assert response.json()["detail"]["key"] == "backend.errors.repo.infoFailed"
 
-    def test_get_repository_info_merges_rinfo_and_disk_usage(
+    def test_get_repository_info_merges_rinfo_and_measures_nothing(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        """The route merges repository and encryption metadata from rinfo and
+        runs no disk measurement of its own: the size is the stored one on
+        the repository response (#981), so the live info carries no
+        `rinfo_stats`."""
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, path="/tmp/v2-info-repo")
 
@@ -903,7 +903,7 @@ class TestV2RepositoryRoutes:
                 ),
             ) as mock_rinfo:
                 with patch(
-                    "app.api.v2.repositories.calculate_path_size_bytes",
+                    "app.utils.fs.calculate_path_size_bytes",
                     new=AsyncMock(return_value=12345),
                 ) as mock_size:
                     response = test_client.get(
@@ -914,10 +914,10 @@ class TestV2RepositoryRoutes:
         info = response.json()["info"]
         assert info["repository"] == {"id": 9}
         assert info["encryption"] == {"mode": "repokey-aes-ocb"}
-        assert info["rinfo_stats"] == {"unique_csize": 12345, "unique_size": 12345}
+        assert "rinfo_stats" not in info
         mock_info.assert_awaited_once()
         mock_rinfo.assert_awaited_once()
-        mock_size.assert_awaited_once_with([repo.path], timeout=30)
+        mock_size.assert_not_awaited()
 
     def test_get_repository_info_syncs_archive_stats_to_the_row(
         self, test_client: TestClient, admin_headers, test_db

@@ -33,7 +33,6 @@ from app.services.repository_executor import (
     wait_for_agent_repository_operation_job,
 )
 from app.services.v2.repository_service import repository_v2_service
-from app.utils.fs import calculate_path_size_bytes
 from app.utils.borg_env import effective_repository_remote_path, repository_borg_env
 from app.utils.archive_job_metadata import enrich_archives_with_backup_metadata
 from app.utils.repository_paths import build_ssh_repository_path
@@ -603,9 +602,10 @@ async def get_repository_info(
         except json.JSONDecodeError:
             info_data = {"raw": result["stdout"]}
 
-        # borg2 info --json has per-archive original_size but no repo-level disk usage.
-        # borg2 repo-info --json has cache.path only — no cache.stats like borg1.
-        # Pull repository/encryption metadata from rinfo, then compute disk usage separately.
+        # borg2 info --json has per-archive original_size but no repo-level disk
+        # usage, and repo-info --json has cache.path only, no cache.stats like
+        # borg1. Pull repository/encryption metadata from rinfo; the size is the
+        # stored one (`storage` on the repository response), not a live du.
         with repository_borg_env(repo, db) as env:
             rinfo_result = await borg2.rinfo(
                 repository=repo.path,
@@ -621,20 +621,6 @@ async def get_repository_info(
                 if rinfo_data.get("encryption") and not info_data.get("encryption"):
                     info_data["encryption"] = rinfo_data["encryption"]
             except json.JSONDecodeError:
-                pass
-
-        # For local repos compute actual on-disk size via du (borg2 has no JSON equivalent).
-        # Remote repos (SSH/SFTP) get no rinfo_stats — frontend treats missing as unavailable.
-        is_local = repo.path.startswith("/") and not repo.host
-        if is_local:
-            try:
-                disk_bytes = await calculate_path_size_bytes([repo.path], timeout=30)
-                if disk_bytes > 0:
-                    info_data["rinfo_stats"] = {
-                        "unique_csize": disk_bytes,
-                        "unique_size": disk_bytes,
-                    }
-            except Exception:
                 pass
 
         # The card renders the stored columns; sync them from the list just
