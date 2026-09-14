@@ -1118,7 +1118,9 @@ export default function Repositories() {
         repository={viewingInfoRepository}
         repositoryInfo={repositoryInfo?.data?.info || null}
         storage={
-          repositoryDetail?.data ? repositoryDetail.data.storage : viewingInfoRepository?.storage
+          repositoryDetail?.data?.repository
+            ? repositoryDetail.data.repository.storage
+            : viewingInfoRepository?.storage
         }
         isLoading={loadingInfo}
         onClose={() => setViewingInfoRepository(null)}

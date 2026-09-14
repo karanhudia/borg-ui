@@ -569,8 +569,8 @@ const Archives: React.FC = () => {
     navigate(`/archives/${selectedRepositoryId}/${day.archive_ids[0]}`)
   }
 
-  const repositoryStorage = repositoryDetail?.data
-    ? repositoryDetail.data.storage
+  const repositoryStorage = repositoryDetail?.data?.repository
+    ? repositoryDetail.data.repository.storage
     : selectedRepository?.storage
 
   // Get last restore job for selected repository

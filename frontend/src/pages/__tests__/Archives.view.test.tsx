@@ -23,7 +23,9 @@ vi.mock('../../components/RepositorySelectorCard', () => ({
   ),
 }))
 vi.mock('../../components/RepositoryStatsGrid', () => ({
-  default: () => <div data-testid="stats-grid" />,
+  default: ({ storage }: { storage?: { size_bytes?: number | null } | null }) => (
+    <div data-testid="stats-grid" data-size-bytes={storage?.size_bytes ?? 'unknown'} />
+  ),
 }))
 vi.mock('../../components/LastRestoreSection', () => ({ default: () => null }))
 vi.mock('../../components/ArchiveContentsDialog', () => ({ default: () => null }))
@@ -199,6 +201,18 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
     await user.click(screen.getByText('Select Repo'))
 
     expect(await screen.findByTestId('stats-grid')).toBeInTheDocument()
+  })
+
+  it('uses storage from the repository detail response', async () => {
+    vi.mocked(apiModule.repositoriesAPI.getRepository).mockResolvedValue({
+      data: { repository: { storage: { size_bytes: 1_073_741_824 } } },
+    } as never)
+    renderWithProviders(<Archives />, { queryClient })
+    const user = userEvent.setup()
+
+    await user.click(screen.getByText('Select Repo'))
+
+    expect(await screen.findByTestId('stats-grid')).toHaveAttribute('data-size-bytes', '1073741824')
   })
 
   it('renders the heatmap and sync chip by default', async () => {
