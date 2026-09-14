@@ -1,5 +1,6 @@
 import pytest
 import os
+from pathlib import Path
 from unittest.mock import MagicMock, patch, AsyncMock
 from app.services.mount_service import MountService, MountType, MountInfo
 from app.database.models import Repository, SSHConnection, SystemSettings
@@ -163,14 +164,78 @@ async def test_mount_borg_archive_uses_unique_path_when_explicit_target_is_occup
         mock_run.return_value = MagicMock(returncode=0, stdout=mount_output)
 
         mounted_path, _ = await mount_service_fixture.mount_borg_archive(
+            repository_id=1, mount_point=f"{occupied_mount_point}/"
+        )
+
+    assert mounted_path.startswith(f"{occupied_mount_point}_")
+    assert Path(mounted_path).parent == occupied_mount_point.parent
+    assert occupied_mount_point.is_dir()
+    assert (occupied_mount_point / "existing-mount-content").exists()
+    assert all(call.args[0][0] != "fusermount" for call in mock_run.call_args_list)
+    assert mounted_path in mock_exec.call_args.args
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("occupation_source", ["system", "tracked"])
+async def test_mount_borg_archive_uses_unique_path_for_empty_occupied_target(
+    mount_service_fixture, mock_db_session, tmp_path, occupation_source
+):
+    """An empty mount target is only reusable when it is not actively mounted."""
+    repo = Repository(
+        id=1, name="TestRepo", path="/backups/repo", repository_type="local"
+    )
+
+    def query_side_effect(model):
+        query = MagicMock()
+        if model == Repository:
+            query.filter.return_value.first.return_value = repo
+        elif model == SystemSettings:
+            query.first.return_value = SystemSettings(mount_timeout=10)
+        return query
+
+    mock_db_session.query.side_effect = query_side_effect
+    occupied_mount_point = tmp_path / "archive"
+    occupied_mount_point.mkdir()
+    if occupation_source == "tracked":
+        mount_service_fixture.active_mounts["existing"] = MountInfo(
+            mount_id="existing",
+            mount_type=MountType.BORG_ARCHIVE,
+            mount_point=str(occupied_mount_point),
+            source="repo::existing",
+            created_at="2024-01-01",
+        )
+
+    mock_process = AsyncMock()
+    mock_process.pid = 12345
+    mock_process.returncode = None
+    mock_process.kill = MagicMock()
+    mount_output = MagicMock()
+    mount_output.__contains__.return_value = True
+    active_mount_output = (
+        f"fuse on {occupied_mount_point} type fuse"
+        if occupation_source == "system"
+        else ""
+    )
+
+    with (
+        patch("app.services.mount_service.asyncio.sleep", return_value=None),
+        patch(
+            "app.services.mount_service.asyncio.create_subprocess_exec",
+            return_value=mock_process,
+        ),
+        patch("app.services.mount_service.subprocess.run") as mock_run,
+    ):
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=active_mount_output),
+            MagicMock(returncode=0, stdout=mount_output),
+        ]
+
+        mounted_path, _ = await mount_service_fixture.mount_borg_archive(
             repository_id=1, mount_point=str(occupied_mount_point)
         )
 
     assert mounted_path.startswith(f"{occupied_mount_point}_")
     assert occupied_mount_point.is_dir()
-    assert (occupied_mount_point / "existing-mount-content").exists()
-    assert all(call.args[0][0] != "fusermount" for call in mock_run.call_args_list)
-    assert mounted_path in mock_exec.call_args.args
 
 
 @pytest.mark.asyncio
