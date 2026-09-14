@@ -403,6 +403,24 @@ class MountService:
 
         return active_mount_points
 
+    def _is_mount_point_occupied(self, mount_point: str) -> bool:
+        """Return whether a mount target is active in the system or service state."""
+        normalized_mount_point = os.path.normpath(mount_point)
+        active_mount_points = self._get_active_mount_points()
+        if active_mount_points is not None and normalized_mount_point in {
+            os.path.normpath(active_mount_point)
+            for active_mount_point in active_mount_points
+        }:
+            return True
+
+        if os.path.ismount(normalized_mount_point):
+            return True
+
+        return any(
+            os.path.normpath(mount_info.mount_point) == normalized_mount_point
+            for mount_info in self.active_mounts.values()
+        )
+
     def _cleanup_managed_mount_dir(self, mount_point: Optional[str]):
         """Remove an empty directory only when it lives under the managed mount base."""
         if not mount_point:
@@ -1005,24 +1023,24 @@ class MountService:
                 if not mount_point.startswith("/"):
                     mount_point = str(self.mount_base_dir / mount_point)
                 else:
+                    mount_point = os.path.normpath(mount_point)
                     # Absolute path provided - validate it
                     self._validate_mount_point(mount_point)
 
-                # If directory exists and is not empty, it's likely stale - clean it first
+                # Reuse empty directories, but never displace an existing mount (or
+                # obscure user data) at an explicit target. Match the auto-path
+                # behavior by allocating a unique sibling directory instead.
                 if os.path.exists(mount_point):
-                    if os.path.isdir(mount_point) and not os.listdir(mount_point):
+                    if (
+                        os.path.isdir(mount_point)
+                        and not os.listdir(mount_point)
+                        and not self._is_mount_point_occupied(mount_point)
+                    ):
                         # Empty directory, reuse it
                         pass
-                    elif os.path.isdir(mount_point):
-                        # Directory exists with content - might be old mount, try to unmount
-                        try:
-                            subprocess.run(
-                                ["fusermount", "-uz", mount_point],
-                                capture_output=True,
-                                timeout=5,
-                            )
-                        except:
-                            pass
+                    else:
+                        mount_point = f"{mount_point}_{uuid.uuid4().hex[:8]}"
+                        os.makedirs(mount_point, exist_ok=True)
                 else:
                     os.makedirs(mount_point, exist_ok=True)
             else:
