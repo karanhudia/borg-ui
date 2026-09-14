@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-09-13T19:45:06.569Z",
+  "generatedAt": "2026-09-14T05:23:56.535Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1051 visual report",
-    "commitSha": "bd379685141b",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34778143041"
+    "commitSha": "7b4619029e10",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34808316232"
   },
   "totals": {
-    "baseline": 850,
-    "actual": 850,
-    "compared": 848,
-    "changed": 8,
+    "baseline": 852,
+    "actual": 852,
+    "compared": 850,
+    "changed": 12,
     "added": 2,
     "removed": 2,
-    "unchanged": 840
+    "unchanged": 838
   },
   "changed": [
     {
@@ -93,9 +93,9 @@
       "baselinePath": "images/baseline/components-archives-archiveseriesheatmap--empty--mobile.png",
       "actualPath": "images/actual/components-archives-archiveseriesheatmap--empty--mobile.png",
       "diffPath": "images/diff/components-archives-archiveseriesheatmap--empty--mobile.png",
-      "diffPixels": 5586,
+      "diffPixels": 5677,
       "totalPixels": 329160,
-      "diffRatio": 0.016970470288005832,
+      "diffRatio": 0.017246931583424475,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -111,9 +111,9 @@
       "baselinePath": "images/baseline/components-archives-archiveseriesheatmap--empty.png",
       "actualPath": "images/actual/components-archives-archiveseriesheatmap--empty.png",
       "diffPath": "images/diff/components-archives-archiveseriesheatmap--empty.png",
-      "diffPixels": 8704,
+      "diffPixels": 8812,
       "totalPixels": 1024000,
-      "diffRatio": 0.0085,
+      "diffRatio": 0.00860546875,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -150,6 +150,78 @@
       "diffPixels": 189169,
       "totalPixels": 1024000,
       "diffRatio": 0.1847353515625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-archives-heatmaplegend--community--mobile.png",
+      "baselinePath": "images/baseline/components-archives-heatmaplegend--community--mobile.png",
+      "actualPath": "images/actual/components-archives-heatmaplegend--community--mobile.png",
+      "diffPath": "images/diff/components-archives-heatmaplegend--community--mobile.png",
+      "diffPixels": 678,
+      "totalPixels": 329160,
+      "diffRatio": 0.002059788552679548,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-archives-heatmaplegend--community.png",
+      "baselinePath": "images/baseline/components-archives-heatmaplegend--community.png",
+      "actualPath": "images/actual/components-archives-heatmaplegend--community.png",
+      "diffPath": "images/diff/components-archives-heatmaplegend--community.png",
+      "diffPixels": 4331,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0042294921875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-archives-heatmaplegend--pro--mobile.png",
+      "baselinePath": "images/baseline/components-archives-heatmaplegend--pro--mobile.png",
+      "actualPath": "images/actual/components-archives-heatmaplegend--pro--mobile.png",
+      "diffPath": "images/diff/components-archives-heatmaplegend--pro--mobile.png",
+      "diffPixels": 678,
+      "totalPixels": 329160,
+      "diffRatio": 0.002059788552679548,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-archives-heatmaplegend--pro.png",
+      "baselinePath": "images/baseline/components-archives-heatmaplegend--pro.png",
+      "actualPath": "images/actual/components-archives-heatmaplegend--pro.png",
+      "diffPath": "images/diff/components-archives-heatmaplegend--pro.png",
+      "diffPixels": 2497,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0024384765625,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -1059,18 +1131,6 @@
       "fileName": "components-archives-filehistorypanel--unlocked.png"
     },
     {
-      "fileName": "components-archives-heatmaplegend--community--mobile.png"
-    },
-    {
-      "fileName": "components-archives-heatmaplegend--community.png"
-    },
-    {
-      "fileName": "components-archives-heatmaplegend--pro--mobile.png"
-    },
-    {
-      "fileName": "components-archives-heatmaplegend--pro.png"
-    },
-    {
       "fileName": "components-archives-syncstatechip--fresh--mobile.png"
     },
     {
@@ -1723,6 +1783,12 @@
     },
     {
       "fileName": "components-repositoryinfodialog--failed-info-recovery.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--failed-info-with-agent-reason--mobile.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--failed-info-with-agent-reason.png"
     },
     {
       "fileName": "components-repositorywipedialog--compact-failure-recovery--mobile.png"
