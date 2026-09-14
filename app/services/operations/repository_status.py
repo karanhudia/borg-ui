@@ -665,17 +665,24 @@ class StorageSummary:
     rows and `archive_count` disagree, or while no listing has run for the
     repository yet (nothing to be consistent with); `archives_consistent`
     None says they were not computed at all (the list route).
-    `latest_archive_files` is the newest archive's file count, not a sum."""
+    `latest_archive_files` is the newest archive's file count, not a sum;
+    `first_backup_at` and `last_backup_at` span the current archives."""
 
     size_bytes: Optional[int] = None
     size_source: Optional[str] = None
     measured_at: Optional[datetime] = None
     last_modified: Optional[datetime] = None
     archives_consistent: Optional[bool] = None
+    # whether a listing has ever completed for the repository: tells a
+    # withheld figure that will catch up from one nothing has produced,
+    # and a settled empty repository from an unlisted one; on every route
+    archives_listed: Optional[bool] = None
     original_size: Optional[int] = None
     compressed_size: Optional[int] = None
     deduplicated_size: Optional[int] = None
     latest_archive_files: Optional[int] = None
+    first_backup_at: Optional[datetime] = None
+    last_backup_at: Optional[datetime] = None
     compact: Optional[dict] = None
     compact_at: Optional[datetime] = None
 
@@ -721,6 +728,21 @@ def _archive_sums(db: Session, current) -> dict[int, tuple]:
         .all()
     )
     return {row[0]: row[1:] for row in rows}
+
+
+def _archive_span(db: Session, current) -> dict[int, tuple[datetime, datetime]]:
+    """The oldest and the newest `start` among each repository's current
+    archive rows: the span the backups cover."""
+    newest_seen, current = current
+    rows = (
+        db.query(
+            Archive.repository_id, func.min(Archive.start), func.max(Archive.start)
+        )
+        .join(newest_seen, current)
+        .group_by(Archive.repository_id)
+        .all()
+    )
+    return {row[0]: (row[1], row[2]) for row in rows}
 
 
 def _latest_archive_files(db: Session, current) -> dict[int, int]:
@@ -848,10 +870,13 @@ def storage_summaries(
         current = _current_archives(db, ids)
         sums = _archive_sums(db, current)
         files = _latest_archive_files(db, current)
+        spans = _archive_span(db, current)
         compacts = _latest_compact_stats(db, ids)
-        listed = _listed_repositories(db, ids)
     else:
-        sums, files, compacts, listed = {}, {}, {}, set()
+        sums, files, spans, compacts = {}, {}, {}, {}
+    # on every route: the card reads it to tell a settled, empty repository
+    # (listed, 0 archives) from one no listing has reached yet
+    listed = _listed_repositories(db, ids)
     result: dict[int, StorageSummary] = {}
     for repository in repos:
         count, filled_original, original, filled_compressed, compressed = sums.get(
@@ -882,12 +907,20 @@ def storage_summaries(
             measured_at=repository.total_size_measured_at,
             last_modified=repository.borg_last_modified,
             archives_consistent=consistent,
+            archives_listed=repository.id in listed,
             # a consistent, empty repository has a measured original size
             # of 0 (every archive pruned), which is not "not measured yet"
             original_size=(
                 int(original or 0) if consistent and filled_original == count else None
             ),
             latest_archive_files=files.get(repository.id) if consistent else None,
+            # the span reads the rows like the sums do, and waits like them
+            first_backup_at=spans[repository.id][0]
+            if consistent and repository.id in spans
+            else None,
+            last_backup_at=spans[repository.id][1]
+            if consistent and repository.id in spans
+            else None,
             compact=compact[0] if compact else None,
             compact_at=compact[1] if compact else None,
         )

@@ -40,6 +40,7 @@ import {
 import type { PruneForm, Repository } from './repositories-page/types'
 import type { BackupPlan, RepositoryWipeExecuteRequest, RepositoryWipeJob } from '../types'
 import type { OperationItem } from '../types/operations'
+import { SUCCESS_OPERATION_STATUSES } from '../utils/operationStatus'
 
 const EMPTY_REPOSITORIES: Repository[] = []
 const RUNNING_WIPE_STATUSES = new Set(['pending', 'running'])
@@ -48,16 +49,30 @@ const RUNNING_WIPE_STATUSES = new Set(['pending', 'running'])
 // follow-up), completed successfully, since only successful runs move the
 // values. The list is refetched once per burst of such events, and at
 // least every LIST_REFRESH_MAX_WAIT_MS while a burst keeps going.
-const SUCCESS_OPERATION_STATUSES = new Set(['completed', 'completed_with_warnings'])
 const LIST_REFRESH_DEBOUNCE_MS = 2000
 const LIST_REFRESH_MAX_WAIT_MS = 10000
 // Completions spaced wider than the debounce (a reconcile sweep finishing
 // one repository every few seconds) must not each cost a full list load.
 const LIST_REFRESH_MIN_INTERVAL_MS = 10000
+// The open dialog's figures refetch once per burst of index stages, as the
+// Archives header does.
+const STORAGE_REFRESH_DEBOUNCE_MS = 1500
+
+// The index kinds whose pending state the card renders (#1063): the archive
+// count and the last backup read `archive_sync`, the size reads `stats`.
+const CARD_INDEX_KINDS = new Set(['archive_sync', 'stats'])
 
 function movesCardLastRuns(op: OperationItem): boolean {
+  // Index work the card's placeholders read moves the card when it is
+  // queued (the "indexing" placeholder appears) and when it ends, however
+  // it ends (the placeholder clears, the figures land); a stage's start
+  // changes no card value. Every other index kind moves the card's "Last
+  // Index" when it ends well, like any other last run.
+  if (op.category === 'index' && CARD_INDEX_KINDS.has(op.kind)) {
+    return op.status !== 'running'
+  }
+  if (op.category === 'index') return SUCCESS_OPERATION_STATUSES.has(op.status)
   if (!SUCCESS_OPERATION_STATUSES.has(op.status)) return false
-  if (op.category === 'index') return true
   // a prune preview (dry run) removes nothing and moves no value
   return op.kind === 'prune' && !op.params?.dry_run
 }
@@ -210,8 +225,28 @@ export default function Repositories() {
   const listRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const listRefreshBurstStart = useRef<number | null>(null)
   const listRefreshedAt = useRef<number>(0)
+  // one timer per repository: a burst on repository B must not cancel the
+  // refresh repository A's open dialog is waiting for
+  const storageRefreshTimers = useRef(new Map<number, ReturnType<typeof setTimeout>>())
   useOperationEvents(
     (op: OperationItem) => {
+      if (op.category === 'index' && op.repository_id != null) {
+        // the info dialog's storage figures and pending kinds come from
+        // the storage route, which nothing else refreshes while it is
+        // open; every index move counts here, since the pending kinds
+        // name every kind, not only the ones the cards read
+        const repositoryId = op.repository_id
+        const timers = storageRefreshTimers.current
+        const pending = timers.get(repositoryId)
+        if (pending) clearTimeout(pending)
+        timers.set(
+          repositoryId,
+          setTimeout(() => {
+            timers.delete(repositoryId)
+            queryClient.invalidateQueries({ queryKey: ['repository-storage', repositoryId] })
+          }, STORAGE_REFRESH_DEBOUNCE_MS)
+        )
+      }
       if (!movesCardLastRuns(op)) return
       const now = Date.now()
       const refetch = () => {
@@ -240,6 +275,8 @@ export default function Repositories() {
   React.useEffect(
     () => () => {
       if (listRefreshTimer.current) clearTimeout(listRefreshTimer.current)
+      for (const timer of storageRefreshTimers.current.values()) clearTimeout(timer)
+      storageRefreshTimers.current.clear()
     },
     []
   )
@@ -304,14 +341,51 @@ export default function Repositories() {
     retry: false,
   })
 
+  // The dialog's storage statistics read the stored `storage` payload
+  // (#981) from the storage route: the archive sums the list leaves out,
+  // and no live Borg call next to the `/info` above.
+  const { data: viewingRepositoryStorageResponse } = useQuery({
+    queryKey: ['repository-storage', viewingInfoRepository?.id],
+    queryFn: () => repositoriesAPI.getStorage(viewingInfoRepository!.id),
+    enabled: !!viewingInfoRepository,
+    retry: false,
+  })
+  // `viewingInfoRepository` is the list row as it was when the dialog
+  // opened; the dialog reads the row as the list has it now, so the count
+  // and the stand-in columns below move with the list's refetches.
+  const listedRepositories: Repository[] =
+    repositoriesData?.data?.repositories || EMPTY_REPOSITORIES
+  const viewingRepository = viewingInfoRepository
+    ? (listedRepositories.find((r) => r.id === viewingInfoRepository.id) ?? viewingInfoRepository)
+    : null
+  // The list's columns stand in until the storage route answers. Only an
+  // explicit `null` replaces them; a response without the field (an older
+  // server) leaves them in place.
+  const viewingRepositoryStorage =
+    viewingRepositoryStorageResponse?.data?.storage === undefined
+      ? viewingRepository?.storage
+      : viewingRepositoryStorageResponse.data.storage
+  // The pending index kinds come from the storage route, which the
+  // operation events refresh, so the "indexing" state clears while the
+  // dialog stays open.
+  const viewingRepositoryIndexPending: string[] | undefined =
+    viewingRepositoryStorageResponse?.data?.index_pending_kinds ??
+    viewingRepository?.index_pending_kinds
+
   // Fresh info carries the authoritative archive list, and the backend syncs
   // archive_count/last_backup from it — refetch the list so the card catches
   // up with the dialog instead of rendering the stale stored count.
   React.useEffect(() => {
     if (repositoryInfo) {
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
+      // the dialog's figures read the synced columns too
+      if (viewingInfoRepository) {
+        queryClient.invalidateQueries({
+          queryKey: ['repository-storage', viewingInfoRepository.id],
+        })
+      }
     }
-  }, [repositoryInfo, queryClient])
+  }, [repositoryInfo, viewingInfoRepository, queryClient])
 
   // Agent-run info failures carry borg's own reason in detail.message.
   const infoErrorMessage = React.useMemo(() => {
@@ -938,7 +1012,7 @@ export default function Repositories() {
     localStorage.setItem('repos_group', groupBy)
   }, [groupBy])
 
-  const repositories: Repository[] = repositoriesData?.data?.repositories || EMPTY_REPOSITORIES
+  const repositories: Repository[] = listedRepositories
   const repositoriesLoading =
     isLoading || (selectedBackupPlanId !== null && loadingSelectedBackupPlan)
 
@@ -1109,8 +1183,13 @@ export default function Repositories() {
       {/* Repository Info Dialog */}
       <RepositoryInfoDialog
         open={!!viewingInfoRepository}
-        repository={viewingInfoRepository}
+        // the row as the list has it now: the count moves with the index
+        // work the dialog's other figures follow, the snapshot at open
+        // time would not
+        repository={viewingRepository}
         repositoryInfo={repositoryInfo?.data?.info || null}
+        storage={viewingRepositoryStorage}
+        indexPendingKinds={viewingRepositoryIndexPending}
         isLoading={loadingInfo}
         onClose={() => setViewingInfoRepository(null)}
         onRunRecoveryCheck={(repository) => handleCheckRepository(repository as Repository)}

@@ -39,6 +39,7 @@ import { useAnalytics } from '../hooks/useAnalytics'
 import { Repository } from '../types'
 import type { RepoAction } from '../hooks/usePermissions'
 import OperationalCard from './OperationalCard'
+import { archivesMayArrive, repositoryStatItems, stateText } from '../utils/repositoryStats'
 
 interface RepositoryCardProps {
   repository: Repository
@@ -221,21 +222,57 @@ export default function RepositoryCard({
     }
   }, [hasRunningJobs, isInJobsSet, repository.id, onJobCompleted, queryClient])
 
+  // The stored size figures, read the way the archive header and the info
+  // dialog read them (#981), and the post-import "indexing" state (#1063)
+  // for a count or a size the chain has not produced yet.
+  const statItems = repositoryStatItems(t, {
+    storage: repository.storage,
+    // a response without `storage` (an older server) counted a missing
+    // column as 0, as the card always did
+    archiveCount: repository.archive_count ?? (repository.storage === undefined ? 0 : null),
+    indexPendingKinds: repository.index_pending_kinds,
+  })
+  const archivesStat = statItems.find((item) => item.key === 'archives')!
+  const sizeStat = statItems.find((item) => item.key === 'usedOnDisk')!
+  const lastBackupIndexing =
+    !repository.last_backup &&
+    archivesMayArrive(repository.storage, new Set(repository.index_pending_kinds ?? []))
+  // A response without `storage` (a server older than the payload) keeps
+  // the formatted string the card always showed, without a hint that
+  // would call that string "not measured".
+  const legacySize =
+    repository.storage === undefined && sizeStat.state === 'unknown'
+      ? repository.total_size || null
+      : null
+  const sizeValue = legacySize ?? stateText(t, sizeStat)
+
   const keyStats = [
     {
       label: t('repositoryCard.archives'),
-      value: String(repository.archive_count ?? 0),
-      tooltip: '',
+      value: stateText(t, archivesStat),
+      tooltip: archivesStat.hint ?? '',
     },
     {
+      // the card keeps its label; where and when the size was read is
+      // the tooltip's, as the dialog's subtitle says it
       label: t('repositoryCard.totalSize'),
-      value: repository.total_size || 'N/A',
-      tooltip: '',
+      value: sizeValue,
+      tooltip: legacySize
+        ? ''
+        : [sizeStat.subtitle, sizeStat.hint].filter(Boolean).join('. ') || '',
     },
     {
       label: t('repositoryCard.lastBackup'),
-      value: repository.last_backup ? formatDateShort(repository.last_backup) : t('common.never'),
-      tooltip: repository.last_backup ? formatDateTimeFull(repository.last_backup) : '',
+      value: repository.last_backup
+        ? formatDateShort(repository.last_backup)
+        : lastBackupIndexing
+          ? t('repositoryStats.indexing')
+          : t('common.never'),
+      tooltip: repository.last_backup
+        ? formatDateTimeFull(repository.last_backup)
+        : lastBackupIndexing
+          ? t('repositoryStats.indexingArchivesHint')
+          : '',
     },
     {
       label: t('repositoryCard.lastCheck'),
