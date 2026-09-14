@@ -62,7 +62,11 @@ from app.core.security import get_current_user, check_repo_access
 from app.core.borg import BorgInterface
 from app.core.borg_router import BorgRouter
 from app.core.borg_errors import is_lock_error
-from app.core.borg2 import normalize_repo_info_encryption
+from app.core.borg2 import (
+    ENCRYPTION_FLAGS_SINCE_BETA,
+    borg2_speaks_encryption_flags,
+    normalize_repo_info_encryption,
+)
 from app.core.features import (
     FEATURES,
     get_current_plan,
@@ -103,6 +107,7 @@ from app.services.agent_connection_manager import (
     AgentCommandError,
 )
 from app.core.agent_constants import AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS
+from app.core.agent_versions import agent_borg_version_for_major
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.repository_info_sync import sync_archive_stats_from_info
 from app.services.storage_usage import (
@@ -2199,6 +2204,34 @@ def _reject_agent_repository_ssh_target(
         )
 
 
+def _require_agent_borg2(agent: AgentMachine) -> None:
+    """Refuse a Borg 2 repository on an endpoint that cannot run one.
+
+    Both failures are otherwise invisible until the init job reaches the
+    endpoint and dies there: no `borg2` on PATH is "No such file or directory",
+    and a pre-b22 one rejects every encryption mode the server emits. Neither
+    exit code names the real problem, so decide it here, where the answer is
+    already known.
+    """
+    version = agent_borg_version_for_major(agent.borg_versions, 2)
+    if version is None:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.agentBorg2Unavailable"},
+        )
+    if not borg2_speaks_encryption_flags(version):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "key": "backend.errors.repo.agentBorg2TooOld",
+                "params": {
+                    "version": version,
+                    "minimum": f"2.0.0b{ENCRYPTION_FLAGS_SINCE_BETA}",
+                },
+            },
+        )
+
+
 async def _validate_agent_repository_payload(
     repo_data: Union[RepositoryCreate, RepositoryImport], db: Session
 ) -> AgentMachine:
@@ -2208,6 +2241,9 @@ async def _validate_agent_repository_payload(
         execution_target=repo_data.execution_target,
     )
     agent = _require_queueable_agent(repo_data.agent_machine_id, db)
+
+    if _uses_borg2_payload(repo_data):
+        _require_agent_borg2(agent)
 
     encrypted = repo_data.encryption in [
         "repokey",

@@ -678,6 +678,7 @@ class RestoreCheckService:
         from app.services.repository_executor import (
             SUCCESSFUL_AGENT_STATUSES,
             TERMINAL_AGENT_STATUSES,
+            agent_operation_failed_detail,
         )
 
         started_at = time.monotonic()
@@ -697,10 +698,9 @@ class RestoreCheckService:
             if agent_job.status in TERMINAL_AGENT_STATUSES:
                 raise HTTPException(
                     status_code=502,
-                    detail={
-                        "key": "backend.errors.agents.repositoryOperationFailed",
-                        "message": agent_job.error_message or agent_job.status,
-                    },
+                    detail=agent_operation_failed_detail(
+                        agent_job.error_message or agent_job.status
+                    ),
                 )
             if job is not None and agent_job.progress_percent is not None:
                 job.progress = max(15, min(99, int(agent_job.progress_percent)))

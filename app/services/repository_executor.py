@@ -417,24 +417,71 @@ def get_agent_archive_browse_job(
     )
 
 
+# How many of a failed job's last log rows to read for its reason. Borg prints
+# a usage block before the line that says what was actually wrong, and each
+# line arrives as its own row.
+FAILURE_LOG_TAIL = 40
+
+
+def _log_reason_line(rows: list, *, stream: Optional[str]) -> Optional[str]:
+    """The reason line from the job's newest log row on `stream` (any stream
+    when it is None), given `rows` ordered newest first.
+
+    A row's first non-empty line is the reason: borg leads with the human
+    sentence and follows it with a traceback.
+
+    Sequence 0 is the agent's own "Starting <kind>: <command>" preamble, never
+    a reason - it is what the job was about to run, not why it stopped.
+    """
+    for sequence, row_stream, message in rows:
+        if sequence == 0 or (stream is not None and row_stream != stream):
+            continue
+        lines = [line.strip() for line in (message or "").splitlines() if line.strip()]
+        if lines:
+            return lines[0]
+    return None
+
+
 def _agent_job_failure_message(db: Session, agent_job: AgentJob) -> Optional[str]:
     """The agent only reports "exited with code N"; borg's actual reason is in
-    the stderr log. Its first line is the human-readable error, so surface it."""
-    stderr = (
-        db.query(AgentJobLog.message)
-        .filter(
-            AgentJobLog.agent_job_id == agent_job.id, AgentJobLog.stream == "stderr"
-        )
+    the job log.
+
+    Prefer stderr, but fall back to stdout: borg prints an argument error
+    ("invalid choice: ...") on stdout, and reporting only the exit code there
+    leaves the operator with nothing to act on.
+    """
+    rows = (
+        db.query(AgentJobLog.sequence, AgentJobLog.stream, AgentJobLog.message)
+        .filter(AgentJobLog.agent_job_id == agent_job.id)
         .order_by(AgentJobLog.sequence.desc())
-        .first()
+        .limit(FAILURE_LOG_TAIL)
+        .all()
     )
-    first_line = (stderr[0] if stderr else "").strip().splitlines()
-    if not first_line:
+    reason = _log_reason_line(rows, stream="stderr") or _log_reason_line(
+        rows, stream=None
+    )
+    if not reason:
         return agent_job.error_message
-    reason = first_line[0].strip()
     if not agent_job.error_message:
         return reason
     return f"{agent_job.error_message}: {reason}"
+
+
+def agent_operation_failed_detail(reason: Optional[str]) -> dict[str, Any]:
+    """The error detail for a failed agent repository operation.
+
+    The reason belongs in `params`, not in a `message` key: the frontend renders
+    a detail by translating its key with its params and drops every other field,
+    so a `message` never reaches the operator - which is how borg's actual
+    complaint used to surface as a bare "The agent repository operation failed".
+    """
+    reason = (reason or "").strip()
+    if not reason:
+        return {"key": "backend.errors.agents.repositoryOperationFailed"}
+    return {
+        "key": "backend.errors.agents.repositoryOperationFailedWithReason",
+        "params": {"reason": reason},
+    }
 
 
 async def wait_for_agent_repository_operation_job(
@@ -458,10 +505,9 @@ async def wait_for_agent_repository_operation_job(
         if agent_job.status in TERMINAL_AGENT_STATUSES:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail={
-                    "key": "backend.errors.agents.repositoryOperationFailed",
-                    "message": _agent_job_failure_message(db, agent_job),
-                },
+                detail=agent_operation_failed_detail(
+                    _agent_job_failure_message(db, agent_job)
+                ),
             )
         await asyncio.sleep(poll_interval_seconds)
 
