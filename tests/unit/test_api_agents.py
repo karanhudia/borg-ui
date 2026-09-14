@@ -1183,6 +1183,44 @@ class TestAgentJobTransport:
         assert job.status == "failed"
         assert "no client is waiting" in (job.error_message or "")
 
+    def test_heartbeat_fails_stale_diff_job_instead_of_rerunning_it(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        # The diff's consumer is the history index run that registered the
+        # relay channel. Once it stopped waiting, a rerun would stream a
+        # whole diff into the drain for nobody and hold the repository
+        # meanwhile; the index run retries on its own budget.
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        stale_at = datetime.now(timezone.utc) - timedelta(minutes=30)
+        job = self._create_repository_job(
+            test_db,
+            agent,
+            job_kind="repository.diff",
+            operation={"archive": "daily-2", "predecessor": "daily-1"},
+            stale_at=stale_at,
+        )
+
+        response = test_client.post(
+            "/api/agents/heartbeat",
+            json={
+                "agent_id": registered["agent_id"],
+                "agent_version": "0.1.6",
+                "borg_versions": [],
+                "capabilities": ["repository.diff"],
+                "running_job_ids": [],
+            },
+            headers=_agent_headers(registered["agent_token"]),
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(job)
+        assert job.status == "failed"
+        assert "no client is waiting" in (job.error_message or "")
+
     def test_heartbeat_requeues_stale_durable_repository_job(
         self, test_client: TestClient, test_db, admin_headers
     ):
@@ -1274,6 +1312,110 @@ class TestAgentJobTransport:
 
         assert response.status_code == 200
         assert response.json() == {"accepted": False, "size": 0}
+
+    def test_upload_job_artifact_refuses_a_diff_without_draining_it(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        # A listing nobody consumes must not be produced to the end: the
+        # route answers at once instead of draining the body, and the agent
+        # ends borg on the refusal.
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        job = self._create_repository_job(
+            test_db,
+            agent,
+            job_kind="repository.diff",
+            operation={"archive": "b", "predecessor": "a"},
+            stale_at=datetime.now(timezone.utc),
+        )
+
+        response = test_client.post(
+            f"/api/agents/jobs/{job.id}/artifact",
+            content=b'{"path": "orphaned"}\n',
+            headers=_agent_headers(registered["agent_token"]),
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"accepted": False, "size": 0}
+        # The refusal alone may not reach borg in time (a proxy can go on
+        # draining the body): the job is cancelled as well.
+        test_db.refresh(job)
+        assert job.status == "cancel_requested"
+
+    def test_upload_job_artifact_cancels_a_diff_whose_consumer_left_mid_stream(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        # The consumer leaves while chunks are flowing: the relay refuses
+        # the push, the route stops relaying and cancels the job, so the
+        # agent ends borg instead of streaming the rest into the drain.
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        job = self._create_repository_job(
+            test_db,
+            agent,
+            job_kind="repository.diff",
+            operation={"archive": "b", "predecessor": "a"},
+            stale_at=datetime.now(timezone.utc),
+        )
+
+        from app.services.agent_artifact_relay import agent_artifact_relay
+
+        agent_artifact_relay.register(job.id)
+        try:
+            with patch.object(
+                agent_artifact_relay, "push", AsyncMock(return_value=False)
+            ) as push:
+                response = test_client.post(
+                    f"/api/agents/jobs/{job.id}/artifact",
+                    content=b'{"path": "a"}\n',
+                    headers=_agent_headers(registered["agent_token"]),
+                )
+        finally:
+            agent_artifact_relay.unregister(job.id)
+
+        assert response.status_code == 200
+        assert response.json() == {"accepted": False, "size": 14}
+        push.assert_awaited_once()
+        test_db.refresh(job)
+        assert job.status == "cancel_requested"
+
+    def test_upload_job_artifact_reports_an_empty_body_nobody_consumed(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        # An empty body pushes no chunk, so the relay's close is the only
+        # call that can notice the consumer left; its answer is the
+        # response, not the `delivered` the loop never touched.
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        job = _create_agent_job(test_db, agent, status="running")
+
+        from app.services.agent_artifact_relay import agent_artifact_relay
+
+        agent_artifact_relay.register(job.id)
+        try:
+            with patch.object(
+                agent_artifact_relay, "close", AsyncMock(return_value=False)
+            ) as close:
+                response = test_client.post(
+                    f"/api/agents/jobs/{job.id}/artifact",
+                    content=b"",
+                    headers=_agent_headers(registered["agent_token"]),
+                )
+        finally:
+            agent_artifact_relay.unregister(job.id)
+
+        assert response.status_code == 200
+        assert response.json() == {"accepted": False, "size": 0}
+        close.assert_awaited_once_with(job.id, confirm_timeout=None)
 
     def test_agent_cannot_mutate_another_agents_job(
         self, test_client: TestClient, test_db, admin_headers
