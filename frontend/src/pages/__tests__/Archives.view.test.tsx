@@ -54,7 +54,7 @@ vi.mock('../../services/api', () => ({
     deleteArchive: vi.fn(),
     downloadFile: vi.fn(),
   },
-  repositoriesAPI: { getRepositories: vi.fn() },
+  repositoriesAPI: { getRepositories: vi.fn(), getRepository: vi.fn() },
   mountsAPI: { mountBorgArchive: vi.fn() },
   restoreAPI: { getRestoreJobs: vi.fn() },
 }))
@@ -163,6 +163,9 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
     vi.mocked(apiModule.repositoriesAPI.getRepositories).mockResolvedValue({
       data: { repositories: [mockRepository] },
     } as never)
+    vi.mocked(apiModule.repositoriesAPI.getRepository).mockRejectedValue(
+      new Error('storage summary unavailable')
+    )
     vi.mocked(apiModule.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: { jobs: [] },
     } as never)
@@ -187,6 +190,15 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
     await waitFor(() => {
       expect(listStoredMock).toHaveBeenCalledWith(1)
     })
+  })
+
+  it('renders repository statistics as unknown when the storage detail is unavailable', async () => {
+    renderWithProviders(<Archives />, { queryClient })
+    const user = userEvent.setup()
+
+    await user.click(screen.getByText('Select Repo'))
+
+    expect(await screen.findByTestId('stats-grid')).toBeInTheDocument()
   })
 
   it('renders the heatmap and sync chip by default', async () => {

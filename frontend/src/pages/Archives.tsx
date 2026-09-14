@@ -704,41 +704,37 @@ const Archives: React.FC = () => {
       )}
 
       {/* ── Context panel: stats + last restore ── */}
-      {selectedRepositoryId &&
-        (loadingRepoInfo ||
-          repositoryDetailPending ||
-          repositoryStorage !== undefined ||
-          lastRestoreJob) && (
-          <Box sx={{ ...panelSx, mb: 3 }}>
-            {/* Stats */}
-            <Box sx={{ p: 2.5 }}>
-              {loadingRepoInfo || repositoryDetailPending ? (
-                <RepositoryStatsGridSkeleton />
-              ) : repositoryStorage !== undefined ? (
-                <RepositoryStatsGrid
-                  storage={repositoryStorage}
-                  archivesCount={archivesList.length}
-                  borgVersion={selectedRepository?.borg_version}
-                  archivesLoading={loadingArchives || repoInfoPending}
-                />
-              ) : null}
-            </Box>
-            {/* Last Restore, only when there is one to show */}
-            {lastRestoreJob && (
-              <Box
-                sx={{
-                  px: 2.5,
-                  py: 2,
-                  borderTop: '1px solid',
-                  borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.06),
-                  bgcolor: isDark ? alpha('#fff', 0.012) : alpha('#000', 0.01),
-                }}
-              >
-                <LastRestoreSection restoreJob={lastRestoreJob} />
-              </Box>
+      {selectedRepositoryId && (
+        <Box sx={{ ...panelSx, mb: 3 }}>
+          {/* Stats */}
+          <Box sx={{ p: 2.5 }}>
+            {loadingRepoInfo || repositoryDetailPending ? (
+              <RepositoryStatsGridSkeleton />
+            ) : (
+              <RepositoryStatsGrid
+                storage={repositoryStorage}
+                archivesCount={archivesList.length}
+                borgVersion={selectedRepository?.borg_version}
+                archivesLoading={loadingArchives || repoInfoPending}
+              />
             )}
           </Box>
-        )}
+          {/* Last Restore, only when there is one to show */}
+          {lastRestoreJob && (
+            <Box
+              sx={{
+                px: 2.5,
+                py: 2,
+                borderTop: '1px solid',
+                borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.06),
+                bgcolor: isDark ? alpha('#fff', 0.012) : alpha('#000', 0.01),
+              }}
+            >
+              <LastRestoreSection restoreJob={lastRestoreJob} />
+            </Box>
+          )}
+        </Box>
+      )}
 
       {/* ── Archives list ── */}
       {selectedRepositoryId && (
