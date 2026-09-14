@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-09-14T05:23:56.535Z",
+  "generatedAt": "2026-09-14T05:50:58.103Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1051 visual report",
-    "commitSha": "7b4619029e10",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34808316232"
+    "commitSha": "c6d4f59dac55",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34810565132"
   },
   "totals": {
-    "baseline": 852,
-    "actual": 852,
-    "compared": 850,
+    "baseline": 854,
+    "actual": 854,
+    "compared": 852,
     "changed": 12,
     "added": 2,
     "removed": 2,
-    "unchanged": 838
+    "unchanged": 840
   },
   "changed": [
     {
@@ -1921,6 +1921,12 @@
     },
     {
       "fileName": "components-statusbadge--status-comparison.png"
+    },
+    {
+      "fileName": "components-storagebrowserdialog--errored--mobile.png"
+    },
+    {
+      "fileName": "components-storagebrowserdialog--errored.png"
     },
     {
       "fileName": "components-storagebrowserdialog--loading--mobile.png"
