@@ -92,6 +92,7 @@ class ActivityItem(BaseModel):
 
     # Type-specific metadata
     archive_name: Optional[str] = None  # For backup/restore
+    archive_borg_id: Optional[str] = None  # backup: stored archive's borg id
     archive_pruned_at: Optional[datetime] = None  # backup: its archive is gone
     package_name: Optional[str] = None  # For package installs
     has_logs: bool = False  # Whether logs are available for download
@@ -593,6 +594,7 @@ def _apply_legacy_activity_shape(
     if op.kind == "backup":
         from app.services.operations.backup_facade import (
             BackupJobFacade,
+            archive_borg_id_for,
             backup_job_has_logs,
         )
 
@@ -600,6 +602,7 @@ def _apply_legacy_activity_shape(
         item["triggered_by"] = job.triggered_by
         item["backup_plan_id"] = job.backup_plan_id
         item["archive_name"] = job.archive_name
+        item["archive_borg_id"] = archive_borg_id_for(db, job)
         item["archive_pruned_at"] = job.archive_pruned_at
         item["has_logs"] = backup_job_has_logs(db, job, log_save_policy=log_save_policy)
         if job.scheduled_job_id:

@@ -38,6 +38,8 @@ interface StorageBrowserDialogProps {
   items?: StorageBrowserItem[] | null
   isLoading?: boolean
   loadingHint?: ReactNode
+  /** Rendered in place of the listing when it failed; hides the empty states. */
+  error?: ReactNode
   rootLabel: string
   closeLabel: string
   emptyDirectoryLabel: string
@@ -148,6 +150,7 @@ export default function StorageBrowserDialog({
   currentPath,
   items,
   isLoading = false,
+  error,
   loadingHint,
   rootLabel,
   closeLabel,
@@ -298,7 +301,9 @@ export default function StorageBrowserDialog({
           {banner}
 
           <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            {isLoading ? (
+            {error ? (
+              error
+            ) : isLoading ? (
               <Stack spacing={1.5} sx={{ height: '100%' }}>
                 {loadingHint}
                 <Stack spacing={0.5}>

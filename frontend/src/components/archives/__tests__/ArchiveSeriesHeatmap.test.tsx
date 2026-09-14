@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import ArchiveSeriesHeatmap from '../ArchiveSeriesHeatmap'
 import type { HeatmapResponse, HeatmapSeries } from '../../../types/archives'
@@ -35,6 +35,15 @@ const data: HeatmapResponse = {
 }
 
 describe('ArchiveSeriesHeatmap', () => {
+  // The window ends at the real "today" and a month label is dropped when the
+  // next one is under three columns away, so which months render depends on
+  // the calendar. Pin the clock to the fixture's `until` (the shared setup
+  // restores real timers after each test, so this runs before each).
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-09-04T12:00:00Z'))
+  })
+
   it('renders one band per series', () => {
     render(<ArchiveSeriesHeatmap data={data} onSelectDay={vi.fn()} />)
     expect(screen.getByText('nightly')).toBeInTheDocument()

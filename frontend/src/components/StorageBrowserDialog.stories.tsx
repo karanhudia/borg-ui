@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Box, Link, Typography } from '@mui/material'
+import { Alert, Box, Button, Link, Typography } from '@mui/material'
 import { Hourglass } from 'lucide-react'
 import StorageBrowserDialog, { type StorageBrowserItem } from './StorageBrowserDialog'
 
@@ -70,6 +70,27 @@ export const WithTitleAction: Story = {
       <Link href="#" variant="body2" underline="hover">
         Open full page
       </Link>
+    ),
+  },
+}
+
+// The error slot: a failed listing replaces the content area (no empty-state
+// placeholder underneath) and offers a retry.
+export const Errored: Story = {
+  args: {
+    items: null,
+    error: (
+      <Alert
+        severity="error"
+        sx={{ flexShrink: 0 }}
+        action={
+          <Button color="inherit" size="small">
+            Retry
+          </Button>
+        }
+      >
+        Archive daily not found
+      </Alert>
     ),
   },
 }
