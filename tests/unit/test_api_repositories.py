@@ -654,6 +654,159 @@ class TestRepositoriesCreate:
         assert repo.agent_machine_id == agent.id
         assert repo.path == "/agent/repo"
 
+    def test_create_borg2_agent_repository_rejects_agent_without_borg2(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Borg1 Only",
+            agent_id="agt_borg1_only",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
+            borg_versions=[{"major": 1, "version": "1.2.4", "path": "/usr/bin/borg"}],
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+
+        with (
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"status": "completed"}),
+            ),
+            patch(
+                "app.api.repositories.dispatch_agent_job_best_effort",
+                new=AsyncMock(return_value=True),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Borg2 Repo",
+                    "path": "/agent/borg2-repo",
+                    "encryption": "repokey-aes-ocb",
+                    "passphrase": "hunter2",
+                    "compression": "lz4",
+                    "execution_target": "agent",
+                    "agent_machine_id": agent.id,
+                    "borg_version": 2,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.agentBorg2Unavailable"
+        )
+        assert test_db.query(AgentJob).count() == 0
+        assert (
+            test_db.query(Repository).filter_by(name="Agent Borg2 Repo").first() is None
+        )
+
+    def test_create_borg2_agent_repository_rejects_outdated_borg2(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Old Borg2",
+            agent_id="agt_old_borg2",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
+            borg_versions=[
+                {"major": 2, "version": "2.0.0b21", "path": "/usr/local/bin/borg2"}
+            ],
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+
+        with (
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"status": "completed"}),
+            ),
+            patch(
+                "app.api.repositories.dispatch_agent_job_best_effort",
+                new=AsyncMock(return_value=True),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Borg2 Repo",
+                    "path": "/agent/borg2-repo",
+                    "encryption": "repokey-aes-ocb",
+                    "passphrase": "hunter2",
+                    "compression": "lz4",
+                    "execution_target": "agent",
+                    "agent_machine_id": agent.id,
+                    "borg_version": 2,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["key"] == "backend.errors.repo.agentBorg2TooOld"
+        assert detail["params"]["version"] == "2.0.0b21"
+        assert detail["params"]["minimum"] == "2.0.0b22"
+        assert test_db.query(AgentJob).count() == 0
+
+    def test_create_borg2_agent_repository_allows_agent_reporting_borg2(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Borg2 Capable",
+            agent_id="agt_borg2_capable",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
+            borg_versions=[
+                {"major": 1, "version": "1.4.5", "path": "/usr/local/bin/borg"},
+                {"major": 2, "version": "2.0.0b24", "path": "/usr/local/bin/borg2"},
+            ],
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+
+        with (
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"status": "completed"}),
+            ),
+            patch(
+                "app.api.repositories.dispatch_agent_job_best_effort",
+                new=AsyncMock(return_value=True),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Borg2 Repo",
+                    "path": "/agent/borg2-repo",
+                    "encryption": "repokey-aes-ocb",
+                    "passphrase": "hunter2",
+                    "compression": "lz4",
+                    "execution_target": "agent",
+                    "agent_machine_id": agent.id,
+                    "borg_version": 2,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        agent_job = test_db.query(AgentJob).one()
+        assert agent_job.payload["repository"]["borg_version"] == 2
+        assert agent_job.payload["operation"]["encryption"] == "repokey-aes-ocb"
+
     def test_create_agent_repository_requires_pro_plan(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -5114,7 +5267,10 @@ async def test_wait_for_agent_job_failure_surfaces_borg_stderr(test_db):
         )
 
     assert exc_info.value.status_code == 502
-    assert exc_info.value.detail["message"] == (
+    assert exc_info.value.detail["key"] == (
+        "backend.errors.agents.repositoryOperationFailedWithReason"
+    )
+    assert exc_info.value.detail["params"]["reason"] == (
         "repository.info exited with code 2: "
         "Failed to create/acquire the lock /repo/lock.exclusive (Permission denied)."
     )

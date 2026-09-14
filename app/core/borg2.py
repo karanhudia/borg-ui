@@ -93,6 +93,25 @@ BORG2_ENCRYPTION_FLAGS: Dict[str, List[str]] = {
 
 BORG2_ENCRYPTION_MODES = list(BORG2_ENCRYPTION_FLAGS)
 
+# The beta that made the split above. Every mode this table emits is rejected
+# outright by an older binary ("invalid choice: 'aes256-ocb'"), so a caller that
+# knows which Borg 2 will run the command can refuse before the command runs.
+ENCRYPTION_FLAGS_SINCE_BETA = 22
+
+
+def borg2_speaks_encryption_flags(version: Optional[str]) -> bool:
+    """Whether this Borg 2 version accepts what `borg2_encryption_flags` emits.
+
+    An unreadable or absent version is accepted: it is not evidence of an old
+    binary, and refusing on silence would block every endpoint that reports no
+    version at all.
+    """
+    from app.services.borg2_compact_stats import borg2_beta_at_least
+
+    if not version:
+        return True
+    return borg2_beta_at_least(version, ENCRYPTION_FLAGS_SINCE_BETA)
+
 
 def borg2_encryption_flags(mode: str) -> List[str]:
     """The repo-create flags for a combined encryption mode name."""

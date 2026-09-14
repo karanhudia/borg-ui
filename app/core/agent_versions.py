@@ -17,7 +17,7 @@ parse as dotted integers is reported as unknown rather than guessed at.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 UP_TO_DATE = "up_to_date"
 OUTDATED = "outdated"
@@ -110,10 +110,32 @@ def borg_pin_satisfied(
     """
     if not desired:
         return True
+    return agent_reports_borg_major(reported, desired)
+
+
+def agent_reports_borg_major(reported: Optional[list], major: Any) -> bool:
+    """Whether an endpoint's reported Borg binaries include this major.
+
+    No report at all means no: queueing a job for a binary the endpoint never
+    mentioned fails on the endpoint with a bare "No such file or directory".
+    """
+    return agent_borg_version_for_major(reported, major) is not None
+
+
+def agent_borg_version_for_major(reported: Optional[list], major: Any) -> Optional[str]:
+    """The version string an endpoint reports for this Borg major: "" when it
+    reports the major without a readable version, None when it does not report
+    the major at all.
+
+    The list arrives from an agent heartbeat, so anything in it may be
+    malformed and must not raise: an entry that is not a mapping with a major
+    simply does not match.
+    """
     for entry in reported or []:
         if not isinstance(entry, dict):
             continue
-        major = entry.get("major")
-        if major is not None and str(major) == str(desired):
-            return True
-    return False
+        entry_major = entry.get("major")
+        if entry_major is not None and str(entry_major) == str(major):
+            version = entry.get("version")
+            return version if isinstance(version, str) else ""
+    return None

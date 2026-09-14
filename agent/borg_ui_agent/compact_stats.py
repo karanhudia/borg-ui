@@ -71,14 +71,21 @@ def parse_borg_version(output: str) -> Optional[str]:
     return match.group(0)[match.start("major") - match.start(0) :]
 
 
-def has_compact_stats(version: str) -> bool:
-    """Whether Borg `version` (a token from `parse_borg_version`) accepts
-    `compact --stats`: any 2.x that is not a beta before b15."""
+def borg2_beta_at_least(version: str, minimum_beta: int) -> bool:
+    """Whether `version` (a token from `parse_borg_version`) is a Borg 2 at or
+    past `minimum_beta`. A released 2.x carries no beta number and is past every
+    one of them; anything that is not a 2.x is not."""
     match = _VERSION.search(version)
     if not match or int(match.group("major")) != 2:
         return False
     beta = match.group("beta")
-    return beta is None or int(beta) >= COMPACT_STATS_SINCE_BETA
+    return beta is None or int(beta) >= minimum_beta
+
+
+def has_compact_stats(version: str) -> bool:
+    """Whether Borg `version` (a token from `parse_borg_version`) accepts
+    `compact --stats`: any 2.x that is not a beta before b15."""
+    return borg2_beta_at_least(version, COMPACT_STATS_SINCE_BETA)
 
 
 _UNITS = {

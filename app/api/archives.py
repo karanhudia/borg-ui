@@ -30,6 +30,7 @@ from app.services.operations.enqueue import enqueue
 from app.services.operations.job_facade import resolve_maintenance_job
 from app.services.operations.maintenance_start import active_delete_for_archive
 from app.services.repository_executor import (
+    agent_operation_failed_detail,
     is_agent_executor,
     queue_agent_repository_operation_job,
     wait_for_agent_repository_operation_job,
@@ -197,10 +198,7 @@ async def _stream_agent_archive_file(
     except RuntimeError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={
-                "key": "backend.errors.agents.repositoryOperationFailed",
-                "message": str(exc),
-            },
+            detail=agent_operation_failed_detail(str(exc)),
         ) from exc
 
     async def body():

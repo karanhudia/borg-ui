@@ -2453,6 +2453,75 @@ async def test_waiter_returns_on_a_completion_with_warnings(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_waiter_surfaces_borgs_reason_from_stdout(
+    test_client, test_db, admin_headers
+):
+    """Borg prints an argument error on stdout, so a stderr-only reader left
+    the operator with a bare "operation failed". The reason must reach the
+    detail's params, which is the only part the frontend renders."""
+    from app.services.repository_executor import (
+        wait_for_agent_repository_operation_job,
+    )
+
+    registered = _register_agent(
+        test_client, _create_enrollment_token(test_client, admin_headers)["token"]
+    )
+    agent = _get_agent(test_db, registered["agent_id"])
+    job = _create_agent_job(test_db, agent, status="failed")
+    job.error_message = "repository.init exited with code 2"
+    for sequence, message in enumerate(
+        [
+            "Starting repository.init: borg2 -r /repo repo-create -e aes256-ocb",
+            "usage: borg2 [options] repo-create [-h]",
+            "error: argument -e/--encryption: invalid choice: 'aes256-ocb'",
+        ]
+    ):
+        test_db.add(
+            AgentJobLog(
+                agent_job_id=job.id,
+                sequence=sequence,
+                stream="stdout",
+                message=message,
+                created_at=datetime.utcnow(),
+            )
+        )
+    test_db.commit()
+
+    with pytest.raises(HTTPException) as excinfo:
+        await wait_for_agent_repository_operation_job(
+            test_db, job.id, timeout_seconds=2, poll_interval_seconds=0.01
+        )
+    detail = excinfo.value.detail
+    assert detail["key"] == (
+        "backend.errors.agents.repositoryOperationFailedWithReason"
+    )
+    assert detail["params"]["reason"] == (
+        "repository.init exited with code 2: "
+        "error: argument -e/--encryption: invalid choice: 'aes256-ocb'"
+    )
+
+    # stderr still wins when the agent wrote one, and the preamble never does.
+    test_db.add(
+        AgentJobLog(
+            agent_job_id=job.id,
+            sequence=3,
+            stream="stderr",
+            message="Repository /repo already exists.",
+            created_at=datetime.utcnow(),
+        )
+    )
+    test_db.commit()
+    with pytest.raises(HTTPException) as excinfo:
+        await wait_for_agent_repository_operation_job(
+            test_db, job.id, timeout_seconds=2, poll_interval_seconds=0.01
+        )
+    assert excinfo.value.detail["params"]["reason"].endswith(
+        "Repository /repo already exists."
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_script_and_backup_waiters_return_on_a_completion_with_warnings(
     test_client, test_db, admin_headers
 ):
