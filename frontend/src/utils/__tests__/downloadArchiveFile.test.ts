@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { downloadArchiveFile } from '../downloadArchiveFile'
+import { downloadArchiveFile, downloadArchiveFolder } from '../downloadArchiveFile'
 import { BorgApiClient, type Repository } from '../../services/borgApi/client'
 import { toast } from 'react-hot-toast'
 
@@ -109,5 +109,20 @@ describe('downloadArchiveFile', () => {
       'Failed to download file',
       expect.objectContaining({ id: 'toast-id' })
     )
+  })
+
+  it('does not show unstructured folder-download backend errors', async () => {
+    vi.spyOn(BorgApiClient.prototype, 'fetchArchiveFolder').mockRejectedValue({
+      response: { data: { detail: 'borg: repository passphrase is incorrect' } },
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    await downloadArchiveFolder(repo, 'archive-1', '/Documents')
+
+    expect(toast.error).toHaveBeenCalledWith(
+      'Failed to download folder',
+      expect.objectContaining({ id: 'toast-id' })
+    )
+    expect(warn).toHaveBeenCalled()
   })
 })

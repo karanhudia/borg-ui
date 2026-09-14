@@ -16,7 +16,11 @@ from sqlalchemy.orm import Session
 import structlog
 
 from app.api.archive_download import extract_file_download
-from app.api.archives import _content_disposition_attachment, _tar_strip_components
+from app.api.archives import (
+    _content_disposition_attachment,
+    _stream_agent_archive_tar,
+    _tar_strip_components,
+)
 from app.database.database import get_db
 from app.database.models import User, Repository, SystemSettings
 from app.services.operations.enqueue import enqueue
@@ -710,6 +714,10 @@ async def download_folder_from_archive(
     repo = _get_v2_repo(repository, db, current_user)
     archive_selector = _get_archive_selector(archive)
     try:
+        if is_agent_executor(repo):
+            return await _stream_agent_archive_tar(
+                db, repo, archive_selector, directory_path
+            )
         if _repo_needs_custom_env(repo):
             with repository_borg_env(repo, db) as env:
                 stream = borg2.export_archive_tar(

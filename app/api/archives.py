@@ -30,6 +30,7 @@ from app.services.operations.enqueue import enqueue
 from app.services.operations.job_facade import resolve_maintenance_job
 from app.services.operations.maintenance_start import active_delete_for_archive
 from app.services.repository_executor import (
+    abandon_agent_repository_operation_job,
     agent_operation_failed_detail,
     is_agent_executor,
     queue_agent_repository_operation_job,
@@ -258,21 +259,29 @@ async def _stream_agent_archive_tar(
     except StopAsyncIteration:
         first_chunk = None
     except TimeoutError as exc:
+        abandon_agent_repository_operation_job(db, agent_job.id)
+        agent_artifact_relay.unregister(agent_job.id)
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail={"key": "backend.errors.agents.repositoryOperationTimeout"},
         ) from exc
     except RuntimeError as exc:
+        abandon_agent_repository_operation_job(db, agent_job.id)
+        agent_artifact_relay.unregister(agent_job.id)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=agent_operation_failed_detail(str(exc)),
         ) from exc
 
     async def body():
-        if first_chunk is not None:
-            yield first_chunk
-        async for chunk in stream:
-            yield chunk
+        try:
+            if first_chunk is not None:
+                yield first_chunk
+            async for chunk in stream:
+                yield chunk
+        finally:
+            abandon_agent_repository_operation_job(db, agent_job.id)
+            agent_artifact_relay.unregister(agent_job.id)
 
     filename = f"{os.path.basename(directory_path.rstrip('/')) or 'archive'}.tar"
     return StreamingResponse(

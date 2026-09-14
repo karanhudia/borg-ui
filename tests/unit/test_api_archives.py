@@ -22,6 +22,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from app.core.security import get_password_hash
 from app.services.operations.job_facade import resolve_maintenance_job
@@ -752,6 +753,35 @@ class TestDownloadFolderEndpoint:
             env=export.call_args.kwargs["env"],
             strip_components=1,
         )
+
+    @pytest.mark.asyncio
+    async def test_agent_tar_timeout_abandons_the_queued_job(self):
+        from app.api.archives import _stream_agent_archive_tar
+
+        class TimeoutStream:
+            async def __anext__(self):
+                raise TimeoutError
+
+        agent_job = SimpleNamespace(id=17)
+        relay = Mock()
+        relay.stream.return_value = TimeoutStream()
+        with (
+            patch(
+                "app.api.archives.queue_agent_repository_operation_job",
+                return_value=agent_job,
+            ),
+            patch("app.api.archives.agent_artifact_relay", relay),
+            patch("app.api.archives.dispatch_agent_job_best_effort", new=AsyncMock()),
+            patch("app.api.archives.abandon_agent_repository_operation_job") as abandon,
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await _stream_agent_archive_tar(
+                    Mock(), SimpleNamespace(id=3), "archive-1", "/Documents"
+                )
+
+        assert exc_info.value.status_code == 504
+        abandon.assert_called_once()
+        relay.unregister.assert_called_once_with(17)
 
 
 @pytest.mark.unit

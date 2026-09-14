@@ -507,6 +507,29 @@ describe('ArchiveContentsDialog', () => {
     )
   })
 
+  it('re-enables folder download after a rejected handler', async () => {
+    mockGetArchiveContents.mockResolvedValue({
+      data: { items: [{ name: 'Documents', path: '/Documents', type: 'directory' }] },
+    } as AxiosResponse)
+    mockHandlers.onDownloadFolder.mockRejectedValueOnce(new Error('download failed'))
+
+    renderWithProviders(
+      <ArchiveContentsDialog
+        open
+        archive={mockArchive}
+        repository={mockRepository}
+        {...mockHandlers}
+      />
+    )
+
+    await waitFor(() => expect(screen.getByText('Documents')).toBeInTheDocument())
+    const downloadButton = screen.getByTitle('Download folder')
+    fireEvent.click(downloadButton)
+
+    await waitFor(() => expect(mockHandlers.onDownloadFolder).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(downloadButton).toBeEnabled())
+  })
+
   it('calls onClose when Close button is clicked', async () => {
     mockGetArchiveContents.mockResolvedValue({
       data: { items: [] },

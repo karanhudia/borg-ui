@@ -4,6 +4,13 @@ import { BorgApiClient, type Repository } from '../services/borgApi/client'
 import { translateBackendKey, type BackendDetail } from './translateBackendKey'
 import { formatBytes } from './dateUtils'
 
+function isStructuredBackendDetail(detail: BackendDetail): boolean {
+  if (typeof detail === 'object' && detail !== null && typeof detail.key === 'string') {
+    return true
+  }
+  return typeof detail === 'string' && /^[\w]+\.[\w.]+$/.test(detail)
+}
+
 /**
  * Download a single file from an archive and save it, with a live activity
  * toast (bytes transferred, or a percentage once the total size is known) and
@@ -120,12 +127,16 @@ async function downloadArchiveArtifact(
     } else if (data && typeof data === 'object') {
       detail = (data as { detail?: BackendDetail }).detail
     }
-    toast.error(
-      translateBackendKey(detail, options.failedKey ?? 'archiveContents.failedToDownloadFile'),
-      {
-        id: toastId,
-        duration: 6000,
-      }
-    )
+    const failedKey = options.failedKey ?? 'archiveContents.failedToDownloadFile'
+    const message = isStructuredBackendDetail(detail)
+      ? translateBackendKey(detail, failedKey)
+      : i18n.t(failedKey)
+    if (detail && !isStructuredBackendDetail(detail)) {
+      console.warn('Archive download failed with an unstructured backend error', detail)
+    }
+    toast.error(message, {
+      id: toastId,
+      duration: 6000,
+    })
   }
 }
