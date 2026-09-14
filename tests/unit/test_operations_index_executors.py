@@ -1515,3 +1515,44 @@ async def test_archive_sync_reports_stable_identities_for_removed_archives(
     assert outcome.result["removed_archive_generations"] == {
         str(removed_id): removed.generation_id
     }
+
+
+@pytest.mark.unit
+def test_apply_listing_links_a_new_row_to_the_backup_that_made_it(db, repo):
+    """A Borg 2 series repeats names, so the link is the only exact answer:
+    the unlinked backup with that name whose start is nearest the archive's."""
+    from tests.utils.operations import seed_job_operation
+
+    older = seed_job_operation(
+        db,
+        "backup",
+        repository=repo.path,
+        status="completed",
+        started_at=datetime(2026, 9, 1, 2, 0, 0),
+        completed_at=datetime(2026, 9, 1, 2, 5, 0),
+        archive_name="daily",
+    )
+    newer = seed_job_operation(
+        db,
+        "backup",
+        repository=repo.path,
+        status="completed",
+        started_at=datetime(2026, 9, 2, 2, 0, 0),
+        completed_at=datetime(2026, 9, 2, 2, 5, 0),
+        archive_name="daily",
+    )
+    entries = [
+        {"id": "aa11", "name": "daily", "start": "2026-09-01T02:00:07"},
+        {"id": "bb22", "name": "daily", "start": "2026-09-02T02:00:09"},
+        {"id": "cc33", "name": "other", "start": "2026-09-02T03:00:00"},
+    ]
+    index_exec.apply_listing(db, repo, entries, timezone_name="UTC")
+    db.commit()
+
+    by_id = {a.borg_id: a.backup_operation_id for a in db.query(Archive).all()}
+    assert by_id == {"aa11": older.id, "bb22": newer.id, "cc33": None}
+
+    # A second sync of the same listing changes nothing: the rows are known.
+    index_exec.apply_listing(db, repo, entries, timezone_name="UTC")
+    db.commit()
+    assert {a.borg_id: a.backup_operation_id for a in db.query(Archive).all()} == by_id

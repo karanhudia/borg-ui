@@ -374,3 +374,34 @@ async def test_machine_parsed_output_renders_timestamps_in_utc(method, args):
     env = mock_run.await_args.kwargs["env"]
     assert env["TZ"] == "UTC"
     assert env["BORG_PASSPHRASE"] == "pw"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_hands_the_spawned_process_to_on_process():
+    """#1028: `delete_archive_v2_service` cancels by terminating the process
+    `_run` spawned, so `_run` has to hand it over."""
+    seen = []
+
+    result = await borg2._run(
+        ["/bin/sh", "-c", "exit 0"], on_process=lambda process: seen.append(process)
+    )
+
+    assert result["success"] is True
+    assert len(seen) == 1 and seen[0].returncode == 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["delete_archive", "compact"])
+async def test_delete_and_compact_forward_on_process(method):
+    hook = object()
+    args = ("/repo", "archive-1") if method == "delete_archive" else ("/repo",)
+    with patch.object(
+        borg2,
+        "_run",
+        new=AsyncMock(return_value={"success": True, "stdout": ""}),
+    ) as mock_run:
+        await getattr(borg2, method)(*args, on_process=hook)
+
+    assert mock_run.await_args.kwargs["on_process"] is hook

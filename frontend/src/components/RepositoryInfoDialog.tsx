@@ -59,6 +59,8 @@ interface RepositoryInfoDialogProps {
   onRunRecoveryCheck?: (repository: Repository) => void
   canRunRecoveryCheck?: boolean
   isRecoveryCheckStarting?: boolean
+  /** The backend's reason for the failure, e.g. borg's stderr from an agent job. */
+  errorMessage?: string | null
 }
 
 interface RecoveryCommand {
@@ -307,6 +309,7 @@ export default function RepositoryInfoDialog({
   onRunRecoveryCheck,
   canRunRecoveryCheck = true,
   isRecoveryCheckStarting = false,
+  errorMessage = null,
 }: RepositoryInfoDialogProps) {
   const { t } = useTranslation()
   const [displayRepository, setDisplayRepository] = useState<Repository | null>(repository)
@@ -564,7 +567,24 @@ export default function RepositoryInfoDialog({
               </PlanGate>
             ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Alert severity="error">{t('repositoryInfoDialog.failedToLoad')}</Alert>
+                <Alert severity="error">
+                  {t('repositoryInfoDialog.failedToLoad')}
+                  {errorMessage && (
+                    <Box
+                      component="pre"
+                      sx={{
+                        m: 0,
+                        mt: 1,
+                        fontFamily: 'monospace',
+                        fontSize: '0.8rem',
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {errorMessage}
+                    </Box>
+                  )}
+                </Alert>
                 {displayRepository && (
                   <Paper
                     variant="outlined"

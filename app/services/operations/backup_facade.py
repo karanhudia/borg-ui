@@ -31,6 +31,7 @@ from sqlalchemy import func, nullslast
 from sqlalchemy.orm import Session
 
 from app.database.models import (
+    Archive,
     BackupPlanRun,
     Operation,
     OperationBackupDetails,
@@ -544,6 +545,72 @@ def backup_jobs_for_archive_names(db: Session, repository: Repository, names) ->
     jobs = _facades(db, ops)
     jobs.sort(key=_sort_key("created_at"), reverse=True)
     return jobs
+
+
+def _nearest_start(rows, anchor):
+    """The row whose `start` is nearest `anchor`; a tie goes to the newest id
+    so the answer is stable across calls."""
+    if anchor is None:
+        return rows[0]
+    return min(rows, key=lambda r: (abs(r.start - anchor), -r.id))
+
+
+def link_archive_to_backup(db: Session, archive: Archive) -> None:
+    """Record which backup made a newly listed archive (spec 6.4).
+
+    Borg reports no operation id, so the match is by name: the completed
+    backup in the repository with that archive name that no stored archive
+    claims yet, nearest in start time when a Borg 2 series repeats the name.
+    """
+    claimed = db.query(Archive.backup_operation_id).filter(
+        Archive.repository_id == archive.repository_id,
+        Archive.backup_operation_id.isnot(None),
+    )
+    candidates = (
+        db.query(Operation.id, Operation.started_at.label("start"))
+        .join(
+            OperationBackupDetails, OperationBackupDetails.operation_id == Operation.id
+        )
+        .filter(
+            Operation.repository_id == archive.repository_id,
+            Operation.kind == "backup",
+            Operation.status.in_(("completed", "completed_with_warnings")),
+            Operation.started_at.isnot(None),
+            OperationBackupDetails.archive_name == archive.name,
+            Operation.id.notin_(claimed),
+        )
+        .all()
+    )
+    if candidates:
+        archive.backup_operation_id = _nearest_start(candidates, archive.start).id
+
+
+def archive_borg_id_for(db: Session, job: "BackupJobFacade") -> Optional[str]:
+    """The stored archive's borg id for a backup, or None if none is stored.
+
+    The sync links each new archive to its backup; rows stored before that
+    link existed fall back to the same-name row nearest the job's start.
+    `Archive.name` is the full name for both Borg versions. One query on the
+    repository index per job, so a 200-row job list stays cheap.
+    """
+    # ponytail: one lookup per listed job; batch by repository if the job
+    # lists ever get slow.
+    if not job.archive_name or job.repository_id is None:
+        return None
+    rows = (
+        db.query(
+            Archive.id, Archive.borg_id, Archive.start, Archive.backup_operation_id
+        )
+        .filter(
+            Archive.repository_id == job.repository_id,
+            Archive.name == job.archive_name,
+        )
+        .all()
+    )
+    if not rows:
+        return None
+    linked = [r for r in rows if r.backup_operation_id == job.id]
+    return (linked[0] if linked else _nearest_start(rows, job.started_at)).borg_id
 
 
 def newest_per_group(db: Session, model, group_column, order_column, filters) -> list:

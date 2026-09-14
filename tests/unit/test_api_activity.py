@@ -2923,3 +2923,114 @@ class TestRunningAgentBackupLogs:
         assert response.status_code == 200
         contents = [line["content"] for line in response.json()["lines"]]
         assert "agent backup in progress" in contents
+
+
+class TestBackupArchiveBorgId:
+    def test_backup_item_carries_the_borg_id_of_its_archive(
+        self, test_client, admin_headers, test_db
+    ):
+        """A Borg 2 series repeats archive names, so the stored row nearest
+        the backup's start wins; the frontend needs the id, not the name."""
+        from app.database.models import Archive
+
+        repo = _create_activity_repository(test_db, "Borg Id Repo")
+        started = datetime(2026, 9, 1, 10, 0, 0)
+        job = seed_job_operation(
+            test_db,
+            "backup",
+            repository=repo.path,
+            status="completed",
+            started_at=started,
+            completed_at=started + timedelta(minutes=2),
+            archive_name="daily",
+        )
+        for borg_id, start in (
+            ("aaaa1111aaaa1111", started - timedelta(days=1)),
+            ("bbbb2222bbbb2222", started + timedelta(seconds=20)),
+            ("cccc3333cccc3333", started + timedelta(days=1)),
+        ):
+            test_db.add(
+                Archive(
+                    repository_id=repo.id,
+                    borg_id=borg_id,
+                    name="daily",
+                    series="daily",
+                    start=start,
+                )
+            )
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=backup", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        item = next(i for i in response.json() if i["id"] == job.id)
+        assert item["archive_borg_id"] == "bbbb2222bbbb2222"
+
+    def test_backup_item_prefers_the_archive_linked_to_it(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import Archive
+
+        repo = _create_activity_repository(test_db, "Linked Repo")
+        started = datetime(2026, 9, 1, 10, 0, 0)
+        job = seed_job_operation(
+            test_db,
+            "backup",
+            repository=repo.path,
+            status="completed",
+            started_at=started,
+            completed_at=started + timedelta(minutes=2),
+            archive_name="daily",
+        )
+        # Nearest by time, but unlinked: the sync recorded the other one.
+        test_db.add(
+            Archive(
+                repository_id=repo.id,
+                borg_id="near0000near0000",
+                name="daily",
+                series="daily",
+                start=started + timedelta(seconds=5),
+            )
+        )
+        test_db.add(
+            Archive(
+                repository_id=repo.id,
+                borg_id="link0000link0000",
+                name="daily",
+                series="daily",
+                start=started + timedelta(hours=3),
+                backup_operation_id=job.id,
+            )
+        )
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=backup", headers=admin_headers
+        )
+
+        item = next(i for i in response.json() if i["id"] == job.id)
+        assert item["archive_borg_id"] == "link0000link0000"
+
+    def test_backup_item_without_a_stored_archive_has_no_borg_id(
+        self, test_client, admin_headers, test_db
+    ):
+        repo = _create_activity_repository(test_db, "No Row Repo")
+        job = seed_job_operation(
+            test_db,
+            "backup",
+            repository=repo.path,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            archive_name="orphan",
+        )
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=backup", headers=admin_headers
+        )
+
+        item = next(i for i in response.json() if i["id"] == job.id)
+        assert item["archive_borg_id"] is None

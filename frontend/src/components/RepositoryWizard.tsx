@@ -1109,9 +1109,12 @@ const RepositoryWizard = ({
       case 'location':
         return (
           <>
+            {/* The warning is about remote URLs the agent may not reach; a plain
+                local path on the agent needs no BORG_REPO hint, so stay quiet. */}
             {wizardState.executionTarget === 'agent' &&
               wizardState.agentMachineId &&
-              agentRepoAdvertised === false && (
+              agentRepoAdvertised === false &&
+              /^(ssh|sftp):\/\//i.test((wizardState.path || '').trim()) && (
                 <div className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
                   {t('repositoryWizard.agentRepoUnknownWarning')}
                 </div>

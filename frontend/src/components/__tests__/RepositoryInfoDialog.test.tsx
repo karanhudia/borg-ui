@@ -294,6 +294,22 @@ describe('RepositoryInfoDialog', () => {
       expect(screen.getByText(/Failed to load repository information/i)).toBeInTheDocument()
     })
 
+    it('shows the backend failure reason under the generic error', () => {
+      render(
+        <RepositoryInfoDialog
+          open={true}
+          repository={mockRepository}
+          repositoryInfo={null}
+          isLoading={false}
+          onClose={vi.fn()}
+          errorMessage="repository.info exited with code 2: Failed to create/acquire the lock (Permission denied)"
+        />
+      )
+
+      expect(screen.getByText(/Failed to load repository information/i)).toBeInTheDocument()
+      expect(screen.getByText(/Permission denied/)).toBeInTheDocument()
+    })
+
     it('shows copyable recovery commands when repository info cannot load', () => {
       render(
         <RepositoryInfoDialog

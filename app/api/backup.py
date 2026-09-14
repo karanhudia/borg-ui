@@ -35,6 +35,7 @@ from app.services.log_policy import get_log_save_policy
 from app.services.operations.backup_facade import (
     CANCELLED_BY_USER,
     CANCELLED_PROCESS_NOT_FOUND,
+    archive_borg_id_for,
     backup_job_has_logs,
     create_backup_operation,
     is_backup_operation,
@@ -558,6 +559,7 @@ async def get_all_backup_jobs(
                         else "manual"
                     ),
                     "archive_name": getattr(job, "archive_name", None),
+                    "archive_borg_id": archive_borg_id_for(db, job),
                     "archive_pruned_at": serialize_datetime(job.archive_pruned_at),
                     "execution_mode": job.execution_mode or "local",
                     "route_strategy": job.route_strategy,

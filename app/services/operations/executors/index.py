@@ -24,6 +24,7 @@ from app.config import settings
 from app.core.borg_router import BorgRouter
 from app.database.models import Archive, Repository, SystemSettings, utc_now
 from app.services.operations import executors
+from app.services.operations.backup_facade import link_archive_to_backup
 from app.services.operations.followups import (
     HISTORY_AVAILABLE,
     history_capability,
@@ -126,6 +127,7 @@ def apply_listing(
         row = existing.get(fields["borg_id"])
         if row is None:
             row = Archive(repository_id=repository.id, first_seen_at=now, **fields)
+            link_archive_to_backup(db, row)
             db.add(row)
             new_rows.append(row)
         else:

@@ -224,11 +224,13 @@ async def _run(
 
 async def run_check(ctx) -> Outcome:
     from app.services.check_service import check_service
+    from app.services.v2.check_service import check_v2_service
 
     return await _run(
         ctx,
         lambda router, job_id: router.check(job_id),
         canceller=getattr(check_service, "cancel_check", None),
+        borg2_canceller=getattr(check_v2_service, "cancel_check", None),
     )
 
 
@@ -287,6 +289,7 @@ executors.register("compact", run_compact)
 
 async def run_delete_archive(ctx) -> Outcome:
     from app.services.delete_archive_service import delete_archive_service
+    from app.services.v2.delete_archive_service import delete_archive_v2_service
 
     archive_name = ctx.params.get("archive_name")
     if not archive_name:
@@ -301,6 +304,7 @@ async def run_delete_archive(ctx) -> Outcome:
         ctx,
         lambda router, job_id: router.delete_archive(job_id, archive_name),
         canceller=cancel,
+        borg2_canceller=getattr(delete_archive_v2_service, "cancel_delete", None),
     )
 
 
