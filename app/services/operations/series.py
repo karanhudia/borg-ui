@@ -92,13 +92,23 @@ def _schedules_for(db: Session, repository: Repository) -> list[ScheduledJob]:
     return result
 
 
-def _plans_for(db: Session, repository: Repository) -> list[BackupPlan]:
-    plan_ids = [
-        row.backup_plan_id
-        for row in db.query(BackupPlanRepository.backup_plan_id)
-        .filter(BackupPlanRepository.repository_id == repository.id)
-        .all()
-    ]
+def _plans_for(
+    db: Session, repository: Repository, *, active_links_only: bool = False
+) -> list[BackupPlan]:
+    """Plans targeting the repository.
+
+    `active_links_only` drops plans whose link to this repository is disabled.
+    The executor skips those links, so their cadence and prune settings say
+    nothing about what this repository receives or keeps. Series prefixes want
+    them anyway: a link disabled today still named the archives it wrote
+    yesterday.
+    """
+    links = db.query(BackupPlanRepository.backup_plan_id).filter(
+        BackupPlanRepository.repository_id == repository.id
+    )
+    if active_links_only:
+        links = links.filter(BackupPlanRepository.enabled.is_(True))
+    plan_ids = [row.backup_plan_id for row in links.all()]
     if not plan_ids:
         return []
     return db.query(BackupPlan).filter(BackupPlan.id.in_(plan_ids)).all()
@@ -138,7 +148,7 @@ def crons_for_repository(
     for job in _schedules_for(db, repository):
         if job.enabled and job.schedule_mode == "cron" and job.cron_expression:
             crons.append((job.cron_expression, job.timezone))
-    for plan in _plans_for(db, repository):
+    for plan in _plans_for(db, repository, active_links_only=True):
         if (
             plan.enabled
             and plan.schedule_enabled
@@ -183,7 +193,7 @@ def retention_days_for_repository(db: Session, repository: Repository) -> Option
     sources = [
         source
         for source in list(_schedules_for(db, repository))
-        + list(_plans_for(db, repository))
+        + list(_plans_for(db, repository, active_links_only=True))
         # A disabled source never runs its prune, so its keeps say nothing
         # about what is retained; counting them widened the window and put
         # genuinely pruned days back in the red (PR #1051 review).

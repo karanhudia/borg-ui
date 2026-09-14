@@ -166,3 +166,39 @@ def test_retention_window_ignores_disabled_sources(db):
     db.commit()
 
     assert retention_days_for_repository(db, repo) == 7
+
+
+@pytest.mark.unit
+def test_a_disabled_plan_link_gives_no_cadence_but_keeps_its_prefix(db):
+    """The executor skips a disabled link, so the plan never writes here and
+    its cron says nothing about this repository. Its prefix still has to name
+    the archives it wrote while the link was on."""
+    repo = Repository(name="nas", path="/tmp/nas", encryption="none", compression="lz4")
+    db.add(repo)
+    db.commit()
+    plan = BackupPlan(
+        name="photos plan",
+        source_directories="[]",
+        archive_name_template="{plan_name}-{now}",
+        enabled=True,
+        schedule_enabled=True,
+        schedule_mode="cron",
+        cron_expression="0 5 * * *",
+        run_prune_after=True,
+        prune_keep_daily=365,
+    )
+    db.add(plan)
+    db.commit()
+    db.add(
+        BackupPlanRepository(
+            backup_plan_id=plan.id,
+            repository_id=repo.id,
+            execution_order=0,
+            enabled=False,
+        )
+    )
+    db.commit()
+
+    assert crons_for_repository(db, repo) == []
+    assert retention_days_for_repository(db, repo) is None
+    assert series_prefixes_for_repository(db, repo) == ["photos-plan"]
