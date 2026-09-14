@@ -210,7 +210,8 @@ The first implementation supports:
 - `filesystem.browse` for source path selection from the central Borg UI
 - `repository.init`, `repository.info`, `repository.list_archives`,
   `repository.list_archive_contents`, `repository.extract_archive_file`,
-  `repository.check`, `repository.prune`, `repository.compact`, and
-  `repository.rclone_sync` for agent-owned repositories
+  `repository.check`, `repository.prune`, `repository.compact`,
+  `repository.rclone_sync`, and `repository.diff` (the change listing the
+  server's archive history is built from) for agent-owned repositories
 - log and progress upload
 - cancellation through heartbeat
