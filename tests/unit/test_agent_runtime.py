@@ -1,7 +1,9 @@
 import base64
 import json
+import os
 import queue
 import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -3385,3 +3387,1048 @@ class TestReportedTimezone:
         monkeypatch.setenv("TZ", "Europe/Berlin")
 
         assert detect_platform()["timezone"] == "UTC"
+
+
+@pytest.mark.unit
+def test_repository_diff_payload_builds_diff_and_listing_commands():
+    # The argv the server's history index runs for its own repositories
+    # (app/core/borg.py diff_archives / list_archive_lines and the Borg 2
+    # twins): a predecessor means a diff, none means the full listing of
+    # the first archive in a series.
+    assert "repository.diff" in get_capabilities()
+
+    diff_v1 = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.diff",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": {"archive": "daily-2", "predecessor": "daily-1"},
+        }
+    )
+    assert diff_v1.build_command() == [
+        "borg",
+        "diff",
+        "--json-lines",
+        "--",
+        "/agent/repo::daily-1",
+        "daily-2",
+    ]
+
+    listing_v1 = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.diff",
+            "repository": {
+                "path": "/agent/repo",
+                "borg_version": 1,
+                "remote_path": "/opt/borg",
+            },
+            "operation": {"archive": "daily-1", "predecessor": None},
+        }
+    )
+    assert listing_v1.build_command() == [
+        "borg",
+        "list",
+        "--remote-path",
+        "/opt/borg",
+        "--json-lines",
+        "--",
+        "/agent/repo::daily-1",
+    ]
+
+    diff_v2 = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.diff",
+            "repository": {"path": "/agent/v2-repo", "borg_version": 2},
+            "operation": {"archive": "aid:b2", "predecessor": "aid:a1"},
+        }
+    )
+    assert diff_v2.build_command() == [
+        "borg2",
+        "-r",
+        "/agent/v2-repo",
+        "diff",
+        "--json-lines",
+        "--",
+        "aid:a1",
+        "aid:b2",
+    ]
+
+    listing_v2 = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.diff",
+            "repository": {"path": "/agent/v2-repo", "borg_version": 2},
+            "operation": {"archive": "aid:a1", "predecessor": None},
+        }
+    )
+    assert listing_v2.build_command() == [
+        "borg2",
+        "-r",
+        "/agent/v2-repo",
+        "list",
+        "--json-lines",
+        "--",
+        "aid:a1",
+    ]
+
+    # An archive named like an option is still an archive.
+    odd = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.diff",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": {"archive": "--help", "predecessor": "daily-1"},
+        }
+    )
+    assert odd.build_command()[-3:] == ["--", "/agent/repo::daily-1", "--help"]
+
+
+@pytest.mark.unit
+def test_repository_diff_rejects_a_blank_or_missing_predecessor():
+    # A blank or a missing predecessor is a payload error, not a request
+    # for the full listing: silently listing would store every path as
+    # added on top of an indexed predecessor. The full listing is asked
+    # for with an explicit null.
+    for operation in ({"archive": "daily-2", "predecessor": "  "}, {"archive": "d"}):
+        payload = RepositoryOperationPayload.from_job_payload(
+            {
+                "job_kind": "repository.diff",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": operation,
+            }
+        )
+        with pytest.raises(ValueError, match="predecessor"):
+            payload.build_command()
+
+
+class _ChunkedStdout:
+    def __init__(self, data):
+        self._data = data
+        self._done = False
+
+    def read(self, *args):
+        if self._done:
+            return b""
+        self._done = True
+        return self._data
+
+    def close(self):
+        pass
+
+
+class _ArtifactClient(FakeRuntimeClient):
+    def __init__(self, jobs):
+        super().__init__(jobs)
+        self.uploaded = {}
+
+    def upload_artifact(self, job_id, data):
+        self.uploaded["job_id"] = job_id
+        self.uploaded["bytes"] = data.read()
+        return {"accepted": True, "size": len(self.uploaded["bytes"])}
+
+
+def _run_diff_job_with_return_code(monkeypatch, return_code, *, stderr=b""):
+    seen = {}
+
+    def fake_popen(cmd, **kwargs):
+        seen["cmd"] = cmd
+        seen["env"] = kwargs["env"]
+        return SimpleNamespace(
+            stdout=_ChunkedStdout(b'{"path": "a", "change": "added"}\n'),
+            stderr=SimpleNamespace(read=lambda: stderr),
+            wait=lambda: return_code,
+            poll=lambda: return_code,
+        )
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.subprocess.Popen", fake_popen
+    )
+    monkeypatch.setenv("TZ", "Europe/Berlin")
+    client = _ArtifactClient([])
+    result = execute_repository_operation_job(
+        {
+            "id": 97,
+            "payload": {
+                "job_kind": "repository.diff",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {"archive": "daily-2", "predecessor": "daily-1"},
+                "secrets": {"BORG_PASSPHRASE": {"value": "secret"}},
+            },
+        },
+        client,
+    )
+    return result, client, seen
+
+
+@pytest.mark.unit
+def test_repository_diff_streams_the_listing_as_an_artifact(monkeypatch):
+    # The listing goes over the artifact upload whether or not the server
+    # asked for it: a large archive's diff runs to tens of megabytes, which
+    # the WebSocket result must never carry. The server parses timestamps
+    # out of it, so it renders in UTC like the other machine-parsed kinds.
+    result, client, seen = _run_diff_job_with_return_code(monkeypatch, 0)
+
+    assert result.status == "completed"
+    assert seen["cmd"][:4] == ["borg", "diff", "--json-lines", "--"]
+    assert seen["env"]["TZ"] == "UTC"
+    assert seen["env"]["BORG_PASSPHRASE"] == "secret"
+    assert client.uploaded["job_id"] == 97
+    assert client.uploaded["bytes"] == b'{"path": "a", "change": "added"}\n'
+    complete_call = [c for c in client.calls if c[0] == "complete_job"][0]
+    assert complete_call[2] == {
+        "return_code": 0,
+        "command": seen["cmd"],
+        "artifact": True,
+    }
+    assert not [c for c in client.calls if c[0] == "fail_job"]
+
+
+@pytest.mark.unit
+def test_repository_diff_completes_with_warnings_on_a_borg_warning(monkeypatch):
+    # rc 1 is Borg's warning: the listing was produced in full and the
+    # server's history index accepts it (its BORG_OK_EXIT_CODES). Failing
+    # the job here would throw away a complete diff and burn one of the
+    # archive's bounded retries for nothing.
+    result, client, seen = _run_diff_job_with_return_code(
+        monkeypatch, 1, stderr=b"file changed while we backed it up\n"
+    )
+
+    assert result.status == "completed_with_warnings"
+    assert result.return_code == 1
+    assert client.uploaded["job_id"] == 97
+    complete_call = [c for c in client.calls if c[0] == "complete_job"][0]
+    assert complete_call[2]["return_code"] == 1
+    assert complete_call[2]["artifact"] is True
+    stderr_logs = [c for c in client.calls if c[0] == "send_log" and c[3] == "stderr"]
+    assert stderr_logs and "file changed" in stderr_logs[-1][4]
+    assert not [c for c in client.calls if c[0] == "fail_job"]
+
+
+@pytest.mark.unit
+def test_repository_diff_fails_on_a_borg_error(monkeypatch):
+    result, client, _ = _run_diff_job_with_return_code(
+        monkeypatch, 2, stderr=b"Failed to create/acquire the lock\n"
+    )
+
+    assert result.status == "failed"
+    assert result.return_code == 2
+    fail_call = [c for c in client.calls if c[0] == "fail_job"][0]
+    assert fail_call[3] == 2
+    assert not [c for c in client.calls if c[0] == "complete_job"]
+
+
+@pytest.mark.unit
+def test_repository_extract_file_still_fails_on_a_borg_warning(monkeypatch):
+    # The warning tolerance is the diff job's alone: a file served with a
+    # warning may be incomplete, and a download must not pretend otherwise.
+    def fake_popen(cmd, **kwargs):
+        return SimpleNamespace(
+            stdout=_ChunkedStdout(b"partial"),
+            stderr=SimpleNamespace(read=lambda: b"warning\n"),
+            wait=lambda: 1,
+            poll=lambda: 1,
+        )
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.subprocess.Popen", fake_popen
+    )
+    client = _ArtifactClient([])
+
+    result = execute_repository_operation_job(
+        {
+            "id": 98,
+            "payload": {
+                "job_kind": "repository.extract_archive_file",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {
+                    "archive": "archive-1",
+                    "file_path": "docs/report.txt",
+                    "delivery": "artifact",
+                },
+            },
+        },
+        client,
+    )
+
+    assert result.status == "failed"
+    assert [c for c in client.calls if c[0] == "fail_job"]
+
+
+@pytest.mark.unit
+def test_repository_diff_fails_when_the_server_dropped_the_upload(monkeypatch):
+    # The artifact route answers 200 with `accepted: false` when no consumer
+    # is registered for the job or it left mid-stream. For a download that
+    # is a person who closed the tab; for a listing it is a job that did
+    # not happen, and a `completed` row would read as a delivered one.
+    def fake_popen(cmd, **kwargs):
+        return SimpleNamespace(
+            stdout=_ChunkedStdout(b'{"path": "a", "change": "added"}\n'),
+            stderr=SimpleNamespace(read=lambda: b""),
+            wait=lambda: 0,
+            poll=lambda: 0,
+        )
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.subprocess.Popen", fake_popen
+    )
+
+    class _DroppingClient(FakeRuntimeClient):
+        def upload_artifact(self, job_id, data):
+            data.read()
+            return {"accepted": False, "size": 0}
+
+    client = _DroppingClient([])
+
+    result = execute_repository_operation_job(
+        {
+            "id": 99,
+            "payload": {
+                "job_kind": "repository.diff",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {"archive": "daily-2", "predecessor": "daily-1"},
+            },
+        },
+        client,
+    )
+
+    assert result.status == "failed"
+    fail_call = [c for c in client.calls if c[0] == "fail_job"][0]
+    assert "not delivered" in fail_call[2]
+    assert not [c for c in client.calls if c[0] == "complete_job"]
+
+
+@pytest.mark.unit
+def test_repository_diff_fails_without_an_explicit_delivery_confirmation(monkeypatch):
+    # Fail closed: the transport returns {} for a bodyless answer (a proxy
+    # that swallowed the body, say), and only the server's explicit yes
+    # says a consumer took the listing.
+    def fake_popen(cmd, **kwargs):
+        return SimpleNamespace(
+            stdout=_ChunkedStdout(b'{"path": "a", "change": "added"}\n'),
+            stderr=SimpleNamespace(read=lambda: b""),
+            wait=lambda: 0,
+            poll=lambda: 0,
+        )
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.subprocess.Popen", fake_popen
+    )
+
+    class _SilentClient(FakeRuntimeClient):
+        def upload_artifact(self, job_id, data):
+            data.read()
+            return {}
+
+    client = _SilentClient([])
+
+    result = execute_repository_operation_job(
+        {
+            "id": 108,
+            "payload": {
+                "job_kind": "repository.diff",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {"archive": "daily-2", "predecessor": "daily-1"},
+            },
+        },
+        client,
+    )
+
+    assert result.status == "failed"
+    fail_call = [c for c in client.calls if c[0] == "fail_job"][0]
+    assert "did not confirm" in fail_call[2]
+    assert not [c for c in client.calls if c[0] == "complete_job"]
+
+
+@pytest.mark.unit
+def test_repository_diff_keeps_borgs_reason_when_the_consumer_gave_up(monkeypatch):
+    # borg failed before writing a byte (a held lock), the consumer's
+    # first-byte timeout expired and the upload came back rejected: the
+    # job fails as not delivered, and the lock error must still reach the
+    # log, or the operator retries blind against the same lock.
+    def fake_popen(cmd, **kwargs):
+        return SimpleNamespace(
+            stdout=_ChunkedStdout(b""),
+            stderr=SimpleNamespace(read=lambda: b"Failed to create/acquire the lock\n"),
+            wait=lambda: 2,
+            poll=lambda: 2,
+        )
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.subprocess.Popen", fake_popen
+    )
+
+    class _DroppingClient(FakeRuntimeClient):
+        def upload_artifact(self, job_id, data):
+            data.read()
+            return {"accepted": False, "size": 0}
+
+    client = _DroppingClient([])
+
+    result = execute_repository_operation_job(
+        {
+            "id": 109,
+            "payload": {
+                "job_kind": "repository.diff",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {"archive": "daily-2", "predecessor": "daily-1"},
+            },
+        },
+        client,
+    )
+
+    assert result.status == "failed"
+    fail_call = [c for c in client.calls if c[0] == "fail_job"][0]
+    assert "not delivered" in fail_call[2] and "code 2" in fail_call[2]
+    stderr_logs = [c for c in client.calls if c[0] == "send_log" and c[3] == "stderr"]
+    assert stderr_logs and "acquire the lock" in stderr_logs[-1][4]
+
+
+@pytest.mark.unit
+def test_streaming_keepalive_never_holds_the_watchdog(monkeypatch):
+    # On the polling transport a keepalive is an HTTP request with retries.
+    # It runs on its own thread, so a server that does not answer cannot
+    # delay a cancellation by the length of those retries.
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.STREAM_KEEPALIVE_SECONDS", 0.1
+    )
+    terminated = threading.Event()
+    killed = _watchdog_process(monkeypatch, terminated, _StallingStdout(terminated))
+    cancel_at = time.monotonic() + 0.2
+
+    class _HangingClient(_ArtifactClient):
+        def send_progress(self, job_id, progress):
+            self.calls.append(("send_progress", job_id, progress))
+            time.sleep(3)  # the retries of an unreachable server
+            return {"id": job_id, "status": "running"}
+
+        def cancel_job(self, job_id):
+            self.calls.append(("cancel_job", job_id))
+            return {"id": job_id, "status": "canceled"}
+
+    client = _HangingClient([])
+    started = time.monotonic()
+
+    result = execute_repository_operation_job(
+        {
+            "id": 110,
+            "payload": {
+                "job_kind": "repository.diff",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {"archive": "daily-2", "predecessor": "daily-1"},
+            },
+        },
+        client,
+        should_cancel=lambda: time.monotonic() >= cancel_at,
+    )
+
+    assert result.status == "canceled"
+    assert killed.is_set()
+    assert [c for c in client.calls if c[0] == "send_progress"]
+    # Cancelled within about a poll tick of the request; joining the
+    # hanging keepalive would have taken the verdict past its 3 s sleep,
+    # which started no later than the first keepalive tick at 0.1 s.
+    assert time.monotonic() - started < 3.0
+
+
+@pytest.mark.unit
+def test_streaming_watchdog_survives_a_failing_cancel_check(monkeypatch):
+    # The cancel check may ask the server and fail while it is unreachable.
+    # The watchdog must go on: it enforces the deadline too, and with the
+    # keepalive reporting the job alive, a dead watchdog would leave a job
+    # that nothing can stop any more. A later answer still cancels.
+    terminated = threading.Event()
+    killed = _watchdog_process(monkeypatch, terminated, _StallingStdout(terminated))
+    answers = iter([RuntimeError("heartbeat failed"), RuntimeError("again"), True])
+
+    def should_cancel():
+        answer = next(answers, True)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    class _CancelClient(_ArtifactClient):
+        def cancel_job(self, job_id):
+            self.calls.append(("cancel_job", job_id))
+            return {"id": job_id, "status": "canceled"}
+
+    client = _CancelClient([])
+
+    result = execute_repository_operation_job(
+        {
+            "id": 111,
+            "payload": {
+                "job_kind": "repository.diff",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {"archive": "daily-2", "predecessor": "daily-1"},
+            },
+        },
+        client,
+        should_cancel=should_cancel,
+    )
+
+    assert result.status == "canceled"
+    assert killed.is_set()
+    assert ("cancel_job", 111) in client.calls
+
+
+@pytest.mark.unit
+def test_activity_reader_pads_a_silent_pipe_with_blank_lines():
+    # A diff's upload carries nothing while borg compares unchanged paths;
+    # a proxy in front of the server may cut an idle request body. Padding
+    # keeps bytes flowing without counting as activity or as output.
+    from agent.borg_ui_agent.repository_ops import _ActivityTrackingReader
+
+    read_fd, write_fd = os.pipe()
+    # Buffered like a Popen pipe: a buffered read(n) would block until n
+    # bytes arrived, so the reader must not go through it.
+    stream = os.fdopen(read_fd, "rb")
+    try:
+        reader = _ActivityTrackingReader(stream, pad_idle_seconds=0.05)
+        before = reader.last_activity
+
+        assert reader.read(8192) == b"\n"
+        assert reader.bytes_read == 0
+        assert reader.last_activity == before
+
+        # A flush that ends inside a record: the partial line is held back,
+        # the silence that follows is padded at a line boundary.
+        os.write(write_fd, b'{"path": "a')
+        assert reader.read(8192) == b"\n"
+        assert reader.bytes_read == 11
+
+        os.write(write_fd, b'"}\n{"path": "b"}\n{"pa')
+        assert reader.read(8192) == b'{"path": "a"}\n{"path": "b"}\n'
+        assert reader.bytes_read == 11 + 21
+        assert reader.last_activity > before
+
+        # End of output: the tail goes out as it is, then the empty read.
+        os.close(write_fd)
+        write_fd = None
+        assert reader.read(8192) == b'{"pa'
+        assert reader.read(8192) == b""
+        # A whole-output read would take one batch of lines for the whole
+        # listing: refused rather than served short.
+        with pytest.raises(ValueError, match="size"):
+            reader.read()
+    finally:
+        stream.close()
+        if write_fd is not None:
+            os.close(write_fd)
+
+    # Without padding the reader blocks on the read, as the extract needs.
+    plain = _ActivityTrackingReader(_ChunkedStdout(b"x"))
+    assert plain.read() == b"x"
+    assert plain.read() == b""
+
+
+@pytest.mark.unit
+def test_repository_diff_streams_through_a_padding_reader(monkeypatch):
+    seen = {}
+
+    class _Reader:
+        def __init__(self, stream, *, pad_idle_seconds=None):
+            seen["pad"] = pad_idle_seconds
+            self._stream = stream
+            self.last_activity = time.monotonic()
+            self.bytes_read = 0
+
+        def read(self, *args):
+            return self._stream.read(*args)
+
+        def close(self):
+            self._stream.close()
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops._ActivityTrackingReader", _Reader
+    )
+
+    def fake_popen(cmd, **kwargs):
+        return SimpleNamespace(
+            stdout=_ChunkedStdout(b""),
+            stderr=SimpleNamespace(read=lambda: b""),
+            wait=lambda: 0,
+            poll=lambda: 0,
+        )
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.subprocess.Popen", fake_popen
+    )
+
+    execute_repository_operation_job(
+        {
+            "id": 112,
+            "payload": {
+                "job_kind": "repository.diff",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {"archive": "daily-2", "predecessor": "daily-1"},
+            },
+        },
+        _ArtifactClient([]),
+    )
+    assert seen["pad"] == 30
+
+    execute_repository_operation_job(
+        {
+            "id": 113,
+            "payload": {
+                "job_kind": "repository.extract_archive_file",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {
+                    "archive": "archive-1",
+                    "file_path": "docs/report.txt",
+                    "delivery": "artifact",
+                },
+            },
+        },
+        _ArtifactClient([]),
+    )
+    # An extract's bytes are the file: never padded.
+    assert seen["pad"] is None
+
+
+@pytest.mark.unit
+def test_repository_diff_budget_ignores_a_boolean_timeout():
+    from agent.borg_ui_agent.repository_ops import _operation_timeout_seconds
+
+    assert _operation_timeout_seconds({"timeout_seconds": True}, 5.0) == 5.0
+
+
+@pytest.mark.unit
+def test_streaming_deadline_does_not_wait_for_a_blocked_cancel_check(monkeypatch):
+    # On the polling transport the cancel check is a heartbeat request
+    # with retries; one that hangs on an unreachable server must not hold
+    # the deadline.
+    terminated = threading.Event()
+    killed = _watchdog_process(monkeypatch, terminated, _StallingStdout(terminated))
+    entered = threading.Event()
+
+    def should_cancel():
+        entered.set()
+        time.sleep(3)
+        return False
+
+    client = _ArtifactClient([])
+    started = time.monotonic()
+
+    # The poller's first tick (0.5 s) enters the hanging check; the
+    # deadline (0.8 s) is due on the watchdog's second tick while the
+    # check still hangs.
+    result = execute_repository_operation_job(
+        {
+            "id": 114,
+            "payload": {
+                "job_kind": "repository.diff",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {
+                    "archive": "daily-2",
+                    "predecessor": "daily-1",
+                    "timeout_seconds": 0.8,
+                },
+            },
+        },
+        client,
+        should_cancel=should_cancel,
+    )
+
+    assert result.status == "failed"
+    assert entered.is_set()
+    assert killed.is_set()
+    fail_call = [c for c in client.calls if c[0] == "fail_job"][0]
+    assert "stopped by the watchdog: ran longer than 0.8s" in fail_call[2]
+    assert time.monotonic() - started < 3.0
+
+
+@pytest.mark.unit
+def test_repository_diff_ends_borg_when_the_server_rejects_the_upload(monkeypatch):
+    # The consumer left mid-stream: the server answers the upload early
+    # with `accepted: false` while borg is still comparing unchanged paths.
+    # Closing stdout ends borg only at its next write, so the agent ends it.
+    terminated = threading.Event()
+    killed = _watchdog_process(monkeypatch, terminated, _StallingStdout(terminated))
+
+    class _RejectingClient(FakeRuntimeClient):
+        def upload_artifact(self, job_id, data):
+            return {"accepted": False, "size": 0}
+
+    client = _RejectingClient([])
+    started = time.monotonic()
+
+    result = execute_repository_operation_job(
+        {
+            "id": 115,
+            "payload": {
+                "job_kind": "repository.diff",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {"archive": "daily-2", "predecessor": "daily-1"},
+            },
+        },
+        client,
+    )
+
+    assert result.status == "failed"
+    assert killed.is_set()
+    assert time.monotonic() - started < 5
+    fail_call = [c for c in client.calls if c[0] == "fail_job"][0]
+    assert "not delivered" in fail_call[2]
+
+
+@pytest.mark.unit
+def test_repository_extract_file_completes_when_the_downloader_left(monkeypatch):
+    # The download keeps its contract: a consumer that left is not the
+    # agent's failure, and nothing reads the job's verdict afterwards.
+    def fake_popen(cmd, **kwargs):
+        return SimpleNamespace(
+            stdout=_ChunkedStdout(b"filebytes"),
+            stderr=SimpleNamespace(read=lambda: b""),
+            wait=lambda: 0,
+            poll=lambda: 0,
+        )
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.subprocess.Popen", fake_popen
+    )
+
+    class _DroppingClient(FakeRuntimeClient):
+        def upload_artifact(self, job_id, data):
+            data.read()
+            return {"accepted": False, "size": 0}
+
+    client = _DroppingClient([])
+
+    result = execute_repository_operation_job(
+        {
+            "id": 100,
+            "payload": {
+                "job_kind": "repository.extract_archive_file",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {
+                    "archive": "archive-1",
+                    "file_path": "docs/report.txt",
+                    "delivery": "artifact",
+                },
+            },
+        },
+        client,
+    )
+
+    assert result.status == "completed"
+
+
+@pytest.mark.unit
+def test_repository_diff_fails_when_the_upload_breaks(monkeypatch):
+    # borg has already exited here; the terminate finds nothing to end.
+    def fake_popen(cmd, **kwargs):
+        return SimpleNamespace(
+            stdout=_ChunkedStdout(b'{"path": "a", "change": "added"}\n'),
+            stderr=SimpleNamespace(read=lambda: b""),
+            wait=lambda: 0,
+            poll=lambda: 0,
+            returncode=0,
+        )
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.subprocess.Popen", fake_popen
+    )
+
+    class _BrokenClient(FakeRuntimeClient):
+        def upload_artifact(self, job_id, data):
+            raise RuntimeError("connection reset")
+
+    client = _BrokenClient([])
+
+    result = execute_repository_operation_job(
+        {
+            "id": 101,
+            "payload": {
+                "job_kind": "repository.diff",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {"archive": "daily-2", "predecessor": "daily-1"},
+            },
+        },
+        client,
+    )
+
+    assert result.status == "failed"
+    fail_call = [c for c in client.calls if c[0] == "fail_job"][0]
+    assert "upload failed" in fail_call[2] and "connection reset" in fail_call[2]
+    assert not [c for c in client.calls if c[0] == "complete_job"]
+
+
+class _StallingStdout:
+    """Blocks in read() until the watchdog terminates the process, then
+    ends the stream; `data` is served after `delay` seconds when the
+    watchdog has not struck by then."""
+
+    def __init__(self, terminated, *, delay=None, data=b""):
+        self._terminated = terminated
+        self._delay = delay
+        self._data = data
+        self._served = False
+
+    def read(self, *args):
+        if self._served:
+            return b""
+        if self._delay is not None and not self._terminated.wait(timeout=self._delay):
+            self._served = True
+            return self._data
+        self._terminated.wait(timeout=5)
+        return b""
+
+    def close(self):
+        self._terminated.set()
+
+
+def _watchdog_process(monkeypatch, terminated, stdout, *, stderr=b""):
+    """A fake borg whose stdout is `stdout`. `terminated` unblocks the
+    stdout (the helper closes it after the upload; the watchdog's kill
+    sets it too); `killed` records only the watchdog's kill and decides
+    the exit code, so a run the watchdog left alone exits 0."""
+    killed = threading.Event()
+
+    def _kill(pgid, sig):
+        killed.set()
+        terminated.set()
+
+    process = SimpleNamespace(
+        stdout=stdout,
+        stderr=SimpleNamespace(read=lambda: stderr),
+        pid=4321,
+        poll=lambda: -15 if killed.is_set() else None,
+        wait=lambda *a, **k: -15 if killed.is_set() else 0,
+    )
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.subprocess.Popen", lambda *a, **k: process
+    )
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.os.getpgid", lambda pid: 9999
+    )
+    monkeypatch.setattr("agent.borg_ui_agent.repository_ops.os.killpg", _kill)
+    return killed
+
+
+@pytest.mark.unit
+def test_repository_diff_is_not_killed_for_stdout_silence(monkeypatch):
+    # `borg diff --json-lines` prints a line per changed path and nothing
+    # while it compares unchanged ones, so stdout silence says nothing
+    # about a diff. The extract's idle bound must not apply to it: with
+    # that bound far below the silence, the listing still completes, and
+    # an extract under the same silence is stalled as before.
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.STREAM_EXTRACT_IDLE_SECONDS", 0.05
+    )
+    terminated = threading.Event()
+    killed = _watchdog_process(
+        monkeypatch,
+        terminated,
+        _StallingStdout(terminated, delay=1.2, data=b'{"path": "a"}\n'),
+    )
+    client = _ArtifactClient([])
+
+    result = execute_repository_operation_job(
+        {
+            "id": 102,
+            "payload": {
+                "job_kind": "repository.diff",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {"archive": "daily-2", "predecessor": "daily-1"},
+            },
+        },
+        client,
+    )
+
+    assert result.status == "completed"
+    assert client.uploaded["bytes"] == b'{"path": "a"}\n'
+    assert not killed.is_set()
+
+    terminated = threading.Event()
+    killed = _watchdog_process(
+        monkeypatch,
+        terminated,
+        _StallingStdout(terminated, delay=1.2, data=b"filebytes"),
+    )
+    client = _ArtifactClient([])
+
+    result = execute_repository_operation_job(
+        {
+            "id": 103,
+            "payload": {
+                "job_kind": "repository.extract_archive_file",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {
+                    "archive": "archive-1",
+                    "file_path": "docs/report.txt",
+                    "delivery": "artifact",
+                },
+            },
+        },
+        client,
+    )
+
+    assert result.status == "failed"
+    assert killed.is_set()
+    fail_call = [c for c in client.calls if c[0] == "fail_job"][0]
+    assert "stopped by the watchdog: no output for 0.05s" in fail_call[2]
+
+
+@pytest.mark.unit
+def test_repository_diff_is_bounded_by_the_server_budget(monkeypatch):
+    # No idle bound does not mean no bound: the payload's timeout_seconds
+    # (the server's wait budget) caps the run, and the agent's own
+    # generous default caps it without one, so a wedged borg cannot pin
+    # the worker for good.
+    terminated = threading.Event()
+    killed = _watchdog_process(
+        monkeypatch,
+        terminated,
+        _StallingStdout(terminated),
+        stderr=b"Remote: connection stalled\n",
+    )
+    client = _ArtifactClient([])
+
+    result = execute_repository_operation_job(
+        {
+            "id": 104,
+            "payload": {
+                "job_kind": "repository.diff",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {
+                    "archive": "daily-2",
+                    "predecessor": "daily-1",
+                    "timeout_seconds": 0.2,
+                },
+            },
+        },
+        client,
+    )
+
+    assert result.status == "failed"
+    assert killed.is_set()
+    fail_call = [c for c in client.calls if c[0] == "fail_job"][0]
+    assert "stopped by the watchdog: ran longer than 0.2s" in fail_call[2]
+    # Whatever borg said before it was ended is the operator's lead.
+    stderr_logs = [c for c in client.calls if c[0] == "send_log" and c[3] == "stderr"]
+    assert stderr_logs and "connection stalled" in stderr_logs[-1][4]
+
+
+@pytest.mark.unit
+def test_repository_diff_default_budget_is_the_server_stream_cap():
+    from agent.borg_ui_agent.repository_ops import (
+        STREAM_DIFF_MAX_SECONDS,
+        _operation_timeout_seconds,
+    )
+
+    assert STREAM_DIFF_MAX_SECONDS == 24 * 3600
+    assert (
+        _operation_timeout_seconds({"timeout_seconds": "x"}, STREAM_DIFF_MAX_SECONDS)
+        == STREAM_DIFF_MAX_SECONDS
+    )
+    assert _operation_timeout_seconds({"timeout_seconds": 90}, 5.0) == 90.0
+
+
+@pytest.mark.unit
+def test_repository_diff_is_cancelled_through_the_watchdog(monkeypatch):
+    terminated = threading.Event()
+    killed = _watchdog_process(monkeypatch, terminated, _StallingStdout(terminated))
+
+    class _CancelClient(_ArtifactClient):
+        def cancel_job(self, job_id):
+            self.calls.append(("cancel_job", job_id))
+            return {"id": job_id, "status": "canceled"}
+
+    client = _CancelClient([])
+
+    result = execute_repository_operation_job(
+        {
+            "id": 105,
+            "payload": {
+                "job_kind": "repository.diff",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {"archive": "daily-2", "predecessor": "daily-1"},
+            },
+        },
+        client,
+        should_cancel=lambda: True,
+    )
+
+    assert result.status == "canceled"
+    assert killed.is_set()
+    assert ("cancel_job", 105) in client.calls
+    assert not [c for c in client.calls if c[0] in ("complete_job", "fail_job")]
+
+
+@pytest.mark.unit
+def test_streaming_jobs_keep_the_server_informed_while_silent(monkeypatch):
+    # Nothing reaches the job row while a stream runs (logs and the result
+    # come at the end, the heartbeat only lists the job), and the server
+    # reaps an in-flight job after 15 minutes without activity. The
+    # watchdog reports a progress keepalive meanwhile; a keepalive that
+    # fails to send is dropped, not fatal.
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.STREAM_KEEPALIVE_SECONDS", 0.3
+    )
+    terminated = threading.Event()
+    killed = _watchdog_process(
+        monkeypatch,
+        terminated,
+        _StallingStdout(terminated, delay=1.4, data=b'{"path": "a"}\n'),
+    )
+
+    class _FlakyClient(_ArtifactClient):
+        def send_progress(self, job_id, progress):
+            self.calls.append(("send_progress", job_id, progress))
+            if len([c for c in self.calls if c[0] == "send_progress"]) == 1:
+                raise RuntimeError("socket closed")
+            return {"id": job_id, "status": "running"}
+
+    client = _FlakyClient([])
+
+    result = execute_repository_operation_job(
+        {
+            "id": 106,
+            "payload": {
+                "job_kind": "repository.diff",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {"archive": "daily-2", "predecessor": "daily-1"},
+            },
+        },
+        client,
+    )
+
+    assert result.status == "completed"
+    assert not killed.is_set()
+    keepalives = [c for c in client.calls if c[0] == "send_progress"]
+    assert len(keepalives) >= 2
+    # A sign of life only: no field of the progress schema is a fact
+    # about a stream.
+    assert all(c[1] == 106 and c[2] == {} for c in keepalives)
+
+
+@pytest.mark.unit
+def test_repository_diff_ends_borg_when_the_upload_breaks_mid_silence(monkeypatch):
+    # Closing stdout ends borg only at its next write, and a diff comparing
+    # unchanged paths may not write for a long time: without a terminate the
+    # worker would sit in process.wait() until the deadline.
+    terminated = threading.Event()
+    killed = _watchdog_process(monkeypatch, terminated, _StallingStdout(terminated))
+
+    class _BrokenClient(FakeRuntimeClient):
+        def upload_artifact(self, job_id, data):
+            raise RuntimeError("connection reset")
+
+    client = _BrokenClient([])
+    started = time.monotonic()
+
+    result = execute_repository_operation_job(
+        {
+            "id": 107,
+            "payload": {
+                "job_kind": "repository.diff",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {"archive": "daily-2", "predecessor": "daily-1"},
+            },
+        },
+        client,
+    )
+
+    assert result.status == "failed"
+    assert killed.is_set()
+    assert time.monotonic() - started < 5
+    fail_call = [c for c in client.calls if c[0] == "fail_job"][0]
+    assert "upload failed" in fail_call[2]
