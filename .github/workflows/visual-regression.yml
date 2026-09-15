@@ -1,16 +1,12 @@
 name: GitHub Pages Visual Regression
 
 on:
-  pull_request:
+  workflow_run:
+    workflows: ["Capture Storybook Visual Snapshots"]
+    types: [completed]
+  pull_request_target:
     branches: [main, develop]
-    types: [opened, synchronize, reopened, closed]
-    paths:
-      - "frontend/.storybook/**"
-      - "frontend/scripts/**"
-      - "frontend/src/**"
-      - "frontend/package.json"
-      - "frontend/package-lock.json"
-      - ".github/workflows/visual-regression.yml"
+    types: [closed]
   push:
     branches: [main]
     paths:
@@ -38,10 +34,11 @@ env:
 jobs:
   visuals:
     name: Storybook Visual Report
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
+      actions: read
       contents: write
       pages: write
       id-token: write
@@ -53,14 +50,23 @@ jobs:
         env:
           EVENT_ACTION: ${{ github.event.action || '' }}
           EVENT_NAME: ${{ github.event_name }}
-          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number || '' }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number || github.event.pull_request.number || github.event.inputs.pr_number || '' }}
         run: |
-          if [ "$EVENT_NAME" = "pull_request" ] && [ "$EVENT_ACTION" = "closed" ]; then
+          if [ "$EVENT_NAME" = "pull_request_target" ] && [ "$EVENT_ACTION" = "closed" ]; then
             mode="cleanup"
-          elif [ "$EVENT_NAME" = "pull_request" ] || [ -n "$PR_NUMBER" ]; then
+          elif [ "$EVENT_NAME" = "workflow_run" ] || [ -n "$PR_NUMBER" ]; then
             mode="pr"
           else
             mode="baseline"
+          fi
+
+          if [ "$EVENT_NAME" = "workflow_run" ] && [ "$mode" = "pr" ]; then
+            pr_state="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .state)"
+            if [ "$pr_state" != "open" ]; then
+              mode="cleanup"
+            fi
           fi
 
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
@@ -70,6 +76,7 @@ jobs:
         if: ${{ steps.visual_mode.outputs.mode != 'cleanup' }}
         uses: actions/checkout@v7
         with:
+          ref: main
           path: source
           persist-credentials: false
 
@@ -92,11 +99,32 @@ jobs:
         run: PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install --with-deps chromium
 
       - name: Capture Storybook snapshots
-        if: ${{ steps.visual_mode.outputs.mode != 'cleanup' }}
+        if: ${{ steps.visual_mode.outputs.mode != 'cleanup' && github.event_name != 'workflow_run' }}
         working-directory: source/frontend
         run: npm run visual:screenshots
         env:
           STORYBOOK_SNAPSHOTS_DIR: ${{ github.workspace }}/visual-actual
+
+      - name: Download untrusted visual snapshots
+        if: ${{ steps.visual_mode.outputs.mode == 'pr' && github.event_name == 'workflow_run' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          gh run download "$SOURCE_RUN_ID" --name visual-actual --dir "$GITHUB_WORKSPACE/visual-actual"
+
+          if find "$GITHUB_WORKSPACE/visual-actual" -type l -print -quit | grep -q . || \
+            find "$GITHUB_WORKSPACE/visual-actual" -type f ! -name '*.png' -print -quit | grep -q .; then
+            echo "Refusing unexpected visual artifact files."
+            exit 1
+          fi
+
+          file_count="$(find "$GITHUB_WORKSPACE/visual-actual" -type f -name '*.png' | wc -l | tr -d ' ')"
+          size_kb="$(du -sk "$GITHUB_WORKSPACE/visual-actual" | cut -f1)"
+          if [ "$file_count" -eq 0 ] || [ "$file_count" -gt 2000 ] || [ "$size_kb" -gt 512000 ]; then
+            echo "Refusing visual artifact outside expected size limits."
+            exit 1
+          fi
 
       - name: Prepare visual state branch
         env:
