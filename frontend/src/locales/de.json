@@ -3137,19 +3137,6 @@
       "encryption": "Verschlüsselung",
       "lastModified": "Zuletzt geändert",
       "repositoryLocation": "Repository-Standort",
-      "storageStatistics": "Speicherstatistiken",
-      "totalSize": "Gesamtgröße",
-      "usedOnDisk": "Auf Festplatte verwendet",
-      "uniqueData": "Eindeutige Daten",
-      "totalChunks": "Blöcke gesamt",
-      "uniqueChunks": "Eindeutige Blöcke",
-      "files": "Dateien",
-      "archiveCount": "Archive",
-      "latestBackupSize": "Aktuelle Sicherungsgröße",
-      "firstBackup": "Erste Sicherung",
-      "latestBackup": "Letzte Sicherung",
-      "noBackupsYet": "Noch keine Sicherungen",
-      "noBackupsDesc": "Dieses Repository wurde initialisiert, enthält aber keine Archive. Speicherstatistiken erscheinen hier, nachdem du deine erste Sicherung erstellt hast.",
       "loadFailed": "Fehler beim Laden der Repository-Informationen. Stelle sicher, dass das Repository zugänglich und ordnungsgemäß initialisiert ist.",
       "v2PlanRequired": "This repository uses Borg 2. Your data is safe. Upgrade to Pro to view its details.",
       "exportKeyfileTooltip": "Schlüsseldatei exportieren. sicher aufbewahren!"
@@ -3402,15 +3389,6 @@
     "columnType": "Typ",
     "columnDate": "Datum",
     "columnActions": "Aktionen"
-  },
-  "repositoryInfo": {
-    "title": "Repository-Informationen",
-    "encryption": "Verschlüsselung",
-    "location": "Standort",
-    "totalSize": "Gesamtgröße",
-    "archives": "Archive",
-    "lastModified": "Zuletzt geändert",
-    "na": "N/V"
   },
   "systemSettings": {
     "title": "Systemeinstellungen",
@@ -5086,16 +5064,46 @@
       }
     }
   },
-  "repositoryStatsGrid": {
-    "totalArchives": "Archive gesamt",
-    "originalSize": "Gesamtgröße der Archive",
-    "originalSizeTooltip": "Gesamte logische Größe aller gesicherten Daten über alle Archive vor Komprimierung und Deduplizierung",
-    "compressedSize": "Komprimierte Archivgröße",
-    "compressedSizeTooltip": "Gesamtgröße aller Archivdaten nach Komprimierung, vor Deduplizierung über alle Archive",
-    "numberOfFiles": "Anzahl der Dateien",
-    "numberOfFilesTooltip": "Gesamtzahl der Dateien über alle Archive",
+  "repositoryStats": {
+    "heading": "Speicherstatistik",
+    "archives": "Archive",
     "repositorySize": "Repository-Größe",
-    "repositorySizeTooltip": "Tatsächlich vom Repository auf dem Datenträger belegter Speicher nach Komprimierung und Deduplizierung über alle Archive"
+    "deduplicatedSize": "Deduplizierte Größe",
+    "storageUsed": "Belegter Speicher",
+    "originalSize": "Gesamtgröße der Archive",
+    "compressedSize": "Komprimierte Archivgröße",
+    "latestArchiveFiles": "Dateien im neuesten Archiv",
+    "unknown": "Unbekannt",
+    "unknownHint": "Noch nicht gemessen",
+    "notReported": "Von Borg {{version}} nicht gemeldet",
+    "notReportedHint": "Borg {{version}} meldet diesen Wert nicht",
+    "pending": "Ausstehend",
+    "pendingHint": "Der Archivindex holt das Repository gerade nach",
+    "indexing": "Indexierung…",
+    "indexingArchivesHint": "Die Archivliste wird gelesen",
+    "indexingSizeHint": "Die Repository-Größe wird gemessen",
+    "measuredAt": "Gemessen {{time}}",
+    "measuredTimeUnknown": "Messzeitpunkt unbekannt",
+    "source": {
+      "borg1_cache_stats": "Deduplizierte Größe aus Borgs Cache-Statistik",
+      "borg2_index": "Summe aller Objekte im Chunk-Index des Repositorys",
+      "storage_used": "Vom Repository belegte Bytes auf dem Speicher",
+      "compact_stats": "Repository-Größe laut letztem Compact"
+    },
+    "originalSizeHint": "Summe der Originalgröße aller Archive der neuesten Auflistung",
+    "compressedSizeHint": "Summe der komprimierten Größe aller Archive",
+    "deduplicatedSizeHint": "Größe der Daten nach Deduplizierung",
+    "latestArchiveFilesHint": "Anzahl der Dateien im neuesten Archiv, keine Summe",
+    "compact": {
+      "heading": "Letzter Compact",
+      "at": "Kompaktiert {{time}}.",
+      "sourceSize": "Quelldaten",
+      "deduplicatedSize": "Deduplizierte Größe",
+      "compressionFactor": "Kompressionsfaktor",
+      "deduplicationFactor": "Deduplizierungsfaktor",
+      "saved": "Freigegebener Speicher",
+      "rounded": "Die Werte stammen aus Borgs formatierter Ausgabe und sind gerundet."
+    }
   },
   "upcomingJobs": {
     "title": "Bevorstehende Aufgaben (Nächste 24 Stunden)",
@@ -5563,7 +5571,6 @@
   },
   "repositoryInfoDialog": {
     "failedToDownloadKeyfile": "Schlüsseldatei konnte nicht heruntergeladen werden",
-    "noArchivesDescription": "Dieses Repository wurde initialisiert, enthält aber keine Archive. Speicherstatistiken erscheinen hier nach der ersten Sicherung.",
     "failedToLoad": "Repository-Informationen konnten nicht geladen werden. Stelle sicher, dass das Repository zugänglich und ordnungsgemäß initialisiert ist.",
     "recovery": {
       "title": "Wiederherstellungsbefehle",

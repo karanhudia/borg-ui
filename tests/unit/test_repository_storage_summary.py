@@ -236,6 +236,7 @@ class TestStorageInResponses:
         assert row["storage"]["measured_at"] is not None
         # the polled list carries the stored columns only
         assert row["storage"]["archives_consistent"] is None
+        assert row["storage"]["archives_listed"] is False
         assert row["storage"]["compact"] is None
 
         single = test_client.get(f"/api/repositories/{repo.id}", headers=admin_headers)
@@ -245,6 +246,192 @@ class TestStorageInResponses:
         assert storage["compact"] == {"repository_size": 2_350_000_000}
         assert storage["compact_at"] is not None
         assert storage["compressed_size"] is None
+
+    def test_list_names_the_index_work_still_pending(
+        self, test_client, test_db, admin_headers
+    ):
+        """After an import the chain (stats, archive_sync, history_index) is
+        queued; the list names those kinds so the card says "indexing"
+        instead of showing 0 archives and no size as final values (#1063).
+        Finished and non-index work is not named."""
+        fresh = _repo(test_db, "fresh-import", borg_version=2, archive_count=0)
+        settled = _repo(test_db, "settled", borg_version=2, archive_count=3)
+        for kind, status in (
+            ("stats", "queued"),
+            ("archive_sync", "running"),
+            ("history_index", "queued"),
+            ("compact", "queued"),
+        ):
+            test_db.add(
+                Operation(
+                    repository_id=fresh.id,
+                    kind=kind,
+                    category="maintenance" if kind == "compact" else "index",
+                    status=status,
+                    trigger="followup",
+                    priority=10,
+                    run_id=f"import-{fresh.id}-{kind}",
+                )
+            )
+        test_db.add(
+            Operation(
+                repository_id=settled.id,
+                kind="stats",
+                category="index",
+                status="completed",
+                trigger="reconcile",
+                priority=10,
+                run_id=f"reconcile-{settled.id}",
+                completed_at=datetime(2026, 9, 1, 12, 0, 0),
+            )
+        )
+        # a routine reconcile listing waiting in the queue is named too: the
+        # card keeps the settled repository's figures, since only a
+        # placeholder is replaced by "indexing"; a manual resync carries the
+        # same trigger and must show
+        test_db.add(
+            Operation(
+                repository_id=settled.id,
+                kind="archive_sync",
+                category="index",
+                status="queued",
+                trigger="reconcile",
+                priority=10,
+                run_id=f"reconcile-{settled.id}-next",
+            )
+        )
+        test_db.commit()
+
+        listed = test_client.get("/api/repositories/", headers=admin_headers)
+        assert listed.status_code == 200, listed.text
+        rows = {r["id"]: r for r in listed.json()["repositories"]}
+        assert rows[fresh.id]["index_pending_kinds"] == [
+            "archive_sync",
+            "history_index",
+            "stats",
+        ]
+        assert rows[settled.id]["index_pending_kinds"] == ["archive_sync"]
+
+        # the detail carries the same kinds
+        single = test_client.get(f"/api/repositories/{fresh.id}", headers=admin_headers)
+        assert single.status_code == 200, single.text
+        assert single.json()["repository"]["index_pending_kinds"] == [
+            "archive_sync",
+            "history_index",
+            "stats",
+        ]
+
+    def test_storage_route_serves_the_stored_figures_without_borg(
+        self, test_client, test_db, admin_headers, monkeypatch
+    ):
+        """The header and the dialog read this route: the same summary the
+        detail carries plus the pending index kinds, and no live Borg call,
+        so it cannot race the dialog's `/info` for the repository lock."""
+        import app.api.repositories as repositories_api
+
+        repo = _repo(
+            test_db,
+            "stored-only",
+            borg_version=1,
+            archive_count=1,
+            total_size_bytes=4096,
+            total_size_source="borg1_cache_stats",
+        )
+        test_db.add(
+            Operation(
+                repository_id=repo.id,
+                kind="stats",
+                category="index",
+                status="queued",
+                trigger="manual",
+                priority=10,
+                run_id=f"manual-{repo.id}",
+            )
+        )
+        test_db.commit()
+
+        async def no_borg(*args, **kwargs):
+            raise AssertionError("the storage route must not run borg")
+
+        monkeypatch.setattr(repositories_api, "get_repository_stats", no_borg)
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/storage", headers=admin_headers
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["repository_id"] == repo.id
+        assert body["storage"]["size_bytes"] == 4096
+        assert body["storage"]["size_source"] == "borg1_cache_stats"
+        assert body["index_pending_kinds"] == ["stats"]
+
+        missing = test_client.get(
+            "/api/repositories/999999/storage", headers=admin_headers
+        )
+        assert missing.status_code == 404
+
+    def test_storage_route_needs_access_to_the_repository(
+        self, test_client, test_db, admin_headers, auth_headers
+    ):
+        """The figures and the pending work of a repository are read with the
+        viewer role on it, like the detail: a user without any permission on
+        the repository is refused."""
+        repo = _repo(test_db, "guarded", borg_version=1, archive_count=1)
+        allowed = test_client.get(
+            f"/api/repositories/{repo.id}/storage", headers=admin_headers
+        )
+        assert allowed.status_code == 200, allowed.text
+        denied = test_client.get(
+            f"/api/repositories/{repo.id}/storage", headers=auth_headers
+        )
+        assert denied.status_code == 403, denied.text
+
+    def test_list_survives_a_failing_operations_query(
+        self, test_client, test_db, admin_headers, monkeypatch
+    ):
+        """The list's storage columns and pending kinds both read the
+        operations table; when that fails the list still answers, without
+        those fields, and the fallback does not run the failing query
+        again."""
+        import app.services.operations.repository_status as status_module
+
+        from sqlalchemy import text
+
+        repo = _repo(test_db, "listed-under-failure", borg_version=1, archive_count=1)
+
+        def boom(db, repository_ids):
+            db.execute(text("SELECT nothing FROM no_such_table"))
+
+        monkeypatch.setattr(status_module, "_listed_repositories", boom)
+        listed = test_client.get("/api/repositories/", headers=admin_headers)
+        assert listed.status_code == 200, listed.text
+        row = next(r for r in listed.json()["repositories"] if r["id"] == repo.id)
+        assert row["storage"] is None
+        assert row["index_pending_kinds"] == []
+
+    def test_storage_route_survives_a_failing_pending_kinds_query(
+        self, test_client, test_db, admin_headers, monkeypatch
+    ):
+        """The pending kinds are decorative: their query failing leaves the
+        field empty and the route up, on the detail as well."""
+        import app.api.repositories as repositories_api
+
+        from sqlalchemy import text
+
+        repo = _repo(test_db, "flaky", borg_version=1, archive_count=1)
+
+        def boom(db, repository_ids):
+            db.execute(text("SELECT nothing FROM no_such_table"))
+
+        monkeypatch.setattr(repositories_api, "index_pending_kinds", boom)
+        storage = test_client.get(
+            f"/api/repositories/{repo.id}/storage", headers=admin_headers
+        )
+        assert storage.status_code == 200, storage.text
+        assert storage.json()["index_pending_kinds"] == []
+        detail = test_client.get(f"/api/repositories/{repo.id}", headers=admin_headers)
+        assert detail.status_code == 200, detail.text
+        assert detail.json()["repository"]["index_pending_kinds"] == []
 
     def test_storage_failure_does_not_take_the_detail_down(
         self, test_client, test_db, admin_headers, monkeypatch
@@ -458,11 +645,13 @@ def test_an_emptied_repository_measures_zero_not_nothing(test_db):
     _archive_sync(test_db, repo, at, status="failed")
     summary = storage_summaries(test_db, [repo])[repo.id]
     assert summary.archives_consistent is False
+    assert summary.archives_listed is False
     assert summary.original_size is None
 
     _archive_sync(test_db, repo, at + timedelta(hours=1))
     summary = storage_summaries(test_db, [repo])[repo.id]
     assert summary.archives_consistent is True
+    assert summary.archives_listed is True
     assert summary.original_size == 0
     assert summary.compressed_size == 0
     assert summary.latest_archive_files is None

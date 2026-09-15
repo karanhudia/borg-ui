@@ -27,7 +27,7 @@ vi.mock('../../components/RepositorySelectorCard', () => ({
   ),
 }))
 
-vi.mock('../../components/RepositoryStatsGrid', () => ({ default: () => <div>Stats</div> }))
+vi.mock('../../components/RepositoryStats', () => ({ default: () => <div>Stats</div> }))
 vi.mock('../../components/LastRestoreSection', () => ({ default: () => null }))
 vi.mock('../../components/LockErrorDialog', () => ({ default: () => null }))
 
@@ -113,10 +113,6 @@ vi.mock('../../components/RestoreWizard', () => ({
     ) : null,
 }))
 
-vi.mock('../../hooks/useRepositoryStats', () => ({
-  useRepositoryStats: () => ({ totalSize: 1 }),
-}))
-
 vi.mock('../../hooks/usePermissions', () => ({
   usePermissions: () => ({
     canAccess: (repoId: number) => repoId === 1,
@@ -153,6 +149,7 @@ vi.mock('../../services/api', () => ({
   },
   repositoriesAPI: {
     getRepositories: vi.fn(),
+    getStorage: vi.fn().mockRejectedValue(new Error('not mocked')),
   },
   mountsAPI: {
     mountBorgArchive: vi.fn(),

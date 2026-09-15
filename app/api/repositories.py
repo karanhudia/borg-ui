@@ -1148,6 +1148,53 @@ def _storage_summary_or_none(
         return None
 
 
+def index_pending_kinds(db: Session, repository_ids) -> dict[int, list[str]]:
+    """The index kinds (`stats`, `archive_sync`, `history_merge`,
+    `history_index`) queued or running per repository (#1063), for the
+    card to say "indexing" while a chain a user's action started (an
+    import, a backup, a manual refresh) has not produced a count or a
+    size yet, instead of showing 0 archives and no size as if the
+    repository were empty. Every trigger counts, the periodic reconcile
+    and a manual resync included: the reader replaces only a placeholder
+    (a count of 0, no size, no last backup) with "indexing", so a settled
+    repository keeps showing its figures while a routine listing waits.
+    Sorted, so the payload is the same text for the same state."""
+    ids = list(repository_ids)
+    if not ids:
+        return {}
+    pending: dict[int, set[str]] = {}
+    for repository_id, kind in (
+        db.query(Operation.repository_id, Operation.kind)
+        .filter(
+            Operation.repository_id.in_(ids),
+            Operation.category == "index",
+            Operation.status.in_(("queued", "running")),
+        )
+        .distinct()
+        .all()
+    ):
+        pending.setdefault(repository_id, set()).add(kind)
+    return {repository_id: sorted(kinds) for repository_id, kinds in pending.items()}
+
+
+def _index_pending_kinds_or_empty(db: Session, repository: Repository) -> list[str]:
+    """The pending index kinds of one repository, or an empty list when the
+    query fails: a decorative field must not take the detail or the
+    storage route down, the same rule `_storage_summary_or_none` applies."""
+    repository_id = repository.id  # before a rollback could expire the row
+    try:
+        return index_pending_kinds(db, [repository_id]).get(repository_id, [])
+    except Exception as exc:
+        db.rollback()
+        logger.warning(
+            "Failed to compute pending index kinds",
+            repository_id=repository_id,
+            error=str(exc),
+            exc_info=True,
+        )
+        return []
+
+
 def storage_payload(summary: Optional[StorageSummary]) -> Optional[dict]:
     """The `storage` object of a repository response (#981): the stored
     size with its provenance and time, Borg's last manifest write, the
@@ -1158,8 +1205,12 @@ def storage_payload(summary: Optional[StorageSummary]) -> Optional[dict]:
     upgrade's backfill, or a row it did not reach), so its time is unknown;
     `archives_consistent` False says the archive figures are withheld
     because the rows and the count disagree, or because no listing has run
-    for the repository yet; None says the route did not compute them (the
-    list; the detail route does). `latest_archive_files` is the newest
+    for the repository yet; `archives_listed` tells the two apart (a
+    reader shows "pending" only for a repository a listing has reached)
+    and is computed on every route, so the card can tell a settled, empty
+    repository from one nothing has listed; `archives_consistent` None
+    says the route did not compute the archive figures (the list; the
+    detail and the storage route do). `latest_archive_files` is the newest
     archive's file count, not a sum. `compact` is the statistics of that
     run as `parse_compact_stats` read them, including its
     `size_precision`: `rounded` says its figures come from Borg's
@@ -1173,6 +1224,7 @@ def storage_payload(summary: Optional[StorageSummary]) -> Optional[dict]:
         "measured_at": format_datetime(summary.measured_at),
         "last_modified": format_datetime(summary.last_modified),
         "archives_consistent": summary.archives_consistent,
+        "archives_listed": summary.archives_listed,
         "original_size": summary.original_size,
         "compressed_size": summary.compressed_size,
         "deduplicated_size": summary.deduplicated_size,
@@ -3058,9 +3110,26 @@ async def get_repositories(
             repositories = (
                 db.query(Repository).filter(Repository.id.in_(repository_ids)).all()
             )
-        # the stored columns only, no query of its own (the archive figures
-        # come with the detail route, which guards its queries)
-        storage = storage_summaries(db, repositories, archives=False)
+        # The stored size columns (plus whether a listing has run, one query
+        # on the operations table) and the pending index kinds (another):
+        # both decorative, so one guard covers them, and the fallback runs
+        # neither again. A failure leaves the cards without `storage` and
+        # without the "indexing" state rather than taking the list down.
+        try:
+            storage = storage_summaries(db, repositories, archives=False)
+            index_pending = index_pending_kinds(db, repository_ids)
+        except Exception as exc:
+            logger.warning(
+                "Failed to compute storage columns or pending index kinds",
+                error=str(exc),
+                exc_info=True,
+            )
+            db.rollback()
+            storage = {}
+            index_pending = {}
+            repositories = (
+                db.query(Repository).filter(Repository.id.in_(repository_ids)).all()
+            )
         for repo in repositories:
             # Running check, compact, or prune.
             running_kinds = {
@@ -3117,6 +3186,7 @@ async def get_repositories(
                 ),
                 "total_size": repo.total_size,
                 "storage": storage_payload(storage.get(repo.id)),
+                "index_pending_kinds": index_pending.get(repo.id, []),
                 "archive_count": repo.archive_count,
                 "created_at": format_datetime(repo.created_at),
                 "updated_at": format_datetime(repo.updated_at),
@@ -4153,6 +4223,32 @@ async def download_keyfile(repo_id: int, db: Session = Depends(get_db)):
         )
 
 
+@router.get("/{repo_id}/storage")
+async def get_repository_storage(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """The stored size figures of one repository (#981) and the index work
+    still pending for it (#1063), from the database alone. The archive
+    header and the info dialog read this instead of the repository detail:
+    the detail runs a live `borg info` for a server-executed repository,
+    which would hold Borg's cache lock against the dialog's own `/info`
+    call and make one of the two fail on a slow remote."""
+    repository = db.query(Repository).filter(Repository.id == repo_id).first()
+    if not repository:
+        raise HTTPException(
+            status_code=404,
+            detail={"key": "backend.errors.repo.repositoryNotFound"},
+        )
+    _require_repository_access(db, current_user, repository, "viewer")
+    return {
+        "repository_id": repository.id,
+        "storage": storage_payload(_storage_summary_or_none(db, repository)),
+        "index_pending_kinds": _index_pending_kinds_or_empty(db, repository),
+    }
+
+
 @router.get("/{repo_id}")
 async def get_repository(
     repo_id: int,
@@ -4183,6 +4279,7 @@ async def get_repository(
         # computed before the payload is built: on a failure this rolls the
         # session back, which would expire every row the payload still reads
         storage = storage_payload(_storage_summary_or_none(db, repository))
+        pending_kinds = _index_pending_kinds_or_empty(db, repository)
 
         repository_payload = {
             "id": repository.id,
@@ -4197,6 +4294,7 @@ async def get_repository(
             "last_backup": format_datetime(repository.last_backup),
             "total_size": repository.total_size,
             "storage": storage,
+            "index_pending_kinds": pending_kinds,
             "archive_count": repository.archive_count,
             "created_at": format_datetime(repository.created_at),
             "updated_at": format_datetime(repository.updated_at),

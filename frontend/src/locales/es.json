@@ -3137,19 +3137,6 @@
       "encryption": "Cifrado",
       "lastModified": "Última modificación",
       "repositoryLocation": "Ubicación del repositorio",
-      "storageStatistics": "Estadísticas de almacenamiento",
-      "totalSize": "Tamaño total",
-      "usedOnDisk": "Usado en disco",
-      "uniqueData": "Datos únicos",
-      "totalChunks": "Total de fragmentos",
-      "uniqueChunks": "Fragmentos únicos",
-      "files": "Archivos",
-      "archiveCount": "Archivos de copia",
-      "latestBackupSize": "Tamaño de la última copia",
-      "firstBackup": "Primera copia",
-      "latestBackup": "Última copia",
-      "noBackupsYet": "Sin copias de seguridad aún",
-      "noBackupsDesc": "Este repositorio ha sido inicializado pero no contiene archivos. Las estadísticas de almacenamiento aparecerán aquí después de crear tu primera copia de seguridad.",
       "loadFailed": "Error al cargar la información del repositorio. Asegúrate de que el repositorio sea accesible y esté correctamente inicializado.",
       "v2PlanRequired": "This repository uses Borg 2. Your data is safe. Upgrade to Pro to view its details.",
       "exportKeyfileTooltip": "Exportar archivo de clave. ¡mantenlo seguro!"
@@ -3402,15 +3389,6 @@
     "columnType": "Tipo",
     "columnDate": "Fecha",
     "columnActions": "Acciones"
-  },
-  "repositoryInfo": {
-    "title": "Información del repositorio",
-    "encryption": "Cifrado",
-    "location": "Ubicación",
-    "totalSize": "Tamaño total",
-    "archives": "Archivos",
-    "lastModified": "Última modificación",
-    "na": "N/D"
   },
   "systemSettings": {
     "title": "Configuración del sistema",
@@ -5086,16 +5064,46 @@
       }
     }
   },
-  "repositoryStatsGrid": {
-    "totalArchives": "Total de archivos",
-    "originalSize": "Tamaño total de archivos",
-    "originalSizeTooltip": "Tamaño lógico total de todos los datos respaldados en todos los archivos antes de la compresión y la deduplicación",
-    "compressedSize": "Tamaño comprimido de archivos",
-    "compressedSizeTooltip": "Tamaño total de todos los datos de archivo después de la compresión, antes de la deduplicación en todos los archivos",
-    "numberOfFiles": "Número de archivos",
-    "numberOfFilesTooltip": "Número total de archivos en todos los archivos",
+  "repositoryStats": {
+    "heading": "Estadísticas de almacenamiento",
+    "archives": "Archivos",
     "repositorySize": "Tamaño del repositorio",
-    "repositorySizeTooltip": "Almacenamiento real usado por el repositorio en disco después de la compresión y la deduplicación en todos los archivos"
+    "deduplicatedSize": "Tamaño deduplicado",
+    "storageUsed": "Almacenamiento usado",
+    "originalSize": "Tamaño total de los archivos",
+    "compressedSize": "Tamaño comprimido de los archivos",
+    "latestArchiveFiles": "Ficheros en el archivo más reciente",
+    "unknown": "Desconocido",
+    "unknownHint": "Aún no medido",
+    "notReported": "No informado por Borg {{version}}",
+    "notReportedHint": "Borg {{version}} no informa este valor",
+    "pending": "Pendiente",
+    "pendingHint": "El índice de archivos se está poniendo al día con el repositorio",
+    "indexing": "Indexando…",
+    "indexingArchivesHint": "Se está leyendo la lista de archivos",
+    "indexingSizeHint": "Se está midiendo el tamaño del repositorio",
+    "measuredAt": "Medido {{time}}",
+    "measuredTimeUnknown": "Momento de la medición desconocido",
+    "source": {
+      "borg1_cache_stats": "Tamaño deduplicado según las estadísticas de caché de Borg",
+      "borg2_index": "Suma de todos los objetos del índice de fragmentos del repositorio",
+      "storage_used": "Bytes que el repositorio ocupa en su almacenamiento",
+      "compact_stats": "Tamaño del repositorio informado por el último compact"
+    },
+    "originalSizeHint": "Suma del tamaño original de todos los archivos del listado más reciente",
+    "compressedSizeHint": "Suma del tamaño comprimido de todos los archivos",
+    "deduplicatedSizeHint": "Tamaño de los datos tras la deduplicación",
+    "latestArchiveFilesHint": "Número de ficheros del archivo más reciente, no un total",
+    "compact": {
+      "heading": "Último compact",
+      "at": "Compactado {{time}}.",
+      "sourceSize": "Datos de origen",
+      "deduplicatedSize": "Tamaño deduplicado",
+      "compressionFactor": "Factor de compresión",
+      "deduplicationFactor": "Factor de deduplicación",
+      "saved": "Espacio liberado",
+      "rounded": "Los valores proceden de la salida formateada de Borg y están redondeados."
+    }
   },
   "upcomingJobs": {
     "title": "Trabajos próximos (Próximas 24 horas)",
@@ -5563,7 +5571,6 @@
   },
   "repositoryInfoDialog": {
     "failedToDownloadKeyfile": "Error al descargar el archivo de clave",
-    "noArchivesDescription": "Este repositorio ha sido inicializado pero no contiene archivos. Las estadísticas de almacenamiento aparecerán aquí después de crear tu primera copia de seguridad.",
     "failedToLoad": "Error al cargar la información del repositorio. Asegúrate de que el repositorio sea accesible y esté correctamente inicializado.",
     "recovery": {
       "title": "Comandos de recuperación",

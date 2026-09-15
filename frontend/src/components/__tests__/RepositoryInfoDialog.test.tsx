@@ -48,6 +48,57 @@ const mockRepositoryInfo = {
   },
 }
 
+const storedBorg1 = {
+  size_bytes: 268435456, // 256 MB
+  size_source: 'borg1_cache_stats' as const,
+  measured_at: '2024-01-15T10:35:00Z',
+  last_modified: '2024-01-15T10:30:00Z',
+  archives_consistent: true,
+  archives_listed: true,
+  original_size: 1073741824, // 1 GB
+  compressed_size: 536870912, // 512 MB
+  deduplicated_size: 268435456,
+  latest_archive_files: 10000,
+  compact: null,
+  compact_at: null,
+}
+
+const storedBorg2 = {
+  size_bytes: 6 * 1024 * 1024 * 1024,
+  size_source: 'borg2_index' as const,
+  measured_at: '2024-06-01T10:05:00Z',
+  last_modified: '2024-06-01T10:00:00Z',
+  archives_consistent: true,
+  archives_listed: true,
+  original_size: 6 * 1024 * 1024 * 1024,
+  compressed_size: null,
+  deduplicated_size: 2 * 1024 * 1024 * 1024,
+  latest_archive_files: 2500,
+  compact: {
+    source_size: 6 * 1024 * 1024 * 1024,
+    deduplicated_size: 2 * 1024 * 1024 * 1024,
+    compression_factor: 1.5,
+    deduplication_factor: 3,
+    size_precision: 'exact',
+  },
+  compact_at: '2024-06-01T09:00:00Z',
+}
+
+const unmeasured = {
+  size_bytes: null,
+  size_source: null,
+  measured_at: null,
+  last_modified: null,
+  archives_consistent: false,
+  archives_listed: false,
+  original_size: null,
+  compressed_size: null,
+  deduplicated_size: null,
+  latest_archive_files: null,
+  compact: null,
+  compact_at: null,
+}
+
 describe('RepositoryInfoDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -147,7 +198,45 @@ describe('RepositoryInfoDialog', () => {
   })
 
   describe('Storage Statistics', () => {
-    it('shows storage statistics header', () => {
+    it('shows the stored figures for a Borg 1 repository, named by their source', () => {
+      render(
+        <RepositoryInfoDialog
+          open={true}
+          repository={{ ...mockRepository, borg_version: 1 }}
+          repositoryInfo={mockRepositoryInfo}
+          storage={storedBorg1}
+          isLoading={false}
+          onClose={vi.fn()}
+        />
+      )
+
+      expect(screen.getByText('Storage Statistics')).toBeInTheDocument()
+      expect(screen.getByTestId('repository-stat-size')).toHaveTextContent('Deduplicated Size')
+      expect(screen.getByTestId('repository-stat-size')).toHaveTextContent('256.00 MB')
+      expect(screen.getByTestId('repository-stat-originalSize')).toHaveTextContent('1.00 GB')
+      expect(screen.getByTestId('repository-stat-compressedSize')).toHaveTextContent('512.00 MB')
+      expect(screen.getByTestId('repository-stat-latestArchiveFiles')).toHaveTextContent('10,000')
+    })
+
+    it('does not read the live cache statistics for the figures', () => {
+      render(
+        <RepositoryInfoDialog
+          open={true}
+          repository={{ ...mockRepository, borg_version: 1 }}
+          repositoryInfo={mockRepositoryInfo}
+          storage={unmeasured}
+          isLoading={false}
+          onClose={vi.fn()}
+        />
+      )
+
+      // the live payload says 1 GB; the stored figures say nothing yet
+      expect(screen.queryByText('1.00 GB')).not.toBeInTheDocument()
+      expect(screen.getByTestId('repository-stat-size')).toHaveAttribute('data-state', 'unknown')
+      expect(screen.queryByText('0 B')).not.toBeInTheDocument()
+    })
+
+    it('shows the rows as unknown while the storage payload has not loaded', () => {
       render(
         <RepositoryInfoDialog
           open={true}
@@ -159,123 +248,50 @@ describe('RepositoryInfoDialog', () => {
       )
 
       expect(screen.getByText('Storage Statistics')).toBeInTheDocument()
-    })
-
-    it('shows total size', () => {
-      render(
-        <RepositoryInfoDialog
-          open={true}
-          repository={mockRepository}
-          repositoryInfo={mockRepositoryInfo}
-          isLoading={false}
-          onClose={vi.fn()}
-        />
-      )
-
-      expect(screen.getByText('Total Size')).toBeInTheDocument()
-    })
-
-    it('shows unique data', () => {
-      render(
-        <RepositoryInfoDialog
-          open={true}
-          repository={mockRepository}
-          repositoryInfo={mockRepositoryInfo}
-          isLoading={false}
-          onClose={vi.fn()}
-        />
-      )
-
-      expect(screen.getByText('Unique Data')).toBeInTheDocument()
-    })
-
-    it('shows used on disk', () => {
-      render(
-        <RepositoryInfoDialog
-          open={true}
-          repository={mockRepository}
-          repositoryInfo={mockRepositoryInfo}
-          isLoading={false}
-          onClose={vi.fn()}
-        />
-      )
-
-      expect(screen.getByText('Used on Disk')).toBeInTheDocument()
-    })
-
-    it('shows chunk statistics', () => {
-      render(
-        <RepositoryInfoDialog
-          open={true}
-          repository={mockRepository}
-          repositoryInfo={mockRepositoryInfo}
-          isLoading={false}
-          onClose={vi.fn()}
-        />
-      )
-
-      expect(screen.getByText('Total Chunks')).toBeInTheDocument()
-      expect(screen.getByText('10,000')).toBeInTheDocument()
-      expect(screen.getByText('Unique Chunks')).toBeInTheDocument()
-      expect(screen.getByText('5,000')).toBeInTheDocument()
+      expect(screen.getAllByText('Unknown').length).toBeGreaterThan(0)
+      expect(screen.queryByText('0 B')).not.toBeInTheDocument()
     })
   })
 
   describe('Empty Repository', () => {
-    it('shows no backups message when stats are empty', () => {
-      const emptyRepoInfo = {
-        encryption: { mode: 'repokey' },
-        repository: { location: '/backups/test' },
-        cache: {
-          stats: {
-            total_size: 0,
-            unique_size: 0,
-            unique_csize: 0,
-            total_chunks: 0,
-            total_unique_chunks: 0,
-          },
-        },
-      }
-
+    it('shows a measured zero for a repository whose archives were all pruned', () => {
       render(
         <RepositoryInfoDialog
           open={true}
-          repository={mockRepository}
-          repositoryInfo={emptyRepoInfo}
+          repository={{ ...mockRepository, borg_version: 1, archive_count: 0 }}
+          repositoryInfo={mockRepositoryInfo}
+          storage={{ ...storedBorg1, original_size: 0, compressed_size: 0 }}
           isLoading={false}
           onClose={vi.fn()}
         />
       )
 
-      expect(screen.getByText('No backups yet')).toBeInTheDocument()
+      expect(screen.getByTestId('repository-stat-originalSize')).toHaveTextContent('0 B')
+      expect(screen.getByTestId('repository-stat-originalSize')).toHaveAttribute(
+        'data-state',
+        'value'
+      )
     })
 
-    it('shows explanation for empty repository', () => {
-      const emptyRepoInfo = {
-        encryption: { mode: 'repokey' },
-        repository: { location: '/backups/test' },
-        cache: {
-          stats: {
-            total_size: 0,
-            unique_size: 0,
-            unique_csize: 0,
-            total_chunks: 0,
-            total_unique_chunks: 0,
-          },
-        },
-      }
-
+    it('says indexing while the post-import chain has not listed the archives', () => {
       render(
         <RepositoryInfoDialog
           open={true}
-          repository={mockRepository}
-          repositoryInfo={emptyRepoInfo}
+          repository={{
+            ...mockRepository,
+            borg_version: 2,
+            archive_count: 0,
+            index_pending_kinds: ['stats', 'archive_sync'],
+          }}
+          repositoryInfo={mockRepositoryInfo}
+          storage={unmeasured}
           isLoading={false}
           onClose={vi.fn()}
         />
       )
 
-      expect(screen.getByText(/contains no archives/i)).toBeInTheDocument()
+      expect(screen.getByTestId('repository-stat-size')).toHaveTextContent('Indexing…')
+      expect(screen.getByTestId('repository-stat-originalSize')).toHaveTextContent('Indexing…')
     })
   })
 
@@ -525,44 +541,56 @@ describe('RepositoryInfoDialog', () => {
     const v2Info = {
       encryption: { mode: 'repokey-aes-ocb' },
       repository: { location: '/backups/v2' },
-      archives: [
-        {
-          name: 'arch-1',
-          time: '2024-01-01T10:00:00Z',
-          stats: { original_size: 2 * 1024 * 1024 * 1024, nfiles: 1000 },
-        },
-        {
-          name: 'arch-2',
-          time: '2024-06-01T10:00:00Z',
-          stats: { original_size: 4 * 1024 * 1024 * 1024, nfiles: 2500 },
-        },
-      ],
     }
 
-    it('renders archive count for v2 repo', () => {
+    it('shows the same rows as Borg 1, with the compressed size as not reported', () => {
       render(
         <RepositoryInfoDialog
           open={true}
           repository={v2Repo}
           repositoryInfo={v2Info}
+          storage={storedBorg2}
           isLoading={false}
           onClose={vi.fn()}
         />
       )
-      expect(screen.getByText('2')).toBeInTheDocument()
+      expect(screen.getByTestId('repository-stat-size')).toHaveTextContent('Repository Size')
+      expect(screen.getByTestId('repository-stat-size')).toHaveTextContent('6.00 GB')
+      expect(screen.getByTestId('repository-stat-compressedSize')).toHaveTextContent(
+        'Not reported by Borg 2'
+      )
+      expect(screen.getByTestId('repository-stat-deduplicatedSize')).toHaveTextContent('2.00 GB')
     })
 
-    it('renders file count from latest archive for v2 repo', () => {
+    it('renders the file count of the newest archive', () => {
       render(
         <RepositoryInfoDialog
           open={true}
           repository={v2Repo}
           repositoryInfo={v2Info}
+          storage={storedBorg2}
           isLoading={false}
           onClose={vi.fn()}
         />
       )
       expect(screen.getByText('2,500')).toBeInTheDocument()
+    })
+
+    it('shows the newest compact statistics', () => {
+      render(
+        <RepositoryInfoDialog
+          open={true}
+          repository={v2Repo}
+          repositoryInfo={v2Info}
+          storage={storedBorg2}
+          isLoading={false}
+          onClose={vi.fn()}
+        />
+      )
+      expect(screen.getByText('Last Compact')).toBeInTheDocument()
+      expect(screen.getByTestId('repository-stat-compact-compressionFactor')).toHaveTextContent(
+        '1.50×'
+      )
     })
 
     it('does not render v1 chunk count labels for v2 repo', () => {
@@ -571,25 +599,13 @@ describe('RepositoryInfoDialog', () => {
           open={true}
           repository={v2Repo}
           repositoryInfo={v2Info}
+          storage={storedBorg2}
           isLoading={false}
           onClose={vi.fn()}
         />
       )
       expect(screen.queryByText('Total Chunks')).not.toBeInTheDocument()
       expect(screen.queryByText('Unique Chunks')).not.toBeInTheDocument()
-    })
-
-    it('shows no backups alert for v2 repo with empty archives', () => {
-      render(
-        <RepositoryInfoDialog
-          open={true}
-          repository={v2Repo}
-          repositoryInfo={{ ...v2Info, archives: [] }}
-          isLoading={false}
-          onClose={vi.fn()}
-        />
-      )
-      expect(screen.getByText('No backups yet')).toBeInTheDocument()
     })
   })
 

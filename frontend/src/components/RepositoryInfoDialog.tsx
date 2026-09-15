@@ -19,19 +19,16 @@ import CalendarMonth from '@mui/icons-material/CalendarMonth'
 import CheckIcon from '@mui/icons-material/Check'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import FileDownload from '@mui/icons-material/FileDownload'
-import Info from '@mui/icons-material/Info'
 import Lock from '@mui/icons-material/Lock'
 import Storage from '@mui/icons-material/Storage'
 import { useTranslation } from 'react-i18next'
 import { formatDateShort } from '../utils/dateUtils'
 import { repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
-import RepositoryStatsV1 from './RepositoryStatsV1'
-import RepositoryStatsV2, { type ArchiveEntry } from './RepositoryStatsV2'
-import type { CacheStats } from './RepositoryStatsV1'
+import RepositoryStats from './RepositoryStats'
 import PlanGate from './shared/PlanGate'
 import UpgradePrompt from './UpgradePrompt'
-import { Repository } from '../types'
+import type { Repository, RepositoryStorage } from '../types'
 import { isV2Repo } from '../utils/repoCapabilities'
 import { generateBorgInitCommand } from '../utils/borgUtils'
 
@@ -43,17 +40,24 @@ interface RepositoryInfo {
     last_modified?: string
     location?: string
   }
+  // Borg's live blocks are still accepted (the callers pass the whole
+  // `info` payload); the storage statistics no longer read them.
   cache?: {
-    stats?: CacheStats
+    stats?: Record<string, number | undefined>
   }
-  // Borg 2: per-archive stats (from `borg2 info --json`)
-  archives?: ArchiveEntry[]
+  archives?: unknown[]
 }
 
 interface RepositoryInfoDialogProps {
   open: boolean
   repository: Repository | null
   repositoryInfo: RepositoryInfo | null
+  /** The repository's stored size figures (#981): `null` when the server
+   * could not compute them, `undefined` while they have not been loaded. */
+  storage?: RepositoryStorage | null
+  /** Index work still pending for the repository (#1063); falls back to
+   * the repository row's own list when not given. */
+  indexPendingKinds?: string[] | null
   isLoading: boolean
   onClose: () => void
   onRunRecoveryCheck?: (repository: Repository) => void
@@ -304,6 +308,8 @@ export default function RepositoryInfoDialog({
   open,
   repository,
   repositoryInfo,
+  storage,
+  indexPendingKinds,
   isLoading,
   onClose,
   onRunRecoveryCheck,
@@ -316,12 +322,35 @@ export default function RepositoryInfoDialog({
   const [displayRepositoryInfo, setDisplayRepositoryInfo] = useState<RepositoryInfo | null>(
     repositoryInfo
   )
+  // The storage figures and the pending kinds are kept the way the live
+  // info is, so the closing transition does not flip them to "unknown";
+  // a different repository opening resets them before its own arrive.
+  const [displayStorage, setDisplayStorage] = useState<RepositoryStorage | null | undefined>(
+    storage
+  )
+  const [displayIndexPending, setDisplayIndexPending] = useState<string[] | null | undefined>(
+    indexPendingKinds
+  )
+  const displayedRepositoryId = useRef<number | null>(repository?.id ?? null)
 
   useEffect(() => {
     if (repository) {
       setDisplayRepository(repository)
+      if (displayedRepositoryId.current !== repository.id) {
+        displayedRepositoryId.current = repository.id
+        setDisplayStorage(undefined)
+        setDisplayIndexPending(undefined)
+      }
     }
   }, [repository])
+
+  useEffect(() => {
+    if (storage !== undefined) setDisplayStorage(storage)
+  }, [storage])
+
+  useEffect(() => {
+    if (indexPendingKinds !== undefined) setDisplayIndexPending(indexPendingKinds)
+  }, [indexPendingKinds])
 
   useEffect(() => {
     if (repositoryInfo) {
@@ -334,6 +363,9 @@ export default function RepositoryInfoDialog({
       const timeout = window.setTimeout(() => {
         setDisplayRepository(null)
         setDisplayRepositoryInfo(null)
+        setDisplayStorage(undefined)
+        setDisplayIndexPending(undefined)
+        displayedRepositoryId.current = null
       }, 225)
 
       return () => window.clearTimeout(timeout)
@@ -536,33 +568,16 @@ export default function RepositoryInfoDialog({
                     </CardContent>
                   </Card>
 
-                  {/* Storage Statistics */}
-                  {isV2Repo(displayRepository) ? (
-                    <RepositoryStatsV2 archives={displayRepositoryInfo.archives || []} />
-                  ) : displayRepositoryInfo.cache?.stats &&
-                    (displayRepositoryInfo.cache.stats.total_size ?? 0) > 0 ? (
-                    <RepositoryStatsV1 stats={displayRepositoryInfo.cache.stats} />
-                  ) : (
-                    <Alert severity="info" icon={<Info />}>
-                      <Typography
-                        variant="body2"
-                        gutterBottom
-                        sx={{
-                          fontWeight: 600,
-                        }}
-                      >
-                        {t('dialogs.repositoryInfo.noBackupsYet')}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          color: 'text.secondary',
-                        }}
-                      >
-                        {t('repositoryInfoDialog.noArchivesDescription')}
-                      </Typography>
-                    </Alert>
-                  )}
+                  {/* Storage Statistics: the stored figures, as the card and the
+                      archive header show them, never a live per-version block */}
+                  <RepositoryStats
+                    variant="detail"
+                    storage={displayStorage}
+                    borgVersion={displayRepository?.borg_version}
+                    indexPendingKinds={
+                      displayIndexPending ?? displayRepository?.index_pending_kinds
+                    }
+                  />
                 </Box>
               </PlanGate>
             ) : (

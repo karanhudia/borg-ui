@@ -383,8 +383,13 @@ Rules:
   `total_size_bytes`, `total_size_source` and `total_size_measured_at`,
   through one writer (`storage_usage.set_repository_size`); the repository
   responses carry a `storage` object (the stored figures in the list; the
-  detail adds the archive sums and the newest compact statistics), so
-  every size reader shows the same value and names its source: Borg 1
+  detail adds the archive sums and the newest compact statistics;
+  `GET /repositories/{id}/storage` serves the detail's figures alone,
+  without the detail's live `borg info`), and
+  the card, the archive header and the info dialog read that object
+  through one frontend component (`RepositoryStats`), never a live Borg
+  output field, so every size reader shows the same value and names its
+  source; a figure not measured yet reads "unknown", never `0 B`. Borg 1
   `cache.stats.unique_csize` (`borg1_cache_stats`, deduplicated); Borg 2 the
   chunk-index sum through Borg's Python API next to the configured binary
   (`borg2_index`, the bytes of every indexed object), else a store-level
