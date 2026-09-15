@@ -258,7 +258,12 @@ If you use Docker Compose Manager instead, the Compose files above work as-is wi
 
 ## Easypanel
 
-Borg UI has an official one-click template on [Easypanel](https://easypanel.io/): https://easypanel.io/templates/borgui
+Borg UI has an official one-click template on [Easypanel](https://easypanel.io/), a Docker-based hosting platform:
+
+[![Deploy on Easypanel][easypanel-btn]][easypanel-deploy]
+
+[easypanel-btn]: https://easypanel.io/img/deploy-on-easypanel-40.svg
+[easypanel-deploy]: https://easypanel.io/templates/borgui
 
 The template runs the container without a FUSE device, so archive mounting and SSHFS pull backups are not available there; backups, browsing, and restores work normally.
 
