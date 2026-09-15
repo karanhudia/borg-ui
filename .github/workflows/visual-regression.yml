@@ -53,6 +53,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number || github.event.pull_request.number || github.event.inputs.pr_number || '' }}
+          SOURCE_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || '' }}
+          SOURCE_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name || '' }}
+          SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha || '' }}
         run: |
           if [ "$EVENT_NAME" = "pull_request_target" ] && [ "$EVENT_ACTION" = "closed" ]; then
             mode="cleanup"
@@ -63,9 +66,25 @@ jobs:
           fi
 
           if [ "$EVENT_NAME" = "workflow_run" ] && [ "$mode" = "pr" ]; then
-            pr_state="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .state)"
+            if [ -z "$PR_NUMBER" ] && [ -n "$SOURCE_HEAD_REPOSITORY" ] && [ -n "$SOURCE_HEAD_BRANCH" ]; then
+              source_owner="${SOURCE_HEAD_REPOSITORY%%/*}"
+              PR_NUMBER="$(gh api -X GET "repos/${GITHUB_REPOSITORY}/pulls" \
+                -f state=open -f "head=${source_owner}:${SOURCE_HEAD_BRANCH}" --jq '.[0].number // empty')"
+            fi
+
+            if [ -z "$PR_NUMBER" ]; then
+              mode="skip"
+            fi
+          fi
+
+          if [ "$EVENT_NAME" = "workflow_run" ] && [ "$mode" = "pr" ]; then
+            pr_details="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+            pr_state="$(jq -r .state <<<"$pr_details")"
+            pr_head_sha="$(jq -r .head.sha <<<"$pr_details")"
             if [ "$pr_state" != "open" ]; then
               mode="cleanup"
+            elif [ "$pr_head_sha" != "$SOURCE_HEAD_SHA" ]; then
+              mode="skip"
             fi
           fi
 
@@ -73,7 +92,7 @@ jobs:
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
 
       - name: Checkout source
-        if: ${{ steps.visual_mode.outputs.mode != 'cleanup' }}
+        if: ${{ steps.visual_mode.outputs.mode == 'pr' || steps.visual_mode.outputs.mode == 'baseline' }}
         uses: actions/checkout@v7
         with:
           ref: main
@@ -81,7 +100,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Node.js ${{ env.NODE_VERSION }}
-        if: ${{ steps.visual_mode.outputs.mode != 'cleanup' }}
+        if: ${{ steps.visual_mode.outputs.mode == 'pr' || steps.visual_mode.outputs.mode == 'baseline' }}
         uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -89,17 +108,17 @@ jobs:
           cache-dependency-path: source/frontend/package-lock.json
 
       - name: Install frontend dependencies
-        if: ${{ steps.visual_mode.outputs.mode != 'cleanup' }}
+        if: ${{ steps.visual_mode.outputs.mode == 'pr' || steps.visual_mode.outputs.mode == 'baseline' }}
         working-directory: source/frontend
         run: npm ci
 
       - name: Install Playwright Chromium
-        if: ${{ steps.visual_mode.outputs.mode != 'cleanup' }}
+        if: ${{ steps.visual_mode.outputs.mode == 'pr' || steps.visual_mode.outputs.mode == 'baseline' }}
         working-directory: source/frontend
         run: PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install --with-deps chromium
 
       - name: Capture Storybook snapshots
-        if: ${{ steps.visual_mode.outputs.mode != 'cleanup' && github.event_name != 'workflow_run' }}
+        if: ${{ (steps.visual_mode.outputs.mode == 'pr' || steps.visual_mode.outputs.mode == 'baseline') && github.event_name != 'workflow_run' }}
         working-directory: source/frontend
         run: npm run visual:screenshots
         env:
@@ -127,6 +146,7 @@ jobs:
           fi
 
       - name: Prepare visual state branch
+        if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -186,6 +206,7 @@ jobs:
           rm -rf visual-state/visual/reports/pr-${{ steps.visual_mode.outputs.pr_number }}
 
       - name: Commit visual state
+        if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         working-directory: visual-state
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -209,6 +230,7 @@ jobs:
           fi
 
       - name: Checkout docs source
+        if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         uses: actions/checkout@v7
         with:
           ref: main
@@ -216,6 +238,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up docs Node.js ${{ env.NODE_VERSION }}
+        if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -223,14 +246,17 @@ jobs:
           cache-dependency-path: docs-source/docs/package-lock.json
 
       - name: Install docs dependencies
+        if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         working-directory: docs-source/docs
         run: npm ci
 
       - name: Build docs
+        if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         working-directory: docs-source/docs
         run: npm run build
 
       - name: Overlay visual reports
+        if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         run: |
           rm -rf docs-source/docs/.vitepress/dist/visual
           mkdir -p docs-source/docs/.vitepress/dist
@@ -240,15 +266,18 @@ jobs:
           fi
 
       - name: Configure Pages
+        if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         uses: actions/configure-pages@v6
 
       - name: Upload Pages artifact
+        if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         uses: actions/upload-pages-artifact@v5
         with:
           path: docs-source/docs/.vitepress/dist
 
       - name: Deploy to GitHub Pages
         id: deployment
+        if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         uses: actions/deploy-pages@v5
 
       - name: Resolve report URL

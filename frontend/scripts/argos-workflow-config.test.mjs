@@ -38,7 +38,7 @@ describe('GitHub Pages visual regression workflow', () => {
     expect(workflow).toContain('workflows: ["Capture Storybook Visual Snapshots"]')
     expect(workflow).toContain('pull_request_target:')
     expect(workflow).toContain('types: [closed]')
-    expect(workflow).toContain('github.event.workflow_run.conclusion == \'success\'')
+    expect(workflow).toContain("github.event.workflow_run.conclusion == 'success'")
     expect(workflow).not.toContain('run-visuals')
     expect(workflow).toContain('group: ${{ github.workflow }}-visual-state')
     expect(workflow).toContain('cancel-in-progress: false')
@@ -67,7 +67,14 @@ describe('GitHub Pages visual regression workflow', () => {
     expect(workflow).toContain('ref: main')
     expect(workflow).toContain('gh run download "$SOURCE_RUN_ID" --name visual-actual')
     expect(workflow).toContain('Refusing unexpected visual artifact files.')
-    expect(workflow).toContain('pr_state="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .state)"')
+    expect(workflow).toContain(
+      'pr_details="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
+    )
+    expect(workflow).toContain("SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha || '' }}")
+    expect(workflow).toContain('"head=${source_owner}:${SOURCE_HEAD_BRANCH}"')
+    expect(workflow).toContain('pr_head_sha="$(jq -r .head.sha <<<"$pr_details")"')
+    expect(workflow).toContain('elif [ "$pr_head_sha" != "$SOURCE_HEAD_SHA" ]; then')
+    expect(workflow).toContain('mode="skip"')
     expect(workflow).not.toContain('ARGOS_TOKEN')
 
     expect(captureWorkflow).toContain('name: Capture Storybook Visual Snapshots')
