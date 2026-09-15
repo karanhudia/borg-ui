@@ -127,8 +127,6 @@ curl -fsSL https://github.com/karanhudia/borg-ui/releases/latest/download/instal
 For setup details and the native install options, see the
 [installation guide](https://docs.borgui.com/installation).
 
-You can also deploy Borg UI with one click using the official [Easypanel](https://easypanel.io/) template: https://easypanel.io/templates/borgui
-
 ## Documentation
 
 - [Full documentation](https://docs.borgui.com)
