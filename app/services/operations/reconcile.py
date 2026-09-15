@@ -108,7 +108,8 @@ def enqueue_reconcile_run(
         # The one-off look: archive_sync and stats, this once.
         mode = "archives"
     # The plan gate is read once by the caller; the executor gate is per
-    # repository (an agent's repository gets no history stage).
+    # repository (an agent's repository gets a history stage only while its
+    # agent runs `repository.diff`).
     kinds = reconcile_kinds(
         db, history=history_possible_for(db, repository_id, history=history), mode=mode
     )

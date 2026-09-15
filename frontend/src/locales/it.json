@@ -1194,7 +1194,7 @@
       "filterLabel": "Tipo di modifica",
       "delta": "{{sign}}{{size}}",
       "summaryFolder": "Cartella",
-      "agentUnsupported": "La cronologia delle modifiche non è disponibile per i repository eseguiti da un agente."
+      "agentUnsupported": "La cronologia delle modifiche richiede un agente in grado di generarla: a questo repository non è assegnato un agente utilizzabile, oppure il suo agente è precedente alla cronologia delle modifiche. Assegnare o abilitare un agente, oppure aggiornarlo."
     },
     "files": {
       "size": "Dimensione",
@@ -1226,7 +1226,7 @@
       "type": "Tipo",
       "typeFile": "File",
       "typeDirectory": "Cartella",
-      "historyUnavailableAgent": "La cronologia delle modifiche non è disponibile per i repository eseguiti da un agente.",
+      "historyUnavailableAgent": "La cronologia delle modifiche richiede un agente in grado di generarla: a questo repository non è assegnato un agente utilizzabile, oppure il suo agente è precedente alla cronologia delle modifiche. Assegnare o abilitare un agente, oppure aggiornarlo.",
       "historyNotIndexed": "Questo repository non è ancora stato indicizzato.",
       "historyCoverage_one": "{{indexed}} di {{count}} archivio indicizzato",
       "historyCoverage_other": "{{indexed}} di {{count}} archivi indicizzati",
@@ -3822,7 +3822,7 @@
         "detailHint": "Ricostruisci da Cronologia dei file per indicizzare di nuovo questi archivi.",
         "viewIndexRuns": "Vedi esecuzioni di indicizzazione",
         "openRepository": "Apri repository",
-        "historyAgentUnsupported": "Non disponibile per i repository agente"
+        "historyAgentUnsupported": "Richiede un agente in grado di farlo"
       },
       "rebuildMenuHint": "Ogni fase successiva a quella scelta viene ricostruita a sua volta. Le fasi precedenti restano. Le statistiche vengono sempre per ultime, perché sommano ciò che le altre fasi hanno prodotto.",
       "rebuildTitle": "Ricostruisci i dati derivati",
@@ -3831,7 +3831,7 @@
       "stageKept": "Conservato",
       "stageStart": "Inizia qui",
       "currentRun": "Esecuzione corrente",
-      "stageAgentUnsupported": "Non disponibile per i repository eseguiti da un agente"
+      "stageAgentUnsupported": "Non disponibile per i repository il cui agente non può generare la cronologia delle modifiche: nessuno è assegnato o utilizzabile, oppure è precedente alla funzione"
     },
     "status": {
       "queued": "In coda",
@@ -6103,7 +6103,7 @@
         "repositoryNotFound": "Repository non trovato",
         "fileNotFoundAfterExtraction": "File non trovato dopo l'estrazione",
         "failedExtractFile": "Impossibile estrarre il file: {{error}}",
-        "historyUnavailableForAgent": "La cronologia delle modifiche non è disponibile per i repository eseguiti da un agente, quindi non c'è nulla da ricostruire."
+        "historyUnavailableForAgent": "La cronologia delle modifiche non è disponibile per i repository il cui agente non può generarla, quindi non c'è nulla da ricostruire. Assegnare o abilitare un agente, oppure aggiornarne uno precedente alla cronologia delle modifiche."
       },
       "borg": {
         "repositoryDoesNotExist": "Il repository non esiste nel percorso specificato",

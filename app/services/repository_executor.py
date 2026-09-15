@@ -4,7 +4,7 @@ import asyncio
 import json
 import time
 from datetime import datetime
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Mapping, Optional
 
 import structlog
 from fastapi import HTTPException, status
@@ -94,6 +94,57 @@ def repository_executor_type(repository: Repository) -> str:
 
 def is_agent_executor(repository: Repository) -> bool:
     return repository_executor_type(repository) == EXECUTOR_AGENT
+
+
+# The agent job that produces an archive's change listing for the history
+# index (agents from 0.1.6).
+AGENT_DIFF_JOB_KIND = "repository.diff"
+
+
+def agent_advertises_job(agent: Any, job_kind: str) -> bool:
+    """`agent_supports_job` on an agent row already loaded (a page's
+    machines, or the columns the query below selects)."""
+    if agent is None or agent.deleted_at is not None:
+        return False
+    if agent.status in ("disabled", "revoked", "deleted"):
+        return False
+    return isinstance(agent.capabilities, list) and job_kind in agent.capabilities
+
+
+def agent_supports_job(
+    db: Session,
+    repository: Repository,
+    job_kind: str,
+    *,
+    agents: Optional[Mapping[int, AgentMachine]] = None,
+) -> bool:
+    """True when the repository's agent advertises `job_kind`.
+
+    `agents` is a page's machines by id, loaded once (the repositories hub
+    asks per repository on every poll): rows with `capabilities`,
+    `deleted_at` and `status`; single-repository callers leave it out and
+    query.
+
+    Agents report their capabilities on hello and heartbeat, so an agent
+    from before a job kind existed answers False until it is updated; so
+    does a repository with no agent assigned, and one whose agent is
+    disabled, revoked or deleted, which the admission refuses every job
+    (`validate_agent_repository_operation`): the job it once advertised is
+    not on offer. Whether the agent is online is a question for the moment
+    the job is queued, not for this one.
+    """
+    if not repository.agent_machine_id:
+        return False
+    if agents is not None:
+        return agent_advertises_job(agents.get(repository.agent_machine_id), job_kind)
+    row = (
+        db.query(
+            AgentMachine.capabilities, AgentMachine.deleted_at, AgentMachine.status
+        )
+        .filter(AgentMachine.id == repository.agent_machine_id)
+        .one_or_none()
+    )
+    return agent_advertises_job(row, job_kind)
 
 
 def agent_timezone_for_repository(db: Session, repository: Repository) -> Optional[str]:

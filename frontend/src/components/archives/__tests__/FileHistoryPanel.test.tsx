@@ -171,9 +171,7 @@ describe('FileHistoryPanel', () => {
       },
     } as never)
     renderPanel('etc/hosts')
-    expect(
-      await screen.findByText(/not available for repositories executed by an agent/i)
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/needs an agent that can build it/i)).toBeInTheDocument()
     expect(screen.queryByText(/no earlier archive contains this path/i)).not.toBeInTheDocument()
   })
 
@@ -188,9 +186,7 @@ describe('FileHistoryPanel', () => {
       },
     } as never)
     renderPanel('etc/hosts')
-    expect(
-      await screen.findByText(/not available for repositories executed by an agent/i)
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/needs an agent that can build it/i)).toBeInTheDocument()
     expect(screen.queryByText(/archives indexed/i)).not.toBeInTheDocument()
   })
 

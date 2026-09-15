@@ -100,8 +100,9 @@ def running_index_operation(db: Session, repository_id: int) -> bool:
     `metadata`). A running `history_index` is not counted: it is exclusive
     and holds the lane, which the bypass setting may cross so an hours-long
     index does not hold the hourly listing; the server's metadata scope
-    keeps its `borg diff` and the listing apart, and an agent's repository
-    has no history stage.
+    keeps its `borg diff` and the listing apart. On an agent's repository
+    the diff runs as an agent job and the agent's listing does not take
+    that scope, so with the bypass on the two can run side by side there.
 
     A row a dead task left `running` would hold the repository for good;
     the runner requeues such rows at every tick (as it does at startup),

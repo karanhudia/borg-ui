@@ -103,8 +103,10 @@ describe('RepositoryTrackDialog', () => {
       history: { indexed: 0, pending: 0, failed: 0, skipped: 18, truncated: 0, rows: 0 },
     })
     // the detail section, once loaded, and the stage picker each say so
-    expect(await screen.findByText(/not available for agent repositories/i)).toBeInTheDocument()
-    expect(screen.getByText(/repositories executed by an agent/i)).toBeInTheDocument()
+    expect(await screen.findByText(/needs a capable agent/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/repositories whose agent cannot build change history/i)
+    ).toBeInTheDocument()
     expect(screen.queryByText(/every archive has its file history/i)).not.toBeInTheDocument()
     expect(screen.getByTestId('rebuild-stage-history')).toHaveAttribute('data-state', 'locked')
   })
@@ -124,7 +126,7 @@ describe('RepositoryTrackDialog', () => {
       history: { indexed: 12, pending: 0, failed: 0, skipped: 6, truncated: 0, rows: 4000 },
     })
     expect(await screen.findByText(/covers 12 of 18 archives/i)).toBeInTheDocument()
-    expect(screen.getByText(/not available for agent repositories/i)).toBeInTheDocument()
+    expect(screen.getByText(/needs a capable agent/i)).toBeInTheDocument()
     expect(screen.queryByText(/every archive has its file history/i)).not.toBeInTheDocument()
   })
 

@@ -22,6 +22,7 @@ from app.core.security import (
 )
 from app.database.database import get_db
 from app.database.models import (
+    AgentMachine,
     Archive,
     Operation,
     Repository,
@@ -557,7 +558,8 @@ async def get_repositories_hub(
 ):
     """One row per repository the user may see, with the state of its
     derived data, plus totals and the reconcile cadence. Two grouped
-    queries for archives and operations, not one per repository."""
+    queries for archives and operations and one for the agents, not one per
+    repository."""
     accessible = accessible_repository_ids(db, current_user)
     q = db.query(Repository)
     if accessible is not None:
@@ -566,6 +568,24 @@ async def get_repositories_hub(
     # commit cannot expire them (one refresh per repository otherwise).
     history_plan = history_enabled(db)
     repositories = q.order_by(func.lower(Repository.name), Repository.id).all()
+    # The agents once as well: `history_capability` reads each repository's
+    # agent, and the board polls this route every thirty seconds. Plain rows,
+    # not instances: the settings lookup below commits, which would expire
+    # instances and reload each one on first touch.
+    agent_ids = {r.agent_machine_id for r in repositories if r.agent_machine_id}
+    agents = (
+        {
+            row.id: row
+            for row in db.query(
+                AgentMachine.id,
+                AgentMachine.capabilities,
+                AgentMachine.deleted_at,
+                AgentMachine.status,
+            ).filter(AgentMachine.id.in_(agent_ids))
+        }
+        if agent_ids
+        else {}
+    )
 
     settings = _settings_row(db)
     interval = _reconcile_interval(settings)
@@ -596,7 +616,9 @@ async def get_repositories_hub(
                 last_history_at=facts["last_history_at"] if facts else None,
                 archives=facts["archives"] if facts else 0,
                 history=facts["summary"] if facts else HistorySummary(),
-                history_capability=history_capability(db, repo, history=history_plan),
+                history_capability=history_capability(
+                    db, repo, history=history_plan, agents=agents
+                ),
             )
         )
 

@@ -39,6 +39,9 @@ class _Channel:
     queue: asyncio.Queue = field(default_factory=lambda: asyncio.Queue(maxsize=16))
     error: Optional[str] = None
     consumer_gone: bool = False
+    # Set once the producer called close(): what is still queued is the
+    # tail of the upload, the end marker behind it.
+    closing: bool = False
     # Set once the consumer took the end marker; `settled` fires when the
     # consumer is done with the channel either way.
     eof_taken: bool = False
@@ -63,6 +66,13 @@ class AgentArtifactRelay:
 
     def is_registered(self, job_id: int) -> bool:
         return job_id in self._channels
+
+    def is_closing(self, job_id: int) -> bool:
+        """Whether the producer has ended the upload: the queue holds at
+        most its tail and the end marker, so a consumer that paces its
+        intake can take the rest at once and confirm the marker in time."""
+        channel = self._channels.get(job_id)
+        return channel is not None and channel.closing
 
     def unregister(self, job_id: int) -> None:
         channel = self._channels.pop(job_id, None)
@@ -111,6 +121,7 @@ class AgentArtifactRelay:
         channel = self._channels.get(job_id)
         if channel is None or channel.consumer_gone:
             return False
+        channel.closing = True
         channel.error = error
         if confirm_timeout is None:
             await channel.queue.put(_EOF)
