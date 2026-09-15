@@ -32,6 +32,7 @@ OPERATION_REPOSITORY_LIST_ARCHIVES = "repository.list_archives"
 OPERATION_REPOSITORY_LIST_ARCHIVE_CONTENTS = "repository.list_archive_contents"
 OPERATION_REPOSITORY_EXTRACT_ARCHIVE_FILE = "repository.extract_archive_file"
 OPERATION_REPOSITORY_EXPORT_ARCHIVE_TAR = "repository.export_archive_tar"
+OPERATION_REPOSITORY_DIFF = "repository.diff"
 OPERATION_BREAK_LOCK = "break_lock"
 OPERATION_DISK_USAGE = "repository.disk_usage"
 OPERATION_STORAGE_USAGE = "repository.storage_usage"
@@ -94,6 +95,11 @@ READ_OPERATIONS = {
     OPERATION_REPOSITORY_LIST_ARCHIVE_CONTENTS,
     OPERATION_REPOSITORY_EXTRACT_ARCHIVE_FILE,
     OPERATION_REPOSITORY_EXPORT_ARCHIVE_TAR,
+    # The change listing between two archives (or one archive's full
+    # listing) for the history index: opens the repository read-only. It
+    # can run for hours on a large archive, so it is not transient read
+    # work: a write that arrives meanwhile is refused, not waited out.
+    OPERATION_REPOSITORY_DIFF,
     # rclone reads the repository and writes only to the remote, so it
     # cannot corrupt local state the way a write operation can.
     OPERATION_RCLONE_SYNC,
@@ -122,6 +128,7 @@ AGENT_JOB_KIND_OPERATIONS = {
     "repository.list_archive_contents": OPERATION_REPOSITORY_LIST_ARCHIVE_CONTENTS,
     "repository.extract_archive_file": OPERATION_REPOSITORY_EXTRACT_ARCHIVE_FILE,
     "repository.export_archive_tar": OPERATION_REPOSITORY_EXPORT_ARCHIVE_TAR,
+    "repository.diff": OPERATION_REPOSITORY_DIFF,
     "repository.restore": OPERATION_RESTORE,
     "repository.disk_usage": OPERATION_DISK_USAGE,
     "repository.storage_usage": OPERATION_STORAGE_USAGE,

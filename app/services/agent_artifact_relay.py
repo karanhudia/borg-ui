@@ -27,12 +27,22 @@ from typing import Optional
 # Bytes chunk marker for a clean end-of-stream; an error carries a message.
 _EOF = object()
 
+# How long `close(confirm_timeout=...)` waits for the consumer to take the
+# end marker before it answers no. The in-process consumer of a listing
+# takes it at once, and the agent's upload request, whose own read timeout
+# is far longer than this, must not be held for a consumer that stalled.
+CLOSE_ACK_TIMEOUT_SECONDS = 5.0
+
 
 @dataclass
 class _Channel:
     queue: asyncio.Queue = field(default_factory=lambda: asyncio.Queue(maxsize=16))
     error: Optional[str] = None
     consumer_gone: bool = False
+    # Set once the consumer took the end marker; `settled` fires when the
+    # consumer is done with the channel either way.
+    eof_taken: bool = False
+    settled: asyncio.Event = field(default_factory=asyncio.Event)
 
     def drain(self) -> None:
         """Empty the queue so a producer blocked in put() wakes up."""
@@ -55,7 +65,9 @@ class AgentArtifactRelay:
         return job_id in self._channels
 
     def unregister(self, job_id: int) -> None:
-        self._channels.pop(job_id, None)
+        channel = self._channels.pop(job_id, None)
+        if channel is not None:
+            channel.settled.set()
 
     async def push(self, job_id: int, chunk: bytes) -> bool:
         """Feed one chunk to the consumer.
@@ -70,13 +82,59 @@ class AgentArtifactRelay:
         await channel.queue.put(chunk)
         return not channel.consumer_gone
 
-    async def close(self, job_id: int, *, error: Optional[str] = None) -> None:
-        """Signal end-of-stream (or failure) to the consumer."""
+    async def close(
+        self,
+        job_id: int,
+        *,
+        error: Optional[str] = None,
+        confirm_timeout: Optional[float] = None,
+    ) -> bool:
+        """Signal end-of-stream (or failure) to the consumer.
+
+        Returns False if nobody is listening any more, like `push()`: an
+        upload with no chunks (an empty output) reaches only this call, and
+        its answer is the only sign the consumer was still there. The
+        answer is read after the put, since a put that waited on a full
+        queue may have been woken by the consumer leaving (its exit drains
+        the queue) rather than by space. A failure claims no delivery.
+
+        With `confirm_timeout` the answer is whether the consumer took the
+        marker, for an upload that is worthless unless consumed: a consumer
+        whose timeout expired in the same tick has taken nothing, so the
+        enqueue alone is not the answer. Both the put and the wait for the
+        consumer are bounded by it, and past the bound the answer is no:
+        a consumer that has not taken the marker by then has confirmed
+        nothing, and the agent's upload request must not be held for it.
+        Without it (a download), the put waits as `push()` does, for a
+        consumer that reads at its own pace.
+        """
         channel = self._channels.get(job_id)
         if channel is None or channel.consumer_gone:
-            return
+            return False
         channel.error = error
-        await channel.queue.put(_EOF)
+        if confirm_timeout is None:
+            await channel.queue.put(_EOF)
+            return error is None and not channel.consumer_gone
+        # One deadline for both steps: a consumer that frees a slot just
+        # before it and then stalls must not buy the wait a second bound.
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + confirm_timeout
+        try:
+            await asyncio.wait_for(channel.queue.put(_EOF), timeout=confirm_timeout)
+        except asyncio.TimeoutError:
+            return False
+        if error is not None:
+            return False
+        if channel.settled.is_set():
+            return channel.eof_taken
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            return False
+        try:
+            await asyncio.wait_for(channel.settled.wait(), timeout=remaining)
+        except asyncio.TimeoutError:
+            return False
+        return channel.eof_taken
 
     async def stream(
         self,
@@ -102,6 +160,7 @@ class AgentArtifactRelay:
                 except asyncio.TimeoutError as exc:
                     raise TimeoutError("artifact stream timed out") from exc
                 if item is _EOF:
+                    channel.eof_taken = True
                     if channel.error:
                         raise RuntimeError(channel.error)
                     return

@@ -122,7 +122,7 @@ describe('RepositoryHubRow', () => {
         history: { indexed: 0, pending: 0, failed: 0, skipped: 18, truncated: 0, rows: 0 },
       },
     })
-    expect(screen.getByText(/not available for agent repositories/i)).toBeInTheDocument()
+    expect(screen.getByText(/available after an agent update/i)).toBeInTheDocument()
     expect(screen.queryByText('Pro')).not.toBeInTheDocument()
   })
 
@@ -135,7 +135,7 @@ describe('RepositoryHubRow', () => {
         history: { indexed: 12, pending: 0, failed: 0, skipped: 6, truncated: 0, rows: 4000 },
       },
     })
-    expect(screen.getByText(/not available for agent repositories/i)).toBeInTheDocument()
+    expect(screen.getByText(/available after an agent update/i)).toBeInTheDocument()
     expect(screen.queryByText('Pro')).not.toBeInTheDocument()
   })
 

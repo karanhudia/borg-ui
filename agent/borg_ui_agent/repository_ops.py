@@ -5,6 +5,7 @@ import hashlib
 import json
 import math
 import os
+import selectors
 import shlex
 import shutil
 import signal
@@ -51,6 +52,7 @@ REPOSITORY_JOB_KINDS = {
     "repository.rclone_sync",
     "repository.disk_usage",
     "repository.storage_usage",
+    "repository.diff",
 }
 
 # Kinds whose stdout the server parses timestamps out of. These run under
@@ -62,6 +64,7 @@ MACHINE_PARSED_JOB_KINDS = {
     "repository.rinfo",
     "repository.archive_info",
     "repository.list_archives",
+    "repository.diff",
 }
 
 # Borg 2.0.0b22 split repo-create's single --encryption value into the cipher,
@@ -97,6 +100,29 @@ BORG2_ENCRYPTION_FLAGS = {
 # wedged borg, not a slow one. Idle (not an absolute cap) so a legitimately
 # large/slow download is never truncated mid-transfer.
 STREAM_EXTRACT_IDLE_SECONDS = 300
+
+# A change listing prints a line per changed path and nothing while it
+# compares unchanged ones, so stdout silence says nothing about a diff.
+# Its bound is absolute instead: the server's own diffs are capped the
+# same way (app/core/borg_stream.py MAX_DURATION), and the server can
+# pass a tighter budget in the payload.
+STREAM_DIFF_MAX_SECONDS = 24 * 3600
+
+# While a stream runs, the job row on the server sees no activity: logs and
+# the result arrive at the end, and the heartbeat only lists the job. The
+# server reaps an in-flight job after 15 minutes without activity
+# (app/services/agent_job_reaper.py), so the watchdog reports a progress
+# keepalive this often. Well inside the reaper's window, and cheap.
+STREAM_KEEPALIVE_SECONDS = 60
+
+# A diff's upload carries no bytes while borg compares unchanged paths, and
+# a reverse proxy in front of the server may cut a request body that is
+# idle for a minute (nginx's proxy_read_timeout default). The diff stream
+# is padded with a bare newline after this much silence; the server's
+# parser of these lines (app/core/borg_diff.py) skips blank ones, and a
+# consumer of this stream must keep doing so. Never for an extract: its
+# bytes are the file.
+STREAM_DIFF_PAD_IDLE_SECONDS = 30
 
 
 @dataclass(frozen=True)
@@ -294,6 +320,41 @@ class RepositoryOperationPayload:
                 "--json-lines",
             ]
 
+        if self.job_kind == "repository.diff":
+            # The change listing the server's history index parses
+            # (app/services/operations/executors/history.py), built the way
+            # the server builds it for its own repositories. Without a
+            # predecessor the archive is the first of its series and gets
+            # the full listing, whose entries all read as added.
+            # `--` closes the options: an archive name is data, whatever it
+            # begins with.
+            archive = _operation_archive(self.operation, self.job_kind)
+            predecessor = _operation_predecessor(self.operation)
+            if self.borg_version == 2:
+                if predecessor is None:
+                    return [*self._base_borg2("list"), "--json-lines", "--", archive]
+                return [
+                    *self._base_borg2("diff"),
+                    "--json-lines",
+                    "--",
+                    predecessor,
+                    archive,
+                ]
+            if predecessor is None:
+                return [
+                    *self._base_borg1("list"),
+                    "--json-lines",
+                    "--",
+                    f"{self.repository_path}::{archive}",
+                ]
+            return [
+                *self._base_borg1("diff"),
+                "--json-lines",
+                "--",
+                f"{self.repository_path}::{predecessor}",
+                archive,
+            ]
+
         if self.job_kind == "repository.extract_archive_file":
             archive = _operation_archive(self.operation, self.job_kind)
             file_path = _operation_file_path(self.operation, self.job_kind)
@@ -484,18 +545,27 @@ def _require_non_empty_string(value: Any, field_name: str) -> str:
     return value.strip()
 
 
+def _operation_timeout_seconds(operation: Any, default: float) -> float:
+    """The server's budget for a job (`operation.timeout_seconds`), else
+    `default`. Anything that is not a finite positive number (a missing or
+    malformed payload, "inf", nan) falls back to the default so a stalled
+    tool never runs without a deadline."""
+    if not isinstance(operation, dict):
+        return default
+    raw = operation.get("timeout_seconds")
+    if isinstance(raw, bool):
+        return default
+    try:
+        value = float(raw or 0)
+    except (TypeError, ValueError):
+        return default
+    return value if math.isfinite(value) and value > 0 else default
+
+
 def _storage_usage_timeout(operation: Any) -> float:
     """The server's budget for a storage_usage job, else the measurement's
-    own default. Anything that is not a finite positive number (a missing
-    or malformed payload, "inf", nan) falls back to the default so a
-    stalled tool never runs without a deadline."""
-    if not isinstance(operation, dict):
-        return 600.0
-    try:
-        value = float(operation.get("timeout_seconds") or 0)
-    except (TypeError, ValueError):
-        return 600.0
-    return value if math.isfinite(value) and value > 0 else 600.0
+    own default."""
+    return _operation_timeout_seconds(operation, 600.0)
 
 
 def _rclone_operation(operation: dict[str, Any] | None) -> dict[str, Any]:
@@ -512,6 +582,24 @@ def _operation_archive(operation: dict[str, Any] | None, job_kind: str) -> str:
     if not isinstance(archive, str) or not archive.strip():
         raise ValueError(f"{job_kind} requires operation.archive")
     return archive.strip()
+
+
+def _operation_predecessor(operation: dict[str, Any] | None) -> Optional[str]:
+    """The archive a diff runs against, or None for a full listing. The key
+    must be present, `null` meaning the first archive of its series: a
+    payload that lost the field would otherwise read as a full listing
+    on top of an indexed predecessor, every path stored as added. An
+    empty value is a payload error for the same reason."""
+    if not isinstance(operation, dict) or "predecessor" not in operation:
+        raise ValueError(
+            "repository.diff requires operation.predecessor (null for a full listing)"
+        )
+    predecessor = operation.get("predecessor")
+    if predecessor is None:
+        return None
+    if not isinstance(predecessor, str) or not predecessor.strip():
+        raise ValueError("repository.diff requires a non-empty operation.predecessor")
+    return predecessor.strip()
 
 
 def _operation_file_path(operation: dict[str, Any] | None, job_kind: str) -> str:
@@ -672,6 +760,34 @@ def execute_repository_operation_job(
         try:
             return _execute_limited_output_repository_operation(
                 job_id, payload, client, cmd, env
+            )
+        finally:
+            _remove_temp_file(rclone_config_path)
+
+    if payload.job_kind == "repository.diff":
+        # Always the artifact path: a change listing of a large archive runs
+        # to tens of megabytes, which the WebSocket result must not carry.
+        # The listing is worthless unless the server consumed it, so a
+        # rejected upload fails the job. Borg reports a warning when it
+        # could not read part of an archive; the listing it did produce is
+        # still consumed, as the server's own history index does for rc 1
+        # (the agent's warning set also covers Borg's modern codes).
+        try:
+            return _execute_streaming_artifact_operation(
+                job_id,
+                payload,
+                client,
+                cmd,
+                env,
+                should_cancel=should_cancel,
+                warnings_ok=True,
+                idle_timeout_seconds=None,
+                max_duration_seconds=_operation_timeout_seconds(
+                    payload.operation, STREAM_DIFF_MAX_SECONDS
+                ),
+                keepalive_seconds=STREAM_KEEPALIVE_SECONDS,
+                pad_idle_seconds=STREAM_DIFF_PAD_IDLE_SECONDS,
+                delivery_required=True,
             )
         finally:
             _remove_temp_file(rclone_config_path)
@@ -893,19 +1009,88 @@ class _ActivityTrackingReader:
     Lets the streaming watchdog tell an actively-transferring extract (bytes
     flowing) from a wedged one (read blocked, no data) without capping the total
     duration, so legitimately large/slow downloads are never truncated.
+
+    With `pad_idle_seconds`, a read that finds no data for that long returns
+    a bare newline instead of blocking on, so the upload connection carries
+    something while the command is silent. Only for line-oriented output
+    whose consumer skips blank lines. Reads then go to the pipe's file
+    descriptor directly, unbuffered: the buffered `read(n)` of a Popen pipe
+    blocks until it has n bytes, however long the command is silent after
+    writing fewer, and a Python-side buffer would hide bytes from select.
+    Output is passed on whole lines: the command flushes its output in
+    blocks that can end inside a record, and a partial line is held back
+    until its end arrives, so the padding never lands inside one. Padding
+    is not counted as activity or as bytes read. A held-back partial line
+    puts nothing on the wire and grows until its end arrives, so the
+    output must be short lines, as borg's are. Needs a real pipe (posix);
+    elsewhere reads block as before.
     """
 
-    def __init__(self, stream: Any):
+    def __init__(self, stream: Any, *, pad_idle_seconds: Optional[float] = None):
         self._stream = stream
         self.last_activity = time.monotonic()
+        self.bytes_read = 0
+        self._pad_idle_seconds = pad_idle_seconds
+        self._pending = b""
+        self._fd: Optional[int] = None
+        self._selector: Optional[selectors.BaseSelector] = None
+        if pad_idle_seconds is not None and os.name == "posix":
+            try:
+                self._fd = stream.fileno()
+                # The platform's selector, not select(): that one refuses a
+                # descriptor beyond FD_SETSIZE, which an agent holding many
+                # files can reach.
+                self._selector = selectors.DefaultSelector()
+                self._selector.register(self._fd, selectors.EVENT_READ)
+            except (AttributeError, OSError, ValueError):
+                self._fd = None
+                self._selector = None
 
     def read(self, *args: Any) -> bytes:
-        chunk = self._stream.read(*args)
-        if chunk:
+        if self._fd is None:
+            chunk = self._stream.read(*args)
+            if chunk:
+                self.last_activity = time.monotonic()
+                self.bytes_read += len(chunk)
+            return chunk
+        if not (args and isinstance(args[0], int) and args[0] > 0):
+            # A whole-output read would take one batch of lines for the
+            # whole listing; the padded reader serves sized reads only.
+            raise ValueError("padded reads need a size")
+        size = args[0]
+        while True:
+            try:
+                ready = self._selector.select(self._pad_idle_seconds)
+            except (OSError, ValueError):
+                ready = [None]  # a closed pipe: let the read report EOF
+            if not ready:
+                return b"\n"
+            try:
+                data = os.read(self._fd, size)
+            except OSError:
+                data = b""
+            if not data:
+                # End of output: the held-back tail goes out as it is, then
+                # the empty read that ends the upload.
+                self._selector.close()
+                tail, self._pending = self._pending, b""
+                return tail
             self.last_activity = time.monotonic()
-        return chunk
+            self.bytes_read += len(data)
+            combined = self._pending + data
+            cut = combined.rfind(b"\n")
+            if cut < 0:
+                self._pending = combined
+                continue
+            self._pending = combined[cut + 1 :]
+            # May exceed `size`: whole lines only, and the held-back part of
+            # a line joins the read that completes it. The upload's chunked
+            # body loop takes what it gets.
+            return combined[: cut + 1]
 
     def close(self) -> None:
+        if self._selector is not None:
+            self._selector.close()
         self._stream.close()
 
 
@@ -917,14 +1102,50 @@ def _execute_streaming_artifact_operation(
     env: dict[str, str],
     *,
     should_cancel: Optional[Callable[[], bool]] = None,
+    warnings_ok: bool = False,
+    idle_timeout_seconds: Optional[float],
+    max_duration_seconds: Optional[float] = None,
+    keepalive_seconds: Optional[float] = None,
+    pad_idle_seconds: Optional[float] = None,
+    delivery_required: bool = False,
 ) -> RepositoryOperationResult:
-    """Stream `borg extract --stdout` straight to the server over HTTP.
+    """Stream a command's stdout straight to the server over HTTP.
 
-    The file content never enters the WebSocket, so it works at any size. stderr
+    The output never enters the WebSocket, so it works at any size. stderr
     is drained on a thread so a full stderr pipe can't deadlock the stdout the
-    upload is reading. A watchdog terminates borg on cancellation or if it wedges
-    past a deadline, so a hung process can't pin this worker — terminating closes
-    stdout, which unblocks the upload read below.
+    upload is reading. A watchdog terminates borg if it wedges past a deadline,
+    and a poller of `should_cancel` terminates it on cancellation, so a hung
+    process can't pin this worker — terminating closes stdout, which unblocks
+    the upload read below.
+
+    The deadline is `idle_timeout_seconds` without stdout activity (an extract
+    that stopped producing bytes is wedged), `max_duration_seconds` since the
+    start (a diff is silent while it compares unchanged paths, so only an
+    absolute bound tells a long one from a stuck one), or both; None disables
+    that bound.
+
+    `warnings_ok` completes the job on a Borg warning exit code as well: the
+    output was streamed in full and the server decides what the warning
+    means for it. An extract keeps failing on a warning, since a partially
+    served file is not a download.
+
+    `keepalive_seconds` reports an empty progress keepalive this often, so
+    the server sees the job alive while nothing else reaches it; a
+    keepalive that fails to send is dropped, never fatal.
+    `pad_idle_seconds` keeps the upload connection itself carrying bytes
+    while the command is silent (see `_ActivityTrackingReader`).
+
+    `delivery_required` fails the job unless the server confirms the upload
+    (`accepted: true`); it answers `false` when no consumer was registered
+    for the job or it left mid-stream. A download's consumer is a person who
+    may have closed the tab; a listing nobody consumed is a job that did not
+    happen, and a `completed` row would read as a delivered one.
+
+    The stream itself carries no end marker: a kill by the watchdog closes
+    stdout and the server sees a clean end of stream, the same as a run that
+    finished. Whether the bytes are the whole output is the job's terminal
+    status, which lands after the upload; a consumer commits nothing before
+    it has read that status.
     """
     try:
         popen_kwargs: dict[str, Any] = {
@@ -955,44 +1176,120 @@ def _execute_streaming_artifact_operation(
 
     cancelled = threading.Event()
     timed_out = threading.Event()
+    timeout_reason: list[str] = []
     watchdog_done = threading.Event()
 
-    reader = _ActivityTrackingReader(process.stdout)
+    reader = _ActivityTrackingReader(process.stdout, pad_idle_seconds=pad_idle_seconds)
+    started_at = time.monotonic()
+
+    def _keepalive() -> None:
+        # Its own thread: on the polling transport a send is an HTTP request
+        # with retries, and a server that is down would otherwise hold the
+        # watchdog (cancellation, deadline) for the length of those retries.
+        # The session transport queues the message without blocking. A send
+        # that fails is dropped; the next one is due a minute later.
+        while not watchdog_done.wait(keepalive_seconds):
+            if process.poll() is not None:
+                return
+            try:
+                # No fields: the report is a sign of life, and every field
+                # the progress schema offers is a backup statistic that
+                # would be read as one.
+                client.send_progress(job_id, {})
+            except Exception:  # noqa: BLE001 - a keepalive is best effort
+                pass
+
+    def _cancel_requested() -> bool:
+        # The check may ask the server (the polling runtime's heartbeat) and
+        # fail while it is unreachable. An exception must not end this
+        # thread: it enforces the deadline as well, and the keepalive would
+        # then keep a job alive that nothing can stop any more.
+        if should_cancel is None:
+            return False
+        try:
+            return bool(should_cancel())
+        except Exception:  # noqa: BLE001 - unknown is not cancelled
+            return False
+
+    def _cancel_poller() -> None:
+        # Its own thread as well: on the polling transport the check is a
+        # heartbeat request with retries, and the deadlines must not wait
+        # for an unreachable server to answer it.
+        while not watchdog_done.wait(0.5):
+            if process.poll() is not None:
+                return
+            if _cancel_requested():
+                cancelled.set()
+                _terminate_process(process)
+                return
 
     def _watchdog() -> None:
         while not watchdog_done.wait(0.5):
             if process.poll() is not None:
                 return
-            if should_cancel is not None and should_cancel():
-                cancelled.set()
-                _terminate_process(process)
-                return
+            now = time.monotonic()
             # Idle, not absolute: only kill borg once no bytes have flowed for
             # the timeout, so an actively-streaming large transfer is not cut off.
-            if time.monotonic() - reader.last_activity >= STREAM_EXTRACT_IDLE_SECONDS:
+            if (
+                idle_timeout_seconds is not None
+                and now - reader.last_activity >= idle_timeout_seconds
+            ):
+                timeout_reason.append(f"no output for {idle_timeout_seconds:g}s")
+                timed_out.set()
+                _terminate_process(process)
+                return
+            if (
+                max_duration_seconds is not None
+                and now - started_at >= max_duration_seconds
+            ):
+                timeout_reason.append(f"ran longer than {max_duration_seconds:g}s")
                 timed_out.set()
                 _terminate_process(process)
                 return
 
     watchdog = threading.Thread(target=_watchdog, daemon=True)
     watchdog.start()
+    if should_cancel is not None:
+        threading.Thread(target=_cancel_poller, daemon=True).start()
+    if keepalive_seconds is not None:
+        threading.Thread(target=_keepalive, daemon=True).start()
 
     upload_error: Optional[BaseException] = None
+    upload_response: Any = None
     try:
-        client.upload_artifact(job_id, reader)
+        upload_response = client.upload_artifact(job_id, reader)
     except BaseException as exc:  # noqa: BLE001 - reported below
         upload_error = exc
+        # A broken upload leaves nobody reading stdout. Closing the pipe
+        # ends borg only at its next write, and a diff comparing unchanged
+        # paths may not write for a long time; end it now instead.
+        _terminate_process(process)
     finally:
-        # Closing stdout makes borg see EPIPE and exit if the upload broke.
-        if process.stdout is not None:
-            try:
-                process.stdout.close()
-            except OSError:
-                pass
+        # Closing stdout makes borg see EPIPE and exit if the upload broke;
+        # the reader's selector goes with it.
+        try:
+            reader.close()
+        except OSError:
+            pass
+
+    delivered = isinstance(upload_response, dict) and (
+        upload_response.get("accepted") is True
+    )
+    if delivery_required and not delivered and process.poll() is None:
+        # The server ended the request without a consumer while borg is
+        # still comparing: nothing will take the rest, so borg does not
+        # run it (it would otherwise hold the repository until the
+        # deadline, kept alive by the keepalives).
+        _terminate_process(process)
 
     return_code = process.wait()
     watchdog_done.set()
     watchdog.join(timeout=5)
+    # The keepalive and cancel-poller threads are not joined: a request in
+    # flight may be waiting out an unreachable server's retries, and the
+    # verdict must not wait for it. They end on their own, and a progress
+    # report that lands after the verdict is refused by the server as a
+    # report on a final job.
     stderr_thread.join()
     stderr = b"".join(stderr_chunks).decode("utf-8", errors="replace")
 
@@ -1006,9 +1303,15 @@ def _execute_streaming_artifact_operation(
         )
 
     if timed_out.is_set():
-        error_message = (
-            f"{payload.job_kind} stalled: no output for {STREAM_EXTRACT_IDLE_SECONDS}s"
-        )
+        reason = timeout_reason[0] if timeout_reason else "deadline reached"
+        if upload_error is not None:
+            reason = f"{reason}; upload failed meanwhile: {upload_error}"
+        if stderr:
+            # Whatever borg said before it was ended is the operator's lead.
+            client.send_log(
+                job_id, sequence=1, stream="stderr", message=stderr.rstrip()
+            )
+        error_message = f"{payload.job_kind} stopped by the watchdog: {reason}"
         client.fail_job(job_id, error_message=error_message, return_code=return_code)
         return RepositoryOperationResult(
             job_id=job_id,
@@ -1027,14 +1330,42 @@ def _execute_streaming_artifact_operation(
             message=error_message,
         )
 
-    if return_code == 0:
+    if delivery_required and not delivered:
+        # The server answers 200 either way; only the body says whether a
+        # consumer took the bytes, so anything but its explicit yes (a
+        # bodyless answer from a proxy included) is not a delivery. Checked
+        # before the exit code: a consumer that left mid-stream closes the
+        # pipe and borg's EPIPE exit would otherwise name the wrong cause.
+        # borg may have failed before writing a byte (a held lock, say): the
+        # consumer gave up waiting, and its reason is on stderr.
+        if stderr:
+            client.send_log(
+                job_id, sequence=1, stream="stderr", message=stderr.rstrip()
+            )
+        error_message = (
+            f"{payload.job_kind} artifact not delivered: the server did not "
+            f"confirm a consumer for it (borg exited with code {return_code})"
+        )
+        client.fail_job(job_id, error_message=error_message, return_code=return_code)
+        return RepositoryOperationResult(
+            job_id=job_id,
+            status="failed",
+            return_code=return_code,
+            message=error_message,
+        )
+
+    if return_code == 0 or (warnings_ok and is_warning_return_code(return_code)):
+        if return_code != 0 and stderr:
+            client.send_log(
+                job_id, sequence=1, stream="stderr", message=stderr.rstrip()
+            )
         client.complete_job(
             job_id,
             result={"return_code": return_code, "command": cmd, "artifact": True},
         )
         return RepositoryOperationResult(
             job_id=job_id,
-            status="completed",
+            status="completed" if return_code == 0 else "completed_with_warnings",
             return_code=return_code,
             message=f"{payload.job_kind} exited with code {return_code}",
         )
@@ -1063,7 +1394,14 @@ def _execute_binary_output_repository_operation(
     operation = payload.operation or {}
     if operation.get("delivery") == "artifact" and hasattr(client, "upload_artifact"):
         return _execute_streaming_artifact_operation(
-            job_id, payload, client, cmd, env, should_cancel=should_cancel
+            job_id,
+            payload,
+            client,
+            cmd,
+            env,
+            should_cancel=should_cancel,
+            idle_timeout_seconds=STREAM_EXTRACT_IDLE_SECONDS,
+            keepalive_seconds=STREAM_KEEPALIVE_SECONDS,
         )
 
     try:

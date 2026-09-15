@@ -498,3 +498,146 @@ def test_null_excludes_fall_back_to_the_defaults():
     assert history.is_excluded("home/u/.cache/pip/x", compiled) is True
 
     assert history.compile_excludes([]) == []
+
+
+class FakeAgentStream(FakeStream):
+    """Stands in for AgentChangeStream: keyed by (predecessor, archive),
+    `None` as predecessor for a full listing."""
+
+    listings: dict = {}
+    created: list = []
+
+    def __init__(self, db, repository, archive, predecessor, cancelled=None):
+        self.key = (predecessor, archive)
+        self.cancelled = cancelled
+        FakeAgentStream.created.append(self.key)
+        value = self.listings[self.key]
+        if isinstance(value, BaseException):
+            self._raise = value
+            super().__init__([])
+        else:
+            self._raise = None
+            super().__init__(value)
+
+    async def __aiter__(self):
+        if self._raise is not None:
+            raise self._raise
+        async for line in super().__aiter__():
+            yield line
+
+
+@pytest.fixture()
+def agent_repo(db, repo):
+    repo.executor_type = "agent"
+    repo.execution_target = "agent"
+    db.commit()
+    FakeAgentStream.listings = {}
+    FakeAgentStream.created = []
+    prepare = AsyncMock()
+    with (
+        patch.object(history, "agent_supports_job", return_value=True),
+        patch.object(history, "AgentChangeStream", FakeAgentStream),
+        patch.object(history, "_prepare_repository_borg_env", prepare),
+    ):
+        yield repo, prepare
+
+
+@pytest.mark.unit
+async def test_agent_repository_indexes_through_the_agent(db, agent_repo):
+    """The agent produces the listing; parsing, excludes and sizes are the
+    server's. No credentials are prepared on the server and the server's
+    own borg is never asked."""
+    repo, prepare = agent_repo
+    a1 = _archive(db, repo, "first", 1)
+    a2 = _archive(db, repo, "second", 2)
+    FakeAgentStream.listings[(None, "first")] = [
+        L("src", t="d"),
+        L("src/a.txt", 10),
+        L("src/.cache/x", 1),
+    ]
+    FakeAgentStream.listings[("first", "second")] = [
+        D_MOD("src/a.txt", 5, 0),
+        D_ADD("src/b.txt", 3),
+    ]
+
+    out = await history.run_history_index(_ctx(db, repo))
+
+    assert out.status == "completed"
+    assert out.result == {"indexed": 2, "failed": 0, "left_pending": 0, "exhausted": 0}
+    assert FakeAgentStream.created == [(None, "first"), ("first", "second")]
+    prepare.assert_not_called()
+    db.refresh(a1)
+    db.refresh(a2)
+    assert (a1.history_state, a2.history_state) == ("indexed", "indexed")
+    rows = {r.path: r for r in db.query(ArchiveChange).filter_by(archive_id=a2.id)}
+    assert (rows["src/a.txt"].size_before, rows["src/a.txt"].size_after) == (10, 15)
+    assert rows["src/b.txt"].change == "added"
+
+
+@pytest.mark.unit
+async def test_agent_repository_without_the_job_still_skips(db, repo):
+    """An agent that does not advertise the diff job keeps the old skip."""
+    repo.executor_type = "agent"
+    repo.execution_target = "agent"
+    db.commit()
+    a1 = _archive(db, repo, "first", 1)
+    out = await history.run_history_index(_ctx(db, repo))
+    assert out.status == "skipped" and out.skip_reason == "agent_diff_unsupported"
+    db.refresh(a1)
+    assert a1.history_state == "skipped"
+
+
+@pytest.mark.unit
+async def test_an_unavailable_agent_leaves_archives_pending_with_their_budget(
+    db, agent_repo
+):
+    """No agent took the job: the run stops, and neither this archive nor
+    the ones after it spend a retry, so an agent that is offline for a few
+    reconcile runs does not exhaust the repository's history."""
+    from app.services.operations.executors.agent_changes import AgentUnavailable
+
+    repo, _ = agent_repo
+    a1 = _archive(db, repo, "first", 1)
+    a2 = _archive(db, repo, "second", 2)
+    FakeAgentStream.listings[(None, "first")] = AgentUnavailable(
+        "no agent picked up the change listing job"
+    )
+
+    out = await history.run_history_index(_ctx(db, repo))
+
+    assert out.status == "completed_with_warnings"
+    assert out.result == {
+        "indexed": 0,
+        "failed": 0,
+        "left_pending": 2,
+        "exhausted": 0,
+        "agent_unavailable": "no agent picked up the change listing job",
+    }
+    for archive in (a1, a2):
+        db.refresh(archive)
+        assert archive.history_state == "pending"
+        assert (archive.history_attempts or 0) == 0
+
+
+@pytest.mark.unit
+async def test_a_busy_repository_defers_the_run_without_spending_a_retry(
+    db, agent_repo
+):
+    from fastapi import HTTPException
+
+    from app.services.operations.runner import REPOSITORY_BUSY_KEY, repository_busy
+
+    repo, _ = agent_repo
+    a1 = _archive(db, repo, "first", 1, state="indexed")
+    a2 = _archive(db, repo, "second", 2)
+    FakeAgentStream.listings[("first", "second")] = HTTPException(
+        status_code=409, detail={"key": REPOSITORY_BUSY_KEY}
+    )
+
+    with pytest.raises(HTTPException) as refused:
+        await history.run_history_index(_ctx(db, repo))
+
+    assert repository_busy(refused.value)
+    db.refresh(a2)
+    assert a2.history_state == "pending"
+    assert (a2.history_attempts or 0) == 0

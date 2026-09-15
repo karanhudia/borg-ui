@@ -209,6 +209,24 @@ async def test_reset_successor_of_an_agent_repository_is_skipped_not_pending(db,
 
 
 @pytest.mark.unit
+async def test_reset_successor_of_a_capable_agent_repository_is_pending(db, repo):
+    """An agent that produces the change listing gets its history run like
+    any repository, so a successor that loses its base waits for it."""
+    repo.executor_type = "agent"
+    repo.execution_target = "agent"
+    db.commit()
+    r = _archive(db, repo, "r", 2, state="skipped")
+    s = _archive(db, repo, "s", 3)
+    _row(db, s, "a", "added", after=1)
+    op = _ops(db, repo, [r.id])
+    with patch.object(history, "agent_supports_job", return_value=True):
+        out = await history.run_history_merge(_ctx(db, repo, op))
+    assert out.result["reset"] == 1
+    db.refresh(s)
+    assert s.history_state == "pending" and s.history_rows is None
+
+
+@pytest.mark.unit
 async def test_pending_successor_or_no_successor_just_drops(db, repo):
     r1 = _archive(db, repo, "r1", 1)
     _row(db, r1, "a", "added", after=1)

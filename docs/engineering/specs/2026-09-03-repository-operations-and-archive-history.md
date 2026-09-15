@@ -107,9 +107,10 @@ a live Borg call, and only the archive count and newest timestamp are stored.
   schedulers started in `app/main.py`.
 - No changes to how managed agents transport backups. `AgentJob` remains the
   transport record; it gains a pointer to an operation in the last phase.
-- History index for managed-agent repositories is out of scope until the
-  agent protocol gains a `diff` command. Such repositories show the history
-  stage as `skipped` with a reason.
+- History index for managed-agent repositories was out of scope until the
+  agent protocol gained a `diff` command. It has one since agent 0.1.6
+  (`repository.diff`); a repository whose agent predates it shows the
+  history stage as unavailable with a reason.
 
 ## 5. Vocabulary
 
@@ -641,8 +642,14 @@ For each series in the repository, ordered by `start`:
   - Else leave `pending`.
 - Progress: `progress_current` is the pair index, `progress_total` the
   pending count, `progress_message` is `"<prev> → <cur>"`.
-- Managed-agent repositories: set `history_state = skipped` on all pending
-  archives and `skip_reason = "agent_diff_unsupported"` on the operation.
+- Managed-agent repositories run the same pairs through the agent's
+  `repository.diff` job: the agent runs the identical argv and streams its
+  stdout through the artifact upload, and the server parses it exactly as
+  it parses its own stream, excludes, sizes, cap and fold included. A job
+  the agent never picks up stops the run with the archive left `pending`
+  and its retry budget untouched. A repository whose agent does not
+  advertise the job: set `history_state = skipped` on all pending archives
+  and `skip_reason = "agent_diff_unsupported"` on the operation.
 
 New wrapper methods: `Borg.diff_archives(...)` in `app/core/borg.py`,
 `Borg2.diff_archives(...)` in `app/core/borg2.py`,
@@ -1234,7 +1241,6 @@ Not in scope, listed so nobody re-derives them.
 - Restore cart across archives.
 - Miller-column browser toggle.
 - FTS5 search if `LIKE` proves slow.
-- Agent protocol `diff` command to unblock history for managed agents.
 - Manual series override per repository.
 - Merging `BackupPlanRun` into `run_id` semantics.
 - Moving the Background work tab into the sidebar if usage justifies it.
@@ -1460,6 +1466,7 @@ Recorded so later sessions do not re-derive or re-litigate them.
 | Restore is non-exclusive | Restore takes the lane | Borg permits concurrent reads; blocking restores behind a backup would be a regression |
 | Borg 1 series inferred from plan template prefix, then timestamp stripping, then `default` | Require users to define series | Inference covers the common cases; a manual override is a listed follow-up |
 | Managed-agent repositories skip history until the agent gains `diff` | Block the feature on the agent protocol | The rest of the feature ships; the skip is visible and explained |
+| Agent repositories get history once their agent advertises `repository.diff`, with no index mode migration: the backfill starts like it did for server repositories after phase 2 (#1052) | Move existing agent repositories to `archives` until an operator opts in; cap the archives indexed per run | Server repositories were backfilled without an opt-in, and `full` on an agent repository never did anything before, so there is no choice to protect; `archives` stays the way to exclude a repository too large to diff |
 | Reconcile replaces the hourly stats scheduler rather than running beside it | Keep both | Two writers to the same columns with no coordination is the current bug |
 | Codex is not used; all phases are implemented and reviewed by Claude models named in section 13 | Mixed vendors | Owner's decision |
 | Hidden rows above the cap collapse to per-subtree summary rows | Drop rows silently or refuse to index | The user sees that truncation happened and where |
