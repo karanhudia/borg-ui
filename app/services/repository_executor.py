@@ -8,7 +8,9 @@ from typing import Any, Callable, Optional
 
 import structlog
 from fastapi import HTTPException, status
+from sqlalchemy import update
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import SingletonThreadPool, StaticPool
 
 from app.database.models import AgentJob, AgentJobLog, AgentMachine, Repository
 from app.services.agent_job_dispatcher import dispatch_agent_cancel_if_connected
@@ -51,6 +53,20 @@ REPOSITORY_OPERATION_CAPABILITIES = {
     "repository.disk_usage",
     "repository.storage_usage",
 }
+# Kinds whose output the server parses. The agent reports the raw JSON as
+# `stdout` and its own parse of it as `data` (its MACHINE_PARSED_JOB_KINDS;
+# the two packages share no imports, so the set is stated twice). The reader
+# takes the result once, from the wait below, and nothing reads the stored
+# copy back, so the row keeps only what still describes the run.
+MACHINE_PARSED_JOB_KINDS = frozenset(
+    {
+        "repository.info",
+        "repository.rinfo",
+        "repository.archive_info",
+        "repository.list_archives",
+    }
+)
+CONSUMED_RESULT_KEYS = ("return_code", "command", "stderr")
 
 
 def normalize_executor_type(
@@ -485,6 +501,59 @@ def agent_operation_failed_detail(reason: Optional[str]) -> dict[str, Any]:
     }
 
 
+def is_machine_parsed_job(agent_job: AgentJob) -> bool:
+    payload = agent_job.payload if isinstance(agent_job.payload, dict) else {}
+    return payload.get("job_kind") in MACHINE_PARSED_JOB_KINDS
+
+
+def consumed_result(result: Any) -> dict[str, Any]:
+    """A machine-parsed result as the row keeps it once its reader has it:
+    `stdout` and `data` (the same output twice) are gone, the rest stays."""
+    if not isinstance(result, dict):
+        return {}
+    return {key: result[key] for key in CONSUMED_RESULT_KEYS if key in result}
+
+
+def drop_consumed_agent_job_output(db: Session, agent_job: AgentJob) -> None:
+    """Reduce a machine-parsed job's stored result once the wait handed it over.
+
+    A listing is the largest thing a repository job row holds and every reader
+    keeps its own copy, yet the row kept the full one until the job fell out
+    of retention. The write goes through a session of its own on the caller's
+    engine: the caller's transaction is neither committed nor rolled back by
+    it, and the caller's copy of the result is untouched. A pool that hands
+    every session the same connection (in-memory SQLite) cannot give the
+    write a transaction of its own, so the row is left to the retention pass
+    there. Best effort, like the browse route's drop of a consumed contents
+    listing: a failed write is logged, and the retention pass reduces what is
+    left behind.
+    """
+    result = agent_job.result
+    if not is_machine_parsed_job(agent_job) or not isinstance(result, dict):
+        return
+    if "stdout" not in result and "data" not in result:
+        return
+    engine = db.get_bind()
+    if isinstance(engine.pool, (SingletonThreadPool, StaticPool)):
+        return
+    agent_job_id = agent_job.id
+    try:
+        with Session(bind=engine) as own:
+            own.execute(
+                update(AgentJob)
+                .where(AgentJob.id == agent_job_id)
+                .values(result=consumed_result(result))
+            )
+            own.commit()
+    except Exception as exc:
+        # the exception text can carry the bound parameters, stderr included
+        logger.warning(
+            "consumed agent job result could not be reduced",
+            agent_job_id=agent_job_id,
+            error_type=type(exc).__name__,
+        )
+
+
 async def wait_for_agent_repository_operation_job(
     db: Session,
     agent_job_id: int,
@@ -502,7 +571,10 @@ async def wait_for_agent_repository_operation_job(
                 detail={"key": "backend.errors.agents.jobNotFound"},
             )
         if agent_job.status in SUCCESSFUL_AGENT_STATUSES:
-            return agent_job.result or {}
+            # The caller gets the full result; the row keeps the small part.
+            result = agent_job.result or {}
+            drop_consumed_agent_job_output(db, agent_job)
+            return result
         if agent_job.status in TERMINAL_AGENT_STATUSES:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
