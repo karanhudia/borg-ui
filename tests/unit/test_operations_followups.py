@@ -497,18 +497,38 @@ def test_enqueue_followups_ignores_a_running_chain(db, repo, monkeypatch):
 
 @pytest.mark.unit
 def test_history_capability_names_the_reason(db_session):
-    """The executor first, then the plan: an agent's repository reads as
-    agent-unsupported on every plan (an upgrade would not change it), a
-    Community install's server repository as plan-locked, and only a Pro
-    server-side repository has the history stage."""
-    from app.database.models import LicensingState
+    """The agent first, then the plan: a repository whose agent does not
+    advertise the diff job reads as agent-unsupported on every plan (an
+    upgrade would not change it); one whose agent does is decided by the
+    plan like a server repository: plan-locked on Community, available on
+    Pro."""
+    from app.database.models import AgentMachine, LicensingState
     from app.services.operations.followups import (
         history_capability,
         history_possible,
         history_possible_for,
     )
 
+    older = AgentMachine(
+        name="older",
+        agent_id="agt_older",
+        token_hash="x",
+        token_prefix="x",
+        status="online",
+        capabilities=["repository.list_archives"],
+    )
+    current = AgentMachine(
+        name="current",
+        agent_id="agt_current",
+        token_hash="y",
+        token_prefix="y",
+        status="online",
+        capabilities=["repository.list_archives", "repository.diff"],
+    )
+    db_session.add_all([older, current])
+    db_session.flush()
     server = Repository(name="server", path="/repo/server", borg_version=1)
+    # no agent assigned: nothing could run the job
     agent = Repository(
         name="agent",
         path="/repo/agent",
@@ -516,17 +536,40 @@ def test_history_capability_names_the_reason(db_session):
         executor_type="agent",
         execution_target="agent",
     )
-    db_session.add_all([server, agent])
+    old_agent = Repository(
+        name="old-agent",
+        path="/repo/old-agent",
+        borg_version=1,
+        executor_type="agent",
+        execution_target="agent",
+        agent_machine_id=older.id,
+    )
+    capable = Repository(
+        name="capable",
+        path="/repo/capable",
+        borg_version=1,
+        executor_type="agent",
+        execution_target="agent",
+        agent_machine_id=current.id,
+    )
+    db_session.add_all([server, agent, old_agent, capable])
     db_session.commit()
 
     assert history_capability(db_session, server) == "plan_locked"
     assert history_capability(db_session, agent) == "agent_unsupported"
+    assert history_capability(db_session, old_agent) == "agent_unsupported"
+    assert history_capability(db_session, capable) == "plan_locked"
     state = db_session.query(LicensingState).first()
     state.plan = "pro"
     state.status = "active"
     db_session.commit()
     assert history_capability(db_session, server) == "available"
     assert history_capability(db_session, agent) == "agent_unsupported"
+    assert history_capability(db_session, old_agent) == "agent_unsupported"
+    assert history_capability(db_session, capable) == "available"
+    assert history_possible(db_session, capable) is True
+    assert history_possible_for(db_session, capable.id, history=True) is True
+    assert history_capability(db_session, capable, history=False) == "plan_locked"
     assert history_possible(db_session, server) is True
     assert history_possible(db_session, agent) is False
     # the plan gate can be handed in by a caller that already read it
@@ -560,8 +603,9 @@ def test_chain_for_repository_gives_an_agent_repository_no_history_stage(
     db, monkeypatch
 ):
     """The one place every follow-up site reads its gates: with the plan
-    open and the mode `full`, a repository executed by an agent still gets
-    no `history_index`, since the server cannot diff it."""
+    open and the mode `full`, a repository whose agent cannot produce the
+    change listing gets no `history_index`; once its agent advertises the
+    diff job it gets the same chain as a server repository."""
     from app.services.operations.followups import chain_for_repository
 
     monkeypatch.setattr(
@@ -595,3 +639,25 @@ def test_chain_for_repository_gives_an_agent_repository_no_history_stage(
     agent.index_mode = "archives"
     db.commit()
     assert chain_for_repository(db, "backup", agent.id) == ["archive_sync", "stats"]
+
+    from app.database.models import AgentMachine
+
+    machine = AgentMachine(
+        name="current",
+        agent_id="agt_chain",
+        token_hash="x",
+        token_prefix="x",
+        status="online",
+        capabilities=["repository.diff"],
+    )
+    db.add(machine)
+    db.flush()
+    agent.agent_machine_id = machine.id
+    agent.index_mode = "full"
+    db.commit()
+    assert chain_for_repository(db, "backup", agent.id) == [
+        "archive_sync",
+        "history_merge",
+        "history_index",
+        "stats",
+    ]

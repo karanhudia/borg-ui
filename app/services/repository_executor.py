@@ -80,6 +80,29 @@ def is_agent_executor(repository: Repository) -> bool:
     return repository_executor_type(repository) == EXECUTOR_AGENT
 
 
+# The agent job that produces an archive's change listing for the history
+# index (agents from 0.1.6).
+AGENT_DIFF_JOB_KIND = "repository.diff"
+
+
+def agent_supports_job(db: Session, repository: Repository, job_kind: str) -> bool:
+    """True when the repository's agent advertises `job_kind`.
+
+    Agents report their capabilities on hello and heartbeat, so an agent
+    from before a job kind existed answers False until it is updated; so
+    does a repository with no agent assigned. Whether the agent is online
+    is a question for the moment the job is queued, not for this one.
+    """
+    if not repository.agent_machine_id:
+        return False
+    capabilities = (
+        db.query(AgentMachine.capabilities)
+        .filter(AgentMachine.id == repository.agent_machine_id)
+        .scalar()
+    )
+    return isinstance(capabilities, list) and job_kind in capabilities
+
+
 def agent_timezone_for_repository(db: Session, repository: Repository) -> Optional[str]:
     """The IANA zone the repository's agent reported, if any.
 

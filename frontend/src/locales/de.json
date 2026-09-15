@@ -1150,7 +1150,7 @@
       "filterLabel": "Änderungstyp",
       "delta": "{{sign}}{{size}}",
       "summaryFolder": "Ordner",
-      "agentUnsupported": "Für Repositories, die ein Agent ausführt, ist keine Änderungshistorie verfügbar."
+      "agentUnsupported": "Für Repositories, deren Agent die Änderungshistorie noch nicht erstellen kann, ist sie nicht verfügbar. Ein Agent-Update schaltet sie frei."
     },
     "files": {
       "size": "Größe",
@@ -1182,7 +1182,7 @@
       "type": "Typ",
       "typeFile": "Datei",
       "typeDirectory": "Ordner",
-      "historyUnavailableAgent": "Für Repositories, die ein Agent ausführt, ist keine Änderungshistorie verfügbar.",
+      "historyUnavailableAgent": "Für Repositories, deren Agent die Änderungshistorie noch nicht erstellen kann, ist sie nicht verfügbar. Ein Agent-Update schaltet sie frei.",
       "historyNotIndexed": "Dieses Repository wurde noch nicht indiziert.",
       "historyCoverage_one": "{{indexed}} von {{count}} Archiv indiziert",
       "historyCoverage_other": "{{indexed}} von {{count}} Archiven indiziert",
@@ -3800,7 +3800,7 @@
         "detailHint": "Baue ab Dateiverlauf neu auf, um diese Archive erneut zu indizieren.",
         "viewIndexRuns": "Indexläufe anzeigen",
         "openRepository": "Repository öffnen",
-        "historyAgentUnsupported": "Für Agent-Repositories nicht verfügbar"
+        "historyAgentUnsupported": "Nach einem Agent-Update verfügbar"
       },
       "rebuildMenuHint": "Jede Stufe nach der gewählten wird ebenfalls neu aufgebaut. Frühere Stufen bleiben erhalten. Statistiken laufen immer zuletzt, weil sie zusammenzählen, was die anderen Stufen erzeugt haben.",
       "rebuildTitle": "Abgeleitete Daten neu aufbauen",
@@ -3809,7 +3809,7 @@
       "stageKept": "Bleibt erhalten",
       "stageStart": "Hier beginnen",
       "currentRun": "Aktueller Lauf",
-      "stageAgentUnsupported": "Für Repositories, die ein Agent ausführt, nicht verfügbar"
+      "stageAgentUnsupported": "Für Repositories, deren Agent die Änderungshistorie noch nicht erstellen kann, nicht verfügbar"
     },
     "status": {
       "queued": "In Warteschlange",
@@ -6052,7 +6052,7 @@
         "repositoryNotFound": "Repository nicht gefunden",
         "fileNotFoundAfterExtraction": "Datei nach der Extraktion nicht gefunden",
         "failedExtractFile": "Fehler beim Extrahieren der Datei: {{error}}",
-        "historyUnavailableForAgent": "Für Repositories, die ein Agent ausführt, ist keine Änderungshistorie verfügbar; es gibt nichts neu aufzubauen."
+        "historyUnavailableForAgent": "Für Repositories, deren Agent die Änderungshistorie noch nicht erstellen kann, ist sie nicht verfügbar; es gibt nichts neu aufzubauen. Zuerst muss der Agent aktualisiert werden."
       },
       "borg": {
         "repositoryDoesNotExist": "Das Repository existiert nicht im angegebenen Pfad",

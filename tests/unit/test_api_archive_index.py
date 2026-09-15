@@ -1439,15 +1439,65 @@ def test_archive_changes_has_no_btree_index_on_the_unbounded_path():
 
 @pytest.mark.unit
 class TestAgentRepositoryHistoryCapability:
-    """A managed agent's repository cannot be diffed by the server, so the
-    history stage does not exist for it: the responses say so, nothing
-    enqueues it, and a rebuild of it is refused (#953)."""
+    """A repository whose agent cannot produce the change listing has no
+    history stage: the responses say so, nothing enqueues it, and a rebuild
+    of it is refused (#953). Once its agent advertises the diff job it is a
+    repository like any other (#1052)."""
 
     @staticmethod
     def _agent_repo(test_db):
         return _repo(
             test_db, name="agent", executor_type="agent", execution_target="agent"
         )
+
+    @staticmethod
+    def _capable_agent_repo(test_db):
+        from app.database.models import AgentMachine
+
+        machine = AgentMachine(
+            name="current",
+            agent_id="agt_history",
+            token_hash="x",
+            token_prefix="x",
+            status="online",
+            capabilities=["repository.list_archives", "repository.diff"],
+        )
+        test_db.add(machine)
+        test_db.commit()
+        return _repo(
+            test_db,
+            name="capable",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=machine.id,
+        )
+
+    def test_an_agent_with_the_diff_job_has_the_history_stage(
+        self, test_client, test_db, admin_headers
+    ):
+        capable = self._capable_agent_repo(test_db)
+        a = _archive(test_db, capable, "a1", 1, state="skipped")
+        r = test_client.get(
+            f"/api/repositories/{capable.id}/archives", headers=admin_headers
+        )
+        # Community: the plan decides, as for a server repository
+        assert r.json()["history_capability"] == "plan_locked"
+
+        _pro(test_db)
+        r = test_client.get(
+            f"/api/repositories/{capable.id}/archives", headers=admin_headers
+        )
+        assert r.json()["history_capability"] == "available"
+        r = test_client.post(
+            f"/api/repositories/{capable.id}/rebuild",
+            json={"from": "history"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 200
+        kinds = [test_db.get(Operation, i).kind for i in r.json()["operations"]]
+        assert kinds == ["history_index", "stats"]
+        test_db.refresh(a)
+        assert a.history_state == "pending"
 
     def test_list_and_detail_name_the_capability(
         self, test_client, test_db, admin_headers

@@ -28,6 +28,11 @@ from app.database.models import (
     utc_now,
 )
 from app.services.operations import executors
+from app.services.operations.executors.agent_changes import (
+    AgentChangeStream,
+    AgentUnavailable,
+    OperationCancelled,
+)
 from app.services.operations.executors.index import _load_repository
 from app.services.operations.followups import history_enabled
 from app.services.operations.history_fold import (
@@ -35,9 +40,13 @@ from app.services.operations.history_fold import (
     fold_pair,
     rows_to_changes,
 )
-from app.services.operations.runner import Outcome
+from app.services.operations.runner import Outcome, repository_busy
 from app.services.repository_command_lock import run_serialized_repository_command
-from app.services.repository_executor import is_agent_executor
+from app.services.repository_executor import (
+    AGENT_DIFF_JOB_KIND,
+    agent_supports_job,
+    is_agent_executor,
+)
 from app.utils.borg_env import cleanup_temp_key_file
 
 logger = structlog.get_logger()
@@ -53,10 +62,6 @@ SIZE_LOOKUP_CHUNK = 500
 MAX_HISTORY_ATTEMPTS = 3
 # borg exits 1 for warnings; the diff is still complete
 BORG_OK_EXIT_CODES = (0, 1)
-
-
-class OperationCancelled(Exception):
-    pass
 
 
 # -- excludes -------------------------------------------------------------------
@@ -259,17 +264,29 @@ async def collect_changes(
     excludes: list[re.Pattern],
     max_rows: int,
 ) -> RowCollector:
-    router = BorgRouter(repository)
-    if predecessor is None:
-        stream = router.list_archive_lines(archive_ref(repository, archive), env=env)
-        parser = parse_list_line
+    agent = is_agent_executor(repository)
+    parser = parse_list_line if predecessor is None else parse_diff_line
+    if agent:
+        # The agent runs the same listing on its machine and relays stdout.
+        stream = AgentChangeStream(
+            db,
+            repository,
+            archive_ref(repository, archive),
+            archive_ref(repository, predecessor) if predecessor is not None else None,
+            # a diff of unchanged paths yields no line for hours: the
+            # stream itself has to notice a cancellation
+            cancelled=ctx.cancelled,
+        )
+    elif predecessor is None:
+        stream = BorgRouter(repository).list_archive_lines(
+            archive_ref(repository, archive), env=env
+        )
     else:
-        stream = router.diff_archives(
+        stream = BorgRouter(repository).diff_archives(
             archive_ref(repository, predecessor),
             archive_ref(repository, archive),
             env=env,
         )
-        parser = parse_diff_line
     collector = RowCollector(archive.id, max_rows)
     pending_modified: list[ChangeRecord] = []
 
@@ -289,20 +306,26 @@ async def collect_changes(
             collector.add(rec, before, after)
         pending_modified.clear()
 
-    async for line in stream:
-        if ctx.cancelled():
+    try:
+        async for line in stream:
+            if ctx.cancelled():
+                await stream.close()
+                raise OperationCancelled()
+            rec = parser(line)
+            if rec is None or rec.is_directory or is_excluded(rec.path, excludes):
+                continue
+            if rec.change == "modified" and rec.size_delta is not None:
+                pending_modified.append(rec)
+                if len(pending_modified) >= SIZE_LOOKUP_CHUNK:
+                    flush_modified()
+            else:
+                collector.add(rec, rec.size_before, rec.size_after)
+        flush_modified()
+    except BaseException:
+        if agent:
+            # a job left running would hold the repository on the agent
             await stream.close()
-            raise OperationCancelled()
-        rec = parser(line)
-        if rec is None or rec.is_directory or is_excluded(rec.path, excludes):
-            continue
-        if rec.change == "modified" and rec.size_delta is not None:
-            pending_modified.append(rec)
-            if len(pending_modified) >= SIZE_LOOKUP_CHUNK:
-                flush_modified()
-        else:
-            collector.add(rec, rec.size_before, rec.size_after)
-    flush_modified()
+        raise
     if stream.return_code not in BORG_OK_EXIT_CODES:
         raise RuntimeError(
             f"borg exited {stream.return_code}: {(stream.stderr or '').strip()[-500:]}"
@@ -356,11 +379,13 @@ async def run_history_index(ctx) -> Outcome:
         and (a.history_attempts or 0) >= MAX_HISTORY_ATTEMPTS
     ]
     pending = [a for a in candidates if a not in exhausted]
-    if is_agent_executor(repository):
-        # The chains no longer create this stage for an agent's repository;
-        # a row that reaches it anyway marks what the listing marks: every
-        # archive not indexed, the exhausted failures included (nothing can
-        # retry them here either).
+    agent = is_agent_executor(repository)
+    if agent and not agent_supports_job(db, repository, AGENT_DIFF_JOB_KIND):
+        # The chains do not create this stage for a repository whose agent
+        # cannot produce the listing; a row that reaches it anyway (queued
+        # before the agent was replaced by an older one) marks what the
+        # listing marks: every archive not indexed, the exhausted failures
+        # included (nothing can retry them here either).
         for archive in candidates:
             archive.history_state = "skipped"
         db.commit()
@@ -384,8 +409,12 @@ async def run_history_index(ctx) -> Outcome:
         )
     excludes = compile_excludes(repository.history_index_excludes)
     max_rows = settings.index_history_max_rows
-    env, temp_key_file = _prepare_repository_borg_env(repository, db)
+    # the agent holds the repository's credentials; the server prepares none
+    env, temp_key_file = (
+        ({}, None) if agent else _prepare_repository_borg_env(repository, db)
+    )
     indexed = failed = left = 0
+    agent_unavailable: Optional[str] = None
     total = len(pending)
     try:
         for position, archive in enumerate(pending):
@@ -422,8 +451,20 @@ async def run_history_index(ctx) -> Outcome:
             except OperationCancelled:
                 db.rollback()
                 break
+            except AgentUnavailable as exc:
+                # Not the archive's fault: it and every archive after it stay
+                # `pending` with their retry budget, for the next run.
+                db.rollback()
+                agent_unavailable = str(exc)
+                left += total - position
+                ctx.log(f"{label}: agent unavailable: {exc}")
+                break
             except Exception as exc:
                 db.rollback()
+                if repository_busy(exc):
+                    # Another job holds the repository: the runner defers the
+                    # operation and retries; indexed archives stay indexed.
+                    raise
                 archive.history_state = "failed"
                 archive.history_attempts = (archive.history_attempts or 0) + 1
                 db.commit()
@@ -442,15 +483,15 @@ async def run_history_index(ctx) -> Outcome:
         status = (
             "completed_with_warnings" if failed or left or exhausted else "completed"
         )
-        return Outcome(
-            status=status,
-            result={
-                "indexed": indexed,
-                "failed": failed,
-                "left_pending": left,
-                "exhausted": len(exhausted),
-            },
-        )
+        result = {
+            "indexed": indexed,
+            "failed": failed,
+            "left_pending": left,
+            "exhausted": len(exhausted),
+        }
+        if agent_unavailable is not None:
+            result["agent_unavailable"] = agent_unavailable
+        return Outcome(status=status, result=result)
     finally:
         cleanup_temp_key_file(temp_key_file)
 
@@ -582,10 +623,16 @@ async def run_history_merge(ctx) -> Outcome:
     db = ctx.db
     counts = {"merged": 0, "folded": 0, "reset": 0, "dropped": 0}
     targets = removed_archive_targets_from_dependency(db, ctx.operation)
-    # A reset successor reads as "not yet"; on an agent's repository no run
-    # comes on any plan (the capability is the executor's), so it takes the
-    # state the listing writes there.
-    reset_state = "skipped" if is_agent_executor(repository) else "pending"
+    # A reset successor reads as "not yet"; on an agent's repository whose
+    # agent cannot produce the listing no run comes on any plan (the
+    # capability is the agent's), so it takes the state the listing writes
+    # there.
+    reset_state = (
+        "skipped"
+        if is_agent_executor(repository)
+        and not agent_supports_job(db, repository, AGENT_DIFF_JOB_KIND)
+        else "pending"
+    )
     for position, (archive_id, borg_id, last_seen_at, generation_id) in enumerate(
         targets
     ):

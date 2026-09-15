@@ -200,26 +200,28 @@ async def test_run_archive_sync_updates_repository_columns(db, repo, monkeypatch
 @pytest.mark.unit
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "agent, plan_has_history, expected_state",
+    "agent, capable, plan_has_history, expected_state",
     [
-        (True, True, "skipped"),  # no history run reaches it: say so
-        (
-            True,
-            False,
-            "skipped",
-        ),  # on Community too: the executor's reason outlasts the plan
-        (False, True, "pending"),  # server-side: the history run decides
-        (False, False, "pending"),  # Community: the stage is absent, nothing is touched
+        # an agent that cannot produce the listing: no history run reaches it
+        (True, False, True, "skipped"),
+        # on Community too: the agent's reason outlasts the plan
+        (True, False, False, "skipped"),
+        # an agent that advertises the diff job is a repository like any other
+        (True, True, True, "pending"),
+        (True, True, False, "pending"),
+        (False, False, True, "pending"),  # server-side: the history run decides
+        (False, False, False, "pending"),  # Community: the stage is absent
     ],
 )
 async def test_run_archive_sync_marks_agent_archives_skipped(
-    db, repo, monkeypatch, agent, plan_has_history, expected_state
+    db, repo, monkeypatch, agent, capable, plan_has_history, expected_state
 ):
-    """No history run reaches an agent's repository on any plan, so the
-    listing writes the state that run used to write: a new archive is
-    `skipped`, not a `pending` that reads as "not yet"; an indexed one is
-    left alone. On a server's repository `pending` stays, so the history
-    run (or a later plan change) finds it."""
+    """No history run reaches a repository whose agent cannot produce the
+    change listing, on any plan, so the listing writes the state that run
+    used to write: a new archive is `skipped`, not a `pending` that reads as
+    "not yet"; an indexed one is left alone. On a server's repository, and
+    on one whose agent advertises the diff job, `pending` stays, so the
+    history run (or a later plan change) finds it."""
     monkeypatch.setattr(
         index_exec,
         "list_archives_for_repository",
@@ -233,6 +235,9 @@ async def test_run_archive_sync_marks_agent_archives_skipped(
         "app.services.repository_executor.is_agent_executor", lambda repository: agent
     )
     monkeypatch.setattr(index_exec, "is_agent_executor", lambda repository: agent)
+    supports = lambda db, repository, job_kind: capable  # noqa: E731
+    monkeypatch.setattr(index_exec, "agent_supports_job", supports)
+    monkeypatch.setattr("app.services.repository_executor.agent_supports_job", supports)
     monkeypatch.setattr(
         "app.services.operations.followups.history_enabled",
         lambda db: plan_has_history,
@@ -293,10 +298,11 @@ async def test_run_archive_sync_marks_agent_archives_skipped(
     assert states.pop("given-up") == (
         "skipped" if expected_state == "skipped" else "failed"
     )
-    # a `skipped` row on a server's repository is left over from an
-    # agent-executed past: reopened with a fresh budget where the history
-    # stage exists, left alone everywhere else
-    reopened = not agent and plan_has_history
+    # a `skipped` row is left over from an agent that could not produce the
+    # listing: reopened with a fresh budget where the history stage exists
+    # now (a server's repository, or an agent updated since), left alone
+    # everywhere else; this is how an updated agent's backfill starts
+    reopened = (not agent or capable) and plan_has_history
     assert states.pop("leftover") == ("pending" if reopened else "skipped")
     assert db.query(Archive).filter_by(name="leftover").one().history_attempts == (
         0 if reopened else 3

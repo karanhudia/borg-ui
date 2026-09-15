@@ -32,7 +32,11 @@ from app.services.operations.followups import (
 from app.services.operations.runner import Outcome, repository_busy
 from app.services.operations.series import infer_series, series_prefixes_for_repository
 from app.services.repository_command_lock import run_serialized_repository_command
-from app.services.repository_executor import is_agent_executor
+from app.services.repository_executor import (
+    AGENT_DIFF_JOB_KIND,
+    agent_supports_job,
+    is_agent_executor,
+)
 from app.services.storage_usage import measure_repository_size, set_repository_size
 from app.utils.borg_env import cleanup_temp_key_file, effective_repository_remote_path
 
@@ -624,16 +628,18 @@ async def run_archive_sync(ctx) -> Outcome:
         removed_last_seen_at = {
             str(row.id): row.last_seen_at.isoformat() for row in removed_rows
         }
-        if is_agent_executor(repository):
-            # No history run ever reaches an agent's repository (the server
-            # cannot diff it), so the listing records the state the history
-            # run used to write: `skipped`, not a `pending` that would read
-            # as "not yet". On every plan: the capability is the executor's
-            # and outlasts a plan change. `failed` is marked too: nothing can retry it
-            # here, and a row left `failed` would flag the repository and
-            # offer a rebuild that is refused. Moving the repository back to
-            # the server reopens every `skipped` archive with a fresh retry
-            # budget.
+        if is_agent_executor(repository) and not agent_supports_job(
+            db, repository, AGENT_DIFF_JOB_KIND
+        ):
+            # No history run reaches an agent's repository whose agent cannot
+            # produce the change listing, so the listing records the state the
+            # history run used to write: `skipped`, not a `pending` that would
+            # read as "not yet". On every plan: the capability is the agent's
+            # and outlasts a plan change. `failed` is marked too: nothing can
+            # retry it here, and a row left `failed` would flag the repository
+            # and offer a rebuild that is refused. Updating the agent, or moving
+            # the repository back to the server, reopens every `skipped`
+            # archive with a fresh retry budget (the branch below).
             db.query(Archive).filter(
                 Archive.repository_id == repository.id,
                 Archive.history_state.in_(("pending", "failed")),
@@ -649,12 +655,14 @@ async def run_archive_sync(ctx) -> Outcome:
             is not None
             and history_capability(db, repository) == HISTORY_AVAILABLE
         ):
-            # The mirror image: `skipped` on a server's repository is left
-            # over from an agent-executed past (the executor change reopens
-            # them, but rows written before it did so stay). With the history
-            # stage available they go back to `pending` with a fresh budget,
-            # and the chain's history stage picks them up. The plan lookup
-            # behind the capability commits, so it runs only with such rows.
+            # The mirror image: `skipped` rows are left over from an agent
+            # that could not produce the listing, on a repository whose agent
+            # has since been updated or that the server executes now. With
+            # the history stage available they go back to `pending` with a
+            # fresh budget, and the chain's history stage picks them up: this
+            # is how an agent repository's backfill starts after the update.
+            # The plan lookup behind the capability commits, so it runs only
+            # with such rows.
             db.query(Archive).filter(
                 Archive.repository_id == repository.id,
                 Archive.history_state == "skipped",
