@@ -27,7 +27,7 @@ Pick one Compose workflow:
 - [With Redis](#option-2-with-redis-recommended): recommended for normal installs.
 - [External Redis](#option-3-external-redis): use Redis from another host, stack, or managed service.
 
-For Portainer or Unraid, use the same settings and see the platform notes below.
+For Portainer, Unraid, or Easypanel, use the same settings and see the platform notes below.
 
 ## Option 1: No Redis (Simple)
 
