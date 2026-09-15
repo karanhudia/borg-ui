@@ -10,6 +10,11 @@ import { resolveSnapshotOutputDir } from './snapshot-output-config.mjs'
 
 const { PNG } = pngjs
 
+const MAX_PNG_WIDTH = 4096
+const MAX_PNG_HEIGHT = 4096
+const MAX_PNG_PIXELS = 16_777_216
+const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(__dirname, '..')
 const repoRoot = path.resolve(frontendRoot, '..')
@@ -103,8 +108,38 @@ async function listPngFiles(rootDir, currentDir = rootDir) {
   return files.sort((a, b) => a.localeCompare(b))
 }
 
+function assertPngDimensions(width, height, filePath) {
+  if (
+    !Number.isInteger(width) ||
+    !Number.isInteger(height) ||
+    width <= 0 ||
+    height <= 0 ||
+    width > MAX_PNG_WIDTH ||
+    height > MAX_PNG_HEIGHT ||
+    width * height > MAX_PNG_PIXELS
+  ) {
+    throw new Error(`PNG dimensions exceed the visual report safety limit: ${filePath}`)
+  }
+}
+
+function validatePngHeader(buffer, filePath) {
+  if (
+    buffer.length < 24 ||
+    !buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE) ||
+    buffer.toString('ascii', 12, 16) !== 'IHDR'
+  ) {
+    return
+  }
+
+  assertPngDimensions(buffer.readUInt32BE(16), buffer.readUInt32BE(20), filePath)
+}
+
 async function readPng(filePath) {
-  return PNG.sync.read(await readFile(filePath))
+  const buffer = await readFile(filePath)
+  validatePngHeader(buffer, filePath)
+  const png = PNG.sync.read(buffer)
+  assertPngDimensions(png.width, png.height, filePath)
+  return png
 }
 
 async function readLines(filePath) {
@@ -183,8 +218,11 @@ async function copySnapshot(sourceRoot, outputDir, kind, fileName) {
 }
 
 function makeDiffPng(baseline, actual) {
+  assertPngDimensions(baseline.width, baseline.height, 'baseline image')
+  assertPngDimensions(actual.width, actual.height, 'actual image')
   const width = Math.max(baseline.width, actual.width)
   const height = Math.max(baseline.height, actual.height)
+  assertPngDimensions(width, height, 'diff image')
   const diff = new PNG({ width, height })
   let diffPixels = 0
 

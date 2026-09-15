@@ -1,16 +1,12 @@
 name: GitHub Pages Visual Regression
 
 on:
-  pull_request:
+  workflow_run:
+    workflows: ["Capture Storybook Visual Snapshots"]
+    types: [completed]
+  pull_request_target:
     branches: [main, develop]
-    types: [opened, synchronize, reopened, closed]
-    paths:
-      - "frontend/.storybook/**"
-      - "frontend/scripts/**"
-      - "frontend/src/**"
-      - "frontend/package.json"
-      - "frontend/package-lock.json"
-      - ".github/workflows/visual-regression.yml"
+    types: [closed]
   push:
     branches: [main]
     paths:
@@ -38,10 +34,11 @@ env:
 jobs:
   visuals:
     name: Storybook Visual Report
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
+      actions: read
       contents: write
       pages: write
       id-token: write
@@ -53,28 +50,57 @@ jobs:
         env:
           EVENT_ACTION: ${{ github.event.action || '' }}
           EVENT_NAME: ${{ github.event_name }}
-          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number || '' }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number || github.event.pull_request.number || github.event.inputs.pr_number || '' }}
+          SOURCE_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || '' }}
+          SOURCE_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name || '' }}
+          SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha || '' }}
         run: |
-          if [ "$EVENT_NAME" = "pull_request" ] && [ "$EVENT_ACTION" = "closed" ]; then
+          if [ "$EVENT_NAME" = "pull_request_target" ] && [ "$EVENT_ACTION" = "closed" ]; then
             mode="cleanup"
-          elif [ "$EVENT_NAME" = "pull_request" ] || [ -n "$PR_NUMBER" ]; then
+          elif [ "$EVENT_NAME" = "workflow_run" ] || [ -n "$PR_NUMBER" ]; then
             mode="pr"
           else
             mode="baseline"
+          fi
+
+          if [ "$EVENT_NAME" = "workflow_run" ] && [ "$mode" = "pr" ]; then
+            if [ -z "$PR_NUMBER" ] && [ -n "$SOURCE_HEAD_REPOSITORY" ] && [ -n "$SOURCE_HEAD_BRANCH" ]; then
+              source_owner="${SOURCE_HEAD_REPOSITORY%%/*}"
+              PR_NUMBER="$(gh api -X GET "repos/${GITHUB_REPOSITORY}/pulls" \
+                -f state=open -f "head=${source_owner}:${SOURCE_HEAD_BRANCH}" --jq '.[0].number // empty')"
+            fi
+
+            if [ -z "$PR_NUMBER" ]; then
+              mode="skip"
+            fi
+          fi
+
+          if [ "$EVENT_NAME" = "workflow_run" ] && [ "$mode" = "pr" ]; then
+            pr_details="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+            pr_state="$(jq -r .state <<<"$pr_details")"
+            pr_head_sha="$(jq -r .head.sha <<<"$pr_details")"
+            if [ "$pr_state" != "open" ]; then
+              mode="cleanup"
+            elif [ "$pr_head_sha" != "$SOURCE_HEAD_SHA" ]; then
+              mode="skip"
+            fi
           fi
 
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
 
       - name: Checkout source
-        if: ${{ steps.visual_mode.outputs.mode != 'cleanup' }}
+        if: ${{ steps.visual_mode.outputs.mode == 'pr' || steps.visual_mode.outputs.mode == 'baseline' }}
         uses: actions/checkout@v7
         with:
+          ref: main
           path: source
           persist-credentials: false
 
       - name: Set up Node.js ${{ env.NODE_VERSION }}
-        if: ${{ steps.visual_mode.outputs.mode != 'cleanup' }}
+        if: ${{ steps.visual_mode.outputs.mode == 'pr' || steps.visual_mode.outputs.mode == 'baseline' }}
         uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -82,23 +108,45 @@ jobs:
           cache-dependency-path: source/frontend/package-lock.json
 
       - name: Install frontend dependencies
-        if: ${{ steps.visual_mode.outputs.mode != 'cleanup' }}
+        if: ${{ steps.visual_mode.outputs.mode == 'pr' || steps.visual_mode.outputs.mode == 'baseline' }}
         working-directory: source/frontend
         run: npm ci
 
       - name: Install Playwright Chromium
-        if: ${{ steps.visual_mode.outputs.mode != 'cleanup' }}
+        if: ${{ steps.visual_mode.outputs.mode == 'pr' || steps.visual_mode.outputs.mode == 'baseline' }}
         working-directory: source/frontend
         run: PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install --with-deps chromium
 
       - name: Capture Storybook snapshots
-        if: ${{ steps.visual_mode.outputs.mode != 'cleanup' }}
+        if: ${{ (steps.visual_mode.outputs.mode == 'pr' || steps.visual_mode.outputs.mode == 'baseline') && github.event_name != 'workflow_run' }}
         working-directory: source/frontend
         run: npm run visual:screenshots
         env:
           STORYBOOK_SNAPSHOTS_DIR: ${{ github.workspace }}/visual-actual
 
+      - name: Download untrusted visual snapshots
+        if: ${{ steps.visual_mode.outputs.mode == 'pr' && github.event_name == 'workflow_run' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          gh run download "$SOURCE_RUN_ID" --name visual-actual --dir "$GITHUB_WORKSPACE/visual-actual"
+
+          if find "$GITHUB_WORKSPACE/visual-actual" -type l -print -quit | grep -q . || \
+            find "$GITHUB_WORKSPACE/visual-actual" -type f ! -name '*.png' -print -quit | grep -q .; then
+            echo "Refusing unexpected visual artifact files."
+            exit 1
+          fi
+
+          file_count="$(find "$GITHUB_WORKSPACE/visual-actual" -type f -name '*.png' | wc -l | tr -d ' ')"
+          size_kb="$(du -sk "$GITHUB_WORKSPACE/visual-actual" | cut -f1)"
+          if [ "$file_count" -eq 0 ] || [ "$file_count" -gt 2000 ] || [ "$size_kb" -gt 512000 ]; then
+            echo "Refusing visual artifact outside expected size limits."
+            exit 1
+          fi
+
       - name: Prepare visual state branch
+        if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -158,6 +206,7 @@ jobs:
           rm -rf visual-state/visual/reports/pr-${{ steps.visual_mode.outputs.pr_number }}
 
       - name: Commit visual state
+        if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         working-directory: visual-state
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -181,6 +230,7 @@ jobs:
           fi
 
       - name: Checkout docs source
+        if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         uses: actions/checkout@v7
         with:
           ref: main
@@ -188,6 +238,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up docs Node.js ${{ env.NODE_VERSION }}
+        if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -195,14 +246,17 @@ jobs:
           cache-dependency-path: docs-source/docs/package-lock.json
 
       - name: Install docs dependencies
+        if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         working-directory: docs-source/docs
         run: npm ci
 
       - name: Build docs
+        if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         working-directory: docs-source/docs
         run: npm run build
 
       - name: Overlay visual reports
+        if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         run: |
           rm -rf docs-source/docs/.vitepress/dist/visual
           mkdir -p docs-source/docs/.vitepress/dist
@@ -212,15 +266,18 @@ jobs:
           fi
 
       - name: Configure Pages
+        if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         uses: actions/configure-pages@v6
 
       - name: Upload Pages artifact
+        if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         uses: actions/upload-pages-artifact@v5
         with:
           path: docs-source/docs/.vitepress/dist
 
       - name: Deploy to GitHub Pages
         id: deployment
+        if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         uses: actions/deploy-pages@v5
 
       - name: Resolve report URL

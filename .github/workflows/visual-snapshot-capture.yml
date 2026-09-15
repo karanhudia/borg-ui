@@ -1,0 +1,63 @@
+name: Capture Storybook Visual Snapshots
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+    paths:
+      - "frontend/.storybook/**"
+      - "frontend/scripts/**"
+      - "frontend/src/**"
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+      - ".github/workflows/visual-regression.yml"
+      - ".github/workflows/visual-snapshot-capture.yml"
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  capture:
+    name: Capture Storybook snapshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout pull request source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install --with-deps chromium
+
+      - name: Capture Storybook snapshots
+        working-directory: frontend
+        run: npm run visual:screenshots
+        env:
+          STORYBOOK_SNAPSHOTS_DIR: ${{ github.workspace }}/visual-actual
+
+      - name: Upload visual snapshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-actual
+          path: visual-actual
+          if-no-files-found: error
+          retention-days: 1

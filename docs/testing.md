@@ -31,10 +31,14 @@ npm run build
 
 ### Storybook Visual Regression
 
-Storybook visual snapshots are handled by the `GitHub Pages Visual Regression`
-workflow. Same-repository pull request runs happen automatically for frontend
-changes. The workflow also runs on `main` pushes that touch frontend source,
-stories, Storybook config, frontend scripts, or frontend package metadata.
+Storybook visual snapshots are handled by a two-stage GitHub Actions workflow.
+The unprivileged `Capture Storybook Visual Snapshots` workflow runs automatically
+for frontend changes in both same-repository and fork pull requests. Its
+screenshots are passed as an artifact to `GitHub Pages Visual Regression`, which
+runs only trusted `main` code to publish the report, update the state branch,
+and update the PR description. The publisher also runs on `main` pushes that
+touch frontend source, stories, Storybook config, frontend scripts, or frontend
+package metadata.
 
 The workflow builds Storybook, captures screenshots with Playwright, compares
 them against the baseline stored on the `visual-regression-state` branch, and

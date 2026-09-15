@@ -23,6 +23,15 @@ async function writePng(filePath, pixels, width = 2, height = 2) {
   })
 }
 
+async function writePngHeader(filePath, width, height) {
+  const header = Buffer.alloc(24)
+  header.set([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82])
+  header.writeUInt32BE(width, 16)
+  header.writeUInt32BE(height, 20)
+  await mkdir(path.dirname(filePath), { recursive: true })
+  await writeFile(filePath, header)
+}
+
 const white = [255, 255, 255, 255]
 const black = [0, 0, 0, 255]
 const red = [255, 0, 0, 255]
@@ -111,6 +120,20 @@ describe('compareVisualSnapshots', () => {
       fileName: 'resized.png',
       dimensionsChanged: true,
     })
+  })
+
+  it('rejects PNGs with dimensions beyond the visual report safety limit', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'borg-visual-oversize-'))
+    const baselineDir = path.join(root, 'baseline')
+    const actualDir = path.join(root, 'actual')
+    const outputDir = path.join(root, 'report')
+
+    await writePng(path.join(baselineDir, 'snapshot.png'), [white, white, white, white])
+    await writePngHeader(path.join(actualDir, 'snapshot.png'), 4097, 1)
+
+    await expect(compareVisualSnapshots({ baselineDir, actualDir, outputDir })).rejects.toThrow(
+      'PNG dimensions exceed the visual report safety limit'
+    )
   })
 
   it('ignores tiny unrelated drift while keeping screenshots linked to changed stories', async () => {
