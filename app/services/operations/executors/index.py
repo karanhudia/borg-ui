@@ -639,9 +639,12 @@ async def run_archive_sync(ctx) -> Outcome:
             # 4.1): the survivors' figures are now stale, whoever removed the
             # archives. Clearing the date hands them to archives_needing_info
             # below, under the same per-run cap as a first fill.
-            db.query(Archive).filter(Archive.repository_id == repository.id).update(
-                {Archive.stats_measured_at: None}, synchronize_session=False
-            )
+            # Survivors only: a removed row lingers until the merge deletes
+            # it, and with no date it would take an info slot every run.
+            db.query(Archive).filter(
+                Archive.repository_id == repository.id,
+                Archive.id.notin_(removed_id_set),
+            ).update({Archive.stats_measured_at: None}, synchronize_session=False)
             db.commit()
         if is_agent_executor(repository):
             # No history run ever reaches an agent's repository (the server

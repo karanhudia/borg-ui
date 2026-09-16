@@ -239,7 +239,11 @@ async def test_run_archive_sync_stales_survivors_when_archives_were_removed(
 
     await index_exec.run_archive_sync(_ctx(db, repo))
     db.refresh(survivor)
+    db.refresh(gone)
     assert survivor.stats_measured_at is None
+    # The removed row keeps its date: with none it would take an info slot
+    # on every run until the merge deletes it.
+    assert gone.stats_measured_at == measured
 
     # Second listing. archive_sync never deletes rows (history_merge does,
     # and never in the `archives` index mode), so `gone` is reported removed

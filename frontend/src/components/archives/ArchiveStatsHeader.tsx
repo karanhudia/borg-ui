@@ -60,7 +60,7 @@ export default function ArchiveStatsHeader({
     d ? `${d} ${t('archives.detail.stats.vsPrevious')}` : undefined
 
   const ratio =
-    archive.compressed_size != null && archive.compressed_size > 0 && archive.original_size
+    archive.compressed_size != null && archive.compressed_size > 0 && archive.original_size != null
       ? `${(archive.original_size / archive.compressed_size).toFixed(1)}:1`
       : null
 
