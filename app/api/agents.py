@@ -44,7 +44,10 @@ from app.services.operations.backup_facade import (
     is_backup_operation,
 )
 from app.services.operations.job_facade import resolve_agent_maintenance_job
-from app.services.agent_artifact_relay import agent_artifact_relay
+from app.services.agent_artifact_relay import (
+    CLOSE_ACK_TIMEOUT_SECONDS,
+    agent_artifact_relay,
+)
 from app.services.agent_connection_manager import (
     AgentConnection,
     agent_connection_manager,
@@ -397,8 +400,37 @@ REQUEST_SCOPED_REPOSITORY_JOB_KINDS = frozenset(
         "repository.list_archives",
         "repository.info",
         "repository.init",
+        # The consumer is the history index run that registered the relay
+        # channel; once it stopped waiting, a rerun streams a whole diff
+        # into the drain for nobody and holds the repository meanwhile.
+        "repository.diff",
     }
 )
+
+
+# Kinds whose upload is worthless unless a consumer takes it (the agent fails
+# the job on a refusal); the others are downloads whose consumer may leave.
+DELIVERY_REQUIRED_REPOSITORY_JOB_KINDS = frozenset({"repository.diff"})
+
+
+def _is_delivery_required_job(job: AgentJob) -> bool:
+    if job.job_type != "repository":
+        return False
+    payload = job.payload if isinstance(job.payload, dict) else {}
+    return payload.get("job_kind") in DELIVERY_REQUIRED_REPOSITORY_JOB_KINDS
+
+
+async def _cancel_unconsumed_delivery(db: Session, job: AgentJob) -> None:
+    """Cancel a delivery-required job whose upload found no consumer, so the
+    agent ends borg instead of finishing a listing for nobody."""
+    from app.services.agent_job_dispatcher import dispatch_agent_cancel_if_connected
+    from app.services.repository_executor import (
+        abandon_agent_repository_operation_job,
+    )
+
+    cancelled = abandon_agent_repository_operation_job(db, job.id)
+    if cancelled is not None and cancelled.status == "cancel_requested":
+        await dispatch_agent_cancel_if_connected(cancelled)
 
 
 def _is_request_scoped_repository_job(job: AgentJob) -> bool:
@@ -1688,6 +1720,16 @@ async def upload_job_artifact(
     job = _get_agent_job(job_id, current_agent, db)
 
     if not agent_artifact_relay.is_registered(job.id):
+        if _is_delivery_required_job(job):
+            # A listing nobody consumes must not be produced to the end:
+            # answered at once, the agent's send fails or reads the
+            # refusal and ends borg, instead of running a whole diff into
+            # this drain while holding the repository. The refusal alone
+            # may not reach borg in time (a proxy can go on draining the
+            # body), so the job is cancelled as well: the agent's cancel
+            # poll ends borg within its interval.
+            await _cancel_unconsumed_delivery(db, job)
+            return {"accepted": False, "size": 0}
         async for _ in request.stream():
             pass
         return {"accepted": False, "size": 0}
@@ -1703,9 +1745,22 @@ async def upload_job_artifact(
                 # The download consumer is gone; stop relaying (and stop the
                 # agent's upload) instead of draining the whole body for nobody.
                 delivered = False
+                if _is_delivery_required_job(job):
+                    await _cancel_unconsumed_delivery(db, job)
                 break
         if delivered:
-            await agent_artifact_relay.close(job.id)
+            # An empty body pushes nothing, so only the close can tell that
+            # the consumer left meanwhile; a listing is confirmed only once
+            # its consumer took the end marker, a download's consumer reads
+            # at its own pace.
+            delivered = await agent_artifact_relay.close(
+                job.id,
+                confirm_timeout=(
+                    CLOSE_ACK_TIMEOUT_SECONDS
+                    if _is_delivery_required_job(job)
+                    else None
+                ),
+            )
     except Exception as exc:
         await agent_artifact_relay.close(job.id, error=str(exc))
         raise

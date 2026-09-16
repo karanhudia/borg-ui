@@ -52,6 +52,7 @@ REPOSITORY_OPERATION_CAPABILITIES = {
     "repository.rclone_sync",
     "repository.disk_usage",
     "repository.storage_usage",
+    "repository.diff",
 }
 # Kinds whose output the server parses. The agent reports the raw JSON as
 # `stdout` and its own parse of it as `data` (its MACHINE_PARSED_JOB_KINDS;

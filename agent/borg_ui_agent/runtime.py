@@ -48,6 +48,7 @@ DEFAULT_CAPABILITIES = [
     "repository.rclone_sync",
     "repository.disk_usage",
     "repository.storage_usage",
+    "repository.diff",
     "agent.list_scripts",
     "script.run",
 ]
