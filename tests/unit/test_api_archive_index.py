@@ -179,6 +179,34 @@ class TestArchiveList:
             == 404
         )
 
+    def test_detail_carries_measurement_date_and_predecessor_stats(
+        self, test_client, test_db, admin_headers
+    ):
+        """Spec 4.2: the header draws its deltas from one request."""
+        repo = _repo(test_db)
+        a1 = _archive(test_db, repo, "a1", 1, size=100, dur=10.0, nfiles=10)
+        a2 = _archive(test_db, repo, "a2", 2, size=150, dur=12.0, nfiles=11)
+        a2.stats_measured_at = datetime(2026, 9, 2, 2, 30)
+        test_db.commit()
+
+        body = test_client.get(
+            f"/api/repositories/{repo.id}/archives/{a2.id}", headers=admin_headers
+        ).json()
+        assert body["stats_measured_at"].startswith("2026-09-02T02:30")
+        assert body["predecessor_stats"] == {
+            "id": a1.id,
+            "nfiles": 10,
+            "original_size": 100,
+            "deduplicated_size": 100,
+            "duration_seconds": 10.0,
+        }
+
+        first = test_client.get(
+            f"/api/repositories/{repo.id}/archives/{a1.id}", headers=admin_headers
+        ).json()
+        assert first["predecessor_stats"] is None
+        assert first["stats_measured_at"] is None
+
     def test_live_listing_moved(self, test_client, test_db, admin_headers):
         repo = _repo(test_db)
         # The generated schema rather than app.routes: how the route table is

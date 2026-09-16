@@ -89,6 +89,7 @@ const storedArchive: ArchiveRow = {
   original_size: 90_000_000_000,
   compressed_size: 60_000_000_000,
   deduplicated_size: 41_200_000_000,
+  stats_measured_at: null,
   hostname: 'nas',
   username: 'root',
   comment: null,

@@ -24,6 +24,7 @@ for (let dayOffset = 27; dayOffset >= 0; dayOffset--) {
       original_size: 5_000_000,
       compressed_size: 4_000_000,
       deduplicated_size: 200_000,
+      stats_measured_at: null,
       hostname: 'db1',
       username: 'root',
       comment: null,

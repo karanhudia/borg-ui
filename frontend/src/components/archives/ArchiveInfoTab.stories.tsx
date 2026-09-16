@@ -25,6 +25,7 @@ export const Default: Story = {
       original_size: 90_000_000_000,
       compressed_size: 60_000_000_000,
       deduplicated_size: 41_200_000_000,
+      stats_measured_at: null,
       hostname: 'nas',
       username: 'root',
       comment: null,
@@ -36,6 +37,7 @@ export const Default: Story = {
       first_seen_at: '2026-09-02T02:00:00Z',
       last_seen_at: '2026-09-02T02:00:00Z',
       predecessor_id: 11,
+      predecessor_stats: null,
       successor_id: null,
       history_available: true,
     },
@@ -55,6 +57,7 @@ export const SizesUnknown: Story = {
       original_size: null,
       compressed_size: null,
       deduplicated_size: null,
+      stats_measured_at: null,
     },
   },
 }
@@ -67,6 +70,7 @@ export const UniqueShareBelowOnePercent: Story = {
       original_size: 820 * 1024 ** 3,
       compressed_size: 731 * 1024 ** 3,
       deduplicated_size: 566.6 * 1024 ** 2,
+      stats_measured_at: null,
     },
   },
 }

@@ -75,6 +75,7 @@ def serialize_archive(a: Archive) -> dict:
         "original_size": a.original_size,
         "compressed_size": a.compressed_size,
         "deduplicated_size": a.deduplicated_size,
+        "stats_measured_at": a.stats_measured_at,
         "hostname": a.hostname,
         "username": a.username,
         "comment": a.comment,
@@ -341,6 +342,19 @@ async def get_archive(
         **serialize_archive(archive),
         "predecessor_id": predecessor.id if predecessor else None,
         "successor_id": successor.id if successor else None,
+        # The header's deltas (spec 4.2) come from here rather than a second
+        # request for the predecessor.
+        "predecessor_stats": (
+            {
+                "id": predecessor.id,
+                "nfiles": predecessor.nfiles,
+                "original_size": predecessor.original_size,
+                "deduplicated_size": predecessor.deduplicated_size,
+                "duration_seconds": predecessor.duration_seconds,
+            }
+            if predecessor
+            else None
+        ),
         "history_available": history,
         "history_capability": history_capability(db, repository, history=history),
     }

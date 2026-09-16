@@ -70,6 +70,7 @@ const archive = (
   original_size: null,
   compressed_size: null,
   deduplicated_size: null,
+  stats_measured_at: null,
   hostname: null,
   username: null,
   comment: null,

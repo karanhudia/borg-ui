@@ -82,6 +82,7 @@ const archive = {
   original_size: 90_000_000_000,
   compressed_size: 60_000_000_000,
   deduplicated_size: 41_200_000_000,
+  stats_measured_at: '2026-09-02T02:20:00Z',
   hostname: 'nas',
   username: 'root',
   comment: null,
@@ -94,6 +95,13 @@ const archive = {
   last_seen_at: '2026-09-02T02:00:00Z',
   predecessor_id: 11,
   successor_id: null,
+  predecessor_stats: {
+    id: 11,
+    nfiles: 11000,
+    original_size: 80_000_000_000,
+    deduplicated_size: 30_000_000_000,
+    duration_seconds: 900,
+  },
   history_available: true,
 }
 
@@ -126,6 +134,14 @@ describe('ArchiveDetail', () => {
     } as never)
     vi.mocked(restoreAPI.startRestore).mockReset()
     vi.mocked(restoreAPI.getRestoreStatus).mockReset()
+  })
+
+  it('shows the stats header with deltas in place of the size chips', async () => {
+    vi.mocked(archivesAPI.getArchive).mockResolvedValue({ data: archive } as never)
+    renderRoute('/archives/7/12?tab=files')
+    expect(await screen.findByText('Added to the repository')).toBeInTheDocument()
+    expect(screen.getByText('+1,000 vs previous')).toBeInTheDocument()
+    expect(screen.queryByText('Deduplicated size')).not.toBeInTheDocument()
   })
 
   it('follows the started restore in the bottom-right panel until dismissed', async () => {
