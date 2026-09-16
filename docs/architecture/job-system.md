@@ -433,6 +433,11 @@ Rules:
 - Operations write their logs to files under `data/logs/`. Retention deletes
   those files at `log_retention_days` and again with the row itself at
   `cleanup_retention_days`.
+- A machine-parsed agent job (`repository.list_archives`, `repository.rinfo`,
+  `repository.info`, `repository.archive_info`) reports its output twice, raw
+  and parsed. The wait that hands the result to its reader reduces the stored
+  copy to the return code, the command and stderr; the retention pass reduces
+  results no reader took.
 - A backup job outlives its archive. When a prune or an archive deletion
   removes the archive a job created, the job row is marked
   (`archive_pruned_at`) and kept as the record that the backup ran; it falls

@@ -379,6 +379,82 @@ def sweep_orphaned_log_files(db: Session, cutoff) -> int:
     return total
 
 
+# A machine-parsed agent result (a listing, a repository or archive info)
+# is reduced by the wait that reads it (repository_executor's
+# drop_consumed_agent_job_output). One whose reader gave up before the agent
+# finished is nobody's and stays full; this pass reduces those. The grace is
+# measured on the server clock (updated_at is set at completion) and covers
+# a reader's hand-over, which happens within one poll of the completion.
+CONSUMED_RESULT_GRACE = timedelta(hours=1)
+
+
+def reduce_consumed_agent_job_results(db: Session, cutoff) -> int:
+    """Reduce the stored results of machine-parsed agent jobs that completed
+    before cutoff and still carry their raw output. Returns the row count.
+
+    Best effort like the hand-over's reduction: a failed chunk is rolled back
+    and logged, the committed count is returned, and the rest of the
+    retention pass runs; the next pass takes the chunk up again."""
+    from app.services.repository_executor import (
+        MACHINE_PARSED_JOB_KINDS,
+        SUCCESSFUL_AGENT_STATUSES,
+        consumed_result,
+    )
+
+    # The subscripts compile to json_extract on SQLite and ->> on Postgres.
+    # `as_string` matters: the bare subscript wraps SQLite's in JSON_QUOTE,
+    # which turns a missing key into the text 'null' and matches every row.
+    # A reduced result has neither key and drops out of the filter; the id
+    # cursor keeps the loop finite either way.
+    filters = (
+        AgentJob.job_type == "repository",
+        AgentJob.status.in_(SUCCESSFUL_AGENT_STATUSES),
+        func.coalesce(AgentJob.updated_at, AgentJob.completed_at, AgentJob.created_at)
+        < cutoff,
+        AgentJob.payload["job_kind"].as_string().in_(sorted(MACHINE_PARSED_JOB_KINDS)),
+        or_(
+            AgentJob.result["stdout"].as_string().isnot(None),
+            AgentJob.result["data"].as_string().isnot(None),
+        ),
+    )
+    total = 0
+    last_id = 0
+    while True:
+        try:
+            ids = [
+                row[0]
+                for row in db.query(AgentJob.id)
+                .filter(*filters, AgentJob.id > last_id)
+                .order_by(AgentJob.id)
+                .limit(CHUNK_SIZE)
+            ]
+            if not ids:
+                return total
+            for job_id in ids:
+                # One result in memory at a time: a listing of a large
+                # repository is megabytes, and the first pass after the
+                # upgrade walks every retained one.
+                result = (
+                    db.query(AgentJob.result).filter(AgentJob.id == job_id).scalar()
+                )
+                db.query(AgentJob).filter(AgentJob.id == job_id).update(
+                    {AgentJob.result: consumed_result(result)},
+                    synchronize_session=False,
+                )
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            # the exception text can carry the bound parameters, stderr included
+            logger.warning(
+                "agent job results could not be reduced",
+                reduced=total,
+                error_type=type(exc).__name__,
+            )
+            return total
+        total += len(ids)
+        last_id = ids[-1]
+
+
 def purge_job_rows(db: Session, cutoff) -> int:
     """Delete finished job rows older than cutoff (all job tables).
 
@@ -631,6 +707,9 @@ def run_retention(db: Session, settings: Optional[SystemSettings] = None) -> Dic
             )
             if discarded
             else 0
+        ),
+        "agent_results_reduced": reduce_consumed_agent_job_results(
+            db, now - CONSUMED_RESULT_GRACE
         ),
         "job_rows_deleted": purge_job_rows(db, now - timedelta(days=row_days)),
         "orphaned_log_files_deleted": sweep_orphaned_log_files(
