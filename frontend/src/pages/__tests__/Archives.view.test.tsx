@@ -20,7 +20,10 @@ const getGrowthMock = vi.fn()
 
 vi.mock('../../components/RepositorySelectorCard', () => ({
   default: ({ onChange }: { onChange: (id: number) => void }) => (
-    <button onClick={() => onChange(1)}>Select Repo</button>
+    <>
+      <button onClick={() => onChange(1)}>Select Repo</button>
+      <button onClick={() => onChange(2)}>Select Other Repo</button>
+    </>
   ),
 }))
 vi.mock('../../components/RepositoryStatsGrid', () => ({
@@ -47,8 +50,17 @@ vi.mock('../../components/archives/ArchiveHourlyHeatmap', () => ({
   default: () => <div data-testid="archive-hourly-heatmap" />,
 }))
 vi.mock('../../components/archives/ArchiveGrowthChart', () => ({
-  default: ({ data }: { data: { points: unknown[] } }) => (
-    <div data-testid="archive-growth-chart">{data.points.length}</div>
+  default: ({
+    data,
+    onSeriesChange,
+  }: {
+    data: { points: unknown[] }
+    onSeriesChange: (series: string) => void
+  }) => (
+    <div data-testid="archive-growth-chart">
+      {data.points.length}
+      <button onClick={() => onSeriesChange('old')}>Pick Series</button>
+    </div>
   ),
 }))
 
@@ -168,7 +180,7 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
     })
 
     vi.mocked(apiModule.repositoriesAPI.getRepositories).mockResolvedValue({
-      data: { repositories: [mockRepository] },
+      data: { repositories: [mockRepository, { ...mockRepository, id: 2, name: 'Other' }] },
     } as never)
     vi.mocked(apiModule.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: { jobs: [] },
@@ -301,6 +313,27 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
     expect(getGrowthMock).toHaveBeenCalledWith(1, { series: undefined })
     expect(screen.queryByTestId('archive-series-heatmap')).not.toBeInTheDocument()
     expect(localStorage.getItem('archives-view-mode')).toBe('growth')
+  })
+
+  it('drops the series filter when the repository changes', async () => {
+    localStorage.setItem('archives-view-mode', 'growth')
+    renderWithProviders(<Archives />, { queryClient })
+    const user = userEvent.setup()
+
+    await user.click(screen.getByText('Select Repo'))
+    await waitFor(() => {
+      expect(screen.getByTestId('archive-growth-chart')).toBeInTheDocument()
+    })
+    await user.click(screen.getByText('Pick Series'))
+    await waitFor(() => {
+      expect(getGrowthMock).toHaveBeenCalledWith(1, { series: 'old' })
+    })
+
+    await user.click(screen.getByText('Select Other Repo'))
+    await waitFor(() => {
+      expect(getGrowthMock).toHaveBeenCalledWith(2, { series: undefined })
+    })
+    expect(getGrowthMock).not.toHaveBeenCalledWith(2, { series: 'old' })
   })
 
   it('honours a persisted growth view preference on mount', async () => {

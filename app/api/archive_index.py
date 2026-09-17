@@ -42,7 +42,10 @@ from app.services.operations.index_mode import allows as mode_allows
 from app.services.operations.index_mode import filter_kinds
 from app.services.operations.index_mode import mode_of as index_mode_of
 from app.services.operations.reconcile import RECONCILE_CHAIN, enqueue_reconcile_run
-from app.services.operations.repository_status import repository_status
+from app.services.operations.repository_status import (
+    pending_removed_ids,
+    repository_status,
+)
 from app.services.operations.series import (
     crons_for_repository,
     retention_days_for_repository,
@@ -330,7 +333,8 @@ async def archives_growth(
 
     One point per measured archive, oldest first: what the archive added to
     the repository (deduplicated_size) and the running total of those
-    additions, which is the repository footprint after that backup. Filtered
+    additions, which is at least the repository footprint after that backup
+    (chunks shared only among archives are in nobody's number). Filtered
     to a series the total restarts, so the curve is that series' footprint.
     Archives the info fill has not measured have no point. A stale point
     (measured once, then a listing saw archives removed) keeps its value
@@ -341,11 +345,14 @@ async def archives_growth(
     fail validation.
     """
     repository = _repo(db, current_user, repo_id)
-    rows = (
-        _archives_query(db, repository, series, None, None)
-        .order_by(Archive.start.asc(), Archive.id.asc())
-        .all()
-    )
+    # Rows the newest listing reported removed linger until history_merge
+    # deletes them (never in the `archives` index mode); they are gone from
+    # the repository and must not add to the footprint.
+    removed = pending_removed_ids(db, repository.id)
+    q = _archives_query(db, repository, series, None, None)
+    if removed:
+        q = q.filter(Archive.id.notin_(removed))
+    rows = q.order_by(Archive.start.asc(), Archive.id.asc()).all()
     all_series = [
         s
         for (s,) in db.query(Archive.series)

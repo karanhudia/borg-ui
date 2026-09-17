@@ -405,6 +405,9 @@ const Archives: React.FC = () => {
   const handleRepositoryChange = (repositoryId: number) => {
     const normalizedRepositoryId = normalizeRepositoryId(repositoryId)
     setSelectedRepositoryId(normalizedRepositoryId)
+    // A series belongs to one repository; carrying it over would filter the
+    // next repository by a name it may not have, with no select to clear it.
+    setGrowthSeries('')
     const repo = repositories.find((r: Repository) => r.id === normalizedRepositoryId)
 
     if (normalizedRepositoryId) {

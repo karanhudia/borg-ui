@@ -1096,7 +1096,7 @@
       "allSeries": "All series",
       "showSource": "Show source size",
       "legendAdded": "Added per archive",
-      "legendFootprint": "Repository footprint (running total)",
+      "legendFootprint": "Repository footprint (running total, at least)",
       "legendSource": "Source size (original)",
       "legendStale": "Stale, re-measuring",
       "staleNote_one": "{{count}} archive is being re-measured after archives were removed. Its bar shows the last measurement.",
@@ -1105,7 +1105,7 @@
       "unmeasuredNote_other": "{{count}} archives are not measured yet and are not drawn.",
       "empty": "The growth graph needs at least two measured archives.",
       "tooltipAdded": "Added",
-      "tooltipFootprint": "Footprint after",
+      "tooltipFootprint": "Footprint after (at least)",
       "tooltipSource": "Source size",
       "tooltipStale": "Stale measurement",
       "openArchive": "Open archive"

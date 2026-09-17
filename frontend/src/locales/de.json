@@ -1096,7 +1096,7 @@
       "allSeries": "Alle Serien",
       "showSource": "Quellgröße anzeigen",
       "legendAdded": "Pro Archiv hinzugefügt",
-      "legendFootprint": "Belegter Speicher (laufende Summe)",
+      "legendFootprint": "Belegter Speicher (laufende Summe, mindestens)",
       "legendSource": "Quellgröße (Original)",
       "legendStale": "Veraltet, wird neu gemessen",
       "staleNote_one": "{{count}} Archiv wird nach dem Entfernen von Archiven neu gemessen. Sein Balken zeigt die letzte Messung.",
@@ -1105,7 +1105,7 @@
       "unmeasuredNote_other": "{{count}} Archive sind noch nicht gemessen und werden nicht gezeichnet.",
       "empty": "Das Wachstumsdiagramm braucht mindestens zwei gemessene Archive.",
       "tooltipAdded": "Hinzugefügt",
-      "tooltipFootprint": "Belegt danach",
+      "tooltipFootprint": "Belegt danach (mindestens)",
       "tooltipSource": "Quellgröße",
       "tooltipStale": "Veraltete Messung",
       "openArchive": "Archiv öffnen"

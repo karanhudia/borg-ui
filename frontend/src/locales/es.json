@@ -1096,7 +1096,7 @@
       "allSeries": "Todas las series",
       "showSource": "Mostrar tamaño de origen",
       "legendAdded": "Añadido por archivo",
-      "legendFootprint": "Espacio ocupado (total acumulado)",
+      "legendFootprint": "Espacio ocupado (total acumulado, al menos)",
       "legendSource": "Tamaño de origen (original)",
       "legendStale": "Obsoleto, midiendo de nuevo",
       "staleNote_one": "{{count}} archivo se está midiendo de nuevo tras eliminar archivos. Su barra muestra la última medición.",
@@ -1105,7 +1105,7 @@
       "unmeasuredNote_other": "{{count}} archivos aún no se han medido y no se dibujan.",
       "empty": "El gráfico de crecimiento necesita al menos dos archivos medidos.",
       "tooltipAdded": "Añadido",
-      "tooltipFootprint": "Ocupado después",
+      "tooltipFootprint": "Ocupado después (al menos)",
       "tooltipSource": "Tamaño de origen",
       "tooltipStale": "Medición obsoleta",
       "openArchive": "Abrir archivo"

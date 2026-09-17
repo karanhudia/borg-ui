@@ -422,6 +422,31 @@ class TestArchiveGrowth:
         assert [p["running_total"] for p in body["points"]] == [30, 50]
         assert body["series"] == ["nas", "old"]
 
+    def test_rows_reported_removed_are_not_points(
+        self, test_client, test_db, admin_headers
+    ):
+        """A row the newest listing reported removed lingers until
+        history_merge deletes it (never in the `archives` index mode). It is
+        no longer in the repository, so it adds nothing to the footprint."""
+        repo = _repo(test_db)
+        self._measured(test_db, repo, "a1", 1, size=100)
+        removed = self._measured(test_db, repo, "a2", 2, size=50)
+        self._measured(test_db, repo, "a3", 3, size=20)
+        sync = _op(
+            test_db, repo, "archive_sync", completed_at=datetime(2026, 9, 5, 9, 54)
+        )
+        sync.result = {"listed": 2, "removed_archive_ids": [removed.id]}
+        test_db.commit()
+
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/archives/growth", headers=admin_headers
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert [p["name"] for p in body["points"]] == ["a1", "a3"]
+        assert [p["running_total"] for p in body["points"]] == [100, 120]
+        assert body["unmeasured_count"] == 0
+
     def test_requires_repository_access(self, test_client, test_db, auth_headers):
         repo = _repo(test_db)
         assert test_client.get(

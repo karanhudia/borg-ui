@@ -42,7 +42,7 @@ describe('ArchiveGrowthChart', () => {
   it('names the bars and the footprint line, and hides the source line by default', () => {
     render(response())
     expect(screen.getByText('Added per archive')).toBeInTheDocument()
-    expect(screen.getByText('Repository footprint (running total)')).toBeInTheDocument()
+    expect(screen.getByText('Repository footprint (running total, at least)')).toBeInTheDocument()
     expect(screen.queryByText('Source size (original)')).not.toBeInTheDocument()
     expect(screen.queryByText('Stale, re-measuring')).not.toBeInTheDocument()
   })
