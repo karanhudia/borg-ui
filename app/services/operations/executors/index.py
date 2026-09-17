@@ -289,8 +289,13 @@ def archives_needing_info(
     *,
     limit: int,
     include_missing_end: bool = False,
+    exclude_ids: Iterable[int] = (),
 ) -> list[Archive]:
     """Archives whose `borg info` stats are missing or stale, oldest first.
+
+    `exclude_ids` are the rows the listing reported removed: they linger
+    until the merge deletes them (never, in the `archives` mode) and a
+    `borg info` on them would fail and waste a slot.
 
     Not just the rows this run created: a repository imported with more
     archives than `INDEX_ARCHIVE_INFO_PER_RUN` fills the oldest few now and
@@ -314,10 +319,11 @@ def archives_needing_info(
     # NULL is "never measured" and "stale" alike (spec 4.1): a listing that
     # saw archives removed cleared it on every survivor, and the same
     # bounded loop re-measures them, oldest first.
-    rows = _select(Archive.stats_measured_at.is_(None), set(), limit)
+    removed = set(exclude_ids)
+    rows = _select(Archive.stats_measured_at.is_(None), removed, limit)
     spare = limit - len(rows)
     if include_missing_end and spare > 0:
-        rows += _select(Archive.end.is_(None), {a.id for a in rows}, spare)
+        rows += _select(Archive.end.is_(None), removed | {a.id for a in rows}, spare)
     return rows
 
 
@@ -693,6 +699,7 @@ async def run_archive_sync(ctx) -> Outcome:
                 repository,
                 limit=settings.index_archive_info_per_run,
                 include_missing_end=True,
+                exclude_ids=removed_id_set,
             ),
             env,
             limit=settings.index_archive_info_per_run,

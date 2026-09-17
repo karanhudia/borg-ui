@@ -98,6 +98,13 @@ describe('ArchiveStatsHeader', () => {
     expect(screen.getByText('Not measured yet')).toBeInTheDocument()
   })
 
+  it('does not render a missing dedup size as 0 B', () => {
+    renderWithProviders(
+      <ArchiveStatsHeader archive={{ ...base, deduplicated_size: null }} totalsState="ready" />
+    )
+    expect(screen.queryByText('0 B')).not.toBeInTheDocument()
+  })
+
   it('shows no delta when the predecessor lacks the figure, and no ratio on Borg 2', () => {
     renderWithProviders(
       <ArchiveStatsHeader

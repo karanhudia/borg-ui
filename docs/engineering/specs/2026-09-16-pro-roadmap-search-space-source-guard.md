@@ -111,7 +111,8 @@ NULL and are picked up as before.
 ### 4.2 Phase 1: stats freshness and the archive stats header (2a)
 
 Data: the column and rule in 4.1. Alembic revision on head `f2a3b4c5d6e7`,
-`batch_alter_table` for SQLite, with a migration test in the pattern of
+plain `add_column` / `drop_column` (a batch rebuild of `archives` on SQLite
+cascades into `archive_changes`), with a migration test in the pattern of
 `tests/unit/test_repository_index_mode_migration.py`.
 
 API: `serialize_archive` adds `stats_measured_at`. `GET
@@ -133,8 +134,8 @@ this order:
 3. Data backed up: `original_size`, delta against the predecessor.
 4. Files: `nfiles`, delta against the predecessor.
 5. Duration: `duration_seconds`, delta against the predecessor.
-6. Compression: `compressed_size / original_size` as a ratio, or "not
-   reported by this Borg version" when `compressed_size` is null (Borg 2).
+6. Compression: `original_size / compressed_size` as a ratio ("1.5:1"), or
+   "not reported by this Borg version" when `compressed_size` is null (Borg 2).
 
 A delta is shown only when the predecessor has the figure. The series chip
 stays. No plan gate on the header itself: Community sees these numbers

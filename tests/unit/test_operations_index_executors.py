@@ -1119,6 +1119,37 @@ async def test_fill_archive_info_stamps_stats_measured_at(db, repo, monkeypatch)
 
 
 @pytest.mark.unit
+def test_archives_needing_info_skips_rows_the_listing_reported_removed(db, repo):
+    """A removed row lingers until the merge deletes it; a never-measured one
+    (no date) and a measured one without an end would both take a slot."""
+    for borg_id, measured, end in (
+        ("gone-never", None, None),
+        ("gone-no-end", datetime(2026, 9, 1), None),
+        ("live", None, None),
+    ):
+        db.add(
+            Archive(
+                repository_id=repo.id,
+                borg_id=borg_id,
+                name=borg_id,
+                series="default",
+                start=datetime(2026, 9, 1),
+                original_size=10 if measured else None,
+                stats_measured_at=measured,
+                end=end,
+            )
+        )
+    db.commit()
+    gone = {
+        a.id for a in db.query(Archive).filter(Archive.borg_id.like("gone-%")).all()
+    }
+    picked = index_exec.archives_needing_info(
+        db, repo, limit=5, include_missing_end=True, exclude_ids=gone
+    )
+    assert [a.borg_id for a in picked] == ["live"]
+
+
+@pytest.mark.unit
 def test_archives_needing_info_backfills_across_runs(db, repo):
     """The per-run cap means later runs must pick up archives an earlier run
     left unfilled, not just the rows they created themselves."""

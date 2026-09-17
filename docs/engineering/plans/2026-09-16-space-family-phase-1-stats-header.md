@@ -23,8 +23,9 @@ from the single request the page already makes. On the frontend one new
 component, `ArchiveStatsHeader`, owns the tiles; `ArchiveDetail.tsx` only
 swaps the chip row for it.
 
-**Tech Stack:** FastAPI, SQLAlchemy, Alembic with `batch_alter_table` for
-SQLite, pytest with the `db` / `repo` fixtures of
+**Tech Stack:** FastAPI, SQLAlchemy, Alembic (plain `add_column` and
+`drop_column`: a batch rebuild of `archives` on SQLite cascades into
+`archive_changes`), pytest with the `db` / `repo` fixtures of
 `tests/unit/test_operations_index_executors.py` and the `test_client` /
 `admin_headers` fixtures of `tests/unit/test_api_archive_index.py`; React,
 MUI, `react-i18next`, TanStack Query, Vitest with `renderWithProviders`,
@@ -195,8 +196,9 @@ depends_on = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("archives") as batch:
-        batch.add_column(sa.Column("stats_measured_at", sa.DateTime(), nullable=True))
+    # Plain ALTER like f2a3b4c5d6e7: a batch rebuild of `archives` on SQLite
+    # would cascade-delete every archive_changes row.
+    op.add_column("archives", sa.Column("stats_measured_at", sa.DateTime(), nullable=True))
     # A row with sizes was measured in the listing run that created it
     # (spec 4.1); first_seen_at is the honest date. Rows without sizes stay
     # NULL and the info loop picks them up as before.
@@ -207,8 +209,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("archives") as batch:
-        batch.drop_column("stats_measured_at")
+    op.drop_column("archives", "stats_measured_at")
 ```
 
 - [x] **Step 5: Run the test to verify it passes**
@@ -571,7 +572,7 @@ export interface ArchiveStatsHeaderProps {
   // Why the totals are absent, so the tile can say so instead of showing 0.
   totalsState: 'ready' | 'loading' | 'plan_locked' | 'not_indexed' | 'unavailable'
 }
-export default function ArchiveStatsHeader(props: ArchiveStatsHeaderProps): JSX.Element
+export default function ArchiveStatsHeader(props: ArchiveStatsHeaderProps)
 ```
 
 - [x] **Step 1: Extend the types**

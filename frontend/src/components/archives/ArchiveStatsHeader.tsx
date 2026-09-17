@@ -106,7 +106,10 @@ export default function ArchiveStatsHeader({
     {
       key: 'added',
       label: t('archives.detail.stats.addedToRepository'),
-      value: measured ? formatBytes(archive.deduplicated_size) : MINUS,
+      value:
+        measured && archive.deduplicated_size != null
+          ? formatBytes(archive.deduplicated_size)
+          : MINUS,
       sub: measuredLine,
       headline: true,
     },
