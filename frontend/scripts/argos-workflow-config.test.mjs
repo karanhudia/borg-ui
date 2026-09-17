@@ -65,7 +65,7 @@ describe('GitHub Pages visual regression workflow', () => {
     expect(workflow).toContain('pull-requests: write')
     expect(workflow).toContain('actions: read')
     expect(workflow).toContain('ref: main')
-    expect(workflow).toContain('gh run download "$SOURCE_RUN_ID" --name visual-actual')
+    expect(workflow).toContain('gh run download "$SOURCE_RUN_ID" -R "$GITHUB_REPOSITORY" --name visual-actual')
     expect(workflow).toContain('Refusing unexpected visual artifact files.')
     expect(workflow).toContain(
       'pr_details="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
