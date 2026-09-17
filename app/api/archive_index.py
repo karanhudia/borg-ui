@@ -353,13 +353,11 @@ async def archives_growth(
     if removed:
         q = q.filter(Archive.id.notin_(removed))
     rows = q.order_by(Archive.start.asc(), Archive.id.asc()).all()
+    series_q = db.query(Archive.series).filter(Archive.repository_id == repository.id)
+    if removed:
+        series_q = series_q.filter(Archive.id.notin_(removed))
     all_series = [
-        s
-        for (s,) in db.query(Archive.series)
-        .filter(Archive.repository_id == repository.id)
-        .distinct()
-        .order_by(Archive.series.asc())
-        .all()
+        s for (s,) in series_q.distinct().order_by(Archive.series.asc()).all()
     ]
     points: list[dict] = []
     running = 0

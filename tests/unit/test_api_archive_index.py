@@ -430,8 +430,11 @@ class TestArchiveGrowth:
         no longer in the repository, so it adds nothing to the footprint."""
         repo = _repo(test_db)
         self._measured(test_db, repo, "a1", 1, size=100)
-        removed = self._measured(test_db, repo, "a2", 2, size=50)
+        removed = self._measured(test_db, repo, "a2", 2, series="gone", size=50)
         self._measured(test_db, repo, "a3", 3, size=20)
+        unmeasured = _archive(test_db, repo, "old-a4", 4, series="old")
+        unmeasured.deduplicated_size = None
+        test_db.commit()
         sync = _op(
             test_db, repo, "archive_sync", completed_at=datetime(2026, 9, 5, 9, 54)
         )
@@ -445,7 +448,9 @@ class TestArchiveGrowth:
         body = r.json()
         assert [p["name"] for p in body["points"]] == ["a1", "a3"]
         assert [p["running_total"] for p in body["points"]] == [100, 120]
-        assert body["unmeasured_count"] == 0
+        # The selector lists surviving series only, measured or not.
+        assert body["series"] == ["nas", "old"]
+        assert body["unmeasured_count"] == 1
 
     def test_requires_repository_access(self, test_client, test_db, auth_headers):
         repo = _repo(test_db)
