@@ -16,6 +16,7 @@ import * as apiModule from '../../services/api'
 const getInfoMock = vi.fn()
 const listStoredMock = vi.fn()
 const getHeatmapMock = vi.fn()
+const getGrowthMock = vi.fn()
 
 vi.mock('../../components/RepositorySelectorCard', () => ({
   default: ({ onChange }: { onChange: (id: number) => void }) => (
@@ -45,11 +46,17 @@ vi.mock('../../components/archives/ArchiveSeriesHeatmap', () => ({
 vi.mock('../../components/archives/ArchiveHourlyHeatmap', () => ({
   default: () => <div data-testid="archive-hourly-heatmap" />,
 }))
+vi.mock('../../components/archives/ArchiveGrowthChart', () => ({
+  default: ({ data }: { data: { points: unknown[] } }) => (
+    <div data-testid="archive-growth-chart">{data.points.length}</div>
+  ),
+}))
 
 vi.mock('../../services/api', () => ({
   archivesAPI: {
     listStored: vi.fn(),
     getHeatmap: vi.fn(),
+    getGrowth: vi.fn(),
     rebuild: vi.fn(),
     deleteArchive: vi.fn(),
     downloadFile: vi.fn(),
@@ -169,8 +176,17 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
     getInfoMock.mockResolvedValue({ data: { info: {} } })
     listStoredMock.mockResolvedValue(storedResponse)
     getHeatmapMock.mockResolvedValue(heatmapResponse)
+    getGrowthMock.mockResolvedValue({
+      data: {
+        points: [{ archive_id: 1 }, { archive_id: 2 }],
+        series: ['default'],
+        stale_count: 0,
+        unmeasured_count: 0,
+      },
+    })
     vi.mocked(apiModule.archivesAPI.listStored).mockImplementation(listStoredMock)
     vi.mocked(apiModule.archivesAPI.getHeatmap).mockImplementation(getHeatmapMock)
+    vi.mocked(apiModule.archivesAPI.getGrowth).mockImplementation(getGrowthMock)
   })
 
   afterEach(() => {
@@ -265,5 +281,38 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
       expect(screen.getByTestId('archives-list')).toBeInTheDocument()
     })
     expect(screen.queryByTestId('archive-series-heatmap')).not.toBeInTheDocument()
+  })
+
+  it('switches to the growth view and persists the choice', async () => {
+    renderWithProviders(<Archives />, { queryClient })
+    const user = userEvent.setup()
+
+    await user.click(screen.getByText('Select Repo'))
+    await waitFor(() => {
+      expect(screen.getByTestId('archive-series-heatmap')).toBeInTheDocument()
+    })
+    expect(getGrowthMock).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Growth' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('archive-growth-chart')).toHaveTextContent('2')
+    })
+    expect(getGrowthMock).toHaveBeenCalledWith(1, { series: undefined })
+    expect(screen.queryByTestId('archive-series-heatmap')).not.toBeInTheDocument()
+    expect(localStorage.getItem('archives-view-mode')).toBe('growth')
+  })
+
+  it('honours a persisted growth view preference on mount', async () => {
+    localStorage.setItem('archives-view-mode', 'growth')
+    renderWithProviders(<Archives />, { queryClient })
+    const user = userEvent.setup()
+
+    await user.click(screen.getByText('Select Repo'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('archive-growth-chart')).toBeInTheDocument()
+    })
+    expect(getHeatmapMock).not.toHaveBeenCalled()
   })
 })

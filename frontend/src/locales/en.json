@@ -1064,6 +1064,7 @@
     "view": {
       "heatmap": "Heatmap",
       "list": "List",
+      "growth": "Growth",
       "scaleDays": "Days",
       "scaleHours": "Hours",
       "scaleLabel": "Scale"
@@ -1088,6 +1089,26 @@
       "hideSeries": "Hide series",
       "seriesNote": "Series are inferred from archive names, so a naming change can split one backup line in two. Every archive is in the band above regardless.",
       "cadenceUnknown": "no schedule known, so no day is judged"
+    },
+    "growth": {
+      "title": "Repository growth",
+      "seriesLabel": "Series",
+      "allSeries": "All series",
+      "showSource": "Show source size",
+      "legendAdded": "Added per archive",
+      "legendFootprint": "Repository footprint (running total)",
+      "legendSource": "Source size (original)",
+      "legendStale": "Stale, re-measuring",
+      "staleNote_one": "{{count}} archive is being re-measured after archives were removed. Its bar shows the last measurement.",
+      "staleNote_other": "{{count}} archives are being re-measured after archives were removed. Their bars show the last measurement.",
+      "unmeasuredNote_one": "{{count}} archive is not measured yet and is not drawn.",
+      "unmeasuredNote_other": "{{count}} archives are not measured yet and are not drawn.",
+      "empty": "The growth graph needs at least two measured archives.",
+      "tooltipAdded": "Added",
+      "tooltipFootprint": "Footprint after",
+      "tooltipSource": "Source size",
+      "tooltipStale": "Stale measurement",
+      "openArchive": "Open archive"
     },
     "search": {
       "placeholder": "Search files in this repository",

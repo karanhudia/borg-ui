@@ -1064,6 +1064,7 @@
     "view": {
       "heatmap": "Mapa de calor",
       "list": "Lista",
+      "growth": "Crecimiento",
       "scaleDays": "Días",
       "scaleHours": "Horas",
       "scaleLabel": "Escala"
@@ -1088,6 +1089,26 @@
       "hideSeries": "Ocultar series",
       "seriesNote": "Las series se deducen de los nombres de los archivos, así que un cambio de nomenclatura puede dividir una misma línea de copias. Aun así, todos los archivos están en la banda superior.",
       "cadenceUnknown": "no se conoce ninguna programación, así que no se juzga ningún día"
+    },
+    "growth": {
+      "title": "Crecimiento del repositorio",
+      "seriesLabel": "Serie",
+      "allSeries": "Todas las series",
+      "showSource": "Mostrar tamaño de origen",
+      "legendAdded": "Añadido por archivo",
+      "legendFootprint": "Espacio ocupado (total acumulado)",
+      "legendSource": "Tamaño de origen (original)",
+      "legendStale": "Obsoleto, midiendo de nuevo",
+      "staleNote_one": "{{count}} archivo se está midiendo de nuevo tras eliminar archivos. Su barra muestra la última medición.",
+      "staleNote_other": "{{count}} archivos se están midiendo de nuevo tras eliminar archivos. Sus barras muestran la última medición.",
+      "unmeasuredNote_one": "{{count}} archivo aún no se ha medido y no se dibuja.",
+      "unmeasuredNote_other": "{{count}} archivos aún no se han medido y no se dibujan.",
+      "empty": "El gráfico de crecimiento necesita al menos dos archivos medidos.",
+      "tooltipAdded": "Añadido",
+      "tooltipFootprint": "Ocupado después",
+      "tooltipSource": "Tamaño de origen",
+      "tooltipStale": "Medición obsoleta",
+      "openArchive": "Abrir archivo"
     },
     "search": {
       "placeholder": "Buscar archivos en este repositorio",

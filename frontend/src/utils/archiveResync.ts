@@ -6,6 +6,7 @@ export function storedArchiveKeys(repositoryId: number) {
   return [
     ['repository-archives-stored', repositoryId],
     ['repository-archives-heatmap', repositoryId],
+    ['repository-archives-growth', repositoryId],
     ['repository-info', repositoryId],
   ]
 }

@@ -87,6 +87,29 @@ export interface HeatmapResponse {
   }
 }
 
+// Mirrors GET /repositories/{id}/archives/growth (spec 4.3). Points are the
+// measured archives oldest first; running_total is the footprint after each
+// one, restarted per series when the request was filtered.
+export interface GrowthPoint {
+  archive_id: number
+  name: string
+  series: string
+  start: string
+  deduplicated_size: number
+  original_size: number | null
+  running_total: number
+  // Sizes present but the measurement date was cleared by a listing that saw
+  // removed archives (spec 4.1). Drawn lighter.
+  stale: boolean
+}
+
+export interface GrowthResponse {
+  points: GrowthPoint[]
+  series: string[]
+  stale_count: number
+  unmeasured_count: number
+}
+
 export interface ArchiveDetailResponse extends ArchiveRow {
   predecessor_id: number | null
   successor_id: number | null

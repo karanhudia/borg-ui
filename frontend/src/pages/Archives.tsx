@@ -38,6 +38,7 @@ import {
 import SyncStateChip from '../components/archives/SyncStateChip'
 import ArchiveSearchField from '../components/archives/ArchiveSearchField'
 import ArchiveSeriesHeatmap from '../components/archives/ArchiveSeriesHeatmap'
+import ArchiveGrowthChart from '../components/archives/ArchiveGrowthChart'
 import { parseBackendDate } from '../utils/dateUtils'
 import type { ArchiveRow, HeatmapDay } from '../types/archives'
 import type { OperationItem } from '../types/operations'
@@ -54,10 +55,11 @@ import { useLockBreakPermissions } from '../hooks/useLockBreakPermissions'
 import { useTrackedJobOutcomes } from '../hooks/useTrackedJobOutcomes'
 import { getArchiveAgeBucket, getJobDurationSeconds } from '../utils/analyticsProperties'
 
-type ArchivesViewMode = 'heatmap' | 'list'
+type ArchivesViewMode = 'heatmap' | 'list' | 'growth'
 
 function getInitialViewMode(): ArchivesViewMode {
-  return localStorage.getItem('archives-view-mode') === 'list' ? 'list' : 'heatmap'
+  const stored = localStorage.getItem('archives-view-mode')
+  return stored === 'list' || stored === 'growth' ? stored : 'heatmap'
 }
 
 // Downstream actions (restore, mount, delete) key off the borg archive id,
@@ -121,6 +123,9 @@ const Archives: React.FC = () => {
 
   const [viewMode, setViewMode] = useState<ArchivesViewMode>(getInitialViewMode)
   const [chosenScale, setChosenScale] = useState<HeatmapScale | null>(readStoredScale)
+  // '' is the whole repository; the growth endpoint restarts its running
+  // total when a series is named (spec 4.3).
+  const [growthSeries, setGrowthSeries] = useState('')
 
   const queryClient = useQueryClient()
   const location = useLocation()
@@ -180,6 +185,14 @@ const Archives: React.FC = () => {
     queryKey: ['repository-archives-heatmap', selectedRepositoryId],
     queryFn: () => archivesAPI.getHeatmap(selectedRepositoryId!),
     enabled: !!selectedRepositoryId && !repoInfoPending && viewMode === 'heatmap',
+    retry: false,
+  })
+
+  const { data: growthData } = useQuery({
+    queryKey: ['repository-archives-growth', selectedRepositoryId, growthSeries],
+    queryFn: () =>
+      archivesAPI.getGrowth(selectedRepositoryId!, { series: growthSeries || undefined }),
+    enabled: !!selectedRepositoryId && !repoInfoPending && viewMode === 'growth',
     retry: false,
   })
 
@@ -779,6 +792,7 @@ const Archives: React.FC = () => {
             >
               <ToggleButton value="heatmap">{t('archives.view.heatmap')}</ToggleButton>
               <ToggleButton value="list">{t('archives.view.list')}</ToggleButton>
+              <ToggleButton value="growth">{t('archives.view.growth')}</ToggleButton>
             </ToggleButtonGroup>
           </Box>
           {viewMode === 'heatmap' ? (
@@ -822,6 +836,19 @@ const Archives: React.FC = () => {
                     }}
                   />
                 )}
+              </Box>
+            ) : null
+          ) : viewMode === 'growth' ? (
+            growthData?.data ? (
+              <Box sx={{ ...panelSx, p: 2.5 }}>
+                <ArchiveGrowthChart
+                  data={growthData.data}
+                  series={growthSeries}
+                  onSeriesChange={setGrowthSeries}
+                  onSelectArchive={(archiveId) =>
+                    navigate(`/archives/${selectedRepositoryId}/${archiveId}`)
+                  }
+                />
               </Box>
             ) : null
           ) : (
