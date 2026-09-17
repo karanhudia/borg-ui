@@ -3175,19 +3175,6 @@
       "encryption": "Verschlüsselung",
       "lastModified": "Zuletzt geändert",
       "repositoryLocation": "Repository-Standort",
-      "storageStatistics": "Speicherstatistiken",
-      "totalSize": "Gesamtgröße",
-      "usedOnDisk": "Auf Festplatte verwendet",
-      "uniqueData": "Eindeutige Daten",
-      "totalChunks": "Blöcke gesamt",
-      "uniqueChunks": "Eindeutige Blöcke",
-      "files": "Dateien",
-      "archiveCount": "Archive",
-      "latestBackupSize": "Aktuelle Sicherungsgröße",
-      "firstBackup": "Erste Sicherung",
-      "latestBackup": "Letzte Sicherung",
-      "noBackupsYet": "Noch keine Sicherungen",
-      "noBackupsDesc": "Dieses Repository wurde initialisiert, enthält aber keine Archive. Speicherstatistiken erscheinen hier, nachdem du deine erste Sicherung erstellt hast.",
       "loadFailed": "Fehler beim Laden der Repository-Informationen. Stelle sicher, dass das Repository zugänglich und ordnungsgemäß initialisiert ist.",
       "v2PlanRequired": "This repository uses Borg 2. Your data is safe. Upgrade to Pro to view its details.",
       "exportKeyfileTooltip": "Schlüsseldatei exportieren. sicher aufbewahren!"
@@ -3440,15 +3427,6 @@
     "columnType": "Typ",
     "columnDate": "Datum",
     "columnActions": "Aktionen"
-  },
-  "repositoryInfo": {
-    "title": "Repository-Informationen",
-    "encryption": "Verschlüsselung",
-    "location": "Standort",
-    "totalSize": "Gesamtgröße",
-    "archives": "Archive",
-    "lastModified": "Zuletzt geändert",
-    "na": "N/V"
   },
   "systemSettings": {
     "title": "Systemeinstellungen",
@@ -5124,16 +5102,42 @@
       }
     }
   },
-  "repositoryStatsGrid": {
-    "totalArchives": "Archive gesamt",
-    "originalSize": "Gesamtgröße der Archive",
-    "originalSizeTooltip": "Gesamte logische Größe aller gesicherten Daten über alle Archive vor Komprimierung und Deduplizierung",
-    "compressedSize": "Komprimierte Archivgröße",
-    "compressedSizeTooltip": "Gesamtgröße aller Archivdaten nach Komprimierung, vor Deduplizierung über alle Archive",
-    "numberOfFiles": "Anzahl der Dateien",
-    "numberOfFilesTooltip": "Gesamtzahl der Dateien über alle Archive",
-    "repositorySize": "Repository-Größe",
-    "repositorySizeTooltip": "Tatsächlich vom Repository auf dem Datenträger belegter Speicher nach Komprimierung und Deduplizierung über alle Archive"
+  "repositoryStats": {
+    "heading": "Speicherstatistik",
+    "archives": "Archive",
+    "originalSize": "Originalgröße",
+    "usedOnDisk": "Belegt auf Platte",
+    "spaceSaved": "Eingesparter Platz",
+    "backupSpan": "Backup-Zeitraum",
+    "backupSpanValue": "{{first}} bis {{last}}",
+    "latestArchiveFiles": "Dateien im neuesten",
+    "unknown": "Unbekannt",
+    "unknownHint": "Noch nicht gemessen",
+    "pending": "Ausstehend",
+    "pendingHint": "Der Archivindex holt das Repository ein",
+    "indexing": "Wird indiziert…",
+    "indexingArchivesHint": "Die Archivliste wird gelesen",
+    "indexingSizeHint": "Die Repository-Größe wird gemessen",
+    "measuredAt": "{{when}}, aus {{source}}",
+    "measuredAtNoSource": "{{when}}",
+    "measuredTimeUnknown": "Messzeitpunkt unbekannt",
+    "source": {
+      "borg1_cache_stats": "Borg-1-Cache",
+      "borg2_index": "Borg-2-Index",
+      "storage_used": "Speicher",
+      "compact_stats": "letztem Compact"
+    },
+    "sourceHint": {
+      "borg1_cache_stats": "Deduplizierte Größe aus Borgs Cache-Statistik",
+      "borg2_index": "Summe aller Objekte im Chunk-Index des Repositorys",
+      "storage_used": "Bytes, die das Repository auf seinem Speicher belegt",
+      "compact_stats": "Vom letzten Compact gemeldete Repository-Größe"
+    },
+    "originalSizeHint": "Summe der Originalgröße aller Archive, die die neueste Auflistung gesehen hat",
+    "spaceSavedHint": "Originalgröße geteilt durch den belegten Platz: Deduplizierung und Kompression zusammen",
+    "spaceSavedUnknownHint": "Nichts, wodurch geteilt werden kann",
+    "backupSpanHint": "Das älteste und das neueste Archiv",
+    "latestArchiveFilesHint": "Anzahl der Dateien im neuesten Archiv, keine Summe"
   },
   "upcomingJobs": {
     "title": "Bevorstehende Aufgaben (Nächste 24 Stunden)",
@@ -5601,7 +5605,6 @@
   },
   "repositoryInfoDialog": {
     "failedToDownloadKeyfile": "Schlüsseldatei konnte nicht heruntergeladen werden",
-    "noArchivesDescription": "Dieses Repository wurde initialisiert, enthält aber keine Archive. Speicherstatistiken erscheinen hier nach der ersten Sicherung.",
     "failedToLoad": "Repository-Informationen konnten nicht geladen werden. Stelle sicher, dass das Repository zugänglich und ordnungsgemäß initialisiert ist.",
     "recovery": {
       "title": "Wiederherstellungsbefehle",

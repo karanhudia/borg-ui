@@ -56,6 +56,56 @@ export interface SourceLocation {
   container?: SourceContainerSelection
 }
 
+/** Where a stored repository size came from (`repositories.total_size_source`). */
+export type RepositorySizeSource =
+  'borg1_cache_stats' | 'borg2_index' | 'storage_used' | 'compact_stats'
+
+/** The newest successful compact's statistics (Borg 2 with `--stats`). */
+export interface RepositoryCompactStats {
+  repository_size?: number | null
+  deduplicated_size?: number | null
+  source_size?: number | null
+  source_files?: number | null
+  compression_factor?: number | null
+  deduplication_factor?: number | null
+  compaction_saved?: number | null
+  object_count?: number | null
+  archive_count?: number | null
+  /** `rounded` when the figures were parsed from Borg's formatted output. */
+  size_precision?: 'exact' | 'rounded' | string
+  [key: string]: unknown
+}
+
+/**
+ * The `storage` object of a repository response (#981): the stored size
+ * with its provenance and time, Borg's last manifest write, the archive
+ * sums and the newest compact statistics. A `null` field is not measured
+ * yet or not reported by this Borg version; `0` is a measurement. The list
+ * carries the stored columns only (`archives_consistent` null), the detail
+ * adds the archive figures.
+ */
+export interface RepositoryStorage {
+  size_bytes: number | null
+  size_source: RepositorySizeSource | string | null
+  measured_at: string | null
+  last_modified: string | null
+  archives_consistent: boolean | null
+  /** Whether a listing has ever completed: with `archives_consistent`
+   * false, true means the sums are catching up, false that nothing has
+   * produced them yet. */
+  archives_listed: boolean | null
+  original_size: number | null
+  compressed_size: number | null
+  deduplicated_size: number | null
+  latest_archive_files: number | null
+  /** The oldest and the newest current archive; null while the archive
+   * figures are withheld or unknown. */
+  first_backup_at: string | null
+  last_backup_at: string | null
+  compact: RepositoryCompactStats | null
+  compact_at: string | null
+}
+
 export interface Repository {
   id: number
   name: string
@@ -87,6 +137,10 @@ export interface Repository {
   check_extra_flags?: string | null
   archive_count?: number
   total_size?: string | null
+  storage?: RepositoryStorage | null
+  // Index work queued or running for the repository (#1063): `stats`,
+  // `archive_sync`, `history_merge`, `history_index`.
+  index_pending_kinds?: string[]
   last_backup?: string | null
   last_check?: string | null
   last_compact?: string | null

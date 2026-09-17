@@ -13,15 +13,14 @@ import {
 } from '@mui/material'
 import { Folder, History } from 'lucide-react'
 import { repositoriesAPI, mountsAPI, restoreAPI, archivesAPI } from '../services/api'
-import { useRepositoryStats } from '../hooks/useRepositoryStats'
 import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { downloadArchiveFile, downloadArchiveFolder } from '../utils/downloadArchiveFile'
 import { invalidateStoredArchives, resyncStoredArchives } from '../utils/archiveResync'
 import { useOperationEvents } from '../hooks/useOperationEvents'
+import { SUCCESS_OPERATION_STATUSES } from '../utils/operationStatus'
 import RepositorySelectorCard from '../components/RepositorySelectorCard'
-import RepositoryStatsGrid from '../components/RepositoryStatsGrid'
-import RepositoryStatsGridSkeleton from '../components/RepositoryStatsGridSkeleton'
+import RepositoryStats from '../components/RepositoryStats'
 import ArchivesList from '../components/ArchivesList'
 import LastRestoreSection from '../components/LastRestoreSection'
 import DeleteArchiveDialog from '../components/DeleteArchiveDialog'
@@ -93,6 +92,10 @@ function normalizeRepositoryId(value: number | string | null | undefined): numbe
   return null
 }
 
+// One refetch per burst of index stages (an import or backup chain ends
+// stats, archive_sync, history_merge within seconds).
+const STORAGE_REFRESH_DEBOUNCE_MS = 1500
+
 const Archives: React.FC = () => {
   const { t } = useTranslation()
   const theme = useTheme()
@@ -158,7 +161,6 @@ const Archives: React.FC = () => {
   // Get repository info for statistics
   const {
     data: repoInfo,
-    isLoading: loadingRepoInfo,
     error: repoInfoError,
     isPending: repoInfoPending,
   } = useQuery({
@@ -167,6 +169,32 @@ const Archives: React.FC = () => {
     enabled: !!selectedRepository,
     retry: false,
   })
+  // The live info syncs the stored archive columns on the server; the
+  // figures read from them are refetched once it has answered, so the
+  // header does not keep the state from before that sync.
+  React.useEffect(() => {
+    if (repoInfo && selectedRepositoryId) {
+      queryClient.invalidateQueries({ queryKey: ['repository-storage', selectedRepositoryId] })
+    }
+  }, [repoInfo, selectedRepositoryId, queryClient])
+
+  // The header's size figures come from the stored `storage` payload
+  // (#981): the list carries the stored columns, the storage route adds
+  // the archive sums without a live Borg call (the detail would run one
+  // and race the `/info` above for the repository lock).
+  const { data: repositoryStorageResponse } = useQuery({
+    queryKey: ['repository-storage', selectedRepositoryId],
+    queryFn: () => repositoriesAPI.getStorage(selectedRepositoryId!),
+    enabled: !!selectedRepositoryId,
+    retry: false,
+  })
+  // Until that arrives the list's columns stand in. Only an explicit
+  // `null` (the server could not compute the summary) replaces them; a
+  // response without the field (an older server) leaves them in place.
+  const repositoryStorage =
+    repositoryStorageResponse?.data?.storage === undefined
+      ? selectedRepository?.storage
+      : repositoryStorageResponse.data.storage
 
   // Get archives for selected repository from the persisted index, after repo
   // info settles
@@ -199,11 +227,35 @@ const Archives: React.FC = () => {
   // The stored list only changes when archive_sync writes it, so the page
   // refreshes on that operation rather than on a timer: a delete, a prune,
   // a backup's follow-up, and the reconcile tick all land the same way.
+  // An index chain ends its stages within seconds of each other, so the
+  // header's figures are refetched once per burst, not once per stage.
+  // A pending refresh belongs to the repository it was queued for: it is
+  // dropped when the selection moves on, not fired against the new one.
+  const storageRefreshTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  React.useEffect(
+    () => () => {
+      if (storageRefreshTimer.current) clearTimeout(storageRefreshTimer.current)
+      storageRefreshTimer.current = null
+    },
+    [selectedRepositoryId]
+  )
   const onOperationUpdated = React.useCallback(
     (operation: OperationItem) => {
-      if (operation.kind !== 'archive_sync') return
       if (operation.repository_id !== selectedRepositoryId) return
-      if (operation.status !== 'completed' && operation.status !== 'completed_with_warnings') return
+      if (operation.category === 'index') {
+        // every move of index work touches the header: a queued or
+        // running stage is the pending state the "indexing" placeholders
+        // read, stats and archive_sync write the stored figures at their
+        // end, and a failed or cancelled run clears the pending state
+        if (storageRefreshTimer.current) clearTimeout(storageRefreshTimer.current)
+        storageRefreshTimer.current = setTimeout(() => {
+          storageRefreshTimer.current = null
+          queryClient.invalidateQueries({ queryKey: ['repository-storage', selectedRepositoryId] })
+          queryClient.invalidateQueries({ queryKey: ['repositories'] })
+        }, STORAGE_REFRESH_DEBOUNCE_MS)
+      }
+      if (operation.kind !== 'archive_sync') return
+      if (!SUCCESS_OPERATION_STATUSES.has(operation.status)) return
       invalidateStoredArchives(queryClient, selectedRepositoryId as number)
     },
     [queryClient, selectedRepositoryId]
@@ -581,8 +633,6 @@ const Archives: React.FC = () => {
     navigate(`/archives/${selectedRepositoryId}/${day.archive_ids[0]}`)
   }
 
-  const repositoryStats = useRepositoryStats(repoInfo?.data?.info, selectedRepository?.borg_version)
-
   // Get last restore job for selected repository
   const lastRestoreJob = React.useMemo(() => {
     if (!selectedRepository || !restoreJobsData?.data?.jobs) return null
@@ -714,21 +764,25 @@ const Archives: React.FC = () => {
       )}
 
       {/* ── Context panel: stats + last restore ── */}
-      {selectedRepositoryId && (loadingRepoInfo || repositoryStats || lastRestoreJob) && (
+      {selectedRepositoryId && (selectedRepository || lastRestoreJob) && (
         <Box sx={{ ...panelSx, mb: 3 }}>
           {/* Stats */}
-          <Box sx={{ p: 2.5 }}>
-            {loadingRepoInfo ? (
-              <RepositoryStatsGridSkeleton />
-            ) : repositoryStats ? (
-              <RepositoryStatsGrid
-                stats={repositoryStats}
-                archivesCount={archivesList.length}
-                borgVersion={selectedRepository?.borg_version}
-                archivesLoading={loadingArchives || repoInfoPending}
+          {selectedRepository && (
+            <Box sx={{ p: 2.5 }}>
+              <RepositoryStats
+                storage={repositoryStorage}
+                // a list that could not be read is no count of zero
+                archiveCount={archivesError ? null : archivesList.length}
+                // the stored list waits for the live info to settle, so
+                // "loading" is "no list yet", not the query's own flag
+                archivesLoading={!archives && !archivesError}
+                indexPendingKinds={
+                  repositoryStorageResponse?.data?.index_pending_kinds ??
+                  selectedRepository.index_pending_kinds
+                }
               />
-            ) : null}
-          </Box>
+            </Box>
+          )}
           {/* Last Restore, only when there is one to show */}
           {lastRestoreJob && (
             <Box

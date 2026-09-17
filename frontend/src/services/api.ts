@@ -1,4 +1,5 @@
 import axios from 'axios'
+import type { RepositoryStorage } from '../types'
 import { toast } from 'react-hot-toast'
 import { BASE_PATH } from '@/utils/basePath'
 import {
@@ -265,6 +266,12 @@ export interface RcloneOAuthSession {
   config?: Record<string, unknown> | null
   token_status?: RcloneOAuthTokenStatus | null
   error?: string | null
+}
+
+export interface RepositoryStorageResponse {
+  repository_id: number
+  storage: RepositoryStorage | null
+  index_pending_kinds: string[]
 }
 
 export interface RcloneRemoteStorage {
@@ -957,6 +964,9 @@ export const repositoriesAPI = {
   },
   downloadKeyfile: (id: number) => api.get(`/repositories/${id}/keyfile`, { responseType: 'blob' }),
   getRepository: (id: number) => api.get(`/repositories/${id}`),
+  // The stored size figures and pending index kinds alone (#981, #1063):
+  // no live Borg call, unlike the detail.
+  getStorage: (id: number) => api.get<RepositoryStorageResponse>(`/repositories/${id}/storage`),
   updateRepository: (id: number, data: RepositoryData) => api.put(`/repositories/${id}`, data),
   deleteRepository: (id: number) => api.delete(`/repositories/${id}`),
   permanentlyDeleteRepository: (id: number, data: RepositoryPermanentDeleteRequest) =>

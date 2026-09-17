@@ -22,7 +22,7 @@ vi.mock('../../components/RepositorySelectorCard', () => ({
     <button onClick={() => onChange(1)}>Select Repo</button>
   ),
 }))
-vi.mock('../../components/RepositoryStatsGrid', () => ({
+vi.mock('../../components/RepositoryStats', () => ({
   default: () => <div data-testid="stats-grid" />,
 }))
 vi.mock('../../components/ArchivesList', () => ({
@@ -59,6 +59,7 @@ vi.mock('../../services/api', () => ({
   },
   repositoriesAPI: {
     getRepositories: vi.fn(),
+    getStorage: vi.fn().mockRejectedValue(new Error('not mocked')),
     listRepositoryArchives: vi.fn(),
     getRepositoryInfo: vi.fn(),
   },

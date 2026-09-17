@@ -42,6 +42,23 @@ describe('RepositoryCard', () => {
     next_run: null,
   }
 
+  const storedSize = {
+    size_bytes: 2_523_456_789,
+    size_source: 'borg2_index' as const,
+    measured_at: '2024-01-20T10:35:00Z',
+    last_modified: '2024-01-20T10:30:00Z',
+    archives_consistent: null,
+    archives_listed: null,
+    original_size: null,
+    compressed_size: null,
+    deduplicated_size: null,
+    latest_archive_files: null,
+    first_backup_at: null,
+    last_backup_at: null,
+    compact: null,
+    compact_at: null,
+  }
+
   const mockCallbacks = {
     onViewInfo: vi.fn(),
     onCheck: vi.fn(),
@@ -344,8 +361,12 @@ describe('RepositoryCard', () => {
       expect(screen.getByText('Mirror failed')).toBeInTheDocument()
     })
 
-    it('renders N/A for missing total size', () => {
-      const repoWithoutSize = { ...mockRepository, total_size: null }
+    it('renders Unknown, not N/A or 0 B, for a size that was not measured', () => {
+      const repoWithoutSize = {
+        ...mockRepository,
+        total_size: null,
+        storage: { ...storedSize, size_bytes: null, size_source: null, measured_at: null },
+      }
       renderWithProviders(
         <RepositoryCard
           repository={repoWithoutSize}
@@ -356,7 +377,138 @@ describe('RepositoryCard', () => {
         />
       )
 
-      expect(screen.getByText('N/A')).toBeInTheDocument()
+      expect(screen.getByText('Unknown')).toBeInTheDocument()
+      expect(screen.queryByText('N/A')).not.toBeInTheDocument()
+      expect(screen.queryByText('0 B')).not.toBeInTheDocument()
+    })
+
+    it("reads the stored size under the card's own label", () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={{ ...mockRepository, borg_version: 2, storage: storedSize }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByText('Total Size')).toBeInTheDocument()
+      expect(screen.getByText('2.35 GB')).toBeInTheDocument()
+      expect(screen.queryByText('10.5 GB')).not.toBeInTheDocument()
+    })
+
+    it('keeps the label for a Borg 1 cache figure too', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            borg_version: 1,
+            storage: { ...storedSize, size_source: 'borg1_cache_stats' },
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByText('Total Size')).toBeInTheDocument()
+      expect(screen.getByText('2.35 GB')).toBeInTheDocument()
+    })
+
+    it('shows unknown when the list payload carries an explicit null storage', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={{ ...mockRepository, storage: null }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByText('Total Size')).toBeInTheDocument()
+      expect(screen.getByText('Unknown')).toBeInTheDocument()
+      expect(screen.queryByText('10.5 GB')).not.toBeInTheDocument()
+    })
+
+    it('keeps the formatted string when the response carries no storage payload', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={mockRepository}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByText('Total Size')).toBeInTheDocument()
+      expect(screen.getByText('10.5 GB')).toBeInTheDocument()
+    })
+
+    it('says indexing instead of 0 archives, no size and never while the import chain runs', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            archive_count: 0,
+            last_backup: null,
+            total_size: null,
+            storage: { ...storedSize, size_bytes: null, size_source: null, measured_at: null },
+            index_pending_kinds: ['archive_sync', 'history_index', 'stats'],
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getAllByText('Indexing…')).toHaveLength(3)
+      expect(screen.queryByText('Never')).not.toBeInTheDocument()
+      expect(screen.queryByText('N/A')).not.toBeInTheDocument()
+    })
+
+    it('keeps 0 archives and never for a settled empty repository while a listing waits', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            archive_count: 0,
+            last_backup: null,
+            storage: { ...storedSize, archives_listed: true },
+            index_pending_kinds: ['archive_sync'],
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.queryByText('Indexing…')).not.toBeInTheDocument()
+      expect(screen.getByText('Never')).toBeInTheDocument()
+    })
+
+    it('shows the listed archives while only the size is still being measured', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            storage: { ...storedSize, size_bytes: null, size_source: null, measured_at: null },
+            index_pending_kinds: ['stats'],
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByText('25')).toBeInTheDocument()
+      expect(screen.getAllByText('Indexing…')).toHaveLength(1)
     })
 
     it('renders encryption type', () => {

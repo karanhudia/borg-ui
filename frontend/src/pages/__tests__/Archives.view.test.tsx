@@ -12,6 +12,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { renderWithProviders } from '../../test/test-utils'
 import Archives from '../Archives'
 import * as apiModule from '../../services/api'
+import type { OperationItem } from '../../types/operations'
 
 const getInfoMock = vi.fn()
 const listStoredMock = vi.fn()
@@ -26,8 +27,20 @@ vi.mock('../../components/RepositorySelectorCard', () => ({
     </>
   ),
 }))
-vi.mock('../../components/RepositoryStatsGrid', () => ({
-  default: () => <div data-testid="stats-grid" />,
+const statsProps: Array<Record<string, unknown>> = []
+vi.mock('../../components/RepositoryStats', () => ({
+  default: (props: Record<string, unknown>) => {
+    statsProps.push(props)
+    return <div data-testid="stats-grid" />
+  },
+}))
+const operationEventHandlers: { onUpdated: ((op: OperationItem) => void) | null } = {
+  onUpdated: null,
+}
+vi.mock('../../hooks/useOperationEvents', () => ({
+  useOperationEvents: (onUpdated: (op: OperationItem) => void) => {
+    operationEventHandlers.onUpdated = onUpdated
+  },
 }))
 vi.mock('../../components/LastRestoreSection', () => ({ default: () => null }))
 vi.mock('../../components/ArchiveContentsDialog', () => ({ default: () => null }))
@@ -73,7 +86,10 @@ vi.mock('../../services/api', () => ({
     deleteArchive: vi.fn(),
     downloadFile: vi.fn(),
   },
-  repositoriesAPI: { getRepositories: vi.fn() },
+  repositoriesAPI: {
+    getRepositories: vi.fn(),
+    getStorage: vi.fn(),
+  },
   mountsAPI: { mountBorgArchive: vi.fn() },
   restoreAPI: { getRestoreJobs: vi.fn() },
 }))
@@ -110,6 +126,9 @@ vi.mock('../../hooks/useAuth', () => ({
   }),
 }))
 
+const listStorage = { size_bytes: 1024 * 100, original_size: null }
+const detailStorage = { size_bytes: 1024 * 100, original_size: 1000 }
+
 const mockRepository = {
   id: 1,
   name: 'My Backups',
@@ -118,6 +137,8 @@ const mockRepository = {
   archive_count: 1,
   last_modified: '2024-01-15T10:00:00Z',
   size: 1024 * 100,
+  storage: listStorage,
+  index_pending_kinds: ['stats'],
 }
 
 const storedResponse = {
@@ -179,8 +200,12 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
       },
     })
 
+    statsProps.length = 0
     vi.mocked(apiModule.repositoriesAPI.getRepositories).mockResolvedValue({
       data: { repositories: [mockRepository, { ...mockRepository, id: 2, name: 'Other' }] },
+    } as never)
+    vi.mocked(apiModule.repositoriesAPI.getStorage).mockResolvedValue({
+      data: { repository_id: 1, storage: detailStorage, index_pending_kinds: [] },
     } as never)
     vi.mocked(apiModule.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: { jobs: [] },
@@ -215,6 +240,162 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
     await waitFor(() => {
       expect(listStoredMock).toHaveBeenCalledWith(1)
     })
+  })
+
+  it('hands the header the detail storage once it arrives, the list columns before', async () => {
+    renderWithProviders(<Archives />, { queryClient })
+    const user = userEvent.setup()
+    await user.click(screen.getByText('Select Repo'))
+
+    await waitFor(() => {
+      const last = statsProps[statsProps.length - 1]
+      expect(last?.storage).toEqual(detailStorage)
+    })
+    expect(statsProps.some((p) => p.storage === listStorage)).toBe(true)
+    const last = statsProps[statsProps.length - 1]
+    // the pending kinds follow the detail too, so the placeholders clear
+    expect(last.indexPendingKinds).toEqual([])
+    expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledWith(1)
+  })
+
+  it('keeps an explicit null from the detail instead of the list columns', async () => {
+    vi.mocked(apiModule.repositoriesAPI.getStorage).mockResolvedValue({
+      data: { repository_id: 1, storage: null, index_pending_kinds: [] },
+    } as never)
+    renderWithProviders(<Archives />, { queryClient })
+    const user = userEvent.setup()
+    await user.click(screen.getByText('Select Repo'))
+
+    await waitFor(() => expect(statsProps[statsProps.length - 1]?.storage).toBeNull())
+  })
+
+  it('falls back to the list columns when the detail cannot be read', async () => {
+    vi.mocked(apiModule.repositoriesAPI.getStorage).mockRejectedValue(new Error('offline'))
+    renderWithProviders(<Archives />, { queryClient })
+    const user = userEvent.setup()
+    await user.click(screen.getByText('Select Repo'))
+
+    await waitFor(() => expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalled())
+    await waitFor(() => expect(screen.getByTestId('stats-grid')).toBeInTheDocument())
+    expect(statsProps[statsProps.length - 1]?.storage).toEqual(listStorage)
+  })
+
+  it('passes no archive count when the stored list could not be read', async () => {
+    listStoredMock.mockRejectedValue(new Error('lost'))
+    renderWithProviders(<Archives />, { queryClient })
+    const user = userEvent.setup()
+    await user.click(screen.getByText('Select Repo'))
+
+    await waitFor(() => expect(statsProps[statsProps.length - 1]?.archiveCount).toBeNull())
+  })
+
+  it('refreshes the detail and the list when index work of the repository ends, failed included', async () => {
+    renderWithProviders(<Archives />, { queryClient })
+    const user = userEvent.setup()
+    await user.click(screen.getByText('Select Repo'))
+    // the first read plus the refetch the live info's sync triggers
+    await waitFor(() => expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(2))
+    const listCalls = vi.mocked(apiModule.repositoriesAPI.getRepositories).mock.calls.length
+
+    operationEventHandlers.onUpdated?.({
+      id: 7,
+      kind: 'archive_sync',
+      category: 'index',
+      status: 'failed',
+      repository_id: 1,
+    } as OperationItem)
+
+    await waitFor(() => expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(3), {
+      timeout: 4000,
+    })
+    await waitFor(() =>
+      expect(
+        vi.mocked(apiModule.repositoriesAPI.getRepositories).mock.calls.length
+      ).toBeGreaterThan(listCalls)
+    )
+    // another repository's work is not this page's business, not even
+    // after the debounce a refresh of its own would have waited for
+    operationEventHandlers.onUpdated?.({
+      id: 8,
+      kind: 'stats',
+      category: 'index',
+      status: 'completed',
+      repository_id: 2,
+    } as OperationItem)
+    await new Promise((resolve) => setTimeout(resolve, 1800))
+    expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(3)
+  })
+
+  it('refetches the figures once the live info has synced the stored columns', async () => {
+    let resolveInfo: (value: unknown) => void = () => {}
+    getInfoMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveInfo = resolve
+      })
+    )
+    renderWithProviders(<Archives />, { queryClient })
+    const user = userEvent.setup()
+    await user.click(screen.getByText('Select Repo'))
+    await waitFor(() => expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(1))
+
+    resolveInfo({ data: { info: {} } })
+
+    await waitFor(() => expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(2))
+  })
+
+  it('refetches the figures when index work is queued, so the header can say indexing', async () => {
+    renderWithProviders(<Archives />, { queryClient })
+    const user = userEvent.setup()
+    await user.click(screen.getByText('Select Repo'))
+    await waitFor(() => expect(screen.getByTestId('stats-grid')).toBeInTheDocument())
+    await waitFor(() => expect(getInfoMock).toHaveBeenCalled())
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    const before = vi.mocked(apiModule.repositoriesAPI.getStorage).mock.calls.length
+
+    operationEventHandlers.onUpdated?.({
+      id: 21,
+      kind: 'archive_sync',
+      category: 'index',
+      status: 'queued',
+      repository_id: 1,
+    } as OperationItem)
+
+    await waitFor(
+      () =>
+        expect(vi.mocked(apiModule.repositoriesAPI.getStorage).mock.calls.length).toBeGreaterThan(
+          before
+        ),
+      { timeout: 4000 }
+    )
+  })
+
+  it('refetches the figures once for a burst of index stages ending together', async () => {
+    renderWithProviders(<Archives />, { queryClient })
+    const user = userEvent.setup()
+    await user.click(screen.getByText('Select Repo'))
+    // the first read plus the refetch the live info's sync triggers
+    await waitFor(() => expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(2))
+
+    for (const [id, kind] of [
+      [11, 'stats'],
+      [12, 'archive_sync'],
+      [13, 'history_merge'],
+    ] as const) {
+      operationEventHandlers.onUpdated?.({
+        id,
+        kind,
+        category: 'index',
+        status: 'completed',
+        repository_id: 1,
+      } as OperationItem)
+    }
+
+    await waitFor(() => expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(3), {
+      timeout: 4000,
+    })
+    // past the debounce again: the burst's one refetch was the only one
+    await new Promise((resolve) => setTimeout(resolve, 1800))
+    expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(3)
   })
 
   it('renders the heatmap and sync chip by default', async () => {
