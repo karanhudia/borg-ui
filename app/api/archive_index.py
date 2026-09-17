@@ -42,7 +42,10 @@ from app.services.operations.index_mode import allows as mode_allows
 from app.services.operations.index_mode import filter_kinds
 from app.services.operations.index_mode import mode_of as index_mode_of
 from app.services.operations.reconcile import RECONCILE_CHAIN, enqueue_reconcile_run
-from app.services.operations.repository_status import repository_status
+from app.services.operations.repository_status import (
+    pending_removed_ids,
+    repository_status,
+)
 from app.services.operations.series import (
     crons_for_repository,
     retention_days_for_repository,
@@ -316,6 +319,71 @@ async def archives_heatmap(
             "size_outlier": pro,
             "duration_outlier": pro,
         },
+    }
+
+
+@router.get("/{repo_id}/archives/growth")
+async def archives_growth(
+    repo_id: int,
+    series: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """The archive index as a growth curve (spec 4.3).
+
+    One point per measured archive, oldest first: what the archive added to
+    the repository (deduplicated_size) and the running total of those
+    additions, which is at least the repository footprint after that backup
+    (chunks shared only among archives are in nobody's number). Filtered
+    to a series the total restarts, so the curve is that series' footprint.
+    Archives the info fill has not measured have no point. A stale point
+    (measured once, then a listing saw archives removed) keeps its value
+    and is flagged, per spec 4.1.
+
+    Declared before the `{archive_id}` route on purpose: that route's path
+    parameter matches any segment, so `growth` would otherwise reach it and
+    fail validation.
+    """
+    repository = _repo(db, current_user, repo_id)
+    # Rows the newest listing reported removed linger until history_merge
+    # deletes them (never in the `archives` index mode); they are gone from
+    # the repository and must not add to the footprint.
+    removed = pending_removed_ids(db, repository.id)
+    q = _archives_query(db, repository, series, None, None)
+    if removed:
+        q = q.filter(Archive.id.notin_(removed))
+    rows = q.order_by(Archive.start.asc(), Archive.id.asc()).all()
+    series_q = db.query(Archive.series).filter(Archive.repository_id == repository.id)
+    if removed:
+        series_q = series_q.filter(Archive.id.notin_(removed))
+    all_series = [
+        s for (s,) in series_q.distinct().order_by(Archive.series.asc()).all()
+    ]
+    points: list[dict] = []
+    running = 0
+    unmeasured = 0
+    for a in rows:
+        if a.deduplicated_size is None:
+            unmeasured += 1
+            continue
+        running += a.deduplicated_size
+        points.append(
+            {
+                "archive_id": a.id,
+                "name": a.name,
+                "series": a.series,
+                "start": a.start,
+                "deduplicated_size": a.deduplicated_size,
+                "original_size": a.original_size,
+                "running_total": running,
+                "stale": a.stats_measured_at is None,
+            }
+        )
+    return {
+        "points": points,
+        "series": all_series,
+        "stale_count": sum(1 for p in points if p["stale"]),
+        "unmeasured_count": unmeasured,
     }
 
 

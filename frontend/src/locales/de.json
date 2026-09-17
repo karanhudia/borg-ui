@@ -1064,6 +1064,7 @@
     "view": {
       "heatmap": "Heatmap",
       "list": "Liste",
+      "growth": "Wachstum",
       "scaleDays": "Tage",
       "scaleHours": "Stunden",
       "scaleLabel": "Skala"
@@ -1088,6 +1089,26 @@
       "hideSeries": "Serien ausblenden",
       "seriesNote": "Serien werden aus den Archivnamen abgeleitet, eine Namensänderung kann eine Sicherungslinie also aufteilen. Jedes Archiv ist trotzdem im Band darüber enthalten.",
       "cadenceUnknown": "kein Zeitplan bekannt, daher wird kein Tag bewertet"
+    },
+    "growth": {
+      "title": "Wachstum des Repositorys",
+      "seriesLabel": "Serie",
+      "allSeries": "Alle Serien",
+      "showSource": "Quellgröße anzeigen",
+      "legendAdded": "Pro Archiv hinzugefügt",
+      "legendFootprint": "Belegter Speicher (laufende Summe, mindestens)",
+      "legendSource": "Quellgröße (Original)",
+      "legendStale": "Veraltet, wird neu gemessen",
+      "staleNote_one": "{{count}} Archiv wird nach dem Entfernen von Archiven neu gemessen. Sein Balken zeigt die letzte Messung.",
+      "staleNote_other": "{{count}} Archive werden nach dem Entfernen von Archiven neu gemessen. Ihre Balken zeigen die letzte Messung.",
+      "unmeasuredNote_one": "{{count}} Archiv ist noch nicht gemessen und wird nicht gezeichnet.",
+      "unmeasuredNote_other": "{{count}} Archive sind noch nicht gemessen und werden nicht gezeichnet.",
+      "empty": "Das Wachstumsdiagramm braucht mindestens zwei gemessene Archive.",
+      "tooltipAdded": "Hinzugefügt",
+      "tooltipFootprint": "Belegt danach (mindestens)",
+      "tooltipSource": "Quellgröße",
+      "tooltipStale": "Veraltete Messung",
+      "openArchive": "Archiv öffnen"
     },
     "search": {
       "placeholder": "Dateien in diesem Repository durchsuchen",

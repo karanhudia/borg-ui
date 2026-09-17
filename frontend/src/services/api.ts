@@ -37,6 +37,7 @@ import type {
 import type {
   ArchiveListResponse,
   HeatmapResponse,
+  GrowthResponse,
   ArchiveDetailResponse,
   ChangesResponse,
   ChangeType,
@@ -722,6 +723,8 @@ export const archivesAPI = {
   ) => api.get<ArchiveListResponse>(`/repositories/${repositoryId}/archives`, { params }),
   getHeatmap: (repositoryId: number, params?: { since?: string; until?: string }) =>
     api.get<HeatmapResponse>(`/repositories/${repositoryId}/archives/heatmap`, { params }),
+  getGrowth: (repositoryId: number, params?: { series?: string }) =>
+    api.get<GrowthResponse>(`/repositories/${repositoryId}/archives/growth`, { params }),
   getArchive: (repositoryId: number, archiveId: number) =>
     api.get<ArchiveDetailResponse>(`/repositories/${repositoryId}/archives/${archiveId}`),
   getChanges: (

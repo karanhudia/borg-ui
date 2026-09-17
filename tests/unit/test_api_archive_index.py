@@ -363,6 +363,102 @@ class TestHeatmap:
         assert r.json()["flags_available"]["size_outlier"] is True
 
 
+@pytest.mark.unit
+class TestArchiveGrowth:
+    def _measured(self, test_db, repo, name, day, **kw):
+        a = _archive(test_db, repo, name, day, **kw)
+        a.stats_measured_at = utc_now().replace(tzinfo=None)
+        test_db.commit()
+        return a
+
+    def test_points_carry_a_running_total_and_skip_unmeasured_archives(
+        self, test_client, test_db, admin_headers
+    ):
+        """One point per measured archive, oldest first; the running total
+        is the repository footprint after that archive (spec 4.3). A row the
+        info fill has not reached yet has no size and is not a point."""
+        repo = _repo(test_db)
+        self._measured(test_db, repo, "a1", 1, size=100)
+        stale = _archive(test_db, repo, "a2", 2, size=50)  # sizes, no date
+        unmeasured = _archive(test_db, repo, "a3", 3)
+        unmeasured.original_size = None
+        unmeasured.deduplicated_size = None
+        test_db.commit()
+        self._measured(test_db, repo, "old-a4", 4, series="old", size=30)
+
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/archives/growth", headers=admin_headers
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert [p["name"] for p in body["points"]] == ["a1", "a2", "old-a4"]
+        assert [p["running_total"] for p in body["points"]] == [100, 150, 180]
+        assert [p["stale"] for p in body["points"]] == [False, True, False]
+        assert body["points"][1]["archive_id"] == stale.id
+        assert body["points"][0]["original_size"] == 100
+        assert body["points"][0]["start"].startswith("2026-09-01T02:00:00")
+        assert body["series"] == ["nas", "old"]
+        assert body["stale_count"] == 1
+        assert body["unmeasured_count"] == 1
+
+    def test_series_filter_restarts_the_running_total(
+        self, test_client, test_db, admin_headers
+    ):
+        """Filtered to one series, the total is that series' footprint, and
+        the series list still names every series so the select can switch."""
+        repo = _repo(test_db)
+        self._measured(test_db, repo, "a1", 1, size=100)
+        self._measured(test_db, repo, "old-a2", 2, series="old", size=30)
+        self._measured(test_db, repo, "old-a3", 3, series="old", size=20)
+
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/archives/growth",
+            params={"series": "old"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert [p["name"] for p in body["points"]] == ["old-a2", "old-a3"]
+        assert [p["running_total"] for p in body["points"]] == [30, 50]
+        assert body["series"] == ["nas", "old"]
+
+    def test_rows_reported_removed_are_not_points(
+        self, test_client, test_db, admin_headers
+    ):
+        """A row the newest listing reported removed lingers until
+        history_merge deletes it (never in the `archives` index mode). It is
+        no longer in the repository, so it adds nothing to the footprint."""
+        repo = _repo(test_db)
+        self._measured(test_db, repo, "a1", 1, size=100)
+        removed = self._measured(test_db, repo, "a2", 2, series="gone", size=50)
+        self._measured(test_db, repo, "a3", 3, size=20)
+        unmeasured = _archive(test_db, repo, "old-a4", 4, series="old")
+        unmeasured.deduplicated_size = None
+        test_db.commit()
+        sync = _op(
+            test_db, repo, "archive_sync", completed_at=datetime(2026, 9, 5, 9, 54)
+        )
+        sync.result = {"listed": 2, "removed_archive_ids": [removed.id]}
+        test_db.commit()
+
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/archives/growth", headers=admin_headers
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert [p["name"] for p in body["points"]] == ["a1", "a3"]
+        assert [p["running_total"] for p in body["points"]] == [100, 120]
+        # The selector lists surviving series only, measured or not.
+        assert body["series"] == ["nas", "old"]
+        assert body["unmeasured_count"] == 1
+
+    def test_requires_repository_access(self, test_client, test_db, auth_headers):
+        repo = _repo(test_db)
+        assert test_client.get(
+            f"/api/repositories/{repo.id}/archives/growth", headers=auth_headers
+        ).status_code in (403, 404)
+
+
 def _plan(test_db, repo, **flags):
     """An enabled, scheduled plan: only such a plan runs on its own and is
     an expectation (a manual-only plan is not)."""
