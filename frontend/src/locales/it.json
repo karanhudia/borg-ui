@@ -1127,7 +1127,24 @@
       "restore": "Ripristina",
       "mount": "Monta",
       "delete": "Elimina",
-      "tabChangesLabel": "Modifiche"
+      "tabChangesLabel": "Modifiche",
+      "stats": {
+        "addedToRepository": "Aggiunto al repository",
+        "addedHint": "Dati presenti solo in questo archivio. Eliminandolo si libera almeno questo spazio.",
+        "filesChanged": "File modificati",
+        "filesChangedLocked": "Pro: modifiche ai file per archivio",
+        "filesChangedNotIndexed": "Non ancora indicizzato",
+        "filesChangedUnavailable": "Non disponibile per questo repository",
+        "dataBackedUp": "Dati salvati",
+        "files": "File",
+        "duration": "Durata",
+        "compression": "Compressione",
+        "compressionNotReported": "Non riportato da questa versione di Borg",
+        "measuredAt": "Misurato {{when}}",
+        "remeasuring": "Nuova misurazione dopo la rimozione di archivi",
+        "notMeasured": "Non ancora misurato",
+        "vsPrevious": "rispetto al precedente"
+      }
     },
     "changes": {
       "compareWith": "Confronta con",

@@ -289,8 +289,13 @@ def archives_needing_info(
     *,
     limit: int,
     include_missing_end: bool = False,
+    exclude_ids: Iterable[int] = (),
 ) -> list[Archive]:
-    """Archives still missing their `borg info` stats, oldest first.
+    """Archives whose `borg info` stats are missing or stale, oldest first.
+
+    `exclude_ids` are the rows the listing reported removed: they linger
+    until the merge deletes them (never, in the `archives` mode) and a
+    `borg info` on them would fail and waste a slot.
 
     Not just the rows this run created: a repository imported with more
     archives than `INDEX_ARCHIVE_INFO_PER_RUN` fills the oldest few now and
@@ -311,10 +316,14 @@ def archives_needing_info(
             q = q.filter(Archive.id.notin_(exclude_ids))
         return q.order_by(Archive.start.asc()).limit(n).all()
 
-    rows = _select(Archive.original_size.is_(None), set(), limit)
+    # NULL is "never measured" and "stale" alike (spec 4.1): a listing that
+    # saw archives removed cleared it on every survivor, and the same
+    # bounded loop re-measures them, oldest first.
+    removed = set(exclude_ids)
+    rows = _select(Archive.stats_measured_at.is_(None), removed, limit)
     spare = limit - len(rows)
     if include_missing_end and spare > 0:
-        rows += _select(Archive.end.is_(None), {a.id for a in rows}, spare)
+        rows += _select(Archive.end.is_(None), removed | {a.id for a in rows}, spare)
     return rows
 
 
@@ -461,6 +470,7 @@ async def fill_archive_info(
         archive.original_size = info["original_size"]
         archive.compressed_size = info["compressed_size"]
         archive.deduplicated_size = info["deduplicated_size"]
+        archive.stats_measured_at = utc_now()
         if info["end"] and (timezone_name or _carries_utc_offset(info["end"])):
             # A naive end time from an agent that never reported its zone
             # would be read in the server's zone; leave it unset instead.
@@ -624,6 +634,24 @@ async def run_archive_sync(ctx) -> Outcome:
         removed_last_seen_at = {
             str(row.id): row.last_seen_at.isoformat() for row in removed_rows
         }
+        # Rows reported removed stay in the table until history_merge deletes
+        # them (never, in the `archives` mode), so a lingering row is
+        # reported on every listing; only a removal the newest listing on
+        # record did not report is news.
+        from app.services.operations.repository_status import pending_removed_ids
+
+        if removed_id_set - pending_removed_ids(db, repository.id):
+            # deduplicated_size is relative to the archives that exist (spec
+            # 4.1): the survivors' figures are now stale, whoever removed the
+            # archives. Clearing the date hands them to archives_needing_info
+            # below, under the same per-run cap as a first fill.
+            # Survivors only: a removed row lingers until the merge deletes
+            # it, and with no date it would take an info slot every run.
+            db.query(Archive).filter(
+                Archive.repository_id == repository.id,
+                Archive.id.notin_(removed_id_set),
+            ).update({Archive.stats_measured_at: None}, synchronize_session=False)
+            db.commit()
         if is_agent_executor(repository):
             # No history run ever reaches an agent's repository (the server
             # cannot diff it), so the listing records the state the history
@@ -671,6 +699,7 @@ async def run_archive_sync(ctx) -> Outcome:
                 repository,
                 limit=settings.index_archive_info_per_run,
                 include_missing_end=True,
+                exclude_ids=removed_id_set,
             ),
             env,
             limit=settings.index_archive_info_per_run,

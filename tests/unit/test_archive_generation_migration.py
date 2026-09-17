@@ -56,7 +56,9 @@ def test_upgrade_and_downgrade_preserve_history_and_initialize_legacy_identity(
         connection.execute(
             changes.insert().values(archive_id=archive_id, path="keep", change="added")
         )
-    _migrate(url, REVISION)
+    # The ORM half reads through the current model, which carries every
+    # column added since this revision; run it at head, downgrade from there.
+    _migrate(url, "head")
     with Session(engine) as db:
         row = db.get(Archive, archive_id)
         assert row.generation_id is None

@@ -27,6 +27,9 @@ export interface ArchiveRow {
   original_size: number | null
   compressed_size: number | null
   deduplicated_size: number | null
+  // When the four Borg figures above were last measured. null is never
+  // measured (sizes null too) or stale (sizes set, being re-measured).
+  stats_measured_at: string | null
   hostname: string | null
   username: string | null
   comment: string | null
@@ -87,6 +90,13 @@ export interface HeatmapResponse {
 export interface ArchiveDetailResponse extends ArchiveRow {
   predecessor_id: number | null
   successor_id: number | null
+  predecessor_stats: {
+    id: number
+    nfiles: number | null
+    original_size: number | null
+    deduplicated_size: number | null
+    duration_seconds: number | null
+  } | null
   history_available: boolean
   history_capability?: HistoryCapability
 }

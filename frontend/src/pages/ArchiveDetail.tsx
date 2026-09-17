@@ -18,7 +18,6 @@ import {
   useTheme,
 } from '@mui/material'
 import { Archive as ArchiveIcon, HardDrive, RotateCcw, Trash2 } from 'lucide-react'
-import { formatBytes, formatDurationSeconds } from '../utils/dateUtils'
 import { changeColor } from '../components/archives/changeStyle'
 import { archivesAPI, repositoriesAPI, mountsAPI, restoreAPI } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
@@ -26,6 +25,9 @@ import { getBorgVersion } from '../utils/repoCapabilities'
 import { translateBackendKey, type BackendDetail } from '../utils/translateBackendKey'
 import { parseBackendDate } from '../utils/dateUtils'
 import ArchiveInfoTab from '../components/archives/ArchiveInfoTab'
+import ArchiveStatsHeader, {
+  type ArchiveStatsHeaderProps,
+} from '../components/archives/ArchiveStatsHeader'
 import ArchiveChangesTab from '../components/archives/ArchiveChangesTab'
 import ArchiveFilesTab from '../components/archives/ArchiveFilesTab'
 import DeleteArchiveDialog from '../components/DeleteArchiveDialog'
@@ -274,6 +276,17 @@ export default function ArchiveDetail() {
 
   // Cached data from a previous mode must not outlive the setting.
   const totals = indexMode === 'full' ? changesForLabel?.totals : undefined
+  const capability = archive.history_capability ?? 'available'
+  const totalsState: ArchiveStatsHeaderProps['totalsState'] =
+    capability === 'plan_locked' || !can('archive_history')
+      ? 'plan_locked'
+      : capability !== 'available' || indexMode !== 'full'
+        ? 'unavailable'
+        : archive.history_state !== 'indexed'
+          ? 'not_indexed'
+          : totals
+            ? 'ready'
+            : 'loading'
   const tabLabel = (
     <Box
       component="span"
@@ -339,6 +352,7 @@ export default function ArchiveDetail() {
           mb: 3,
           display: 'flex',
           flexDirection: { xs: 'column', md: 'row' },
+          flexWrap: 'wrap',
           gap: 2,
           alignItems: { md: 'flex-start' },
           justifyContent: 'space-between',
@@ -370,62 +384,11 @@ export default function ArchiveDetail() {
             <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
               {parseBackendDate(archive.start).toLocaleString()}
             </Typography>
-            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mt: 1.5 }}>
-              {[
-                { label: t('archives.detail.series'), value: archive.series, key: 'secondary' },
-                {
-                  label: t('archives.detail.files'),
-                  value: archive.nfiles?.toLocaleString() ?? null,
-                  key: 'primary',
-                },
-                {
-                  label: t('archives.detail.originalSize'),
-                  value: archive.original_size != null ? formatBytes(archive.original_size) : null,
-                  key: 'success',
-                },
-                {
-                  label: t('archives.detail.deduplicatedSize'),
-                  value:
-                    archive.deduplicated_size != null
-                      ? formatBytes(archive.deduplicated_size)
-                      : null,
-                  key: 'info',
-                },
-                {
-                  label: t('archives.detail.duration'),
-                  value:
-                    archive.duration_seconds != null
-                      ? formatDurationSeconds(archive.duration_seconds)
-                      : null,
-                  key: 'warning',
-                },
-              ]
-                .filter((pill) => pill.value)
-                .map((pill) => {
-                  const color = theme.palette[pill.key as 'primary'].main
-                  return (
-                    <Chip
-                      key={pill.label}
-                      size="small"
-                      label={
-                        <Box component="span" sx={{ display: 'inline-flex', gap: 0.75 }}>
-                          <Box component="span" sx={{ color: alpha(color, 0.85), fontWeight: 500 }}>
-                            {pill.label}
-                          </Box>
-                          <Box component="span" sx={{ fontWeight: 700, color }}>
-                            {pill.value}
-                          </Box>
-                        </Box>
-                      }
-                      sx={{
-                        bgcolor: alpha(color, theme.palette.mode === 'dark' ? 0.16 : 0.09),
-                        height: 26,
-                        '& .MuiChip-label': { px: 1.25 },
-                      }}
-                    />
-                  )
-                })}
-            </Stack>
+            <Chip
+              size="small"
+              label={`${t('archives.detail.series')}: ${archive.series}`}
+              sx={{ mt: 1.5 }}
+            />
           </Box>
         </Stack>
         <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
@@ -456,6 +419,9 @@ export default function ArchiveDetail() {
             {t('archives.detail.delete')}
           </Button>
         </Stack>
+        <Box sx={{ flexBasis: '100%' }}>
+          <ArchiveStatsHeader archive={archive} totals={totals} totalsState={totalsState} />
+        </Box>
       </Box>
 
       <Tabs

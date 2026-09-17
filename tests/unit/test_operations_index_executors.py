@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import Archive, Base, Repository, SystemSettings
+from app.database.models import Archive, Base, Operation, Repository, SystemSettings
 from app.services.operations.executors import index as index_exec
 from app.services.operations.runner import Outcome
 from app.services.storage_usage import SizeResult
@@ -195,6 +195,76 @@ async def test_run_archive_sync_updates_repository_columns(db, repo, monkeypatch
     assert repo.archive_count == 1
     assert repo.last_backup == datetime(2026, 9, 2, 2, 0, 0)
     ctx.progress.assert_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_archive_sync_stales_survivors_when_archives_were_removed(
+    db, repo, monkeypatch
+):
+    """Spec 4.1: deduplicated_size is relative to the archives that exist,
+    so once a listing sees archives gone (prune, delete, wipe, inside or
+    outside Borg UI) every surviving row's measurement is stale. A listing
+    that removed nothing leaves the dates alone."""
+    measured = datetime(2026, 9, 1, 3)
+    survivor = Archive(
+        repository_id=repo.id,
+        borg_id="aa11",
+        name="nas-2026-09-02T02:00:00",
+        series="nas",
+        start=datetime(2026, 9, 2, 2),
+        original_size=10,
+        stats_measured_at=measured,
+    )
+    gone = Archive(
+        repository_id=repo.id,
+        borg_id="gone",
+        name="nas-2026-09-01T02:00:00",
+        series="nas",
+        start=datetime(2026, 9, 1, 2),
+        original_size=10,
+        stats_measured_at=measured,
+    )
+    db.add_all([survivor, gone])
+    db.commit()
+    monkeypatch.setattr(
+        index_exec,
+        "list_archives_for_repository",
+        AsyncMock(return_value=(True, [BORG1_ENTRY], "UTC")),
+    )
+    monkeypatch.setattr(index_exec, "fill_archive_info", AsyncMock(return_value=0))
+    monkeypatch.setattr(
+        index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
+    )
+
+    await index_exec.run_archive_sync(_ctx(db, repo))
+    db.refresh(survivor)
+    db.refresh(gone)
+    assert survivor.stats_measured_at is None
+    # The removed row keeps its date: with none it would take an info slot
+    # on every run until the merge deletes it.
+    assert gone.stats_measured_at == measured
+
+    # Second listing. archive_sync never deletes rows (history_merge does,
+    # and never in the `archives` index mode), so `gone` is reported removed
+    # again; the newest listing on record already knows it, and a freshly
+    # measured date survives.
+    db.add(
+        Operation(
+            repository_id=repo.id,
+            kind="archive_sync",
+            category="index",
+            status="completed",
+            run_id="run-1",
+            completed_at=datetime(2026, 9, 2, 3),
+            result={"removed_archive_ids": [gone.id]},
+        )
+    )
+    survivor.stats_measured_at = measured
+    db.commit()
+    await index_exec.run_archive_sync(_ctx(db, repo))
+    db.refresh(survivor)
+    assert survivor.stats_measured_at == measured
 
 
 @pytest.mark.unit
@@ -985,6 +1055,101 @@ def test_agent_listing_ok(result, expected):
 
 
 @pytest.mark.unit
+def test_archives_needing_info_picks_stale_rows_with_sizes(db, repo):
+    """Spec 4.1: NULL stats_measured_at means never measured or stale, so a
+    row that has sizes but no date comes back, and a dated row does not."""
+    for borg_id, size, measured in (
+        ("stale", 10, None),
+        ("fresh", 10, datetime(2026, 9, 1, 3)),
+        ("never", None, None),
+    ):
+        db.add(
+            Archive(
+                repository_id=repo.id,
+                borg_id=borg_id,
+                name=borg_id,
+                series="default",
+                start=datetime(2026, 9, 1),
+                original_size=size,
+                stats_measured_at=measured,
+            )
+        )
+    db.commit()
+    picked = {a.borg_id for a in index_exec.archives_needing_info(db, repo, limit=5)}
+    assert picked == {"stale", "never"}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fill_archive_info_stamps_stats_measured_at(db, repo, monkeypatch):
+    row = Archive(
+        repository_id=repo.id,
+        borg_id="x",
+        name="x",
+        series="default",
+        start=datetime(2026, 9, 1),
+    )
+    db.add(row)
+    db.commit()
+    payload = json.dumps(
+        {
+            "archives": [
+                {
+                    "end": "2026-09-01T00:10:00",
+                    "duration": 600,
+                    "stats": {
+                        "nfiles": 1,
+                        "original_size": 10,
+                        "compressed_size": 8,
+                        "deduplicated_size": 4,
+                    },
+                }
+            ]
+        }
+    )
+    monkeypatch.setattr(
+        index_exec,
+        "_server_archive_info",
+        AsyncMock(return_value={"success": True, "stdout": payload}),
+    )
+    assert await index_exec.fill_archive_info(db, repo, [row], {}, limit=1) == 1
+    db.refresh(row)
+    assert row.deduplicated_size == 4
+    assert row.stats_measured_at is not None
+
+
+@pytest.mark.unit
+def test_archives_needing_info_skips_rows_the_listing_reported_removed(db, repo):
+    """A removed row lingers until the merge deletes it; a never-measured one
+    (no date) and a measured one without an end would both take a slot."""
+    for borg_id, measured, end in (
+        ("gone-never", None, None),
+        ("gone-no-end", datetime(2026, 9, 1), None),
+        ("live", None, None),
+    ):
+        db.add(
+            Archive(
+                repository_id=repo.id,
+                borg_id=borg_id,
+                name=borg_id,
+                series="default",
+                start=datetime(2026, 9, 1),
+                original_size=10 if measured else None,
+                stats_measured_at=measured,
+                end=end,
+            )
+        )
+    db.commit()
+    gone = {
+        a.id for a in db.query(Archive).filter(Archive.borg_id.like("gone-%")).all()
+    }
+    picked = index_exec.archives_needing_info(
+        db, repo, limit=5, include_missing_end=True, exclude_ids=gone
+    )
+    assert [a.borg_id for a in picked] == ["live"]
+
+
+@pytest.mark.unit
 def test_archives_needing_info_backfills_across_runs(db, repo):
     """The per-run cap means later runs must pick up archives an earlier run
     left unfilled, not just the rows they created themselves."""
@@ -997,6 +1162,7 @@ def test_archives_needing_info_backfills_across_runs(db, repo):
                 series="default",
                 start=datetime(2026, 9, day),
                 original_size=10 if day == 1 else None,
+                stats_measured_at=datetime(2026, 9, 1) if day == 1 else None,
             )
         )
     db.commit()
@@ -1020,6 +1186,7 @@ def test_archives_needing_info_revisits_withheld_end(db, repo, monkeypatch):
             series="default",
             start=datetime(2026, 9, 1),
             original_size=10,
+            stats_measured_at=datetime(2026, 9, 1),
             end=None,
         )
     )
@@ -1031,6 +1198,7 @@ def test_archives_needing_info_revisits_withheld_end(db, repo, monkeypatch):
             series="default",
             start=datetime(2026, 9, 2),
             original_size=10,
+            stats_measured_at=datetime(2026, 9, 2),
             end=datetime(2026, 9, 2, 1),
         )
     )
