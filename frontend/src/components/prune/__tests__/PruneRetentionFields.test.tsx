@@ -22,6 +22,13 @@ describe('PruneRetentionFields', () => {
     })
   })
 
+  it('never reports a negative count', () => {
+    const onChange = vi.fn()
+    renderWithProviders(<PruneRetentionFields value={DEFAULT_RETENTION} onChange={onChange} />)
+    fireEvent.change(screen.getByLabelText(/keep daily/i), { target: { value: '-3' } })
+    expect(onChange).toHaveBeenCalledWith({ ...DEFAULT_RETENTION, keep_daily: 0 })
+  })
+
   it('disables every field when disabled', () => {
     renderWithProviders(
       <PruneRetentionFields value={DEFAULT_RETENTION} onChange={() => {}} disabled />

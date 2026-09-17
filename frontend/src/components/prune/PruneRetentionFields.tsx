@@ -163,7 +163,9 @@ export default function PruneRetentionFields({
             <InputBase
               type="number"
               value={value[field.key]}
-              onChange={(e) => onChange({ ...value, [field.key]: parseInt(e.target.value) || 0 })}
+              onChange={(e) =>
+                onChange({ ...value, [field.key]: Math.max(0, parseInt(e.target.value, 10) || 0) })
+              }
               disabled={disabled}
               inputProps={{
                 min: 0,

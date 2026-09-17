@@ -8,6 +8,7 @@ import re
 from dataclasses import asdict, dataclass
 from typing import Any, Optional
 
+import structlog
 from sqlalchemy.orm import Session
 
 from app.database.models import Archive, Operation, Repository
@@ -26,6 +27,7 @@ _VERDICT_LINE = re.compile(
     r"\[(?P<id>[0-9a-f]{64})\]\s*$"
 )
 _STREAM_PREFIX = re.compile(r"^\[(?:stdout|stderr)\] ")
+logger = structlog.get_logger()
 
 
 @dataclass(frozen=True)
@@ -155,8 +157,8 @@ from app.services.operations.repository_status import (
 from app.utils.borg_env import cleanup_temp_key_file
 
 # Candidates re-measured synchronously before the preview answers (spec
-# 4.4 step 3). Beyond it the stored values stand and `partial_measure` is
-# reported.
+# 4.4 step 3). Beyond it, or when a measurement fails, the stored values
+# stand and `partial_measure` is reported.
 MEASURE_CAP = 50
 
 
@@ -224,10 +226,24 @@ async def remeasure_candidates(
         return False
     env, temp_key_file = _prepare_repository_borg_env(repository, db)
     try:
-        await fill_archive_info(db, repository, candidates, env, limit=MEASURE_CAP)
+        filled = await fill_archive_info(
+            db, repository, candidates, env, limit=MEASURE_CAP
+        )
+    except Exception as exc:
+        # A busy repository (another job took the lock after the dry run)
+        # or an agent that stopped answering: the stored values stand and
+        # the preview says so, rather than failing after Borg's verdicts
+        # were already in hand.
+        logger.warning(
+            "prune preview re-measure abandoned, stored sizes used",
+            repository_id=repository.id,
+            error=str(exc),
+        )
+        db.rollback()
+        filled = 0
     finally:
         cleanup_temp_key_file(temp_key_file)
-    return len(candidates) > MEASURE_CAP
+    return filled < len(candidates)
 
 
 def freed_at_least(candidates: list[Archive]) -> int:

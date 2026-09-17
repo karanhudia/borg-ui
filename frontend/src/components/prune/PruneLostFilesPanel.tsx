@@ -63,7 +63,7 @@ export default function PruneLostFilesPanel({ repositoryId, lost }: PruneLostFil
 
       {totalCount === 0 ? (
         <Typography variant="body2" color="text.secondary">
-          {t('prunePreview.lostNone')}
+          {lost.incomplete ? t('prunePreview.lostUnknown') : t('prunePreview.lostNone')}
         </Typography>
       ) : (
         <>

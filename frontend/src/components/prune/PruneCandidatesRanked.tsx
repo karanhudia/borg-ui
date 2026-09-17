@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Box, Button, Chip, Stack, Typography, alpha, useTheme } from '@mui/material'
+import { Box, Button, ButtonBase, Chip, Stack, Typography, alpha, useTheme } from '@mui/material'
 import { formatBytes } from '../../utils/dateUtils'
 import type { PrunePreviewArchive } from '../../types/archives'
 
@@ -11,6 +11,30 @@ export interface PruneCandidatesRankedProps {
 }
 
 const VISIBLE_CAP = 25
+
+const rowSx = { display: 'flex', alignItems: 'center', gap: 1.5, width: '100%', px: 0.5 }
+
+// A verdict line the index has no row for (not yet listed) has no archive
+// page to open, so it is plain text, not a button.
+function Row({
+  archiveId,
+  onOpen,
+  children,
+}: {
+  archiveId: number | null
+  onOpen: (archiveId: number) => void
+  children: ReactNode
+}) {
+  if (archiveId == null) return <Box sx={rowSx}>{children}</Box>
+  return (
+    <ButtonBase
+      onClick={() => onOpen(archiveId)}
+      sx={{ ...rowSx, textAlign: 'left', borderRadius: 1 }}
+    >
+      {children}
+    </ButtonBase>
+  )
+}
 
 export default function PruneCandidatesRanked({
   archives,
@@ -42,11 +66,7 @@ export default function PruneCandidatesRanked({
           const size = a.deduplicated_size
           const width = size != null && max > 0 ? Math.max(2, (size / max) * 100) : 0
           return (
-            <Box
-              key={a.borg_id}
-              sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}
-              onClick={() => a.id != null && onOpen(a.id)}
-            >
+            <Row key={a.borg_id} archiveId={a.id} onOpen={onOpen}>
               <Typography
                 variant="body2"
                 sx={{
@@ -56,7 +76,6 @@ export default function PruneCandidatesRanked({
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
-                  cursor: a.id != null ? 'pointer' : 'default',
                 }}
                 title={a.name}
               >
@@ -90,7 +109,7 @@ export default function PruneCandidatesRanked({
               >
                 {size != null ? formatBytes(size) : t('prunePreview.notMeasured')}
               </Typography>
-            </Box>
+            </Row>
           )
         })}
       </Stack>

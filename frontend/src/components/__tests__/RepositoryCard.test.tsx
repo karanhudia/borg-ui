@@ -1013,6 +1013,7 @@ describe('RepositoryCard', () => {
       expect(screen.getByRole('button', { name: /Check/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /Compact/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /^Prune$/i })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /prune preview/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /Run backup automation/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /Create Backup Plan/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /View Archives/i })).toBeDisabled()

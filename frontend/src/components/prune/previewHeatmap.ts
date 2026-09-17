@@ -22,7 +22,7 @@ function band(archives: PrunePreviewArchive[]) {
     }
     day.count += 1
     day.deduplicated_size += a.deduplicated_size ?? 0
-    day.archive_ids.push(a.id ?? -1)
+    if (a.id != null) day.archive_ids.push(a.id)
     days.set(key, day)
   }
   const dated = archives.filter((a) => a.start).sort((x, y) => x.start!.localeCompare(y.start!))
@@ -72,11 +72,16 @@ export function sizeIntensity(archives: PrunePreviewArchive[]) {
   const byId = new Map(
     archives.filter((a) => a.id !== null).map((a) => [a.id as number, a.deduplicated_size])
   )
-  const sizes = archives.map((a) => a.deduplicated_size ?? 0)
-  const max = Math.max(0, ...sizes)
+  const perDay = new Map<string, number>()
+  for (const a of archives) {
+    if (!a.start) continue
+    const key = isoDay(a.start)
+    perDay.set(key, (perDay.get(key) ?? 0) + (a.deduplicated_size ?? 0))
+  }
+  const max = Math.max(0, ...perDay.values())
   return (day: HeatmapDay): number => {
     if (max === 0) return MIN_INTENSITY
     const total = day.archive_ids.reduce((sum, id) => sum + (byId.get(id) ?? 0), 0)
-    return MIN_INTENSITY + (total / max) * (1 - MIN_INTENSITY)
+    return MIN_INTENSITY + Math.min(1, total / max) * (1 - MIN_INTENSITY)
   }
 }

@@ -62,29 +62,39 @@ export default function PrunePreview() {
     queryFn: () => repositoriesAPI.pruneRetentionDefaults(repositoryId).then((res) => res.data),
     enabled: !stateRetention && Number.isFinite(repositoryId),
   })
+  const defaultRetention = useMemo<PruneRetention | null>(
+    () =>
+      defaultsData
+        ? {
+            keep_hourly: defaultsData.keep_hourly,
+            keep_daily: defaultsData.keep_daily,
+            keep_weekly: defaultsData.keep_weekly,
+            keep_monthly: defaultsData.keep_monthly,
+            keep_quarterly: defaultsData.keep_quarterly,
+            keep_yearly: defaultsData.keep_yearly,
+            keep_within: defaultsData.keep_within ?? '',
+          }
+        : null,
+    [defaultsData]
+  )
+  const source = stateRetention || !defaultsData ? null : defaultsData
 
   const [retention, setRetention] = useState<PruneRetention>(stateRetention ?? DEFAULT_RETENTION)
-  const [source, setSource] = useState<{ source: string; plan_name: string | null } | null>(
-    stateRetention ? null : null
-  )
+  // The retention the shown preview was computed with. "Run prune now"
+  // posts this, never the form, so an edit without a refresh cannot prune
+  // with rules nobody previewed.
+  const [previewedRetention, setPreviewedRetention] = useState<PruneRetention | null>(null)
   const [preview, setPreview] = useState<PrunePreviewResponse | null>(null)
   const [error, setError] = useState<{ status: number; key: string; log?: string } | null>(null)
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [logOpen, setLogOpen] = useState(false)
 
-  useEffect(() => {
-    if (!stateRetention && defaultsData) {
-      const { source: src, plan_name, ...rest } = defaultsData
-      setRetention({ ...rest, keep_within: rest.keep_within ?? '' })
-      setSource({ source: src, plan_name })
-    }
-  }, [defaultsData, stateRetention])
-
   const previewMutation = useMutation({
     mutationFn: (form: PruneRetention) => repositoriesAPI.prunePreview(repositoryId, form),
-    onSuccess: (res) => {
+    onSuccess: (res, form) => {
       setPreview(res.data)
+      setPreviewedRetention(form)
       setError(null)
       setRefreshedAt(new Date())
     },
@@ -103,8 +113,8 @@ export default function PrunePreview() {
   })
 
   const runPruneMutation = useMutation({
-    mutationFn: () =>
-      repositoriesAPI.pruneRepository(repositoryId, { ...retention, dry_run: false }),
+    mutationFn: (form: PruneRetention) =>
+      repositoriesAPI.pruneRepository(repositoryId, { ...form, dry_run: false }),
     onSuccess: () => {
       toast.success(t('repositories.toasts.pruneStarted'))
       navigate(`/activity?repository_id=${repositoryId}`)
@@ -114,15 +124,24 @@ export default function PrunePreview() {
     },
   })
 
+  // First preview, once per repository, with the retention the form is
+  // prefilled with: the dialog's form when it sent us here, else the
+  // loaded defaults. Reading the form state here would see the value from
+  // before the defaults landed.
   const ranForRepoRef = useRef<number | null>(null)
   useEffect(() => {
     if (ranForRepoRef.current === repositoryId) return
     if (!Number.isFinite(repositoryId)) return
-    if (!stateRetention && !defaultsData) return
+    const initial = stateRetention ?? defaultRetention
+    if (!initial) return
     ranForRepoRef.current = repositoryId
-    previewMutation.mutate(stateRetention ?? retention)
+    setRetention(initial)
+    previewMutation.mutate(initial)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultsData, stateRetention, repositoryId])
+  }, [defaultRetention, stateRetention, repositoryId])
+
+  const dirty =
+    previewedRetention !== null && JSON.stringify(retention) !== JSON.stringify(previewedRetention)
 
   const archives = useMemo(() => preview?.archives ?? [], [preview])
   const heatmapData = useMemo(() => previewToHeatmap(archives), [archives])
@@ -170,13 +189,7 @@ export default function PrunePreview() {
           <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
             <Button
               size="small"
-              onClick={() =>
-                setRetention(
-                  defaultsData
-                    ? { ...defaultsData, keep_within: defaultsData.keep_within ?? '' }
-                    : DEFAULT_RETENTION
-                )
-              }
+              onClick={() => setRetention(stateRetention ?? defaultRetention ?? DEFAULT_RETENTION)}
             >
               {t('prunePreview.reset')}
             </Button>
@@ -199,8 +212,17 @@ export default function PrunePreview() {
         </Paper>
 
         <Stack spacing={3} sx={{ flex: 1, minWidth: 0 }}>
-          {error && error.status === 502 && (
-            <Alert severity="error">{t('prunePreview.dryRunFailed')}</Alert>
+          {error && error.key !== 'backend.errors.prune.noKeepRule' && (
+            <Alert severity="error">
+              {error.status === 502
+                ? t('prunePreview.dryRunFailed')
+                : t('prunePreview.previewFailed', { status: error.status })}
+              {error.log && (
+                <Box component="pre" sx={{ mt: 1, fontSize: '0.75rem', overflowX: 'auto' }}>
+                  {error.log}
+                </Box>
+              )}
+            </Alert>
           )}
 
           {previewMutation.isPending && !preview ? (
@@ -324,7 +346,9 @@ export default function PrunePreview() {
                   variant="contained"
                   color="error"
                   onClick={() => setConfirmOpen(true)}
-                  disabled={deletedCount === 0}
+                  disabled={
+                    deletedCount === 0 || dirty || previewMutation.isPending || error !== null
+                  }
                 >
                   {t('prunePreview.runNow', { count: deletedCount })}
                 </Button>
@@ -346,7 +370,7 @@ export default function PrunePreview() {
             color="error"
             onClick={() => {
               setConfirmOpen(false)
-              runPruneMutation.mutate()
+              if (previewedRetention) runPruneMutation.mutate(previewedRetention)
             }}
           >
             {t('prunePreview.confirm')}

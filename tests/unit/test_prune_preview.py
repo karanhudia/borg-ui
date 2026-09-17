@@ -192,6 +192,39 @@ class TestRemeasureCandidates:
         assert len(fill.await_args.args[2]) == MEASURE_CAP + 1
 
     @pytest.mark.asyncio
+    async def test_partial_when_fewer_were_filled_than_asked(self, test_db):
+        repo = _repo(test_db)
+        rows = [_archive(test_db, repo, "a", 1), _archive(test_db, repo, "b", 2)]
+        with (
+            patch.object(
+                prune_preview, "_prepare_repository_borg_env", return_value=({}, None)
+            ),
+            patch.object(
+                prune_preview, "fill_archive_info", new=AsyncMock(return_value=1)
+            ),
+        ):
+            assert await remeasure_candidates(test_db, repo, rows) is True
+
+    @pytest.mark.asyncio
+    async def test_a_failed_measurement_falls_back_to_stored_values(self, test_db):
+        repo = _repo(test_db)
+        rows = [_archive(test_db, repo, "a", 1, size=5)]
+        with (
+            patch.object(
+                prune_preview, "_prepare_repository_borg_env", return_value=({}, None)
+            ),
+            patch.object(
+                prune_preview,
+                "fill_archive_info",
+                new=AsyncMock(
+                    side_effect=RuntimeError("Failed to create/acquire the lock")
+                ),
+            ),
+        ):
+            assert await remeasure_candidates(test_db, repo, rows) is True
+        assert rows[0].deduplicated_size == 5
+
+    @pytest.mark.asyncio
     async def test_not_partial_within_the_cap(self, test_db):
         repo = _repo(test_db)
         rows = [_archive(test_db, repo, "a", 1)]

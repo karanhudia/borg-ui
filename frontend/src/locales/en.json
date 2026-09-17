@@ -6451,6 +6451,7 @@
     "lostTitle": "Files lost forever",
     "lostSummary": "{{count}} files, {{size}}, no surviving archive holds them",
     "lostNone": "No file is lost: every path a deleted archive holds survives in a kept archive of its series.",
+    "lostUnknown": "No lost file found, but the index is incomplete, so this answer is not final.",
     "lostPath": "Path",
     "lostSize": "Size",
     "lostHeldBy": "Last held by",
@@ -6468,6 +6469,7 @@
     "confirmBody": "This runs the prune with the retention shown. Deleted archives cannot be recovered.",
     "confirm": "Confirm",
     "dryRunFailed": "Borg's dry run failed. The output is below.",
+    "previewFailed": "The preview could not be built (HTTP {{status}}). Try again once the repository is idle.",
     "noKeepRule": "Set at least one keep rule."
   }
 }

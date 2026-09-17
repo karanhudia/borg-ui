@@ -78,7 +78,7 @@ describe('PrunePreview page', () => {
         source: 'plan',
         plan_name: 'Nightly',
         keep_hourly: 0,
-        keep_daily: 7,
+        keep_daily: 3,
         keep_weekly: 4,
         keep_monthly: 6,
         keep_quarterly: 0,
@@ -94,7 +94,7 @@ describe('PrunePreview page', () => {
     await waitFor(() =>
       expect(repositoriesAPI.prunePreview).toHaveBeenCalledWith(
         7,
-        expect.objectContaining({ keep_daily: 7 })
+        expect.objectContaining({ keep_daily: 3 })
       )
     )
     expect(await screen.findByText(/Nightly/)).toBeInTheDocument()
@@ -124,6 +124,22 @@ describe('PrunePreview page', () => {
         expect.objectContaining({ keep_daily: 2, dry_run: false })
       )
     )
+  })
+
+  it('keeps "run now" disabled while the form differs from the previewed retention', async () => {
+    renderWithProviders(<PrunePreview />, { initialRoute: '/repositories/7/prune-preview' })
+    await screen.findByTestId('prune-preview-deleted')
+    expect(screen.getByRole('button', { name: /run prune now/i })).toBeEnabled()
+    fireEvent.change(screen.getByLabelText(/keep daily/i), { target: { value: '2' } })
+    expect(screen.getByRole('button', { name: /run prune now/i })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText(/keep daily/i), { target: { value: '3' } })
+    expect(screen.getByRole('button', { name: /run prune now/i })).toBeEnabled()
+  })
+
+  it('shows a message when the preview fails for any reason', async () => {
+    vi.mocked(repositoriesAPI.prunePreview).mockRejectedValue({ response: { status: 500 } })
+    renderWithProviders(<PrunePreview />, { initialRoute: '/repositories/7/prune-preview' })
+    expect(await screen.findByText(/could not be built/i)).toBeInTheDocument()
   })
 
   it('shows the lower-bound and cross-series notes', async () => {

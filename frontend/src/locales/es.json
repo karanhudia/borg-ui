@@ -6451,6 +6451,7 @@
     "lostTitle": "Archivos perdidos para siempre",
     "lostSummary": "{{count}} archivos, {{size}}, ningún archivo superviviente los conserva",
     "lostNone": "No se pierde ningún archivo: toda ruta que contiene un archivo eliminado sobrevive en un archivo conservado de su serie.",
+    "lostUnknown": "No se encontró ningún archivo perdido, pero el índice está incompleto, así que esta respuesta no es definitiva.",
     "lostPath": "Ruta",
     "lostSize": "Tamaño",
     "lostHeldBy": "Conservado por última vez en",
@@ -6468,6 +6469,7 @@
     "confirmBody": "Esto ejecuta el prune con la retención mostrada. Los archivos eliminados no se pueden recuperar.",
     "confirm": "Confirmar",
     "dryRunFailed": "La ejecución de prueba de Borg falló. La salida está debajo.",
+    "previewFailed": "No se pudo generar la vista previa (HTTP {{status}}). Inténtelo de nuevo cuando el repositorio esté libre.",
     "noKeepRule": "Defina al menos una regla de retención."
   }
 }

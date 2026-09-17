@@ -6451,6 +6451,7 @@
     "lostTitle": "Für immer verlorene Dateien",
     "lostSummary": "{{count}} Dateien, {{size}}, kein verbleibendes Archiv enthält sie",
     "lostNone": "Keine Datei geht verloren: jeder Pfad, den ein gelöschtes Archiv enthält, bleibt in einem behaltenen Archiv seiner Serie erhalten.",
+    "lostUnknown": "Keine verlorene Datei gefunden, aber der Index ist unvollständig, daher ist diese Antwort nicht endgültig.",
     "lostPath": "Pfad",
     "lostSize": "Größe",
     "lostHeldBy": "Zuletzt enthalten in",
@@ -6468,6 +6469,7 @@
     "confirmBody": "Dies führt den Prune mit der gezeigten Aufbewahrung aus. Gelöschte Archive können nicht wiederhergestellt werden.",
     "confirm": "Bestätigen",
     "dryRunFailed": "Der Testlauf von Borg ist fehlgeschlagen. Die Ausgabe steht unten.",
+    "previewFailed": "Die Vorschau konnte nicht erstellt werden (HTTP {{status}}). Erneut versuchen, sobald das Repository frei ist.",
     "noKeepRule": "Mindestens eine Aufbewahrungsregel festlegen."
   }
 }

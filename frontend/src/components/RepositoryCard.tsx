@@ -1090,6 +1090,7 @@ export default function RepositoryCard({
                   <IconButton
                     size="small"
                     onClick={onPrunePreview}
+                    disabled={isMaintenanceRunning}
                     aria-label={t('repositoryCard.buttons.prunePreview')}
                   >
                     <Eye size={16} />

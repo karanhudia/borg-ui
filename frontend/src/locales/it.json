@@ -6451,6 +6451,7 @@
     "lostTitle": "File persi per sempre",
     "lostSummary": "{{count}} file, {{size}}, nessun archivio superstite li contiene",
     "lostNone": "Nessun file viene perso: ogni percorso contenuto in un archivio eliminato sopravvive in un archivio conservato della sua serie.",
+    "lostUnknown": "Nessun file perso trovato, ma l'indice è incompleto, quindi questa risposta non è definitiva.",
     "lostPath": "Percorso",
     "lostSize": "Dimensione",
     "lostHeldBy": "Conservato l'ultima volta in",
@@ -6468,6 +6469,7 @@
     "confirmBody": "Questo esegue il prune con la conservazione mostrata. Gli archivi eliminati non possono essere recuperati.",
     "confirm": "Conferma",
     "dryRunFailed": "L'esecuzione di prova di Borg è fallita. L'output è sotto.",
+    "previewFailed": "Impossibile generare l'anteprima (HTTP {{status}}). Riprova quando il repository è libero.",
     "noKeepRule": "Imposta almeno una regola di conservazione."
   }
 }

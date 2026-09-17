@@ -90,3 +90,24 @@ describe('sizeIntensity', () => {
     expect(f(day('2026-09-12', [3]))).toBe(0.45)
   })
 })
+
+describe('sizeIntensity', () => {
+  it('normalises against the largest day, not the largest archive', () => {
+    const list = [
+      a(1, 'nas', '2026-09-10T02:00:00', 'deleted', 10),
+      a(2, 'nas', '2026-09-10T03:00:00', 'deleted', 10),
+      a(3, 'nas', '2026-09-11T02:00:00', 'deleted', 10),
+    ]
+    const intensity = sizeIntensity(list)
+    const day = (ids: number[]) => ({
+      date: '2026-09-10',
+      archive_ids: ids,
+      count: ids.length,
+      deduplicated_size: 0,
+      duration_seconds: 0,
+      anomalies: [],
+    })
+    expect(intensity(day([1, 2]))).toBe(1)
+    expect(intensity(day([3]))).toBeCloseTo(0.725)
+  })
+})

@@ -68,5 +68,7 @@ describe('PruneLostFilesPanel', () => {
       />
     )
     expect(screen.getByText(/index incomplete/i)).toBeInTheDocument()
+    expect(screen.queryByText(/No file is lost/)).not.toBeInTheDocument()
+    expect(screen.getByText(/not final/i)).toBeInTheDocument()
   })
 })
