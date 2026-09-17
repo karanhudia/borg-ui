@@ -1703,3 +1703,222 @@ class TestAgentRepositoryHistoryCapability:
             "total": 4,
             "capability": "available",
         }
+
+
+from unittest.mock import AsyncMock, patch
+
+from app.services import prune_preview as pp
+from app.services.prune_preview import Verdict
+
+
+def _hex(n):
+    return f"{n:064x}"
+
+
+def _fake_dry_run(status="completed", log="borg said"):
+    from app.services.operations.vocab import category_for
+
+    async def run(db, repository, retention, *, user_id):
+        op = Operation(
+            kind="prune",
+            category=category_for("prune"),
+            repository_id=repository.id,
+            status=status,
+            trigger="manual",
+            priority=0,
+            run_id="run",
+            params={**retention.as_params(), "dry_run": True},
+        )
+        db.add(op)
+        db.commit()
+        return op, log
+
+    return run
+
+
+class TestPrunePreview:
+    def _setup(self, test_db):
+        repo = _repo(test_db)
+        a1 = _archive(test_db, repo, "a1", 1, size=100)
+        a2 = _archive(test_db, repo, "a2", 2, size=200)
+        a3 = _archive(test_db, repo, "a3", 3, size=300)
+        for n, a in enumerate((a1, a2, a3), start=1):
+            a.borg_id = _hex(n)
+        test_db.commit()
+        verdicts = [
+            Verdict(_hex(3), "a3", "kept", "daily #1"),
+            Verdict(_hex(2), "a2", "deleted", None),
+            Verdict(_hex(1), "a1", "deleted", None),
+        ]
+        return repo, (a1, a2, a3), verdicts
+
+    def test_preview_joins_measures_and_sums(self, test_client, test_db, admin_headers):
+        repo, (a1, a2, a3), verdicts = self._setup(test_db)
+        with (
+            patch.object(pp, "run_prune_dry_run", new=_fake_dry_run()),
+            patch.object(pp, "parse_prune_verdicts", return_value=verdicts),
+            patch.object(
+                pp, "remeasure_candidates", new=AsyncMock(return_value=False)
+            ) as remeasure,
+            patch.object(pp, "footprint", return_value=1000),
+        ):
+            r = test_client.post(
+                f"/api/repositories/{repo.id}/prune/preview",
+                json={"keep_daily": 1},
+                headers=admin_headers,
+            )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert [(a["name"], a["verdict"]) for a in body["archives"]] == [
+            ("a1", "deleted"),
+            ("a2", "deleted"),
+            ("a3", "kept"),
+        ]
+        assert body["deleted_count"] == 2 and body["kept_count"] == 1
+        assert body["freed_at_least"] == 300
+        assert (
+            body["footprint_before"] == 1000 and body["footprint_after_at_most"] == 700
+        )
+        assert body["partial_measure"] is False and body["log"] == "borg said"
+        assert {a.id for a in remeasure.await_args.args[2]} == {a1.id, a2.id}
+        assert body["lost_files"] == {"available": False, "capability": "plan_locked"}
+
+    def test_preview_on_pro_walks_lost_files(self, test_client, test_db, admin_headers):
+        _pro(test_db)
+        repo, (a1, a2, a3), verdicts = self._setup(test_db)
+        with (
+            patch.object(pp, "run_prune_dry_run", new=_fake_dry_run()),
+            patch.object(pp, "parse_prune_verdicts", return_value=verdicts),
+            patch.object(pp, "remeasure_candidates", new=AsyncMock(return_value=False)),
+            patch.object(
+                pp,
+                "lost_files",
+                return_value={
+                    "incomplete": False,
+                    "unindexed_archive_ids": [],
+                    "total_count": 0,
+                    "total_size": 0,
+                    "top": [],
+                    "by_folder": [],
+                },
+            ) as lost,
+        ):
+            r = test_client.post(
+                f"/api/repositories/{repo.id}/prune/preview",
+                json={"keep_daily": 1},
+                headers=admin_headers,
+            )
+        assert r.status_code == 200
+        assert r.json()["lost_files"]["available"] is True
+        assert lost.call_args.kwargs["deleted_ids"] == {a1.id, a2.id}
+        assert list(lost.call_args.args[2]) == ["nas"]
+
+    def test_no_keep_rule_is_400(self, test_client, test_db, admin_headers):
+        repo = _repo(test_db)
+        r = test_client.post(
+            f"/api/repositories/{repo.id}/prune/preview",
+            json={"keep_daily": 0},
+            headers=admin_headers,
+        )
+        assert r.status_code == 400
+        assert r.json()["detail"]["key"] == "backend.errors.prune.noKeepRule"
+
+    def test_failed_dry_run_is_502_with_the_log(
+        self, test_client, test_db, admin_headers
+    ):
+        repo = _repo(test_db)
+        with patch.object(
+            pp, "run_prune_dry_run", new=_fake_dry_run(status="failed", log="boom")
+        ):
+            r = test_client.post(
+                f"/api/repositories/{repo.id}/prune/preview",
+                json={"keep_daily": 1},
+                headers=admin_headers,
+            )
+        assert r.status_code == 502
+        assert r.json()["detail"]["key"] == "backend.errors.prune.dryRunFailed"
+        assert r.json()["detail"]["params"]["log"] == "boom"
+
+    def test_viewer_cannot_preview(self, test_client, test_db, auth_headers):
+        repo = _repo(test_db)
+        r = test_client.post(
+            f"/api/repositories/{repo.id}/prune/preview",
+            json={"keep_daily": 1},
+            headers=auth_headers,
+        )
+        assert r.status_code == 403
+
+
+class TestPruneRetentionDefaults:
+    def test_defaults_without_plan_or_prune(self, test_client, test_db, admin_headers):
+        repo = _repo(test_db)
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/prune/retention-defaults",
+            headers=admin_headers,
+        )
+        assert r.status_code == 200
+        assert r.json() == {
+            "source": "default",
+            "plan_name": None,
+            "keep_hourly": 0,
+            "keep_daily": 7,
+            "keep_weekly": 4,
+            "keep_monthly": 6,
+            "keep_quarterly": 0,
+            "keep_yearly": 1,
+            "keep_within": None,
+        }
+
+    def test_last_manual_prune_wins_over_defaults(
+        self, test_client, test_db, admin_headers
+    ):
+        repo = _repo(test_db)
+        _op(
+            test_db,
+            repo,
+            "prune",
+            params={"keep_daily": 3, "keep_within": "2d", "dry_run": True},
+        )
+        _op(test_db, repo, "prune", params={"keep_daily": 9, "keep_weekly": 2})
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/prune/retention-defaults",
+            headers=admin_headers,
+        )
+        body = r.json()
+        assert (
+            body["source"] == "last_prune"
+            and body["keep_daily"] == 9
+            and body["keep_weekly"] == 2
+        )
+
+    def test_plan_wins_over_last_prune(self, test_client, test_db, admin_headers):
+        from app.database.models import BackupPlan, BackupPlanRepository
+
+        repo = _repo(test_db)
+        _op(test_db, repo, "prune", params={"keep_daily": 9})
+        plan = BackupPlan(
+            name="Nightly",
+            run_prune_after=True,
+            enabled=True,
+            prune_keep_daily=14,
+            prune_keep_within="1d",
+            source_directories="[]",
+        )
+        test_db.add(plan)
+        test_db.flush()
+        test_db.add(
+            BackupPlanRepository(
+                backup_plan_id=plan.id,
+                repository_id=repo.id,
+                enabled=True,
+                execution_order=0,
+            )
+        )
+        test_db.commit()
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/prune/retention-defaults",
+            headers=admin_headers,
+        )
+        body = r.json()
+        assert body["source"] == "plan" and body["plan_name"] == "Nightly"
+        assert body["keep_daily"] == 14 and body["keep_within"] == "1d"

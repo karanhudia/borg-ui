@@ -73,6 +73,25 @@ describe('ArchiveSeriesHeatmap', () => {
     )
   })
 
+  it('lets the caller color and label a day', () => {
+    const overrideData: HeatmapResponse = {
+      ...data,
+      repository: band([day('2026-09-01', { archive_ids: [1] })]),
+      series: [],
+    }
+    render(
+      <ArchiveSeriesHeatmap
+        data={overrideData}
+        onSelectDay={() => {}}
+        cellColor={(d) => (d.archive_ids.includes(1) ? 'rgb(220, 38, 38)' : undefined)}
+        cellLabel={(d) => `deleted on ${d.date}`}
+      />
+    )
+    const cell = screen.getByTestId('heatmap-day-repository-2026-09-01')
+    expect(cell).toHaveStyle({ backgroundColor: 'rgb(220, 38, 38)' })
+    expect(cell).toHaveAttribute('aria-label', 'deleted on 2026-09-01')
+  })
+
   it('draws one shared month axis above the bands', () => {
     const split: HeatmapResponse = {
       ...data,

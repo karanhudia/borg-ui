@@ -1,0 +1,5 @@
+Ignoring --stats. It is not supported when using --dry-run.
+Keeping archive (rule: daily #1):            daily-4                              Thu, 2026-09-17 15:07:55 [a4bc6debbd7f130fbdb8b637a49cf6e10ae44196e271537c76f4cc79895770d7]
+Would prune:                                 daily-3                              Thu, 2026-09-17 15:07:55 [9f35416b07a424f7f0ff1624b54cf1df72e07c5efa5f10fc0a8c9f8ab31ff2ba]
+Would prune:                                 daily-2                              Thu, 2026-09-17 15:07:55 [d0edfe0a5d7cd33a747f8d72cd4b2b87bfa314c3fcd3e275e8a60a9878d372d4]
+Keeping archive (rule: daily[oldest] #2):    daily-1                              Thu, 2026-09-17 15:07:55 [da727048048744c9f9fa3d15fe577ef59d14bf06807e87d5f5c871199e27ee4a]

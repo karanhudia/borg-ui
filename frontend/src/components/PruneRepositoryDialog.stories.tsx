@@ -41,7 +41,7 @@ export const RetentionPreview: Story = {
     isLoading: false,
     results: null,
     onClose: () => {},
-    onDryRun: async () => {},
+    onPreview: () => {},
     onConfirmPrune: async () => {},
   },
   render: (args) => (
@@ -71,7 +71,7 @@ export const DryRunLogMessages: Story = {
       },
     },
     onClose: () => {},
-    onDryRun: async () => {},
+    onPreview: () => {},
     onConfirmPrune: async () => {},
   },
   render: (args) => (

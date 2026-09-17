@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   Package2,
   Scissors,
+  Eye,
   FolderOpen,
   Play,
   Trash2,
@@ -48,6 +49,7 @@ interface RepositoryCardProps {
   onCheck: () => void
   onCompact: () => void
   onPrune: () => void
+  onPrunePreview: () => void
   onWipeContents: () => void
   onBreakLock: () => void
   onEdit: () => void
@@ -86,6 +88,7 @@ export default function RepositoryCard({
   onCheck,
   onCompact,
   onPrune,
+  onPrunePreview,
   onWipeContents,
   onBreakLock,
   onEdit,
@@ -1113,6 +1116,21 @@ export default function RepositoryCard({
                     ) : (
                       <Scissors size={16} />
                     )}
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
+
+            {canDo('maintenance') && capabilities.canPrune && (
+              <Tooltip title={t('repositoryCard.buttons.prunePreview')} arrow>
+                <span>
+                  <IconButton
+                    size="small"
+                    onClick={onPrunePreview}
+                    disabled={isMaintenanceRunning}
+                    aria-label={t('repositoryCard.buttons.prunePreview')}
+                  >
+                    <Eye size={16} />
                   </IconButton>
                 </span>
               </Tooltip>

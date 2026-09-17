@@ -10,6 +10,7 @@ import Backup from './pages/Backup'
 import BackupPlans from './pages/BackupPlans'
 import Archives from './pages/Archives'
 import ArchiveDetail from './pages/ArchiveDetail'
+import PrunePreview from './pages/PrunePreview'
 import Schedule from './pages/Schedule'
 import Repositories from './pages/Repositories'
 import CloudStorage from './pages/CloudStorage'
@@ -183,6 +184,14 @@ function App() {
           element={
             <ProtectedRoute requiredTab="archives">
               <ArchiveDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/repositories/:repositoryId/prune-preview"
+          element={
+            <ProtectedRoute requiredTab="repositories">
+              <PrunePreview />
             </ProtectedRoute>
           }
         />

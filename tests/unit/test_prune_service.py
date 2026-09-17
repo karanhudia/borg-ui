@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import Repository
+from app.database.models import Operation, Repository
 from app.services.prune_service import PruneService
 from app.services.operations.job_facade import resolve_maintenance_job
 from app.database.models import OperationBackupDetails
@@ -20,11 +20,11 @@ class EmptyAsyncStream:
 
 
 class FakeProcess:
-    def __init__(self, returncode=0):
+    def __init__(self, returncode=0, stdout=None, stderr=None):
         self.returncode = returncode
         self.pid = 123
-        self.stdout = EmptyAsyncStream()
-        self.stderr = EmptyAsyncStream()
+        self.stdout = stdout if stdout is not None else EmptyAsyncStream()
+        self.stderr = stderr if stderr is not None else EmptyAsyncStream()
 
     async def wait(self):
         return self.returncode
@@ -116,6 +116,64 @@ def _log_record(message):
         )
         + "\n"
     ).encode()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_dry_run_log_keeps_every_verdict_line(db_engine):
+    """A dry run prints one line per archive and the preview parses all of
+    them; the 1000-line cap that protects a real prune's buffer would drop
+    the oldest verdicts of a large repository."""
+    from pathlib import Path
+
+    testing_session_local = sessionmaker(bind=db_engine)
+    session = testing_session_local()
+    repo = Repository(
+        name="V1 Repo",
+        path="/tmp/v1-repo-dry-run",
+        encryption="repokey",
+        repository_type="local",
+        borg_version=1,
+    )
+    session.add(repo)
+    session.commit()
+    session.refresh(repo)
+
+    job = seed_job_operation(
+        session,
+        "prune",
+        repository_id=repo.id,
+        repository_path=repo.path,
+        status="pending",
+    )
+    session.commit()
+    session.refresh(job)
+    repo_id = repo.id
+    job_id = job.id
+    session.close()
+
+    lines = [
+        _log_record(f"Would prune:  a{i}  Thu, 2026-09-17 15:07:55 [{i:064x}]")
+        for i in range(1200)
+    ]
+    process = FakeProcess(0, stdout=EmptyAsyncStream(), stderr=LinesAsyncStream(lines))
+    service = PruneService()
+    with (
+        patch("app.services.prune_service.SessionLocal", testing_session_local),
+        patch(
+            "app.services.prune_service.build_repository_borg_env",
+            return_value=({}, None),
+        ),
+        patch(
+            "app.services.prune_service.asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=process),
+        ),
+    ):
+        await service.execute_prune(job_id, repo_id, 0, 7, 4, 6, 0, 1, dry_run=True)
+    session = testing_session_local()
+    job = session.get(Operation, job_id)
+    text = Path(job.log_file_path).read_text()
+    assert text.count("Would prune") == 1200
 
 
 class PruningFakeProcess(FakeProcess):

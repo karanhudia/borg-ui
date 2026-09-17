@@ -177,7 +177,7 @@ class TestRepositoryApiDispatch:
 
         fake_router = Mock(prune=AsyncMock())
         with patch(
-            "app.api.repositories.BorgRouter", return_value=fake_router
+            "app.core.borg_router.BorgRouter", return_value=fake_router
         ) as mock_router:
             response = test_client.post(
                 f"/api/repositories/{repo.id}/prune",
@@ -223,7 +223,7 @@ class TestRepositoryApiDispatch:
             test_db.commit()
 
         fake_router = Mock(prune=AsyncMock(side_effect=complete_prune_with_logs))
-        with patch("app.api.repositories.BorgRouter", return_value=fake_router):
+        with patch("app.core.borg_router.BorgRouter", return_value=fake_router):
             response = test_client.post(
                 f"/api/repositories/{repo.id}/prune",
                 json={"keep_daily": 3, "dry_run": True},

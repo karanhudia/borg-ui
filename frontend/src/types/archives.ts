@@ -209,3 +209,66 @@ export interface SearchResponse {
   results: SearchResult[]
   truncated: boolean
 }
+
+// Mirrors POST /repositories/{id}/prune/preview and the retention fields
+// shared with the prune dialog (spec 4.4).
+export interface PruneRetention {
+  keep_within: string
+  keep_hourly: number
+  keep_daily: number
+  keep_weekly: number
+  keep_monthly: number
+  keep_quarterly: number
+  keep_yearly: number
+}
+
+export interface PrunePreviewArchive {
+  id: number | null
+  borg_id: string
+  name: string
+  series: string | null
+  start: string | null
+  verdict: 'kept' | 'deleted'
+  rule: string | null
+  deduplicated_size: number | null
+  stats_measured_at: string | null
+  stale: boolean
+}
+
+export interface PruneLostFile {
+  path: string
+  size: number | null
+  series: string
+  last_held_archive_id: number | null
+  last_held_archive_name: string | null
+}
+
+export interface PruneLostFiles {
+  available: boolean
+  capability: string
+  incomplete?: boolean
+  unindexed_archive_ids?: number[]
+  total_count?: number
+  total_size?: number
+  top?: PruneLostFile[]
+  by_folder?: { folder: string; count: number; size: number }[]
+}
+
+export interface PrunePreviewResponse {
+  operation_id: number
+  archives: PrunePreviewArchive[]
+  deleted_count: number
+  kept_count: number
+  freed_at_least: number
+  partial_measure: boolean
+  footprint_before: number | null
+  footprint_after_at_most: number | null
+  lost_files: PruneLostFiles
+  log: string
+}
+
+export interface PruneRetentionDefaults extends Omit<PruneRetention, 'keep_within'> {
+  source: 'plan' | 'last_prune' | 'default'
+  plan_name: string | null
+  keep_within: string | null
+}

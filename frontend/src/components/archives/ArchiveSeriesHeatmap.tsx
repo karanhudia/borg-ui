@@ -30,6 +30,10 @@ interface ArchiveSeriesHeatmapProps {
   // A day with several archives shows a chooser; picking one calls this.
   onSelectArchive?: (archiveId: number) => void
   archiveLookup?: (archiveId: number) => HeatmapArchiveSummary | undefined
+  // Optional overrides for a day that has archives. Absent, the cell keeps
+  // its count-scaled primary color and count tooltip.
+  cellColor?: (day: HeatmapDay) => string | undefined
+  cellLabel?: (day: HeatmapDay) => string | undefined
 }
 
 interface Chooser {
@@ -177,6 +181,8 @@ function Band({
   window,
   onSelectDay,
   onOpenChooser,
+  cellColor,
+  cellLabel,
 }: {
   // Stable key for the cell test ids; the label is translated, the id is not.
   id: string
@@ -186,6 +192,8 @@ function Band({
   window: Window
   onSelectDay: (day: HeatmapDay) => void
   onOpenChooser: (anchor: HTMLElement, day: HeatmapDay) => void
+  cellColor?: (day: HeatmapDay) => string | undefined
+  cellLabel?: (day: HeatmapDay) => string | undefined
 }) {
   const { t } = useTranslation()
   const theme = useTheme()
@@ -244,6 +252,8 @@ function Band({
             else onSelectDay(day)
           }
           const showCount = window.cell >= 14 && count > 1
+          const colorOverride = hasArchives && day ? cellColor?.(day) : undefined
+          const labelOverride = hasArchives && day ? cellLabel?.(day) : undefined
           const cell = (
             <Box
               key={iso}
@@ -254,12 +264,13 @@ function Band({
               tabIndex={hasArchives ? 0 : undefined}
               aria-label={
                 hasArchives
-                  ? t('archives.heatmap.tooltip', {
+                  ? (labelOverride ??
+                    t('archives.heatmap.tooltip', {
                       count,
                       date: iso,
                       size: formatBytes(day?.deduplicated_size ?? 0),
                       duration: formatDurationSeconds(day?.duration_seconds ?? 0),
-                    })
+                    }))
                   : undefined
               }
               onClick={hasArchives ? (event) => activate(event.currentTarget) : undefined}
@@ -279,11 +290,13 @@ function Band({
                 borderRadius: window.cell >= 14 ? '3px' : '2px',
                 boxSizing: 'border-box',
                 cursor: hasArchives ? 'pointer' : 'default',
-                bgcolor: hasArchives
-                  ? alpha(theme.palette.primary.main, countScale(count))
-                  : isMissed
-                    ? alpha(theme.palette.error.main, 0.16)
-                    : alpha(theme.palette.text.primary, 0.06),
+                bgcolor:
+                  colorOverride ??
+                  (hasArchives
+                    ? alpha(theme.palette.primary.main, countScale(count))
+                    : isMissed
+                      ? alpha(theme.palette.error.main, 0.16)
+                      : alpha(theme.palette.text.primary, 0.06)),
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -307,12 +320,13 @@ function Band({
               key={iso}
               title={
                 hasArchives
-                  ? t('archives.heatmap.tooltip', {
+                  ? (labelOverride ??
+                    t('archives.heatmap.tooltip', {
                       count,
                       date: iso,
                       size: formatBytes(day?.deduplicated_size ?? 0),
                       duration: formatDurationSeconds(day?.duration_seconds ?? 0),
-                    })
+                    }))
                   : t('archives.heatmap.missed')
               }
             >
@@ -330,6 +344,8 @@ export default function ArchiveSeriesHeatmap({
   onSelectDay,
   onSelectArchive,
   archiveLookup,
+  cellColor,
+  cellLabel,
 }: ArchiveSeriesHeatmapProps) {
   const { t } = useTranslation()
   const [chooser, setChooser] = useState<Chooser | null>(null)
@@ -382,6 +398,8 @@ export default function ArchiveSeriesHeatmap({
             window={window}
             onSelectDay={onSelectDay}
             onOpenChooser={(anchor, day) => setChooser({ anchor, day })}
+            cellColor={cellColor}
+            cellLabel={cellLabel}
           />
           {showSeries &&
             data.series.map((series) => (
@@ -393,6 +411,8 @@ export default function ArchiveSeriesHeatmap({
                 window={window}
                 onSelectDay={onSelectDay}
                 onOpenChooser={(anchor, day) => setChooser({ anchor, day })}
+                cellColor={cellColor}
+                cellLabel={cellLabel}
               />
             ))}
         </Stack>

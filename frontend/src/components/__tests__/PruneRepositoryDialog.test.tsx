@@ -17,7 +17,7 @@ describe('PruneRepositoryDialog', () => {
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={null}
@@ -35,7 +35,7 @@ describe('PruneRepositoryDialog', () => {
           open={false}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={null}
@@ -51,7 +51,7 @@ describe('PruneRepositoryDialog', () => {
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={null}
@@ -68,7 +68,7 @@ describe('PruneRepositoryDialog', () => {
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={null}
@@ -90,7 +90,7 @@ describe('PruneRepositoryDialog', () => {
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={null}
@@ -113,7 +113,7 @@ describe('PruneRepositoryDialog', () => {
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={null}
@@ -135,7 +135,7 @@ describe('PruneRepositoryDialog', () => {
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={null}
@@ -155,7 +155,7 @@ describe('PruneRepositoryDialog', () => {
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={null}
@@ -181,7 +181,7 @@ describe('PruneRepositoryDialog', () => {
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={null}
@@ -191,20 +191,20 @@ describe('PruneRepositoryDialog', () => {
       expect(screen.queryByRole('button', { name: /Cancel/i })).not.toBeInTheDocument()
     })
 
-    it('renders Dry Run button', () => {
+    it('renders Preview button', () => {
       render(
         <PruneRepositoryDialog
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={null}
         />
       )
 
-      expect(screen.getByRole('button', { name: /Dry Run/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Preview/i })).toBeInTheDocument()
     })
 
     it('renders Prune Archives button', () => {
@@ -213,7 +213,7 @@ describe('PruneRepositoryDialog', () => {
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={null}
@@ -223,25 +223,25 @@ describe('PruneRepositoryDialog', () => {
       expect(screen.getByRole('button', { name: /Run Prune/i })).toBeInTheDocument()
     })
 
-    it('calls onDryRun with form data when Dry Run is clicked', async () => {
+    it('calls onPreview with form data when Preview is clicked', async () => {
       const user = userEvent.setup()
-      const onDryRun = vi.fn()
+      const onPreview = vi.fn()
 
       render(
         <PruneRepositoryDialog
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={onDryRun}
+          onPreview={onPreview}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={null}
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Dry Run/i }))
+      await user.click(screen.getByRole('button', { name: /Preview/i }))
 
-      expect(onDryRun).toHaveBeenCalledWith(
+      expect(onPreview).toHaveBeenCalledWith(
         expect.objectContaining({
           keep_within: '',
           keep_hourly: 0,
@@ -254,16 +254,16 @@ describe('PruneRepositoryDialog', () => {
       )
     })
 
-    it('submits keep-within when set before dry run', async () => {
+    it('submits keep-within when set before preview', async () => {
       const user = userEvent.setup()
-      const onDryRun = vi.fn()
+      const onPreview = vi.fn()
 
       render(
         <PruneRepositoryDialog
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={onDryRun}
+          onPreview={onPreview}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={null}
@@ -271,9 +271,9 @@ describe('PruneRepositoryDialog', () => {
       )
 
       await user.type(screen.getByLabelText(/Keep Within/i), '1d')
-      await user.click(screen.getByRole('button', { name: /Dry Run/i }))
+      await user.click(screen.getByRole('button', { name: /Preview/i }))
 
-      expect(onDryRun).toHaveBeenCalledWith(
+      expect(onPreview).toHaveBeenCalledWith(
         expect.objectContaining({
           keep_within: '1d',
         })
@@ -289,7 +289,7 @@ describe('PruneRepositoryDialog', () => {
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={onConfirmPrune}
           isLoading={false}
           results={null}
@@ -307,14 +307,14 @@ describe('PruneRepositoryDialog', () => {
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={true}
           results={null}
         />
       )
 
-      expect(screen.getByRole('button', { name: /Dry Run/i })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /Preview/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /Run Prune/i })).toBeDisabled()
     })
 
@@ -324,14 +324,14 @@ describe('PruneRepositoryDialog', () => {
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={true}
           results={null}
         />
       )
 
-      expect(screen.getByRole('button', { name: /Dry Run/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Preview/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Run Prune/i })).toBeInTheDocument()
     })
   })
@@ -343,7 +343,7 @@ describe('PruneRepositoryDialog', () => {
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={{
@@ -365,7 +365,7 @@ describe('PruneRepositoryDialog', () => {
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={{
@@ -387,7 +387,7 @@ describe('PruneRepositoryDialog', () => {
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={{
@@ -410,7 +410,7 @@ describe('PruneRepositoryDialog', () => {
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={{
@@ -441,7 +441,7 @@ describe('PruneRepositoryDialog', () => {
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={{
@@ -464,7 +464,7 @@ describe('PruneRepositoryDialog', () => {
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={{
@@ -490,7 +490,7 @@ describe('PruneRepositoryDialog', () => {
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={null}
@@ -507,7 +507,7 @@ describe('PruneRepositoryDialog', () => {
           open={true}
           repository={mockRepository}
           onClose={vi.fn()}
-          onDryRun={vi.fn()}
+          onPreview={vi.fn()}
           onConfirmPrune={vi.fn()}
           isLoading={false}
           results={null}

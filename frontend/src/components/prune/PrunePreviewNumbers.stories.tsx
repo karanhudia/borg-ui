@@ -1,0 +1,30 @@
+import type { Meta, StoryObj } from '@storybook/react-vite'
+import PrunePreviewNumbers from './PrunePreviewNumbers'
+
+const meta = {
+  title: 'Components/Prune/PrunePreviewNumbers',
+  component: PrunePreviewNumbers,
+} satisfies Meta<typeof PrunePreviewNumbers>
+
+export default meta
+type Story = StoryObj<typeof meta>
+
+export const Default: Story = {
+  args: {
+    deletedCount: 4,
+    keptCount: 12,
+    freedAtLeast: 41_200_000_000,
+    footprintBefore: 900_000_000_000,
+    footprintAfterAtMost: 858_800_000_000,
+  },
+}
+
+export const NotMeasured: Story = {
+  args: {
+    deletedCount: 4,
+    keptCount: 12,
+    freedAtLeast: 0,
+    footprintBefore: null,
+    footprintAfterAtMost: null,
+  },
+}

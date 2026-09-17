@@ -33,15 +33,11 @@ from app.api.maintenance_jobs import (
     get_maintenance_job_with_repository,
     get_repository_maintenance_jobs,
     get_repository_with_access,
-    read_job_logs,
     serialize_job_status,
     serialize_job_summary,
 )
 from app.services.operations.maintenance_start import (
     active_maintenance_operation,
-    fail_inline_maintenance,
-    finish_inline_maintenance,
-    start_inline_maintenance,
     start_maintenance,
 )
 from app.services.operations.job_facade import MaintenanceJobFacade
@@ -5762,76 +5758,36 @@ async def prune_repository(
                 "message": "backend.success.repo.pruneJobStarted",
             }
 
-        prune_job = start_inline_maintenance(
+        from app.services.prune_preview import Retention, run_prune_dry_run
+
+        prune_job, stdout_output = await run_prune_dry_run(
             db,
             repository,
-            "prune",
-            params={
-                "keep_hourly": keep_hourly,
-                "keep_daily": keep_daily,
-                "keep_weekly": keep_weekly,
-                "keep_monthly": keep_monthly,
-                "keep_quarterly": keep_quarterly,
-                "keep_yearly": keep_yearly,
-                "keep_within": keep_within,
-                "dry_run": True,
-                "scheduled_prune": False,
-            },
+            Retention(
+                keep_hourly=keep_hourly,
+                keep_daily=keep_daily,
+                keep_weekly=keep_weekly,
+                keep_monthly=keep_monthly,
+                keep_quarterly=keep_quarterly,
+                keep_yearly=keep_yearly,
+                keep_within=keep_within,
+            ),
             user_id=current_user.id,
         )
-
         logger.info(
-            "Starting prune job",
+            "Prune dry run finished",
             job_id=prune_job.id,
             repository_id=repo_id,
-            dry_run=dry_run,
             user=current_user.username,
         )
-
-        # Wait for prune to complete and get logs
-        prune_kwargs = {"keep_within": keep_within} if keep_within is not None else {}
-        try:
-            await BorgRouter(repository).prune(
-                prune_job.id,
-                keep_hourly,
-                keep_daily,
-                keep_weekly,
-                keep_monthly,
-                keep_quarterly,
-                keep_yearly,
-                dry_run,
-                **prune_kwargs,
-            )
-        except Exception as exc:
-            # The row was created `running`; a step that raised never closed it.
-            await fail_inline_maintenance(db, prune_job, exc)
-            raise
-
-        # Refresh job to get updated status and logs
-        db.refresh(prune_job)
-        # A dry run changed nothing, so it gets no follow-up chain; passing
-        # the flag explicitly documents that rather than leaving the reader
-        # to wonder.
-        finish_inline_maintenance(db, prune_job, enqueue_followups=False)
-        prune_view = MaintenanceJobFacade(db, prune_job)
-
-        # Read log file if it exists
-        stdout_output = read_job_logs(
-            prune_view, fallback_to_logs=True, log_save_policy="all_jobs"
-        )
-        stderr_output = ""
-
-        # Return results in format expected by frontend
         return {
             "job_id": prune_job.id,
-            "status": prune_view.status,
-            "dry_run": dry_run,
+            "status": prune_job.status,
+            "dry_run": True,
             "prune_result": {
-                "success": prune_view.status == "completed",
+                "success": prune_job.status == "completed",
                 "stdout": stdout_output,
-                "stderr": stderr_output
-                if stderr_output or prune_view.error_message
-                else (prune_view.error_message or ""),
+                "stderr": prune_job.error_message or "",
             },
         }
     except HTTPException:

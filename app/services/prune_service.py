@@ -238,7 +238,14 @@ class PruneService:
                                             _log_message(line_str)
                                         )
                                     )
-                                    if len(log_buffer) > MAX_BUFFER_SIZE:
+                                    # A dry run's output is one verdict line per
+                                    # archive and the preview (spec 4.4) reads
+                                    # every one of them; only a real prune's
+                                    # chatter is capped.
+                                    if (
+                                        not dry_run
+                                        and len(log_buffer) > MAX_BUFFER_SIZE
+                                    ):
                                         log_buffer.pop(0)
                         except asyncio.CancelledError:
                             pass
