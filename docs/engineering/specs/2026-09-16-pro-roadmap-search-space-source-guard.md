@@ -54,6 +54,7 @@ Before a scheduled backup runs, refuse and alert if a source path:
 Reason: unmounted NAS share or external disk, borg backs up an empty directory for months, prune deletes the real data. Most quotable failure story in this space. Per-source override to skip the guard. Nothing like this exists in app/ today (checked 2026-09-16: no mount guard, no source preflight).
 
 ## Not in this round (from the same discussion, keep for later)
+- Paths that grew most between archives (2d): per-path growth over an archive range from the changes endpoint. Deferred 2026-09-18 in favour of the retention comparison.
 - Missed-run catch-up (anacron-style) and silent-stagnation alert: strongest companions to the guard; "your schedule cannot fail silently" story.
 - Unprotected-data finder, time scrubber, what-would-I-lose-now, restore drills with proof report, deleted-file recycle bin, mass-change guard, schedule advisor, quiet windows, pause with resume date.
 
@@ -229,11 +230,95 @@ limitation), the raw Borg log behind a disclosure, and "Run prune now" which
 posts to the existing prune route with the same fields and then navigates
 to the operation.
 
-### 4.5 Phase 4: how to save space (2d)
+### 4.5 Phase 4: retention comparison (2d)
 
-Deferred. Designed after phases 2 and 3 ship, because "suggested retention"
-needs real prune-preview usage to be honest. Not planned until this
-section is written.
+Designed 2026-09-18 with Karan after phases 2 and 3 shipped. Of the three
+2d items, growth per series is the growth graph's series filter and
+"paths that grew most" is deferred (see "Not in this round"). What ships
+is the retention comparison: a fixed set of policies run through the prune
+preview and laid side by side, with a dashboard card that leads there.
+The wording is fixed: "Compared policies" and "would free at least",
+never "recommended" or "suggested". The card picks the row that frees the
+most and says "frees the most of the compared policies".
+
+**Candidates.** Per repository, one comparison is a fixed list:
+
+- `current`: the plan's retention, else the last manual prune's, from
+  `retention_defaults`. With no source the row is "no policy" and frees
+  nothing.
+- Three presets, fixed in code, not configurable: `standard` (7 daily,
+  4 weekly, 6 monthly, 1 yearly; Borg's documentation example), `longer`
+  (14 daily, 8 weekly, 12 monthly, 2 yearly) and `wide` (30 daily,
+  12 monthly, 3 yearly). A preset equal to the current policy is dropped.
+
+Each candidate runs `build_preview` steps 1 to 4 (dry run, verdict join,
+candidate re-measure, freed lower bound) and not step 5: lost files are
+computed on the preview page when the user opens a row. One policy per
+repository, as Borg prune and the plan prune take one policy; no per-series
+policies.
+
+**Operation.** A derived kind `prune_compare`, following `stats` and
+`archive_sync`: a follow-up of `archive_sync` added to the chain only when
+the listing changed the archive set (rows added or removed), so backups,
+prunes, deletes and external changes reach it through the one listing
+path (Appendix B, staleness from the listing). No cron. Skipped when the
+repository is observe-only, has fewer than two archives, or has write
+maintenance queued or running (`write_maintenance_running`). It runs in
+the maintenance lane and serialises with real prunes; Borg 2 holds the
+repository lock for each dry run. Cost: at most four dry runs per changed
+repository per listing, each with the re-measure under the existing cap
+of 50 (`partial_measure` carried per row).
+
+**Storage.** Table `prune_comparisons`: `repository_id`, `candidate`
+(key), `label`, `retention` (JSON of the keep fields), `kept_count`,
+`deleted_count`, `freed_at_least`, `partial_measure`, `operation_id`
+(the dry run, for its log), `archive_count_at`, `computed_at`. Replaced
+wholesale per repository on each run; deleted with the repository. One
+migration with its test.
+
+**API.**
+
+- `GET /repositories/{id}/prune/comparison` returns `{computed_at,
+  archive_count_at, stale, candidates: [{key, label, retention,
+  kept_count, deleted_count, freed_at_least, partial_measure,
+  operation_id}]}`. `stale` is true when nothing is stored or the current
+  archive count differs from `archive_count_at`.
+- `POST /repositories/{id}/prune/comparison/refresh` enqueues one
+  `prune_compare` operation and returns its id; 409 while one is queued or
+  running, the rule the other maintenance kinds use.
+- The dashboard overview payload gains `space_savings`: per repository the
+  best candidate's `repository_id`, `repository_name`, `candidate`,
+  `label`, `freed_at_least`, `computed_at`, `stale`; sorted by freed
+  descending, top three; repositories with nothing computed or zero freed
+  are left out.
+
+Community, no gate: nothing here reads the history index (4.6).
+
+**Preview page.** A "Compared policies" section under the existing
+preview. Table columns: policy label, retention on one line (`7d 4w 6m
+1y`), kept, deleted, would free at least; the current policy row is
+marked. When the editor's policy differs from every stored row, an
+"Editing" row shows the figures of the last preview run on this page.
+Clicking a row loads its retention into the editor and runs the preview,
+so the heatmap, the ranked list and the lost-files panel show it in full;
+"Run prune now" then applies it through the existing route. Header:
+"Compared on <date>" with a "Compare now" button, "Numbers may have
+changed since the last comparison" when stale, "Not compared yet" with the
+button when empty. The page's `partial_measure` warning covers comparison
+rows. The page accepts `?candidate=<key>` and, when present, loads that
+stored row's retention into the editor and runs the preview on open.
+
+**Dashboard.** One card, "Space you could free", next to the health
+panel: up to three lines of `<repository>: at least <size> with <retention>`,
+each a link to `/repositories/{id}/prune-preview?candidate=<key>`, a small
+"may have changed" note on stale lines. Hidden when `space_savings` is
+empty, so a fresh or well-pruned install sees no zero.
+
+**Testing** per 4.7: backend unit tests for the candidate list (preset
+dedupe, no-policy row), the follow-up condition, the guard, the stored
+rows and both routes, plus the migration test; frontend tests for the
+table, the card and the query parameter; stories for the table and the
+card; light and dark screenshots before push.
 
 ### 4.6 Plan gating
 
@@ -257,7 +342,7 @@ dark screenshots before push.
 | 1 Stats freshness and archive header | 4.1, 4.2 | Fable 5.1 (touches the index executor) | Fable 5.1 |
 | 2 Growth graph | 4.3 | Sonnet 5 | Fable 5.1 |
 | 3 Prune preview | 4.4 | Sonnet 5 (Fable 5.1 for the lost-files algorithm if the implementer asks) | Fable 5.1 |
-| 4 How to save space | 4.5 | not planned | |
+| 4 Retention comparison | 4.5 | Sonnet 5 | Fable 5.1 |
 
 Plans are written on Fable 5.1.
 
@@ -277,7 +362,7 @@ Statuses: `not started`, `plan drafted`, `plan approved`, `in progress`,
 | 1 Stats freshness and archive header | done | `docs/engineering/plans/2026-09-16-space-family-phase-1-stats-header.md` | `feat/space-family-phase-1` | Plan drafted 2026-09-16 on Fable 5.1, the model 4.8 names; approved at G1 the same day; implemented on Fable 5.1 2026-09-16 in worktree `../borg-ui-space-family`, all seven tasks, TDD throughout. One deviation from the plan: staling survivors is keyed on removals the newest recorded listing did not already report (`pending_removed_ids`), because archive_sync never deletes rows and the `archives` index mode never runs the merge that would; without that guard every listing would re-stale the repository. Backend unit suite and frontend typecheck, lint, tests, locale parity and format all green; Storybook renders light only, dark checked by token reuse. Committed 9876ad88 at G2. Reviewed 2026-09-17 on Fable 5.1 (CodeRabbit high, plus 4.1, 4.2 and Appendix B by hand): two findings, both fixed in 28e8c207 (removed rows stay out of the stale reset; ratio for a zero-byte archive), re-review clean. Merged to main via PR #1080 on 2026-09-17 after the PR review (removed rows kept out of the info selector, no 0 B for a missing dedup size, doc corrections). Open wording question: headline label "Added to the repository" vs "Unique to this archive". |
 | 2 Growth graph | done | `docs/engineering/plans/2026-09-17-space-family-phase-2-growth-graph.md` | `feat/space-family-phase-2` | Plan drafted 2026-09-17 on Fable 5.1 (the model 4.8 names for plans); branch created from `origin/main` 07de1106 in worktree `../borg-ui-space-family`. Chart colors validated with the dataviz palette checker for both themes (dark footprint line uses `info.light`). Approved at G1 on 2026-09-17 as drafted: two Y axes as in the mockup, no KPI row. Implemented 2026-09-17 on Sonnet 5 (G0 matched), all five tasks, TDD throughout, no deviations from the plan except two MUI v9 `Stack` prop fixes (`alignItems`/`flexWrap` moved into `sx`, not passed as direct props, to satisfy this version's types). The worktree had no `node_modules` and needed `npm ci`; the platform-native `@rolldown` binding only installed after switching to Node 20.19.4 via `fnm` (the default 20.17.0 fails the package's engine check and npm silently skips the optional dependency). Backend unit suite: 4414 passed, 15 skipped (pre-existing, unrelated). Frontend typecheck, lint, tests (2819 passed), check:locales and format:check all green. Storybook verified visually in the browser pane (not headless), light, dark and 400px width: stale bars visibly lighter, legend wraps without overlap, footprint line distinguishable from bars in both themes, no X-axis label collision. Committed b97d172b at G2. Reviewed 2026-09-17 on Fable 5.1 (CodeRabbit high plus 4.3 and Appendix B by hand): three findings, all fixed at G3 (Karan: "do whatever is necessary") and re-review clean. (1) Rows a listing reported removed linger in `archives` until history_merge deletes them, which the `archives` index mode never runs; the growth endpoint sums them into `running_total`, so a pruned archive inflates the footprint line for good. Fix: exclude `pending_removed_ids` in `archives_growth`. (2) `growthSeries` is not reset when the repository changes (Archives.tsx), so a series from repository A filters repository B, and with one series there the select is hidden and the filter cannot be cleared. (3) CodeRabbit major, spec-conflicting: `running_total` is the sum of per-archive `deduplicated_size`, which omits chunks shared only among archives, so the true footprint is at least that; the math is what 4.3 specifies, the question is whether the legend and tooltip should say "at least", as 4.4 does for freed space. Resolved: legend and tooltip now say "at least" in all four locales, 4.3 records the lower bound and the removed-row exclusion, and the response shape names `unmeasured_count`. Fixes verified: backend unit suite 4415 passed, 15 skipped; frontend typecheck, lint, tests (2820), locale parity and format all green; Storybook checked light, dark and 400px. Merged to main via PR #1084 on 2026-09-17 after one PR review thread (pending-removed series kept out of the selector, 90d1beb9). |
 | 3 Prune preview | done | `docs/engineering/plans/2026-09-17-space-family-phase-3-prune-preview.md` | `feat/space-family-phase-3` | Borg 2 dry-run naming verified 2026-09-17 with `borg-live-debug` and recorded in 4.4 step 2 (join by archive id; fixtures captured from Borg 1.4.5 and 2.0.0b24). Plan drafted 2026-09-17 on Fable 5.1, the model 4.8 names for plans. Approved at G1 on 2026-09-17 as drafted, open questions settled as the plan proposes. Implemented 2026-09-17 on Sonnet 5 (G0 matched, per 4.8), branch created from `origin/main` 7a56b806 in worktree `../borg-ui-space-family`, all ten tasks, TDD throughout. Deviations from the plan: (1) the moved dry-run branch in `prune_repository` keeps a `stderr` field (`prune_job.error_message or ""`) in `prune_result` instead of dropping it, to preserve the existing response shape for API callers, since the plan's own prose says to keep the shape identical; (2) `_lost_in_series`'s survivor sweep iterates a snapshot (`list(candidates if first_sweep else dirty)`) instead of the live set, since the plan's exact code mutates the set it iterates and raises `RuntimeError: Set changed size during iteration`; (3) the Task 9 dialog test's `getByRole('link', ...)` assertion for two identical "last held by" links now uses `getAllByRole` and checks the first, since the plan's own fixture data has two rows pointing at the same archive. Storybook has no dark-mode toggle in this repo (`preview.tsx` hardcodes `getTheme('light')`, the same limitation phase 1/2 noted); verified light only, all five new components at 400px, all built with theme tokens so dark mode follows the app's real theme. Backend unit suite could not run as one pass in this environment (the sandboxed `docker exec` reliably dies partway through a ~4458-test run, unrelated to content: confirmed by running the same slice standalone); covered instead through repeated overlapping shard runs (roughly 3900+ of the ~4458 tests executed with this diff applied) with the only failures being pre-existing and confirmed unrelated via `git stash` (14 OIDC tests from `PUBLIC_BASE_URL` per the existing memory note, plus a handful of IST-vs-UTC timestamp tests in `test_operations_index_executors.py`, `test_operations_followups.py`, `test_repository_info_sync.py`, `test_schedule_time.py`, `test_storage_usage.py`, `test_upload_ratelimit_policies.py`, and one unrelated pre-existing failure in `test_api_v2_archives.py`); every prune-specific test file (`test_prune_preview.py`, `test_prune_service.py`, `test_api_archive_index.py`, `test_api_repositories.py -k prune`) is fully green. Frontend: typecheck, lint (oxlint --deny-warnings), full test suite (2834 passed, 239 files), check:locales (5299 keys) and format:check all green. Ruff clean on all touched backend files. The two Borg-output fixtures (`tests/fixtures/prune_dry_run_borg1.log`, `...borg2.log`) are caught by the repo's blanket `*.log` .gitignore rule and were force-added. Committed 36ddd710 at G2 on 2026-09-17 (the pre-commit `backend-ruff-format` hook reformatted six files on the first attempt; re-verified prune-specific tests green and re-committed). Next: `/code-review high` against 4.1 (the re-measure), 4.4, 4.6 and Appendix B, per 5.3, on Fable 5.1 (4.8's review model); G0 asked 2026-09-17 on Sonnet 5, Karan chose to switch rather than continue on Sonnet 5. Reviewed 2026-09-17 on Fable 5.1 (CodeRabbit high, 10 findings, plus 4.1, 4.4, 4.6 and Appendix B by hand). Spec conformance holds: verdicts joined by id, candidates re-measured under the cap, freed space a lower bound, lost files per series from the index only (the first archive of a series is a full listing, so "absent" means not held), lost files behind `history_enabled` and `PlanGate`, no new feature key. Confirmed findings, not yet fixed: (1) PrunePreview.tsx first auto preview posts `DEFAULT_RETENTION`, not the plan or last-prune defaults the form shows, because the effect that mutates reads `retention` from the same render that sets it; the page test cannot see it since its mocked defaults equal the hard-coded defaults. (2) "Run prune now" posts the current form, not the retention the shown preview was computed with, so an edit without a refresh prunes with un-previewed rules under a button that still names the previewed count. (3) The page only renders an error for 400 no-keep-rule and 502; any other failure (a 500 from `fill_archive_info` re-raising a busy repository after the dry run, a 403, a 409) leaves a blank page. (4) `remeasure_candidates` reports `partial_measure` from the cap alone: a busy repository fails the whole preview after a successful dry run, and an early stop (agent unavailable) is reported as fully measured; should fall back to stored values and derive partial from the count `fill_archive_info` returns. (5) PruneCandidatesRanked rows are clickable Boxes with no button role or keyboard access. Minor: lost-files panel says "none lost" when the count is 0 but the index is incomplete; retention inputs parse without a radix and never clamp below 0; heatmap intensity is normalised per archive, not per day (MUI alpha clamps, so it saturates); `a.id ?? -1` in previewHeatmap is unreachable; the prune dialog still carries its results dialog although Repositories.tsx now only ever passes null; card preview button stays enabled while maintenance runs. Rejected: CodeRabbit's objection to the uncapped dry-run log buffer (one verdict line per archive, the log file is written from that buffer and the preview needs every line) and to `success == "completed"` in the dry-run branch (unchanged behaviour). G3 answered 2026-09-17: fix in the same session on Fable 5.1 (not the implement model, Karan's call). Fixes applied 2026-09-17, TDD (eight new or extended frontend tests, two backend tests, all red first): first preview posts the prefilled retention; "Run prune now" posts the previewed retention and is disabled while the form is dirty, a refresh is pending or the last preview failed; every failed preview shows a message (502 keeps the dry-run wording and log); `remeasure_candidates` catches a failed measurement, keeps stored values and derives `partial_measure` from the count `fill_archive_info` returns; ranked rows are `ButtonBase` (rows without an index row stay plain text); lost-files panel says "not final" for a zero count on an incomplete index; retention inputs clamp at 0 with radix 10; heatmap intensity normalised per day; card preview button disabled while maintenance runs. Not changed: the prune dialog's results overlay, since Repositories.tsx still feeds it a non-job prune response. Re-review: CodeRabbit's one remaining finding is stale (it repeats the radix/clamp fix already in place). Verified: frontend typecheck, lint, tests (2839 passed, 240 files), locale parity (5301 keys) and format all green; prune-related backend tests 39 passed, ruff clean; ranked rows checked in Storybook (light). Fixes committed 9a2a52a0 (Karan: "commit push create a pr"), branch pushed, PR #1087 opened 2026-09-17 with the phase 3 plan file included. CI: two dispatch tests patched `BorgRouter` on the repositories module, which the dry run no longer imports; repointed to `app.core.borg_router` (ae170132). CodeRabbit PR review, four threads: three fixed in 8cabce95 (form, reset and refresh disabled until the prefill is known with a retry on a failed defaults request; keyboard test uses Enter only; Spanish warning tells archives from files), one declined with reasoning on the thread (a preview fingerprint to reject prunes after a new backup: same gap as the old dry-run dialog, prune re-evaluates the confirmed rules against whatever exists, as the nightly plan prune does). CI green on 8cabce95 (22 checks), CodeRabbit re-review clean (coverage report only, 97% of new statements). Merged to main via PR #1087 on 2026-09-17 (6fb972b4). |
-| 4 How to save space | blocked | | | Design pending (4.5). |
+| 4 Retention comparison | planned | `docs/engineering/plans/2026-09-18-space-family-phase-4-retention-comparison.md` | `feat/space-family-phase-4` | Section 4.5 designed 2026-09-18 with Karan (retention comparison; "paths that grew most" deferred to Not in this round). Plan drafted 2026-09-18 on Fable 5.1 (G0 passed for the plan step): eleven tasks, one migration, new kind `prune_compare` as a result-conditional archive_sync follow-up, builder steps 1 to 4 |extracted into `run_candidate`. G1 approved 2026-09-18. |
 
 ### 5.2 Continuation protocol
 
@@ -291,7 +376,8 @@ review step checks against the sections in 5.3 and Appendix B below.
 ### 5.3 Review focus per phase
 
 Phase 1: 4.1, 4.2. Phase 2: 4.3. Phase 3: 4.1 (the re-measure of
-candidates), 4.4, 4.6. Every phase: Appendix B.
+candidates), 4.4, 4.6. Phase 4: 4.4 (reuse of the builder), 4.5, 4.6.
+Every phase: Appendix B.
 
 ### 5.4 Gates
 
