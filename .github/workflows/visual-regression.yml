@@ -128,9 +128,10 @@ jobs:
         if: ${{ steps.visual_mode.outputs.mode == 'pr' && github.event_name == 'workflow_run' }}
         env:
           GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
           SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
-          gh run download "$SOURCE_RUN_ID" --name visual-actual --dir "$GITHUB_WORKSPACE/visual-actual"
+          gh run download "$SOURCE_RUN_ID" -R "$GITHUB_REPOSITORY" --name visual-actual --dir "$GITHUB_WORKSPACE/visual-actual"
 
           if find "$GITHUB_WORKSPACE/visual-actual" -type l -print -quit | grep -q . || \
             find "$GITHUB_WORKSPACE/visual-actual" -type f ! -name '*.png' -print -quit | grep -q .; then
