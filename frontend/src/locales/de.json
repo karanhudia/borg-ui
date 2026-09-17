@@ -6470,6 +6470,8 @@
     "confirm": "Bestätigen",
     "dryRunFailed": "Der Testlauf von Borg ist fehlgeschlagen. Die Ausgabe steht unten.",
     "previewFailed": "Die Vorschau konnte nicht erstellt werden (HTTP {{status}}). Erneut versuchen, sobald das Repository frei ist.",
+    "defaultsFailed": "Die Standard-Aufbewahrung konnte nicht geladen werden.",
+    "retry": "Erneut versuchen",
     "noKeepRule": "Mindestens eine Aufbewahrungsregel festlegen."
   }
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fireEvent, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../../../test/test-utils'
 import PruneCandidatesRanked from '../PruneCandidatesRanked'
 import type { PrunePreviewArchive } from '../../../types/archives'
@@ -18,7 +19,7 @@ const archive = (id: number | null, name: string): PrunePreviewArchive => ({
 })
 
 describe('PruneCandidatesRanked', () => {
-  it('rows are buttons that open the archive from the keyboard', () => {
+  it('rows are buttons that open the archive from the keyboard', async () => {
     const onOpen = vi.fn()
     renderWithProviders(
       <PruneCandidatesRanked
@@ -29,8 +30,8 @@ describe('PruneCandidatesRanked', () => {
     )
     const row = screen.getByRole('button', { name: /a1/ })
     row.focus()
-    fireEvent.keyDown(row, { key: 'Enter' })
-    fireEvent.click(row)
+    await userEvent.keyboard('{Enter}')
+    expect(onOpen).toHaveBeenCalledTimes(1)
     expect(onOpen).toHaveBeenCalledWith(1)
     expect(screen.queryByRole('button', { name: /unknown/ })).not.toBeInTheDocument()
   })

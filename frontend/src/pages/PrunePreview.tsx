@@ -57,7 +57,11 @@ export default function PrunePreview() {
     [repositoriesData, repositoryId]
   )
 
-  const { data: defaultsData } = useQuery({
+  const {
+    data: defaultsData,
+    isError: defaultsFailed,
+    refetch: refetchDefaults,
+  } = useQuery({
     queryKey: ['prune-retention-defaults', repositoryId],
     queryFn: () => repositoriesAPI.pruneRetentionDefaults(repositoryId).then((res) => res.data),
     enabled: !stateRetention && Number.isFinite(repositoryId),
@@ -140,6 +144,9 @@ export default function PrunePreview() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultRetention, stateRetention, repositoryId])
 
+  // Until the prefill is known the form shows placeholder values that
+  // nothing should preview or prune with.
+  const ready = Boolean(stateRetention ?? defaultRetention)
   const dirty =
     previewedRetention !== null && JSON.stringify(retention) !== JSON.stringify(previewedRetention)
 
@@ -176,10 +183,23 @@ export default function PrunePreview() {
                   : t('prunePreview.prefilledDefault')}
             </Typography>
           )}
+          {defaultsFailed && !stateRetention && (
+            <Alert
+              severity="error"
+              sx={{ mb: 1 }}
+              action={
+                <Button size="small" color="inherit" onClick={() => refetchDefaults()}>
+                  {t('prunePreview.retry')}
+                </Button>
+              }
+            >
+              {t('prunePreview.defaultsFailed')}
+            </Alert>
+          )}
           <PruneRetentionFields
             value={retention}
             onChange={setRetention}
-            disabled={previewMutation.isPending}
+            disabled={!ready || previewMutation.isPending}
           />
           {error?.key === 'backend.errors.prune.noKeepRule' && (
             <Alert severity="error" sx={{ mt: 1 }}>
@@ -189,6 +209,7 @@ export default function PrunePreview() {
           <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
             <Button
               size="small"
+              disabled={!ready}
               onClick={() => setRetention(stateRetention ?? defaultRetention ?? DEFAULT_RETENTION)}
             >
               {t('prunePreview.reset')}
@@ -196,7 +217,7 @@ export default function PrunePreview() {
             <Button
               size="small"
               variant="contained"
-              disabled={previewMutation.isPending}
+              disabled={!ready || previewMutation.isPending}
               onClick={() => previewMutation.mutate(retention)}
             >
               {t('prunePreview.refresh')}

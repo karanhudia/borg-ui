@@ -142,6 +142,42 @@ describe('PrunePreview page', () => {
     expect(await screen.findByText(/could not be built/i)).toBeInTheDocument()
   })
 
+  it('keeps the form and refresh disabled until the defaults arrive', async () => {
+    let resolveDefaults: (v: unknown) => void = () => {}
+    vi.mocked(repositoriesAPI.pruneRetentionDefaults).mockReturnValue(
+      new Promise((resolve) => {
+        resolveDefaults = resolve
+      }) as never
+    )
+    renderWithProviders(<PrunePreview />, { initialRoute: '/repositories/7/prune-preview' })
+    expect(await screen.findByRole('button', { name: /refresh preview/i })).toBeDisabled()
+    expect(screen.getByLabelText(/keep daily/i)).toBeDisabled()
+    expect(repositoriesAPI.prunePreview).not.toHaveBeenCalled()
+    resolveDefaults({
+      data: {
+        source: 'default',
+        plan_name: null,
+        keep_hourly: 0,
+        keep_daily: 3,
+        keep_weekly: 4,
+        keep_monthly: 6,
+        keep_quarterly: 0,
+        keep_yearly: 1,
+        keep_within: null,
+      },
+    })
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /refresh preview/i })).toBeEnabled()
+    )
+  })
+
+  it('offers a retry when the defaults cannot be loaded', async () => {
+    vi.mocked(repositoriesAPI.pruneRetentionDefaults).mockRejectedValue(new Error('down'))
+    renderWithProviders(<PrunePreview />, { initialRoute: '/repositories/7/prune-preview' })
+    expect(await screen.findByRole('button', { name: /retry/i })).toBeInTheDocument()
+    expect(repositoriesAPI.prunePreview).not.toHaveBeenCalled()
+  })
+
   it('shows the lower-bound and cross-series notes', async () => {
     renderWithProviders(<PrunePreview />, { initialRoute: '/repositories/7/prune-preview' })
     expect(await screen.findByText(/lower bound/i)).toBeInTheDocument()

@@ -6470,6 +6470,8 @@
     "confirm": "Conferma",
     "dryRunFailed": "L'esecuzione di prova di Borg è fallita. L'output è sotto.",
     "previewFailed": "Impossibile generare l'anteprima (HTTP {{status}}). Riprova quando il repository è libero.",
+    "defaultsFailed": "Impossibile caricare la conservazione predefinita.",
+    "retry": "Riprova",
     "noKeepRule": "Imposta almeno una regola di conservazione."
   }
 }

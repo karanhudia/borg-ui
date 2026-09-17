@@ -6458,7 +6458,7 @@
     "lostMore": "{{count}} más, los más grandes primero",
     "lostAgent": "Los repositorios ejecutados por agente no tienen índice de historial, por lo que no se pueden calcular los archivos perdidos.",
     "lostUnavailable": "El índice de historial no está disponible para este repositorio.",
-    "warnIncomplete": "Índice incompleto para {{count}} archivos. Es posible que falten en la lista archivos que solo contenían esos archivos.",
+    "warnIncomplete": "Índice incompleto para {{count}} archivos de copia. Es posible que falten en la lista ficheros que solo estaban contenidos en esos archivos.",
     "warnIndexNow": "Abrir los archivos",
     "warnLowerBound": "El espacio liberado es un valor mínimo. Borg no informa estadísticas por conjunto antes de un prune; los fragmentos compartidos solo entre archivos eliminados también se liberan y no se cuentan aquí.",
     "warnCrossSeries": "Los archivos perdidos se comprueban dentro de cada serie. No se considera una copia en otra serie de este repositorio.",
@@ -6470,6 +6470,8 @@
     "confirm": "Confirmar",
     "dryRunFailed": "La ejecución de prueba de Borg falló. La salida está debajo.",
     "previewFailed": "No se pudo generar la vista previa (HTTP {{status}}). Inténtelo de nuevo cuando el repositorio esté libre.",
+    "defaultsFailed": "No se pudo cargar la retención predeterminada.",
+    "retry": "Reintentar",
     "noKeepRule": "Defina al menos una regla de retención."
   }
 }

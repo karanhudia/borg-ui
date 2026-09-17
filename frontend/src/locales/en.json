@@ -6470,6 +6470,8 @@
     "confirm": "Confirm",
     "dryRunFailed": "Borg's dry run failed. The output is below.",
     "previewFailed": "The preview could not be built (HTTP {{status}}). Try again once the repository is idle.",
+    "defaultsFailed": "The retention defaults could not be loaded.",
+    "retry": "Retry",
     "noKeepRule": "Set at least one keep rule."
   }
 }
