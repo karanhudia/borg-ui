@@ -13,7 +13,6 @@ from app.services.operations.job_facade import (
     claim_running,
     latest_maintenance_jobs_by_repository,
     legacy_status,
-    maintenance_jobs_started_since,
     operation_status,
     resolve_agent_maintenance_job,
     resolve_maintenance_job,
@@ -366,25 +365,6 @@ def test_resolve_agent_job_rejects_bad_shapes(db, repository):
     assert resolve_agent_maintenance_job(db, _payload(1), kinds=("prune",)) is None
 
 
-def test_started_since_reads_one_kind_newest_first(db, repository):
-    since = datetime(2026, 9, 1)
-    too_old = _operation(db, repository, status="completed")
-    too_old.started_at = datetime(2026, 8, 30)
-    op = _operation(db, repository, status="completed")
-    op.started_at = datetime(2026, 9, 3)
-    newer = _operation(db, repository, status="completed")
-    newer.started_at = datetime(2026, 9, 5)
-    unrelated = _operation(db, repository, kind="prune", status="completed")
-    unrelated.started_at = datetime(2026, 9, 4)
-    db.commit()
-
-    jobs = maintenance_jobs_started_since(db, "check", since)
-
-    assert [job.id for job in jobs] == [newer.id, op.id]
-    assert all(isinstance(job, MaintenanceJobFacade) for job in jobs)
-    assert jobs[0].repository_path == repository.path
-
-
 def test_latest_by_repository_takes_the_newest_row_of_each(db):
     ops_repo = Repository(name="ops", path="/repo/ops", borg_version=1)
     busy_repo = Repository(name="busy", path="/repo/busy", borg_version=1)
@@ -464,8 +444,6 @@ def test_latest_by_repository_has_no_verdict_for_a_first_run_still_queued(
 
 
 def test_readers_name_an_unknown_kind(db, repository):
-    with pytest.raises(ValueError, match="restorecheck"):
-        maintenance_jobs_started_since(db, "restorecheck", datetime(2026, 9, 1))
     with pytest.raises(ValueError, match="restorecheck"):
         latest_maintenance_jobs_by_repository(db, "restorecheck", [repository.id])
 

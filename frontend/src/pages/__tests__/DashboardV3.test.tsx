@@ -149,16 +149,11 @@ function makeOverview(overrides: Record<string, unknown> = {}) {
       },
     ],
     upcoming_tasks: [],
-    activity_feed: [
-      {
-        id: 1,
-        type: 'backup',
-        status: 'completed',
-        repository: 'my-server',
-        timestamp: '2026-03-30T10:00:00+00:00',
-        message: 'Backup completed',
-        error: null,
-      },
+    activity_timeline: [
+      { date: '2026-03-30', type: 'backup', total: 1, failed: 0 },
+      { date: '2026-03-29', type: 'backup', total: 1, failed: 1 },
+    ],
+    current_failures: [
       {
         id: 2,
         type: 'backup',
@@ -598,13 +593,13 @@ describe('DashboardV3', () => {
   })
 
   describe('activity section', () => {
-    it('shows "No activity recorded yet" when feed is empty', async () => {
-      mockFetchSuccess(makeOverview({ activity_feed: [] }))
+    it('shows "No activity recorded yet" when the timeline is empty', async () => {
+      mockFetchSuccess(makeOverview({ activity_timeline: [], current_failures: [] }))
       renderDashboard()
       await waitFor(() => expect(screen.getByText('No activity recorded yet')).toBeInTheDocument())
     })
 
-    it('shows recent failures section when feed has failures', async () => {
+    it('shows recent failures section when the server reports failures', async () => {
       mockFetchSuccess(makeOverview())
       renderDashboard()
       await waitFor(() => expect(screen.getByText('Recent failures')).toBeInTheDocument())
@@ -621,64 +616,60 @@ describe('DashboardV3', () => {
     })
 
     it('hides recent failures section when no failures', async () => {
-      const data = makeOverview({
-        activity_feed: [
-          {
-            id: 1,
-            type: 'backup',
-            status: 'completed',
-            repository: 'my-server',
-            timestamp: '2026-03-30T10:00:00+00:00',
-            message: 'ok',
-            error: null,
-          },
-        ],
-      })
+      const data = makeOverview({ current_failures: [] })
       mockFetchSuccess(data)
       renderDashboard()
       await waitFor(() => screen.getAllByText('my-server'))
       expect(screen.queryByText('Recent failures')).not.toBeInTheDocument()
     })
 
-    it('hides failed jobs that have a newer successful event for the same repository and type', async () => {
-      const data = makeOverview({
-        activity_feed: [
-          {
-            id: 11,
-            type: 'backup',
-            status: 'completed',
-            repository: 'backup-nas',
-            timestamp: '2026-03-30T11:00:00+00:00',
-            message: 'Backup completed',
-            error: null,
-          },
-          {
-            id: 10,
-            type: 'backup',
-            status: 'failed',
-            repository: 'backup-nas',
-            timestamp: '2026-03-30T10:00:00+00:00',
-            message: 'Backup failed',
-            error: 'Disk full before cleanup',
-          },
-          {
-            id: 12,
-            type: 'check',
-            status: 'failed',
-            repository: 'backup-nas',
-            timestamp: '2026-03-30T09:00:00+00:00',
-            message: 'Check failed',
-            error: 'Repository check still failing',
-          },
-        ],
-      })
-
+    it("derives the timeline and the failures from an older backend's feed", async () => {
+      const data = makeOverview() as Record<string, unknown>
+      delete data.activity_timeline
+      delete data.current_failures
+      data.activity_feed = [
+        {
+          id: 11,
+          type: 'backup',
+          status: 'completed',
+          repository: 'backup-nas',
+          timestamp: '2026-03-30T11:00:00+00:00',
+          message: 'Backup completed',
+          error: null,
+        },
+        {
+          id: 10,
+          type: 'backup',
+          status: 'failed',
+          repository: 'backup-nas',
+          timestamp: '2026-03-30T10:00:00+00:00',
+          message: 'Backup failed',
+          error: 'Disk full before cleanup',
+        },
+        {
+          id: 12,
+          type: 'check',
+          status: 'failed',
+          repository: 'backup-nas',
+          timestamp: '2026-03-30T09:00:00+00:00',
+          message: 'Check failed',
+          error: 'Repository check still failing',
+        },
+      ]
       mockFetchSuccess(data)
       renderDashboard()
-
       await waitFor(() => expect(screen.getByText('Recent failures')).toBeInTheDocument())
+      // the later completed backup resolves the failed one, the check stays
       expect(screen.queryByText('Disk full before cleanup')).not.toBeInTheDocument()
       expect(screen.getByText('Repository check still failing')).toBeInTheDocument()
+      expect(screen.queryByText('No activity recorded yet')).not.toBeInTheDocument()
+    })
+
+    it('asks for the timeline in the viewer time zone', async () => {
+      mockFetchSuccess(makeOverview())
+      renderDashboard()
+      await waitFor(() => expect(getOverviewMock).toHaveBeenCalled())
+      expect(getOverviewMock).toHaveBeenCalledWith(Intl.DateTimeFormat().resolvedOptions().timeZone)
     })
   })
 

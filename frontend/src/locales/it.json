@@ -881,6 +881,8 @@
       "ariaLabel": "Attività di backup negli ultimi 14 giorni",
       "today": "oggi",
       "legendFailed": "falliti",
+      "cellTitle_one": "{{type}}: {{count}} esecuzione, fallite: {{failed}}",
+      "cellTitle_other": "{{type}}: {{count}} esecuzioni, fallite: {{failed}}",
       "jobType": {
         "backup": "backup",
         "check": "controllo",

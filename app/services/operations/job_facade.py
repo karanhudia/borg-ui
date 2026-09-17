@@ -428,20 +428,6 @@ def claim_running(db: Session, job_id: int, kind: str, started_at: datetime) -> 
     )
 
 
-def maintenance_jobs_started_since(db: Session, kind: str, since: datetime) -> list:
-    """Every `kind` job started at or after `since`, newest first, for a reader
-    of recent history (the dashboard timeline)."""
-    _require_maintenance_kind(kind)
-    operations = (
-        db.query(Operation)
-        .filter(Operation.kind == kind, Operation.started_at >= since)
-        .all()
-    )
-    jobs = [MaintenanceJobFacade(db, operation) for operation in operations]
-    jobs.sort(key=lambda job: (job.started_at, job.id), reverse=True)
-    return jobs
-
-
 # A row still waiting for its verdict. Every other status is an outcome,
 # `skipped` included, since its reason says what kept the run from happening.
 UNSETTLED_STATUSES: frozenset[str] = frozenset({"queued", "running"})

@@ -12,7 +12,7 @@ import type { DashboardOverview } from './types'
 
 type RepositoryHealth = DashboardOverview['repository_health']
 type RepoCardData = RepositoryHealth[number]
-type ActivityFeed = DashboardOverview['activity_feed']
+type CurrentFailures = NonNullable<DashboardOverview['current_failures']>
 
 /**
  * Two small chips rendered identically on both the compact and full repo
@@ -74,7 +74,7 @@ export function RepositoryHealthPanel({
   warningCount: number
   healthyCount: number
   nowMs: number
-  currentFailures: ActivityFeed
+  currentFailures: CurrentFailures
   onOpenRepositories: () => void
 }) {
   const { t } = useTranslation()

@@ -675,7 +675,10 @@ export const dashboardAPI = {
   getStatus: () => api.get('/dashboard/status'),
   getMetrics: () => api.get('/dashboard/metrics'),
   getSchedule: () => api.get('/dashboard/schedule'),
-  getOverview: () => api.get('/dashboard/overview'),
+  // The timeline is bucketed by day in the viewer's time zone; the server
+  // falls back to UTC for a zone it does not know.
+  getOverview: (timezone?: string) =>
+    api.get('/dashboard/overview', { params: timezone ? { timezone } : undefined }),
 }
 
 export const licensingAPI = {
