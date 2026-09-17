@@ -2130,7 +2130,6 @@
       "checkFailed": "Impossibile avviare il controllo",
       "compactStarted": "Operazione di compattazione avviata",
       "compactFailed": "Impossibile avviare la compattazione",
-      "dryRunCompleted": "Prova simulata completata - rivedi i risultati qui sotto",
       "pruneStarted": "Job di pulizia avviato",
       "pruned": "Repository pulito con successo!",
       "pruneFailed": "Impossibile pulire il repository",
@@ -3016,7 +3015,8 @@
       "permanentDelete": "Elimina file definitivamente",
       "createBackupPlan": "Crea piano di backup",
       "createBackupPlanSourceRequired": "Aggiungi percorsi sorgente prima di creare un piano di backup",
-      "operations": "Operazioni"
+      "operations": "Operazioni",
+      "prunePreview": "Anteprima prune"
     },
     "legacySources": {
       "title": "Impostazioni sorgente legacy",
@@ -3254,7 +3254,7 @@
     "prune": {
       "whatDoesPruningDo": "Cosa fa la pulizia?",
       "explanation": "La pulizia elimina automaticamente gli archivi vecchi in base a regole di conservazione. Questo aiuta a gestire la dimensione del repository mantenendo solo i backup necessari.",
-      "dryRunTip": "Suggerimento: Esegui sempre prima una \"Prova Simulata\" per vedere cosa verrà eliminato!",
+      "dryRunTip": "Suggerimento: prima visualizza l'anteprima per vedere quali archivi verrebbero eliminati e cosa libererebbero.",
       "retentionPolicy": "Politica di Conservazione",
       "retentionDescription": "Specifica quanti backup mantenere per ogni periodo di tempo",
       "keepWithin": "Mantieni entro",
@@ -3293,7 +3293,7 @@
       "dryRunSuccess": "Prova simulata completata con successo. Rivedi l'output sopra per vedere quali archivi verrebbero eliminati. Se tutto sembra corretto, clicca \"Pulisci Archivi\" per eseguire.",
       "warningTitle": "Attenzione: Gli archivi eliminati non possono essere recuperati!",
       "warningCompact": "Dopo la pulizia, esegui \"Compatta\" per liberare effettivamente spazio su disco.",
-      "dryRunButton": "Prova Simulata (Anteprima)",
+      "dryRunButton": "Anteprima",
       "resultsTitle": "Risultati",
       "dryRunPreviewBadge": "ANTEPRIMA",
       "pruneCompleteBadge": "COMPLETATO",
@@ -6194,6 +6194,10 @@
       },
       "jobs": {
         "repositoryOperationActive": "Un'altra operazione è già in corso su questo repository. Attendi che finisca e riprova."
+      },
+      "prune": {
+        "noKeepRule": "Imposta almeno una regola di conservazione prima di visualizzare l'anteprima o eseguire un prune.",
+        "dryRunFailed": "L'esecuzione di prova di Borg è fallita."
       }
     },
     "success": {
@@ -6412,5 +6416,58 @@
     "excludes": "Percorsi da saltare",
     "excludesHelp": "Un pattern glob per riga. La cronologia dei file ignora i percorsi corrispondenti.",
     "excludesInactive": "Questi pattern valgono per la cronologia dei file, che questa modalità non costruisce."
+  },
+  "prunePreview": {
+    "title": "Anteprima prune",
+    "crumbRepositories": "Repository",
+    "retention": "Conservazione",
+    "prefilledPlan": "Precompilato dal piano {{name}}. Le modifiche qui sono solo un'anteprima finché non si esegue il prune.",
+    "prefilledLastPrune": "Precompilato dall'ultimo prune manuale.",
+    "prefilledDefault": "Conservazione predefinita.",
+    "reset": "Ripristina",
+    "refresh": "Aggiorna anteprima",
+    "refreshedAt": "Anteprima aggiornata {{when}}",
+    "deleted": "Archivi eliminati",
+    "ofTotal": "di {{total}}",
+    "kept": "{{count}} conservati",
+    "freed": "Spazio liberato",
+    "atLeast": "almeno {{size}}",
+    "freedSub": "cifra esatta dopo prune e compact",
+    "before": "Ingombro prima",
+    "after": "Ingombro dopo",
+    "atMost": "al massimo",
+    "notMeasured": "non misurato",
+    "heatmapTitle": "Cosa resta, cosa va",
+    "legendKept": "Conservato",
+    "legendDeleted": "Eliminato",
+    "legendMixed": "Giorno misto",
+    "cellKept": "{{name}}: conservato, regola {{rule}}",
+    "cellDeleted": "{{name}}: verrebbe eliminato",
+    "rankedTitle": "Archivi eliminati ordinati per spazio liberato",
+    "remeasured": "Rimisurati ora per {{count}} candidati",
+    "remeasuredPartial": "Rimisurati i {{cap}} più vecchi su {{count}}; il resto usa il valore memorizzato",
+    "remeasuring": "in rimisurazione",
+    "showAll": "Mostra tutti i {{count}}",
+    "lostTitle": "File persi per sempre",
+    "lostSummary": "{{count}} file, {{size}}, nessun archivio superstite li contiene",
+    "lostNone": "Nessun file viene perso: ogni percorso contenuto in un archivio eliminato sopravvive in un archivio conservato della sua serie.",
+    "lostPath": "Percorso",
+    "lostSize": "Dimensione",
+    "lostHeldBy": "Conservato l'ultima volta in",
+    "lostMore": "altri {{count}}, dal più grande",
+    "lostAgent": "I repository eseguiti tramite agente non hanno un indice cronologico, quindi i file persi non possono essere calcolati.",
+    "lostUnavailable": "L'indice cronologico non è disponibile per questo repository.",
+    "warnIncomplete": "Indice incompleto per {{count}} archivi. I file contenuti solo in quegli archivi potrebbero mancare dall'elenco.",
+    "warnIndexNow": "Apri gli archivi",
+    "warnLowerBound": "Lo spazio liberato è un valore minimo. Borg non riporta statistiche per insieme prima di un prune; i chunk condivisi solo tra archivi eliminati vengono liberati ma non conteggiati qui.",
+    "warnCrossSeries": "I file persi sono verificati all'interno di ciascuna serie. Una copia in un'altra serie di questo repository non viene considerata.",
+    "showLog": "Mostra output di Borg ({{deleted}} verrebbero eliminati, {{kept}} conservati)",
+    "cancel": "Annulla",
+    "runNow": "Esegui prune ora, elimina {{count}} archivi",
+    "confirmTitle": "Eliminare {{count}} archivi?",
+    "confirmBody": "Questo esegue il prune con la conservazione mostrata. Gli archivi eliminati non possono essere recuperati.",
+    "confirm": "Conferma",
+    "dryRunFailed": "L'esecuzione di prova di Borg è fallita. L'output è sotto.",
+    "noKeepRule": "Imposta almeno una regola di conservazione."
   }
 }

@@ -470,14 +470,7 @@ export default function Repositories() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (response: any) => {
-      if (response.data.dry_run) {
-        setPruneResults(response.data)
-        toast.success(t('repositories.toasts.dryRunCompleted'))
-        trackMaintenance(EventAction.COMPLETE, 'Prune', pruningRepository || undefined, {
-          mode: 'dry_run',
-          status: 'completed',
-        })
-      } else if (response.data.job_id) {
+      if (response.data.job_id) {
         setPruneResults(null)
         toast.success(t('repositories.toasts.pruneStarted'))
         trackMaintenance(EventAction.START, 'Prune', pruningRepository || undefined)
@@ -810,13 +803,16 @@ export default function Repositories() {
     setPruneResults(null)
   }
 
-  const handlePruneDryRun = async (form: PruneForm) => {
+  const handlePreview = (form: PruneForm) => {
     if (pruningRepository) {
-      pruneRepositoryMutation.mutate({
-        id: pruningRepository.id,
-        data: { ...form, dry_run: true },
+      navigate(`/repositories/${pruningRepository.id}/prune-preview`, {
+        state: { retention: form },
       })
     }
+  }
+
+  const handlePrunePreview = (repository: Repository) => {
+    navigate(`/repositories/${repository.id}/prune-preview`)
   }
 
   const handleConfirmPrune = async (form: PruneForm) => {
@@ -1057,6 +1053,7 @@ export default function Repositories() {
         onCheck={handleCheckRepository}
         onCompact={handleCompactRepository}
         onPrune={handlePruneRepository}
+        onPrunePreview={handlePrunePreview}
         onWipeContents={handleWipeRepository}
         onBreakLock={handleBreakLockRepository}
         onEdit={openEditModal}
@@ -1126,7 +1123,7 @@ export default function Repositories() {
         open={!!pruningRepository}
         repository={pruningRepository}
         onClose={handleClosePruneDialog}
-        onDryRun={handlePruneDryRun}
+        onPreview={handlePreview}
         onConfirmPrune={handleConfirmPrune}
         isLoading={pruneRepositoryMutation.isPending}
         results={pruneResults}

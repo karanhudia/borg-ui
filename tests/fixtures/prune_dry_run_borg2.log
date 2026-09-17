@@ -1,0 +1,5 @@
+Keeping archive (rule: daily #1):            other                                Thu, 2026-09-17 15:08:23 +0530 [109fa62fcc349c8da7153ca58e85985948c17f43d026e8d8171255bbab00dce3]
+Keeping archive (rule: daily #1):            daily                                Thu, 2026-09-17 15:08:22 +0530 [1bb758c0b8af73ada3cab77defb30bd8579b83ec392df17420cc78cd5362328e]
+Would prune:                                 daily                                Thu, 2026-09-17 15:08:22 +0530 [81ca8589c60cca651571adb13dd522cd7597633523158aa5242ebda824fc50b7]
+Would prune:                                 daily                                Thu, 2026-09-17 15:08:22 +0530 [a3c732c5eb4f4c3bc474f73e98903bedfb583e8dae45077dc71035095f432e78]
+Keeping archive (rule: daily[oldest] #2):    daily                                Thu, 2026-09-17 15:08:21 +0530 [7654e3b38b6f055c67b7be5080d54eb7dc888f9dc102a02a720120cb38c7f58c]

@@ -47,6 +47,7 @@ describe('RepositoryCard', () => {
     onCheck: vi.fn(),
     onCompact: vi.fn(),
     onPrune: vi.fn(),
+    onPrunePreview: vi.fn(),
     onWipeContents: vi.fn(),
     onBreakLock: vi.fn(),
     onEdit: vi.fn(),
@@ -621,7 +622,7 @@ describe('RepositoryCard', () => {
       )
 
       expect(screen.queryByRole('button', { name: /Compact/i })).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /Prune/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^Prune$/i })).not.toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Delete/i })).toBeInTheDocument()
     })
 
@@ -638,7 +639,7 @@ describe('RepositoryCard', () => {
       )
 
       expect(screen.getByRole('button', { name: /Compact/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /Prune/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^Prune$/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Break Lock/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Wipe contents/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Delete/i })).toBeInTheDocument()
@@ -785,8 +786,23 @@ describe('RepositoryCard', () => {
         />
       )
 
-      fireEvent.click(screen.getByRole('button', { name: /Prune/i }))
+      fireEvent.click(screen.getByRole('button', { name: /^Prune$/i }))
       expect(mockCallbacks.onPrune).toHaveBeenCalledTimes(1)
+    })
+
+    it('calls onPrunePreview when Prune preview button is clicked', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={mockRepository}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: /prune preview/i }))
+      expect(mockCallbacks.onPrunePreview).toHaveBeenCalledTimes(1)
     })
 
     it('calls onWipeContents when Wipe contents button is clicked', () => {
@@ -996,7 +1012,7 @@ describe('RepositoryCard', () => {
       expect(screen.getByRole('button', { name: /Info/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /Check/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /Compact/i })).toBeDisabled()
-      expect(screen.getByRole('button', { name: /Prune/i })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /^Prune$/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /Run backup automation/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /Create Backup Plan/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /View Archives/i })).toBeDisabled()
@@ -1480,7 +1496,7 @@ describe('RepositoryCard', () => {
       expect(screen.getByRole('button', { name: /Info/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Check/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Compact/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /Prune/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^Prune$/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Run backup automation/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Create Backup Plan/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /View Archives/i })).toBeInTheDocument()

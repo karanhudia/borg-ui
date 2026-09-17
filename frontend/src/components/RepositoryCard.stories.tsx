@@ -76,6 +76,7 @@ const defaultArgs = {
   onCheck: noop,
   onCompact: noop,
   onPrune: noop,
+  onPrunePreview: noop,
   onWipeContents: noop,
   onBreakLock: noop,
   onEdit: noop,

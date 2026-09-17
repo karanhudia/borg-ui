@@ -43,6 +43,9 @@ import type {
   ChangeType,
   PathHistoryResponse,
   SearchResponse,
+  PruneRetention,
+  PrunePreviewResponse,
+  PruneRetentionDefaults,
 } from '../types/archives'
 
 export type AuthTransportMode = 'jwt' | 'proxy' | 'insecure-no-auth'
@@ -972,6 +975,10 @@ export const repositoriesAPI = {
   ) => api.post(`/repositories/${id}/restore-check`, data || {}),
   compactRepository: (id: number) => api.post(`/repositories/${id}/compact`),
   pruneRepository: (id: number, data: ApiData) => api.post(`/repositories/${id}/prune`, data),
+  prunePreview: (id: number, data: PruneRetention) =>
+    api.post<PrunePreviewResponse>(`/repositories/${id}/prune/preview`, data),
+  pruneRetentionDefaults: (id: number) =>
+    api.get<PruneRetentionDefaults>(`/repositories/${id}/prune/retention-defaults`),
   previewRepositoryWipe: (id: number, data: RepositoryWipePreviewRequest) =>
     api.post<RepositoryWipeJob>(`/repositories/${id}/wipe-preview`, data),
   executeRepositoryWipe: (id: number, data: RepositoryWipeExecuteRequest) =>

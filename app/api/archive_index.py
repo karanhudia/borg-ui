@@ -387,6 +387,69 @@ async def archives_growth(
     }
 
 
+class PrunePreviewRequest(BaseModel):
+    keep_hourly: int = Field(default=0, ge=0)
+    keep_daily: int = Field(default=0, ge=0)
+    keep_weekly: int = Field(default=0, ge=0)
+    keep_monthly: int = Field(default=0, ge=0)
+    keep_quarterly: int = Field(default=0, ge=0)
+    keep_yearly: int = Field(default=0, ge=0)
+    keep_within: Optional[str] = None
+
+
+@router.post("/{repo_id}/prune/preview")
+async def prune_preview(
+    repo_id: int,
+    body: PrunePreviewRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Spec 4.4: Borg's dry run joined to the index, candidates re-measured,
+    freed space as a lower bound, and (Pro) the files no surviving archive
+    of the series would hold. Declared before the `{archive_id}` routes on
+    purpose, as `archives_growth` is."""
+    from app.api.repositories import _normalize_prune_keep_within
+    from app.services import prune_preview as service
+
+    repository = _repo(db, current_user, repo_id, role="operator")
+    retention = service.Retention(
+        keep_hourly=body.keep_hourly,
+        keep_daily=body.keep_daily,
+        keep_weekly=body.keep_weekly,
+        keep_monthly=body.keep_monthly,
+        keep_quarterly=body.keep_quarterly,
+        keep_yearly=body.keep_yearly,
+        keep_within=_normalize_prune_keep_within(body.keep_within),
+    )
+    if not retention.has_rule:
+        raise HTTPException(
+            status_code=400, detail={"key": "backend.errors.prune.noKeepRule"}
+        )
+    try:
+        return await service.build_preview(
+            db, repository, retention, user_id=current_user.id
+        )
+    except service.DryRunFailed as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "key": "backend.errors.prune.dryRunFailed",
+                "params": {"log": exc.log},
+            },
+        )
+
+
+@router.get("/{repo_id}/prune/retention-defaults")
+async def prune_retention_defaults(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from app.services.prune_preview import retention_defaults
+
+    return retention_defaults(db, _repo(db, current_user, repo_id))
+
+
 def _archive_or_404(db: Session, repository: Repository, archive_id: int) -> Archive:
     archive = db.get(Archive, archive_id)
     if archive is None or archive.repository_id != repository.id:

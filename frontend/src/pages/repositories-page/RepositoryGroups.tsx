@@ -25,6 +25,7 @@ interface RepositoryGroupsProps {
   onCheck: (repository: Repository) => void
   onCompact: (repository: Repository) => void
   onPrune: (repository: Repository) => void
+  onPrunePreview: (repository: Repository) => void
   onWipeContents: (repository: Repository) => void
   onBreakLock: (repository: Repository) => void
   onEdit: (repository: Repository) => void
@@ -56,6 +57,7 @@ export function RepositoryGroups({
   onCheck,
   onCompact,
   onPrune,
+  onPrunePreview,
   onWipeContents,
   onBreakLock,
   onEdit,
@@ -186,6 +188,7 @@ export function RepositoryGroups({
                 onCheck={() => onCheck(repository)}
                 onCompact={() => onCompact(repository)}
                 onPrune={() => onPrune(repository)}
+                onPrunePreview={() => onPrunePreview(repository)}
                 onWipeContents={() => onWipeContents(repository)}
                 onBreakLock={() => onBreakLock(repository)}
                 onEdit={() => onEdit(repository)}
