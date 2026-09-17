@@ -4134,6 +4134,7 @@
     "subtitle": "Speicherung, Aufbewahrung und Bereinigung der Job-Protokolle konfigurieren",
     "storageUsage": "Speichernutzung",
     "storageUsageDesc": "Aktuelle Speichernutzung und Statistiken der Protokolle",
+    "storageUnavailable": "Die Speicherwerte der Protokolle sind gerade nicht verfügbar; der Speicher kann trotzdem voll sein.",
     "totalSize": "Gesamtgröße",
     "fileCount": "Anzahl Dateien",
     "oldestLog": "Ältestes Protokoll",

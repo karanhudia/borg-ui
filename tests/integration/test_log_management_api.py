@@ -90,8 +90,11 @@ def temp_log_files(tmp_path):
 class TestGetSystemSettings:
     """Test GET /api/settings/system endpoint"""
 
-    def test_get_system_settings_with_log_storage(self, client, admin_token, test_db):
-        """Should return system settings including log storage info"""
+    def test_get_system_settings_without_log_storage(
+        self, client, admin_token, test_db
+    ):
+        """The settings answer carries no log storage figures; those come
+        from /system/logs/storage (#1083)."""
         # Create system settings
         settings = SystemSettings(
             log_retention_days=30,
@@ -112,20 +115,14 @@ class TestGetSystemSettings:
 
         assert data["success"] is True
         assert "settings" in data
-        assert "log_storage" in data
+        # the log storage figures come from /system/logs/storage
+        assert "log_storage" not in data
 
         # Check log settings
         assert data["settings"]["log_retention_days"] == 30
         assert data["settings"]["log_save_policy"] == "failed_and_warnings"
         assert data["settings"]["log_max_total_size_mb"] == 500
         assert data["settings"]["log_cleanup_on_startup"] is True
-
-        # Check log storage structure
-        log_storage = data["log_storage"]
-        assert "total_size_mb" in log_storage
-        assert "file_count" in log_storage
-        assert "usage_percent" in log_storage
-        assert "files_by_type" in log_storage
 
     def test_get_system_settings_creates_defaults(self, client, admin_token, test_db):
         """Should create default settings if none exist"""
@@ -368,6 +365,55 @@ class TestManualLogCleanup:
         results = data["cleanup_results"]
         assert results["total_deleted_count"] == 7
         assert results["total_deleted_size_mb"] == 15.7
+
+    def test_manual_cleanup_runs_the_pass_against_the_request_database(
+        self, client, admin_token, test_db, tmp_path, monkeypatch
+    ):
+        """Unmocked: the pass runs in a thread with a session on the request's
+        engine, so the running job it must protect is read from the database
+        the request sees (#1083)."""
+        import os
+        import time
+
+        from app.database.models import Operation
+        from app.services import log_manager as lm
+
+        log_dir = tmp_path / "logs"
+        log_dir.mkdir()
+        monkeypatch.setattr(lm.log_manager, "log_dir", log_dir)
+        stale = time.time() - 100 * 86400
+        old = log_dir / "backup_job_old.log"
+        old.write_text("old")
+        os.utime(old, (stale, stale))
+        live = log_dir / "backup_job_live.log"
+        live.write_text("live")
+        os.utime(live, (stale, stale))
+        test_db.add(
+            Operation(
+                repository_id=None,
+                kind="backup",
+                category="backup",
+                status="running",
+                trigger="manual",
+                priority=0,
+                run_id="run-live",
+                log_file_path=str(live),
+            )
+        )
+        test_db.commit()
+
+        response = client.post(
+            "/api/settings/system/logs/cleanup",
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["cleanup_results"]["total_deleted_count"] == 1
+        # the old log went, the running job's log stayed
+        assert not old.exists()
+        assert live.exists()
 
     def test_manual_cleanup_requires_admin(self, client, user_token):
         """Should require admin access"""

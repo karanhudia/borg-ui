@@ -4134,6 +4134,7 @@
     "subtitle": "Configura el almacenamiento, la retención y la limpieza de los registros de trabajos",
     "storageUsage": "Uso de almacenamiento",
     "storageUsageDesc": "Uso actual del almacenamiento de registros y estadísticas",
+    "storageUnavailable": "Las cifras de almacenamiento de registros no están disponibles ahora mismo; el almacenamiento puede seguir lleno.",
     "totalSize": "Tamaño total",
     "fileCount": "Número de archivos",
     "oldestLog": "Registro más antiguo",

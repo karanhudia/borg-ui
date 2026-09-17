@@ -1,5 +1,7 @@
 from unittest.mock import AsyncMock, Mock, patch
 
+import asyncio
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -81,20 +83,25 @@ class TestSystemSettingsContracts:
         assert settings["lock_breaking_enabled"] is True
         assert test_db.query(SystemSettings).count() == 1
 
-    def test_get_system_settings_falls_back_when_log_storage_lookup_fails(
+    def test_get_system_settings_does_not_read_the_log_directory(
         self, test_client: TestClient, admin_headers
     ):
-        fake_log_manager = Mock()
-        fake_log_manager.calculate_log_storage.side_effect = RuntimeError("boom")
-
-        with patch("app.services.log_manager.log_manager", fake_log_manager):
+        """The shell requests this route on every page; the log storage
+        figures (a stat of every log file) come from /system/logs/storage."""
+        # patched on the class, so any binding of the instance (module-level
+        # or local) hits it; a call would fail the request, not just the
+        # assertion below
+        with patch(
+            "app.services.log_manager.LogManager.calculate_log_storage",
+            side_effect=RuntimeError("boom"),
+        ) as calculate:
             response = test_client.get("/api/settings/system", headers=admin_headers)
 
         assert response.status_code == 200
-        log_storage = response.json()["log_storage"]
-        assert log_storage["total_size_mb"] == 0
-        assert log_storage["file_count"] == 0
-        assert log_storage["files_by_type"] == {}
+        payload = response.json()
+        assert "log_storage" not in payload
+        assert "log_storage" not in payload["settings"]
+        calculate.assert_not_called()
 
     def test_update_system_settings_rejects_invalid_log_save_policy(
         self, test_client: TestClient, admin_headers
@@ -389,6 +396,7 @@ class TestSystemSettingsContracts:
 
         with (
             patch("app.services.log_manager.log_manager", fake_log_manager),
+            patch("app.api.settings._off_loop", wraps=asyncio.to_thread) as off_loop,
             patch("app.services.mqtt_service.mqtt_service.configure"),
             patch(
                 "app.services.mqtt_service.build_mqtt_runtime_config",
@@ -403,6 +411,8 @@ class TestSystemSettingsContracts:
 
         assert response.status_code == 200
         body = response.json()
+        # the scan went through the off-loop hop
+        off_loop.assert_any_call(fake_log_manager.calculate_log_storage)
         assert body["success"] is True
         assert len(body["warnings"]) == 1
         assert "exceeds new limit" in body["warnings"][0]
@@ -653,12 +663,17 @@ class TestCacheSettingsContracts:
             "files_by_type": {"backup": 2, "restore": 2},
         }
 
-        with patch("app.services.log_manager.log_manager", fake_log_manager):
+        with (
+            patch("app.services.log_manager.log_manager", fake_log_manager),
+            patch("app.api.settings._off_loop", wraps=asyncio.to_thread) as off_loop,
+        ):
             response = test_client.get(
                 "/api/settings/system/logs/storage", headers=admin_headers
             )
 
         assert response.status_code == 200
+        # the scan of the log directory went through the off-loop hop
+        off_loop.assert_any_call(fake_log_manager.calculate_log_storage)
         log_storage = response.json()["storage"]
         assert log_storage["usage_percent"] == 25
         assert log_storage["file_count"] == 4

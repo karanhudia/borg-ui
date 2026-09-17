@@ -4134,6 +4134,7 @@
     "subtitle": "Configure log storage, retention, and cleanup policies for job logs",
     "storageUsage": "Storage Usage",
     "storageUsageDesc": "Current log storage utilization and statistics",
+    "storageUnavailable": "Log storage figures are unavailable right now; the store may still be full.",
     "totalSize": "Total Size",
     "fileCount": "File Count",
     "oldestLog": "Oldest Log",

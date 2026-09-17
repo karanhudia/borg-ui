@@ -4,6 +4,8 @@ Each test verifies ONE specific expected outcome.
 """
 
 from datetime import datetime, timedelta, timezone
+import asyncio
+
 import pytest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
@@ -453,13 +455,20 @@ class TestSystemSettings:
             patch(
                 "app.services.log_manager.log_manager.calculate_log_storage",
                 return_value={"total_size_mb": 10.0, "file_count": 4},
-            ),
+            ) as calculate,
+            patch("app.api.settings._off_loop", wraps=asyncio.to_thread) as off_loop,
         ):
             response = test_client.post(
                 "/api/settings/system/logs/cleanup", headers=admin_headers
             )
 
         assert response.status_code == 200
+        # the pass and the final figures went through the off-loop hop
+        hopped = [
+            getattr(call.args[0], "__name__", None) for call in off_loop.call_args_list
+        ]
+        assert "_cleanup_logs_off_request" in hopped
+        off_loop.assert_any_call(calculate)
         payload = response.json()
         assert payload["message"] == {
             "key": "backend.success.settings.logCleanupCompleted",
