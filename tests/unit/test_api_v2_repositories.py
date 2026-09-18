@@ -1449,6 +1449,10 @@ class TestV2LiveArchiveRoute:
     [
         (10, "", True),
         (2, "A repository already exists at /repo.", True),
+        # borg prints other diagnostics around the line
+        (2, "Using a pure-python msgpack\nA repository already exists at /r.\n", True),
+        # the phrase inside an unrelated failure is not the diagnostic
+        (2, "Error: the repository already exists check could not run", False),
         (2, "Permission denied: /repo", False),
         (2, "", False),
         (0, "", False),

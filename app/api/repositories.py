@@ -57,7 +57,7 @@ from app.core.authorization import authorize_request
 from app.core.security import get_current_user, check_repo_access
 from app.core.borg import BorgInterface
 from app.core.borg_router import BorgRouter
-from app.core.borg_errors import is_lock_error
+from app.core.borg_errors import is_lock_error, is_repository_exists_failure
 from app.core.borg2 import (
     ENCRYPTION_FLAGS_SINCE_BETA,
     borg2_speaks_encryption_flags,
@@ -6031,10 +6031,7 @@ async def initialize_borg_repository(
     if result.get("success"):
         result.setdefault("message", "backend.success.repo.repositoryInitialized")
         result.setdefault("already_existed", False)
-    elif (
-        result.get("return_code") == 2
-        and "repository already exists" in (result.get("stderr") or "").lower()
-    ):
+    elif is_repository_exists_failure(result):
         return {
             "success": True,
             "message": "backend.success.repo.repositoryAlreadyExists",

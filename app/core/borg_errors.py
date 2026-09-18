@@ -7,6 +7,8 @@ and message IDs from the JSON API output.
 Reference: https://borgbackup.readthedocs.io/en/stable/usage/general.html#return-codes
 """
 
+import re as _re
+
 # Exit code mappings (modern exit codes)
 # Source: https://borgbackup.readthedocs.io/en/stable/internals/frontends.html#message-ids
 BORG_EXIT_CODES = {
@@ -105,6 +107,37 @@ BORG_EXIT_CODES = {
 # check did exactly that while never matching a real already-exists, since
 # Borg 2 has always answered 10.
 REPOSITORY_EXISTS_EXIT_CODE = 10
+
+# Both shipped versions raise Repository.AlreadyExists with the same text,
+# verified against borg 1.4.5 and 2.0.0b24: "A repository already exists at
+# {}." Matched whole, one line at a time: borg prints other diagnostics
+# around it, and a bare "repository already exists" substring would also
+# accept an unrelated failure. Getting this wrong in the permissive
+# direction records a repository that was never created, so a reworded
+# future borg failing this match (a visible error on an existing
+# repository) is the better way to be wrong.
+_REPOSITORY_EXISTS_LINE = _re.compile(r"a repository already exists at .+\.", _re.I)
+
+
+def is_repository_exists_failure(result: dict) -> bool:
+    """Whether a failed repository create failed only because the repository
+    was already there, the one outcome a caller may treat as success.
+
+    The modern codes say so outright. Under the legacy codes, which an
+    operator can still pin with BORG_EXIT_CODES, every error collapses into
+    2, so the code cannot separate this from a generic failure and borg's
+    own wording has to.
+    """
+    return_code = result.get("return_code")
+    if return_code == REPOSITORY_EXISTS_EXIT_CODE:
+        return True
+    if return_code != 2:
+        return False
+    return any(
+        _REPOSITORY_EXISTS_LINE.fullmatch(line.strip())
+        for line in (result.get("stderr") or "").splitlines()
+    )
+
 
 # Message ID to user-friendly error messages
 # These come from Borg's JSON log output
