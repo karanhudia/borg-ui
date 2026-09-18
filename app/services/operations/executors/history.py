@@ -51,8 +51,9 @@ SIZE_LOOKUP_CHUNK = 500
 # so retrying a deterministic failure forever would block other metadata work
 # on that repository once per reconcile run, indefinitely.
 MAX_HISTORY_ATTEMPTS = 3
-# borg exits 1 for warnings; the diff is still complete
-BORG_OK_EXIT_CODES = (0, 1)
+# Borg's warning codes (legacy 1, modern 100-127, see is_borg_warning_exit_code);
+# the diff is still complete
+BORG_OK_EXIT_CODES = (0, 1, *range(100, 128))
 
 
 class OperationCancelled(Exception):
