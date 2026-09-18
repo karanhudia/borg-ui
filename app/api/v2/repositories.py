@@ -127,6 +127,27 @@ def _resolve_bypass_lock(repo: Repository, db: Session, setting_name: str) -> bo
     )
 
 
+def _is_repository_exists_failure(result: dict) -> bool:
+    """Whether a failed `repo-create` failed only because the repository was
+    already there, the one outcome the caller treats as success.
+
+    The modern codes say so outright. Under the legacy codes, which an
+    operator can still pin with BORG_EXIT_CODES, every error collapses into
+    2, so the code alone cannot tell this from a generic failure and borg's
+    own wording has to: the same discriminator the Borg 1 path uses. Matching
+    2 on its own would record a repository that was never created.
+
+    `rcreate` runs with BORG_STORE_CACHE="" so a populated cache directory
+    cannot produce this wording spuriously (see borg2.repo_create).
+    """
+    if result.get("return_code") == REPOSITORY_EXISTS_EXIT_CODE:
+        return True
+    return (
+        result.get("return_code") == 2
+        and "repository already exists" in (result.get("stderr") or "").lower()
+    )
+
+
 def _is_borg2_lock_like_failure(result: dict) -> bool:
     stderr = result.get("stderr", "") or ""
     return (
@@ -236,7 +257,7 @@ async def _rcreate(
         remote_path=remote_path,
         init_timeout=init_timeout,
     )
-    result["already_existed"] = result.get("return_code") == REPOSITORY_EXISTS_EXIT_CODE
+    result["already_existed"] = _is_repository_exists_failure(result)
     return result
 
 
