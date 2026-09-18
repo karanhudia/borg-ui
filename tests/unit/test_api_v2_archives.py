@@ -1128,7 +1128,7 @@ class TestV2ArchiveRoutes:
         job = seed_job_operation(
             test_db,
             "delete_archive",
-            repository_id=1,
+            repository_id=_create_v2_repo(test_db).id,
             repository_path="/tmp/v2-archive-repo",
             archive_name="archive-1",
             status="completed",
@@ -1163,7 +1163,7 @@ class TestV2ArchiveRoutes:
         job = seed_job_operation(
             test_db,
             "delete_archive",
-            repository_id=1,
+            repository_id=_create_v2_repo(test_db).id,
             repository_path="/tmp/v2-archive-repo",
             archive_name="archive-1",
             status="completed",

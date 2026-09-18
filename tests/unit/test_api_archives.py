@@ -27,6 +27,7 @@ from fastapi.testclient import TestClient
 from app.core.security import get_password_hash
 from app.services.operations.job_facade import resolve_maintenance_job
 from tests.utils.operations import seed_job_operation
+from tests.utils.ssh import ssh_connection
 from app.database.models import (
     AgentMachine,
     Repository,
@@ -264,7 +265,7 @@ class TestArchivesSshEnvironment:
             name="SSH Repo",
             path="ssh://borgsmoke@127.0.0.1:2222/home/borgsmoke/remote-repo",
             repository_type="ssh",
-            connection_id=1,
+            connection_id=ssh_connection(test_db).id,
             passphrase=None,
         )
         test_db.add(repo)
@@ -307,7 +308,7 @@ class TestArchivesSshEnvironment:
             name="SSH Repo",
             path="ssh://borgsmoke@127.0.0.1:2222/home/borgsmoke/remote-repo",
             repository_type="ssh",
-            connection_id=1,
+            connection_id=ssh_connection(test_db).id,
             passphrase=None,
         )
         test_db.add(repo)
@@ -466,7 +467,7 @@ class TestDownloadFileEndpoint:
             name="SSH Repo",
             path="ssh://borgsmoke@127.0.0.1:2222/home/borgsmoke/remote-repo",
             repository_type="ssh",
-            connection_id=1,
+            connection_id=ssh_connection(test_db).id,
             passphrase=None,
         )
         test_db.add(repo)

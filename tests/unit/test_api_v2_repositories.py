@@ -24,6 +24,7 @@ from app.database.models import (
 )
 from app.database.models import SSHConnection, SSHKey
 from tests.utils.operations import seed_job_operation
+from tests.utils.ssh import ssh_connection
 
 
 def _enable_borg_v2(test_db, **settings):
@@ -459,6 +460,7 @@ class TestV2RepositoryRoutes:
         self, test_client: TestClient, admin_headers, test_db
     ):
         _enable_borg_v2(test_db)
+        connection = ssh_connection(test_db)
 
         with patch(
             "app.api.v2.repositories._rinfo",
@@ -477,7 +479,7 @@ class TestV2RepositoryRoutes:
                     "path": "/tmp/v2-import-success",
                     "encryption": "none",
                     "source_directories": ["/data/source"],
-                    "source_connection_id": 55,
+                    "source_connection_id": connection.id,
                     "custom_flags": "--stats",
                     "pre_backup_script": "echo pre",
                     "post_backup_script": "echo post",
@@ -493,7 +495,7 @@ class TestV2RepositoryRoutes:
             test_db.query(Repository).filter(Repository.name == "Imported Repo").first()
         )
         assert repo is not None
-        assert repo.source_ssh_connection_id == 55
+        assert repo.source_ssh_connection_id == connection.id
         assert repo.custom_flags == "--stats"
         assert repo.pre_backup_script == "echo pre"
         assert repo.post_backup_script == "echo post"

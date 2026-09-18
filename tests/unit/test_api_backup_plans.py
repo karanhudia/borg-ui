@@ -1133,8 +1133,19 @@ class TestBackupPlanRoutes:
 
         repo = _create_repo(test_db, "Primary", "/repos/primary")
         plan, run = _create_execution_plan(test_db, [repo])
+        agent = AgentMachine(
+            agent_id="agent-hook",
+            name="agent-hook",
+            token_hash="hash",
+            token_prefix="prefix",
+        )
+        test_db.add(agent)
+        test_db.flush()
         agent_job = AgentJob(
-            agent_machine_id=1, job_type="script.run", status="running", payload={}
+            agent_machine_id=agent.id,
+            job_type="script.run",
+            status="running",
+            payload={},
         )
         test_db.add(agent_job)
         test_db.flush()

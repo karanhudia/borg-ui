@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from app.api import browse as browse_api
 from app.core.security import get_password_hash
 from app.database.models import AgentJob, AgentMachine, Repository, SystemSettings
+from tests.utils.ssh import ssh_connection
 
 
 def _create_repository(test_db, name="Browse Test Repo"):
@@ -756,7 +757,7 @@ class TestBrowseArchiveBehavior:
             name="SSH Browse Repo",
             path="ssh://borgsmoke@127.0.0.1:2222/home/borgsmoke/remote-repo",
             repository_type="ssh",
-            connection_id=1,
+            connection_id=ssh_connection(test_db).id,
             passphrase=None,
         )
         test_db.add(repo)
