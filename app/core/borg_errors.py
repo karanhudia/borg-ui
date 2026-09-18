@@ -98,11 +98,13 @@ BORG_EXIT_CODES = {
     107: "Warning: Backup file not found",
 }
 
-# "Repository already exists" is 10 under the modern codes and the legacy 2.
-# A repo-create that hits it is not a failure for us: the caller is adding a
-# repository that is already there. Borg 2 has always answered 10 here, so a
-# bare `== 2` check never matched it.
-REPOSITORY_EXISTS_EXIT_CODES = (2, 10)
+# "Repository already exists", the one repo-create failure that is not a
+# failure for us: the caller is adding a repository that is already there.
+# Only the modern code counts. Under the legacy codes every error is 2, so
+# matching that would swallow every failed repo-create, and the old `== 2`
+# check did exactly that while never matching a real already-exists, since
+# Borg 2 has always answered 10.
+REPOSITORY_EXISTS_EXIT_CODE = 10
 
 # Message ID to user-friendly error messages
 # These come from Borg's JSON log output

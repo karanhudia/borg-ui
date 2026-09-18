@@ -1446,15 +1446,16 @@ class TestV2LiveArchiveRoute:
 @pytest.mark.unit
 @pytest.mark.parametrize(
     "return_code, already_existed",
-    [(10, True), (2, True), (0, False), (13, False), (1, False)],
+    [(10, True), (2, False), (0, False), (13, False), (1, False)],
 )
-def test_rcreate_reads_repository_exists_from_either_exit_code(
+def test_rcreate_reads_repository_exists_from_the_modern_exit_code(
     return_code, already_existed
 ):
     """`repo-create` on an existing repository answers 10 under the modern
-    exit codes Borg 2 uses, not the legacy 2 the check used to look for, so
-    adding a repository that was already there read as a plain failure.
-    Both are accepted; every other code stays a failure."""
+    exit codes Borg 2 uses, so the old `== 2` check never matched a real
+    already-exists. 2 is borg's *generic error*, and `already_existed` is
+    what stops a failed repo-create from raising, so matching it would
+    record a repository that was never created."""
     with patch.object(
         repositories_v2_api.repository_v2_service,
         "initialize_repository",
