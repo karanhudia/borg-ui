@@ -103,6 +103,19 @@ class TestSystemSettingsContracts:
         assert "log_storage" not in payload["settings"]
         calculate.assert_not_called()
 
+    def test_get_system_settings_starts_no_process(
+        self, test_client: TestClient, admin_headers
+    ):
+        """No `borg --version` per call (#1092): the shell requests this route
+        on every page, and the sidebar reads the Borg version from
+        /api/system/info, which caches it."""
+        with patch("subprocess.run", side_effect=RuntimeError("boom")) as run:
+            response = test_client.get("/api/settings/system", headers=admin_headers)
+
+        assert response.status_code == 200
+        assert "borg_version" not in response.json()["settings"]
+        run.assert_not_called()
+
     def test_update_system_settings_rejects_invalid_log_save_policy(
         self, test_client: TestClient, admin_headers
     ):
