@@ -1,21 +1,40 @@
 {
-  "generatedAt": "2026-09-17T11:27:27.583Z",
+  "generatedAt": "2026-09-18T04:44:55.662Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1085 visual report",
-    "commitSha": "7a56b806d61f",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35215659768"
+    "commitSha": "ecb4c4aca7e3",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35308055745"
   },
   "totals": {
-    "baseline": 876,
-    "actual": 880,
-    "compared": 874,
-    "changed": 0,
+    "baseline": 940,
+    "actual": 944,
+    "compared": 938,
+    "changed": 1,
     "added": 6,
     "removed": 2,
-    "unchanged": 874
+    "unchanged": 937
   },
-  "changed": [],
+  "changed": [
+    {
+      "fileName": "components-pathselectorfield--disabled-control--mobile.png",
+      "baselinePath": "images/baseline/components-pathselectorfield--disabled-control--mobile.png",
+      "actualPath": "images/actual/components-pathselectorfield--disabled-control--mobile.png",
+      "diffPath": "images/diff/components-pathselectorfield--disabled-control--mobile.png",
+      "diffPixels": 329160,
+      "totalPixels": 329160,
+      "diffRatio": 1,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    }
+  ],
   "added": [
     {
       "fileName": "pages-dashboardv3-activitytimeline--busy-installation--mobile.png",
@@ -1440,9 +1459,6 @@
       "fileName": "components-pathselectorfield--custom-browse-action.png"
     },
     {
-      "fileName": "components-pathselectorfield--disabled-control--mobile.png"
-    },
-    {
       "fileName": "components-pathselectorfield--disabled-control.png"
     },
     {
@@ -1542,6 +1558,66 @@
       "fileName": "components-planinfodrawer--pro-plan-drawer.png"
     },
     {
+      "fileName": "components-prune-prunecandidatesranked--default--mobile.png"
+    },
+    {
+      "fileName": "components-prune-prunecandidatesranked--default.png"
+    },
+    {
+      "fileName": "components-prune-prunecandidatesranked--partial-and-stale--mobile.png"
+    },
+    {
+      "fileName": "components-prune-prunecandidatesranked--partial-and-stale.png"
+    },
+    {
+      "fileName": "components-prune-prunelostfilespanel--agent-unsupported--mobile.png"
+    },
+    {
+      "fileName": "components-prune-prunelostfilespanel--agent-unsupported.png"
+    },
+    {
+      "fileName": "components-prune-prunelostfilespanel--available--mobile.png"
+    },
+    {
+      "fileName": "components-prune-prunelostfilespanel--available.png"
+    },
+    {
+      "fileName": "components-prune-prunelostfilespanel--empty--mobile.png"
+    },
+    {
+      "fileName": "components-prune-prunelostfilespanel--empty.png"
+    },
+    {
+      "fileName": "components-prune-prunelostfilespanel--incomplete--mobile.png"
+    },
+    {
+      "fileName": "components-prune-prunelostfilespanel--incomplete.png"
+    },
+    {
+      "fileName": "components-prune-prunepreviewnumbers--default--mobile.png"
+    },
+    {
+      "fileName": "components-prune-prunepreviewnumbers--default.png"
+    },
+    {
+      "fileName": "components-prune-prunepreviewnumbers--not-measured--mobile.png"
+    },
+    {
+      "fileName": "components-prune-prunepreviewnumbers--not-measured.png"
+    },
+    {
+      "fileName": "components-prune-pruneretentionfields--default--mobile.png"
+    },
+    {
+      "fileName": "components-prune-pruneretentionfields--default.png"
+    },
+    {
+      "fileName": "components-prune-pruneretentionfields--disabled--mobile.png"
+    },
+    {
+      "fileName": "components-prune-pruneretentionfields--disabled.png"
+    },
+    {
       "fileName": "components-prunerepositorydialog--dry-run-log-messages--mobile.png"
     },
     {
@@ -1602,6 +1678,18 @@
       "fileName": "components-repositorycard--background-work-off.png"
     },
     {
+      "fileName": "components-repositorycard--borg-1-stored-size--mobile.png"
+    },
+    {
+      "fileName": "components-repositorycard--borg-1-stored-size.png"
+    },
+    {
+      "fileName": "components-repositorycard--borg-2-stored-size--mobile.png"
+    },
+    {
+      "fileName": "components-repositorycard--borg-2-stored-size.png"
+    },
+    {
       "fileName": "components-repositorycard--default--mobile.png"
     },
     {
@@ -1618,6 +1706,12 @@
     },
     {
       "fileName": "components-repositorycard--enable-cloud-mirror.png"
+    },
+    {
+      "fileName": "components-repositorycard--indexing-after-import--mobile.png"
+    },
+    {
+      "fileName": "components-repositorycard--indexing-after-import.png"
     },
     {
       "fileName": "components-repositorycard--managed-agent-mirror-pending--mobile.png"
@@ -1662,6 +1756,18 @@
       "fileName": "components-repositorycard--remote-repository-without-permanent-delete.png"
     },
     {
+      "fileName": "components-repositorycard--size-still-measuring--mobile.png"
+    },
+    {
+      "fileName": "components-repositorycard--size-still-measuring.png"
+    },
+    {
+      "fileName": "components-repositorycard--size-unknown--mobile.png"
+    },
+    {
+      "fileName": "components-repositorycard--size-unknown.png"
+    },
+    {
       "fileName": "components-repositorycard--with-upload-limit--mobile.png"
     },
     {
@@ -1680,6 +1786,18 @@
       "fileName": "components-repositorycard--without-run-history.png"
     },
     {
+      "fileName": "components-repositoryinfodialog--borg-1-stored-statistics--mobile.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--borg-1-stored-statistics.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--borg-2-stored-statistics--mobile.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--borg-2-stored-statistics.png"
+    },
+    {
       "fileName": "components-repositoryinfodialog--failed-info-recovery--mobile.png"
     },
     {
@@ -1696,6 +1814,96 @@
     },
     {
       "fileName": "components-repositoryinfodialog--failed-info-with-agent-reason.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--statistics-indexing-after-import--mobile.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--statistics-indexing-after-import.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--statistics-unknown--mobile.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--statistics-unknown.png"
+    },
+    {
+      "fileName": "components-repositorystats--borg-1-detail--mobile.png"
+    },
+    {
+      "fileName": "components-repositorystats--borg-1-detail.png"
+    },
+    {
+      "fileName": "components-repositorystats--borg-1-header--mobile.png"
+    },
+    {
+      "fileName": "components-repositorystats--borg-1-header.png"
+    },
+    {
+      "fileName": "components-repositorystats--borg-2-detail--mobile.png"
+    },
+    {
+      "fileName": "components-repositorystats--borg-2-detail.png"
+    },
+    {
+      "fileName": "components-repositorystats--borg-2-header--mobile.png"
+    },
+    {
+      "fileName": "components-repositorystats--borg-2-header.png"
+    },
+    {
+      "fileName": "components-repositorystats--detail-backfilled-size--mobile.png"
+    },
+    {
+      "fileName": "components-repositorystats--detail-backfilled-size.png"
+    },
+    {
+      "fileName": "components-repositorystats--detail-indexing-after-import--mobile.png"
+    },
+    {
+      "fileName": "components-repositorystats--detail-indexing-after-import.png"
+    },
+    {
+      "fileName": "components-repositorystats--detail-not-loaded--mobile.png"
+    },
+    {
+      "fileName": "components-repositorystats--detail-not-loaded.png"
+    },
+    {
+      "fileName": "components-repositorystats--detail-unknown--mobile.png"
+    },
+    {
+      "fileName": "components-repositorystats--detail-unknown.png"
+    },
+    {
+      "fileName": "components-repositorystats--header-archives-loading--mobile.png"
+    },
+    {
+      "fileName": "components-repositorystats--header-archives-loading.png"
+    },
+    {
+      "fileName": "components-repositorystats--header-archives-withheld--mobile.png"
+    },
+    {
+      "fileName": "components-repositorystats--header-archives-withheld.png"
+    },
+    {
+      "fileName": "components-repositorystats--header-indexing-after-import--mobile.png"
+    },
+    {
+      "fileName": "components-repositorystats--header-indexing-after-import.png"
+    },
+    {
+      "fileName": "components-repositorystats--header-size-still-measuring--mobile.png"
+    },
+    {
+      "fileName": "components-repositorystats--header-size-still-measuring.png"
+    },
+    {
+      "fileName": "components-repositorystats--header-unknown--mobile.png"
+    },
+    {
+      "fileName": "components-repositorystats--header-unknown.png"
     },
     {
       "fileName": "components-repositorywipedialog--compact-failure-recovery--mobile.png"
