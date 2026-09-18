@@ -1476,7 +1476,7 @@ class RestoreService:
 
             # Check exit code (same logic as local restore)
             if process.returncode == 0 or is_borg_warning_exit_code(process.returncode):
-                if process.returncode == 1:
+                if is_borg_warning_exit_code(process.returncode):
                     warning_msgs = [
                         line
                         for line in stderr_lines
@@ -1508,11 +1508,14 @@ class RestoreService:
             job.status = (
                 "completed" if process.returncode == 0 else "completed_with_warnings"
             )
-            if process.returncode == 1:
+            if is_borg_warning_exit_code(process.returncode):
+                # Any warning code, not just the legacy 1: this carries the
+                # text the UI shows beside "completed with warnings", and a
+                # modern warning (100-127) would otherwise leave it empty.
                 job.error_message = json.dumps(
                     {
                         "key": "backend.errors.service.restoreCompletedWithWarnings",
-                        "params": {"exitCode": 1},
+                        "params": {"exitCode": process.returncode},
                     }
                 )
             job.progress = 100
