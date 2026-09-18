@@ -319,6 +319,29 @@ _MSGID_TO_LOCALE_KEY = {
     "Archive.AlreadyExists": "archiveAlreadyExists",
 }
 
+# The same locale keys, reached by exit code, for the failures that arrive
+# without a message id (no --log-json, or a wrapper that swallowed it). Only
+# the modern codes carry this much: the legacy set collapses every error into
+# 2, which is why this map is worth having only now that every borg we run is
+# asked for the modern codes. Codes with no key of their own fall through to
+# the generic "exit code N" below rather than inventing an untranslated
+# string.
+_EXIT_CODE_TO_LOCALE_KEY = {
+    10: "repositoryAlreadyExists",
+    12: "repositoryCheckNeeded",
+    13: "repositoryDoesNotExist",
+    15: "notValidBorgRepository",
+    16: "notValidBorgRepository",
+    30: "archiveAlreadyExists",
+    31: "archiveDoesNotExist",
+    70: "lockError",
+    71: "lockError",
+    72: "lockError",
+    73: "lockTimeout",
+    74: "lockError",
+    75: "lockError",
+}
+
 
 def format_error_message(
     msgid: str = None, original_message: str = None, exit_code: int = None
@@ -340,6 +363,11 @@ def format_error_message(
     if msgid and msgid in _MSGID_TO_LOCALE_KEY:
         return _json.dumps(
             {"key": f"backend.errors.borg.{_MSGID_TO_LOCALE_KEY[msgid]}"}
+        )
+
+    if exit_code in _EXIT_CODE_TO_LOCALE_KEY:
+        return _json.dumps(
+            {"key": f"backend.errors.borg.{_EXIT_CODE_TO_LOCALE_KEY[exit_code]}"}
         )
 
     if exit_code is not None:
