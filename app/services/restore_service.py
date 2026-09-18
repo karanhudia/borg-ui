@@ -631,6 +631,8 @@ class RestoreService:
                     env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
                     env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
                     env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
+                    # modern exit codes, as setup_borg_env sets on the repository path
+                    env.setdefault("BORG_EXIT_CODES", "modern")
                     env["BORG_RSH"] = f"ssh {' '.join(get_standard_ssh_opts())}"
 
                 logger.info(
@@ -1294,6 +1296,8 @@ class RestoreService:
                 env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
                 env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
                 env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
+                # modern exit codes, as setup_borg_env sets on the repository path
+                env.setdefault("BORG_EXIT_CODES", "modern")
                 env["BORG_RSH"] = f"ssh {' '.join(get_standard_ssh_opts())}"
 
             logger.info(

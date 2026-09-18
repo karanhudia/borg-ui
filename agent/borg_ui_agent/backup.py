@@ -198,6 +198,12 @@ _BORG_NONINTERACTIVE_ACCESS_DEFAULTS = {
     # Borg 1 ignores both variables.
     "BORG_STORE_CACHE": "1",
     "BORG_PACK_CACHE_SIZE": str(2 * 1024**3),
+    # Borg's modern exit codes (0 success, 2-99 errors, 100-127 warnings), so
+    # an agent's Borg 1 reports failures in the same vocabulary the server's
+    # does and `is_warning_return_code` sees the range it already accepts.
+    # Borg 2 uses them anyway. setdefault like the rest: an operator can pin
+    # "legacy", and a per-job override from the server still wins.
+    "BORG_EXIT_CODES": "modern",
 }
 
 

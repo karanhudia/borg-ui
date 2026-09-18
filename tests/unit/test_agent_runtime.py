@@ -3080,6 +3080,20 @@ def test_build_borg_env_overrides_win_but_container_setting_is_kept(monkeypatch)
 
 
 @pytest.mark.unit
+def test_build_borg_env_asks_for_modern_exit_codes(monkeypatch):
+    # The server asks borg for the modern codes on every path it runs itself.
+    # An agent's Borg 1 must speak the same vocabulary, or the same failure
+    # reads as a specific code from the server and a bare legacy 2 from an
+    # agent. `is_warning_return_code` already accepts 100-127.
+    monkeypatch.delenv("BORG_EXIT_CODES", raising=False)
+
+    assert build_borg_env()["BORG_EXIT_CODES"] == "modern"
+
+    monkeypatch.setenv("BORG_EXIT_CODES", "legacy")
+    assert build_borg_env()["BORG_EXIT_CODES"] == "legacy"
+
+
+@pytest.mark.unit
 def test_build_borg_env_enables_the_pack_cache_with_a_bounded_size(monkeypatch):
     """Borg 2.0.0b23's pack cache downloads each pack once instead of
     re-transferring it on every listing; borg puts it under its own cache

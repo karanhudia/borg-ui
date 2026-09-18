@@ -119,3 +119,30 @@ def test_borg2_base_env_carries_the_same_pack_cache_defaults(monkeypatch):
 
     assert env["BORG_STORE_CACHE"] == "1"
     assert env["BORG_PACK_CACHE_SIZE"] == str(2 * 1024**3)
+
+
+@pytest.mark.unit
+def test_setup_borg_env_asks_borg_for_modern_exit_codes(monkeypatch):
+    """Borg 2 uses the modern codes by default; Borg 1.4 needs the variable.
+    Without it the same failure reports a specific code from a backup and a
+    bare legacy 2 from every other path. An operator can still pin legacy."""
+    monkeypatch.delenv("BORG_EXIT_CODES", raising=False)
+
+    assert setup_borg_env()["BORG_EXIT_CODES"] == "modern"
+
+    monkeypatch.setenv("BORG_EXIT_CODES", "legacy")
+    assert setup_borg_env()["BORG_EXIT_CODES"] == "legacy"
+
+
+@pytest.mark.unit
+def test_borg1_exec_env_asks_for_modern_exit_codes(monkeypatch):
+    """The Borg 1 wrapper builds its own environment, so it needs the same
+    default; otherwise the vocabulary depends on which path ran borg."""
+    from app.core.borg import borg
+
+    monkeypatch.delenv("BORG_EXIT_CODES", raising=False)
+
+    assert borg._build_exec_env()["BORG_EXIT_CODES"] == "modern"
+
+    monkeypatch.setenv("BORG_EXIT_CODES", "legacy")
+    assert borg._build_exec_env()["BORG_EXIT_CODES"] == "legacy"

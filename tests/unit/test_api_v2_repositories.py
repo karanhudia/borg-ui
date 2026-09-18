@@ -1441,3 +1441,34 @@ class TestV2LiveArchiveRoute:
 
         assert response.status_code == 200
         assert response.json()["archives"][0]["name"] == "m3s02"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "return_code, already_existed",
+    [(10, True), (2, True), (0, False), (13, False), (1, False)],
+)
+def test_rcreate_reads_repository_exists_from_either_exit_code(
+    return_code, already_existed
+):
+    """`repo-create` on an existing repository answers 10 under the modern
+    exit codes Borg 2 uses, not the legacy 2 the check used to look for, so
+    adding a repository that was already there read as a plain failure.
+    Both are accepted; every other code stays a failure."""
+    with patch.object(
+        repositories_v2_api.repository_v2_service,
+        "initialize_repository",
+        new=AsyncMock(return_value={"success": False, "return_code": return_code}),
+    ):
+        result = asyncio.run(
+            repositories_v2_api._rcreate(
+                path="/repo",
+                encryption="none",
+                passphrase=None,
+                ssh_key_id=None,
+                remote_path=None,
+                init_timeout=30,
+            )
+        )
+
+    assert result["already_existed"] is already_existed

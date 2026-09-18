@@ -78,6 +78,12 @@ class BorgInterface:
         # Mark this container's hostname as unique to avoid lock conflicts
         exec_env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
 
+        # Borg's modern exit codes: specific errors (2-99) and warnings
+        # (100-127) instead of the legacy 0/1/2, so a Borg 1 failure names
+        # itself the way the same failure does under Borg 2. Same default and
+        # override semantics as setup_borg_env (app/utils/borg_env.py).
+        exec_env.setdefault("BORG_EXIT_CODES", "modern")
+
         # Allow non-interactive access to unencrypted and relocated repositories
         exec_env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
         exec_env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
@@ -186,6 +192,8 @@ class BorgInterface:
         exec_env = os.environ.copy()
         exec_env["BORG_LOCK_WAIT"] = "20"
         exec_env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
+        # modern exit codes, as _build_exec_env sets above
+        exec_env.setdefault("BORG_EXIT_CODES", "modern")
 
         ssh_opts = [
             *public_key_only_ssh_args(),

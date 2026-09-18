@@ -23,7 +23,7 @@ from app.core.borg2 import (
     BORG2_ENCRYPTION_MODES,
     normalize_repo_info_encryption,
 )
-from app.core.borg_errors import is_lock_error
+from app.core.borg_errors import REPOSITORY_EXISTS_EXIT_CODES, is_lock_error
 from app.services.repository_info_sync import sync_archive_stats_from_info
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
 from app.services.repository_command_lock import run_serialized_repository_command
@@ -236,7 +236,9 @@ async def _rcreate(
         remote_path=remote_path,
         init_timeout=init_timeout,
     )
-    result["already_existed"] = result.get("return_code") == 2
+    result["already_existed"] = (
+        result.get("return_code") in REPOSITORY_EXISTS_EXIT_CODES
+    )
     return result
 
 

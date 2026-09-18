@@ -98,6 +98,12 @@ BORG_EXIT_CODES = {
     107: "Warning: Backup file not found",
 }
 
+# "Repository already exists" is 10 under the modern codes and the legacy 2.
+# A repo-create that hits it is not a failure for us: the caller is adding a
+# repository that is already there. Borg 2 has always answered 10 here, so a
+# bare `== 2` check never matched it.
+REPOSITORY_EXISTS_EXIT_CODES = (2, 10)
+
 # Message ID to user-friendly error messages
 # These come from Borg's JSON log output
 BORG_MESSAGE_IDS = {
