@@ -391,11 +391,12 @@ async def test_plan_locked_skips_without_touching_archives(db, repo):
 
 
 @pytest.mark.unit
-async def test_borg_failure_marks_archive_failed_and_warns(db, repo):
+@pytest.mark.parametrize("return_code", [2, 99, 128])
+async def test_borg_failure_marks_archive_failed_and_warns(db, repo, return_code):
     _archive(db, repo, "first", 1, state="indexed")
     a2 = _archive(db, repo, "second", 2)
     FakeRouter.diffs[("first", "second")] = FakeStream(
-        [D_ADD("x", 1)], return_code=2, stderr="lock held"
+        [D_ADD("x", 1)], return_code=return_code, stderr="lock held"
     )
     out = await history.run_history_index(_ctx(db, repo))
     assert out.status == "completed_with_warnings" and out.result["failed"] == 1
@@ -405,10 +406,13 @@ async def test_borg_failure_marks_archive_failed_and_warns(db, repo):
 
 
 @pytest.mark.unit
-async def test_borg_warning_exit_code_still_indexes(db, repo):
+@pytest.mark.parametrize("return_code", [1, 100, 127])
+async def test_borg_warning_exit_code_still_indexes(db, repo, return_code):
     _archive(db, repo, "first", 1, state="indexed")
     a2 = _archive(db, repo, "second", 2)
-    FakeRouter.diffs[("first", "second")] = FakeStream([D_ADD("x", 1)], return_code=1)
+    FakeRouter.diffs[("first", "second")] = FakeStream(
+        [D_ADD("x", 1)], return_code=return_code
+    )
     out = await history.run_history_index(_ctx(db, repo))
     assert out.status == "completed" and out.result["indexed"] == 1
     db.refresh(a2)
