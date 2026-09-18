@@ -243,9 +243,7 @@ describe('ArchiveChangesTab', () => {
         }}
       />
     )
-    expect(
-      await screen.findByText(/not available for repositories executed by an agent/i)
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/needs an agent that can build it/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /rebuild/i })).not.toBeInTheDocument()
     expect(screen.queryByText(/was skipped for this archive/i)).not.toBeInTheDocument()
   })
@@ -266,9 +264,7 @@ describe('ArchiveChangesTab', () => {
         archive={{ ...archive, history_state: 'pending', history_capability: 'agent_unsupported' }}
       />
     )
-    expect(
-      await screen.findByText(/not available for repositories executed by an agent/i)
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/needs an agent that can build it/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /rebuild/i })).not.toBeInTheDocument()
     expect(screen.queryByText(/has not been indexed yet/i)).not.toBeInTheDocument()
   })
@@ -288,9 +284,7 @@ describe('ArchiveChangesTab', () => {
         archive={{ ...archive, history_state: 'failed', history_capability: 'agent_unsupported' }}
       />
     )
-    expect(
-      await screen.findByText(/not available for repositories executed by an agent/i)
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/needs an agent that can build it/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /rebuild/i })).not.toBeInTheDocument()
     expect(screen.queryByText(/could not be indexed/i)).not.toBeInTheDocument()
   })

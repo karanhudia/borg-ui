@@ -2,7 +2,7 @@
 operation reaches a success state. Phase 2 adds plan awareness here
 (spec 11.2): history kinds are dropped for Community installs."""
 
-from typing import Literal, Optional
+from typing import Any, Literal, Mapping, Optional
 
 from app.services.operations.index_mode import (
     DEFAULT_INDEX_MODE,
@@ -91,9 +91,10 @@ def chain_for_repository(
     through the licensing service and commits the session. A caller that
     wraps this call in a savepoint reads it beforehand and passes it in.
     With the plan gate open, the executor decides next: a repository
-    executed by a managed agent cannot be diffed by the server, so it gets
-    no history stage either (`history_capability`), by the same rule as
-    the plan and the mode: a stage that will never run does not exist.
+    executed by a managed agent whose agent cannot produce the change
+    listing gets no history stage either (`history_capability`), by the
+    same rule as the plan and the mode: a stage that will never run does
+    not exist.
 
     `available` is for the runner, which carries its own registry and must
     not be told about executors it was not given.
@@ -249,23 +250,40 @@ HISTORY_AGENT_UNSUPPORTED: HistoryCapability = "agent_unsupported"
 
 
 def history_capability(
-    db, repository, *, history: Optional[bool] = None
+    db,
+    repository,
+    *,
+    history: Optional[bool] = None,
+    agents: Optional[Mapping[int, Any]] = None,
 ) -> HistoryCapability:
     """Whether change history can be built for `repository`, and if not, why.
 
-    `agent_unsupported`: the repository is executed by a managed agent, and
-    the agent protocol has no diff job, so `history_index` would only ever
-    skip it (the server runs `borg diff`, and it cannot reach an agent's
-    repository). `plan_locked`: the plan lacks the feature (spec 11.2). The
-    executor is read first: its reason outlasts any plan change, and a plan
-    chip on such a repository would promise what an upgrade cannot deliver.
-    Derived at read time from the executor and the plan rather than stored:
-    both are facts about the repository, not about one run. `history` is
-    the plan gate when the caller already read it.
+    `agent_unsupported`: the repository is executed by a managed agent that
+    does not advertise the `repository.diff` job (an agent from before
+    0.1.6, or none assigned), so `history_index` would only ever skip it:
+    the server cannot reach an agent's repository, and only the agent can
+    produce the listing. An agent that advertises the job builds it on its
+    machine, and the plan decides as it does for any repository.
+    `plan_locked`: the plan lacks the feature (spec 11.2). The executor is
+    read first: its reason outlasts any plan change, and a plan chip on
+    such a repository would promise what an upgrade cannot deliver.
+    Derived at read time from the executor, the agent's capabilities and
+    the plan rather than stored: they are facts about the repository, not
+    about one run. `history` is the plan gate when the caller already read
+    it, `agents` a page's machines by id when it loaded them once (the
+    repositories hub); single-repository callers leave both out.
     """
-    from app.services.repository_executor import is_agent_executor
+    from app.services.repository_executor import (
+        AGENT_DIFF_JOB_KIND,
+        agent_supports_job,
+        is_agent_executor,
+    )
 
-    if repository is not None and is_agent_executor(repository):
+    if (
+        repository is not None
+        and is_agent_executor(repository)
+        and not agent_supports_job(db, repository, AGENT_DIFF_JOB_KIND, agents=agents)
+    ):
         return HISTORY_AGENT_UNSUPPORTED
     if history is None:
         history = history_enabled(db)

@@ -412,6 +412,23 @@ Rules:
   unknown size leaves the stored value alone, never `0`. Both versions'
   `repository.last_modified` (the last manifest
   write) lands in `repositories.borg_last_modified`.
+- Agent repositories build file history through the agent's
+  `repository.diff` job (agents from 0.1.6). `history_index` queues one job
+  per archive pair (or the full listing of a series' first archive),
+  receives its stdout through the artifact relay, and parses it with the
+  server's own parser, so excludes, size resolution, the row cap and the
+  fold are identical for both executors. A job no agent picks up leaves the
+  archive `pending` without spending a retry; a repository whose agent
+  predates the job reads `history_capability = agent_unsupported` and gets
+  no history stage.
+  The agent's diff runs under the same metadata scope as the server's own,
+  so a listing waits for it as it waits for a server diff. Its budget is
+  the server's (`timeout_seconds` in the job payload, an hour): a diff
+  prints nothing while it compares unchanged paths and the agent pads that
+  silence, so only the deadline tells a wedged borg from a healthy one,
+  and it bounds how long such a listing can hold the repository. The agent
+  ends borg at the budget; the server stops waiting once the agent has
+  also had its first-byte and verdict bounds, and cancels the job.
 - The repository status (`GET /repositories/{id}/status`) reads
   repository evidence first: backup is the newest
   archive, whatever created it, unless a failed or cancelled Borg UI
@@ -477,9 +494,11 @@ Two more index kinds fill and maintain `archive_changes`:
   `completed_with_warnings` so a stalled series is visible. An archive that
   failed is retried on the next run: nothing else moves it out of that
   state, and every later archive in the series waits on it. A managed
-  agent's repository never gets the stage (see the history capability
-  below); should a row reach the executor anyway, it skips with
-  `agent_diff_unsupported`.
+  agent's repository whose agent does not advertise `repository.diff`
+  never gets the stage (see the history capability below); should a row
+  reach the executor anyway, it skips with `agent_diff_unsupported`. One
+  whose agent advertises the job is indexed through it, as described
+  above.
 - `history_merge` consumes `removed_archive_ids` from the `archive_sync`
   it depends on. A removed archive's rows are folded into its successor
   (the table in the spec, section 8.4), or the successor is reset to
@@ -502,19 +521,22 @@ Community installs the follow-up chains and the reconcile run omit it, and
 activating a Pro licence enqueues a reconcile run for every repository.
 The same gate applies per repository through its history capability
 (`history_capability` in `app/services/operations/followups.py`): a
-repository executed by a managed agent cannot be diffed by the server, so
-it is `agent_unsupported` and gets no `history_index` from any chain.
+repository executed by a managed agent whose agent does not advertise the
+`repository.diff` job (an agent before 0.1.6, or none assigned) is
+`agent_unsupported` and gets no `history_index` from any chain; one whose
+agent advertises the job is decided by the plan like any repository.
 `chain_for_repository` and the reconcile run read the three gates in one
-place, the plan, the repository's index mode (below) and its executor, so
-no follow-up site decides on its own. The rebuild route refuses
+place, the plan, the repository's index mode (below) and its executor with
+the agent's capabilities, so no follow-up site decides on its own. The rebuild route refuses
 `from = history` for such a repository (409) and drops the kind for
-`from = archives`. The capability is derived from the plan and the
-executor when read, not stored. `archive_sync` marks such a repository's
+`from = archives`. The capability is derived from the plan, the
+executor and the agent's advertised capabilities when read, not stored. `archive_sync` marks such a repository's
 `pending` and `failed` archives `skipped`, the state the history run used
 to write for them (nothing there could retry a failure), and
 `history_merge` resets a successor to `skipped` rather than `pending`
-there; moving the repository back to the server puts them back to
-`pending` with a fresh retry budget and queues an index run (a server's
+there; updating its agent to one that advertises the job, or moving the
+repository back to the server, puts them back to `pending` with a fresh
+retry budget and queues an index run (a server's
 listing reopens rows an older release left `skipped` the same way). The
 archive list, detail and changes responses, the hub rows and the
 path-history `coverage` carry it, so the

@@ -459,21 +459,37 @@ class TestOperationsRepositories:
     def test_rows_name_the_history_capability(
         self, test_client, test_db, admin_headers
     ):
-        """The executor first, then the plan: an agent's repository is
-        agent-unsupported on every plan; a server repository is plan-locked
-        on Community and has the stage on Pro."""
-        from app.database.models import LicensingState
+        """The agent first, then the plan: a repository whose agent cannot
+        produce the change listing is agent-unsupported on every plan; a
+        server repository, and one whose agent advertises the diff job, is
+        plan-locked on Community and has the stage on Pro."""
+        from app.database.models import AgentMachine, LicensingState
 
         _repo(test_db, "server")
         agent = _repo(test_db, "agent")
         agent.executor_type = "agent"
         agent.execution_target = "agent"
+        machine = AgentMachine(
+            name="current",
+            agent_id="agt_hub",
+            token_hash="x",
+            token_prefix="x",
+            status="online",
+            capabilities=["repository.diff"],
+        )
+        test_db.add(machine)
+        test_db.flush()
+        capable = _repo(test_db, "capable")
+        capable.executor_type = "agent"
+        capable.execution_target = "agent"
+        capable.agent_machine_id = machine.id
         test_db.commit()
 
         r = test_client.get("/api/operations/repositories", headers=admin_headers)
         rows = {row["repository_name"]: row for row in r.json()["repositories"]}
         assert rows["server"]["history_capability"] == "plan_locked"
         assert rows["agent"]["history_capability"] == "agent_unsupported"
+        assert rows["capable"]["history_capability"] == "plan_locked"
         assert r.json()["history_available"] is False
 
         # the first request created the single licensing row; flip that one
@@ -486,7 +502,57 @@ class TestOperationsRepositories:
         rows = {row["repository_name"]: row for row in r.json()["repositories"]}
         assert rows["server"]["history_capability"] == "available"
         assert rows["agent"]["history_capability"] == "agent_unsupported"
+        assert rows["capable"]["history_capability"] == "available"
         assert r.json()["history_available"] is True
+
+    def test_the_agents_are_read_once_per_page(
+        self, test_client, test_db, admin_headers
+    ):
+        """The board polls this route every thirty seconds: the capability
+        of every agent repository comes from one query for the page's
+        agents, not one per repository."""
+        from sqlalchemy import event
+
+        from app.database.models import AgentMachine
+
+        machines = []
+        for index in range(3):
+            machine = AgentMachine(
+                name=f"machine-{index}",
+                agent_id=f"agt_hub_{index}",
+                token_hash="x",
+                token_prefix="x",
+                status="online",
+                capabilities=["repository.diff"] if index else [],
+            )
+            test_db.add(machine)
+            test_db.flush()
+            machines.append(machine)
+            repo = _repo(test_db, f"agent-{index}")
+            repo.executor_type = "agent"
+            repo.execution_target = "agent"
+            repo.agent_machine_id = machine.id
+        test_db.commit()
+
+        agent_queries = []
+        engine = test_db.get_bind()
+
+        def count(conn, cursor, statement, parameters, context, executemany):
+            if "FROM agent_machines" in statement:
+                agent_queries.append(statement)
+
+        event.listen(engine, "before_cursor_execute", count)
+        try:
+            r = test_client.get("/api/operations/repositories", headers=admin_headers)
+        finally:
+            event.remove(engine, "before_cursor_execute", count)
+
+        assert r.status_code == 200
+        rows = {row["repository_name"]: row for row in r.json()["repositories"]}
+        assert rows["agent-0"]["history_capability"] == "agent_unsupported"
+        assert rows["agent-1"]["history_capability"] == "plan_locked"
+        assert rows["agent-2"]["history_capability"] == "plan_locked"
+        assert len(agent_queries) == 1
 
     def test_rows_cover_every_repository_with_index_totals(
         self, test_client, test_db, admin_headers

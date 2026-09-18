@@ -372,7 +372,7 @@ describe('PipelineBoard', () => {
       }),
     ])
     renderBoard()
-    expect(await screen.findByText(/not available for agent repositories/i)).toBeInTheDocument()
+    expect(await screen.findByText(/needs a capable agent/i)).toBeInTheDocument()
     expect(screen.queryByText(/no file history yet/i)).not.toBeInTheDocument()
   })
 

@@ -1194,7 +1194,7 @@
       "filterLabel": "Change type",
       "delta": "{{sign}}{{size}}",
       "summaryFolder": "Folder",
-      "agentUnsupported": "Change history is not available for repositories executed by an agent."
+      "agentUnsupported": "Change history needs an agent that can build it: this repository has no usable agent assigned, or its agent predates change history. Assign or enable an agent, or update it."
     },
     "files": {
       "size": "Size",
@@ -1226,7 +1226,7 @@
       "type": "Type",
       "typeFile": "File",
       "typeDirectory": "Folder",
-      "historyUnavailableAgent": "Change history is not available for repositories executed by an agent.",
+      "historyUnavailableAgent": "Change history needs an agent that can build it: this repository has no usable agent assigned, or its agent predates change history. Assign or enable an agent, or update it.",
       "historyNotIndexed": "This repository has not been indexed yet.",
       "historyCoverage_one": "{{indexed}} of {{count}} archive indexed",
       "historyCoverage_other": "{{indexed}} of {{count}} archives indexed",
@@ -3822,7 +3822,7 @@
         "detailHint": "Rebuild from File history to index these archives again.",
         "viewIndexRuns": "View index runs",
         "openRepository": "Open repository",
-        "historyAgentUnsupported": "Not available for agent repositories"
+        "historyAgentUnsupported": "Needs a capable agent"
       },
       "rebuildMenuHint": "Every stage after the one you pick is rebuilt too. Earlier stages are kept. Stats always run last, because they total up what the other stages produced.",
       "rebuildTitle": "Rebuild derived data",
@@ -3831,7 +3831,7 @@
       "stageKept": "Kept",
       "stageStart": "Start here",
       "currentRun": "Current run",
-      "stageAgentUnsupported": "Not available for repositories executed by an agent"
+      "stageAgentUnsupported": "Not available for repositories whose agent cannot build change history: none is assigned or usable, or it predates the feature"
     },
     "status": {
       "queued": "Queued",
@@ -6103,7 +6103,7 @@
         "repositoryNotFound": "Repository not found",
         "fileNotFoundAfterExtraction": "File not found after extraction",
         "failedExtractFile": "Failed to extract file: {{error}}",
-        "historyUnavailableForAgent": "Change history is not available for repositories executed by an agent, so there is nothing to rebuild."
+        "historyUnavailableForAgent": "Change history is not available for repositories whose agent cannot build it, so there is nothing to rebuild. Assign or enable an agent, or update one that predates change history."
       },
       "borg": {
         "repositoryDoesNotExist": "Repository does not exist at the specified path",
