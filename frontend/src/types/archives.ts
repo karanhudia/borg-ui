@@ -272,3 +272,25 @@ export interface PruneRetentionDefaults extends Omit<PruneRetention, 'keep_withi
   plan_name: string | null
   keep_within: string | null
 }
+
+export type StoredPruneRetention = Omit<PruneRetention, 'keep_within'> & {
+  keep_within: string | null
+}
+
+export interface PruneComparisonRow {
+  key: string
+  label: string
+  retention: StoredPruneRetention | null
+  kept_count: number
+  deleted_count: number
+  freed_at_least: number
+  partial_measure: boolean
+  operation_id: number | null
+}
+
+export interface PruneComparison {
+  computed_at: string | null
+  archive_count_at: number | null
+  stale: boolean
+  candidates: PruneComparisonRow[]
+}

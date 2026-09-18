@@ -239,6 +239,48 @@ class TestRemeasureCandidates:
             assert await remeasure_candidates(test_db, repo, rows) is False
 
 
+class TestRunCandidate:
+    @pytest.mark.asyncio
+    async def test_without_remeasure_uses_stored_sizes_and_flags_unmeasured(
+        self, test_db
+    ):
+        """Spec 4.5 and Appendix B: the comparison runs after a backup and
+        re-measures nothing; a candidate never measured makes it partial."""
+        from datetime import datetime
+
+        from app.services.prune_preview import Retention, run_candidate
+
+        repo = _repo(test_db)
+        a = _archive(test_db, repo, "daily-1", 1)
+        a.borg_id = HEX(1)
+        a.deduplicated_size = 40
+        a.stats_measured_at = datetime(2026, 9, 1)
+        b = _archive(test_db, repo, "daily-2", 2)
+        b.borg_id = HEX(2)
+        b.deduplicated_size = None
+        b.stats_measured_at = None
+        test_db.commit()
+        op = type("Op", (), {"status": "completed", "id": 1})()
+        with (
+            patch.object(
+                prune_preview, "run_prune_dry_run", new=AsyncMock(return_value=(op, ""))
+            ),
+            patch.object(
+                prune_preview,
+                "parse_prune_verdicts",
+                return_value=_verdicts(
+                    (1, "daily-1", "deleted", None), (2, "daily-2", "deleted", None)
+                ),
+            ),
+            patch.object(prune_preview, "remeasure_candidates", new=AsyncMock()) as rm,
+        ):
+            r = await run_candidate(
+                test_db, repo, Retention(), user_id=None, remeasure=False
+            )
+        rm.assert_not_awaited()
+        assert (r.freed_at_least, r.partial_measure, r.deleted_count) == (40, True, 2)
+
+
 from app.database.models import ArchiveChange
 from app.services.prune_preview import lost_files
 

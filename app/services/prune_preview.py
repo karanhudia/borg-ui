@@ -95,6 +95,8 @@ async def run_prune_dry_run(
     retention: Retention,
     *,
     user_id: Optional[int],
+    run_id: Optional[str] = None,
+    depends_on_id: Optional[int] = None,
 ) -> tuple[Operation, str]:
     """Borg's own dry run, inline, on an operation row created `running`
     and closed here (the path the prune route has always taken). Returns
@@ -114,6 +116,8 @@ async def run_prune_dry_run(
         "prune",
         params={**retention.as_params(), "dry_run": True, "scheduled_prune": False},
         user_id=user_id,
+        run_id=run_id,
+        depends_on_id=depends_on_id,
     )
     prune_kwargs = (
         {"keep_within": retention.keep_within}
@@ -429,13 +433,42 @@ class DryRunFailed(Exception):
         self.log = log
 
 
-async def build_preview(
-    db: Session, repository: Repository, retention: Retention, *, user_id: Optional[int]
-) -> dict:
-    """Spec 4.4 steps 1 to 5 in order. Raises DryRunFailed when Borg's dry
-    run did not complete, with the log attached."""
-    pro = history_enabled(db)  # commits; before the archive rows load
-    operation, log = await run_prune_dry_run(db, repository, retention, user_id=user_id)
+@dataclass
+class CandidateResult:
+    operation: Operation
+    log: str
+    joined: list[PreviewArchive]
+    candidates: list[Archive]
+    partial_measure: bool
+    freed_at_least: int
+    kept_count: int
+    deleted_count: int
+
+
+async def run_candidate(
+    db: Session,
+    repository: Repository,
+    retention: Retention,
+    *,
+    user_id: Optional[int],
+    run_id: Optional[str] = None,
+    depends_on_id: Optional[int] = None,
+    remeasure: bool = True,
+) -> CandidateResult:
+    """Spec 4.4 steps 1 to 4: dry run, verdict join, candidate re-measure,
+    freed lower bound. Shared by the preview page and the comparison
+    (spec 4.5), which passes `remeasure=False`: it runs after a backup,
+    and nothing is re-measured after a backup (Appendix B); a candidate
+    never measured then counts as partial. Raises DryRunFailed when Borg's
+    dry run did not complete."""
+    operation, log = await run_prune_dry_run(
+        db,
+        repository,
+        retention,
+        user_id=user_id,
+        run_id=run_id,
+        depends_on_id=depends_on_id,
+    )
     if operation.status not in ("completed", "completed_with_warnings"):
         raise DryRunFailed(log)
     joined = join_verdicts(db, repository, parse_prune_verdicts(log))
@@ -445,13 +478,36 @@ async def build_preview(
     candidates = [
         by_id[p.id] for p in joined if p.verdict == "deleted" and p.id in by_id
     ]
-    partial = await remeasure_candidates(db, repository, candidates)
+    if remeasure:
+        partial = await remeasure_candidates(db, repository, candidates)
+    else:
+        partial = any(a.stats_measured_at is None for a in candidates)
     for p in joined:
         row = by_id.get(p.id) if p.id is not None else None
         if row is not None:
             p.deduplicated_size = row.deduplicated_size
             p.stats_measured_at = row.stats_measured_at
-    freed = freed_at_least(candidates)
+    return CandidateResult(
+        operation=operation,
+        log=log,
+        joined=joined,
+        candidates=candidates,
+        partial_measure=partial,
+        freed_at_least=freed_at_least(candidates),
+        kept_count=sum(1 for p in joined if p.verdict == "kept"),
+        deleted_count=sum(1 for p in joined if p.verdict == "deleted"),
+    )
+
+
+async def build_preview(
+    db: Session, repository: Repository, retention: Retention, *, user_id: Optional[int]
+) -> dict:
+    """Spec 4.4 steps 1 to 5 in order. Raises DryRunFailed when Borg's dry
+    run did not complete, with the log attached."""
+    pro = history_enabled(db)  # commits; before the archive rows load
+    r = await run_candidate(db, repository, retention, user_id=user_id)
+    operation, log, joined = r.operation, r.log, r.joined
+    candidates, partial, freed = r.candidates, r.partial_measure, r.freed_at_least
     before = footprint(db, repository)
     deleted_ids = {a.id for a in candidates}
     capability = history_capability(db, repository)

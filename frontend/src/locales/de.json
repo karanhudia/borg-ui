@@ -755,6 +755,12 @@
   "dashboard": {
     "title": "Dashboard",
     "subtitle": "Umfassende Übersicht deiner Backup-Infrastruktur",
+    "spaceSavings": {
+      "title": "Speicherplatz, den du freigeben könntest",
+      "line": "mindestens {{size}} mit {{retention}}",
+      "hint": "Gibt am meisten von den verglichenen Regeln frei. Öffnen, um eine Vorschau anzuzeigen.",
+      "stale": "könnte sich geändert haben"
+    },
     "stats": {
       "repositories": "Repositories",
       "sshRemote": "SSH-Remote",
@@ -3852,6 +3858,7 @@
       "archive_sync": "Archivliste abgleichen",
       "history_index": "Dateihistorie indizieren",
       "history_merge": "Entfernte Historie zusammenführen",
+      "prune_compare": "Aufbewahrung vergleichen",
       "script_execution": "Skript",
       "availability_check": "Verfügbarkeitsprüfung",
       "rclone_hydrate": "Spiegel-Hydrierung",
@@ -6201,7 +6208,8 @@
       },
       "prune": {
         "noKeepRule": "Vor einer Vorschau oder Ausführung eines Prunes mindestens eine Aufbewahrungsregel festlegen.",
-        "dryRunFailed": "Der Testlauf von Borg ist fehlgeschlagen."
+        "dryRunFailed": "Der Testlauf von Borg ist fehlgeschlagen.",
+        "comparisonRunning": "Für dieses Repository läuft bereits ein Vergleich der Aufbewahrungsregeln."
       }
     },
     "success": {
@@ -6476,6 +6484,26 @@
     "previewFailed": "Die Vorschau konnte nicht erstellt werden (HTTP {{status}}). Erneut versuchen, sobald das Repository frei ist.",
     "defaultsFailed": "Die Standard-Aufbewahrung konnte nicht geladen werden.",
     "retry": "Erneut versuchen",
-    "noKeepRule": "Mindestens eine Aufbewahrungsregel festlegen."
+    "noKeepRule": "Mindestens eine Aufbewahrungsregel festlegen.",
+    "compare": {
+      "title": "Verglichene Regeln",
+      "intro": "Dieselben Archive unter anderen Aufbewahrungsregeln. Wähle eine Zeile, um sie vollständig als Vorschau anzuzeigen.",
+      "computedOn": "Verglichen am {{date}}",
+      "stale": "Die Werte könnten sich seit dem letzten Vergleich geändert haben.",
+      "notYet": "Noch nicht verglichen.",
+      "compareNow": "Jetzt vergleichen",
+      "comparing": "Vergleich läuft, das führt einen Testlauf pro Regel aus.",
+      "colPolicy": "Regel",
+      "colRetention": "Aufbewahrung",
+      "colKept": "Behalten",
+      "colDeleted": "Gelöscht",
+      "colFree": "Würde mindestens freigeben",
+      "current": "Aktuell",
+      "currentNoPolicy": "Keine Regel",
+      "editing": "Wird bearbeitet",
+      "presets": { "standard": "Standard", "longer": "Länger", "wide": "Weit" },
+      "partial": "Einige Größen sind gespeicherte Werte, nicht neu gemessen.",
+      "refreshFailed": "Der Vergleich konnte nicht gestartet werden."
+    }
   }
 }

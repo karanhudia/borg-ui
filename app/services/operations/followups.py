@@ -24,9 +24,10 @@ FOLLOWUPS: dict[str, tuple[str, ...]] = {
     "rclone_sync": (),
     "package_install": (),
     "stats": (),
-    "archive_sync": (),
+    "archive_sync": ("prune_compare",),
     "history_index": (),
     "history_merge": (),
+    "prune_compare": (),
 }
 
 HISTORY_KINDS: frozenset[str] = frozenset({"history_index", "history_merge"})
@@ -36,6 +37,16 @@ HISTORY_KINDS: frozenset[str] = frozenset({"history_index", "history_merge"})
 # apply_listing deliberately leaves that deletion to it, so a Community
 # install that dropped it would keep every pruned archive in the table.
 PLAN_GATED_KINDS: frozenset[str] = frozenset({"history_index"})
+
+
+def followup_wanted(kind: str, operation) -> bool:
+    """Spec 4.5: a retention comparison is worth four dry runs only when the
+    listing that finished changed the archive set. Every other follow-up is
+    unconditional."""
+    if kind != "prune_compare":
+        return True
+    result = operation.result or {}
+    return bool(result.get("new")) or bool(result.get("removed_archive_ids"))
 
 
 def chain_for(
@@ -189,6 +200,7 @@ def enqueue_followups(
     kinds = chain_for_repository(
         db, operation.kind, operation.repository_id, available=available
     )
+    kinds = [k for k in kinds if followup_wanted(k, operation)]
     if not kinds:
         return []
     covering = queued_chain_covering(db, operation.repository_id, kinds)

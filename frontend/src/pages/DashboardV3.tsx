@@ -24,6 +24,7 @@ import { ArcGauge, StorageDonut, SuccessDonut } from './dashboard-v3/charts'
 import { DashboardSkeleton } from './dashboard-v3/DashboardSkeleton'
 import { PulseDot } from './dashboard-v3/health'
 import { UpcomingBackupsPanel } from './dashboard-v3/UpcomingBackupsPanel'
+import { SpaceSavingsPanel } from './dashboard-v3/SpaceSavingsPanel'
 import { CapabilityLaunchpad } from './dashboard-v3/CapabilityLaunchpad'
 import { RepositoryHealthPanel } from './dashboard-v3/RepositoryHealthPanel'
 import { ResourceGaugeGrid } from './dashboard-v3/ResourceGaugeGrid'
@@ -514,6 +515,18 @@ export default function DashboardV3() {
             />
 
             <UpcomingBackupsPanel tasks={ov.upcoming_tasks} />
+
+            <SpaceSavingsPanel
+              rows={ov.space_savings ?? []}
+              onNavigate={(route) => {
+                trackNavigation(EventAction.VIEW, {
+                  section: 'dashboard',
+                  destination: route.substring(1),
+                  source: 'space_savings',
+                })
+                navigate(route)
+              }}
+            />
 
             {/* Storage donut */}
             <Box sx={{ ...surface, p: 2 }}>

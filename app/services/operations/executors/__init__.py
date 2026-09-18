@@ -30,6 +30,7 @@ def load_default_executors() -> None:
         index,
         maintenance,
         package,
+        prune_compare,
         rclone,
         restore,
         wipe,

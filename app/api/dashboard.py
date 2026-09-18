@@ -1163,6 +1163,10 @@ async def get_dashboard_overview(
         # Get system metrics
         system_metrics = get_system_metrics()
 
+        from app.services.prune_compare import space_savings
+
+        savings = space_savings(db, full_mode_repos)
+
         return {
             "summary": {
                 "total_repositories": len(repositories),
@@ -1237,6 +1241,7 @@ async def get_dashboard_overview(
             ),
             "backup_trends": backup_trends,
             "upcoming_tasks": upcoming_tasks,
+            "space_savings": savings,
             "activity_feed": activity_feed,
             "system_metrics": system_metrics.dict(),
             "last_updated": serialize_datetime(now),

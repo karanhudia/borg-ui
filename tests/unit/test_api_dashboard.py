@@ -1105,6 +1105,65 @@ class TestDashboardScheduleAndOverview:
         assert data["system_metrics"]["cpu_usage"] == 12.5
         assert data["last_updated"].endswith("+00:00")
 
+    def test_dashboard_overview_reports_space_savings(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+    ):
+        from app.database.models import PruneComparison
+
+        repo = Repository(
+            name="Savings Repo",
+            path="/srv/backups/savings",
+            repository_type="local",
+            mode="full",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        test_db.add(
+            PruneComparison(
+                repository_id=repo.id,
+                candidate="standard",
+                label="Standard",
+                retention={"keep_daily": 7},
+                kept_count=2,
+                deleted_count=1,
+                freed_at_least=40,
+                archive_count_at=0,
+                computed_at=datetime.now(timezone.utc),
+            )
+        )
+        test_db.commit()
+
+        metrics = SystemMetrics(
+            cpu_usage=1.0,
+            cpu_count=1,
+            memory_usage=1.0,
+            memory_total=1,
+            memory_available=1,
+            disk_usage=1.0,
+            disk_total=1,
+            disk_free=1,
+            uptime=1,
+        )
+        with patch("app.api.dashboard.get_system_metrics", return_value=metrics):
+            res = test_client.get("/api/dashboard/overview", headers=admin_headers)
+        assert res.status_code == 200
+        savings = res.json()["space_savings"]
+        assert len(savings) == 1
+        assert savings[0]["candidate"] == "standard"
+        assert savings[0]["freed_at_least"] == 40
+        assert set(savings[0]) >= {
+            "repository_id",
+            "repository_name",
+            "label",
+            "retention",
+            "computed_at",
+            "stale",
+        }
+
     def test_dashboard_overview_reads_maintenance_operations(
         self,
         test_client: TestClient,

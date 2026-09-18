@@ -47,6 +47,7 @@ import type {
   PruneRetention,
   PrunePreviewResponse,
   PruneRetentionDefaults,
+  PruneComparison,
 } from '../types/archives'
 
 export type AuthTransportMode = 'jwt' | 'proxy' | 'insecure-no-auth'
@@ -787,6 +788,7 @@ export const operationsAPI = {
   updateLimits: (indexWorkers: number) =>
     api.put<QueueLimits>('/operations/limits', { index_workers: indexWorkers }),
   cancel: (operationId: number) => api.post(`/operations/${operationId}/cancel`),
+  get: (operationId: number) => api.get<OperationItem>(`/operations/${operationId}`),
 }
 
 export const restoreAPI = {
@@ -989,6 +991,9 @@ export const repositoriesAPI = {
     api.post<PrunePreviewResponse>(`/repositories/${id}/prune/preview`, data),
   pruneRetentionDefaults: (id: number) =>
     api.get<PruneRetentionDefaults>(`/repositories/${id}/prune/retention-defaults`),
+  pruneComparison: (id: number) => api.get<PruneComparison>(`/repositories/${id}/prune/comparison`),
+  pruneComparisonRefresh: (id: number) =>
+    api.post<{ operation_id: number }>(`/repositories/${id}/prune/comparison/refresh`),
   previewRepositoryWipe: (id: number, data: RepositoryWipePreviewRequest) =>
     api.post<RepositoryWipeJob>(`/repositories/${id}/wipe-preview`, data),
   executeRepositoryWipe: (id: number, data: RepositoryWipeExecuteRequest) =>
