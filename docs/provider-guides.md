@@ -156,14 +156,17 @@ Port: 23
 Username: u123456
 Default path: /home
 Repository path: /./borg-repository
-Remote Borg Path: borg-1.4, when you need Hetzner's Borg 1.4 binary
+Remote Borg Path: borg-1.4, when the repository was created with Borg 1.4
 ```
 
 Use `/home` as the Remote Machine default path for Storage Box browsing and
 key deployment. Keep the `./` path segment in the repository path, and use the
-sub-account username and host when the Storage Box uses a sub-account. Leave
-Remote Borg Path blank when Hetzner's default Borg version is correct for the
-repository.
+sub-account username and host when the Storage Box uses a sub-account.
+
+Hetzner offer three Borg binaries on the box: `borg-1.1`, `borg-1.2` and
+`borg-1.4`. `borg-1.2` is what runs when Remote Borg Path is blank, so leave it
+blank for a repository created with Borg 1.2 and set it otherwise. Each
+sub-account needs its own `authorized_keys` file in its own directory.
 
 If Borg UI needs to install the public key for a Storage Box, enable SFTP
 deployment mode on the Remote Machine. Hetzner's port 23 key format is the
@@ -176,7 +179,7 @@ normal one-line OpenSSH public key format.
 | `Connection refused, or borg: command not found`             | Port 22 was used. Hetzner serves Borg on the extended SSH service on port 23.        | Set the Remote Machine port to 23. The Hetzner preset does this.                        |
 | `Repository does not exist`                                  | The path was entered absolute, or without the `./` segment.                          | Use `/./name`, relative to the account root.                                            |
 | `Unsupported repository version, or a Borg version mismatch` | The box's default borg is older than the client that created the repository.         | Set Remote Borg Path on the repository to `borg-1.4`.                                   |
-| `Permission denied (publickey)`                              | SSH support is off on the Storage Box, or the key never landed in `authorized_keys`. | Enable SSH support in Robot, then run Deploy key again or paste the key under SSH keys. |
+| `Permission denied (publickey)`                              | SSH support is off on the Storage Box, or the key never landed in `authorized_keys`. | Enable SSH Support in the Hetzner Console under Change settings, then run Deploy key again. The Console cannot add a key to an existing Storage Box, so the manual fallback is `ssh-copy-id -p 23 -s u123456@u123456.your-storagebox.de`. |
 
 ## Other Hosted Borg Providers
 
