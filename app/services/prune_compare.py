@@ -2,6 +2,7 @@
 prune preview's dry run and stored per repository. Wording is fixed:
 compared policies, would free at least. Nothing here picks a policy for the user."""
 
+import logging
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -14,7 +15,9 @@ from app.services.prune_preview import (
     retention_defaults,
     run_candidate,
 )
-from app.utils.datetime_utils import utc_now
+from app.utils.datetime_utils import serialize_datetime, utc_now
+
+logger = logging.getLogger(__name__)
 
 PRESETS: list[tuple[str, str, Retention]] = [
     (
@@ -47,6 +50,10 @@ _KEEP_FIELDS = (
 
 def _current(db: Session, repository: Repository) -> Optional[Retention]:
     defaults = retention_defaults(db, repository)
+    if defaults["source"] == "default":
+        # The dialog's prefill, not a policy anyone set (spec 4.5: no source,
+        # no policy).
+        return None
     retention = Retention(
         **{
             k: defaults.get(k) or (None if k == "keep_within" else 0)
@@ -86,7 +93,9 @@ async def run_comparison(
     depends_on_id: Optional[int],
 ) -> list[PruneComparison]:
     """Run every candidate, then replace the repository's rows wholesale. A
-    candidate whose dry run failed is left out; the others still land."""
+    candidate whose dry run failed is left out; the others still land. When
+    none did, the previous rows stay: an outage should not erase a good
+    comparison."""
     count = current_archive_count(db, repository)
     computed_at = utc_now()
     rows: list[PruneComparison] = []
@@ -119,6 +128,10 @@ async def run_comparison(
             )
         except DryRunFailed:
             continue
+        except Exception:
+            # run_prune_dry_run already failed the candidate's inline row.
+            logger.exception("prune_compare: %s dry run raised", key)
+            continue
         rows.append(
             PruneComparison(
                 repository_id=repository.id,
@@ -134,6 +147,8 @@ async def run_comparison(
                 computed_at=computed_at,
             )
         )
+    if not rows:
+        return []
     db.query(PruneComparison).filter(
         PruneComparison.repository_id == repository.id
     ).delete(synchronize_session=False)
@@ -171,7 +186,7 @@ def stored(db: Session, repository: Repository) -> dict:
         }
     count_at = rows[0].archive_count_at
     return {
-        "computed_at": rows[0].computed_at,
+        "computed_at": serialize_datetime(rows[0].computed_at),
         "archive_count_at": count_at,
         "stale": current_archive_count(db, repository) != count_at,
         "candidates": [_row_payload(r) for r in rows],
@@ -208,7 +223,7 @@ def space_savings(db: Session, repositories: list[Repository]) -> list[dict]:
                 "label": row.label,
                 "retention": row.retention,
                 "freed_at_least": row.freed_at_least,
-                "computed_at": row.computed_at,
+                "computed_at": serialize_datetime(row.computed_at),
                 "stale": current_archive_count(db, repository) != row.archive_count_at,
             }
         )

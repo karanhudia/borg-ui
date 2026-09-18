@@ -1914,6 +1914,9 @@ class TestPruneComparison:
             f"/api/repositories/{repo.id}/prune/comparison", headers=admin_headers
         ).json()
         assert body["stale"] is False
+        # Naive UTC in the column; the browser reads an offset-less value as
+        # local time, so the route must say which zone it is.
+        assert body["computed_at"] == "2026-09-18T01:00:00+00:00"
         assert body["candidates"][0]["key"] == "standard"
         assert body["candidates"][0]["freed_at_least"] == 40
 

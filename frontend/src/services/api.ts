@@ -788,6 +788,7 @@ export const operationsAPI = {
   updateLimits: (indexWorkers: number) =>
     api.put<QueueLimits>('/operations/limits', { index_workers: indexWorkers }),
   cancel: (operationId: number) => api.post(`/operations/${operationId}/cancel`),
+  get: (operationId: number) => api.get<OperationItem>(`/operations/${operationId}`),
 }
 
 export const restoreAPI = {

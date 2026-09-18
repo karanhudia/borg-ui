@@ -7,7 +7,7 @@ import {
   useSearchParams,
   Link as RouterLink,
 } from 'react-router-dom'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
 import {
   Alert,
@@ -29,7 +29,7 @@ import {
   useTheme,
 } from '@mui/material'
 import { formatRelativeTime } from '../utils/dateUtils'
-import { repositoriesAPI } from '../services/api'
+import { operationsAPI, repositoriesAPI } from '../services/api'
 import PlanGate from '../components/shared/PlanGate'
 import ArchiveSeriesHeatmap from '../components/archives/ArchiveSeriesHeatmap'
 import PruneRetentionFields from '../components/prune/PruneRetentionFields'
@@ -38,6 +38,7 @@ import PrunePreviewNumbers from '../components/prune/PrunePreviewNumbers'
 import PruneCandidatesRanked from '../components/prune/PruneCandidatesRanked'
 import PruneLostFilesPanel from '../components/prune/PruneLostFilesPanel'
 import { PruneComparedPolicies } from '../components/prune/PruneComparedPolicies'
+import { sameRetention } from '../components/prune/formatRetention'
 import { dayVerdict, previewToHeatmap, sizeIntensity } from '../components/prune/previewHeatmap'
 import type { PruneRetention, PrunePreviewResponse, PruneComparisonRow } from '../types/archives'
 
@@ -95,26 +96,35 @@ export default function PrunePreview() {
 
   const [searchParams] = useSearchParams()
   const candidateKey = searchParams.get('candidate')
-  const [pendingSince, setPendingSince] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+  // The refresh's operation id; polled until the operation ends, whatever
+  // way it ends, so a skipped or failed comparison does not leave the page
+  // "Comparing" for good.
+  const [pendingOpId, setPendingOpId] = useState<number | null>(null)
   const comparisonQuery = useQuery({
     queryKey: ['prune-comparison', repositoryId],
     queryFn: () => repositoriesAPI.pruneComparison(repositoryId).then((res) => res.data),
     enabled: Number.isFinite(repositoryId),
-    refetchInterval: pendingSince ? 5000 : false,
   })
   const comparison = comparisonQuery.data ?? null
+  const pendingOp = useQuery({
+    queryKey: ['operation', pendingOpId],
+    queryFn: () => operationsAPI.get(pendingOpId as number).then((res) => res.data),
+    enabled: pendingOpId !== null,
+    refetchInterval: 3000,
+  })
+  const pendingStatus = pendingOp.data?.status
   useEffect(() => {
-    if (
-      pendingSince &&
-      comparison?.computed_at &&
-      new Date(comparison.computed_at).getTime() > new Date(pendingSince).getTime()
-    ) {
-      setPendingSince(null)
+    if (pendingOpId === null) return
+    const ended = pendingStatus !== undefined && !['queued', 'running'].includes(pendingStatus)
+    if (ended || pendingOp.isError) {
+      setPendingOpId(null)
+      queryClient.invalidateQueries({ queryKey: ['prune-comparison', repositoryId] })
     }
-  }, [comparison, pendingSince])
+  }, [pendingOpId, pendingStatus, pendingOp.isError, queryClient, repositoryId])
   const refreshMutation = useMutation({
     mutationFn: () => repositoriesAPI.pruneComparisonRefresh(repositoryId),
-    onSuccess: () => setPendingSince(new Date().toISOString()),
+    onSuccess: (res) => setPendingOpId(res.data.operation_id),
     onError: () => toast.error(t('prunePreview.compare.refreshFailed')),
   })
   const candidateRetention = useMemo(
@@ -178,7 +188,7 @@ export default function PrunePreview() {
   useEffect(() => {
     if (ranForRepoRef.current === repositoryId) return
     if (!Number.isFinite(repositoryId)) return
-    if (candidateKey && comparisonQuery.isPending) return
+    if (candidateKey && !candidateRetention && comparisonQuery.isFetching) return
     const initial = stateRetention ?? candidateRetention ?? defaultRetention
     if (!initial) return
     ranForRepoRef.current = repositoryId
@@ -190,7 +200,7 @@ export default function PrunePreview() {
     stateRetention,
     repositoryId,
     candidateRetention,
-    comparisonQuery.isPending,
+    comparisonQuery.isFetching,
     candidateKey,
   ])
 
@@ -212,9 +222,7 @@ export default function PrunePreview() {
   const selectedKey = useMemo(() => {
     if (!previewedRetention || !comparison) return null
     return (
-      comparison.candidates.find(
-        (c) => JSON.stringify(toForm(c.retention)) === JSON.stringify(previewedRetention)
-      )?.key ?? null
+      comparison.candidates.find((c) => sameRetention(c.retention, previewedRetention))?.key ?? null
     )
   }, [comparison, previewedRetention])
   const editing =
@@ -318,7 +326,7 @@ export default function PrunePreview() {
             comparison={comparison}
             editing={editing}
             selectedKey={selectedKey}
-            pending={pendingSince !== null}
+            pending={pendingOpId !== null}
             refreshDisabled={!ready || previewMutation.isPending}
             onSelect={(row) => {
               const form = toForm(row.retention)

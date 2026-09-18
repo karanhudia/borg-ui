@@ -20,3 +20,18 @@ export function formatRetention(r: StoredPruneRetention | null | undefined): str
   }
   return parts.join(' ')
 }
+
+type AnyRetention =
+  StoredPruneRetention | (Omit<StoredPruneRetention, 'keep_within'> & { keep_within: string })
+
+/** Field by field, so key order and '' versus null for keep_within do not matter. */
+export function sameRetention(
+  a: AnyRetention | null | undefined,
+  b: AnyRetention | null | undefined
+): boolean {
+  if (!a || !b) return false
+  return (
+    UNITS.every(([field]) => Number(a[field] ?? 0) === Number(b[field] ?? 0)) &&
+    (a.keep_within || '') === (b.keep_within || '')
+  )
+}

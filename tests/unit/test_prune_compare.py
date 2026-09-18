@@ -80,6 +80,18 @@ def _archives(db, repo, n):
     return rows
 
 
+_NO_POLICY = {
+    "source": "default",
+    "keep_hourly": 0,
+    "keep_daily": 0,
+    "keep_weekly": 0,
+    "keep_monthly": 0,
+    "keep_quarterly": 0,
+    "keep_yearly": 0,
+    "keep_within": None,
+}
+
+
 def _result(kept, deleted, freed, partial=False):
     op = type("Op", (), {"id": 99})()
     return CandidateResult(
@@ -134,6 +146,71 @@ def test_candidates_without_a_policy_carry_a_none_retention(db, repo, monkeypatc
     rows = pc.candidates(db, repo)
     assert rows[0][0] == "current" and rows[0][2] is None
     assert [k for k, _, _ in rows[1:]] == ["standard", "longer", "wide"]
+
+
+@pytest.mark.unit
+def test_candidates_treat_the_dialog_defaults_as_no_policy(db, repo, monkeypatch):
+    """Spec 4.5: with no plan and no manual prune there is no current policy,
+    even though retention_defaults prefills the dialog's 7d 4w 6m 1y."""
+    monkeypatch.setattr(
+        pc,
+        "retention_defaults",
+        lambda db, r: {
+            "source": "default",
+            "plan_name": None,
+            **Retention().as_params(),
+        },
+    )
+    rows = pc.candidates(db, repo)
+    assert rows[0] == ("current", "Current", None)
+    assert [k for k, _, _ in rows[1:]] == ["standard", "longer", "wide"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_comparison_skips_a_candidate_whose_dry_run_raised(
+    db, repo, monkeypatch
+):
+    """A Borg failure fails that candidate's inline row, not the comparison."""
+    _archives(db, repo, 2)
+    monkeypatch.setattr(pc, "retention_defaults", lambda db, r: _NO_POLICY)
+    fake = AsyncMock(
+        side_effect=[RuntimeError("rc 2"), _result(2, 0, 0), _result(1, 1, 5)]
+    )
+    with patch.object(pc, "run_candidate", new=fake):
+        rows = await pc.run_comparison(db, repo, run_id="run", depends_on_id=None)
+    assert {r.candidate for r in rows} == {"current", "longer", "wide"}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_comparison_keeps_old_rows_when_every_dry_run_failed(
+    db, repo, monkeypatch
+):
+    _archives(db, repo, 2)
+    db.add(
+        PruneComparison(
+            repository_id=repo.id,
+            candidate="standard",
+            label="Standard",
+            kept_count=1,
+            deleted_count=1,
+            freed_at_least=5,
+            archive_count_at=2,
+            computed_at=datetime(2026, 1, 1),
+        )
+    )
+    db.commit()
+    monkeypatch.setattr(
+        pc,
+        "retention_defaults",
+        lambda db, r: {"source": "plan", "plan_name": "p", **Retention().as_params()},
+    )
+    fake = AsyncMock(side_effect=DryRunFailed("boom"))
+    with patch.object(pc, "run_candidate", new=fake):
+        rows = await pc.run_comparison(db, repo, run_id="run", depends_on_id=None)
+    assert rows == []
+    assert db.query(PruneComparison).filter_by(repository_id=repo.id).count() == 1
 
 
 @pytest.mark.unit
