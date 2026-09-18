@@ -439,6 +439,51 @@ async def prune_preview(
         )
 
 
+@router.get("/{repo_id}/prune/comparison")
+async def prune_comparison(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Spec 4.5: the stored retention comparison, with `stale` when the
+    archive count moved since it was computed."""
+    from app.services.prune_compare import stored
+
+    return stored(db, _repo(db, current_user, repo_id))
+
+
+@router.post("/{repo_id}/prune/comparison/refresh")
+async def prune_comparison_refresh(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from app.services.operations.enqueue import enqueue
+
+    repository = _repo(db, current_user, repo_id, role="operator")
+    pending = (
+        db.query(Operation.id)
+        .filter(
+            Operation.repository_id == repository.id,
+            Operation.kind == "prune_compare",
+            Operation.status.in_(("queued", "running")),
+        )
+        .first()
+    )
+    if pending is not None:
+        raise HTTPException(
+            status_code=409, detail={"key": "backend.errors.prune.comparisonRunning"}
+        )
+    op = enqueue(
+        db,
+        "prune_compare",
+        repository_id=repository.id,
+        trigger="manual",
+        triggered_by_user_id=current_user.id,
+    )
+    return {"operation_id": op.id}
+
+
 @router.get("/{repo_id}/prune/retention-defaults")
 async def prune_retention_defaults(
     repo_id: int,

@@ -658,6 +658,36 @@ class RepositoryStorage(Base):
     rclone_remote = relationship("RcloneRemote", back_populates="storages")
 
 
+class PruneComparison(Base):
+    """Spec 4.5: one row per repository and candidate policy, replaced
+    wholesale by each prune_compare run."""
+
+    __tablename__ = "prune_comparisons"
+    __table_args__ = (
+        UniqueConstraint("repository_id", "candidate", name="uq_prune_comparison"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    repository_id = Column(
+        Integer,
+        ForeignKey("repositories.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    candidate = Column(String, nullable=False)
+    label = Column(String, nullable=False)
+    retention = Column(JSON, nullable=True)
+    kept_count = Column(Integer, nullable=False, default=0)
+    deleted_count = Column(Integer, nullable=False, default=0)
+    freed_at_least = Column(BigInteger, nullable=False, default=0)
+    partial_measure = Column(Boolean, nullable=False, default=False)
+    operation_id = Column(
+        Integer, ForeignKey("operations.id", ondelete="SET NULL"), nullable=True
+    )
+    archive_count_at = Column(Integer, nullable=False, default=0)
+    computed_at = Column(DateTime, nullable=False, default=utc_now)
+
+
 class Configuration(Base):
     __tablename__ = "configurations"
 

@@ -12,6 +12,7 @@ EXPECTED_KINDS = {
     "compact": ("maintenance", True),
     "delete_archive": ("maintenance", True),
     "wipe": ("maintenance", True),
+    "prune_compare": ("maintenance", True),
     "rclone_sync": ("mirror", False),
     "package_install": ("system", False),
     "stats": ("index", False),

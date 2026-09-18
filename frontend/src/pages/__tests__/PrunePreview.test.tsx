@@ -25,9 +25,17 @@ vi.mock('../../services/api', async (importOriginal) => {
       prunePreview: vi.fn(),
       pruneRetentionDefaults: vi.fn(),
       pruneRepository: vi.fn(),
+      pruneComparison: vi.fn(),
+      pruneComparisonRefresh: vi.fn(),
     },
   }
 })
+
+function renderPage(opts: { search?: string } = {}) {
+  return renderWithProviders(<PrunePreview />, {
+    initialRoute: `/repositories/7/prune-preview${opts.search ?? ''}`,
+  })
+}
 
 const preview: PrunePreviewResponse = {
   operation_id: 5,
@@ -87,6 +95,9 @@ describe('PrunePreview page', () => {
       },
     } as never)
     vi.mocked(repositoriesAPI.prunePreview).mockResolvedValue({ data: preview } as never)
+    vi.mocked(repositoriesAPI.pruneComparison).mockResolvedValue({
+      data: { computed_at: null, archive_count_at: null, stale: true, candidates: [] },
+    } as never)
   })
 
   it('prefills from the plan, runs the preview and shows the numbers', async () => {
@@ -182,5 +193,108 @@ describe('PrunePreview page', () => {
     renderWithProviders(<PrunePreview />, { initialRoute: '/repositories/7/prune-preview' })
     expect(await screen.findByText(/lower bound/i)).toBeInTheDocument()
     expect(screen.getByText(/another series/i)).toBeInTheDocument()
+  })
+
+  const storedComparison = {
+    computed_at: '2026-09-18T01:00:00Z',
+    archive_count_at: 2,
+    stale: false,
+    candidates: [
+      {
+        key: 'current',
+        label: 'Current',
+        retention: {
+          keep_hourly: 0,
+          keep_daily: 30,
+          keep_weekly: 0,
+          keep_monthly: 0,
+          keep_quarterly: 0,
+          keep_yearly: 0,
+          keep_within: null,
+        },
+        kept_count: 2,
+        deleted_count: 0,
+        freed_at_least: 0,
+        partial_measure: false,
+        operation_id: 1,
+      },
+      {
+        key: 'standard',
+        label: 'Standard',
+        retention: {
+          keep_hourly: 0,
+          keep_daily: 7,
+          keep_weekly: 4,
+          keep_monthly: 6,
+          keep_quarterly: 0,
+          keep_yearly: 1,
+          keep_within: null,
+        },
+        kept_count: 1,
+        deleted_count: 1,
+        freed_at_least: 100,
+        partial_measure: false,
+        operation_id: 2,
+      },
+    ],
+  }
+
+  it('lists compared policies and previews a row on click', async () => {
+    vi.mocked(repositoriesAPI.pruneComparison).mockResolvedValue({
+      data: storedComparison,
+    } as never)
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Standard')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Standard'))
+    await waitFor(() =>
+      expect(repositoriesAPI.prunePreview).toHaveBeenLastCalledWith(
+        7,
+        expect.objectContaining({
+          keep_daily: 7,
+          keep_weekly: 4,
+          keep_monthly: 6,
+          keep_yearly: 1,
+          keep_within: '',
+        })
+      )
+    )
+  })
+
+  it('starts from the candidate named in the query string', async () => {
+    vi.mocked(repositoriesAPI.pruneComparison).mockResolvedValue({
+      data: storedComparison,
+    } as never)
+    renderPage({ search: '?candidate=standard' })
+    await waitFor(() =>
+      expect(repositoriesAPI.prunePreview).toHaveBeenCalledWith(
+        7,
+        expect.objectContaining({ keep_daily: 7 })
+      )
+    )
+    expect(repositoriesAPI.prunePreview).toHaveBeenCalledTimes(1)
+  })
+
+  it('compare now posts a refresh and polls until a newer comparison lands', async () => {
+    vi.mocked(repositoriesAPI.pruneComparison)
+      .mockResolvedValueOnce({
+        data: { computed_at: null, archive_count_at: null, stale: true, candidates: [] },
+      } as never)
+      .mockResolvedValue({
+        data: {
+          computed_at: '2026-09-18T02:00:00Z',
+          archive_count_at: 2,
+          stale: false,
+          candidates: [],
+        },
+      } as never)
+    vi.mocked(repositoriesAPI.pruneComparisonRefresh).mockResolvedValue({
+      data: { operation_id: 9 },
+    } as never)
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Not compared yet.')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Compare now' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: 'Compare now' }))
+    await waitFor(() => expect(repositoriesAPI.pruneComparisonRefresh).toHaveBeenCalledWith(7))
+    expect(screen.getByText('Comparing, this runs one dry run per policy.')).toBeInTheDocument()
   })
 })

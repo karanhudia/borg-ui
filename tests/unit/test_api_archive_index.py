@@ -1718,7 +1718,9 @@ def _hex(n):
 def _fake_dry_run(status="completed", log="borg said"):
     from app.services.operations.vocab import category_for
 
-    async def run(db, repository, retention, *, user_id):
+    async def run(
+        db, repository, retention, *, user_id, run_id=None, depends_on_id=None
+    ):
         op = Operation(
             kind="prune",
             category=category_for("prune"),
@@ -1847,6 +1849,93 @@ class TestPrunePreview:
             headers=auth_headers,
         )
         assert r.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_run_candidate_returns_counts_and_freed(self, test_db):
+        repo = _repo(test_db)
+        kept = _archive(test_db, repo, "a1", 1, size=10)
+        gone = _archive(test_db, repo, "a2", 2, size=30)
+        kept.borg_id = _hex(1)
+        gone.borg_id = _hex(2)
+        test_db.commit()
+        log = (
+            f"Keeping archive (rule: daily #1):            a1  Thu, 2026-09-17 15:07:55 [{kept.borg_id}]\n"
+            f"Would prune:                                 a2  Thu, 2026-09-17 15:07:55 [{gone.borg_id}]\n"
+        )
+        with (
+            patch.object(pp, "run_prune_dry_run", new=_fake_dry_run(log=log)),
+            patch.object(pp, "remeasure_candidates", new=AsyncMock(return_value=False)),
+        ):
+            result = await pp.run_candidate(
+                test_db, repo, pp.Retention(keep_daily=1), user_id=None
+            )
+        assert (result.kept_count, result.deleted_count) == (1, 1)
+        assert result.freed_at_least == 30
+        assert [a.id for a in result.candidates] == [gone.id]
+        assert result.partial_measure is False
+
+
+class TestPruneComparison:
+    def test_get_returns_empty_and_stale_before_a_run(
+        self, test_client, admin_headers, test_db
+    ):
+        repo = _repo(test_db)
+        res = test_client.get(
+            f"/api/repositories/{repo.id}/prune/comparison", headers=admin_headers
+        )
+        assert res.status_code == 200
+        assert res.json() == {
+            "computed_at": None,
+            "archive_count_at": None,
+            "stale": True,
+            "candidates": [],
+        }
+
+    def test_get_returns_stored_rows(self, test_client, admin_headers, test_db):
+        from datetime import datetime
+        from app.database.models import PruneComparison
+
+        repo = _repo(test_db)
+        test_db.add(
+            PruneComparison(
+                repository_id=repo.id,
+                candidate="standard",
+                label="Standard",
+                retention={"keep_daily": 7},
+                kept_count=2,
+                deleted_count=1,
+                freed_at_least=40,
+                archive_count_at=0,
+                computed_at=datetime(2026, 9, 18, 1),
+            )
+        )
+        test_db.commit()
+        body = test_client.get(
+            f"/api/repositories/{repo.id}/prune/comparison", headers=admin_headers
+        ).json()
+        assert body["stale"] is False
+        assert body["candidates"][0]["key"] == "standard"
+        assert body["candidates"][0]["freed_at_least"] == 40
+
+    def test_refresh_enqueues_one_operation_and_refuses_a_second(
+        self, test_client, admin_headers, test_db, monkeypatch
+    ):
+        from app.database.models import Operation
+
+        monkeypatch.setattr("app.services.operations.enqueue.wake_runner", lambda: None)
+        repo = _repo(test_db)
+        res = test_client.post(
+            f"/api/repositories/{repo.id}/prune/comparison/refresh",
+            headers=admin_headers,
+        )
+        assert res.status_code == 200
+        op = test_db.get(Operation, res.json()["operation_id"])
+        assert (op.kind, op.status, op.trigger) == ("prune_compare", "queued", "manual")
+        again = test_client.post(
+            f"/api/repositories/{repo.id}/prune/comparison/refresh",
+            headers=admin_headers,
+        )
+        assert again.status_code == 409
 
 
 class TestPruneRetentionDefaults:

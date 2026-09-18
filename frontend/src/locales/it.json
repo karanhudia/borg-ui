@@ -755,6 +755,12 @@
   "dashboard": {
     "title": "Dashboard",
     "subtitle": "Panoramica completa della tua infrastruttura di backup",
+    "spaceSavings": {
+      "title": "Spazio che potresti liberare",
+      "line": "almeno {{size}} con {{retention}}",
+      "hint": "Libera il massimo tra le regole confrontate. Apri per visualizzarne l'anteprima.",
+      "stale": "potrebbe essere cambiato"
+    },
     "stats": {
       "repositories": "Repository",
       "sshRemote": "SSH remoto",
@@ -3852,6 +3858,7 @@
       "archive_sync": "Sincronizza elenco archivi",
       "history_index": "Indicizza cronologia file",
       "history_merge": "Consolida cronologia rimossa",
+      "prune_compare": "Confronta conservazione",
       "script_execution": "script",
       "availability_check": "controllo disponibilità",
       "rclone_hydrate": "idratazione mirror",
@@ -6200,7 +6207,8 @@
       },
       "prune": {
         "noKeepRule": "Imposta almeno una regola di conservazione prima di visualizzare l'anteprima o eseguire un prune.",
-        "dryRunFailed": "L'esecuzione di prova di Borg è fallita."
+        "dryRunFailed": "L'esecuzione di prova di Borg è fallita.",
+        "comparisonRunning": "È già in corso un confronto delle regole di conservazione per questo repository."
       }
     },
     "success": {
@@ -6475,6 +6483,26 @@
     "previewFailed": "Impossibile generare l'anteprima (HTTP {{status}}). Riprova quando il repository è libero.",
     "defaultsFailed": "Impossibile caricare la conservazione predefinita.",
     "retry": "Riprova",
-    "noKeepRule": "Imposta almeno una regola di conservazione."
+    "noKeepRule": "Imposta almeno una regola di conservazione.",
+    "compare": {
+      "title": "Regole confrontate",
+      "intro": "Gli stessi archivi con altre regole di conservazione. Scegli una riga per visualizzarne l'anteprima completa.",
+      "computedOn": "Confrontato il {{date}}",
+      "stale": "I valori potrebbero essere cambiati dall'ultimo confronto.",
+      "notYet": "Non ancora confrontato.",
+      "compareNow": "Confronta ora",
+      "comparing": "Confronto in corso, questo esegue una prova per ogni regola.",
+      "colPolicy": "Regola",
+      "colRetention": "Conservazione",
+      "colKept": "Mantenuti",
+      "colDeleted": "Eliminati",
+      "colFree": "Libererebbe almeno",
+      "current": "Attuale",
+      "currentNoPolicy": "Nessuna regola",
+      "editing": "In modifica",
+      "presets": { "standard": "Standard", "longer": "Più lunga", "wide": "Ampia" },
+      "partial": "Alcune dimensioni sono valori memorizzati, non ricalcolati.",
+      "refreshFailed": "Impossibile avviare il confronto."
+    }
   }
 }

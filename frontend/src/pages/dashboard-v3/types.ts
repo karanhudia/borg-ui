@@ -1,3 +1,16 @@
+import type { StoredPruneRetention } from '../../types/archives'
+
+export interface SpaceSaving {
+  repository_id: number
+  repository_name: string
+  candidate: string
+  label: string
+  retention: StoredPruneRetention | null
+  freed_at_least: number
+  computed_at: string
+  stale: boolean
+}
+
 export type UpcomingTask = {
   id: number | string
   type: string
@@ -65,6 +78,7 @@ export interface DashboardOverview {
     }
   }>
   upcoming_tasks: UpcomingTask[]
+  space_savings: SpaceSaving[]
   activity_feed: Array<{
     id: number
     type: string

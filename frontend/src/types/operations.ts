@@ -16,6 +16,7 @@ export type OperationKind =
   | 'compact'
   | 'delete_archive'
   | 'wipe'
+  | 'prune_compare'
   | 'rclone_sync'
   | 'package_install'
   | 'stats'

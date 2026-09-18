@@ -755,6 +755,12 @@
   "dashboard": {
     "title": "Dashboard",
     "subtitle": "Comprehensive overview of your backup infrastructure",
+    "spaceSavings": {
+      "title": "Space you could free",
+      "line": "at least {{size}} with {{retention}}",
+      "hint": "Frees the most of the compared policies. Open to preview it.",
+      "stale": "may have changed"
+    },
     "stats": {
       "repositories": "Repositories",
       "sshRemote": "SSH remote",
@@ -3852,6 +3858,7 @@
       "archive_sync": "Sync archive list",
       "history_index": "Index file history",
       "history_merge": "Fold removed history",
+      "prune_compare": "Compare retention",
       "script_execution": "script",
       "availability_check": "availability check",
       "rclone_hydrate": "mirror hydrate",
@@ -6200,7 +6207,8 @@
       },
       "prune": {
         "noKeepRule": "Set at least one keep rule before previewing or running a prune.",
-        "dryRunFailed": "Borg's dry run failed."
+        "dryRunFailed": "Borg's dry run failed.",
+        "comparisonRunning": "A retention comparison is already running for this repository."
       }
     },
     "success": {
@@ -6475,6 +6483,26 @@
     "previewFailed": "The preview could not be built (HTTP {{status}}). Try again once the repository is idle.",
     "defaultsFailed": "The retention defaults could not be loaded.",
     "retry": "Retry",
-    "noKeepRule": "Set at least one keep rule."
+    "noKeepRule": "Set at least one keep rule.",
+    "compare": {
+      "title": "Compared policies",
+      "intro": "The same archives under other retention rules. Pick a row to preview it in full.",
+      "computedOn": "Compared on {{date}}",
+      "stale": "Numbers may have changed since the last comparison.",
+      "notYet": "Not compared yet.",
+      "compareNow": "Compare now",
+      "comparing": "Comparing, this runs one dry run per policy.",
+      "colPolicy": "Policy",
+      "colRetention": "Retention",
+      "colKept": "Kept",
+      "colDeleted": "Deleted",
+      "colFree": "Would free at least",
+      "current": "Current",
+      "currentNoPolicy": "No policy",
+      "editing": "Editing",
+      "presets": { "standard": "Standard", "longer": "Longer", "wide": "Wide" },
+      "partial": "Some sizes are stored values, not re-measured.",
+      "refreshFailed": "Could not start the comparison."
+    }
   }
 }

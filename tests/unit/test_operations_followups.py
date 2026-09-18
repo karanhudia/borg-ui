@@ -48,10 +48,54 @@ def test_chain_table_matches_spec_7_4():
         "rclone_sync": (),
         "package_install": (),
         "stats": (),
-        "archive_sync": (),
+        "archive_sync": ("prune_compare",),
         "history_index": (),
         "history_merge": (),
+        "prune_compare": (),
     }
+
+
+@pytest.mark.unit
+def test_prune_compare_follows_a_listing_that_changed_the_archive_set(
+    db, repo, monkeypatch
+):
+    """Spec 4.5: the comparison hangs off archive_sync only when rows were
+    added or removed, so an unchanged listing does not spend four dry runs."""
+    from app.services.operations.followups import enqueue_followups
+
+    monkeypatch.setattr("app.services.operations.enqueue.wake_runner", lambda: None)
+    sync = enqueue(db, "archive_sync", repository_id=repo.id, trigger="reconcile")
+    sync.status = "completed"
+    sync.result = {"listed": 3, "new": 0, "removed_archive_ids": []}
+    db.commit()
+    assert (
+        enqueue_followups(db, sync, depends_on_id=sync.id, available={"prune_compare"})
+        == []
+    )
+
+    sync.result = {"listed": 4, "new": 1, "removed_archive_ids": []}
+    db.commit()
+    ops = enqueue_followups(
+        db, sync, depends_on_id=sync.id, available={"prune_compare"}
+    )
+    assert [o.kind for o in ops] == ["prune_compare"]
+    assert ops[0].depends_on_id == sync.id
+    assert ops[0].trigger == "followup"
+
+
+@pytest.mark.unit
+def test_prune_compare_follows_a_listing_that_removed_archives(db, repo, monkeypatch):
+    from app.services.operations.followups import enqueue_followups
+
+    monkeypatch.setattr("app.services.operations.enqueue.wake_runner", lambda: None)
+    sync = enqueue(db, "archive_sync", repository_id=repo.id, trigger="reconcile")
+    sync.status = "completed"
+    sync.result = {"listed": 2, "new": 0, "removed_archive_ids": [7]}
+    db.commit()
+    ops = enqueue_followups(
+        db, sync, depends_on_id=sync.id, available={"prune_compare"}
+    )
+    assert [o.kind for o in ops] == ["prune_compare"]
 
 
 @pytest.mark.unit

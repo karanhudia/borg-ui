@@ -755,6 +755,12 @@
   "dashboard": {
     "title": "Panel",
     "subtitle": "Visión general completa de tu infraestructura de copias de seguridad",
+    "spaceSavings": {
+      "title": "Espacio que podrías liberar",
+      "line": "al menos {{size}} con {{retention}}",
+      "hint": "Libera lo máximo de las políticas comparadas. Ábrelo para previsualizarlo.",
+      "stale": "puede haber cambiado"
+    },
     "stats": {
       "repositories": "Repositorios",
       "sshRemote": "SSH remoto",
@@ -3852,6 +3858,7 @@
       "archive_sync": "Sincronizar lista de archivos",
       "history_index": "Indexar historial de archivos",
       "history_merge": "Consolidar historial eliminado",
+      "prune_compare": "Comparar retención",
       "script_execution": "script",
       "availability_check": "comprobación de disponibilidad",
       "rclone_hydrate": "hidratación de réplica",
@@ -6200,7 +6207,8 @@
       },
       "prune": {
         "noKeepRule": "Defina al menos una regla de retención antes de previsualizar o ejecutar un prune.",
-        "dryRunFailed": "La ejecución de prueba de Borg falló."
+        "dryRunFailed": "La ejecución de prueba de Borg falló.",
+        "comparisonRunning": "Ya se está ejecutando una comparación de retención para este repositorio."
       }
     },
     "success": {
@@ -6475,6 +6483,26 @@
     "previewFailed": "No se pudo generar la vista previa (HTTP {{status}}). Inténtelo de nuevo cuando el repositorio esté libre.",
     "defaultsFailed": "No se pudo cargar la retención predeterminada.",
     "retry": "Reintentar",
-    "noKeepRule": "Defina al menos una regla de retención."
+    "noKeepRule": "Defina al menos una regla de retención.",
+    "compare": {
+      "title": "Políticas comparadas",
+      "intro": "Los mismos archivos bajo otras reglas de retención. Elige una fila para previsualizarla por completo.",
+      "computedOn": "Comparado el {{date}}",
+      "stale": "Los valores pueden haber cambiado desde la última comparación.",
+      "notYet": "Aún no comparado.",
+      "compareNow": "Comparar ahora",
+      "comparing": "Comparando, esto ejecuta una prueba en seco por política.",
+      "colPolicy": "Política",
+      "colRetention": "Retención",
+      "colKept": "Conservados",
+      "colDeleted": "Eliminados",
+      "colFree": "Liberaría al menos",
+      "current": "Actual",
+      "currentNoPolicy": "Sin política",
+      "editing": "Editando",
+      "presets": { "standard": "Estándar", "longer": "Más larga", "wide": "Amplia" },
+      "partial": "Algunos tamaños son valores almacenados, no vueltos a medir.",
+      "refreshFailed": "No se pudo iniciar la comparación."
+    }
   }
 }

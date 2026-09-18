@@ -21,6 +21,7 @@ KINDS: dict[str, KindSpec] = {
     "compact": KindSpec("maintenance", True),
     "delete_archive": KindSpec("maintenance", True),
     "wipe": KindSpec("maintenance", True),
+    "prune_compare": KindSpec("maintenance", True),
     "rclone_sync": KindSpec("mirror", False),
     "package_install": KindSpec("system", False),
     "stats": KindSpec("index", False),
