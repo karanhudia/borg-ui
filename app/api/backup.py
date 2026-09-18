@@ -9,6 +9,7 @@ from datetime import datetime
 
 from app.database.database import get_db
 from app.database.models import (
+    AgentJob,
     AgentJobLog,
     User,
     BackupPlan,
@@ -632,6 +633,36 @@ async def get_backup_status(
         )
 
 
+def _take_queued_agent_backup(db: Session, backup_job) -> bool:
+    """Cancel the backup's agent job while no agent has taken it, with a
+    write conditional on `queued` (an agent that claims it meanwhile wins),
+    and close the backup cancelled. False when there was none to take."""
+    agent_job = get_agent_job_for_backup(db, backup_job)
+    if agent_job is None:
+        return False
+    now = datetime.utcnow()
+    taken = (
+        db.query(AgentJob)
+        .filter(AgentJob.id == agent_job.id, AgentJob.status == "queued")
+        .update(
+            {
+                AgentJob.status: "canceled",
+                AgentJob.completed_at: now,
+                AgentJob.error_message: "Cancelled by user",
+                AgentJob.updated_at: now,
+            },
+            synchronize_session=False,
+        )
+    )
+    if taken:
+        backup_job.status = "cancelled"
+        backup_job.completed_at = now
+    # Committed before the runner is asked: it writes the row in a session
+    # of its own, which would wait on this transaction.
+    db.commit()
+    return bool(taken)
+
+
 @router.post("/cancel/{job_id}")
 async def cancel_backup(
     job_id: int,
@@ -639,6 +670,19 @@ async def cancel_backup(
     db: Session = Depends(get_db),
 ):
     """Cancel a running backup job"""
+    return await cancel_backup_job(job_id, current_user, db)
+
+
+async def cancel_backup_job(job_id: int, current_user: User, db: Session):
+    """The backup cancel. On an agent that would not end a running borg
+    create on cancel (before 0.1.7) only an agent job no agent has taken is
+    cancelled; a taken one answers 409."""
+    # Deferred: the executor module registers the maintenance executors.
+    from app.services.agent_job_dispatcher import dispatch_agent_cancel_if_connected
+    from app.services.operations.executors.maintenance import (
+        agent_machine_stops_on_cancel,
+    )
+
     try:
         job = resolve_backup_job(db, job_id)
         if not job:
@@ -651,10 +695,35 @@ async def cancel_backup(
             check_repo_access(db, current_user, repo, "operator")
 
         operation = is_backup_operation(job)
-        if job.execution_mode == "agent":
+        # A backup still waiting for its lane has no agent job yet; the
+        # runner takes it off the queue like a server backup.
+        queued_for_agent = (
+            operation
+            and job.status == "pending"
+            and get_agent_job_for_backup(db, job) is None
+        )
+        if job.execution_mode == "agent" and not queued_for_agent:
+            agent_job = get_agent_job_for_backup(db, job)
+            agent_must_stop = agent_job is not None and not (
+                agent_machine_stops_on_cancel(db, agent_job.agent_machine_id)
+            )
+            taken = _take_queued_agent_backup(db, job)
+            if agent_must_stop and not taken:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "key": "backend.errors.activity.cannotCancelWhileRunning",
+                        "params": {"jobType": "backup"},
+                    },
+                )
             if operation:
                 await operation_runner.request_cancel(job.id)
-            cancel_agent_backup_job(db, job)
+            if not taken:
+                # The command goes out from here: the runner's watcher sends
+                # it only for a task this process runs.
+                agent_job, _ = cancel_agent_backup_job(db, job)
+                db.commit()
+                await dispatch_agent_cancel_if_connected(agent_job)
             process_killed = False
         elif job.status == "running":
             if operation:

@@ -186,3 +186,136 @@ def test_hello_still_fails_request_scoped_repository_job_terminally(db_session):
 
     assert job.status == "failed"
     assert job.completed_at is not None
+
+
+@pytest.mark.unit
+def test_a_cancel_requested_job_the_agent_no_longer_runs_is_cancelled(test_db):
+    """An agent that took the cancel and died before reporting it comes
+    back without the job; running it again would undo the cancel."""
+    agent = _create_agent(test_db)
+    job = _create_claimed_job(
+        test_db,
+        agent,
+        age=STALE_AGENT_JOB_REQUEUE_AFTER + timedelta(minutes=1),
+        started_at=_now_utc() - STALE_AGENT_JOB_REQUEUE_AFTER * 2,
+        job_type="repository",
+    )
+    test_db.query(AgentJob).filter(AgentJob.id == job.id).update(
+        {AgentJob.status: "cancel_requested", AgentJob.updated_at: job.claimed_at},
+        synchronize_session=False,
+    )
+    test_db.commit()
+    test_db.refresh(job)
+
+    _requeue_stale_agent_jobs(test_db, agent, now=_now_utc(), running_job_ids=[])
+    test_db.commit()
+    test_db.refresh(job)
+
+    assert job.status == "canceled"
+    assert job.completed_at is not None
+
+
+@pytest.mark.unit
+def test_a_fresh_cancel_requested_job_is_cancelled_on_hello(test_db):
+    """An agent that crashed right after taking the cancel and reconnects at
+    once reports no running jobs; its hello settles the cancel without
+    waiting out the requeue window."""
+    agent = _create_agent(test_db)
+    job = _create_claimed_job(
+        test_db,
+        agent,
+        age=timedelta(seconds=5),
+        started_at=_now_utc() - timedelta(seconds=5),
+        job_type="repository",
+    )
+    test_db.query(AgentJob).filter(AgentJob.id == job.id).update(
+        {AgentJob.status: "cancel_requested"}, synchronize_session=False
+    )
+    test_db.commit()
+
+    _requeue_stale_agent_jobs(
+        test_db,
+        agent,
+        now=_now_utc(),
+        running_job_ids=[],
+        ignore_age_for_undelivered=True,
+    )
+    test_db.commit()
+    test_db.refresh(job)
+
+    assert job.status == "canceled"
+
+
+@pytest.mark.unit
+def test_a_fresh_cancel_requested_job_waits_outside_a_hello(test_db):
+    """A heartbeat is not authoritative about running jobs: the window holds."""
+    agent = _create_agent(test_db)
+    job = _create_claimed_job(
+        test_db,
+        agent,
+        age=timedelta(seconds=5),
+        started_at=_now_utc() - timedelta(seconds=5),
+        job_type="repository",
+    )
+    test_db.query(AgentJob).filter(AgentJob.id == job.id).update(
+        {AgentJob.status: "cancel_requested"}, synchronize_session=False
+    )
+    test_db.commit()
+
+    _requeue_stale_agent_jobs(test_db, agent, now=_now_utc(), running_job_ids=[])
+    test_db.commit()
+    test_db.refresh(job)
+
+    assert job.status == "cancel_requested"
+
+
+@pytest.mark.unit
+def test_a_settled_cancel_closes_the_backup_it_carries(test_db):
+    """Cancelling the agent job alone would leave its backup running until
+    the executor gave up with "returned no result"."""
+    from app.database.models import Operation, Repository
+    from tests.utils.operations import seed_job_operation
+
+    agent = _create_agent(test_db)
+    repo = Repository(
+        name="requeue-backup",
+        path="/agent/requeue",
+        encryption="none",
+        compression="lz4",
+    )
+    test_db.add(repo)
+    test_db.commit()
+    backup = seed_job_operation(
+        test_db,
+        "backup",
+        repository_id=repo.id,
+        status="running",
+        started_at=_now_utc(),
+        execution_mode="agent",
+    )
+    test_db.commit()
+    job = _create_claimed_job(
+        test_db,
+        agent,
+        age=timedelta(seconds=5),
+        started_at=_now_utc() - timedelta(seconds=5),
+        job_type="backup",
+    )
+    test_db.query(AgentJob).filter(AgentJob.id == job.id).update(
+        {AgentJob.status: "cancel_requested", AgentJob.operation_id: backup.id},
+        synchronize_session=False,
+    )
+    test_db.commit()
+
+    _requeue_stale_agent_jobs(
+        test_db,
+        agent,
+        now=_now_utc(),
+        running_job_ids=[],
+        ignore_age_for_undelivered=True,
+    )
+    test_db.commit()
+    test_db.expire_all()
+
+    assert test_db.get(AgentJob, job.id).status == "canceled"
+    assert test_db.get(Operation, backup.id).status == "cancelled"

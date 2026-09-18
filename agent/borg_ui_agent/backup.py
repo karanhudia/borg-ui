@@ -11,6 +11,11 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from agent.borg_ui_agent.borg import is_warning_return_code
+from agent.borg_ui_agent.cancel import (
+    cancel_requested,
+    start_cancel_poller,
+    start_keepalive,
+)
 from agent.borg_ui_agent.client import AgentClient
 
 
@@ -320,6 +325,16 @@ def execute_backup_create_job(
     )
     sequence += 1
 
+    if cancel_requested(should_cancel):
+        # Cancelled between dispatch and start (the log above may have
+        # waited on the server): nothing to stop yet.
+        client.cancel_job(job_id)
+        return BackupExecutionResult(
+            job_id=job_id,
+            status="canceled",
+            message="backup.create canceled before it started",
+        )
+
     try:
         popen_kwargs: dict[str, Any] = {
             "stdout": subprocess.PIPE,
@@ -353,31 +368,52 @@ def execute_backup_create_job(
     stdout_thread = threading.Thread(target=_drain_stdout, daemon=True)
     stdout_thread.start()
 
-    if process.stderr is not None:
-        for line in process.stderr:
-            message = line.rstrip("\n")
-            client.send_log(job_id, sequence=sequence, stream="stderr", message=message)
-            sequence += 1
-            progress = parse_borg_progress(message)
-            if progress:
-                client.send_progress(job_id, progress)
-            if should_cancel and should_cancel():
-                cancel_message = "Cancellation requested; stopping borg create"
+    done = threading.Event()
+    # The per-line check answers at once while borg reports progress; the
+    # poller reaches a borg that is silent (a lock wait, a stalled store).
+    cancelled = start_cancel_poller(process, should_cancel, done, _terminate_process)
+    start_keepalive(process, client, job_id, done)
+    try:
+        if process.stderr is not None:
+            for line in process.stderr:
+                message = line.rstrip("\n")
                 client.send_log(
-                    job_id, sequence=sequence, stream="stderr", message=cancel_message
+                    job_id, sequence=sequence, stream="stderr", message=message
                 )
-                return_code = _terminate_process(process)
-                stdout_thread.join()
-                client.cancel_job(job_id)
-                return BackupExecutionResult(
-                    job_id=job_id,
-                    status="canceled",
-                    return_code=return_code,
-                    message="backup.create canceled",
-                )
-
-    return_code = process.wait()
+                sequence += 1
+                progress = parse_borg_progress(message)
+                if progress:
+                    client.send_progress(job_id, progress)
+                if cancel_requested(should_cancel) and process.poll() is None:
+                    # not once Borg ended on its own while the check ran (it
+                    # may have asked the server): that run is its verdict
+                    cancelled.set()
+                    _terminate_process(process)
+                    break
+        return_code = process.wait()
+    except BaseException:
+        # A report that failed (the server unreachable) unwinds this worker;
+        # borg create must not run on unsupervised, holding the repository.
+        _terminate_process(process)
+        raise
+    finally:
+        done.set()
     stdout_thread.join()
+
+    if cancelled.is_set():
+        client.send_log(
+            job_id,
+            sequence=sequence,
+            stream="stderr",
+            message="Cancellation requested; stopped borg create",
+        )
+        client.cancel_job(job_id)
+        return BackupExecutionResult(
+            job_id=job_id,
+            status="canceled",
+            return_code=return_code,
+            message="backup.create canceled",
+        )
     if return_code == 0 or is_warning_return_code(return_code):
         # Warnings (rc 1 / 100-127) still produced an archive: complete the
         # job and let the server record completed_with_warnings from the
@@ -411,6 +447,9 @@ def execute_backup_create_job(
 
 
 def _terminate_process(process: subprocess.Popen) -> int:
+    if process.poll() is not None:
+        # Already reaped: its pid may be another process's by now.
+        return process.returncode
     if os.name == "posix" and getattr(process, "pid", None):
         try:
             os.killpg(os.getpgid(process.pid), signal.SIGTERM)

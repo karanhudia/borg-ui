@@ -112,6 +112,10 @@ def _get_archive_selector(archive: dict | str | None, repository) -> str:
 # fail if the job is never claimed (agent offline) or goes silent (agent died).
 _AGENT_OP_CLAIM_TIMEOUT_SECONDS = 120
 _AGENT_OP_STALL_TIMEOUT_SECONDS = 600
+# An agent reports a keepalive while its Borg is silent (0.1.7), which holds
+# off the stall timeout; this bounds how long a job may keep doing so without
+# any progress, so a hung but live process is not waited on forever.
+_AGENT_OP_NO_PROGRESS_MAX_SECONDS = 6 * 3600
 
 
 def _http_detail_text(exc: HTTPException) -> str:
@@ -128,9 +132,16 @@ class RestoreCheckService:
         self.log_dir = Path(settings.data_dir) / "logs"
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.running_processes: dict[int, asyncio.subprocess.Process] = {}
+        # Checks whose cancel was requested while they ran: an extract must
+        # not start after it (the canary's legacy-path retry included).
+        self.cancelled_jobs: set[int] = set()
+        self._active_jobs: set[int] = set()
 
     async def cancel_restore_check(self, job_id: int) -> bool:
         """Cancel a running restore check by terminating its tracked process."""
+        if job_id in self._active_jobs:
+            # Only a running check is remembered; its run clears the mark.
+            self.cancelled_jobs.add(job_id)
         return await terminate_tracked_process(
             self.running_processes, job_id, "restore check"
         )
@@ -210,6 +221,7 @@ class RestoreCheckService:
             )
 
     async def execute_restore_check(self, job_id: int, repository_id: int):
+        self._active_jobs.add(job_id)
         db = SessionLocal()
         temp_key_file = None
         temp_restore_dir = None
@@ -374,6 +386,8 @@ class RestoreCheckService:
             verification = None
             canary_prerequisite_error = None
             for attempt_index, attempt_paths in enumerate(restore_path_attempts):
+                if job_id in self.cancelled_jobs:
+                    break
                 if attempt_index > 0:
                     raw_logs.append(
                         "Retrying restore canary using legacy archive path: "
@@ -412,7 +426,18 @@ class RestoreCheckService:
                 break
 
             warning_exit = is_borg_warning_exit_code(returncode)
-            if canary_prerequisite_error:
+            if job_id in self.cancelled_jobs:
+                # Before any verdict from the exit code: a cancelled check
+                # verified nothing, whatever its last extract returned. Not
+                # a failure: no failure notification goes out for it, and the
+                # runner keeps the row cancelled.
+                job.status = "cancelled"
+                job.progress = 100
+                job.completed_at = datetime.utcnow()
+                job.error_message = "Restore verification cancelled"
+                job.progress_message = job.error_message
+                raw_logs.append(job.error_message)
+            elif canary_prerequisite_error:
                 job.status = "needs_backup"
                 job.progress = 100
                 job.completed_at = datetime.utcnow()
@@ -480,6 +505,8 @@ class RestoreCheckService:
                 db.rollback()
         finally:
             self.running_processes.pop(job_id, None)
+            self.cancelled_jobs.discard(job_id)
+            self._active_jobs.discard(job_id)
             cleanup_temp_key_file(temp_key_file)
             if temp_restore_dir:
                 shutil.rmtree(temp_restore_dir, ignore_errors=True)
@@ -683,7 +710,9 @@ class RestoreCheckService:
 
         started_at = time.monotonic()
         stale_since = started_at
-        last_marker = None
+        progress_since = started_at
+        last_progress = None
+        last_seen = None
 
         while True:
             db.expire_all()
@@ -708,29 +737,99 @@ class RestoreCheckService:
 
             # Bound the wait so an unclaimed or dead-agent job can't hang forever.
             now = time.monotonic()
-            marker = (
+            progress = (
                 agent_job.status,
                 agent_job.progress_percent,
                 agent_job.current_file,
             )
-            if marker != last_marker:
-                last_marker = marker
+            if progress != last_progress:
+                last_progress = progress
+                progress_since = now
+                stale_since = now
+            if agent_job.updated_at != last_seen:
+                # Any report, the agent's keepalive (0.1.7) included, shows
+                # the agent alive: a silent extract is not a stalled one.
+                last_seen = agent_job.updated_at
                 stale_since = now
             never_claimed = (
                 agent_job.status == "queued"
                 and now - started_at > _AGENT_OP_CLAIM_TIMEOUT_SECONDS
             )
-            if never_claimed or now - stale_since > _AGENT_OP_STALL_TIMEOUT_SECONDS:
-                # Terminalize the agent job so a still-queued job can't be claimed
-                # and run borg extract after the restore check was already failed.
-                if agent_job.status not in TERMINAL_AGENT_STATUSES:
-                    agent_job.status = "failed"
-                    agent_job.error_message = (
-                        "restore check timed out waiting for the agent"
+            went_silent = (
+                now - stale_since > _AGENT_OP_STALL_TIMEOUT_SECONDS
+                or now - progress_since > _AGENT_OP_NO_PROGRESS_MAX_SECONDS
+            )
+            if never_claimed or went_silent:
+                from app.services.agent_job_dispatcher import (
+                    dispatch_agent_cancel_if_connected,
+                )
+
+                # Conditional on the status just read: the agent's reports
+                # land concurrently, and a verdict that got there first is the
+                # check's result, not a timeout.
+                now_utc = datetime.utcnow()
+                if agent_job.status in ("claimed", "running", "cancel_requested"):
+                    from app.services.operations.executors.maintenance import (
+                        AGENT_WAIT_ABANDONED_MESSAGE,
+                        agent_machine_stops_on_cancel,
                     )
-                    agent_job.completed_at = datetime.utcnow()
-                    agent_job.updated_at = datetime.utcnow()
+
+                    # An agent runs it: ask it to stop, so Borg does not run
+                    # on holding the repository after the check was failed.
+                    # Only an agent that stops Borg on a cancel is asked: an
+                    # older one reports `canceled` at once and lets a silent
+                    # Borg run on, so its job stays live (admission keeps
+                    # counting it) until it reports or the reaper closes it.
+                    if agent_machine_stops_on_cancel(db, agent_job.agent_machine_id):
+                        if agent_job.status != "cancel_requested":
+                            # The message tells the runner that the agent's
+                            # `canceled` answers this stop, not a user's
+                            # cancel. A cancel already asked for keeps its
+                            # own provenance and is only sent again.
+                            changed = (
+                                db.query(AgentJob)
+                                .filter(
+                                    AgentJob.id == agent_job.id,
+                                    AgentJob.status.in_(("claimed", "running")),
+                                )
+                                .update(
+                                    {
+                                        AgentJob.status: "cancel_requested",
+                                        AgentJob.error_message: (
+                                            AGENT_WAIT_ABANDONED_MESSAGE
+                                        ),
+                                        AgentJob.updated_at: now_utc,
+                                    },
+                                    synchronize_session=False,
+                                )
+                            )
+                            db.commit()
+                            if not changed:
+                                continue
+                            db.refresh(agent_job)
+                        await dispatch_agent_cancel_if_connected(agent_job)
+                elif agent_job.status == "queued":
+                    # Never claimed: close it so it cannot be claimed later.
+                    changed = (
+                        db.query(AgentJob)
+                        .filter(
+                            AgentJob.id == agent_job.id, AgentJob.status == "queued"
+                        )
+                        .update(
+                            {
+                                AgentJob.status: "failed",
+                                AgentJob.error_message: (
+                                    "restore check timed out waiting for the agent"
+                                ),
+                                AgentJob.completed_at: now_utc,
+                                AgentJob.updated_at: now_utc,
+                            },
+                            synchronize_session=False,
+                        )
+                    )
                     db.commit()
+                    if not changed:
+                        continue
                 raise HTTPException(
                     status_code=504,
                     detail={"key": "backend.errors.agents.repositoryOperationTimeout"},

@@ -501,3 +501,330 @@ async def test_borg2_restore_check_extracts_by_aid_selector(
     # The job row keeps the human-readable series name for display.
     assert refreshed_job.archive_name == "myplan-daily"
     verification.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_cancelled_canary_check_does_not_start_the_legacy_extract(
+    testing_session_local,
+    db_session,
+    restore_check_repository,
+):
+    """Killing the first extract makes it fail, which would start the
+    legacy-path extract after the cancel watcher has already returned."""
+    job = seed_job_operation(
+        db_session,
+        "restore_check",
+        repository_id=restore_check_repository.id,
+        repository_path=restore_check_repository.path,
+        status="pending",
+        full_archive=False,
+    )
+    db_session.commit()
+    db_session.refresh(job)
+
+    service = RestoreCheckService()
+    extracts = []
+
+    async def killed_extract(*args, **kwargs):
+        extracts.append(args)
+        # the cancel lands while the first extract runs and kills it
+        service.cancelled_jobs.add(job.id)
+        return FakeRestoreCheckProcess(returncode=-15)
+
+    with (
+        patch("app.services.restore_check_service.SessionLocal", testing_session_local),
+        patch("app.services.restore_check_service.BorgRouter", FakeBorgRouter),
+        patch(
+            "app.services.restore_check_service.build_repository_borg_env",
+            return_value=({}, None),
+        ),
+        patch("app.services.restore_check_service.cleanup_temp_key_file"),
+        patch(
+            "app.services.restore_check_service.get_process_start_time",
+            return_value=123456,
+        ),
+        patch(
+            "app.services.restore_check_service.asyncio.create_subprocess_exec",
+            side_effect=killed_extract,
+        ),
+    ):
+        await service.execute_restore_check(job.id, restore_check_repository.id)
+
+    assert len(extracts) == 1
+    assert job.id not in service.cancelled_jobs
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_cancelled_check_whose_extract_warned_is_not_a_success(
+    testing_session_local,
+    db_session,
+    restore_check_repository,
+):
+    """The cancel lands as the first extract ends with a warning and no
+    canary: the check verified nothing, so it neither completes nor
+    records a restore check on the repository."""
+    job = seed_job_operation(
+        db_session,
+        "restore_check",
+        repository_id=restore_check_repository.id,
+        repository_path=restore_check_repository.path,
+        status="pending",
+        full_archive=False,
+    )
+    db_session.commit()
+    db_session.refresh(job)
+
+    service = RestoreCheckService()
+
+    async def warned_extract(*args, **kwargs):
+        service.cancelled_jobs.add(job.id)
+        return FakeRestoreCheckProcess(returncode=1)
+
+    with (
+        patch("app.services.restore_check_service.SessionLocal", testing_session_local),
+        patch("app.services.restore_check_service.BorgRouter", FakeBorgRouter),
+        patch(
+            "app.services.restore_check_service.build_repository_borg_env",
+            return_value=({}, None),
+        ),
+        patch("app.services.restore_check_service.cleanup_temp_key_file"),
+        patch(
+            "app.services.restore_check_service.get_process_start_time",
+            return_value=123456,
+        ),
+        patch(
+            "app.services.restore_check_service.asyncio.create_subprocess_exec",
+            side_effect=warned_extract,
+        ),
+    ):
+        await service.execute_restore_check(job.id, restore_check_repository.id)
+
+    verification = testing_session_local()
+    refreshed_job = resolve_maintenance_job(verification, job.id, "restore_check")
+    refreshed_repo = verification.get(Repository, restore_check_repository.id)
+    assert refreshed_job.status == "cancelled"
+    assert refreshed_job.error_message == "Restore verification cancelled"
+    assert refreshed_repo.last_restore_check is None
+    verification.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_an_agent_keepalive_holds_off_the_stall_timeout(db_session, monkeypatch):
+    """A silent extract reports only an empty progress (agent 0.1.7), which
+    moves nothing but `updated_at`; it is not a stalled one."""
+    import asyncio
+    from datetime import datetime, timedelta
+
+    from app.database.models import AgentJob
+    from app.services import restore_check_service as module
+
+    from app.core.security import get_password_hash
+    from app.database.models import AgentMachine
+
+    agent_machine = AgentMachine(
+        name="keepalive-agent",
+        agent_id="agt_keepalive",
+        token_hash=get_password_hash("secret"),
+        token_prefix="secret",
+        status="online",
+        capabilities=[],
+    )
+    db_session.add(agent_machine)
+    db_session.commit()
+    job = AgentJob(
+        agent_machine_id=agent_machine.id,
+        job_type="repository",
+        status="running",
+        payload={"job_kind": "repository.restore"},
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db_session.add(job)
+    db_session.commit()
+    monkeypatch.setattr(module, "_AGENT_OP_STALL_TIMEOUT_SECONDS", 0.3)
+
+    async def silent_agent():
+        stamp = datetime.utcnow()
+        for _ in range(8):
+            await asyncio.sleep(0.1)
+            stamp += timedelta(seconds=1)
+            db_session.query(AgentJob).filter(AgentJob.id == job.id).update(
+                {AgentJob.updated_at: stamp}, synchronize_session=False
+            )
+            db_session.commit()
+        db_session.query(AgentJob).filter(AgentJob.id == job.id).update(
+            {AgentJob.status: "completed", AgentJob.result: {"verified": True}},
+            synchronize_session=False,
+        )
+        db_session.commit()
+
+    agent = asyncio.create_task(silent_agent())
+    result = await RestoreCheckService()._await_agent_operation(
+        db_session, job.id, poll_interval_seconds=0.05
+    )
+    await agent
+
+    assert result == {"verified": True}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_check_cancelled_before_its_first_extract_runs_none(
+    testing_session_local,
+    db_session,
+    restore_check_repository,
+):
+    """The cancel may land while the check lists archives, before any
+    process is tracked; no extract may start after it."""
+    job = seed_job_operation(
+        db_session,
+        "restore_check",
+        repository_id=restore_check_repository.id,
+        repository_path=restore_check_repository.path,
+        status="pending",
+        full_archive=False,
+    )
+    db_session.commit()
+    db_session.refresh(job)
+    service = RestoreCheckService()
+
+    class CancelWhileListing(FakeBorgRouter):
+        async def list_archives(self, env=None):
+            await service.cancel_restore_check(job.id)
+            return await super().list_archives(env=env)
+
+    extract = AsyncMock()
+    with (
+        patch("app.services.restore_check_service.SessionLocal", testing_session_local),
+        patch("app.services.restore_check_service.BorgRouter", CancelWhileListing),
+        patch(
+            "app.services.restore_check_service.build_repository_borg_env",
+            return_value=({}, None),
+        ),
+        patch("app.services.restore_check_service.cleanup_temp_key_file"),
+        patch(
+            "app.services.restore_check_service.asyncio.create_subprocess_exec",
+            extract,
+        ),
+    ):
+        await service.execute_restore_check(job.id, restore_check_repository.id)
+
+    extract.assert_not_awaited()
+    assert service.cancelled_jobs == set()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_cancel_for_a_check_not_running_is_not_remembered():
+    service = RestoreCheckService()
+
+    await service.cancel_restore_check(4242)
+
+    assert service.cancelled_jobs == set()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "capabilities, status, message, expected",
+    [
+        # the agent stops Borg on a cancel: it is asked to, and the stop is
+        # marked as the server's
+        (["jobs.cancel"], "running", None, ("cancel_requested", "abandoned", 1)),
+        # a user's cancel is already on its way: only sent again, its
+        # provenance kept
+        (
+            ["jobs.cancel"],
+            "cancel_requested",
+            "Cancelled by user",
+            ("cancel_requested", "Cancelled by user", 1),
+        ),
+        # an agent before `jobs.cancel` would report `canceled` at once and
+        # let a silent Borg run on: its job stays live, nothing is sent
+        ([], "running", None, ("running", None, 0)),
+    ],
+)
+async def test_keepalives_alone_do_not_hold_a_job_forever(
+    db_session, monkeypatch, capabilities, status, message, expected
+):
+    """A hung but live process keeps reporting keepalives; without progress
+    the wait still ends."""
+    import asyncio
+    from datetime import datetime, timedelta
+
+    from fastapi import HTTPException
+
+    from app.core.security import get_password_hash
+    from app.database.models import AgentJob, AgentMachine
+    from app.services import restore_check_service as module
+
+    agent_machine = AgentMachine(
+        name="hung-agent",
+        agent_id="agt_hung",
+        token_hash=get_password_hash("secret"),
+        token_prefix="secret",
+        status="online",
+        capabilities=capabilities,
+    )
+    db_session.add(agent_machine)
+    db_session.commit()
+    job = AgentJob(
+        agent_machine_id=agent_machine.id,
+        job_type="repository",
+        status=status,
+        error_message=message,
+        payload={"job_kind": "repository.restore"},
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db_session.add(job)
+    db_session.commit()
+    monkeypatch.setattr(module, "_AGENT_OP_STALL_TIMEOUT_SECONDS", 0.3)
+    monkeypatch.setattr(module, "_AGENT_OP_NO_PROGRESS_MAX_SECONDS", 0.5)
+    stop = asyncio.Event()
+
+    async def keepalives():
+        stamp = datetime.utcnow()
+        while not stop.is_set():
+            await asyncio.sleep(0.1)
+            stamp += timedelta(seconds=1)
+            db_session.query(AgentJob).filter(AgentJob.id == job.id).update(
+                {AgentJob.updated_at: stamp}, synchronize_session=False
+            )
+            db_session.commit()
+
+    agent = asyncio.create_task(keepalives())
+    dispatch = AsyncMock(return_value=True)
+    try:
+        with (
+            patch(
+                "app.services.agent_job_dispatcher.dispatch_agent_cancel_if_connected",
+                dispatch,
+            ),
+            pytest.raises(HTTPException) as timed_out,
+        ):
+            await RestoreCheckService()._await_agent_operation(
+                db_session, job.id, poll_interval_seconds=0.05
+            )
+    finally:
+        stop.set()
+        await agent
+
+    assert timed_out.value.status_code == 504
+    # the agent is asked to stop rather than left running on a failed row,
+    # and the stop is marked as the server's, not a user's cancel
+    from app.services.operations.executors.maintenance import (
+        AGENT_WAIT_ABANDONED_MESSAGE,
+    )
+
+    db_session.expire_all()
+    stopped = db_session.get(AgentJob, job.id)
+    want_status, want_message, dispatched = expected
+    if want_message == "abandoned":
+        want_message = AGENT_WAIT_ABANDONED_MESSAGE
+    assert stopped.status == want_status
+    assert stopped.error_message == want_message
+    assert dispatch.await_count == dispatched

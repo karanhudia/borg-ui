@@ -465,8 +465,21 @@ def _requeue_stale_agent_jobs(
             continue
 
         undelivered = job.status == "claimed" and job.started_at is None
-        skip_age_check = ignore_age_for_undelivered and undelivered
+        # A hello's running_job_ids is authoritative for a job the agent was
+        # asked to cancel too: absent from it, the cancel is done, and the
+        # row must not hold the repository until the reaper.
+        skip_age_check = ignore_age_for_undelivered and (
+            undelivered or job.status == "cancel_requested"
+        )
         if not skip_age_check and _job_activity_at(job) > stale_cutoff:
+            continue
+
+        if job.status == "cancel_requested":
+            # Someone asked this job to stop and the agent no longer runs
+            # it: the cancel is done, the backup or operation it carries
+            # included. Queueing it again would run the work (a prune, an
+            # archive delete) after it was cancelled.
+            _cancel_agent_job(job, db, completed_at=now)
             continue
 
         if _is_request_scoped_repository_job(job):
@@ -956,7 +969,9 @@ def _apply_agent_job_progress(
     for field_name, value in progress.items():
         if hasattr(job, field_name):
             setattr(job, field_name, value)
-    job.progress = progress
+    if progress:
+        # a keepalive carries no fields and keeps the last snapshot
+        job.progress = progress
     backup_job = _get_linked_backup_job(job, db)
     if backup_job:
         backup_job.status = "running"
@@ -1689,10 +1704,24 @@ async def claim_job(
 
     if job.status == "queued":
         now = _now_utc()
-        job.status = "claimed"
-        job.claimed_at = now
-        job.updated_at = now
+        # Conditional on `queued`: a cancel that took the job off the queue
+        # after it was read here wins, and the agent is told it is final.
+        claimed = (
+            db.query(AgentJob)
+            .filter(AgentJob.id == job.id, AgentJob.status == "queued")
+            .update(
+                {
+                    AgentJob.status: "claimed",
+                    AgentJob.claimed_at: now,
+                    AgentJob.updated_at: now,
+                },
+                synchronize_session=False,
+            )
+        )
         db.commit()
+        db.refresh(job)
+        if not claimed:
+            _reject_final_job(job)
 
     return AgentJobStatusResponse(id=job.id, status=job.status)
 
@@ -1736,7 +1765,9 @@ async def update_job_progress(
     progress = payload.model_dump(exclude_none=True)
     for field_name, value in progress.items():
         setattr(job, field_name, value)
-    job.progress = progress
+    if progress:
+        # a keepalive carries no fields and keeps the last snapshot
+        job.progress = progress
     backup_job = _get_linked_backup_job(job, db)
     if backup_job:
         backup_job.status = "running"

@@ -12,6 +12,11 @@ from app.services.agent_connection_manager import agent_connection_manager
 logger = structlog.get_logger()
 
 
+_NOT_DISPATCHABLE = frozenset(
+    {"completed", "completed_with_warnings", "failed", "canceled", "cancel_requested"}
+)
+
+
 def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -37,15 +42,32 @@ async def dispatch_agent_job_if_connected(
 
     if not agent_connection_manager.is_connected(agent_machine_id):
         return False
+    if job.status in _NOT_DISPATCHABLE:
+        # Cancelled (or asked to cancel) since the caller picked it.
+        return False
 
     previous_status = job.status
     previous_claimed_at = job.claimed_at
     now = _now_utc()
     if job.status == "queued":
-        job.status = "claimed"
-        job.claimed_at = now
-        job.updated_at = now
+        # Conditional on `queued`: a cancel that took the job off the queue
+        # after the caller loaded it wins, and nothing is sent.
+        claimed = (
+            db.query(AgentJob)
+            .filter(AgentJob.id == job.id, AgentJob.status == "queued")
+            .update(
+                {
+                    AgentJob.status: "claimed",
+                    AgentJob.claimed_at: now,
+                    AgentJob.updated_at: now,
+                },
+                synchronize_session=False,
+            )
+        )
         db.commit()
+        db.refresh(job)
+        if not claimed:
+            return False
 
     try:
         await agent_connection_manager.send_command(
@@ -57,10 +79,20 @@ async def dispatch_agent_job_if_connected(
             wait_for_result=False,
         )
     except Exception as exc:
-        job.status = previous_status
-        job.claimed_at = previous_claimed_at
-        job.updated_at = _now_utc()
-        db.commit()
+        if previous_status == "queued":
+            # Back on the queue, unless a cancel landed meanwhile.
+            db.query(AgentJob).filter(
+                AgentJob.id == job.id, AgentJob.status == "claimed"
+            ).update(
+                {
+                    AgentJob.status: previous_status,
+                    AgentJob.claimed_at: previous_claimed_at,
+                    AgentJob.updated_at: _now_utc(),
+                },
+                synchronize_session=False,
+            )
+            db.commit()
+            db.refresh(job)
         agent_connection_manager.append_log(
             agent_machine_id,
             level="error",

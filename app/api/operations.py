@@ -751,6 +751,56 @@ async def get_operation(
     return data
 
 
+# The kinds whose run stops when it is cancelled while running: their
+# executors watch the runner's cancel flag and end the Borg process, on the
+# server or through the repository's agent. Any other kind runs to its end
+# while the runner would record it as cancelled, so a running one is
+# refused; a queued one of any kind is taken off the queue. history_index
+# is refused as well: it reads the cancel flag per line of Borg's diff, and
+# a diff of two large archives can be silent for a long time.
+CANCELLABLE_WHILE_RUNNING = frozenset(
+    {
+        "backup",
+        "restore",
+        "check",
+        "compact",
+        "prune",
+        "delete_archive",
+        "restore_check",
+        "history_merge",
+    }
+)
+
+
+def cannot_cancel_while_running(job_type: str) -> HTTPException:
+    return HTTPException(
+        status_code=409,
+        detail={
+            "key": "backend.errors.activity.cannotCancelWhileRunning",
+            "params": {"jobType": job_type},
+        },
+    )
+
+
+def refuse_running_cancel(db: Session, op: Operation) -> None:
+    """Refuse the cancel of a running `op` the runner's flag would not stop:
+    a kind that does not watch it, a task this process does not run (a
+    maintenance step a backup runs inline, or another worker's), or a
+    managed agent that would not end Borg (before 0.1.7). The agent check
+    comes last: it may take the agent's queued job off the queue, which
+    must not happen for a cancel refused on the other grounds."""
+    from app.services.operations.executors.maintenance import agent_run_cannot_stop
+
+    if op.status == "queued":
+        return
+    if op.kind not in CANCELLABLE_WHILE_RUNNING:
+        raise cannot_cancel_while_running(op.kind)
+    if op.id not in operation_runner.running_tasks:
+        raise cannot_cancel_while_running(op.kind)
+    if agent_run_cannot_stop(db, op):
+        raise cannot_cancel_while_running(op.kind)
+
+
 @router.post("/{operation_id}/cancel")
 async def cancel_operation(
     operation_id: int,
@@ -760,6 +810,7 @@ async def cancel_operation(
     op = _get_operation_with_access(db, current_user, operation_id, "operator")
     if is_terminal(op):
         raise HTTPException(status_code=409, detail=ALREADY_FINISHED)
+    refuse_running_cancel(db, op)
     accepted = await operation_runner.request_cancel(op.id)
     if not accepted:
         raise HTTPException(status_code=409, detail=ALREADY_FINISHED)

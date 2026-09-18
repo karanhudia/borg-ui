@@ -1649,6 +1649,79 @@ async def download_job_logs(
     raise _no_logs_available_exception()
 
 
+def _cannot_cancel_while_running(job_type: str) -> HTTPException:
+    return HTTPException(
+        status_code=409,
+        detail={
+            "key": "backend.errors.activity.cannotCancelWhileRunning",
+            "params": {"jobType": job_type},
+        },
+    )
+
+
+@router.post("/{job_type}/{job_id}/cancel")
+async def cancel_job(
+    job_type: str,
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Cancel a queued or running job from an activity list.
+
+    The job lists call this route for whatever row they show. A backup goes
+    through the backup cancel, which also stops the server process or the
+    agent's job; every other kind through the operation cancel, which asks
+    the runner. The role the kind needs (operator on the repository, admin
+    for a job without one) is checked first. A finished job answers 409,
+    and so does a running job of a kind that cannot be stopped mid-run."""
+    # Imported here: app.api.operations imports from this module.
+    from app.api.backup import cancel_backup_job
+    from app.api.operations import (
+        ALREADY_FINISHED,
+        _get_operation_with_access,
+        cancel_operation,
+    )
+
+    if job_type == "script_execution":
+        # a script runs in its plan's or backup's context, not as an operation
+        raise _cannot_cancel_while_running(job_type)
+    if (
+        job_type not in RCLONE_ACTIVITY_OPERATIONS
+        and operation_kind_for_activity_type(job_type) not in op_vocab.KINDS
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "key": "backend.errors.activity.invalidJobType",
+                "params": {"jobType": job_type},
+            },
+        )
+    if job_type in RCLONE_ACTIVITY_OPERATIONS:
+        mirror = _get_rclone_job(db, job_type, job_id)
+        op = db.get(Operation, mirror.id) if mirror is not None else None
+        if op is None:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "key": "backend.errors.activity.jobNotFound",
+                    "params": {"jobType": job_type},
+                },
+            )
+    else:
+        op = _get_operation_or_404(db, job_type, job_id, current_user)
+    # The role before any answer about the job's state.
+    _get_operation_with_access(db, current_user, op.id, "operator")
+
+    if op.status in op_vocab.TERMINAL_STATUSES:
+        raise HTTPException(status_code=409, detail=ALREADY_FINISHED)
+    # Both cancels refuse a running job that would not stop: a kind that
+    # does not watch the runner's flag, a task this process does not run,
+    # or a managed agent that would not end Borg (before 0.1.7).
+    if op.kind == "backup":
+        return await cancel_backup_job(op.id, current_user, db)
+    return await cancel_operation(operation_id=op.id, current_user=current_user, db=db)
+
+
 @router.delete("/{job_type}/{job_id}")
 async def delete_job(
     job_type: str,

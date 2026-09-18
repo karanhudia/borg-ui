@@ -1592,6 +1592,96 @@ def test_session_cancel_command_cancels_target_job_not_completes(
 
 
 @pytest.mark.unit
+def test_session_cancel_command_leaves_a_running_job_to_its_worker(
+    patch_session_platform,
+):
+    """A worker that runs the job reports `canceled` once its process has
+    ended; reporting it on the command would let the server hand the
+    repository to other work while Borg still holds its lock."""
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket(
+        [
+            {
+                "type": "command",
+                "command_id": "cmd-c",
+                "command": "cancel",
+                "job_id": 55,
+                "payload": {"job_id": 55},
+            },
+        ]
+    )
+    http = RecordingHttpClient()
+
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+        http_client=http,
+    )
+    event = runtime._register_cancel(55, command="repository.check")
+    runtime.run_session(max_messages=1)
+
+    assert event.is_set()
+    assert http.canceled == []
+    assert http.completed == []
+
+
+@pytest.mark.unit
+def test_a_dropped_session_does_not_cancel_running_jobs(patch_session_platform):
+    """A dropped socket is not a cancel: the cancel poller would otherwise end
+    a silent Borg on every proxy hiccup."""
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket([ConnectionError("proxy dropped the socket")])
+    http = RecordingHttpClient()
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+        http_client=http,
+    )
+    event = runtime._register_cancel(57, command="repository.check")
+
+    with pytest.raises(ConnectionError):
+        runtime.run_session(max_messages=1)
+
+    assert not event.is_set()
+    assert http.canceled == []
+
+
+@pytest.mark.unit
+def test_session_cancel_command_records_a_job_whose_worker_ignores_cancel(
+    patch_session_platform,
+):
+    """A listing does not stop on cancel; the cancel is recorded as before
+    rather than ending as a completion nobody asked for."""
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket(
+        [
+            {
+                "type": "command",
+                "command_id": "cmd-c",
+                "command": "cancel",
+                "job_id": 56,
+                "payload": {"job_id": 56},
+            },
+        ]
+    )
+    http = RecordingHttpClient()
+
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+        http_client=http,
+    )
+    event = runtime._register_cancel(56, command="repository.list_archives")
+    runtime.run_session(max_messages=1)
+
+    assert event.is_set()
+    assert http.canceled == [56]
+
+
+@pytest.mark.unit
 def test_session_runtime_handles_ephemeral_filesystem_browse(monkeypatch):
     from agent.borg_ui_agent.session import AgentSessionRuntime
 
@@ -2200,7 +2290,7 @@ def test_rinfo_and_archive_info_use_the_stdout_capturing_executor(monkeypatch):
     # path drops stdout (which broke stats/encryption refresh for agent repos).
     routed = []
 
-    def fake_short(job_id, payload, client, cmd, env):
+    def fake_short(job_id, payload, client, cmd, env, *, should_cancel=None):
         routed.append(payload.job_kind)
         return RepositoryOperationResult(job_id=job_id, status="completed")
 
@@ -3245,6 +3335,10 @@ class CancelableProcess(FakeProcess):
     def terminate(self):
         self.terminated = True
 
+    def poll(self):
+        # running until the cancel ends it
+        return None
+
     def kill(self):
         raise AssertionError("process should terminate cleanly")
 
@@ -3256,10 +3350,11 @@ class CancelableProcess(FakeProcess):
 def test_execute_backup_create_job_cancels_running_process(monkeypatch):
     process = CancelableProcess(["first line\n", "second line\n"], -15)
     killed_groups = []
+    started = []
 
     monkeypatch.setattr(
         "agent.borg_ui_agent.backup.subprocess.Popen",
-        lambda *args, **kwargs: process,
+        lambda *args, **kwargs: started.append(True) or process,
     )
     monkeypatch.setattr("agent.borg_ui_agent.backup.os.getpgid", lambda pid: 9876)
     monkeypatch.setattr(
@@ -3279,7 +3374,8 @@ def test_execute_backup_create_job_cancels_running_process(monkeypatch):
             },
         },
         client,
-        should_cancel=lambda: True,
+        # not before the start: the cancel arrives once borg has started
+        should_cancel=lambda: bool(started),
     )
 
     assert result.status == "canceled"
@@ -4446,3 +4542,41 @@ def test_repository_diff_ends_borg_when_the_upload_breaks_mid_silence(monkeypatc
     assert time.monotonic() - started < 5
     fail_call = [c for c in client.calls if c[0] == "fail_job"][0]
     assert "upload failed" in fail_call[2]
+
+
+@pytest.mark.unit
+def test_a_keepalive_reaches_the_server_over_rest_after_the_session_dropped():
+    """The worker survives a dropped socket; its progress keepalive must
+    still land, or the reaper fails a job that is running."""
+    from agent.borg_ui_agent.session import SessionCommandClient
+
+    class RestClient:
+        def __init__(self):
+            self.progress = []
+            self.logs = []
+
+        def send_progress(self, job_id, progress):
+            self.progress.append((job_id, progress))
+
+        def send_log(self, job_id, *, sequence, stream, message):
+            self.logs.append((job_id, sequence, stream, message))
+
+    rest = RestClient()
+    closing = threading.Event()
+    closing.set()
+    client = SessionCommandClient(
+        command_id="cmd-1",
+        job_id=77,
+        outbox=queue.Queue(),
+        closing=closing,
+        artifact_uploader=None,
+        http_client=rest,
+        http_lock=threading.Lock(),
+    )
+    client.started = True
+
+    client.send_progress(77, {})
+    client.send_log(77, sequence=3, stream="stdout", message="still going")
+
+    assert rest.progress == [(77, {})]
+    assert rest.logs == [(77, 3, "stdout", "still going")]

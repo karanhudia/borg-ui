@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from agent.borg_ui_agent.backup import _terminate_process
+from agent.borg_ui_agent.cancel import cancel_requested
 
 DEFAULT_SCRIPTS_DIR = "/etc/borg-ui-agent/scripts.d"
 
@@ -246,6 +247,15 @@ def execute_script_run_job(
 
     def log(stream: str, message: str) -> None:
         client.send_log(job_id, sequence=next_seq(), stream=stream, message=message)
+
+    if cancel_requested(should_cancel):
+        # Cancelled between dispatch and start: the script is not started.
+        client.cancel_job(job_id)
+        return ScriptRunResult(
+            job_id=job_id,
+            status="canceled",
+            message="script.run canceled before it started",
+        )
 
     try:
         resolved = resolve_allowed_script(name)
