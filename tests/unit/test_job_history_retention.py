@@ -573,6 +573,41 @@ def test_sweep_marks_from_late_arriving_prune_logs(db):
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "touched_seconds_ago, repaired",
+    [(10, False), (120, True)],
+    ids=["line-seconds-ago", "settled"],
+)
+def test_sweep_leaves_the_log_file_of_a_prune_with_recent_lines_alone(
+    db, tmp_path, touched_seconds_ago, repaired
+):
+    """A finished agent job's late log lines reach its log file as they
+    arrive, and each moves the job's updated_at; repairing that file from the
+    rows in the same seconds could write a line twice. The archives are
+    marked either way."""
+    _settings(db)
+    _, prune_row_id, _ = _late_prune_log_scenario(db)
+    log_file = tmp_path / "operation_prune.log"
+    log_file.write_text("Starting repository.prune", encoding="utf-8")
+    # finished long ago; only the last line's arrival differs
+    db.query(AgentJob).update(
+        {
+            "completed_at": utc_now() - timedelta(hours=1),
+            "updated_at": utc_now() - timedelta(seconds=touched_seconds_ago),
+        },
+        synchronize_session=False,
+    )
+    db.query(Operation).filter(Operation.id == prune_row_id).update(
+        {"log_file_path": str(log_file)}, synchronize_session=False
+    )
+    db.commit()
+
+    assert sweep_pruned_archive_records(db) == 1
+
+    assert ("Pruning archive: host-old" in log_file.read_text()) is repaired
+
+
+@pytest.mark.unit
 def test_retention_covers_every_surviving_job_table():
     """Phase 9 left one job table plus the rows that are not operations: agent
     jobs, wipe previews, script executions, plan runs and availability
@@ -1489,3 +1524,88 @@ class TestConsumedResultsOnPostgres:
         finally:
             db.close()
             engine.dispose()
+
+
+def _committed_state_at_unlink(tmp_path, purge):
+    """Run `purge` against a file database and record, at every unlink, what
+    a second connection (which sees only committed rows) reads for the
+    operation: the log path it still names, or that the row is gone."""
+    from sqlalchemy import select
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'retention.db'}")
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine)()
+    old = utc_now() - timedelta(days=200)
+    log_file = tmp_path / "operation.log"
+    log_file.write_text("borg output", encoding="utf-8")
+    repo = Repository(
+        name="order", path="/tmp/order", encryption="none", compression="lz4"
+    )
+    session.add(repo)
+    session.commit()
+    op = seed_job_operation(
+        session,
+        "compact",
+        repository_id=repo.id,
+        status="completed",
+        completed_at=old,
+        created_at=old,
+        log_file_path=str(log_file),
+    )
+    session.commit()
+    op_id = op.id
+
+    seen = []
+    real_unlink = Path.unlink
+
+    def unlink(self, *args, **kwargs):
+        if self == log_file:
+            with engine.connect() as conn:
+                seen.append(
+                    conn.execute(
+                        select(Operation.id, Operation.log_file_path).where(
+                            Operation.id == op_id
+                        )
+                    ).first()
+                )
+        return real_unlink(self, *args, **kwargs)
+
+    try:
+        with patch.object(Path, "unlink", unlink):
+            purge(session, op_id)
+    finally:
+        session.close()
+        engine.dispose()
+    assert not log_file.exists()
+    return seen
+
+
+@pytest.mark.unit
+def test_log_purge_commits_the_cleared_path_before_unlinking(tmp_path):
+    # `_complete_finished_operation_log` relies on this order: after it
+    # rewrites a file it re-checks that some operation still names the path
+    # and removes the file again if none does. An unlink before the commit
+    # would let it put back a file nothing names.
+    from app.services.job_history_retention import purge_operation_log_files
+
+    seen = _committed_state_at_unlink(
+        tmp_path,
+        lambda session, op_id: purge_operation_log_files(
+            session, (Operation.id == op_id,)
+        ),
+    )
+
+    assert len(seen) == 1
+    assert seen[0] is not None and seen[0].log_file_path is None
+
+
+@pytest.mark.unit
+def test_row_purge_commits_the_deleted_row_before_unlinking(tmp_path):
+    # Same order for the row window: the row is gone, committed, before its
+    # file is removed.
+    seen = _committed_state_at_unlink(
+        tmp_path,
+        lambda session, op_id: purge_job_rows(session, utc_now() - timedelta(days=90)),
+    )
+
+    assert seen == [None]
