@@ -100,31 +100,35 @@ export default function PrunePreview() {
   // The refresh's operation id; polled until the operation ends, whatever
   // way it ends, so a skipped or failed comparison does not leave the page
   // "Comparing" for good.
-  const [pendingOpId, setPendingOpId] = useState<number | null>(null)
+  // Keyed by repository: the route keeps this component instance across
+  // repositories, and a refresh that lands after a switch belongs to the
+  // old one.
+  const [pendingOp, setPendingOp] = useState<{ id: number; repositoryId: number } | null>(null)
+  const pendingOpId = pendingOp?.repositoryId === repositoryId ? pendingOp.id : null
   const comparisonQuery = useQuery({
     queryKey: ['prune-comparison', repositoryId],
     queryFn: () => repositoriesAPI.pruneComparison(repositoryId).then((res) => res.data),
     enabled: Number.isFinite(repositoryId),
   })
   const comparison = comparisonQuery.data ?? null
-  const pendingOp = useQuery({
+  const pendingOpQuery = useQuery({
     queryKey: ['operation', pendingOpId],
     queryFn: () => operationsAPI.get(pendingOpId as number).then((res) => res.data),
     enabled: pendingOpId !== null,
     refetchInterval: 3000,
   })
-  const pendingStatus = pendingOp.data?.status
+  const pendingStatus = pendingOpQuery.data?.status
   useEffect(() => {
     if (pendingOpId === null) return
     const ended = pendingStatus !== undefined && !['queued', 'running'].includes(pendingStatus)
-    if (ended || pendingOp.isError) {
-      setPendingOpId(null)
+    if (ended || pendingOpQuery.isError) {
+      setPendingOp(null)
       queryClient.invalidateQueries({ queryKey: ['prune-comparison', repositoryId] })
     }
-  }, [pendingOpId, pendingStatus, pendingOp.isError, queryClient, repositoryId])
+  }, [pendingOpId, pendingStatus, pendingOpQuery.isError, queryClient, repositoryId])
   const refreshMutation = useMutation({
-    mutationFn: () => repositoriesAPI.pruneComparisonRefresh(repositoryId),
-    onSuccess: (res) => setPendingOpId(res.data.operation_id),
+    mutationFn: (id: number) => repositoriesAPI.pruneComparisonRefresh(id),
+    onSuccess: (res, id) => setPendingOp({ id: res.data.operation_id, repositoryId: id }),
     onError: () => toast.error(t('prunePreview.compare.refreshFailed')),
   })
   const candidateRetention = useMemo(
@@ -327,14 +331,14 @@ export default function PrunePreview() {
             editing={editing}
             selectedKey={selectedKey}
             pending={pendingOpId !== null}
-            refreshDisabled={!ready || previewMutation.isPending}
+            refreshDisabled={!ready || previewMutation.isPending || refreshMutation.isPending}
             onSelect={(row) => {
               const form = toForm(row.retention)
               if (!form) return
               setRetention(form)
               previewMutation.mutate(form)
             }}
-            onRefresh={() => refreshMutation.mutate()}
+            onRefresh={() => refreshMutation.mutate(repositoryId)}
           />
 
           {previewMutation.isPending && !preview ? (

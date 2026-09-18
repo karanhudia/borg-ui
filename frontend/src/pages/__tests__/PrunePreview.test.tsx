@@ -322,6 +322,26 @@ describe('PrunePreview page', () => {
     expect(screen.getByRole('button', { name: 'Compare now' })).toBeEnabled()
   })
 
+  it('drops the pending comparison when the route moves to another repository', async () => {
+    vi.mocked(repositoriesAPI.pruneComparisonRefresh).mockResolvedValue({
+      data: { operation_id: 9 },
+    } as never)
+    vi.mocked(operationsAPI.get).mockResolvedValue({
+      data: { id: 9, status: 'running' },
+    } as never)
+    const { rerender } = renderPage()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Compare now' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: 'Compare now' }))
+    await waitFor(() =>
+      expect(screen.getByText('Comparing, this runs one dry run per policy.')).toBeInTheDocument()
+    )
+    mockParams = { repositoryId: '8' }
+    rerender(<PrunePreview />)
+    await waitFor(() =>
+      expect(screen.queryByText('Comparing, this runs one dry run per policy.')).toBeNull()
+    )
+  })
+
   it('marks the stored row selected when the dialog form lists keep_within first', async () => {
     vi.mocked(repositoriesAPI.pruneComparison).mockResolvedValue({
       data: storedComparison,

@@ -298,6 +298,34 @@ async def test_run_comparison_replaces_old_rows_and_skips_a_failed_dry_run(
 
 
 @pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_comparison_keeps_old_rows_when_only_the_no_policy_row_is_left(
+    db, repo, monkeypatch
+):
+    _archives(db, repo, 2)
+    db.add(
+        PruneComparison(
+            repository_id=repo.id,
+            candidate="standard",
+            label="Standard",
+            kept_count=1,
+            deleted_count=1,
+            freed_at_least=5,
+            archive_count_at=2,
+            computed_at=datetime(2026, 1, 1),
+        )
+    )
+    db.commit()
+    monkeypatch.setattr(pc, "retention_defaults", lambda db, r: _NO_POLICY)
+    fake = AsyncMock(side_effect=DryRunFailed("boom"))
+    with patch.object(pc, "run_candidate", new=fake):
+        rows = await pc.run_comparison(db, repo, run_id="run", depends_on_id=None)
+    assert rows == []
+    stored = db.query(PruneComparison).filter_by(repository_id=repo.id).all()
+    assert [r.candidate for r in stored] == ["standard"]
+
+
+@pytest.mark.unit
 def test_stored_reports_stale_when_the_archive_count_moved(db, repo):
     assert pc.stored(db, repo) == {
         "computed_at": None,

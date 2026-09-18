@@ -99,6 +99,7 @@ async def run_comparison(
     count = current_archive_count(db, repository)
     computed_at = utc_now()
     rows: list[PruneComparison] = []
+    measured = 0
     for key, label, retention in candidates(db, repository):
         if retention is None:
             rows.append(
@@ -132,6 +133,7 @@ async def run_comparison(
             # run_prune_dry_run already failed the candidate's inline row.
             logger.exception("prune_compare: %s dry run raised", key)
             continue
+        measured += 1
         rows.append(
             PruneComparison(
                 repository_id=repository.id,
@@ -147,7 +149,8 @@ async def run_comparison(
                 computed_at=computed_at,
             )
         )
-    if not rows:
+    if measured == 0:
+        # The no-policy row alone is not a comparison.
         return []
     db.query(PruneComparison).filter(
         PruneComparison.repository_id == repository.id
