@@ -126,6 +126,7 @@ async def run_comparison(
                 user_id=None,
                 run_id=run_id,
                 depends_on_id=depends_on_id,
+                remeasure=False,
             )
         except DryRunFailed:
             continue

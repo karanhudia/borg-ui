@@ -453,10 +453,14 @@ async def run_candidate(
     user_id: Optional[int],
     run_id: Optional[str] = None,
     depends_on_id: Optional[int] = None,
+    remeasure: bool = True,
 ) -> CandidateResult:
     """Spec 4.4 steps 1 to 4: dry run, verdict join, candidate re-measure,
     freed lower bound. Shared by the preview page and the comparison
-    (spec 4.5). Raises DryRunFailed when Borg's dry run did not complete."""
+    (spec 4.5), which passes `remeasure=False`: it runs after a backup,
+    and nothing is re-measured after a backup (Appendix B); a candidate
+    never measured then counts as partial. Raises DryRunFailed when Borg's
+    dry run did not complete."""
     operation, log = await run_prune_dry_run(
         db,
         repository,
@@ -474,7 +478,10 @@ async def run_candidate(
     candidates = [
         by_id[p.id] for p in joined if p.verdict == "deleted" and p.id in by_id
     ]
-    partial = await remeasure_candidates(db, repository, candidates)
+    if remeasure:
+        partial = await remeasure_candidates(db, repository, candidates)
+    else:
+        partial = any(a.stats_measured_at is None for a in candidates)
     for p in joined:
         row = by_id.get(p.id) if p.id is not None else None
         if row is not None:
