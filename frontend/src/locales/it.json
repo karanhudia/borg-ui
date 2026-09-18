@@ -4134,6 +4134,7 @@
     "subtitle": "Configura archiviazione, conservazione e pulizia dei log dei job",
     "storageUsage": "Utilizzo dello spazio",
     "storageUsageDesc": "Utilizzo attuale dello spazio dei log e statistiche",
+    "storageUnavailable": "I dati sullo spazio dei log non sono disponibili al momento; lo spazio potrebbe comunque essere pieno.",
     "totalSize": "Dimensione totale",
     "fileCount": "Numero di file",
     "oldestLog": "Log più vecchio",

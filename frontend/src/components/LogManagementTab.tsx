@@ -67,7 +67,11 @@ const LogManagementTab: React.FC = () => {
   })
 
   // Fetch log storage stats (refresh every 30s)
-  const { data: logStorageData, isLoading: loadingStorage } = useQuery({
+  const {
+    data: logStorageData,
+    isLoading: loadingStorage,
+    isError: storageUnavailable,
+  } = useQuery({
     queryKey: ['log-storage-stats'],
     queryFn: async () => {
       const response = await settingsAPI.getLogStorageStats()
@@ -76,7 +80,7 @@ const LogManagementTab: React.FC = () => {
     refetchInterval: 30000, // Refresh every 30 seconds
   })
 
-  const logStorage: LogStorage | undefined = logStorageData?.storage || settingsData?.log_storage
+  const logStorage: LogStorage | undefined = logStorageData?.storage
   const settings: SystemSettings | undefined = settingsData?.settings
 
   // Initialize form values from fetched settings
@@ -295,8 +299,18 @@ const LogManagementTab: React.FC = () => {
               >
                 <LinearProgress />
               </Box>
+            ) : !logStorage ? (
+              // No figures, whether the route failed or answered without
+              // them: the warning alone, no zero figures that would read as
+              // an empty store.
+              <Alert severity="warning">{t('logManagement.storageUnavailable')}</Alert>
             ) : (
               <>
+                {storageUnavailable && (
+                  // Stale figures from the last successful fetch: say so
+                  // above them.
+                  <Alert severity="warning">{t('logManagement.storageUnavailable')}</Alert>
+                )}
                 <Box
                   sx={{
                     display: 'grid',
@@ -424,28 +438,24 @@ const LogManagementTab: React.FC = () => {
                     {t('logManagement.highUsageWarning', { percent: usagePercent })}
                   </Alert>
                 )}
-
-                <Box sx={{ pt: 1 }}>
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    startIcon={
-                      cleanupMutation.isPending ? (
-                        <CircularProgress size={16} />
-                      ) : (
-                        <Trash2 size={16} />
-                      )
-                    }
-                    onClick={handleCleanup}
-                    disabled={cleanupMutation.isPending}
-                  >
-                    {cleanupMutation.isPending
-                      ? t('logManagement.clearing')
-                      : t('logManagement.clearLogs')}
-                  </Button>
-                </Box>
               </>
             )}
+            {/* The cleanup stays reachable whatever the figures say */}
+            <Box sx={{ pt: 1 }}>
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={
+                  cleanupMutation.isPending ? <CircularProgress size={16} /> : <Trash2 size={16} />
+                }
+                onClick={handleCleanup}
+                disabled={cleanupMutation.isPending}
+              >
+                {cleanupMutation.isPending
+                  ? t('logManagement.clearing')
+                  : t('logManagement.clearLogs')}
+              </Button>
+            </Box>
           </Stack>
         </SettingsCard>
 

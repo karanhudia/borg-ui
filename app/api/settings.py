@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -38,6 +39,39 @@ from app.utils.schedule_time import (
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["settings"], dependencies=[Depends(authorize_request)])
+
+
+def _off_loop(fn, *args, **kwargs):
+    """Run a blocking call in the threadpool. A module-local hop, so that a
+    test can patch it without touching `asyncio.to_thread` for the process."""
+    return asyncio.to_thread(fn, *args, **kwargs)
+
+
+# One cleanup pass at a time in this process: two passes over the same files
+# would report each other's deletions as errors. (Per event loop; a second
+# worker process would not see it.)
+_log_cleanup_lock = asyncio.Lock()
+
+
+def _cleanup_logs_off_request(bind, max_age_days: int, max_total_size_mb: int) -> dict:
+    """The log cleanup pass with a session of its own on the request's
+    engine (`bind`), for the threadpool: the pass stats and deletes every
+    log file past the limits, and the request's session stays with the
+    request. The pass takes its snapshot of running jobs at its start, as
+    it always did."""
+    from app.services.log_manager import log_manager
+
+    db = Session(bind=bind)
+    try:
+        return log_manager.cleanup_logs_combined(
+            db=db,
+            max_age_days=max_age_days,
+            max_total_size_mb=max_total_size_mb,
+            dry_run=False,
+        )
+    finally:
+        db.close()
+
 
 # Initialize Borg interface
 borg = BorgInterface()
@@ -337,39 +371,9 @@ async def get_system_settings(
             db.commit()
             db.refresh(settings)
 
-        # Get log storage statistics
-        from app.services.log_manager import log_manager
-
-        try:
-            log_storage = log_manager.calculate_log_storage()
-            usage_percent = 0
-            if settings.log_max_total_size_mb and settings.log_max_total_size_mb > 0:
-                usage_percent = min(
-                    100,
-                    int(
-                        (log_storage["total_size_mb"] / settings.log_max_total_size_mb)
-                        * 100
-                    ),
-                )
-
-            log_storage_info = {
-                "total_size_mb": log_storage["total_size_mb"],
-                "file_count": log_storage["file_count"],
-                "oldest_log_date": serialize_datetime(log_storage["oldest_log_date"]),
-                "newest_log_date": serialize_datetime(log_storage["newest_log_date"]),
-                "usage_percent": usage_percent,
-                "files_by_type": log_storage["files_by_type"],
-            }
-        except Exception as e:
-            logger.warning("Failed to calculate log storage", error=str(e))
-            log_storage_info = {
-                "total_size_mb": 0,
-                "file_count": 0,
-                "oldest_log_date": None,
-                "newest_log_date": None,
-                "usage_percent": 0,
-                "files_by_type": {},
-            }
+        # The log storage figures are not part of this answer: they cost a
+        # stat of every log file, this route is requested on every page, and
+        # the log tab reads them from /system/logs/storage.
 
         # Calculate effective timeout values and their sources
         mount_timeout, mount_source = get_effective_timeout(
@@ -544,7 +548,6 @@ async def get_system_settings(
                 or "viewer",
                 "oidc_active_admin_count": _active_oidc_admin_count(db),
             },
-            "log_storage": log_storage_info,
         }
     except Exception as e:
         logger.error("Failed to get system settings", error=str(e))
@@ -590,7 +593,8 @@ async def update_system_settings(
             from app.services.log_manager import log_manager
 
             try:
-                log_storage = log_manager.calculate_log_storage()
+                # a stat of every log file: off the event loop
+                log_storage = await _off_loop(log_manager.calculate_log_storage)
                 if log_storage["total_size_mb"] > settings_update.log_max_total_size_mb:
                     warnings.append(
                         f"Warning: Current log storage ({log_storage['total_size_mb']} MB) exceeds new limit "
@@ -1259,8 +1263,6 @@ async def refresh_all_stats(
     Check last_stats_refresh timestamp to know when it completed.
     """
     try:
-        import asyncio
-
         logger.info("Manual stats refresh triggered", user=current_user.username)
 
         # Get all repository IDs
@@ -1880,7 +1882,6 @@ async def cleanup_system(
         # Apply the DB retention windows now (log content after
         # log_retention_days, finished job rows after cleanup_retention_days —
         # the same pass the daily scheduler runs).
-        import asyncio
 
         from app.services.job_history_retention import run_retention_once
 
@@ -1956,8 +1957,8 @@ async def get_log_storage_stats(
             db.add(settings)
             db.commit()
 
-        # Calculate log storage
-        log_storage = log_manager.calculate_log_storage()
+        # Calculate log storage: a stat of every log file, off the event loop
+        log_storage = await _off_loop(log_manager.calculate_log_storage)
 
         # Calculate usage percentage
         usage_percent = 0
@@ -2029,16 +2030,19 @@ async def manual_log_cleanup(
             max_total_size_mb=max_total_size_mb,
         )
 
-        # Run cleanup
-        result = log_manager.cleanup_logs_combined(
-            db=db,
-            max_age_days=max_age_days,
-            max_total_size_mb=max_total_size_mb,
-            dry_run=False,
-        )
+        # Off the event loop: the pass stats and deletes every log file past
+        # the limits, which stalled every other request while it ran. One
+        # pass at a time; a second request waits for the first.
+        async with _log_cleanup_lock:
+            result = await _off_loop(
+                _cleanup_logs_off_request,
+                db.get_bind(),
+                max_age_days,
+                max_total_size_mb,
+            )
 
-        # Get updated storage stats
-        log_storage = log_manager.calculate_log_storage()
+        # Get updated storage stats (a stat of every log file, off the loop)
+        log_storage = await _off_loop(log_manager.calculate_log_storage)
 
         logger.info(
             "Manual log cleanup completed",
