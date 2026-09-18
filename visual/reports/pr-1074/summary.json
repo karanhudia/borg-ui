@@ -1,18 +1,18 @@
 {
-  "generatedAt": "2026-09-18T04:46:39.904Z",
+  "generatedAt": "2026-09-18T10:29:09.800Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1074 visual report",
-    "commitSha": "ecb4c4aca7e3",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35308169448"
+    "commitSha": "04a5158500c1",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35334794430"
   },
   "totals": {
-    "baseline": 940,
+    "baseline": 952,
     "actual": 940,
     "compared": 940,
     "changed": 10,
     "added": 0,
-    "removed": 0,
+    "removed": 12,
     "unchanged": 930
   },
   "changed": [
@@ -198,7 +198,56 @@
     }
   ],
   "added": [],
-  "removed": [],
+  "removed": [
+    {
+      "fileName": "components-logmanagementtab--storage-unavailable--mobile.png",
+      "baselinePath": "images/baseline/components-logmanagementtab--storage-unavailable--mobile.png"
+    },
+    {
+      "fileName": "components-logmanagementtab--storage-unavailable.png",
+      "baselinePath": "images/baseline/components-logmanagementtab--storage-unavailable.png"
+    },
+    {
+      "fileName": "components-prune-prunecomparedpolicies--empty--mobile.png",
+      "baselinePath": "images/baseline/components-prune-prunecomparedpolicies--empty--mobile.png"
+    },
+    {
+      "fileName": "components-prune-prunecomparedpolicies--empty.png",
+      "baselinePath": "images/baseline/components-prune-prunecomparedpolicies--empty.png"
+    },
+    {
+      "fileName": "components-prune-prunecomparedpolicies--stored--mobile.png",
+      "baselinePath": "images/baseline/components-prune-prunecomparedpolicies--stored--mobile.png"
+    },
+    {
+      "fileName": "components-prune-prunecomparedpolicies--stored.png",
+      "baselinePath": "images/baseline/components-prune-prunecomparedpolicies--stored.png"
+    },
+    {
+      "fileName": "components-prune-prunecomparedpolicies--with-editing-row-stale--mobile.png",
+      "baselinePath": "images/baseline/components-prune-prunecomparedpolicies--with-editing-row-stale--mobile.png"
+    },
+    {
+      "fileName": "components-prune-prunecomparedpolicies--with-editing-row-stale.png",
+      "baselinePath": "images/baseline/components-prune-prunecomparedpolicies--with-editing-row-stale.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-spacesavingspanel--one-stale--mobile.png",
+      "baselinePath": "images/baseline/pages-dashboardv3-spacesavingspanel--one-stale--mobile.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-spacesavingspanel--one-stale.png",
+      "baselinePath": "images/baseline/pages-dashboardv3-spacesavingspanel--one-stale.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-spacesavingspanel--three-rows--mobile.png",
+      "baselinePath": "images/baseline/pages-dashboardv3-spacesavingspanel--three-rows--mobile.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-spacesavingspanel--three-rows.png",
+      "baselinePath": "images/baseline/pages-dashboardv3-spacesavingspanel--three-rows.png"
+    }
+  ],
   "unchanged": [
     {
       "fileName": "activity-activitytimeline--dark--mobile.png"
