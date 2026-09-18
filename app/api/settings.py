@@ -26,7 +26,6 @@ from app.core.permissions import (
     default_repository_role_for_global_role,
     normalize_repository_role_for_global_role,
 )
-from app.core.borg import BorgInterface
 from app.config import get_runtime_app_version, settings as app_settings
 from app.services.cache_service import archive_cache
 from app.utils.datetime_utils import serialize_datetime
@@ -72,9 +71,6 @@ def _cleanup_logs_off_request(bind, max_age_days: int, max_total_size_mb: int) -
     finally:
         db.close()
 
-
-# Initialize Borg interface
-borg = BorgInterface()
 
 # Default timeout values (built-in)
 DEFAULT_TIMEOUTS = {
@@ -497,7 +493,6 @@ async def get_system_settings(
                 "backup_reports_last_sent_at": serialize_datetime(
                     settings.backup_reports_last_sent_at
                 ),
-                "borg_version": borg.get_version(),
                 "app_version": get_runtime_app_version(),
                 # MQTT settings
                 "mqtt_enabled": settings.mqtt_enabled,
