@@ -328,22 +328,34 @@ export default function Repositories() {
     return new Set(repositories.filter((link) => link.enabled).map((link) => link.repository_id))
   }, [selectedBackupPlanData, selectedBackupPlanId])
 
-  // Get repository info using borg info command
-  const {
-    data: repositoryInfo,
-    isLoading: loadingInfo,
-    error: infoError,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } = useQuery<AxiosResponse<{ info: any }>>({
-    queryKey: ['repository-info', viewingInfoRepository?.id],
-    queryFn: () => new BorgApiClient(viewingInfoRepository!).getInfo(),
-    enabled: !!viewingInfoRepository,
-    retry: false,
+  // The dialog reads the stored columns; a live `borg info` runs only on
+  // its refresh button. The info syncs the archive columns on the server,
+  // so the list and the dialog's figures are refetched once it answers.
+  const refreshInfoMutation = useMutation({
+    mutationFn: (repository: Repository) => new BorgApiClient(repository).getInfo(),
+    onSuccess: (_result, repository) => {
+      queryClient.invalidateQueries({ queryKey: ['repositories'] })
+      queryClient.invalidateQueries({ queryKey: ['repository-storage', repository.id] })
+    },
+    onError: (error: unknown, repository) => {
+      if ((error as { response?: { status?: number } })?.response?.status === 423) {
+        setLockError({
+          repositoryId: repository.id,
+          repositoryName: repository.name,
+          borgVersion: repository.borg_version as 1 | 2 | undefined,
+        })
+      }
+    },
   })
+  // a failed refresh belongs to the repository it ran for, not the next
+  // one the dialog opens
+  const resetRefreshInfo = refreshInfoMutation.reset
+  React.useEffect(() => {
+    resetRefreshInfo()
+  }, [viewingInfoRepository?.id, resetRefreshInfo])
 
   // The dialog's storage statistics read the stored `storage` payload
-  // (#981) from the storage route: the archive sums the list leaves out,
-  // and no live Borg call next to the `/info` above.
+  // (#981) from the storage route: the archive sums the list leaves out.
   const { data: viewingRepositoryStorageResponse } = useQuery({
     queryKey: ['repository-storage', viewingInfoRepository?.id],
     queryFn: () => repositoriesAPI.getStorage(viewingInfoRepository!.id),
@@ -372,39 +384,13 @@ export default function Repositories() {
     viewingRepositoryStorageResponse?.data?.index_pending_kinds ??
     viewingRepository?.index_pending_kinds
 
-  // Fresh info carries the authoritative archive list, and the backend syncs
-  // archive_count/last_backup from it — refetch the list so the card catches
-  // up with the dialog instead of rendering the stale stored count.
-  React.useEffect(() => {
-    if (repositoryInfo) {
-      queryClient.invalidateQueries({ queryKey: ['repositories'] })
-      // the dialog's figures read the synced columns too
-      if (viewingInfoRepository) {
-        queryClient.invalidateQueries({
-          queryKey: ['repository-storage', viewingInfoRepository.id],
-        })
-      }
-    }
-  }, [repositoryInfo, viewingInfoRepository, queryClient])
-
   // Agent-run info failures carry borg's own reason in detail.message.
+  const infoError = refreshInfoMutation.error
   const infoErrorMessage = React.useMemo(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const detail = (infoError as any)?.response?.data?.detail
     return typeof detail?.message === 'string' && detail.message ? detail.message : null
   }, [infoError])
-
-  // Handle repository info error
-  React.useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (infoError && (infoError as any)?.response?.status === 423 && viewingInfoRepository) {
-      setLockError({
-        repositoryId: viewingInfoRepository.id,
-        repositoryName: viewingInfoRepository.name,
-        borgVersion: viewingInfoRepository.borg_version as 1 | 2 | undefined,
-      })
-    }
-  }, [infoError, viewingInfoRepository])
 
   // Mutations
   const deleteRepositoryMutation = useMutation({
@@ -1184,10 +1170,11 @@ export default function Repositories() {
         // work the dialog's other figures follow, the snapshot at open
         // time would not
         repository={viewingRepository}
-        repositoryInfo={repositoryInfo?.data?.info || null}
         storage={viewingRepositoryStorage}
         indexPendingKinds={viewingRepositoryIndexPending}
-        isLoading={loadingInfo}
+        onRefresh={() => viewingRepository && refreshInfoMutation.mutate(viewingRepository)}
+        isRefreshing={refreshInfoMutation.isPending}
+        refreshFailed={refreshInfoMutation.isError}
         onClose={() => setViewingInfoRepository(null)}
         onRunRecoveryCheck={(repository) => handleCheckRepository(repository as Repository)}
         canRunRecoveryCheck={
@@ -1240,7 +1227,7 @@ export default function Repositories() {
           canBreakLock={canBreakLock({ repository_id: lockError.repositoryId })}
           lockBreakingEnabled={lockBreakingEnabled}
           onLockBroken={() => {
-            queryClient.invalidateQueries({ queryKey: ['repository-info', lockError.repositoryId] })
+            if (viewingRepository) refreshInfoMutation.mutate(viewingRepository)
           }}
         />
       )}

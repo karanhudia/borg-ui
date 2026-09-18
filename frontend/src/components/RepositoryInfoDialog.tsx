@@ -21,6 +21,7 @@ import CheckIcon from '@mui/icons-material/Check'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import FileDownload from '@mui/icons-material/FileDownload'
 import Lock from '@mui/icons-material/Lock'
+import Refresh from '@mui/icons-material/Refresh'
 import Storage from '@mui/icons-material/Storage'
 import { useTranslation } from 'react-i18next'
 import { formatDateShort } from '../utils/dateUtils'
@@ -33,27 +34,21 @@ import type { Repository, RepositoryStorage } from '../types'
 import { isV2Repo } from '../utils/repoCapabilities'
 import { generateBorgInitCommand } from '../utils/borgUtils'
 
-interface RepositoryInfo {
-  encryption?: {
-    mode?: string
-  }
-  repository?: {
-    last_modified?: string
-    location?: string
-  }
-}
-
 interface RepositoryInfoDialogProps {
   open: boolean
   repository: Repository | null
-  repositoryInfo: RepositoryInfo | null
   /** The repository's stored size figures (#981): `null` when the server
    * could not compute them, `undefined` while they have not been loaded. */
   storage?: RepositoryStorage | null
   /** Index work still pending for the repository (#1063); falls back to
    * the repository row's own list when not given. */
   indexPendingKinds?: string[] | null
-  isLoading: boolean
+  /** Runs a live `borg info` for the repository. The details themselves
+   * are the stored columns; this is the user's way to re-read them, and
+   * the health probe: a failure shows the recovery panel. */
+  onRefresh?: () => void
+  isRefreshing?: boolean
+  refreshFailed?: boolean
   onClose: () => void
   onRunRecoveryCheck?: (repository: Repository) => void
   canRunRecoveryCheck?: boolean
@@ -302,10 +297,11 @@ function RecoveryGuidedCheckAction({
 export default function RepositoryInfoDialog({
   open,
   repository,
-  repositoryInfo,
   storage,
   indexPendingKinds,
-  isLoading,
+  onRefresh,
+  isRefreshing = false,
+  refreshFailed = false,
   onClose,
   onRunRecoveryCheck,
   canRunRecoveryCheck = true,
@@ -314,9 +310,6 @@ export default function RepositoryInfoDialog({
 }: RepositoryInfoDialogProps) {
   const { t } = useTranslation()
   const [displayRepository, setDisplayRepository] = useState<Repository | null>(repository)
-  const [displayRepositoryInfo, setDisplayRepositoryInfo] = useState<RepositoryInfo | null>(
-    repositoryInfo
-  )
   // The storage figures and the pending kinds are kept the way the live
   // info is, so the closing transition does not flip them to "unknown";
   // a different repository opening resets them before its own arrive.
@@ -348,16 +341,9 @@ export default function RepositoryInfoDialog({
   }, [indexPendingKinds])
 
   useEffect(() => {
-    if (repositoryInfo) {
-      setDisplayRepositoryInfo(repositoryInfo)
-    }
-  }, [repositoryInfo])
-
-  useEffect(() => {
     if (!open && !repository) {
       const timeout = window.setTimeout(() => {
         setDisplayRepository(null)
-        setDisplayRepositoryInfo(null)
         setDisplayStorage(undefined)
         setDisplayIndexPending(undefined)
         displayedRepositoryId.current = null
@@ -408,27 +394,32 @@ export default function RepositoryInfoDialog({
             variant="h5"
             sx={{
               fontWeight: 600,
+              flex: 1,
+              minWidth: 0,
             }}
           >
             {displayRepository?.name}
           </Typography>
+          {onRefresh && (
+            <Tooltip title={t('repositoryStats.refresh')}>
+              <span>
+                <IconButton
+                  size="small"
+                  aria-label={t('repositoryStats.refresh')}
+                  onClick={onRefresh}
+                  disabled={isRefreshing}
+                >
+                  {isRefreshing ? <CircularProgress size={18} /> : <Refresh fontSize="small" />}
+                </IconButton>
+              </span>
+            </Tooltip>
+          )}
         </Box>
       </DialogTitle>
       <DialogContent>
         {displayRepository && (
           <>
-            {isLoading ? (
-              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    color: 'text.secondary',
-                  }}
-                >
-                  {t('dialogs.repositoryInfo.loadingInfo')}
-                </Typography>
-              </Box>
-            ) : displayRepositoryInfo ? (
+            {!refreshFailed ? (
               <PlanGate
                 feature="borg_v2"
                 when={isV2Repo(displayRepository)}
@@ -513,7 +504,7 @@ export default function RepositoryInfoDialog({
                             ml: 5,
                           }}
                         >
-                          {displayRepositoryInfo.encryption?.mode || 'N/A'}
+                          {displayRepository.encryption || 'N/A'}
                         </Typography>
                       </CardContent>
                     </Card>
@@ -549,8 +540,8 @@ export default function RepositoryInfoDialog({
                             ml: 5,
                           }}
                         >
-                          {displayRepositoryInfo.repository?.last_modified
-                            ? formatDateShort(displayRepositoryInfo.repository.last_modified)
+                          {displayStorage?.last_modified
+                            ? formatDateShort(displayStorage.last_modified)
                             : 'N/A'}
                         </Typography>
                       </CardContent>
@@ -574,7 +565,7 @@ export default function RepositoryInfoDialog({
                         variant="body2"
                         sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}
                       >
-                        {displayRepositoryInfo.repository?.location || 'N/A'}
+                        {displayRepository.path || 'N/A'}
                       </Typography>
                     </CardContent>
                   </Card>
@@ -648,21 +639,19 @@ export default function RepositoryInfoDialog({
             )}
             {/* Storage Statistics: the stored figures, as the card and the
                 archive header show them, never a live per-version block.
-                They need no live info, so a failed `borg info` shows them
-                under its error too; a Borg 2 repository's stay behind the
-                same plan gate as its live block, whose prompt says so. */}
-            {!isLoading && (
-              <PlanGate feature="borg_v2" when={isV2Repo(displayRepository)} fallback={null}>
-                <Box sx={{ mt: 2 }}>
-                  <RepositoryStats
-                    variant="detail"
-                    storage={displayStorage}
-                    archiveCount={displayRepository.archive_count}
-                    indexPendingKinds={displayIndexPending ?? displayRepository.index_pending_kinds}
-                  />
-                </Box>
-              </PlanGate>
-            )}
+                A failed refresh shows them under its error too; a Borg 2
+                repository's stay behind the same plan gate as its details,
+                whose prompt says so. */}
+            <PlanGate feature="borg_v2" when={isV2Repo(displayRepository)} fallback={null}>
+              <Box sx={{ mt: 2 }}>
+                <RepositoryStats
+                  variant="detail"
+                  storage={displayStorage}
+                  archiveCount={displayRepository.archive_count}
+                  indexPendingKinds={displayIndexPending ?? displayRepository.index_pending_kinds}
+                />
+              </Box>
+            </PlanGate>
           </>
         )}
       </DialogContent>

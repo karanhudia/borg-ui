@@ -5145,7 +5145,9 @@
     "spaceSavedHint": "Originalgröße geteilt durch den belegten Platz: Deduplizierung und Kompression zusammen",
     "spaceSavedUnknownHint": "Nichts, wodurch geteilt werden kann",
     "backupSpanHint": "Das älteste und das neueste Archiv",
-    "latestArchiveFilesHint": "Anzahl der Dateien im neuesten Archiv, keine Summe"
+    "latestArchiveFilesHint": "Anzahl der Dateien im neuesten Archiv, keine Summe",
+    "refresh": "Von Borg aktualisieren",
+    "refreshed": "Repository-Informationen aktualisiert"
   },
   "upcomingJobs": {
     "title": "Bevorstehende Aufgaben (Nächste 24 Stunden)",

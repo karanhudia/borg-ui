@@ -2,7 +2,7 @@
  * Regression tests for archive deletion cache invalidation (issue #352)
  *
  * After deleting an archive, the UI was showing stale repository statistics
- * because `repository-info` was not being invalidated alongside `repository-archives`.
+ * because the stored list was not being invalidated after the delete job finished.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
@@ -133,7 +133,6 @@ describe('Archives page — delete cache invalidation (regression #352)', () => 
     queryClient.setQueryData(['repository-archives-stored', 1], {
       data: { archives: [], series: [], sync_state: 'never', last_synced_at: null },
     })
-    queryClient.setQueryData(['repository-info', 1], { data: { info: {} } })
     queryClient.setQueryData(['restore-jobs'], { data: { jobs: [] } })
 
     vi.mocked(apiModule.repositoriesAPI.getRepositories).mockResolvedValue({
@@ -141,9 +140,6 @@ describe('Archives page — delete cache invalidation (regression #352)', () => 
     } as never)
     vi.mocked(apiModule.repositoriesAPI.listRepositoryArchives).mockResolvedValue({
       data: { archives: [] },
-    } as never)
-    vi.mocked(apiModule.repositoriesAPI.getRepositoryInfo).mockResolvedValue({
-      data: { info: {} },
     } as never)
     vi.mocked(apiModule.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: { jobs: [] },
@@ -171,7 +167,7 @@ describe('Archives page — delete cache invalidation (regression #352)', () => 
     vi.clearAllMocks()
   })
 
-  it('invalidates both repository-archives AND repository-info after successful deletion', async () => {
+  it('invalidates the stored archive list after successful deletion', async () => {
     const user = userEvent.setup()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 
@@ -206,9 +202,6 @@ describe('Archives page — delete cache invalidation (regression #352)', () => 
         expect(getDeleteJobStatusMock).toHaveBeenCalledWith(123)
         expect(invalidateSpy).toHaveBeenCalledWith(
           expect.objectContaining({ queryKey: ['repository-archives-stored', 1] })
-        )
-        expect(invalidateSpy).toHaveBeenCalledWith(
-          expect.objectContaining({ queryKey: ['repository-info', 1] })
         )
       },
       { timeout: 4000 }

@@ -10,11 +10,15 @@ import {
   alpha,
   ToggleButton,
   ToggleButtonGroup,
+  IconButton,
+  Tooltip,
+  CircularProgress,
 } from '@mui/material'
+import RefreshIcon from '@mui/icons-material/Refresh'
 import { Folder, History } from 'lucide-react'
 import { repositoriesAPI, mountsAPI, restoreAPI, archivesAPI } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
-import { translateBackendKey } from '../utils/translateBackendKey'
+import { translateBackendKey, type BackendDetail } from '../utils/translateBackendKey'
 import { downloadArchiveFile, downloadArchiveFolder } from '../utils/downloadArchiveFile'
 import { invalidateStoredArchives, resyncStoredArchives } from '../utils/archiveResync'
 import { useOperationEvents } from '../hooks/useOperationEvents'
@@ -158,30 +162,35 @@ const Archives: React.FC = () => {
     fallbackRepositoryId: selectedRepositoryId,
   })
 
-  // Get repository info for statistics
-  const {
-    data: repoInfo,
-    error: repoInfoError,
-    isPending: repoInfoPending,
-  } = useQuery({
-    queryKey: ['repository-info', selectedRepositoryId],
-    queryFn: () => new BorgApiClient(selectedRepository!).getInfo(),
-    enabled: !!selectedRepository,
-    retry: false,
+  // The header reads the stored columns; a live `borg info` runs only on
+  // its refresh button. The info syncs the archive columns on the server,
+  // so the figures are refetched once it has answered.
+  const refreshInfoMutation = useMutation({
+    mutationFn: (repository: Repository) => new BorgApiClient(repository).getInfo(),
+    onSuccess: (_result, repository) => {
+      queryClient.invalidateQueries({ queryKey: ['repository-storage', repository.id] })
+      queryClient.invalidateQueries({ queryKey: ['repositories'] })
+      toast.success(t('repositoryStats.refreshed'))
+    },
+    onError: (error: unknown, repository) => {
+      const response = (
+        error as { response?: { status?: number; data?: { detail?: BackendDetail } } }
+      )?.response
+      if (response?.status === 423) {
+        setLockError({
+          repositoryId: repository.id,
+          repositoryName: repository.name,
+          borgVersion: getBorgVersion(repository),
+        })
+        return
+      }
+      toast.error(translateBackendKey(response?.data?.detail))
+    },
   })
-  // The live info syncs the stored archive columns on the server; the
-  // figures read from them are refetched once it has answered, so the
-  // header does not keep the state from before that sync.
-  React.useEffect(() => {
-    if (repoInfo && selectedRepositoryId) {
-      queryClient.invalidateQueries({ queryKey: ['repository-storage', selectedRepositoryId] })
-    }
-  }, [repoInfo, selectedRepositoryId, queryClient])
 
   // The header's size figures come from the stored `storage` payload
   // (#981): the list carries the stored columns, the storage route adds
-  // the archive sums without a live Borg call (the detail would run one
-  // and race the `/info` above for the repository lock).
+  // the archive sums without a live Borg call.
   const { data: repositoryStorageResponse } = useQuery({
     queryKey: ['repository-storage', selectedRepositoryId],
     queryFn: () => repositoriesAPI.getStorage(selectedRepositoryId!),
@@ -196,8 +205,7 @@ const Archives: React.FC = () => {
       ? selectedRepository?.storage
       : repositoryStorageResponse.data.storage
 
-  // Get archives for selected repository from the persisted index, after repo
-  // info settles
+  // Get archives for selected repository from the persisted index
   const {
     data: archives,
     isLoading: loadingArchives,
@@ -205,14 +213,14 @@ const Archives: React.FC = () => {
   } = useQuery({
     queryKey: ['repository-archives-stored', selectedRepositoryId],
     queryFn: () => archivesAPI.listStored(selectedRepositoryId!),
-    enabled: !!selectedRepositoryId && !repoInfoPending,
+    enabled: !!selectedRepositoryId,
     retry: false,
   })
 
   const { data: heatmapData } = useQuery({
     queryKey: ['repository-archives-heatmap', selectedRepositoryId],
     queryFn: () => archivesAPI.getHeatmap(selectedRepositoryId!),
-    enabled: !!selectedRepositoryId && !repoInfoPending && viewMode === 'heatmap',
+    enabled: !!selectedRepositoryId && viewMode === 'heatmap',
     retry: false,
   })
 
@@ -220,7 +228,7 @@ const Archives: React.FC = () => {
     queryKey: ['repository-archives-growth', selectedRepositoryId, growthSeries],
     queryFn: () =>
       archivesAPI.getGrowth(selectedRepositoryId!, { series: growthSeries || undefined }),
-    enabled: !!selectedRepositoryId && !repoInfoPending && viewMode === 'growth',
+    enabled: !!selectedRepositoryId && viewMode === 'growth',
     retry: false,
   })
 
@@ -282,18 +290,6 @@ const Archives: React.FC = () => {
     queryFn: restoreAPI.getRestoreJobs,
     refetchInterval: 3000, // Refresh every 3 seconds for live progress
   })
-
-  // Handle repo info error
-  React.useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (repoInfoError && (repoInfoError as any)?.response?.status === 423 && selectedRepositoryId) {
-      setLockError({
-        repositoryId: selectedRepositoryId,
-        repositoryName: selectedRepository?.name || t('common.unknown'),
-        borgVersion: getBorgVersion(selectedRepository),
-      })
-    }
-  }, [repoInfoError, selectedRepositoryId, selectedRepository, t])
 
   // Delete archive mutation
   const deleteArchiveMutation = useMutation({
@@ -768,13 +764,27 @@ const Archives: React.FC = () => {
         <Box sx={{ ...panelSx, mb: 3 }}>
           {/* Stats */}
           {selectedRepository && (
-            <Box sx={{ p: 2.5 }}>
+            <Box sx={{ p: 2.5, position: 'relative' }}>
+              <Tooltip title={t('repositoryStats.refresh')}>
+                <span style={{ position: 'absolute', top: 8, right: 8 }}>
+                  <IconButton
+                    size="small"
+                    aria-label={t('repositoryStats.refresh')}
+                    disabled={refreshInfoMutation.isPending}
+                    onClick={() => refreshInfoMutation.mutate(selectedRepository)}
+                  >
+                    {refreshInfoMutation.isPending ? (
+                      <CircularProgress size={16} />
+                    ) : (
+                      <RefreshIcon fontSize="small" />
+                    )}
+                  </IconButton>
+                </span>
+              </Tooltip>
               <RepositoryStats
                 storage={repositoryStorage}
                 // a list that could not be read is no count of zero
                 archiveCount={archivesError ? null : archivesList.length}
-                // the stored list waits for the live info to settle, so
-                // "loading" is "no list yet", not the query's own flag
                 archivesLoading={!archives && !archivesError}
                 indexPendingKinds={
                   repositoryStorageResponse?.data?.index_pending_kinds ??
@@ -912,7 +922,7 @@ const Archives: React.FC = () => {
             <ArchivesList
               archives={archivesList}
               repositoryName={selectedRepository?.name || ''}
-              loading={loadingArchives || repoInfoPending}
+              loading={loadingArchives}
               onViewArchive={handleViewArchive}
               onRestoreArchive={handleRestoreArchive}
               onMountArchive={openMountDialog}
@@ -1001,7 +1011,6 @@ const Archives: React.FC = () => {
             queryClient.invalidateQueries({
               queryKey: ['repository-archives-stored', lockError.repositoryId],
             })
-            queryClient.invalidateQueries({ queryKey: ['repository-info', lockError.repositoryId] })
           }}
         />
       )}

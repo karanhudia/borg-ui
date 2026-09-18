@@ -7,8 +7,9 @@ import { backupPlansAPI, repositoriesAPI } from '../../services/api'
 import type { OperationItem } from '../../types/operations'
 import { toast } from 'react-hot-toast'
 
-const { mockCheckRepository } = vi.hoisted(() => ({
+const { mockCheckRepository, mockGetInfo } = vi.hoisted(() => ({
   mockCheckRepository: vi.fn(),
+  mockGetInfo: vi.fn(),
 }))
 
 const mockRepository = {
@@ -140,7 +141,7 @@ vi.mock('../../services/borgApi', () => ({
   BorgApiClient: vi.fn(function BorgApiClientMock() {
     return {
       checkRepository: mockCheckRepository,
-      getInfo: vi.fn().mockResolvedValue({ data: { info: null } }),
+      getInfo: mockGetInfo,
     }
   }),
 }))
@@ -184,6 +185,8 @@ vi.mock('../../components/RepositoryInfoDialog', () => ({
     indexPendingKinds,
     onRunRecoveryCheck,
     canRunRecoveryCheck,
+    onRefresh,
+    refreshFailed,
   }: {
     open: boolean
     repository: typeof mockRepository | null
@@ -191,6 +194,8 @@ vi.mock('../../components/RepositoryInfoDialog', () => ({
     indexPendingKinds?: string[] | null
     onRunRecoveryCheck?: (repository: typeof mockRepository) => void
     canRunRecoveryCheck?: boolean
+    onRefresh?: () => void
+    refreshFailed?: boolean
   }) =>
     open && repository ? (
       <div>
@@ -200,6 +205,10 @@ vi.mock('../../components/RepositoryInfoDialog', () => ({
         </span>
         <span data-testid="dialog-pending">{(indexPendingKinds ?? []).join(',')}</span>
         <span data-testid="dialog-archives">{repository.archive_count}</span>
+        <span data-testid="dialog-refresh-failed">{String(refreshFailed)}</span>
+        <button type="button" onClick={onRefresh}>
+          refresh info
+        </button>
         {onRunRecoveryCheck ? (
           <button
             type="button"
@@ -278,6 +287,7 @@ vi.mock('../repositories-page/RepositoryGroups', () => ({
 
 describe('Repositories', () => {
   beforeEach(() => {
+    mockGetInfo.mockResolvedValue({ data: { info: null } })
     vi.clearAllMocks()
     vi.mocked(repositoriesAPI.getRepositories).mockResolvedValue({
       data: { repositories: [mockRepository] },
@@ -553,6 +563,37 @@ describe('Repositories', () => {
     expect(
       within(screen.getByTestId('repository-list')).getByText('Broken Repo')
     ).toBeInTheDocument()
+  })
+
+  describe('info dialog refresh', () => {
+    it('runs no live info on open, and refetches the list and figures after a refresh', async () => {
+      renderWithProviders(<Repositories />)
+      fireEvent.click(await screen.findByRole('button', { name: 'view info' }))
+      await waitFor(() => expect(repositoriesAPI.getStorage).toHaveBeenCalledWith(1))
+      expect(mockGetInfo).not.toHaveBeenCalled()
+      const listCalls = vi.mocked(repositoriesAPI.getRepositories).mock.calls.length
+
+      fireEvent.click(screen.getByRole('button', { name: 'refresh info' }))
+
+      await waitFor(() => expect(mockGetInfo).toHaveBeenCalledTimes(1))
+      await waitFor(() =>
+        expect(vi.mocked(repositoriesAPI.getRepositories).mock.calls.length).toBeGreaterThan(
+          listCalls
+        )
+      )
+      expect(screen.getByTestId('dialog-refresh-failed')).toHaveTextContent('false')
+    })
+
+    it('tells the dialog when the refresh failed', async () => {
+      mockGetInfo.mockRejectedValueOnce({ response: { status: 500, data: {} } })
+      renderWithProviders(<Repositories />)
+      fireEvent.click(await screen.findByRole('button', { name: 'view info' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'refresh info' }))
+
+      await waitFor(() =>
+        expect(screen.getByTestId('dialog-refresh-failed')).toHaveTextContent('true')
+      )
+    })
   })
 
   describe('info dialog storage figures', () => {
