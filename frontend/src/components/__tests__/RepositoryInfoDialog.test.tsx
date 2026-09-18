@@ -28,25 +28,7 @@ const mockRepository = {
   id: 1,
   name: 'Test Repository',
   path: '/repo/test',
-}
-
-const mockRepositoryInfo = {
-  encryption: {
-    mode: 'repokey-blake2',
-  },
-  repository: {
-    last_modified: '2024-01-15T10:30:00Z',
-    location: '/backups/test-repo',
-  },
-  cache: {
-    stats: {
-      total_size: 1073741824, // 1 GB
-      unique_size: 536870912, // 512 MB
-      unique_csize: 268435456, // 256 MB
-      total_chunks: 10000,
-      total_unique_chunks: 5000,
-    },
-  },
+  encryption: 'repokey-blake2',
 }
 
 const storedBorg1 = {
@@ -114,93 +96,80 @@ describe('RepositoryInfoDialog', () => {
 
   describe('Rendering', () => {
     it('renders dialog when open', () => {
-      render(
-        <RepositoryInfoDialog
-          open={true}
-          repository={mockRepository}
-          repositoryInfo={mockRepositoryInfo}
-          isLoading={false}
-          onClose={vi.fn()}
-        />
-      )
+      render(<RepositoryInfoDialog open={true} repository={mockRepository} onClose={vi.fn()} />)
 
       expect(screen.getByText('Test Repository')).toBeInTheDocument()
     })
 
     it('does not render when closed', () => {
-      render(
-        <RepositoryInfoDialog
-          open={false}
-          repository={mockRepository}
-          repositoryInfo={mockRepositoryInfo}
-          isLoading={false}
-          onClose={vi.fn()}
-        />
-      )
+      render(<RepositoryInfoDialog open={false} repository={mockRepository} onClose={vi.fn()} />)
 
       expect(screen.queryByText('Test Repository')).not.toBeInTheDocument()
     })
   })
 
-  describe('Loading State', () => {
-    it('shows loading message when loading', () => {
+  describe('Refresh', () => {
+    it('shows no refresh button without a handler', () => {
+      render(<RepositoryInfoDialog open={true} repository={mockRepository} onClose={vi.fn()} />)
+      expect(screen.queryByRole('button', { name: /Refresh from Borg/i })).not.toBeInTheDocument()
+    })
+
+    it('calls onRefresh from the header button', () => {
+      const onRefresh = vi.fn()
       render(
         <RepositoryInfoDialog
           open={true}
           repository={mockRepository}
-          repositoryInfo={null}
-          isLoading={true}
           onClose={vi.fn()}
+          onRefresh={onRefresh}
         />
       )
+      fireEvent.click(screen.getByRole('button', { name: /Refresh from Borg/i }))
+      expect(onRefresh).toHaveBeenCalledTimes(1)
+    })
 
-      expect(screen.getByText('Loading repository info...')).toBeInTheDocument()
+    it('disables the button while a refresh runs and keeps the stored details up', () => {
+      render(
+        <RepositoryInfoDialog
+          open={true}
+          repository={mockRepository}
+          onClose={vi.fn()}
+          onRefresh={vi.fn()}
+          isRefreshing={true}
+        />
+      )
+      expect(screen.getByRole('button', { name: /Refresh from Borg/i })).toBeDisabled()
+      expect(screen.getByText('repokey-blake2')).toBeInTheDocument()
     })
   })
 
   describe('Repository Details', () => {
     it('shows encryption mode', () => {
-      render(
-        <RepositoryInfoDialog
-          open={true}
-          repository={mockRepository}
-          repositoryInfo={mockRepositoryInfo}
-          isLoading={false}
-          onClose={vi.fn()}
-        />
-      )
+      render(<RepositoryInfoDialog open={true} repository={mockRepository} onClose={vi.fn()} />)
 
       expect(screen.getByText('Encryption')).toBeInTheDocument()
       expect(screen.getByText('repokey-blake2')).toBeInTheDocument()
     })
 
-    it('shows last modified date', () => {
+    it('shows the stored last modified date', () => {
       render(
         <RepositoryInfoDialog
           open={true}
           repository={mockRepository}
-          repositoryInfo={mockRepositoryInfo}
-          isLoading={false}
+          storage={storedBorg1}
           onClose={vi.fn()}
         />
       )
 
       expect(screen.getByText('Last Modified')).toBeInTheDocument()
+      expect(screen.queryByText('N/A')).not.toBeInTheDocument()
     })
 
     it('shows repository location', () => {
-      render(
-        <RepositoryInfoDialog
-          open={true}
-          repository={mockRepository}
-          repositoryInfo={mockRepositoryInfo}
-          isLoading={false}
-          onClose={vi.fn()}
-        />
-      )
+      render(<RepositoryInfoDialog open={true} repository={mockRepository} onClose={vi.fn()} />)
 
       expect(screen.getByText('Repository Location')).toBeInTheDocument()
-      expect(screen.getByText('/backups/test-repo')).toBeInTheDocument()
+      expect(screen.getByText('/repo/test')).toBeInTheDocument()
     })
   })
 
@@ -210,9 +179,7 @@ describe('RepositoryInfoDialog', () => {
         <RepositoryInfoDialog
           open={true}
           repository={{ ...mockRepository, borg_version: 1, archive_count: 25 }}
-          repositoryInfo={mockRepositoryInfo}
           storage={storedBorg1}
-          isLoading={false}
           onClose={vi.fn()}
         />
       )
@@ -236,9 +203,7 @@ describe('RepositoryInfoDialog', () => {
         <RepositoryInfoDialog
           open={true}
           repository={{ ...mockRepository, borg_version: 1 }}
-          repositoryInfo={mockRepositoryInfo}
           storage={unmeasured}
-          isLoading={false}
           onClose={vi.fn()}
         />
       )
@@ -253,15 +218,7 @@ describe('RepositoryInfoDialog', () => {
     })
 
     it('shows the rows as unknown while the storage payload has not loaded', () => {
-      render(
-        <RepositoryInfoDialog
-          open={true}
-          repository={mockRepository}
-          repositoryInfo={mockRepositoryInfo}
-          isLoading={false}
-          onClose={vi.fn()}
-        />
-      )
+      render(<RepositoryInfoDialog open={true} repository={mockRepository} onClose={vi.fn()} />)
 
       expect(screen.getByText('Storage Statistics')).toBeInTheDocument()
       expect(screen.getAllByText('Unknown').length).toBeGreaterThan(0)
@@ -275,9 +232,7 @@ describe('RepositoryInfoDialog', () => {
         <RepositoryInfoDialog
           open={true}
           repository={{ ...mockRepository, borg_version: 1, archive_count: 0 }}
-          repositoryInfo={mockRepositoryInfo}
           storage={{ ...storedBorg1, original_size: 0, compressed_size: 0 }}
-          isLoading={false}
           onClose={vi.fn()}
         />
       )
@@ -299,9 +254,7 @@ describe('RepositoryInfoDialog', () => {
             archive_count: 0,
             index_pending_kinds: ['stats', 'archive_sync'],
           }}
-          repositoryInfo={mockRepositoryInfo}
           storage={unmeasured}
-          isLoading={false}
           onClose={vi.fn()}
         />
       )
@@ -318,9 +271,8 @@ describe('RepositoryInfoDialog', () => {
         <RepositoryInfoDialog
           open={true}
           repository={{ ...mockRepository, borg_version: 1, archive_count: 25 }}
-          repositoryInfo={null}
+          refreshFailed
           storage={storedBorg1}
-          isLoading={false}
           onClose={vi.fn()}
         />
       )
@@ -333,8 +285,7 @@ describe('RepositoryInfoDialog', () => {
         <RepositoryInfoDialog
           open={true}
           repository={mockRepository}
-          repositoryInfo={null}
-          isLoading={false}
+          refreshFailed
           onClose={vi.fn()}
         />
       )
@@ -347,8 +298,7 @@ describe('RepositoryInfoDialog', () => {
         <RepositoryInfoDialog
           open={true}
           repository={mockRepository}
-          repositoryInfo={null}
-          isLoading={false}
+          refreshFailed
           onClose={vi.fn()}
           errorMessage="repository.info exited with code 2: Failed to create/acquire the lock (Permission denied)"
         />
@@ -363,8 +313,7 @@ describe('RepositoryInfoDialog', () => {
         <RepositoryInfoDialog
           open={true}
           repository={{ ...mockRepository, encryption: 'repokey', borg_version: 1 }}
-          repositoryInfo={null}
-          isLoading={false}
+          refreshFailed
           onClose={vi.fn()}
         />
       )
@@ -386,8 +335,7 @@ describe('RepositoryInfoDialog', () => {
             path: '/repo/test path;rm',
             remote_path: '/usr/bin/borg 2',
           }}
-          repositoryInfo={null}
-          isLoading={false}
+          refreshFailed
           onClose={vi.fn()}
         />
       )
@@ -412,8 +360,7 @@ describe('RepositoryInfoDialog', () => {
         <RepositoryInfoDialog
           open={true}
           repository={{ ...mockRepository, encryption: 'repokey-aes-ocb', borg_version: 2 }}
-          repositoryInfo={null}
-          isLoading={false}
+          refreshFailed
           onClose={vi.fn()}
         />
       )
@@ -435,8 +382,7 @@ describe('RepositoryInfoDialog', () => {
         <RepositoryInfoDialog
           open={true}
           repository={{ ...mockRepository, encryption: 'repokey', borg_version: 1 }}
-          repositoryInfo={null}
-          isLoading={false}
+          refreshFailed
           onClose={vi.fn()}
         />
       )
@@ -454,8 +400,7 @@ describe('RepositoryInfoDialog', () => {
         <RepositoryInfoDialog
           open={true}
           repository={{ ...mockRepository, encryption: 'repokey', borg_version: 1 }}
-          repositoryInfo={null}
-          isLoading={false}
+          refreshFailed
           onClose={vi.fn()}
           onRunRecoveryCheck={onRunRecoveryCheck}
           canRunRecoveryCheck={true}
@@ -481,8 +426,7 @@ describe('RepositoryInfoDialog', () => {
         <RepositoryInfoDialog
           open={true}
           repository={{ ...mockRepository, encryption: 'repokey', borg_version: 1 }}
-          repositoryInfo={null}
-          isLoading={false}
+          refreshFailed
           onClose={vi.fn()}
           onRunRecoveryCheck={vi.fn()}
           canRunRecoveryCheck={false}
@@ -511,8 +455,7 @@ describe('RepositoryInfoDialog', () => {
         <RepositoryInfoDialog
           open={true}
           repository={{ ...mockRepository, encryption: 'repokey', borg_version: 1 }}
-          repositoryInfo={null}
-          isLoading={false}
+          refreshFailed
           onClose={vi.fn()}
         />
       )
@@ -535,15 +478,7 @@ describe('RepositoryInfoDialog', () => {
 
   describe('Close Button', () => {
     it('renders Close button', () => {
-      render(
-        <RepositoryInfoDialog
-          open={true}
-          repository={mockRepository}
-          repositoryInfo={mockRepositoryInfo}
-          isLoading={false}
-          onClose={vi.fn()}
-        />
-      )
+      render(<RepositoryInfoDialog open={true} repository={mockRepository} onClose={vi.fn()} />)
 
       expect(screen.getByRole('button', { name: /Close/i })).toBeInTheDocument()
     })
@@ -552,15 +487,7 @@ describe('RepositoryInfoDialog', () => {
       const user = userEvent.setup()
       const onClose = vi.fn()
 
-      render(
-        <RepositoryInfoDialog
-          open={true}
-          repository={mockRepository}
-          repositoryInfo={mockRepositoryInfo}
-          isLoading={false}
-          onClose={onClose}
-        />
-      )
+      render(<RepositoryInfoDialog open={true} repository={mockRepository} onClose={onClose} />)
 
       await user.click(screen.getByRole('button', { name: /Close/i }))
 
@@ -569,10 +496,12 @@ describe('RepositoryInfoDialog', () => {
   })
 
   describe('Borg 2 repository stats', () => {
-    const v2Repo = { id: 2, name: 'V2 Repo', path: '/repo/test', borg_version: 2 }
-    const v2Info = {
-      encryption: { mode: 'repokey-aes-ocb' },
-      repository: { location: '/backups/v2' },
+    const v2Repo = {
+      id: 2,
+      name: 'V2 Repo',
+      path: '/repo/test',
+      borg_version: 2,
+      encryption: 'repokey-aes-ocb',
     }
 
     it('keeps the stored figures behind the Borg 2 plan gate', () => {
@@ -583,9 +512,7 @@ describe('RepositoryInfoDialog', () => {
           <RepositoryInfoDialog
             open={true}
             repository={v2Repo}
-            repositoryInfo={v2Info}
             storage={storedBorg2}
-            isLoading={false}
             onClose={vi.fn()}
           />
         </QueryClientProvider>
@@ -600,9 +527,7 @@ describe('RepositoryInfoDialog', () => {
         <RepositoryInfoDialog
           open={true}
           repository={{ ...mockRepository, borg_version: 1 }}
-          repositoryInfo={mockRepositoryInfo}
           storage={storedBorg1}
-          isLoading={false}
           onClose={vi.fn()}
         />
       )
@@ -614,9 +539,7 @@ describe('RepositoryInfoDialog', () => {
         <RepositoryInfoDialog
           open={true}
           repository={v2Repo}
-          repositoryInfo={v2Info}
           storage={storedBorg2}
-          isLoading={false}
           onClose={vi.fn()}
         />
       )
@@ -634,9 +557,7 @@ describe('RepositoryInfoDialog', () => {
         <RepositoryInfoDialog
           open={true}
           repository={v2Repo}
-          repositoryInfo={v2Info}
           storage={storedBorg2}
-          isLoading={false}
           onClose={vi.fn()}
         />
       )
@@ -648,9 +569,7 @@ describe('RepositoryInfoDialog', () => {
         <RepositoryInfoDialog
           open={true}
           repository={v2Repo}
-          repositoryInfo={v2Info}
           storage={storedBorg2}
-          isLoading={false}
           onClose={vi.fn()}
         />
       )
@@ -666,9 +585,7 @@ describe('RepositoryInfoDialog', () => {
         <RepositoryInfoDialog
           open={true}
           repository={v2Repo}
-          repositoryInfo={v2Info}
           storage={storedBorg2}
-          isLoading={false}
           onClose={vi.fn()}
         />
       )
@@ -681,28 +598,12 @@ describe('RepositoryInfoDialog', () => {
     const keyfileRepo = { id: 5, name: 'Keyfile Repo', path: '/repo/test', has_keyfile: true }
 
     it('shows export keyfile button when has_keyfile is true', () => {
-      render(
-        <RepositoryInfoDialog
-          open={true}
-          repository={keyfileRepo}
-          repositoryInfo={mockRepositoryInfo}
-          isLoading={false}
-          onClose={vi.fn()}
-        />
-      )
+      render(<RepositoryInfoDialog open={true} repository={keyfileRepo} onClose={vi.fn()} />)
       expect(screen.getByRole('button', { name: /export keyfile/i })).toBeInTheDocument()
     })
 
     it('does not show export button when has_keyfile is false', () => {
-      render(
-        <RepositoryInfoDialog
-          open={true}
-          repository={mockRepository}
-          repositoryInfo={mockRepositoryInfo}
-          isLoading={false}
-          onClose={vi.fn()}
-        />
-      )
+      render(<RepositoryInfoDialog open={true} repository={mockRepository} onClose={vi.fn()} />)
       expect(screen.queryByRole('button', { name: /export keyfile/i })).not.toBeInTheDocument()
     })
 
@@ -714,15 +615,7 @@ describe('RepositoryInfoDialog', () => {
       URL.createObjectURL = vi.fn().mockReturnValue('blob:test')
       URL.revokeObjectURL = vi.fn()
 
-      render(
-        <RepositoryInfoDialog
-          open={true}
-          repository={keyfileRepo}
-          repositoryInfo={mockRepositoryInfo}
-          isLoading={false}
-          onClose={vi.fn()}
-        />
-      )
+      render(<RepositoryInfoDialog open={true} repository={keyfileRepo} onClose={vi.fn()} />)
 
       fireEvent.click(screen.getByRole('button', { name: /export keyfile/i }))
 
@@ -733,47 +626,23 @@ describe('RepositoryInfoDialog', () => {
   })
 
   describe('N/A Values', () => {
-    it('shows N/A for missing encryption', () => {
-      const noEncryptionInfo = {
-        encryption: {},
-        repository: { location: '/backups/test' },
-        cache: { stats: { unique_size: 100 } },
-      }
-
+    it('shows N/A for a row without a stored encryption mode', () => {
       render(
         <RepositoryInfoDialog
           open={true}
-          repository={mockRepository}
-          repositoryInfo={noEncryptionInfo}
-          isLoading={false}
+          repository={{ ...mockRepository, encryption: undefined }}
+          storage={storedBorg1}
           onClose={vi.fn()}
         />
       )
 
-      // Multiple N/A values possible when encryption or last_modified missing
-      const naElements = screen.getAllByText('N/A')
-      expect(naElements.length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('N/A')).toHaveLength(1)
     })
 
-    it('shows N/A for missing location', () => {
-      const noLocationInfo = {
-        encryption: { mode: 'repokey' },
-        repository: {},
-        cache: { stats: { unique_size: 100 } },
-      }
+    it('shows N/A for last modified while nothing has measured the repository', () => {
+      render(<RepositoryInfoDialog open={true} repository={mockRepository} onClose={vi.fn()} />)
 
-      render(
-        <RepositoryInfoDialog
-          open={true}
-          repository={mockRepository}
-          repositoryInfo={noLocationInfo}
-          isLoading={false}
-          onClose={vi.fn()}
-        />
-      )
-
-      const naElements = screen.getAllByText('N/A')
-      expect(naElements.length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('N/A')).toHaveLength(1)
     })
   })
 })

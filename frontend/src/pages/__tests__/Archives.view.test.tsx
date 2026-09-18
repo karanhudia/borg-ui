@@ -45,7 +45,9 @@ vi.mock('../../hooks/useOperationEvents', () => ({
 vi.mock('../../components/LastRestoreSection', () => ({ default: () => null }))
 vi.mock('../../components/ArchiveContentsDialog', () => ({ default: () => null }))
 vi.mock('../../components/MountArchiveDialog', () => ({ default: () => null }))
-vi.mock('../../components/LockErrorDialog', () => ({ default: () => null }))
+vi.mock('../../components/LockErrorDialog', () => ({
+  default: ({ open }: { open: boolean }) => (open ? <div>repository locked</div> : null),
+}))
 vi.mock('../../components/RestoreWizard', () => ({ default: () => null }))
 vi.mock('../../components/ArchivesList', () => ({
   default: () => <div data-testid="archives-list" />,
@@ -293,8 +295,8 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
     renderWithProviders(<Archives />, { queryClient })
     const user = userEvent.setup()
     await user.click(screen.getByText('Select Repo'))
-    // the first read plus the refetch the live info's sync triggers
-    await waitFor(() => expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(2))
+    // the first read
+    await waitFor(() => expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(1))
     const listCalls = vi.mocked(apiModule.repositoriesAPI.getRepositories).mock.calls.length
 
     operationEventHandlers.onUpdated?.({
@@ -305,7 +307,7 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
       repository_id: 1,
     } as OperationItem)
 
-    await waitFor(() => expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(3), {
+    await waitFor(() => expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(2), {
       timeout: 4000,
     })
     await waitFor(() =>
@@ -323,24 +325,32 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
       repository_id: 2,
     } as OperationItem)
     await new Promise((resolve) => setTimeout(resolve, 1800))
-    expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(3)
+    expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(2)
   })
 
-  it('refetches the figures once the live info has synced the stored columns', async () => {
-    let resolveInfo: (value: unknown) => void = () => {}
-    getInfoMock.mockReturnValue(
-      new Promise((resolve) => {
-        resolveInfo = resolve
-      })
-    )
+  it('runs a live info only from the refresh button, then refetches the figures', async () => {
     renderWithProviders(<Archives />, { queryClient })
     const user = userEvent.setup()
     await user.click(screen.getByText('Select Repo'))
     await waitFor(() => expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(1))
+    expect(getInfoMock).not.toHaveBeenCalled()
 
-    resolveInfo({ data: { info: {} } })
+    await user.click(screen.getByRole('button', { name: 'Refresh from Borg' }))
 
+    await waitFor(() => expect(getInfoMock).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(2))
+  })
+
+  it('opens the lock dialog when the refresh finds the repository locked', async () => {
+    getInfoMock.mockRejectedValue({ response: { status: 423, data: {} } })
+    renderWithProviders(<Archives />, { queryClient })
+    const user = userEvent.setup()
+    await user.click(screen.getByText('Select Repo'))
+    await waitFor(() => expect(screen.getByTestId('stats-grid')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Refresh from Borg' }))
+
+    expect(await screen.findByText('repository locked')).toBeInTheDocument()
   })
 
   it('refetches the figures when index work is queued, so the header can say indexing', async () => {
@@ -348,7 +358,6 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
     const user = userEvent.setup()
     await user.click(screen.getByText('Select Repo'))
     await waitFor(() => expect(screen.getByTestId('stats-grid')).toBeInTheDocument())
-    await waitFor(() => expect(getInfoMock).toHaveBeenCalled())
     await new Promise((resolve) => setTimeout(resolve, 100))
     const before = vi.mocked(apiModule.repositoriesAPI.getStorage).mock.calls.length
 
@@ -373,8 +382,8 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
     renderWithProviders(<Archives />, { queryClient })
     const user = userEvent.setup()
     await user.click(screen.getByText('Select Repo'))
-    // the first read plus the refetch the live info's sync triggers
-    await waitFor(() => expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(2))
+    // the first read
+    await waitFor(() => expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(1))
 
     for (const [id, kind] of [
       [11, 'stats'],
@@ -390,12 +399,12 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
       } as OperationItem)
     }
 
-    await waitFor(() => expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(3), {
+    await waitFor(() => expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(2), {
       timeout: 4000,
     })
     // past the debounce again: the burst's one refetch was the only one
     await new Promise((resolve) => setTimeout(resolve, 1800))
-    expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(3)
+    expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(2)
   })
 
   it('renders the heatmap and sync chip by default', async () => {

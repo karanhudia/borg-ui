@@ -32,15 +32,8 @@ const borg2Repository: Repository = {
   name: 'Borg 2 on a store URL',
   path: 'rest://backup-host/repos/production',
   borg_version: 2,
+  encryption: 'repokey-aes-ocb',
   archive_count: 35,
-}
-
-const liveInfo = {
-  encryption: { mode: 'repokey-blake2' },
-  repository: {
-    location: '/mnt/borg/production',
-    last_modified: '2026-09-09T02:02:11.000Z',
-  },
 }
 
 const meta = {
@@ -54,8 +47,7 @@ const meta = {
   args: {
     open: true,
     repository: brokenRepository,
-    repositoryInfo: null,
-    isLoading: false,
+    onRefresh: () => {},
     onClose: () => {},
     onRunRecoveryCheck: () => {},
     canRunRecoveryCheck: true,
@@ -71,12 +63,13 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-export const FailedInfoRecovery: Story = {}
+export const FailedInfoRecovery: Story = {
+  args: { refreshFailed: true },
+}
 
 export const Borg1StoredStatistics: Story = {
   args: {
     repository: borg1Repository,
-    repositoryInfo: liveInfo,
     storage: borg1Storage,
   },
 }
@@ -84,11 +77,6 @@ export const Borg1StoredStatistics: Story = {
 export const Borg2StoredStatistics: Story = {
   args: {
     repository: borg2Repository,
-    repositoryInfo: {
-      ...liveInfo,
-      encryption: { mode: 'repokey-aes-ocb' },
-      repository: { ...liveInfo.repository, location: 'rest://backup-host/repos/production' },
-    },
     storage: borg2Storage,
   },
 }
@@ -96,7 +84,6 @@ export const Borg2StoredStatistics: Story = {
 export const StatisticsUnknown: Story = {
   args: {
     repository: { ...borg2Repository, archive_count: 0 },
-    repositoryInfo: liveInfo,
     storage: unknownStorage,
   },
 }
@@ -104,7 +91,6 @@ export const StatisticsUnknown: Story = {
 export const StatisticsIndexingAfterImport: Story = {
   args: {
     repository: { ...borg2Repository, archive_count: 0 },
-    repositoryInfo: liveInfo,
     storage: unknownStorage,
     indexPendingKinds: ['stats', 'archive_sync', 'history_index'],
   },
@@ -112,12 +98,14 @@ export const StatisticsIndexingAfterImport: Story = {
 
 export const FailedInfoRecoveryUnavailable: Story = {
   args: {
+    refreshFailed: true,
     canRunRecoveryCheck: false,
   },
 }
 
 export const FailedInfoWithAgentReason: Story = {
   args: {
+    refreshFailed: true,
     errorMessage:
       "repository.info exited with code 2: Failed to create/acquire the lock /mnt/borg/broken/lock.exclusive ([Errno 13] Permission denied: '/mnt/borg/broken/lock.exclusive.5ic2kcji.tmp').",
   },

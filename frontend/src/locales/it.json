@@ -5145,7 +5145,9 @@
     "spaceSavedHint": "Dimensione originale divisa per lo spazio usato su disco: deduplicazione e compressione insieme",
     "spaceSavedUnknownHint": "Nulla per cui dividere",
     "backupSpanHint": "L'archivio più vecchio e quello più recente",
-    "latestArchiveFilesHint": "Numero di file nell'archivio più recente, non un totale"
+    "latestArchiveFilesHint": "Numero di file nell'archivio più recente, non un totale",
+    "refresh": "Aggiorna da Borg",
+    "refreshed": "Informazioni del repository aggiornate"
   },
   "upcomingJobs": {
     "title": "Prossimi Job (Prossime 24 Ore)",

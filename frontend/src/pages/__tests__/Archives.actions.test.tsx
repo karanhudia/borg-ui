@@ -11,16 +11,6 @@ const borgGetInfoMock = vi.fn()
 const borgDeleteArchiveMock = vi.fn()
 const { downloadArchiveFileMock } = vi.hoisted(() => ({ downloadArchiveFileMock: vi.fn() }))
 
-function createDeferred<T>() {
-  let resolve!: (value: T) => void
-  let reject!: (reason?: unknown) => void
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res
-    reject = rej
-  })
-  return { promise, resolve, reject }
-}
-
 vi.mock('../../components/RepositorySelectorCard', () => ({
   default: ({ onChange }: { onChange: (id: number | string) => void }) => (
     <button onClick={() => onChange('1')}>Select Repo</button>
@@ -276,7 +266,6 @@ describe('Archives page actions', () => {
 
     await waitFor(() => {
       expect(listStoredMock).toHaveBeenCalledTimes(1)
-      expect(borgGetInfoMock).toHaveBeenCalledTimes(1)
       expect(trackArchive).toHaveBeenCalledWith('Filter', repository, {
         surface: 'archives_page',
       })
@@ -367,29 +356,20 @@ describe('Archives page actions', () => {
     expect(trackArchive).not.toHaveBeenCalledWith('Start', repository)
   })
 
-  it('loads repository info before requesting archives', async () => {
+  it('requests the stored archives without a live borg info', async () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     })
     const user = userEvent.setup()
-    const repoInfoDeferred = createDeferred<{ data: { info: Record<string, never> } }>()
-
-    borgGetInfoMock.mockImplementation(() => repoInfoDeferred.promise)
 
     renderWithProviders(<Archives />, { queryClient })
 
     await user.click(await screen.findByText('Select Repo'))
 
     await waitFor(() => {
-      expect(borgGetInfoMock).toHaveBeenCalledTimes(1)
-    })
-    expect(listStoredMock).not.toHaveBeenCalled()
-
-    repoInfoDeferred.resolve({ data: { info: {} } })
-
-    await waitFor(() => {
       expect(listStoredMock).toHaveBeenCalledTimes(1)
     })
+    expect(borgGetInfoMock).not.toHaveBeenCalled()
   })
 
   it('shows translated backend errors when archive deletion fails', async () => {
