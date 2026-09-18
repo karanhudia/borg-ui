@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import Response
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
+from dataclasses import dataclass, field
 from typing import List, Literal, Optional, Dict, Any, Union
 from datetime import datetime, timezone
 from pathlib import Path as FilesystemPath
@@ -20,6 +22,7 @@ from app.database.models import (
     Archive,
     DEFAULT_HISTORY_INDEX_EXCLUDES,
     Operation,
+    OperationRcloneDetails,
     RcloneRemote,
     Repository,
     RepositoryStorage,
@@ -562,29 +565,52 @@ def _resolve_bypass_lock(
     return use_bypass_lock, _lock_source(repository.bypass_lock, system_enabled)
 
 
-def _get_repository_schedule_summary(repo_id: int, db: Session) -> Dict[str, Any]:
-    """Return one preferred schedule summary for a repository.
+def _repository_schedule_summaries(
+    db: Session, repository_ids
+) -> Dict[int, Dict[str, Any]]:
+    """One preferred schedule summary per repository, in three queries for
+    the whole list rather than three per repository.
 
-    Enabled schedules win over disabled ones. We support both legacy single-repo
-    schedules and multi-repo schedules through the junction table.
+    Enabled schedules win over disabled ones, and among them the one whose
+    next run comes first. We support both legacy single-repo schedules and
+    multi-repo schedules through the junction table.
     """
-
-    direct_matches = (
-        db.query(ScheduledJob).filter(ScheduledJob.repository_id == repo_id).all()
-    )
-    linked_schedule_ids = [
-        row.scheduled_job_id
-        for row in db.query(ScheduledJobRepository.scheduled_job_id)
-        .filter(ScheduledJobRepository.repository_id == repo_id)
+    ids = list(repository_ids)
+    if not ids:
+        return {}
+    matched: Dict[int, List[ScheduledJob]] = {repo_id: [] for repo_id in ids}
+    for job in (
+        db.query(ScheduledJob)
+        .filter(ScheduledJob.repository_id.in_(ids))
+        .order_by(ScheduledJob.id)
         .all()
-    ]
-    linked_matches = (
-        db.query(ScheduledJob).filter(ScheduledJob.id.in_(linked_schedule_ids)).all()
-        if linked_schedule_ids
-        else []
+    ):
+        matched[job.repository_id].append(job)
+    links = (
+        db.query(
+            ScheduledJobRepository.repository_id,
+            ScheduledJobRepository.scheduled_job_id,
+        )
+        .filter(ScheduledJobRepository.repository_id.in_(ids))
+        .all()
     )
+    linked_jobs = (
+        {
+            job.id: job
+            for job in db.query(ScheduledJob)
+            .filter(ScheduledJob.id.in_(sorted({job_id for _, job_id in links})))
+            .all()
+        }
+        if links
+        else {}
+    )
+    for repo_id, job_id in sorted(links, key=lambda link: link[1]):
+        if job_id in linked_jobs:
+            matched[repo_id].append(linked_jobs[job_id])
+    return {repo_id: _schedule_summary(jobs) for repo_id, jobs in matched.items()}
 
-    matched = direct_matches + linked_matches
+
+def _schedule_summary(matched: List[ScheduledJob]) -> Dict[str, Any]:
     if not matched:
         return {
             "has_schedule": False,
@@ -594,7 +620,15 @@ def _get_repository_schedule_summary(repo_id: int, db: Session) -> Dict[str, Any
             "next_run": None,
         }
 
-    preferred = next((job for job in matched if job.enabled), matched[0])
+    # The card shows `next_run` as the next backup: of the enabled
+    # schedules, the one that runs soonest.
+    enabled = [job for job in matched if job.enabled]
+    timed = [job for job in enabled if job.next_run]
+    preferred = (
+        min(timed, key=lambda job: (job.next_run, job.id))
+        if timed
+        else next(iter(enabled), matched[0])
+    )
     return {
         "has_schedule": True,
         "schedule_enabled": bool(preferred.enabled),
@@ -2023,32 +2057,130 @@ def _discard_rclone_repository_record(
         shutil.rmtree(cache_path, ignore_errors=True)
 
 
-def _serialize_rclone_storage(
-    repository: Repository, db: Session, *, log_save_policy: str | None = None
-) -> Optional[Dict[str, Any]]:
-    storage = (
-        db.query(RepositoryStorage)
-        .filter(RepositoryStorage.repository_id == repository.id)
-        .first()
+@dataclass
+class _ListPageRows:
+    """What the repository list reads per card, loaded once for the page
+    (#1091): the storage rows by repository, the agent machines by id, the
+    rclone remotes by id, and the newest rclone sync by repository. The
+    rclone details rows are only held here, so the facade's `db.get` finds
+    them in the identity map."""
+
+    storages: Dict[int, RepositoryStorage]
+    agents: Dict[int, AgentMachine]
+    remotes: Dict[int, RcloneRemote] = field(default_factory=dict)
+    latest_syncs: Dict[int, Operation] = field(default_factory=dict)
+    rclone_details: List[OperationRcloneDetails] = field(default_factory=list)
+
+
+def _load_list_page_rows(
+    db: Session, repositories: List[Repository], repository_ids: List[int]
+) -> _ListPageRows:
+    agent_ids = {r.agent_machine_id for r in repositories if r.agent_machine_id}
+    agents = (
+        {
+            agent.id: agent
+            for agent in db.query(AgentMachine)
+            .filter(AgentMachine.id.in_(sorted(agent_ids)))
+            .all()
+        }
+        if agent_ids
+        else {}
     )
-    if not storage or storage.backend != "rclone":
-        return None
-    remote = (
-        db.query(RcloneRemote)
-        .filter(RcloneRemote.id == storage.rclone_remote_id)
-        .first()
-    )
-    status = rclone_repository_service.serialize_status(repository, storage, remote)
-    status.update(_agent_machine_summary(repository, db))
-    latest_operation = (
-        db.query(Operation)
+    storages = {
+        storage.repository_id: storage
+        for storage in db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id.in_(repository_ids))
+        .all()
+    }
+    page = _ListPageRows(storages=storages, agents=agents)
+    rclone = [s for s in storages.values() if s.backend == "rclone"]
+    if not rclone:
+        return page
+    remote_ids = sorted({s.rclone_remote_id for s in rclone if s.rclone_remote_id})
+    if remote_ids:
+        page.remotes = {
+            remote.id: remote
+            for remote in db.query(RcloneRemote)
+            .filter(RcloneRemote.id.in_(remote_ids))
+            .all()
+        }
+    ranked = (
+        db.query(
+            Operation.id.label("id"),
+            func.row_number()
+            .over(
+                partition_by=Operation.repository_id,
+                order_by=(Operation.created_at.desc(), Operation.id.desc()),
+            )
+            .label("rank"),
+        )
         .filter(
-            Operation.repository_id == repository.id,
+            Operation.repository_id.in_(sorted(s.repository_id for s in rclone)),
             Operation.kind == "rclone_sync",
         )
-        .order_by(Operation.created_at.desc(), Operation.id.desc())
-        .first()
+        .subquery()
     )
+    latest = (
+        db.query(Operation)
+        .join(ranked, ranked.c.id == Operation.id)
+        .filter(ranked.c.rank == 1)
+        .all()
+    )
+    page.latest_syncs = {op.repository_id: op for op in latest}
+    if latest:
+        page.rclone_details = (
+            db.query(OperationRcloneDetails)
+            .filter(OperationRcloneDetails.operation_id.in_([op.id for op in latest]))
+            .all()
+        )
+    return page
+
+
+def _serialize_rclone_storage(
+    repository: Repository,
+    db: Session,
+    *,
+    log_save_policy: str | None = None,
+    page: Optional[_ListPageRows] = None,
+) -> Optional[Dict[str, Any]]:
+    """`page` is the list route's rows, loaded once for the page;
+    single-repository callers leave it out and query."""
+    if page is not None:
+        storage = page.storages.get(repository.id)
+    else:
+        storage = (
+            db.query(RepositoryStorage)
+            .filter(RepositoryStorage.repository_id == repository.id)
+            .first()
+        )
+    if not storage or storage.backend != "rclone":
+        return None
+    if page is not None:
+        remote = page.remotes.get(storage.rclone_remote_id)
+    else:
+        remote = (
+            db.query(RcloneRemote)
+            .filter(RcloneRemote.id == storage.rclone_remote_id)
+            .first()
+        )
+    status = rclone_repository_service.serialize_status(repository, storage, remote)
+    status.update(
+        _agent_machine_summary(
+            repository, db, agents=page.agents if page is not None else None
+        )
+    )
+    if page is not None:
+        latest_operation = page.latest_syncs.get(repository.id)
+    else:
+        latest_operation = (
+            db.query(Operation)
+            .filter(
+                Operation.repository_id == repository.id,
+                Operation.kind == "rclone_sync",
+            )
+            .order_by(Operation.created_at.desc(), Operation.id.desc())
+            .first()
+        )
     latest_job = (
         RcloneSyncFacade(db, latest_operation) if latest_operation is not None else None
     )
@@ -2148,17 +2280,27 @@ def resume_pending_initial_cloud_mirror_sync_operations() -> int:
         db.close()
 
 
-def _agent_machine_summary(repository: Repository, db: Session) -> Dict[str, Any]:
+def _agent_machine_summary(
+    repository: Repository,
+    db: Session,
+    *,
+    agents: Optional[Dict[int, AgentMachine]] = None,
+) -> Dict[str, Any]:
+    """`agents` is the list route's machines by id, loaded once for the
+    page; single-repository callers leave it out and query."""
     if not repository.agent_machine_id:
         return {
             "agent_machine_name": None,
             "agent_machine_status": None,
         }
-    agent = (
-        db.query(AgentMachine)
-        .filter(AgentMachine.id == repository.agent_machine_id)
-        .first()
-    )
+    if agents is not None:
+        agent = agents.get(repository.agent_machine_id)
+    else:
+        agent = (
+            db.query(AgentMachine)
+            .filter(AgentMachine.id == repository.agent_machine_id)
+            .first()
+        )
     return {
         "agent_machine_name": agent.name if agent else None,
         "agent_machine_status": agent.status if agent else None,
@@ -3067,7 +3209,7 @@ async def _import_direct_rclone_repository_record(
 
 
 @router.get("/")
-async def get_repositories(
+def get_repositories(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get all repositories"""
@@ -3115,15 +3257,12 @@ async def get_repositories(
         # both decorative, each behind its own guard, so the second failing
         # leaves the sizes the first already read. A failure leaves the
         # cards without that field rather than taking the list down; the
-        # rollback expires the loaded rows, so they are reloaded.
-        reloaded = False
+        # rollback expires the loaded rows, so they are reloaded after every
+        # rollback, not only the first.
 
         def reload_rows():
-            nonlocal repositories, reloaded
+            nonlocal repositories
             db.rollback()
-            if reloaded:
-                return
-            reloaded = True
             repositories = (
                 db.query(Repository).filter(Repository.id.in_(repository_ids)).all()
             )
@@ -3144,23 +3283,25 @@ async def get_repositories(
             )
             index_pending = {}
             reload_rows()
-        for repo in repositories:
-            # Running check, compact, or prune.
-            running_kinds = {
-                row.kind
-                for row in db.query(Operation.kind)
-                .filter(
-                    Operation.repository_id == repo.id,
-                    Operation.status == "running",
-                    Operation.kind.in_(("check", "compact", "prune")),
-                )
-                .all()
-            }
 
-            has_check = "check" in running_kinds
-            has_compact = "compact" in running_kinds
-            has_prune = "prune" in running_kinds
-            schedule_summary = _get_repository_schedule_summary(repo.id, db)
+        # What each card reads per repository, loaded once for the page:
+        # a query per repository here made the list cost five statements
+        # per repository on every poll (#1091).
+        # Running check, compact, or prune.
+        maintenance_running = {
+            repository_id
+            for (repository_id,) in db.query(Operation.repository_id)
+            .filter(
+                Operation.repository_id.in_(repository_ids),
+                Operation.status == "running",
+                Operation.kind.in_(("check", "compact", "prune")),
+            )
+            .distinct()
+        }
+        schedule_summaries = _repository_schedule_summaries(db, repository_ids)
+        page = _load_list_page_rows(db, repositories, repository_ids)
+        for repo in repositories:
+            schedule_summary = schedule_summaries[repo.id]
             source_directories = _decode_json_list_field(repo.source_directories)
 
             repo_payload = {
@@ -3181,7 +3322,7 @@ async def get_repositories(
                 "execution_target": repo.execution_target or "local",
                 "executor_type": repository_executor_type(repo),
                 "agent_machine_id": repo.agent_machine_id,
-                **_agent_machine_summary(repo, db),
+                **_agent_machine_summary(repo, db, agents=page.agents),
                 "host": repo.host,
                 "port": repo.port,
                 "username": repo.username,
@@ -3227,7 +3368,7 @@ async def get_repositories(
                 "index_mode": index_mode_of(repo),
                 "custom_flags": repo.custom_flags,
                 "upload_ratelimit_kib": repo.upload_ratelimit_kib,
-                "has_running_maintenance": has_check or has_compact or has_prune,
+                "has_running_maintenance": repo.id in maintenance_running,
                 "has_schedule": schedule_summary["has_schedule"],
                 "schedule_enabled": schedule_summary["schedule_enabled"],
                 "schedule_name": schedule_summary["schedule_name"],
@@ -3238,7 +3379,10 @@ async def get_repositories(
                 "borg_version": repo.borg_version or 1,
             }
             rclone_storage = _serialize_rclone_storage(
-                repo, db, log_save_policy=log_save_policy
+                repo,
+                db,
+                log_save_policy=log_save_policy,
+                page=page,
             )
             if rclone_storage:
                 repo_payload["storage_backend"] = _primary_storage_backend(repo)
