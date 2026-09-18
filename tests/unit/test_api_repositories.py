@@ -42,6 +42,7 @@ from app.api.repositories import _build_repository_path_from_connection
 from app.services.operations.job_facade import resolve_maintenance_job
 from tests.utils.agent_jobs import agent_maintenance_job
 from tests.utils.operations import seed_job_operation
+from tests.utils.ssh import ssh_connection
 
 
 def _enable_borg_v2(test_db):
@@ -2925,13 +2926,14 @@ class TestRepositoriesUpdate:
     ):
         """Test clearing source_connection_id when switching from remote to local source"""
         # Create repository with a remote source
+        connection = ssh_connection(test_db)
         repo = Repository(
             name="Remote Source Repo",
             path="/tmp/remote-source-repo",
             encryption="none",
             compression="lz4",
             repository_type="local",
-            source_ssh_connection_id=1,  # Initially has remote source
+            source_ssh_connection_id=connection.id,  # Initially has remote source
             source_directories=json.dumps(["/remote/data"]),
         )
         test_db.add(repo)
@@ -2939,7 +2941,7 @@ class TestRepositoriesUpdate:
         test_db.refresh(repo)
 
         # Verify initial state
-        assert repo.source_ssh_connection_id == 1
+        assert repo.source_ssh_connection_id == connection.id
 
         # Update to clear source_connection_id (switch to local source)
         response = test_client.put(
@@ -2960,13 +2962,14 @@ class TestRepositoriesUpdate:
         self, test_client: TestClient, admin_headers, test_db
     ):
         """Test empty source and exclude lists remove legacy source settings"""
+        connection = ssh_connection(test_db)
         repo = Repository(
             name="Legacy Source Repo",
             path="/tmp/legacy-source-repo",
             encryption="none",
             compression="lz4",
             repository_type="local",
-            source_ssh_connection_id=1,
+            source_ssh_connection_id=connection.id,
             source_directories=json.dumps(["/remote/data"]),
             exclude_patterns=json.dumps(["*.tmp"]),
         )
@@ -3041,19 +3044,20 @@ class TestRepositoriesUpdate:
         self, test_client: TestClient, admin_headers, test_db
     ):
         """Empty source fields clear stale remote source connection metadata."""
+        connection = ssh_connection(test_db)
         repo = Repository(
             name="Remote Source Clear Repo",
             path="/tmp/remote-source-clear-repo",
             encryption="none",
             compression="lz4",
             repository_type="local",
-            source_ssh_connection_id=42,
+            source_ssh_connection_id=connection.id,
             source_directories=json.dumps(["/remote/old"]),
             source_locations=json.dumps(
                 [
                     {
                         "source_type": "remote",
-                        "source_ssh_connection_id": 42,
+                        "source_ssh_connection_id": connection.id,
                         "agent_machine_id": None,
                         "paths": ["/remote/old"],
                     }
@@ -3688,14 +3692,10 @@ class TestRepositoriesDelete:
 
         assert response.status_code == 200
         assert test_db.get(Repository, repo_id) is None
-        # `operations.repository_id` is ON DELETE CASCADE, so the rows go with
-        # the repository wherever foreign keys are enforced. They are not in
-        # this session (SQLite ignores `PRAGMA foreign_keys` inside a
-        # transaction, which is where a Session always is), so the row is
-        # still here, and that is the assertion: the route leaves job rows to
-        # the cascade instead of deleting them by hand.
+        # `operations.repository_id` is ON DELETE CASCADE: the route leaves
+        # the job rows to the cascade instead of deleting them by hand.
         test_db.expunge_all()
-        assert test_db.get(Operation, operation_id) is not None
+        assert test_db.get(Operation, operation_id) is None
 
     def test_delete_nonexistent_repository(
         self, test_client: TestClient, admin_headers

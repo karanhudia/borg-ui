@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.api import repositories as repositories_api
 from tests.utils.operations import seed_job_operation
+from tests.utils.ssh import ssh_key
 from app.database.models import (
     AgentMachine,
     BackupPlan,
@@ -327,11 +328,12 @@ class TestRepositoryRouteContracts:
 @pytest.mark.unit
 class TestRepositoryHelperContracts:
     def test_get_connection_details_returns_expected_fields(self, test_db):
+        key = ssh_key(test_db)
         connection = SSHConnection(
             host="example.com",
             username="borg",
             port=2222,
-            ssh_key_id=7,
+            ssh_key_id=key.id,
             ssh_path_prefix="/volume1",
         )
         test_db.add(connection)
@@ -344,7 +346,7 @@ class TestRepositoryHelperContracts:
             "host": "example.com",
             "username": "borg",
             "port": 2222,
-            "ssh_key_id": 7,
+            "ssh_key_id": key.id,
             "ssh_path_prefix": "/volume1",
         }
 

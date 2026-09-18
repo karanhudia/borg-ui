@@ -1317,7 +1317,12 @@ class TestBackupJobs:
             encryption="none",
             repository_type="local",
         )
-        test_db.add_all([primary_repo, secondary_repo])
+        schedule = ScheduledJob(
+            name="nightly",
+            repository=primary_repo.path,
+            cron_expression="0 2 * * *",
+        )
+        test_db.add_all([primary_repo, secondary_repo, schedule])
         test_db.flush()
         matching_manual_job = seed_job_operation(
             test_db,
@@ -1342,7 +1347,7 @@ class TestBackupJobs:
             status="completed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
-            scheduled_job_id=123,
+            scheduled_job_id=schedule.id,
         )
         test_db.commit()
 

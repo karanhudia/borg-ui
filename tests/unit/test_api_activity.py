@@ -35,6 +35,20 @@ def _create_activity_repository(test_db, name: str = "Policy Repo"):
     return repo
 
 
+def _create_agent_machine(test_db, agent_id: str = "agent-activity"):
+    from app.database.models import AgentMachine
+
+    machine = AgentMachine(
+        agent_id=agent_id,
+        name=agent_id,
+        token_hash="hash",
+        token_prefix="prefix",
+    )
+    test_db.add(machine)
+    test_db.flush()
+    return machine
+
+
 class TestBackupServiceLogBuffer:
     """Test BackupService log buffer methods"""
 
@@ -1556,7 +1570,7 @@ class TestActivityLogContracts:
         from app.database.models import AgentJob, AgentJobLog, ScriptExecution
 
         agent_job = AgentJob(
-            agent_machine_id=1,
+            agent_machine_id=_create_agent_machine(test_db).id,
             job_type="script",
             status="running",
             payload={},
@@ -1897,7 +1911,7 @@ class TestActivityLogContracts:
         )
         test_db.flush()
         agent_job = AgentJob(
-            agent_machine_id=1,
+            agent_machine_id=_create_agent_machine(test_db).id,
             operation_id=backup_job.id,
             job_type="backup",
             status="completed",
@@ -2240,10 +2254,11 @@ class TestDeleteJobEndpoint:
         from datetime import datetime
 
         # Create a completed check job
+        repo = _create_activity_repository(test_db)
         job = seed_job_operation(
             test_db,
             "check",
-            repository_id=1,
+            repository_id=repo.id,
             status="completed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
@@ -2268,10 +2283,11 @@ class TestDeleteJobEndpoint:
         from datetime import datetime
 
         # Create a completed compact job
+        repo = _create_activity_repository(test_db)
         job = seed_job_operation(
             test_db,
             "compact",
-            repository_id=1,
+            repository_id=repo.id,
             status="completed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
@@ -2296,10 +2312,11 @@ class TestDeleteJobEndpoint:
         from datetime import datetime
 
         # Create a completed prune job
+        repo = _create_activity_repository(test_db)
         job = seed_job_operation(
             test_db,
             "prune",
-            repository_id=1,
+            repository_id=repo.id,
             status="completed",
             started_at=datetime.now(),
             completed_at=datetime.now(),

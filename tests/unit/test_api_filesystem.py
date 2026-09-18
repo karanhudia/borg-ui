@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from app.api import filesystem
 from app.database.models import SSHConnection, SSHKey
+from tests.utils.ssh import ssh_key
 
 
 def _encrypt_private_key(secret_key: str, private_key: str) -> str:
@@ -172,8 +173,9 @@ class TestFilesystemBrowseSSH:
         admin_headers,
         test_db,
     ):
+        key = ssh_key(test_db)
         ssh_connection = SSHConnection(
-            ssh_key_id=123,
+            ssh_key_id=key.id,
             host="example.com",
             username="borg",
             port=22,
@@ -199,7 +201,7 @@ class TestFilesystemBrowseSSH:
                 params={
                     "path": "/",
                     "connection_type": "ssh",
-                    "ssh_key_id": 123,
+                    "ssh_key_id": key.id,
                     "host": "example.com",
                     "username": "borg",
                     "port": 22,

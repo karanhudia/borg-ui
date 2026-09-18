@@ -53,6 +53,14 @@ def test_db(tmp_path, monkeypatch):
             cursor.execute("PRAGMA journal_mode=WAL")
             cursor.close()
 
+    # Production enforces foreign keys on every connection
+    # (app/database/database.py); the tests run under the same rule.
+    @event.listens_for(engine, "connect")
+    def enforce_foreign_keys(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
     Base.metadata.create_all(bind=engine)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

@@ -17,6 +17,7 @@ from app.database.models import (
     RcloneOAuthProviderCredential,
     RcloneRemote,
     SSHConnection,
+    SSHKey,
     SystemSettings,
 )
 from app.services.rclone_service import RcloneCommandResult
@@ -4005,6 +4006,7 @@ def test_direct_borg2_rclone_repository_validates_incompatible_create_payloads(
     if payload_overrides.get("rclone_remote_id"):
         test_db.add(RcloneRemote(id=1, name="prod-s3", provider="s3"))
     if payload_overrides.get("connection_id"):
+        test_db.add(SSHKey(id=1, name="direct-rclone-key"))
         test_db.add(
             SSHConnection(
                 id=1,
