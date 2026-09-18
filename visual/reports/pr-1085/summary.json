@@ -1,29 +1,29 @@
 {
-  "generatedAt": "2026-09-18T04:44:55.662Z",
+  "generatedAt": "2026-09-18T13:03:17.482Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1085 visual report",
-    "commitSha": "ecb4c4aca7e3",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35308055745"
+    "commitSha": "8ce1f0efc331",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35347852101"
   },
   "totals": {
-    "baseline": 940,
-    "actual": 944,
-    "compared": 938,
-    "changed": 1,
+    "baseline": 952,
+    "actual": 956,
+    "compared": 950,
+    "changed": 10,
     "added": 6,
     "removed": 2,
-    "unchanged": 937
+    "unchanged": 940
   },
   "changed": [
     {
-      "fileName": "components-pathselectorfield--disabled-control--mobile.png",
-      "baselinePath": "images/baseline/components-pathselectorfield--disabled-control--mobile.png",
-      "actualPath": "images/actual/components-pathselectorfield--disabled-control--mobile.png",
-      "diffPath": "images/diff/components-pathselectorfield--disabled-control--mobile.png",
-      "diffPixels": 329160,
+      "fileName": "backgroundwork-rebuildstagepicker--history-unsupported-for-agent--mobile.png",
+      "baselinePath": "images/baseline/backgroundwork-rebuildstagepicker--history-unsupported-for-agent--mobile.png",
+      "actualPath": "images/actual/backgroundwork-rebuildstagepicker--history-unsupported-for-agent--mobile.png",
+      "diffPath": "images/diff/backgroundwork-rebuildstagepicker--history-unsupported-for-agent--mobile.png",
+      "diffPixels": 53649,
       "totalPixels": 329160,
-      "diffRatio": 1,
+      "diffRatio": 0.16298760481224936,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -32,6 +32,168 @@
       "actual": {
         "width": 390,
         "height": 844
+      }
+    },
+    {
+      "fileName": "backgroundwork-rebuildstagepicker--history-unsupported-for-agent.png",
+      "baselinePath": "images/baseline/backgroundwork-rebuildstagepicker--history-unsupported-for-agent.png",
+      "actualPath": "images/actual/backgroundwork-rebuildstagepicker--history-unsupported-for-agent.png",
+      "diffPath": "images/diff/backgroundwork-rebuildstagepicker--history-unsupported-for-agent.png",
+      "diffPixels": 41545,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0405712890625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "backgroundwork-repositoryhubrow--agent-repository--mobile.png",
+      "baselinePath": "images/baseline/backgroundwork-repositoryhubrow--agent-repository--mobile.png",
+      "actualPath": "images/actual/backgroundwork-repositoryhubrow--agent-repository--mobile.png",
+      "diffPath": "images/diff/backgroundwork-repositoryhubrow--agent-repository--mobile.png",
+      "diffPixels": 1691,
+      "totalPixels": 329160,
+      "diffRatio": 0.005137319236845303,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "backgroundwork-repositoryhubrow--agent-repository.png",
+      "baselinePath": "images/baseline/backgroundwork-repositoryhubrow--agent-repository.png",
+      "actualPath": "images/actual/backgroundwork-repositoryhubrow--agent-repository.png",
+      "diffPath": "images/diff/backgroundwork-repositoryhubrow--agent-repository.png",
+      "diffPixels": 1695,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0016552734375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "backgroundwork-repositorytrackdialog--agent-repository--mobile.png",
+      "baselinePath": "images/baseline/backgroundwork-repositorytrackdialog--agent-repository--mobile.png",
+      "actualPath": "images/actual/backgroundwork-repositorytrackdialog--agent-repository--mobile.png",
+      "diffPath": "images/diff/backgroundwork-repositorytrackdialog--agent-repository--mobile.png",
+      "diffPixels": 7296,
+      "totalPixels": 329160,
+      "diffRatio": 0.022165512212905577,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "backgroundwork-repositorytrackdialog--agent-repository.png",
+      "baselinePath": "images/baseline/backgroundwork-repositorytrackdialog--agent-repository.png",
+      "actualPath": "images/actual/backgroundwork-repositorytrackdialog--agent-repository.png",
+      "diffPath": "images/diff/backgroundwork-repositorytrackdialog--agent-repository.png",
+      "diffPixels": 45034,
+      "totalPixels": 1024000,
+      "diffRatio": 0.043978515625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-archives-archivechangestab--agent-unsupported--mobile.png",
+      "baselinePath": "images/baseline/components-archives-archivechangestab--agent-unsupported--mobile.png",
+      "actualPath": "images/actual/components-archives-archivechangestab--agent-unsupported--mobile.png",
+      "diffPath": "images/diff/components-archives-archivechangestab--agent-unsupported--mobile.png",
+      "diffPixels": 26434,
+      "totalPixels": 329160,
+      "diffRatio": 0.08030744926479523,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-archives-archivechangestab--agent-unsupported.png",
+      "baselinePath": "images/baseline/components-archives-archivechangestab--agent-unsupported.png",
+      "actualPath": "images/actual/components-archives-archivechangestab--agent-unsupported.png",
+      "diffPath": "images/diff/components-archives-archivechangestab--agent-unsupported.png",
+      "diffPixels": 7161,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0069931640625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-archives-filehistorypanel--agent-unsupported--mobile.png",
+      "baselinePath": "images/baseline/components-archives-filehistorypanel--agent-unsupported--mobile.png",
+      "actualPath": "images/actual/components-archives-filehistorypanel--agent-unsupported--mobile.png",
+      "diffPath": "images/diff/components-archives-filehistorypanel--agent-unsupported--mobile.png",
+      "diffPixels": 7105,
+      "totalPixels": 329160,
+      "diffRatio": 0.02158524729614777,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-archives-filehistorypanel--agent-unsupported.png",
+      "baselinePath": "images/baseline/components-archives-filehistorypanel--agent-unsupported.png",
+      "actualPath": "images/actual/components-archives-filehistorypanel--agent-unsupported.png",
+      "diffPath": "images/diff/components-archives-filehistorypanel--agent-unsupported.png",
+      "diffPixels": 7182,
+      "totalPixels": 1024000,
+      "diffRatio": 0.007013671875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
       }
     }
   ],
@@ -331,18 +493,6 @@
       "fileName": "backgroundwork-rebuildstagepicker--from-stats.png"
     },
     {
-      "fileName": "backgroundwork-rebuildstagepicker--history-unsupported-for-agent--mobile.png"
-    },
-    {
-      "fileName": "backgroundwork-rebuildstagepicker--history-unsupported-for-agent.png"
-    },
-    {
-      "fileName": "backgroundwork-repositoryhubrow--agent-repository--mobile.png"
-    },
-    {
-      "fileName": "backgroundwork-repositoryhubrow--agent-repository.png"
-    },
-    {
       "fileName": "backgroundwork-repositoryhubrow--archives-only--mobile.png"
     },
     {
@@ -413,12 +563,6 @@
     },
     {
       "fileName": "backgroundwork-repositoryhubrow--with-problems.png"
-    },
-    {
-      "fileName": "backgroundwork-repositorytrackdialog--agent-repository--mobile.png"
-    },
-    {
-      "fileName": "backgroundwork-repositorytrackdialog--agent-repository.png"
     },
     {
       "fileName": "backgroundwork-repositorytrackdialog--all-indexed--mobile.png"
@@ -799,12 +943,6 @@
       "fileName": "components-archivepathselector--embedded-with-keyboard-cursor.png"
     },
     {
-      "fileName": "components-archives-archivechangestab--agent-unsupported--mobile.png"
-    },
-    {
-      "fileName": "components-archives-archivechangestab--agent-unsupported.png"
-    },
-    {
       "fileName": "components-archives-archivechangestab--default--mobile.png"
     },
     {
@@ -1013,12 +1151,6 @@
     },
     {
       "fileName": "components-archives-changerowline--summary.png"
-    },
-    {
-      "fileName": "components-archives-filehistorypanel--agent-unsupported--mobile.png"
-    },
-    {
-      "fileName": "components-archives-filehistorypanel--agent-unsupported.png"
     },
     {
       "fileName": "components-archives-filehistorypanel--agent-with-older-index--mobile.png"
@@ -1405,6 +1537,12 @@
       "fileName": "components-logmanagementtab--legacy-retention-out-of-range.png"
     },
     {
+      "fileName": "components-logmanagementtab--storage-unavailable--mobile.png"
+    },
+    {
+      "fileName": "components-logmanagementtab--storage-unavailable.png"
+    },
+    {
       "fileName": "components-monitoringreportstab--community-locked--mobile.png"
     },
     {
@@ -1457,6 +1595,9 @@
     },
     {
       "fileName": "components-pathselectorfield--custom-browse-action.png"
+    },
+    {
+      "fileName": "components-pathselectorfield--disabled-control--mobile.png"
     },
     {
       "fileName": "components-pathselectorfield--disabled-control.png"
@@ -1568,6 +1709,24 @@
     },
     {
       "fileName": "components-prune-prunecandidatesranked--partial-and-stale.png"
+    },
+    {
+      "fileName": "components-prune-prunecomparedpolicies--empty--mobile.png"
+    },
+    {
+      "fileName": "components-prune-prunecomparedpolicies--empty.png"
+    },
+    {
+      "fileName": "components-prune-prunecomparedpolicies--stored--mobile.png"
+    },
+    {
+      "fileName": "components-prune-prunecomparedpolicies--stored.png"
+    },
+    {
+      "fileName": "components-prune-prunecomparedpolicies--with-editing-row-stale--mobile.png"
+    },
+    {
+      "fileName": "components-prune-prunecomparedpolicies--with-editing-row-stale.png"
     },
     {
       "fileName": "components-prune-prunelostfilespanel--agent-unsupported--mobile.png"
@@ -2576,6 +2735,18 @@
     },
     {
       "fileName": "pages-dashboardv3-resourcegaugegrid--narrow-rail.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-spacesavingspanel--one-stale--mobile.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-spacesavingspanel--one-stale.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-spacesavingspanel--three-rows--mobile.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-spacesavingspanel--three-rows.png"
     },
     {
       "fileName": "pages-managedagents--add-agent-details-step--mobile.png"
