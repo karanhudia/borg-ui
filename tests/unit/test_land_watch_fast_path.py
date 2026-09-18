@@ -3,12 +3,18 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
+LAND_WATCH_PATH = (
+    Path(__file__).resolve().parents[2] / ".codex/skills/land/land_watch.py"
+)
+
+if not LAND_WATCH_PATH.is_file():
+    pytest.skip(f"{LAND_WATCH_PATH.name} is not in this tree", allow_module_level=True)
+
 
 def load_land_watch():
-    module_path = (
-        Path(__file__).resolve().parents[2] / ".codex/skills/land/land_watch.py"
-    )
-    spec = importlib.util.spec_from_file_location("land_watch", module_path)
+    spec = importlib.util.spec_from_file_location("land_watch", LAND_WATCH_PATH)
     module = importlib.util.module_from_spec(spec)
     sys.modules["land_watch"] = module
     assert spec.loader is not None
