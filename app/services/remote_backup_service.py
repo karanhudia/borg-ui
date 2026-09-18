@@ -410,7 +410,15 @@ class RemoteBackupService:
         finally:
             db.close()
 
-        # Environment for borg, as shell assignments in front of the command
+        # Environment for borg, as shell assignments in front of the command.
+        # No BORG_EXIT_CODES here, unlike every environment we build for a borg
+        # we run ourselves: with use_sudo these pass through the sudoers
+        # env_keep allowlist, which the operator maintains on the remote host
+        # and which docs/ssh-keys.md documents as exactly four variables. A
+        # fifth would be dropped by sudo until every remote host is edited, so
+        # a sudo backup would keep the legacy codes while a non-sudo one moved
+        # to the modern set. Remote-direct stays on legacy until that
+        # allowlist can change with it.
         env_assignments = [
             "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes",
             "BORG_RELOCATED_REPO_ACCESS_IS_OK=yes",

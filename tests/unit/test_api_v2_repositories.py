@@ -1441,3 +1441,55 @@ class TestV2LiveArchiveRoute:
 
         assert response.status_code == 200
         assert response.json()["archives"][0]["name"] == "m3s02"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "return_code, stderr, already_existed",
+    [
+        (10, "", True),
+        (2, "A repository already exists at /repo.", True),
+        # borg prints other diagnostics around the line
+        (2, "Using a pure-python msgpack\nA repository already exists at /r.\n", True),
+        # the phrase inside an unrelated failure is not the diagnostic
+        (2, "Error: the repository already exists check could not run", False),
+        (2, "Permission denied: /repo", False),
+        (2, "", False),
+        (0, "", False),
+        (13, "", False),
+        (1, "", False),
+    ],
+)
+def test_rcreate_reads_repository_exists_from_the_modern_exit_code(
+    return_code, stderr, already_existed
+):
+    """`repo-create` on an existing repository answers 10 under the modern
+    exit codes Borg 2 uses, so the old `== 2` check never matched a real
+    already-exists. 2 is borg's *generic error*, and `already_existed` is
+    what stops a failed repo-create from raising, so matching it alone would
+    record a repository that was never created. An operator can still pin the
+    legacy codes, where every error is 2, so borg's own wording decides there,
+    the way the Borg 1 path already does it."""
+    with patch.object(
+        repositories_v2_api.repository_v2_service,
+        "initialize_repository",
+        new=AsyncMock(
+            return_value={
+                "success": False,
+                "return_code": return_code,
+                "stderr": stderr,
+            }
+        ),
+    ):
+        result = asyncio.run(
+            repositories_v2_api._rcreate(
+                path="/repo",
+                encryption="none",
+                passphrase=None,
+                ssh_key_id=None,
+                remote_path=None,
+                init_timeout=30,
+            )
+        )
+
+    assert result["already_existed"] is already_existed

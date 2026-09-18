@@ -182,3 +182,41 @@ def test_is_borg_warning_exit_code():
     assert is_borg_warning_exit_code("1") is False
     assert is_borg_warning_exit_code(True) is False
     assert is_borg_warning_exit_code(False) is False
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "exit_code, expected_key",
+    [
+        (13, "backend.errors.borg.repositoryDoesNotExist"),
+        (73, "backend.errors.borg.lockTimeout"),
+        (70, "backend.errors.borg.lockError"),
+        (10, "backend.errors.borg.repositoryAlreadyExists"),
+        (31, "backend.errors.borg.archiveDoesNotExist"),
+    ],
+)
+def test_exit_code_alone_names_the_failure(exit_code, expected_key):
+    """Without a message id the failure used to read "Borg error (exit code
+    N)". The modern codes say what went wrong, and these locale keys already
+    exist in every locale, so the message is named and translated."""
+    assert json.loads(format_error_message(exit_code=exit_code)) == {
+        "key": expected_key
+    }
+
+
+@pytest.mark.unit
+def test_unmapped_exit_code_keeps_the_generic_message():
+    """A code with no key of its own is no worse than before, rather than an
+    untranslated string."""
+    assert json.loads(format_error_message(exit_code=99)) == {
+        "key": "backend.errors.borg.exitCodeError",
+        "params": {"exitCode": 99},
+    }
+
+
+@pytest.mark.unit
+def test_message_id_still_wins_over_the_exit_code():
+    """borg's own message id is the more specific answer where we have it."""
+    assert json.loads(format_error_message(msgid="PassphraseWrong", exit_code=13)) == {
+        "key": "backend.errors.borg.passphraseWrong"
+    }

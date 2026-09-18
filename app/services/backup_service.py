@@ -1467,11 +1467,6 @@ class BackupService:
             # Set environment variables for borg
             env = setup_borg_env()
 
-            # Use modern exit codes for better error handling
-            # 0 = success, 1 = warning, 2+ = error
-            # Modern: 0 = success, 1-99 reserved, 3-99 = errors, 100-127 = warnings
-            env["BORG_EXIT_CODES"] = "modern"
-
             # Look up repository record to get passphrase and repository-specific settings.
             # Backup plans may override source/config while still targeting the repository.
             source_paths = None  # No default - must be configured

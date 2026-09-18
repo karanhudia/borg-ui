@@ -94,6 +94,14 @@ def setup_borg_env(
     env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
     env["BORG_LOCK_WAIT"] = lock_wait
     env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
+    # Borg's modern exit codes: 0 success, 2-99 specific errors, 100-127
+    # specific warnings, instead of the legacy 0/1/2. Borg 2 uses them by
+    # default; Borg 1.4 needs this variable, and without it the same failure
+    # reports "Insufficient free space" from a backup and a bare "Error" from
+    # a prune. `is_borg_warning_exit_code` and BORG_EXIT_CODES already read
+    # both schemes, so the messages get better and nothing else changes.
+    # setdefault, like the cache flags below: an operator can pin "legacy".
+    env.setdefault("BORG_EXIT_CODES", "modern")
     # Borg 2.0.0b23's pack cache: borgstore serves archive metadata as
     # whole-pack loads, so on remote repositories every listing re-transfers
     # packs. The writethrough cache under borg's own cache directory
