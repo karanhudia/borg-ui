@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-09-19T08:37:18.197Z",
+  "generatedAt": "2026-09-19T10:16:25.081Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1108 visual report",
-    "commitSha": "8ce1f0efc331",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35432424821"
+    "commitSha": "ff64417cf721",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35436885225"
   },
   "totals": {
-    "baseline": 952,
-    "actual": 952,
-    "compared": 952,
+    "baseline": 956,
+    "actual": 956,
+    "compared": 956,
     "changed": 0,
     "added": 0,
     "removed": 0,
-    "unchanged": 952
+    "unchanged": 956
   },
   "changed": [],
   "added": [],
@@ -2528,10 +2528,22 @@
       "fileName": "pages-cloudstorage--unavailable.png"
     },
     {
-      "fileName": "pages-dashboardv3-activitytimeline--same-day-chronological-order--mobile.png"
+      "fileName": "pages-dashboardv3-activitytimeline--busy-installation--mobile.png"
     },
     {
-      "fileName": "pages-dashboardv3-activitytimeline--same-day-chronological-order.png"
+      "fileName": "pages-dashboardv3-activitytimeline--busy-installation.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-activitytimeline--fortnight--mobile.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-activitytimeline--fortnight.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-activitytimeline--quiet--mobile.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-activitytimeline--quiet.png"
     },
     {
       "fileName": "pages-dashboardv3-capabilitylaunchpad--empty-start--mobile.png"
