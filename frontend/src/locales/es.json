@@ -1144,7 +1144,6 @@
         "duration": "Duración",
         "compression": "Compresión",
         "compressionNotReported": "Esta versión de Borg no lo informa",
-        "measuredAt": "Medido {{when}}",
         "remeasuring": "Midiendo de nuevo tras eliminar archivos",
         "notMeasured": "Aún no medido",
         "vsPrevious": "respecto al anterior"
@@ -6197,7 +6196,8 @@
       "prune": {
         "noKeepRule": "Defina al menos una regla de retención antes de previsualizar o ejecutar un prune.",
         "dryRunFailed": "La ejecución de prueba de Borg falló.",
-        "comparisonRunning": "Ya se está ejecutando una comparación de retención para este repositorio."
+        "comparisonRunning": "Ya se está ejecutando una comparación de retención para este repositorio.",
+        "candidateNotStored": "Esta política aún no se ha comparado. Ejecuta una comparación para verla."
       }
     },
     "success": {

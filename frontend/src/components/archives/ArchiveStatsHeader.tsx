@@ -5,7 +5,7 @@ import type { LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import TintedTile from '../shared/TintedTile'
 import type { Tone } from '../shared/tones'
-import { formatBytes, formatDurationSeconds, formatRelativeTime } from '../../utils/dateUtils'
+import { formatBytes, formatDurationSeconds } from '../../utils/dateUtils'
 import { changeColor } from './changeStyle'
 import type { ArchiveDetailResponse } from '../../types/archives'
 
@@ -56,13 +56,13 @@ export default function ArchiveStatsHeader({
   const measured = archive.original_size != null
   const stale = measured && archive.stats_measured_at == null
 
+  // Only the exceptions are news: a figure measured at creation says nothing
+  // the archive's own date does not.
   const measuredLine = !measured
     ? t('archives.detail.stats.notMeasured')
     : stale
       ? t('archives.detail.stats.remeasuring')
-      : t('archives.detail.stats.measuredAt', {
-          when: formatRelativeTime(archive.stats_measured_at),
-        })
+      : undefined
 
   const withPrevious = (d: string | null) =>
     d ? `${d} ${t('archives.detail.stats.vsPrevious')}` : undefined
