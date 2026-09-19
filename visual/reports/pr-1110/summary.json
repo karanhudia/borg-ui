@@ -1,137 +1,29 @@
 {
-  "generatedAt": "2026-09-19T11:35:19.636Z",
+  "generatedAt": "2026-09-19T12:29:36.560Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1110 visual report",
     "commitSha": "e8b993f5d871",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35440461100"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35442941979"
   },
   "totals": {
     "baseline": 956,
-    "actual": 964,
-    "compared": 950,
-    "changed": 166,
-    "added": 14,
-    "removed": 6,
-    "unchanged": 784
+    "actual": 958,
+    "compared": 946,
+    "changed": 148,
+    "added": 12,
+    "removed": 10,
+    "unchanged": 798
   },
   "changed": [
-    {
-      "fileName": "backgroundwork-rebuildstagepicker--history-unsupported-for-agent--mobile.png",
-      "baselinePath": "images/baseline/backgroundwork-rebuildstagepicker--history-unsupported-for-agent--mobile.png",
-      "actualPath": "images/actual/backgroundwork-rebuildstagepicker--history-unsupported-for-agent--mobile.png",
-      "diffPath": "images/diff/backgroundwork-rebuildstagepicker--history-unsupported-for-agent--mobile.png",
-      "diffPixels": 53649,
-      "totalPixels": 329160,
-      "diffRatio": 0.16298760481224936,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "backgroundwork-rebuildstagepicker--history-unsupported-for-agent.png",
-      "baselinePath": "images/baseline/backgroundwork-rebuildstagepicker--history-unsupported-for-agent.png",
-      "actualPath": "images/actual/backgroundwork-rebuildstagepicker--history-unsupported-for-agent.png",
-      "diffPath": "images/diff/backgroundwork-rebuildstagepicker--history-unsupported-for-agent.png",
-      "diffPixels": 41545,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0405712890625,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "backgroundwork-repositoryhubrow--agent-repository--mobile.png",
-      "baselinePath": "images/baseline/backgroundwork-repositoryhubrow--agent-repository--mobile.png",
-      "actualPath": "images/actual/backgroundwork-repositoryhubrow--agent-repository--mobile.png",
-      "diffPath": "images/diff/backgroundwork-repositoryhubrow--agent-repository--mobile.png",
-      "diffPixels": 1691,
-      "totalPixels": 329160,
-      "diffRatio": 0.005137319236845303,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "backgroundwork-repositoryhubrow--agent-repository.png",
-      "baselinePath": "images/baseline/backgroundwork-repositoryhubrow--agent-repository.png",
-      "actualPath": "images/actual/backgroundwork-repositoryhubrow--agent-repository.png",
-      "diffPath": "images/diff/backgroundwork-repositoryhubrow--agent-repository.png",
-      "diffPixels": 1695,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0016552734375,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "backgroundwork-repositorytrackdialog--agent-repository--mobile.png",
-      "baselinePath": "images/baseline/backgroundwork-repositorytrackdialog--agent-repository--mobile.png",
-      "actualPath": "images/actual/backgroundwork-repositorytrackdialog--agent-repository--mobile.png",
-      "diffPath": "images/diff/backgroundwork-repositorytrackdialog--agent-repository--mobile.png",
-      "diffPixels": 7296,
-      "totalPixels": 329160,
-      "diffRatio": 0.022165512212905577,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "backgroundwork-repositorytrackdialog--agent-repository.png",
-      "baselinePath": "images/baseline/backgroundwork-repositorytrackdialog--agent-repository.png",
-      "actualPath": "images/actual/backgroundwork-repositorytrackdialog--agent-repository.png",
-      "diffPath": "images/diff/backgroundwork-repositorytrackdialog--agent-repository.png",
-      "diffPixels": 45034,
-      "totalPixels": 1024000,
-      "diffRatio": 0.043978515625,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
     {
       "fileName": "components-archives-archivechangestab--agent-unsupported--mobile.png",
       "baselinePath": "images/baseline/components-archives-archivechangestab--agent-unsupported--mobile.png",
       "actualPath": "images/actual/components-archives-archivechangestab--agent-unsupported--mobile.png",
       "diffPath": "images/diff/components-archives-archivechangestab--agent-unsupported--mobile.png",
-      "diffPixels": 50246,
+      "diffPixels": 54133,
       "totalPixels": 329160,
-      "diffRatio": 0.15264916757807753,
+      "diffRatio": 0.16445801433953092,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -147,9 +39,9 @@
       "baselinePath": "images/baseline/components-archives-archivechangestab--agent-unsupported.png",
       "actualPath": "images/actual/components-archives-archivechangestab--agent-unsupported.png",
       "diffPath": "images/diff/components-archives-archivechangestab--agent-unsupported.png",
-      "diffPixels": 85587,
+      "diffPixels": 89890,
       "totalPixels": 1024000,
-      "diffRatio": 0.0835810546875,
+      "diffRatio": 0.087783203125,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -165,9 +57,9 @@
       "baselinePath": "images/baseline/components-archives-archivechangestab--default--mobile.png",
       "actualPath": "images/actual/components-archives-archivechangestab--default--mobile.png",
       "diffPath": "images/diff/components-archives-archivechangestab--default--mobile.png",
-      "diffPixels": 156142,
+      "diffPixels": 228646,
       "totalPixels": 329160,
-      "diffRatio": 0.47436505043140115,
+      "diffRatio": 0.6946348280471504,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -183,9 +75,9 @@
       "baselinePath": "images/baseline/components-archives-archivechangestab--default.png",
       "actualPath": "images/actual/components-archives-archivechangestab--default.png",
       "diffPath": "images/diff/components-archives-archivechangestab--default.png",
-      "diffPixels": 422644,
+      "diffPixels": 811956,
       "totalPixels": 1024000,
-      "diffRatio": 0.41273828125,
+      "diffRatio": 0.79292578125,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -237,9 +129,9 @@
       "baselinePath": "images/baseline/components-archives-archivechangestab--truncated--mobile.png",
       "actualPath": "images/actual/components-archives-archivechangestab--truncated--mobile.png",
       "diffPath": "images/diff/components-archives-archivechangestab--truncated--mobile.png",
-      "diffPixels": 175871,
+      "diffPixels": 218963,
       "totalPixels": 329160,
-      "diffRatio": 0.5343024668854053,
+      "diffRatio": 0.6652175233928789,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -255,9 +147,9 @@
       "baselinePath": "images/baseline/components-archives-archivechangestab--truncated.png",
       "actualPath": "images/actual/components-archives-archivechangestab--truncated.png",
       "diffPath": "images/diff/components-archives-archivechangestab--truncated.png",
-      "diffPixels": 469253,
+      "diffPixels": 778485,
       "totalPixels": 1024000,
-      "diffRatio": 0.4582548828125,
+      "diffRatio": 0.7602392578125,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -345,9 +237,9 @@
       "baselinePath": "images/baseline/components-archives-archivefilestab--default.png",
       "actualPath": "images/actual/components-archives-archivefilestab--default.png",
       "diffPath": "images/diff/components-archives-archivefilestab--default.png",
-      "diffPixels": 558017,
+      "diffPixels": 693313,
       "totalPixels": 1024000,
-      "diffRatio": 0.5449384765625,
+      "diffRatio": 0.6770634765625,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -492,186 +384,6 @@
       "diffPixels": 396576,
       "totalPixels": 1024000,
       "diffRatio": 0.38728125,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-archives-archiveinfotab--default--mobile.png",
-      "baselinePath": "images/baseline/components-archives-archiveinfotab--default--mobile.png",
-      "actualPath": "images/actual/components-archives-archiveinfotab--default--mobile.png",
-      "diffPath": "images/diff/components-archives-archiveinfotab--default--mobile.png",
-      "diffPixels": 46112,
-      "totalPixels": 329160,
-      "diffRatio": 0.1400899258719164,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-archives-archiveinfotab--default.png",
-      "baselinePath": "images/baseline/components-archives-archiveinfotab--default.png",
-      "actualPath": "images/actual/components-archives-archiveinfotab--default.png",
-      "diffPath": "images/diff/components-archives-archiveinfotab--default.png",
-      "diffPixels": 82283,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0803544921875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-archives-archiveinfotab--no-unique-data--mobile.png",
-      "baselinePath": "images/baseline/components-archives-archiveinfotab--no-unique-data--mobile.png",
-      "actualPath": "images/actual/components-archives-archiveinfotab--no-unique-data--mobile.png",
-      "diffPath": "images/diff/components-archives-archiveinfotab--no-unique-data--mobile.png",
-      "diffPixels": 46112,
-      "totalPixels": 329160,
-      "diffRatio": 0.1400899258719164,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-archives-archiveinfotab--no-unique-data.png",
-      "baselinePath": "images/baseline/components-archives-archiveinfotab--no-unique-data.png",
-      "actualPath": "images/actual/components-archives-archiveinfotab--no-unique-data.png",
-      "diffPath": "images/diff/components-archives-archiveinfotab--no-unique-data.png",
-      "diffPixels": 82283,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0803544921875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-archives-archiveinfotab--sizes-unknown--mobile.png",
-      "baselinePath": "images/baseline/components-archives-archiveinfotab--sizes-unknown--mobile.png",
-      "actualPath": "images/actual/components-archives-archiveinfotab--sizes-unknown--mobile.png",
-      "diffPath": "images/diff/components-archives-archiveinfotab--sizes-unknown--mobile.png",
-      "diffPixels": 87772,
-      "totalPixels": 329160,
-      "diffRatio": 0.2666545145218131,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-archives-archiveinfotab--sizes-unknown.png",
-      "baselinePath": "images/baseline/components-archives-archiveinfotab--sizes-unknown.png",
-      "actualPath": "images/actual/components-archives-archiveinfotab--sizes-unknown.png",
-      "diffPath": "images/diff/components-archives-archiveinfotab--sizes-unknown.png",
-      "diffPixels": 82283,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0803544921875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-archives-archiveinfotab--unique-share-below-one-percent--mobile.png",
-      "baselinePath": "images/baseline/components-archives-archiveinfotab--unique-share-below-one-percent--mobile.png",
-      "actualPath": "images/actual/components-archives-archiveinfotab--unique-share-below-one-percent--mobile.png",
-      "diffPath": "images/diff/components-archives-archiveinfotab--unique-share-below-one-percent--mobile.png",
-      "diffPixels": 46112,
-      "totalPixels": 329160,
-      "diffRatio": 0.1400899258719164,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-archives-archiveinfotab--unique-share-below-one-percent.png",
-      "baselinePath": "images/baseline/components-archives-archiveinfotab--unique-share-below-one-percent.png",
-      "actualPath": "images/actual/components-archives-archiveinfotab--unique-share-below-one-percent.png",
-      "diffPath": "images/diff/components-archives-archiveinfotab--unique-share-below-one-percent.png",
-      "diffPixels": 82283,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0803544921875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-archives-archiveinfotab--with-comment--mobile.png",
-      "baselinePath": "images/baseline/components-archives-archiveinfotab--with-comment--mobile.png",
-      "actualPath": "images/actual/components-archives-archiveinfotab--with-comment--mobile.png",
-      "diffPath": "images/diff/components-archives-archiveinfotab--with-comment--mobile.png",
-      "diffPixels": 33069,
-      "totalPixels": 329160,
-      "diffRatio": 0.10046481954064893,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-archives-archiveinfotab--with-comment.png",
-      "baselinePath": "images/baseline/components-archives-archiveinfotab--with-comment.png",
-      "actualPath": "images/actual/components-archives-archiveinfotab--with-comment.png",
-      "diffPath": "images/diff/components-archives-archiveinfotab--with-comment.png",
-      "diffPixels": 182885,
-      "totalPixels": 1024000,
-      "diffRatio": 0.1785986328125,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -1068,42 +780,6 @@
       "diffPixels": 176263,
       "totalPixels": 1024000,
       "diffRatio": 0.1721318359375,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-archives-filehistorypanel--agent-unsupported--mobile.png",
-      "baselinePath": "images/baseline/components-archives-filehistorypanel--agent-unsupported--mobile.png",
-      "actualPath": "images/actual/components-archives-filehistorypanel--agent-unsupported--mobile.png",
-      "diffPath": "images/diff/components-archives-filehistorypanel--agent-unsupported--mobile.png",
-      "diffPixels": 7105,
-      "totalPixels": 329160,
-      "diffRatio": 0.02158524729614777,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-archives-filehistorypanel--agent-unsupported.png",
-      "baselinePath": "images/baseline/components-archives-filehistorypanel--agent-unsupported.png",
-      "actualPath": "images/actual/components-archives-filehistorypanel--agent-unsupported.png",
-      "diffPath": "images/diff/components-archives-filehistorypanel--agent-unsupported.png",
-      "diffPixels": 7182,
-      "totalPixels": 1024000,
-      "diffRatio": 0.007013671875,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -3053,40 +2729,48 @@
     {
       "fileName": "components-prune-prunepreviewnumbers--freed-known.png",
       "actualPath": "images/actual/components-prune-prunepreviewnumbers--freed-known.png"
-    },
-    {
-      "fileName": "pages-dashboardv3-activitytimeline--same-day-chronological-order--mobile.png",
-      "actualPath": "images/actual/pages-dashboardv3-activitytimeline--same-day-chronological-order--mobile.png"
-    },
-    {
-      "fileName": "pages-dashboardv3-activitytimeline--same-day-chronological-order.png",
-      "actualPath": "images/actual/pages-dashboardv3-activitytimeline--same-day-chronological-order.png"
     }
   ],
   "removed": [
     {
-      "fileName": "pages-dashboardv3-activitytimeline--busy-installation--mobile.png",
-      "baselinePath": "images/baseline/pages-dashboardv3-activitytimeline--busy-installation--mobile.png"
+      "fileName": "components-archives-archiveinfotab--default--mobile.png",
+      "baselinePath": "images/baseline/components-archives-archiveinfotab--default--mobile.png"
     },
     {
-      "fileName": "pages-dashboardv3-activitytimeline--busy-installation.png",
-      "baselinePath": "images/baseline/pages-dashboardv3-activitytimeline--busy-installation.png"
+      "fileName": "components-archives-archiveinfotab--default.png",
+      "baselinePath": "images/baseline/components-archives-archiveinfotab--default.png"
     },
     {
-      "fileName": "pages-dashboardv3-activitytimeline--fortnight--mobile.png",
-      "baselinePath": "images/baseline/pages-dashboardv3-activitytimeline--fortnight--mobile.png"
+      "fileName": "components-archives-archiveinfotab--no-unique-data--mobile.png",
+      "baselinePath": "images/baseline/components-archives-archiveinfotab--no-unique-data--mobile.png"
     },
     {
-      "fileName": "pages-dashboardv3-activitytimeline--fortnight.png",
-      "baselinePath": "images/baseline/pages-dashboardv3-activitytimeline--fortnight.png"
+      "fileName": "components-archives-archiveinfotab--no-unique-data.png",
+      "baselinePath": "images/baseline/components-archives-archiveinfotab--no-unique-data.png"
     },
     {
-      "fileName": "pages-dashboardv3-activitytimeline--quiet--mobile.png",
-      "baselinePath": "images/baseline/pages-dashboardv3-activitytimeline--quiet--mobile.png"
+      "fileName": "components-archives-archiveinfotab--sizes-unknown--mobile.png",
+      "baselinePath": "images/baseline/components-archives-archiveinfotab--sizes-unknown--mobile.png"
     },
     {
-      "fileName": "pages-dashboardv3-activitytimeline--quiet.png",
-      "baselinePath": "images/baseline/pages-dashboardv3-activitytimeline--quiet.png"
+      "fileName": "components-archives-archiveinfotab--sizes-unknown.png",
+      "baselinePath": "images/baseline/components-archives-archiveinfotab--sizes-unknown.png"
+    },
+    {
+      "fileName": "components-archives-archiveinfotab--unique-share-below-one-percent--mobile.png",
+      "baselinePath": "images/baseline/components-archives-archiveinfotab--unique-share-below-one-percent--mobile.png"
+    },
+    {
+      "fileName": "components-archives-archiveinfotab--unique-share-below-one-percent.png",
+      "baselinePath": "images/baseline/components-archives-archiveinfotab--unique-share-below-one-percent.png"
+    },
+    {
+      "fileName": "components-archives-archiveinfotab--with-comment--mobile.png",
+      "baselinePath": "images/baseline/components-archives-archiveinfotab--with-comment--mobile.png"
+    },
+    {
+      "fileName": "components-archives-archiveinfotab--with-comment.png",
+      "baselinePath": "images/baseline/components-archives-archiveinfotab--with-comment.png"
     }
   ],
   "unchanged": [
@@ -3349,6 +3033,18 @@
       "fileName": "backgroundwork-rebuildstagepicker--from-stats.png"
     },
     {
+      "fileName": "backgroundwork-rebuildstagepicker--history-unsupported-for-agent--mobile.png"
+    },
+    {
+      "fileName": "backgroundwork-rebuildstagepicker--history-unsupported-for-agent.png"
+    },
+    {
+      "fileName": "backgroundwork-repositoryhubrow--agent-repository--mobile.png"
+    },
+    {
+      "fileName": "backgroundwork-repositoryhubrow--agent-repository.png"
+    },
+    {
       "fileName": "backgroundwork-repositoryhubrow--archives-only--mobile.png"
     },
     {
@@ -3419,6 +3115,12 @@
     },
     {
       "fileName": "backgroundwork-repositoryhubrow--with-problems.png"
+    },
+    {
+      "fileName": "backgroundwork-repositorytrackdialog--agent-repository--mobile.png"
+    },
+    {
+      "fileName": "backgroundwork-repositorytrackdialog--agent-repository.png"
     },
     {
       "fileName": "backgroundwork-repositorytrackdialog--all-indexed--mobile.png"
@@ -3854,6 +3556,12 @@
     },
     {
       "fileName": "components-archives-changerowline--summary.png"
+    },
+    {
+      "fileName": "components-archives-filehistorypanel--agent-unsupported--mobile.png"
+    },
+    {
+      "fileName": "components-archives-filehistorypanel--agent-unsupported.png"
     },
     {
       "fileName": "components-archives-filehistorypanel--locked--mobile.png"
@@ -5099,6 +4807,24 @@
     },
     {
       "fileName": "pages-cloudstorage--unavailable.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-activitytimeline--busy-installation--mobile.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-activitytimeline--busy-installation.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-activitytimeline--fortnight--mobile.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-activitytimeline--fortnight.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-activitytimeline--quiet--mobile.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-activitytimeline--quiet.png"
     },
     {
       "fileName": "pages-dashboardv3-capabilitylaunchpad--empty-start--mobile.png"
