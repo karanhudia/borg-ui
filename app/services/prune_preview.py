@@ -666,17 +666,22 @@ async def run_candidate(
     )
 
 
-async def build_preview(
-    db: Session, repository: Repository, retention: Retention, *, user_id: Optional[int]
+def assemble_preview(
+    db: Session,
+    repository: Repository,
+    joined: list[PreviewArchive],
+    *,
+    operation_id: Optional[int],
+    log: str,
+    freed: int,
+    partial: bool,
 ) -> dict:
-    """Spec 4.4 steps 1 to 5 in order. Raises DryRunFailed when Borg's dry
-    run did not complete, with the log attached."""
+    """Spec 4.4 step 5: the page's payload from an already-joined verdict
+    list. Shared by the dry run and by a stored comparison candidate, so a
+    row read back reads exactly as the run that produced it."""
     pro = history_enabled(db)  # commits; before the archive rows load
-    r = await run_candidate(db, repository, retention, user_id=user_id)
-    operation, log, joined = r.operation, r.log, r.joined
-    candidates, partial, freed = r.candidates, r.partial_measure, r.freed_at_least
     before = footprint(db, repository)
-    deleted_ids = {a.id for a in candidates}
+    deleted_ids = {p.id for p in joined if p.verdict == "deleted" and p.id is not None}
     capability = history_capability(db, repository)
     lost: dict = {"available": False, "capability": capability}
     if pro and capability == HISTORY_AVAILABLE:
@@ -692,7 +697,7 @@ async def build_preview(
         }
     joined.sort(key=lambda p: (p.start is None, p.start or datetime.min, p.id or 0))
     return {
-        "operation_id": operation.id,
+        "operation_id": operation_id,
         "archives": [
             {
                 "id": p.id,
@@ -719,6 +724,59 @@ async def build_preview(
         "lost_files": lost,
         "log": log,
     }
+
+
+def preview_from_verdicts(
+    db: Session,
+    repository: Repository,
+    verdicts: list[Verdict],
+    *,
+    operation_id: Optional[int],
+) -> dict:
+    """A stored comparison candidate as the preview page's payload. Borg is
+    not run: the verdicts are what it said, and the sizes, series and lost
+    files are joined from the index as it stands now. Nothing is re-measured
+    (as in the comparison itself), so a candidate never measured counts as
+    partial."""
+    joined = join_verdicts(db, repository, verdicts)
+    by_id = {
+        a.id: a for rows in archives_by_series(db, repository).values() for a in rows
+    }
+    candidates = [
+        by_id[p.id] for p in joined if p.verdict == "deleted" and p.id in by_id
+    ]
+    return assemble_preview(
+        db,
+        repository,
+        joined,
+        operation_id=operation_id,
+        log="",
+        freed=freed_at_least(candidates),
+        partial=any(a.stats_measured_at is None for a in candidates),
+    )
+
+
+async def build_preview(
+    db: Session,
+    repository: Repository,
+    retention: Retention,
+    *,
+    user_id: Optional[int],
+    run_id: Optional[str] = None,
+) -> dict:
+    """Spec 4.4 steps 1 to 5 in order. Raises DryRunFailed when Borg's dry
+    run did not complete, with the log attached. `run_id` groups the dry runs
+    of one visit to the preview page under one run in the timeline."""
+    r = await run_candidate(db, repository, retention, user_id=user_id, run_id=run_id)
+    return assemble_preview(
+        db,
+        repository,
+        r.joined,
+        operation_id=r.operation.id,
+        log=r.log,
+        freed=r.freed_at_least,
+        partial=r.partial_measure,
+    )
 
 
 def retention_defaults(db: Session, repository: Repository) -> dict:

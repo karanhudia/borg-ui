@@ -993,13 +993,22 @@ export const repositoriesAPI = {
   ) => api.post(`/repositories/${id}/restore-check`, data || {}),
   compactRepository: (id: number) => api.post(`/repositories/${id}/compact`),
   pruneRepository: (id: number, data: ApiData) => api.post(`/repositories/${id}/prune`, data),
-  prunePreview: (id: number, data: PruneRetention) =>
-    api.post<PrunePreviewResponse>(`/repositories/${id}/prune/preview`, data),
+  prunePreview: (id: number, data: PruneRetention, previewRunId?: string) =>
+    api.post<PrunePreviewResponse>(`/repositories/${id}/prune/preview`, {
+      ...data,
+      ...(previewRunId ? { preview_run_id: previewRunId } : {}),
+    }),
   pruneRetentionDefaults: (id: number) =>
     api.get<PruneRetentionDefaults>(`/repositories/${id}/prune/retention-defaults`),
   pruneComparison: (id: number) => api.get<PruneComparison>(`/repositories/${id}/prune/comparison`),
-  pruneComparisonRefresh: (id: number) =>
-    api.post<{ operation_id: number }>(`/repositories/${id}/prune/comparison/refresh`),
+  pruneCandidatePreview: (id: number, candidate: string) =>
+    api.get<PrunePreviewResponse>(
+      `/repositories/${id}/prune/comparison/${encodeURIComponent(candidate)}/preview`
+    ),
+  pruneComparisonRefresh: (id: number, auto = false) =>
+    api.post<{ operation_id: number }>(
+      `/repositories/${id}/prune/comparison/refresh${auto ? '?auto=true' : ''}`
+    ),
   previewRepositoryWipe: (id: number, data: RepositoryWipePreviewRequest) =>
     api.post<RepositoryWipeJob>(`/repositories/${id}/wipe-preview`, data),
   executeRepositoryWipe: (id: number, data: RepositoryWipeExecuteRequest) =>

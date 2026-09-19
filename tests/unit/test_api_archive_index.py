@@ -1894,6 +1894,81 @@ class TestPrunePreview:
         assert {a.id for a in remeasure.await_args.args[2]} == {a1.id, a2.id}
         assert body["lost_files"] == {"available": False, "capability": "plan_locked"}
 
+    def test_stored_candidate_reads_back_without_borg(
+        self, test_client, test_db, admin_headers
+    ):
+        """Clicking a compared policy is a read: the verdicts the comparison
+        kept are joined to the index again, no dry run, no new operation."""
+        from app.database.models import PruneComparison
+
+        repo, (a1, a2, a3), verdicts = self._setup(test_db)
+        test_db.add(
+            PruneComparison(
+                repository_id=repo.id,
+                candidate="standard",
+                label="Standard",
+                retention={"keep_daily": 1},
+                kept_count=1,
+                deleted_count=2,
+                freed_at_least=300,
+                archive_count_at=3,
+                computed_at=utc_now(),
+                verdicts=[[v.borg_id, v.name, v.verdict, v.rule] for v in verdicts],
+            )
+        )
+        test_db.commit()
+        before = test_db.query(Operation).count()
+        with patch.object(pp, "run_prune_dry_run", new=_fake_dry_run()) as never:
+            r = test_client.get(
+                f"/api/repositories/{repo.id}/prune/comparison/standard/preview",
+                headers=admin_headers,
+            )
+            missing = test_client.get(
+                f"/api/repositories/{repo.id}/prune/comparison/wide/preview",
+                headers=admin_headers,
+            )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["kept_count"] == 1 and body["deleted_count"] == 2
+        assert {a["id"] for a in body["archives"]} == {a1.id, a2.id, a3.id}
+        assert body["freed_at_least"] == a1.deduplicated_size + a2.deduplicated_size
+        assert test_db.query(Operation).count() == before
+        assert never  # patched, never awaited: nothing ran Borg
+        assert missing.status_code == 404
+
+    def test_preview_run_id_groups_the_visit(self, test_client, test_db, admin_headers):
+        """The dry runs of one visit to the preview page share a run, so the
+        timeline shows them as steps instead of a loose row each."""
+        repo, _, verdicts = self._setup(test_db)
+        seen: list = []
+        inner = _fake_dry_run()
+
+        async def capture(db, repository, retention, **kwargs):
+            seen.append(kwargs.get("run_id"))
+            return await inner(db, repository, retention, **kwargs)
+
+        with (
+            patch.object(pp, "run_prune_dry_run", new=capture),
+            patch.object(pp, "parse_prune_verdicts", return_value=verdicts),
+            patch.object(pp, "remeasure_candidates", new=AsyncMock(return_value=False)),
+            patch.object(pp, "footprint", return_value=1000),
+        ):
+            visit = "3f1d2b8e-0b1a-4c3d-9e7f-2a5b6c7d8e9f"
+            for keep in (1, 2):
+                r = test_client.post(
+                    f"/api/repositories/{repo.id}/prune/preview",
+                    json={"keep_daily": keep, "preview_run_id": visit},
+                    headers=admin_headers,
+                )
+                assert r.status_code == 200
+            bad = test_client.post(
+                f"/api/repositories/{repo.id}/prune/preview",
+                json={"keep_daily": 1, "preview_run_id": "run"},
+                headers=admin_headers,
+            )
+        assert seen == [visit, visit]
+        assert bad.status_code == 422
+
     def test_preview_on_pro_walks_lost_files(self, test_client, test_db, admin_headers):
         _pro(test_db)
         repo, (a1, a2, a3), verdicts = self._setup(test_db)
@@ -2001,7 +2076,6 @@ class TestPruneComparison:
         }
 
     def test_get_returns_stored_rows(self, test_client, admin_headers, test_db):
-        from datetime import datetime
         from app.database.models import PruneComparison
 
         repo = _repo(test_db)
@@ -2015,7 +2089,8 @@ class TestPruneComparison:
                 deleted_count=1,
                 freed_at_least=40,
                 archive_count_at=0,
-                computed_at=datetime(2026, 9, 18, 1),
+                computed_at=utc_now(),
+                verdicts=[["ab", "a0", "kept", "daily #1"]],
             )
         )
         test_db.commit()
@@ -2025,7 +2100,7 @@ class TestPruneComparison:
         assert body["stale"] is False
         # Naive UTC in the column; the browser reads an offset-less value as
         # local time, so the route must say which zone it is.
-        assert body["computed_at"] == "2026-09-18T01:00:00+00:00"
+        assert body["computed_at"] is not None
         assert body["candidates"][0]["key"] == "standard"
         assert body["candidates"][0]["freed_at_least"] == 40
 

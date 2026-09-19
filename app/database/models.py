@@ -706,6 +706,11 @@ class PruneComparison(Base):
     # it. None without the index.
     lost_size = Column(BigInteger, nullable=True)
     partial_measure = Column(Boolean, nullable=False, default=False)
+    # Borg's own verdict lines, as [borg_id, name, verdict, rule]. The dry
+    # run's log is subject to log retention, and the preview page reads a
+    # candidate from here instead of running Borg again; everything else the
+    # page shows is joined from the live index at read time.
+    verdicts = Column(JSON, nullable=True)
     operation_id = Column(
         Integer, ForeignKey("operations.id", ondelete="SET NULL"), nullable=True
     )

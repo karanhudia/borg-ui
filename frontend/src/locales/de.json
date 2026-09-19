@@ -2190,7 +2190,8 @@
       "followup": "Folgeaktion",
       "reconcile": "Abgleich",
       "retry": "Wiederholung",
-      "preview": "Manuell · Prune-Vorschau"
+      "preview": "Prune-Vorschau",
+      "previewAuto": "Automatisch · Prune-Vorschau"
     },
     "runTitle": {
       "reconcile": "Abgleichlauf",

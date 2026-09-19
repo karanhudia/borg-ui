@@ -148,6 +148,11 @@ async def run_comparison(
                 freed_at_least=result.freed_at_least,
                 lost_size=lost_size_estimate(db, repository, result.candidates),
                 partial_measure=result.partial_measure,
+                # Borg's verdict lines, so the preview page can show this
+                # candidate in full without running the dry run again.
+                verdicts=[
+                    [p.borg_id, p.name, p.verdict, p.rule] for p in result.joined
+                ],
                 operation_id=result.operation.id,
                 archive_count_at=count,
                 computed_at=computed_at,
@@ -175,6 +180,8 @@ def _row_payload(row: PruneComparison) -> dict:
         "lost_size": row.lost_size,
         "partial_measure": row.partial_measure,
         "operation_id": row.operation_id,
+        # the page reads a row without a dry run only when its verdicts kept
+        "readable": bool(row.verdicts),
     }
 
 
@@ -193,10 +200,22 @@ def stored(db: Session, repository: Repository) -> dict:
             "candidates": [],
         }
     count_at = rows[0].archive_count_at
+    computed_at = rows[0].computed_at
+    # Retention is relative to now, so the same archives fall in different
+    # buckets tomorrow: a comparison is stale once the archive set moved or
+    # the day did, whichever comes first.
+    now = utc_now()
+    stale = (
+        current_archive_count(db, repository) != count_at
+        or (computed_at is None or computed_at.date() != now.date())
+        # a row the preview page cannot read back is not a comparison it can
+        # use: rows stored before the verdicts were kept refresh themselves
+        or any(r.retention is not None and not r.verdicts for r in rows)
+    )
     return {
-        "computed_at": serialize_datetime(rows[0].computed_at),
+        "computed_at": serialize_datetime(computed_at),
         "archive_count_at": count_at,
-        "stale": current_archive_count(db, repository) != count_at,
+        "stale": stale,
         "candidates": [_row_payload(r) for r in rows],
     }
 

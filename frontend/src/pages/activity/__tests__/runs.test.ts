@@ -53,6 +53,14 @@ describe('umbrella', () => {
     })
   })
 
+  it('calls only the comparison an automatic prune preview', () => {
+    expect(umbrella(item({ trigger: 'preview', kind: 'prune_compare' }), t).label).toBe(
+      'Automatic · Prune preview'
+    )
+    // a single dry run under the same trigger is one the reader asked for
+    expect(umbrella(item({ trigger: 'preview', kind: 'prune' }), t).label).toBe('Prune preview')
+  })
+
   it('reads legacy rows from triggered_by', () => {
     expect(
       umbrella(item({ trigger: null, triggered_by: 'backup_plan', backup_plan_name: 'Docs' }), t)

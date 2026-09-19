@@ -15,6 +15,7 @@ from app.database.models import (
 )
 from app.services import prune_compare as pc
 from app.services.prune_preview import CandidateResult, DryRunFailed, Retention
+from app.utils.datetime_utils import utc_now
 
 
 @pytest.fixture()
@@ -353,7 +354,7 @@ async def test_run_comparison_keeps_old_rows_when_only_the_no_policy_row_is_left
 
 
 @pytest.mark.unit
-def test_stored_reports_stale_when_the_archive_count_moved(db, repo):
+def test_stored_reports_stale_when_the_archive_count_or_the_day_moved(db, repo):
     assert pc.stored(db, repo) == {
         "computed_at": None,
         "archive_count_at": None,
@@ -371,7 +372,8 @@ def test_stored_reports_stale_when_the_archive_count_moved(db, repo):
             deleted_count=1,
             freed_at_least=20,
             archive_count_at=2,
-            computed_at=datetime(2026, 9, 18, 1, 0),
+            computed_at=utc_now(),
+            verdicts=[["ab", "a0", "kept", "daily #1"]],
         )
     )
     db.commit()
@@ -380,8 +382,47 @@ def test_stored_reports_stale_when_the_archive_count_moved(db, repo):
     assert payload["candidates"][0]["key"] == "standard"
     assert payload["candidates"][0]["freed_at_least"] == 20
     assert payload["candidates"][0]["lost_size"] is None
+    # retention buckets are relative to now, so yesterday's answer is stale
+    # even when the archive set has not moved
+    row = db.query(PruneComparison).first()
+    row.computed_at = utc_now() - timedelta(days=1)
+    db.commit()
+    assert pc.stored(db, repo)["stale"] is True
+    row.computed_at = utc_now()
+    db.commit()
+    assert pc.stored(db, repo)["stale"] is False
     _archives(db, repo, 1)
     assert pc.stored(db, repo)["stale"] is True
+
+
+@pytest.mark.unit
+def test_stored_is_stale_while_a_row_has_no_verdicts(db, repo):
+    """A comparison the preview page cannot read back is not one it can use:
+    rows from before the verdicts were kept ask to be run again."""
+    _archives(db, repo, 2)
+    db.add(
+        PruneComparison(
+            repository_id=repo.id,
+            candidate="standard",
+            label="Standard",
+            retention=Retention(keep_daily=7).as_params(),
+            kept_count=1,
+            deleted_count=1,
+            freed_at_least=20,
+            archive_count_at=2,
+            computed_at=utc_now(),
+            verdicts=None,
+        )
+    )
+    db.commit()
+    payload = pc.stored(db, repo)
+    assert payload["stale"] is True
+    assert payload["candidates"][0]["readable"] is False
+    row = db.query(PruneComparison).first()
+    row.verdicts = [["ab", "a0", "deleted", None]]
+    db.commit()
+    payload = pc.stored(db, repo)
+    assert payload["stale"] is False and payload["candidates"][0]["readable"] is True
 
 
 @pytest.mark.unit

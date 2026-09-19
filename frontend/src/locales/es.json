@@ -2190,7 +2190,8 @@
       "followup": "Seguimiento",
       "reconcile": "Reconciliación",
       "retry": "Reintento",
-      "preview": "Manual · Vista previa de prune"
+      "preview": "Vista previa de prune",
+      "previewAuto": "Automático · Vista previa de prune"
     },
     "runTitle": {
       "reconcile": "Conciliación",

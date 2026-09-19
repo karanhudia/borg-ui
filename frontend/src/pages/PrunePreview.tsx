@@ -130,9 +130,15 @@ export default function PrunePreview() {
     }
   }, [pendingOpId, pendingStatus, pendingOpQuery.isError, queryClient, repositoryId])
   const refreshMutation = useMutation({
-    mutationFn: (id: number) => repositoriesAPI.pruneComparisonRefresh(id),
-    onSuccess: (res, id) => setPendingOp({ id: res.data.operation_id, repositoryId: id }),
-    onError: () => toast.error(t('prunePreview.compare.refreshFailed')),
+    mutationFn: ({ id, auto }: { id: number; auto: boolean }) =>
+      repositoriesAPI.pruneComparisonRefresh(id, auto),
+    onSuccess: (res, { id }) => setPendingOp({ id: res.data.operation_id, repositoryId: id }),
+    // The automatic one is the page doing its job, not something the reader
+    // asked for: a comparison already running (409), or a reader without the
+    // rights to start one (403), is not an error to shout about.
+    onError: (_err, { auto }) => {
+      if (!auto) toast.error(t('prunePreview.compare.refreshFailed'))
+    },
   })
   const candidateRetention = useMemo(
     () =>
@@ -153,9 +159,22 @@ export default function PrunePreview() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [logOpen, setLogOpen] = useState(false)
 
+  // Previews already run in this visit, by retention. Clicking back and
+  // forth across the compared policies is reading, not re-measuring: each
+  // dry run is a real borg call and shows up in the activity timeline.
+  // Cleared per repository; "Refresh preview" goes around it.
+  const previewCache = useRef(new Map<string, { preview: PrunePreviewResponse; at: Date }>())
+  const cacheKey = (form: PruneRetention) => JSON.stringify(form)
+  // Every dry run of this visit belongs to one run, so the timeline shows
+  // the policies tried as steps under a single "Prune preview" instead of a
+  // loose row each.
+  const previewRunId = useRef(crypto.randomUUID())
+
   const previewMutation = useMutation({
-    mutationFn: (form: PruneRetention) => repositoriesAPI.prunePreview(repositoryId, form),
+    mutationFn: (form: PruneRetention) =>
+      repositoriesAPI.prunePreview(repositoryId, form, previewRunId.current),
     onSuccess: (res, form) => {
+      previewCache.current.set(cacheKey(form), { preview: res.data, at: new Date() })
       setPreview(res.data)
       setPreviewedRetention(form)
       setError(null)
@@ -174,6 +193,48 @@ export default function PrunePreview() {
       setError({ status, key, log })
     },
   })
+
+  // A compared policy the comparison kept verdicts for opens as a read:
+  // the server joins them to the index again, no dry run, nothing new in
+  // the timeline. Only a retention nobody compared still costs a dry run.
+  const storedMutation = useMutation({
+    mutationFn: (row: PruneComparisonRow) =>
+      repositoriesAPI.pruneCandidatePreview(repositoryId, row.key),
+    onSuccess: (res, row) => {
+      const form = toForm(row.retention)
+      setPreview(res.data)
+      if (form) {
+        previewCache.current.set(cacheKey(form), { preview: res.data, at: new Date() })
+        setPreviewedRetention(form)
+      }
+      setError(null)
+      setRefreshedAt(new Date())
+    },
+    // A stored row that has gone (a comparison replaced underneath) falls
+    // back to the dry run rather than leaving the reader with nothing.
+    onError: (_err, row) => {
+      const form = toForm(row.retention)
+      if (form) previewMutation.mutate(form)
+    },
+  })
+
+  // Show a candidate: from this visit's cache, else from the stored
+  // comparison, else by running its dry run.
+  const showCandidate = (row: PruneComparisonRow) => {
+    const form = toForm(row.retention)
+    if (!form) return
+    setRetention(form)
+    const cached = previewCache.current.get(cacheKey(form))
+    if (cached) {
+      setPreview(cached.preview)
+      setPreviewedRetention(form)
+      setError(null)
+      setRefreshedAt(cached.at)
+      return
+    }
+    if (row.readable) storedMutation.mutate(row)
+    else previewMutation.mutate(form)
+  }
 
   const runPruneMutation = useMutation({
     mutationFn: (form: PruneRetention) =>
@@ -196,11 +257,30 @@ export default function PrunePreview() {
     if (ranForRepoRef.current === repositoryId) return
     if (!Number.isFinite(repositoryId)) return
     if (candidateKey && !candidateRetention && comparisonQuery.isFetching) return
+    // Nothing is decided until the comparison is known: deciding early means
+    // not finding the candidate that covers the prefill, and running a dry
+    // run the comparison is about to run anyway.
+    if (!comparisonQuery.isFetched && !comparisonQuery.isError) return
     const initial = stateRetention ?? candidateRetention ?? defaultRetention
     if (!initial) return
     ranForRepoRef.current = repositoryId
+    previewCache.current.clear()
+    previewRunId.current = crypto.randomUUID()
     setRetention(initial)
-    previewMutation.mutate(initial)
+    // The comparison has usually already run this exact policy; reading its
+    // stored verdicts beats running Borg again just to open the page. When
+    // it has not run it yet but is about to, wait for it rather than racing
+    // it with a dry run of the same policy.
+    const match = comparison?.candidates.find((c) => sameRetention(c.retention, initial))
+    if (match?.readable) storedMutation.mutate(match)
+    else if (match) {
+      // A compared policy that cannot be read back yet is one the comparison
+      // is about to run: wait for it. Whether the payload in hand calls
+      // itself stale does not decide this, since it may be a cached one from
+      // an earlier visit.
+      setWantedKey(match.key)
+      comparisonQuery.refetch()
+    } else previewMutation.mutate(initial)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     defaultRetention,
@@ -208,14 +288,81 @@ export default function PrunePreview() {
     repositoryId,
     candidateRetention,
     comparisonQuery.isFetching,
+    comparisonQuery.isFetched,
+    comparisonQuery.isError,
     candidateKey,
+    comparison,
   ])
+
+  // Opening the page is what asks for the comparison: with none stored, or
+  // one the archive set or the day has moved past, run it now and let the
+  // stored numbers stand until the new ones land. Once per repository per
+  // visit, so a refusal does not turn into a loop.
+  const askedForRepoRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (askedForRepoRef.current === repositoryId) return
+    if (!Number.isFinite(repositoryId)) return
+    if (!comparison || comparisonQuery.isFetching) return
+    if (pendingOpId !== null) return
+    if (!comparison.stale) return
+    askedForRepoRef.current = repositoryId
+    refreshMutation.mutate({ id: repositoryId, auto: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comparison, comparisonQuery.isFetching, pendingOpId, repositoryId])
+
+  // The candidate the page is waiting on a running comparison for. Nothing
+  // is on screen until it lands, and if the comparison never produces it
+  // (too few archives, maintenance pending) the dry run takes over.
+  const [wantedKey, setWantedKey] = useState<string | null>(null)
+  useEffect(() => {
+    if (wantedKey === null || !comparison) return
+    const row = comparison.candidates.find((c) => c.key === wantedKey)
+    if (row?.readable) {
+      setWantedKey(null)
+      showCandidate(row)
+      return
+    }
+    // Nothing more is coming: the comparison is not running, is not about to
+    // (it does not call itself stale) and still cannot produce this row. Run
+    // the policy's own dry run rather than leave the page empty.
+    if (
+      pendingOpId === null &&
+      !comparisonQuery.isFetching &&
+      !refreshMutation.isPending &&
+      !comparison.stale
+    ) {
+      setWantedKey(null)
+      previewMutation.mutate(retention)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantedKey, comparison, pendingOpId, comparisonQuery.isFetching, refreshMutation.isPending])
+
+  // A finished comparison replaced every row: re-read the one on screen so
+  // the numbers under it match the table above it.
+  const shownComputedAt = useRef<string | null>(null)
+  useEffect(() => {
+    if (!comparison?.computed_at || pendingOpId !== null) return
+    if (shownComputedAt.current === comparison.computed_at) return
+    shownComputedAt.current = comparison.computed_at
+    if (!previewedRetention) return
+    const row = comparison.candidates.find(
+      (c) => c.readable && sameRetention(c.retention, previewedRetention)
+    )
+    if (!row) return
+    previewCache.current.delete(cacheKey(previewedRetention))
+    storedMutation.mutate(row)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comparison, pendingOpId])
 
   // Until the prefill is known the form shows placeholder values that
   // nothing should preview or prune with.
   const ready = Boolean(stateRetention ?? defaultRetention)
   const dirty =
     previewedRetention !== null && JSON.stringify(retention) !== JSON.stringify(previewedRetention)
+
+  // A preview is on its way whether it is running, being read back, or
+  // waiting on the comparison that will produce it.
+  const loadingPreview = previewMutation.isPending || storedMutation.isPending || wantedKey !== null
 
   const archives = useMemo(() => preview?.archives ?? [], [preview])
   const heatmapData = useMemo(() => previewToHeatmap(archives), [archives])
@@ -364,22 +511,17 @@ export default function PrunePreview() {
             selectedKey={selectedKey}
             pending={pendingOpId !== null}
             refreshDisabled={!ready || previewMutation.isPending || refreshMutation.isPending}
-            onSelect={(row) => {
-              const form = toForm(row.retention)
-              if (!form) return
-              setRetention(form)
-              previewMutation.mutate(form)
-            }}
-            onRefresh={() => refreshMutation.mutate(repositoryId)}
+            onSelect={showCandidate}
+            onRefresh={() => refreshMutation.mutate({ id: repositoryId, auto: false })}
           />
 
-          {previewMutation.isPending && !preview ? (
+          {loadingPreview && !preview ? (
             <Stack spacing={1.5}>
               <Skeleton variant="rounded" height={100} />
               <Skeleton variant="rounded" height={200} />
             </Stack>
           ) : preview ? (
-            <Box sx={{ opacity: previewMutation.isPending ? 0.6 : 1 }}>
+            <Box sx={{ opacity: loadingPreview ? 0.6 : 1 }}>
               <PrunePreviewNumbers
                 deletedCount={deletedCount}
                 keptCount={keptCount}
@@ -540,9 +682,7 @@ export default function PrunePreview() {
                   variant="contained"
                   color="error"
                   onClick={() => setConfirmOpen(true)}
-                  disabled={
-                    deletedCount === 0 || dirty || previewMutation.isPending || error !== null
-                  }
+                  disabled={deletedCount === 0 || dirty || loadingPreview || error !== null}
                 >
                   {t('prunePreview.runNow', { count: deletedCount })}
                 </Button>

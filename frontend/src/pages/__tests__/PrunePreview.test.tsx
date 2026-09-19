@@ -29,6 +29,7 @@ vi.mock('../../services/api', async (importOriginal) => {
       pruneRepository: vi.fn(),
       pruneComparison: vi.fn(),
       pruneComparisonRefresh: vi.fn(),
+      pruneCandidatePreview: vi.fn(),
     },
     operationsAPI: { ...mod.operationsAPI, get: vi.fn() },
   }
@@ -80,6 +81,8 @@ const preview: PrunePreviewResponse = {
 
 describe('PrunePreview page', () => {
   beforeEach(() => {
+    // call history only; the implementations below are set right after
+    vi.clearAllMocks()
     mockParams = { repositoryId: '7' }
     mockState = null
     vi.mocked(operationsAPI.get).mockReset()
@@ -100,9 +103,14 @@ describe('PrunePreview page', () => {
       },
     } as never)
     vi.mocked(repositoriesAPI.prunePreview).mockResolvedValue({ data: preview } as never)
+    vi.mocked(repositoriesAPI.pruneCandidatePreview).mockResolvedValue({ data: preview } as never)
     vi.mocked(repositoriesAPI.pruneComparison).mockResolvedValue({
       data: { computed_at: null, archive_count_at: null, stale: true, candidates: [] },
     } as never)
+    // the page asks for a comparison on open; unless a test says otherwise
+    // the server declines (one already running, or no rights) and the page
+    // carries on with what is stored
+    vi.mocked(repositoriesAPI.pruneComparisonRefresh).mockRejectedValue(new Error('declined'))
   })
 
   it('prefills from the plan, runs the preview and shows the numbers', async () => {
@@ -110,7 +118,8 @@ describe('PrunePreview page', () => {
     await waitFor(() =>
       expect(repositoriesAPI.prunePreview).toHaveBeenCalledWith(
         7,
-        expect.objectContaining({ keep_daily: 3 })
+        expect.objectContaining({ keep_daily: 3 }),
+        expect.any(String)
       )
     )
     expect(await screen.findByText(/Nightly/)).toBeInTheDocument()
@@ -129,7 +138,8 @@ describe('PrunePreview page', () => {
     await waitFor(() =>
       expect(repositoriesAPI.prunePreview).toHaveBeenLastCalledWith(
         7,
-        expect.objectContaining({ keep_daily: 2 })
+        expect.objectContaining({ keep_daily: 2 }),
+        expect.any(String)
       )
     )
     fireEvent.click(screen.getByRole('button', { name: /run prune now/i }))
@@ -272,6 +282,7 @@ describe('PrunePreview page', () => {
         lost_size: null,
         partial_measure: false,
         operation_id: 1,
+        readable: true,
       },
       {
         key: 'standard',
@@ -291,29 +302,144 @@ describe('PrunePreview page', () => {
         lost_size: null,
         partial_measure: false,
         operation_id: 2,
+        readable: true,
       },
     ],
   }
 
-  it('lists compared policies and previews a row on click', async () => {
+  it('reads a compared policy instead of running its dry run again', async () => {
     vi.mocked(repositoriesAPI.pruneComparison).mockResolvedValue({
       data: storedComparison,
     } as never)
     renderPage()
     await waitFor(() => expect(screen.getByText('Standard')).toBeInTheDocument())
+    // the prefill here is the plan's retention, which no compared row holds
+    await screen.findByTestId('prune-preview-deleted')
+    const dryRuns = vi.mocked(repositoriesAPI.prunePreview).mock.calls.length
     fireEvent.click(screen.getByText('Standard'))
     await waitFor(() =>
-      expect(repositoriesAPI.prunePreview).toHaveBeenLastCalledWith(
+      expect(repositoriesAPI.pruneCandidatePreview).toHaveBeenCalledWith(7, 'standard')
+    )
+    const reads = vi.mocked(repositoriesAPI.pruneCandidatePreview).mock.calls.length
+    fireEvent.click(screen.getByText('Standard'))
+    // a row seen once in this visit is already in hand
+    expect(repositoriesAPI.pruneCandidatePreview).toHaveBeenCalledTimes(reads)
+    // opening the row ran no dry run of its own
+    expect(repositoriesAPI.prunePreview).toHaveBeenCalledTimes(dryRuns)
+  })
+
+  it('falls back to a dry run for a policy the comparison never stored', async () => {
+    vi.mocked(repositoriesAPI.pruneComparison).mockResolvedValue({
+      data: {
+        ...storedComparison,
+        candidates: storedComparison.candidates.map((c) => ({ ...c, readable: false })),
+      },
+    } as never)
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Standard')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Standard'))
+    await waitFor(() =>
+      expect(repositoriesAPI.prunePreview).toHaveBeenCalledWith(
         7,
-        expect.objectContaining({
-          keep_daily: 7,
-          keep_weekly: 4,
-          keep_monthly: 6,
-          keep_yearly: 1,
-          keep_within: '',
-        })
+        expect.objectContaining({ keep_daily: 7 }),
+        expect.any(String)
       )
     )
+    expect(repositoriesAPI.pruneCandidatePreview).not.toHaveBeenCalled()
+  })
+
+  it('asks for a comparison when the stored one is stale, and not when it is fresh', async () => {
+    vi.mocked(repositoriesAPI.pruneComparison).mockResolvedValue({
+      data: { ...storedComparison, stale: true },
+    } as never)
+    renderPage()
+    await waitFor(() =>
+      expect(repositoriesAPI.pruneComparisonRefresh).toHaveBeenCalledWith(7, true)
+    )
+    vi.mocked(repositoriesAPI.pruneComparisonRefresh).mockClear()
+    vi.mocked(repositoriesAPI.pruneComparison).mockResolvedValue({
+      data: storedComparison,
+    } as never)
+    renderPage()
+    await waitFor(() => expect(screen.getAllByText('Standard').length).toBeGreaterThan(0))
+    expect(repositoriesAPI.pruneComparisonRefresh).not.toHaveBeenCalled()
+  })
+
+  it('waits for the comparison rather than running the same policy twice', async () => {
+    // the prefill is a policy the comparison is about to run: opening the
+    // page must not fire its own dry run alongside it
+    const stale = {
+      ...storedComparison,
+      stale: true,
+      candidates: storedComparison.candidates.map((c) =>
+        c.key === 'standard'
+          ? { ...c, readable: false, retention: { ...c.retention, keep_daily: 3 } }
+          : c
+      ),
+    }
+    vi.mocked(repositoriesAPI.pruneComparison).mockResolvedValue({ data: stale } as never)
+    vi.mocked(repositoriesAPI.pruneComparisonRefresh).mockResolvedValue({
+      data: { operation_id: 9 },
+    } as never)
+    vi.mocked(operationsAPI.get).mockResolvedValue({
+      data: { id: 9, status: 'running' },
+    } as never)
+    renderPage()
+    await waitFor(() =>
+      expect(repositoriesAPI.pruneComparisonRefresh).toHaveBeenCalledWith(7, true)
+    )
+    expect(repositoriesAPI.prunePreview).not.toHaveBeenCalled()
+
+    // once the comparison has run it, the page reads the stored row
+    vi.mocked(repositoriesAPI.pruneComparison).mockResolvedValue({
+      data: {
+        ...stale,
+        stale: false,
+        computed_at: '2026-09-19T02:00:00Z',
+        candidates: stale.candidates.map((c) =>
+          c.key === 'standard' ? { ...c, readable: true } : c
+        ),
+      },
+    } as never)
+    vi.mocked(operationsAPI.get).mockResolvedValue({
+      data: { id: 9, status: 'completed' },
+    } as never)
+    await waitFor(
+      () => expect(repositoriesAPI.pruneCandidatePreview).toHaveBeenCalledWith(7, 'standard'),
+      { timeout: 8000 }
+    )
+    expect(repositoriesAPI.prunePreview).not.toHaveBeenCalled()
+  }, 10000)
+
+  it('waits even when a cached comparison still calls itself fresh', async () => {
+    // the payload in hand is from an earlier visit: not stale, but its rows
+    // cannot be read back. Opening must not dry-run the policy the
+    // comparison is about to run.
+    const unreadable = storedComparison.candidates.map((c) =>
+      c.key === 'standard'
+        ? { ...c, readable: false, retention: { ...c.retention, keep_daily: 3 } }
+        : c
+    )
+    vi.mocked(repositoriesAPI.pruneComparison)
+      .mockResolvedValueOnce({
+        data: { ...storedComparison, stale: false, candidates: unreadable },
+      } as never)
+      // the refetch says what the server really thinks: a row nobody can
+      // read back means the comparison has to run again
+      .mockResolvedValue({
+        data: { ...storedComparison, stale: true, candidates: unreadable },
+      } as never)
+    vi.mocked(repositoriesAPI.pruneComparisonRefresh).mockResolvedValue({
+      data: { operation_id: 9 },
+    } as never)
+    vi.mocked(operationsAPI.get).mockResolvedValue({
+      data: { id: 9, status: 'running' },
+    } as never)
+    renderPage()
+    await waitFor(() =>
+      expect(repositoriesAPI.pruneComparisonRefresh).toHaveBeenCalledWith(7, true)
+    )
+    expect(repositoriesAPI.prunePreview).not.toHaveBeenCalled()
   })
 
   it('starts from the candidate named in the query string', async () => {
@@ -322,15 +448,12 @@ describe('PrunePreview page', () => {
     } as never)
     renderPage({ search: '?candidate=standard' })
     await waitFor(() =>
-      expect(repositoriesAPI.prunePreview).toHaveBeenCalledWith(
-        7,
-        expect.objectContaining({ keep_daily: 7 })
-      )
+      expect(repositoriesAPI.pruneCandidatePreview).toHaveBeenCalledWith(7, 'standard')
     )
-    expect(repositoriesAPI.prunePreview).toHaveBeenCalledTimes(1)
+    expect(repositoriesAPI.prunePreview).not.toHaveBeenCalled()
   })
 
-  it('compare now posts a refresh and polls the operation until it ends', async () => {
+  it('compares on its own for a repository never compared, then polls until it ends', async () => {
     vi.mocked(repositoriesAPI.pruneComparison)
       .mockResolvedValueOnce({
         data: { computed_at: null, archive_count_at: null, stale: true, candidates: [] },
@@ -343,17 +466,23 @@ describe('PrunePreview page', () => {
       .mockResolvedValueOnce({ data: { id: 9, status: 'running' } } as never)
       .mockResolvedValue({ data: { id: 9, status: 'completed' } } as never)
     renderPage()
-    await waitFor(() => expect(screen.getByText('Not compared yet.')).toBeInTheDocument())
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Compare now' })).toBeEnabled())
-    fireEvent.click(screen.getByRole('button', { name: 'Compare now' }))
-    await waitFor(() => expect(repositoriesAPI.pruneComparisonRefresh).toHaveBeenCalledWith(7))
+    // nothing stored, so the page asks for the comparison itself
+    await waitFor(() =>
+      expect(repositoriesAPI.pruneComparisonRefresh).toHaveBeenCalledWith(7, true)
+    )
     expect(screen.getByText('Comparing, this runs one dry run per policy.')).toBeInTheDocument()
     await waitFor(() => expect(operationsAPI.get).toHaveBeenCalledWith(9))
     await waitFor(() => expect(screen.getByText('Standard')).toBeInTheDocument(), {
       timeout: 8000,
     })
     expect(screen.queryByText('Comparing, this runs one dry run per policy.')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Compare now' })).toBeEnabled()
+    // and the button is still the reader's way to ask for another one
+    const button = screen.getByRole('button', { name: 'Compare now' })
+    expect(button).toBeEnabled()
+    fireEvent.click(button)
+    await waitFor(() =>
+      expect(repositoriesAPI.pruneComparisonRefresh).toHaveBeenCalledWith(7, false)
+    )
   }, 10000)
 
   it('stops waiting when the comparison operation is skipped or fails', async () => {
@@ -410,7 +539,10 @@ describe('PrunePreview page', () => {
     }
     renderPage()
     await waitFor(() => expect(screen.getByText('Standard')).toBeInTheDocument())
-    await waitFor(() => expect(repositoriesAPI.prunePreview).toHaveBeenCalled())
+    // the dialog's retention is a compared policy, so it opens as a read
+    await waitFor(() =>
+      expect(repositoriesAPI.pruneCandidatePreview).toHaveBeenCalledWith(7, 'standard')
+    )
     await waitFor(() => expect(screen.queryByText('Editing')).toBeNull())
     expect(screen.getByText('Standard').closest('tr')).toHaveClass('Mui-selected')
   })
