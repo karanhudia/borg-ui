@@ -59,7 +59,11 @@ def test_merge_revision_joins_the_prune_comparisons_branch():
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     assert script.get_revision(SIBLING).down_revision == PREVIOUS
     assert set(script.get_revision(MERGE).down_revision) == {REVISION, SIBLING}
-    assert script.get_heads() == [MERGE]
+    # one head, with the merge on the way to it (later revisions chain on
+    # top of it, so the head itself moves as migrations are added)
+    heads = script.get_heads()
+    assert len(heads) == 1
+    assert MERGE in {r.revision for r in script.iterate_revisions(heads[0], "base")}
 
 
 @pytest.mark.unit

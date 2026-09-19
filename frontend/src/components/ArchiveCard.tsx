@@ -1,4 +1,6 @@
+import type { MouseEvent as ReactMouseEvent } from 'react'
 import { Box, IconButton, Tooltip, Chip, useTheme, alpha } from '@mui/material'
+import { Link as RouterLink } from 'react-router-dom'
 import { FolderOpen, RotateCcw, HardDrive, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatDate } from '../utils/dateUtils'
@@ -8,6 +10,10 @@ import { getArchiveType } from '../utils/archiveGrouping'
 interface ArchiveCardProps {
   archive: Archive
   onView: (archive: Archive) => void
+  /** Click anywhere on the row: open the archive's detail page. */
+  onOpen?: (archive: Archive) => void
+  /** Where the row leads, so the name is a real link (new tab, copy link). */
+  openHref?: string
   onRestore: (archive: Archive) => void
   onMount: (archive: Archive) => void
   onDelete: (archive: Archive) => void
@@ -18,6 +24,8 @@ interface ArchiveCardProps {
 export default function ArchiveCard({
   archive,
   onView,
+  onOpen,
+  openHref,
   onRestore,
   onMount,
   onDelete,
@@ -30,6 +38,21 @@ export default function ArchiveCard({
   const isManual = getArchiveType(archive) === 'manual'
   const archiveTime = archive.start || archive.time
   const desktopGridTemplate = 'minmax(0, 1fr) 76px minmax(180px, 220px) 132px'
+
+  const nameSx = {
+    display: 'block',
+    textDecoration: 'none',
+    fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
+    fontSize: '0.78rem',
+    fontWeight: 600,
+    color: 'text.primary',
+    textUnderlineOffset: 3,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    minWidth: 0,
+    '@media (max-width: 767px)': { gridColumn: 1, gridRow: 1 },
+  }
 
   const iconBtnSx = (color: string) => ({
     width: 28,
@@ -45,7 +68,15 @@ export default function ArchiveCard({
 
   return (
     <Box
+      data-testid="archive-row"
+      // A click anywhere on the row is a convenience; the archive name is
+      // the real control, a link, which is what the keyboard and assistive
+      // technology follow. The row must not claim a button role of its own:
+      // a button's children are presentational, so a focusable link inside
+      // one has no node in the accessibility tree.
+      onClick={onOpen ? () => onOpen(archive) : undefined}
       sx={{
+        cursor: onOpen ? 'pointer' : 'default',
         display: 'grid',
         gridTemplateColumns: desktopGridTemplate,
         alignItems: 'center',
@@ -57,6 +88,10 @@ export default function ArchiveCard({
         transition: 'all 150ms ease',
         '&:hover': {
           bgcolor: alpha(theme.palette.primary.main, isDark ? 0.04 : 0.03),
+          // The row opens the archive: say so the way a link does.
+          ...(onOpen && {
+            '& .archive-name': { textDecoration: 'underline', color: 'primary.main' },
+          }),
         },
         '@media (max-width: 767px)': {
           display: 'grid',
@@ -68,26 +103,24 @@ export default function ArchiveCard({
         },
       }}
     >
-      {/* Archive name */}
-      <Box
-        title={archive.name}
-        sx={{
-          fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
-          fontSize: '0.78rem',
-          fontWeight: 600,
-          color: 'text.primary',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          minWidth: 0,
-          '@media (max-width: 767px)': {
-            gridColumn: 1,
-            gridRow: 1,
-          },
-        }}
-      >
-        {archive.name}
-      </Box>
+      {/* Archive name: a real link when the route is known, so middle
+          click and "open in a new tab" work; the row handles plain clicks */}
+      {openHref ? (
+        <Box
+          component={RouterLink}
+          to={openHref}
+          className="archive-name"
+          title={archive.name}
+          onClick={(e: ReactMouseEvent) => e.stopPropagation()}
+          sx={nameSx}
+        >
+          {archive.name}
+        </Box>
+      ) : (
+        <Box className="archive-name" title={archive.name} sx={nameSx}>
+          {archive.name}
+        </Box>
+      )}
 
       {/* Type chip + Date (share row 2 on mobile) */}
       <Box
@@ -143,6 +176,7 @@ export default function ArchiveCard({
 
       {/* Actions — always visible */}
       <Box
+        onClick={(e) => e.stopPropagation()}
         sx={{
           display: 'flex',
           alignItems: 'center',

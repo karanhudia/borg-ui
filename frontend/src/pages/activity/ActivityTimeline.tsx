@@ -54,6 +54,7 @@ const UMBRELLA_ICONS: Record<UmbrellaKind, typeof User> = {
   followup: CornerDownRight,
   reconcile: RefreshCw,
   retry: RotateCcw,
+  preview: User,
   other: Zap,
 }
 

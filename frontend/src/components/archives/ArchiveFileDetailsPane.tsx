@@ -1,4 +1,4 @@
-import { Box, Button, Stack, Typography, alpha, useTheme } from '@mui/material'
+import { Box, Button, Typography, alpha, useTheme } from '@mui/material'
 import { Download, MousePointerClick } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatBytes } from '../../utils/dateUtils'
@@ -9,6 +9,7 @@ import { usePlan } from '../../hooks/usePlan'
 import type { ArchiveItem } from '../ArchivePathSelector'
 import type { HistoryEntry } from '../../types/archives'
 import type { IndexMode } from '../../types/operations'
+import { tintChipSx } from '../shared/tones'
 
 interface ArchiveFileDetailsPaneProps {
   repositoryId: number
@@ -122,6 +123,24 @@ export default function ArchiveFileDetailsPane({
             {isFile && selectedEntry.size != null ? ` · ${formatBytes(selectedEntry.size)}` : ''}
           </Typography>
         </Box>
+        {(isFile || selectedEntry.type === 'directory') && (
+          <Box sx={{ alignSelf: 'center', flexShrink: 0 }}>
+            <Button
+              size="small"
+              startIcon={<Download size={15} />}
+              onClick={isFile ? onDownload : onDownloadFolder}
+              sx={{
+                // The pane's tiles are tinted, so its one action is too.
+                ...tintChipSx(theme, 'success'),
+                px: 1.5,
+                borderRadius: 1.5,
+                '&:hover': { bgcolor: alpha(theme.palette.success.main, 0.2) },
+              }}
+            >
+              {isFile ? t('archives.files.download') : t('archives.files.downloadFolder')}
+            </Button>
+          </Box>
+        )}
       </Box>
 
       <Box sx={{ px: 2.5, py: 2 }}>
@@ -140,18 +159,6 @@ export default function ArchiveFileDetailsPane({
         >
           {selectedPath}
         </Typography>
-        {(isFile || selectedEntry.type === 'directory') && (
-          <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<Download size={14} />}
-              onClick={isFile ? onDownload : onDownloadFolder}
-            >
-              {isFile ? t('archives.files.download') : t('archives.files.downloadFolder')}
-            </Button>
-          </Stack>
-        )}
       </Box>
 
       <Box sx={{ px: 2.5, pb: 2, pt: 1, borderTop: 1, borderColor: 'divider' }}>

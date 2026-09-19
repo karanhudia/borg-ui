@@ -8,7 +8,6 @@ import {
   Box,
   Breadcrumbs,
   Button,
-  Chip,
   Link,
   Stack,
   Tab,
@@ -24,7 +23,6 @@ import { BorgApiClient } from '../services/borgApi'
 import { getBorgVersion } from '../utils/repoCapabilities'
 import { translateBackendKey, type BackendDetail } from '../utils/translateBackendKey'
 import { parseBackendDate } from '../utils/dateUtils'
-import ArchiveInfoTab from '../components/archives/ArchiveInfoTab'
 import ArchiveStatsHeader, {
   type ArchiveStatsHeaderProps,
 } from '../components/archives/ArchiveStatsHeader'
@@ -42,9 +40,9 @@ import type { RestorePathMetadata } from '../utils/restorePaths'
 import type { ArchiveDetailResponse } from '../types/archives'
 import type { Archive, Repository } from '@/types'
 
-type DetailTab = 'changes' | 'files' | 'info'
+type DetailTab = 'changes' | 'files'
 
-const DETAIL_TABS: DetailTab[] = ['files', 'changes', 'info']
+const DETAIL_TABS: DetailTab[] = ['files', 'changes']
 
 function getDefaultMountPoint(archiveName: string): string {
   return archiveName.replace(/[/:]/g, '_').replace(/\s+/g, '_')
@@ -264,14 +262,14 @@ export default function ArchiveDetail() {
 
   if (!validParams || archiveErrored) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box>
         <Alert severity="error">{t('archives.detail.loadFailed')}</Alert>
       </Box>
     )
   }
 
   if (loadingArchive || !archive) {
-    return <Box sx={{ p: 3 }} />
+    return <Box />
   }
 
   // Cached data from a previous mode must not outlive the setting.
@@ -334,7 +332,7 @@ export default function ArchiveDetail() {
   )
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box>
       <Breadcrumbs sx={{ mb: 2 }}>
         <Link component={RouterLink} to="/archives" underline="hover">
           {t('archives.title')}
@@ -382,13 +380,15 @@ export default function ArchiveDetail() {
               {archive.name}
             </Typography>
             <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
-              {parseBackendDate(archive.start).toLocaleString()}
+              {[
+                parseBackendDate(archive.start).toLocaleString(),
+                archive.hostname &&
+                  `${archive.username ? `${archive.username}@` : ''}${archive.hostname}`,
+                archive.comment,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
             </Typography>
-            <Chip
-              size="small"
-              label={`${t('archives.detail.series')}: ${archive.series}`}
-              sx={{ mt: 1.5 }}
-            />
           </Box>
         </Stack>
         <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
@@ -431,7 +431,6 @@ export default function ArchiveDetail() {
       >
         <Tab label={t('archives.detail.tabFiles')} value="files" />
         <Tab label={tabLabel} value="changes" />
-        <Tab label={t('archives.detail.tabInfo')} value="info" />
       </Tabs>
 
       <Box sx={{ pt: 1 }}>
@@ -454,7 +453,6 @@ export default function ArchiveDetail() {
             selectionResetToken={selectionEpoch}
           />
         )}
-        {activeTab === 'info' && <ArchiveInfoTab archive={archive} />}
       </Box>
 
       {repository && legacyArchive && (

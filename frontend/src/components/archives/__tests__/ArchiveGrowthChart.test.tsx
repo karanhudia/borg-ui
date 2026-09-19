@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { screen, fireEvent } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import { renderWithProviders } from '../../../test/test-utils'
 import ArchiveGrowthChart from '../ArchiveGrowthChart'
 import type { GrowthPoint, GrowthResponse } from '../../../types/archives'
@@ -12,6 +12,7 @@ const point = (id: number, day: number, overrides: Partial<GrowthPoint> = {}): G
   deduplicated_size: 1_000_000_000,
   original_size: 90_000_000_000,
   running_total: id * 1_000_000_000,
+  repository_size: id * 20_000_000_000,
   stale: false,
   ...overrides,
 })
@@ -24,33 +25,18 @@ const response = (overrides: Partial<GrowthResponse> = {}): GrowthResponse => ({
   ...overrides,
 })
 
-const render = (data: GrowthResponse, series = '') => {
-  const onSeriesChange = vi.fn()
+const render = (data: GrowthResponse) => {
   const onSelectArchive = vi.fn()
-  renderWithProviders(
-    <ArchiveGrowthChart
-      data={data}
-      series={series}
-      onSeriesChange={onSeriesChange}
-      onSelectArchive={onSelectArchive}
-    />
-  )
-  return { onSeriesChange, onSelectArchive }
+  renderWithProviders(<ArchiveGrowthChart data={data} onSelectArchive={onSelectArchive} />)
+  return { onSelectArchive }
 }
 
 describe('ArchiveGrowthChart', () => {
-  it('names the bars and the footprint line, and hides the source line by default', () => {
+  it('names the repository line and the source line', () => {
     render(response())
-    expect(screen.getByText('Added per archive')).toBeInTheDocument()
-    expect(screen.getByText('Repository footprint (running total, at least)')).toBeInTheDocument()
-    expect(screen.queryByText('Source size (original)')).not.toBeInTheDocument()
-    expect(screen.queryByText('Stale, re-measuring')).not.toBeInTheDocument()
-  })
-
-  it('adds the source line when asked', () => {
-    render(response())
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Show source size' }))
-    expect(screen.getByText('Source size (original)')).toBeInTheDocument()
+    expect(screen.getByText('Repository size after this backup')).toBeInTheDocument()
+    expect(screen.getByText('Source size (before deduplication)')).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
   })
 
   it('explains stale and unmeasured archives', () => {
@@ -61,21 +47,13 @@ describe('ArchiveGrowthChart', () => {
         unmeasured_count: 2,
       })
     )
-    expect(screen.getByText('Stale, re-measuring')).toBeInTheDocument()
     expect(screen.getByText(/1 archive is being re-measured/)).toBeInTheDocument()
     expect(screen.getByText(/2 archives are not measured yet/)).toBeInTheDocument()
   })
 
-  it('offers the series select only when the repository has several series', () => {
-    render(response())
-    expect(screen.queryByLabelText('Series')).not.toBeInTheDocument()
-  })
-
-  it('switches series through the select', () => {
-    const { onSeriesChange } = render(response({ series: ['nas', 'docs'] }))
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: /Series/ }))
-    fireEvent.click(screen.getByRole('option', { name: /docs/ }))
-    expect(onSeriesChange).toHaveBeenCalledWith('docs')
+  it('shows the whole repository, with no series select', () => {
+    render(response({ series: ['nas', 'docs'] }))
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
   })
 
   it('says so when fewer than two archives are measured', () => {

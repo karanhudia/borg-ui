@@ -1,6 +1,10 @@
 import type { ReactNode } from 'react'
-import { Box, Tooltip, Typography, useTheme, alpha } from '@mui/material'
+import { Box, Tooltip, Typography, useTheme } from '@mui/material'
+import { FileDiff, FileText, HardDrive, Layers, Package, Timer } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import TintedTile from '../shared/TintedTile'
+import type { Tone } from '../shared/tones'
 import { formatBytes, formatDurationSeconds, formatRelativeTime } from '../../utils/dateUtils'
 import { changeColor } from './changeStyle'
 import type { ArchiveDetailResponse } from '../../types/archives'
@@ -35,6 +39,10 @@ interface Tile {
   value: ReactNode
   sub?: ReactNode
   headline?: boolean
+  // The same tint per figure as the info tab and the repository header.
+  tone: Tone
+  icon: LucideIcon
+  muted?: boolean
 }
 
 export default function ArchiveStatsHeader({
@@ -76,7 +84,10 @@ export default function ArchiveStatsHeader({
         component="span"
         sx={{
           display: 'inline-flex',
-          gap: 1,
+          flexWrap: 'wrap',
+          columnGap: 0.75,
+          fontSize: '0.85em',
+          '& > span': { whiteSpace: 'nowrap' },
           fontVariantNumeric: 'tabular-nums',
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
         }}
@@ -112,19 +123,35 @@ export default function ArchiveStatsHeader({
           : MINUS,
       sub: measuredLine,
       headline: true,
+      tone: 'info',
+      icon: Layers,
+      muted: !measured,
     },
-    { key: 'changed', label: t('archives.detail.stats.filesChanged'), value: filesChanged },
+    {
+      key: 'changed',
+      label: t('archives.detail.stats.filesChanged'),
+      value: filesChanged,
+      tone: 'primary',
+      icon: FileDiff,
+      muted: totalsState !== 'ready',
+    },
     {
       key: 'original',
       label: t('archives.detail.stats.dataBackedUp'),
       value: measured ? formatBytes(archive.original_size) : MINUS,
       sub: withPrevious(delta(archive.original_size, prev?.original_size, formatBytes)),
+      tone: 'success',
+      icon: HardDrive,
+      muted: !measured,
     },
     {
       key: 'files',
       label: t('archives.detail.stats.files'),
       value: archive.nfiles != null ? archive.nfiles.toLocaleString() : MINUS,
       sub: withPrevious(delta(archive.nfiles, prev?.nfiles, (n) => n.toLocaleString())),
+      tone: 'primary',
+      icon: FileText,
+      muted: archive.nfiles == null,
     },
     {
       key: 'duration',
@@ -134,65 +161,68 @@ export default function ArchiveStatsHeader({
       sub: withPrevious(
         delta(archive.duration_seconds, prev?.duration_seconds, formatDurationSeconds)
       ),
+      tone: 'warning',
+      icon: Timer,
+      muted: archive.duration_seconds == null,
     },
     {
       key: 'compression',
       label: t('archives.detail.stats.compression'),
-      value: ratio ?? muted(t('archives.detail.stats.compressionNotReported')),
+      value: ratio ?? t('archives.detail.stats.compressionNotReported'),
+      tone: 'secondary',
+      icon: Package,
+      muted: ratio == null,
     },
   ]
 
   return (
     <Box
-      component="dl"
       sx={{
         display: 'grid',
-        gridTemplateColumns: { xs: '1fr 1fr', md: '1.6fr repeat(5, 1fr)' },
+        gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(6, minmax(0, 1fr))' },
         gap: 1.5,
-        m: 0,
       }}
     >
-      {tiles.map((tile) => (
-        <Tooltip
-          key={tile.key}
-          title={tile.headline ? t('archives.detail.stats.addedHint') : ''}
-          disableHoverListener={!tile.headline}
-        >
+      {tiles.map((tile) => {
+        const node = (
           <Box
             sx={{
-              p: 1.5,
-              borderRadius: 2,
-              bgcolor: tile.headline
-                ? alpha(theme.palette.info.main, theme.palette.mode === 'dark' ? 0.16 : 0.09)
-                : alpha(theme.palette.text.primary, theme.palette.mode === 'dark' ? 0.04 : 0.03),
               gridColumn: tile.headline ? { xs: '1 / -1', md: 'auto' } : 'auto',
+              height: '100%',
             }}
           >
-            <Typography
-              component="dt"
-              variant="caption"
-              sx={{ color: 'text.secondary', display: 'block' }}
-            >
-              {tile.label}
-            </Typography>
-            <Typography
-              component="dd"
-              variant={tile.headline ? 'h5' : 'subtitle1'}
-              sx={{ m: 0, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1.3 }}
-            >
-              {tile.value}
-            </Typography>
-            {tile.sub && (
-              <Typography
-                variant="caption"
-                sx={{ color: stale && tile.headline ? 'warning.main' : 'text.secondary' }}
-              >
-                {tile.sub}
-              </Typography>
-            )}
+            <TintedTile
+              testId={`archive-stat-${tile.key}`}
+              label={tile.label}
+              value={tile.value}
+              sub={
+                tile.sub ? (
+                  <Box
+                    component="span"
+                    sx={{ color: stale && tile.headline ? 'warning.main' : 'inherit' }}
+                  >
+                    {tile.sub}
+                  </Box>
+                ) : undefined
+              }
+              tone={tile.tone}
+              icon={tile.icon}
+              muted={tile.muted}
+            />
           </Box>
-        </Tooltip>
-      ))}
+        )
+        if (!tile.headline)
+          return (
+            <Box key={tile.key} sx={{ height: '100%' }}>
+              {node}
+            </Box>
+          )
+        return (
+          <Tooltip key={tile.key} title={t('archives.detail.stats.addedHint')}>
+            {node}
+          </Tooltip>
+        )
+      })}
     </Box>
   )
 }

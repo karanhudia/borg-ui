@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link as RouterLink } from 'react-router-dom'
 import {
@@ -12,10 +13,44 @@ import {
   TableHead,
   TableRow,
   Typography,
+  alpha,
+  useTheme,
 } from '@mui/material'
+import { CheckCircle2, FileX } from 'lucide-react'
 import { PLAN_LABEL } from '../../core/features'
 import { formatBytes } from '../../utils/dateUtils'
+import SearchBox from '../shared/SearchBox'
 import type { PruneLostFiles } from '../../types/archives'
+import { tintChipSx } from '../shared/tones'
+
+function Header({ tone }: { tone: 'warning' | 'success' | 'primary' }) {
+  const { t } = useTranslation()
+  const theme = useTheme()
+  const color = theme.palette[tone].main
+  return (
+    <Stack direction="row" sx={{ alignItems: 'center', gap: 1.5, mb: 1.5 }}>
+      <Box
+        sx={{
+          width: 36,
+          height: 36,
+          borderRadius: 1.5,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color,
+          bgcolor: alpha(color, theme.palette.mode === 'dark' ? 0.16 : 0.1),
+          flexShrink: 0,
+        }}
+      >
+        {tone === 'success' ? <CheckCircle2 size={20} /> : <FileX size={20} />}
+      </Box>
+      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+        {t('prunePreview.lostTitle')}
+        <Chip size="small" label={PLAN_LABEL.pro} sx={{ ml: 1, ...tintChipSx(theme, 'primary') }} />
+      </Typography>
+    </Stack>
+  )
+}
 
 export interface PruneLostFilesPanelProps {
   repositoryId: number
@@ -24,6 +59,8 @@ export interface PruneLostFilesPanelProps {
 
 export default function PruneLostFilesPanel({ repositoryId, lost }: PruneLostFilesPanelProps) {
   const { t } = useTranslation()
+  const theme = useTheme()
+  const [filter, setFilter] = useState('')
 
   if (!lost.available) {
     const reason =
@@ -32,10 +69,7 @@ export default function PruneLostFilesPanel({ repositoryId, lost }: PruneLostFil
         : t('prunePreview.lostUnavailable')
     return (
       <Box>
-        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-          {t('prunePreview.lostTitle')}
-          <Chip size="small" label={PLAN_LABEL.pro} sx={{ ml: 1 }} />
-        </Typography>
+        <Header tone="primary" />
         <Typography variant="body2" color="text.secondary">
           {reason}
         </Typography>
@@ -47,13 +81,14 @@ export default function PruneLostFilesPanel({ repositoryId, lost }: PruneLostFil
   const totalSize = lost.total_size ?? 0
   const top = lost.top ?? []
   const byFolder = lost.by_folder ?? []
+  // The largest rows the server sent, narrowed by path; the rows beyond
+  // the cap are not here to search.
+  const needle = filter.trim().toLowerCase()
+  const rows = needle ? top.filter((f) => f.path.toLowerCase().includes(needle)) : top
 
   return (
     <Box>
-      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-        {t('prunePreview.lostTitle')}
-        <Chip size="small" label={PLAN_LABEL.pro} sx={{ ml: 1 }} />
-      </Typography>
+      <Header tone={totalCount === 0 && !lost.incomplete ? 'success' : 'warning'} />
 
       {lost.incomplete && (
         <Alert severity="warning" sx={{ mb: 1.5 }}>
@@ -62,12 +97,23 @@ export default function PruneLostFilesPanel({ repositoryId, lost }: PruneLostFil
       )}
 
       {totalCount === 0 ? (
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            p: 1.5,
+            borderRadius: 1.5,
+            color: lost.incomplete ? 'text.secondary' : 'success.main',
+            bgcolor: alpha(
+              lost.incomplete ? theme.palette.text.primary : theme.palette.success.main,
+              theme.palette.mode === 'dark' ? 0.08 : 0.06
+            ),
+          }}
+        >
           {lost.incomplete ? t('prunePreview.lostUnknown') : t('prunePreview.lostNone')}
         </Typography>
       ) : (
         <>
-          <Typography variant="body2" sx={{ mb: 1.5 }}>
+          <Typography variant="body2" sx={{ mb: 1.5, fontWeight: 600, color: 'warning.main' }}>
             {t('prunePreview.lostSummary', { count: totalCount, size: formatBytes(totalSize) })}
           </Typography>
 
@@ -77,53 +123,78 @@ export default function PruneLostFilesPanel({ repositoryId, lost }: PruneLostFil
                 <Chip
                   key={f.folder}
                   size="small"
-                  variant="outlined"
+                  sx={{ ...tintChipSx(theme, 'warning'), fontFamily: 'monospace' }}
                   label={`${f.folder} (${f.count}, ${formatBytes(f.size)})`}
                 />
               ))}
             </Stack>
           )}
 
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>{t('prunePreview.lostPath')}</TableCell>
-                <TableCell align="right">{t('prunePreview.lostSize')}</TableCell>
-                <TableCell>{t('prunePreview.lostHeldBy')}</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {top.map((f) => (
-                <TableRow key={f.path}>
-                  <TableCell
-                    sx={{
-                      maxWidth: 260,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      fontFamily: 'monospace',
-                    }}
-                    title={f.path}
-                  >
-                    {f.path}
-                  </TableCell>
-                  <TableCell align="right">{f.size != null ? formatBytes(f.size) : '–'}</TableCell>
-                  <TableCell>
-                    {f.last_held_archive_id != null ? (
-                      <Link
-                        component={RouterLink}
-                        to={`/archives/${repositoryId}/${f.last_held_archive_id}`}
-                      >
-                        {f.last_held_archive_name}
-                      </Link>
-                    ) : (
-                      '–'
-                    )}
-                  </TableCell>
+          <SearchBox
+            value={filter}
+            onChange={setFilter}
+            placeholder={t('prunePreview.lostSearch')}
+            sx={{ mb: 1.5 }}
+          />
+          <Box
+            sx={{
+              maxHeight: 420,
+              overflowY: 'auto',
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1.5,
+            }}
+          >
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell>{t('prunePreview.lostPath')}</TableCell>
+                  <TableCell align="right">{t('prunePreview.lostSize')}</TableCell>
+                  <TableCell>{t('prunePreview.lostHeldBy')}</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {rows.map((f) => (
+                  <TableRow key={f.path}>
+                    <TableCell
+                      sx={{
+                        maxWidth: 260,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        fontFamily: 'monospace',
+                      }}
+                      title={f.path}
+                    >
+                      {f.path}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600, color: 'warning.main' }}>
+                      {f.size != null ? formatBytes(f.size) : '–'}
+                    </TableCell>
+                    <TableCell>
+                      {f.last_held_archive_id != null ? (
+                        <Link
+                          component={RouterLink}
+                          to={`/archives/${repositoryId}/${f.last_held_archive_id}`}
+                        >
+                          {f.last_held_archive_name}
+                        </Link>
+                      ) : (
+                        '–'
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {rows.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={3} sx={{ color: 'text.secondary' }}>
+                      {t('prunePreview.lostNoMatch')}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </Box>
           {totalCount > top.length && (
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
               {t('prunePreview.lostMore', { count: totalCount - top.length })}

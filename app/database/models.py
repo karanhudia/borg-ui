@@ -658,6 +658,27 @@ class RepositoryStorage(Base):
     rclone_remote = relationship("RcloneRemote", back_populates="storages")
 
 
+class RepositorySizeSample(Base):
+    """One row per repository size measurement, appended by every writer
+    that goes through `set_repository_size`: the stats step after a backup,
+    a prune or a delete, and a compact's own statistics. The growth chart
+    reads these back as the repository's size over time, which no
+    per-archive figure from Borg can reconstruct."""
+
+    __tablename__ = "repository_size_samples"
+
+    id = Column(Integer, primary_key=True)
+    repository_id = Column(
+        Integer,
+        ForeignKey("repositories.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    measured_at = Column(DateTime, nullable=False, index=True)
+    size_bytes = Column(BigInteger, nullable=False)
+    source = Column(String, nullable=True)
+
+
 class PruneComparison(Base):
     """Spec 4.5: one row per repository and candidate policy, replaced
     wholesale by each prune_compare run."""
@@ -680,6 +701,10 @@ class PruneComparison(Base):
     kept_count = Column(Integer, nullable=False, default=0)
     deleted_count = Column(Integer, nullable=False, default=0)
     freed_at_least = Column(BigInteger, nullable=False, default=0)
+    # logical size of the files no kept archive holds, from the history
+    # index; an upper bound on the storage this frees, not a measurement of
+    # it. None without the index.
+    lost_size = Column(BigInteger, nullable=True)
     partial_measure = Column(Boolean, nullable=False, default=False)
     operation_id = Column(
         Integer, ForeignKey("operations.id", ondelete="SET NULL"), nullable=True

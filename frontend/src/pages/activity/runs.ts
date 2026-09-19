@@ -3,6 +3,7 @@ import { isToday, isYesterday } from 'date-fns'
 import type { ActivityItem } from '../Activity'
 import type { RunChainOperation } from '../../components/activity/RunChainRow'
 import { getTypeLabel, statusLabel } from '../../components/jobs/jobLabels'
+import { formatRetention } from '../../components/prune/formatRetention'
 import { formatDurationSeconds, parseBackendDate } from '../../utils/dateUtils'
 
 export const activityKey = (item: ActivityItem) => item.activity_key ?? `${item.type}-${item.id}`
@@ -31,7 +32,15 @@ export const flattenRuns = (items: ActivityItem[]): ActivityItem[] =>
   items.flatMap((item) => [item, ...(item.followups ?? [])])
 
 export type UmbrellaKind =
-  'plan' | 'schedule' | 'manual' | 'import' | 'followup' | 'reconcile' | 'retry' | 'other'
+  | 'plan'
+  | 'schedule'
+  | 'manual'
+  | 'import'
+  | 'followup'
+  | 'reconcile'
+  | 'retry'
+  | 'preview'
+  | 'other'
 
 export interface Umbrella {
   kind: UmbrellaKind
@@ -88,6 +97,12 @@ export function runTitle(item: ActivityItem, t: TFunction): string {
       defaultValue: t(`operations.kind.${kind}`, { defaultValue: kind }),
     })
   }
+  if (kind === 'prune' && item.dry_run) {
+    const retention = formatRetention(item.prune_retention)
+    return retention
+      ? t('backupJobsTable.types.pruneDryRunPolicy', { retention })
+      : t('backupJobsTable.types.pruneDryRun')
+  }
   const legacy = getTypeLabel(item.type, t)
   if (legacy !== item.type) return legacy
   return capitalize(t(`operations.kind.${kind}`, { defaultValue: kind }))
@@ -103,6 +118,8 @@ export function chainStep(step: ActivityItem): RunChainOperation {
     kind: step.kind ?? step.type,
     type: step.type,
     hook_type: step.hook_type,
+    dry_run: step.dry_run,
+    prune_retention: step.prune_retention,
     name: step.package_name,
     status: step.status,
     trigger: step.trigger,
@@ -123,6 +140,8 @@ export function runChain(item: ActivityItem): RunChainOperation {
     id: item.id,
     kind: item.kind ?? item.type,
     type: item.type,
+    dry_run: item.dry_run,
+    prune_retention: item.prune_retention,
     status: item.status,
     started_at: item.started_at,
     completed_at: item.completed_at,

@@ -12,7 +12,7 @@ interface HeatmapLegendProps {
 }
 
 const SCALE_STEPS = [0.25, 0.425, 0.6, 0.775, 0.95]
-const SWATCH = 10
+const SWATCH = 12
 
 export default function HeatmapLegend({
   flagsAvailable,
@@ -57,7 +57,11 @@ export default function HeatmapLegend({
   ]
 
   return (
-    <Stack direction="row" spacing={3} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+    <Stack
+      direction="row"
+      useFlexGap
+      sx={{ flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}
+    >
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
         <Typography variant="caption" color="text.secondary">
           {t('archives.heatmap.legendLess')}
@@ -70,33 +74,40 @@ export default function HeatmapLegend({
           {t('archives.heatmap.legendMore')}
         </Typography>
       </Stack>
-      {rows.map(({ key, available, sample }) => (
-        <Stack key={key} direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
-          {swatch(sample)}
-          <Typography variant="caption" color="text.secondary">
-            {key === 'missed' ? t('archives.heatmap.legendMissed') : t(`archives.heatmap.${key}`)}
-            {key === 'missed' && available
-              ? cadenceKnown
-                ? missedTotal != null
-                  ? ` (${t('archives.heatmap.missedTotal', { count: missedTotal })})`
-                  : ''
-                : ` (${t('archives.heatmap.cadenceUnknown')})`
-              : ''}
-          </Typography>
-          {!available && (
-            <Chip
-              size="small"
-              label={PLAN_LABEL.pro}
-              sx={{
-                height: 18,
-                fontSize: '0.65rem',
-                backgroundColor: alpha(PLAN_COLOR.pro, 0.15),
-                color: PLAN_COLOR.pro,
-              }}
-            />
-          )}
-        </Stack>
-      ))}
+      <Stack
+        direction="row"
+        spacing={2.5}
+        useFlexGap
+        sx={{ flexWrap: 'wrap', alignItems: 'center' }}
+      >
+        {rows.map(({ key, available, sample }) => (
+          <Stack key={key} direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+            {swatch(sample)}
+            <Typography variant="caption" color="text.secondary">
+              {key === 'missed' ? t('archives.heatmap.legendMissed') : t(`archives.heatmap.${key}`)}
+              {key === 'missed' && available
+                ? cadenceKnown
+                  ? missedTotal != null
+                    ? ` (${t('archives.heatmap.missedTotal', { count: missedTotal })})`
+                    : ''
+                  : ` (${t('archives.heatmap.cadenceUnknown')})`
+                : ''}
+            </Typography>
+            {!available && (
+              <Chip
+                size="small"
+                label={PLAN_LABEL.pro}
+                sx={{
+                  height: 18,
+                  fontSize: '0.65rem',
+                  backgroundColor: alpha(PLAN_COLOR.pro, 0.15),
+                  color: PLAN_COLOR.pro,
+                }}
+              />
+            )}
+          </Stack>
+        ))}
+      </Stack>
     </Stack>
   )
 }

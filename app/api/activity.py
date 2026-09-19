@@ -113,6 +113,12 @@ class ActivityItem(BaseModel):
     progress_total: Optional[int] = None
     progress_message: Optional[str] = None
     execution_mode: Optional[str] = None
+    # A prune run with `dry_run` in its params: the comparison's dry runs
+    # share the prune kind, and the timeline tells them apart by this.
+    dry_run: bool = False
+    # A prune's keep rules, so the timeline can say which policy a
+    # dry run tried ("Dry run · 7d 4w 6m 1y").
+    prune_retention: Optional[dict] = None
     created_at: Optional[datetime] = None
     # Script executions only: the hook that ran the script and the operation
     # it ran around. With collapse_runs a hook rides under that operation.
@@ -734,6 +740,13 @@ def _operation_activity_items(
                 file_path=op.log_file_path,
             ),
         )
+        item["dry_run"] = bool((op.params or {}).get("dry_run"))
+        if op.kind == "prune":
+            item["prune_retention"] = {
+                key: value
+                for key, value in (op.params or {}).items()
+                if key.startswith("keep_")
+            }
         _apply_legacy_activity_shape(db, op, item, log_save_policy=log_save_policy)
         if (
             job_type

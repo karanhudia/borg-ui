@@ -2,8 +2,8 @@
  * Archives page: the database-backed heatmap/list view (spec 10.3).
  *
  * The page reads `archivesAPI.listStored` instead of the live
- * `BorgApiClient.listArchives()`, defaults to the heatmap, and lets the user
- * switch to the list view with the choice persisted to `localStorage`.
+ * `BorgApiClient.listArchives()`, defaults to the list, and lets the user
+ * switch to the heatmap with the choice persisted to `localStorage`.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
@@ -59,23 +59,19 @@ vi.mock('../../components/archives/ArchiveSearchField', () => ({
   default: () => <div data-testid="archive-search-field" />,
 }))
 vi.mock('../../components/archives/ArchiveSeriesHeatmap', () => ({
-  default: () => <div data-testid="archive-series-heatmap" />,
+  // the page hands the calendar its Days/Hours toggle through the header slot
+  default: ({ header }: { header?: { toolbar?: React.ReactNode } }) => (
+    <div data-testid="archive-series-heatmap">{header?.toolbar}</div>
+  ),
 }))
 vi.mock('../../components/archives/ArchiveHourlyHeatmap', () => ({
-  default: () => <div data-testid="archive-hourly-heatmap" />,
+  default: ({ header }: { header?: { toolbar?: React.ReactNode } }) => (
+    <div data-testid="archive-hourly-heatmap">{header?.toolbar}</div>
+  ),
 }))
 vi.mock('../../components/archives/ArchiveGrowthChart', () => ({
-  default: ({
-    data,
-    onSeriesChange,
-  }: {
-    data: { points: unknown[] }
-    onSeriesChange: (series: string) => void
-  }) => (
-    <div data-testid="archive-growth-chart">
-      {data.points.length}
-      <button onClick={() => onSeriesChange('old')}>Pick Series</button>
-    </div>
+  default: ({ data }: { data: { points: unknown[] } }) => (
+    <div data-testid="archive-growth-chart">{data.points.length}</div>
   ),
 }))
 
@@ -85,6 +81,7 @@ vi.mock('../../services/api', () => ({
     getHeatmap: vi.fn(),
     getGrowth: vi.fn(),
     rebuild: vi.fn(),
+    resync: vi.fn(),
     deleteArchive: vi.fn(),
     downloadFile: vi.fn(),
   },
@@ -407,18 +404,18 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
     expect(apiModule.repositoriesAPI.getStorage).toHaveBeenCalledTimes(2)
   })
 
-  it('renders the heatmap and sync chip by default', async () => {
+  it('renders the list and the freshness caption by default', async () => {
     renderWithProviders(<Archives />, { queryClient })
     const user = userEvent.setup()
 
     await user.click(screen.getByText('Select Repo'))
 
     await waitFor(() => {
-      expect(screen.getByTestId('archive-series-heatmap')).toBeInTheDocument()
+      expect(screen.getByTestId('archives-list')).toBeInTheDocument()
     })
-    expect(screen.queryByTestId('archives-list')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('archive-series-heatmap')).not.toBeInTheDocument()
     await waitFor(() => {
-      expect(screen.getByTestId('sync-state-chip')).toHaveTextContent('fresh')
+      expect(screen.getByText(/^Updated /)).toBeInTheDocument()
     })
   })
 
@@ -426,11 +423,12 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
     renderWithProviders(<Archives />, { queryClient })
     const user = userEvent.setup()
     await user.click(screen.getByText('Select Repo'))
-    await waitFor(() => expect(screen.getByTestId('archive-series-heatmap')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('archives-list')).toBeInTheDocument())
     expect(screen.queryByText(/no recent restores/i)).not.toBeInTheDocument()
   })
 
   it('switches the heatmap to hours and remembers it', async () => {
+    localStorage.setItem('archives-view-mode', 'heatmap')
     renderWithProviders(<Archives />, { queryClient })
     const user = userEvent.setup()
     await user.click(screen.getByText('Select Repo'))
@@ -451,22 +449,22 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
     )
   })
 
-  it('switches to the list view and persists the choice', async () => {
+  it('switches to the heatmap view and persists the choice', async () => {
     renderWithProviders(<Archives />, { queryClient })
     const user = userEvent.setup()
 
     await user.click(screen.getByText('Select Repo'))
     await waitFor(() => {
-      expect(screen.getByTestId('archive-series-heatmap')).toBeInTheDocument()
-    })
-
-    await user.click(screen.getByRole('button', { name: 'List' }))
-
-    await waitFor(() => {
       expect(screen.getByTestId('archives-list')).toBeInTheDocument()
     })
-    expect(screen.queryByTestId('archive-series-heatmap')).not.toBeInTheDocument()
-    expect(localStorage.getItem('archives-view-mode')).toBe('list')
+
+    await user.click(screen.getByRole('button', { name: 'Heatmap' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('archive-series-heatmap')).toBeInTheDocument()
+    })
+    expect(screen.queryByTestId('archives-list')).not.toBeInTheDocument()
+    expect(localStorage.getItem('archives-view-mode')).toBe('heatmap')
   })
 
   it('honours a persisted list view preference on mount', async () => {
@@ -491,7 +489,7 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
 
     await user.click(screen.getByText('Select Repo'))
     await waitFor(() => {
-      expect(screen.getByTestId('archive-series-heatmap')).toBeInTheDocument()
+      expect(screen.getByTestId('archives-list')).toBeInTheDocument()
     })
     expect(getGrowthMock).not.toHaveBeenCalled()
 
@@ -500,30 +498,9 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('archive-growth-chart')).toHaveTextContent('2')
     })
-    expect(getGrowthMock).toHaveBeenCalledWith(1, { series: undefined })
-    expect(screen.queryByTestId('archive-series-heatmap')).not.toBeInTheDocument()
+    expect(getGrowthMock).toHaveBeenCalledWith(1)
+    expect(screen.queryByTestId('archives-list')).not.toBeInTheDocument()
     expect(localStorage.getItem('archives-view-mode')).toBe('growth')
-  })
-
-  it('drops the series filter when the repository changes', async () => {
-    localStorage.setItem('archives-view-mode', 'growth')
-    renderWithProviders(<Archives />, { queryClient })
-    const user = userEvent.setup()
-
-    await user.click(screen.getByText('Select Repo'))
-    await waitFor(() => {
-      expect(screen.getByTestId('archive-growth-chart')).toBeInTheDocument()
-    })
-    await user.click(screen.getByText('Pick Series'))
-    await waitFor(() => {
-      expect(getGrowthMock).toHaveBeenCalledWith(1, { series: 'old' })
-    })
-
-    await user.click(screen.getByText('Select Other Repo'))
-    await waitFor(() => {
-      expect(getGrowthMock).toHaveBeenCalledWith(2, { series: undefined })
-    })
-    expect(getGrowthMock).not.toHaveBeenCalledWith(2, { series: 'old' })
   })
 
   it('honours a persisted growth view preference on mount', async () => {

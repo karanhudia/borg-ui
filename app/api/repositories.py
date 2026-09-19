@@ -4400,10 +4400,18 @@ async def get_repository_storage(
             detail={"key": "backend.errors.repo.repositoryNotFound"},
         )
     _require_repository_access(db, current_user, repository, "viewer")
+    # Local import: archive_index imports from this module.
+    from app.api.archive_index import sync_state_for
+
+    sync_state, last_synced_at = sync_state_for(db, repository)
     return {
         "repository_id": repository.id,
         "storage": storage_payload(_storage_summary_or_none(db, repository)),
         "index_pending_kinds": _index_pending_kinds_or_empty(db, repository),
+        # The archive listing's freshness, so the dialog's "Updated" caption
+        # covers the archive figures as well as the size.
+        "sync_state": sync_state,
+        "last_synced_at": last_synced_at,
     }
 
 

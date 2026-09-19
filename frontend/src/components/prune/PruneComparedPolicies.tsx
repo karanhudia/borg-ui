@@ -13,9 +13,11 @@ import {
   TableHead,
   TableRow,
   Typography,
+  useTheme,
 } from '@mui/material'
 import { formatBytes, formatDateTimeFull } from '../../utils/dateUtils'
 import { formatRetention } from './formatRetention'
+import { tintChipSx } from '../shared/tones'
 import type {
   PruneComparison,
   PruneComparisonRow,
@@ -27,6 +29,7 @@ export interface EditingRow {
   kept_count: number
   deleted_count: number
   freed_at_least: number
+  lost_size: number | null
 }
 
 interface Props {
@@ -49,6 +52,18 @@ export function PruneComparedPolicies({
   onRefresh,
 }: Props) {
   const { t } = useTranslation()
+  const theme = useTheme()
+  const freedText = (row: { lost_size: number | null; freed_at_least: number }) =>
+    t('prunePreview.atLeast', { size: formatBytes(row.freed_at_least) }) +
+    (row.lost_size != null
+      ? `, ${t('prunePreview.upTo', { size: formatBytes(row.lost_size) })}`
+      : '')
+  // the figures carry the page's tones: deletions red, space given back green
+  const deletedSx = (n: number) => (n > 0 ? { color: 'error.main', fontWeight: 600 } : undefined)
+  const freedSx = (row: { lost_size: number | null; freed_at_least: number }) =>
+    (row.lost_size ?? row.freed_at_least) > 0
+      ? { color: 'success.main', fontWeight: 600 }
+      : undefined
   const rows = comparison?.candidates ?? []
   const label = (row: PruneComparisonRow) =>
     row.key === 'current'
@@ -116,21 +131,33 @@ export function PruneComparedPolicies({
                     {formatRetention(row.retention)}
                   </TableCell>
                   <TableCell align="right">{row.kept_count}</TableCell>
-                  <TableCell align="right">{row.deleted_count}</TableCell>
-                  <TableCell align="right">{formatBytes(row.freed_at_least)}</TableCell>
+                  <TableCell align="right" sx={deletedSx(row.deleted_count)}>
+                    {row.deleted_count}
+                  </TableCell>
+                  <TableCell align="right" sx={freedSx(row)}>
+                    {freedText(row)}
+                  </TableCell>
                 </TableRow>
               ))}
               {editing && (
                 <TableRow selected>
                   <TableCell>
-                    <Chip size="small" label={t('prunePreview.compare.editing')} />
+                    <Chip
+                      size="small"
+                      label={t('prunePreview.compare.editing')}
+                      sx={tintChipSx(theme, 'primary')}
+                    />
                   </TableCell>
                   <TableCell sx={{ fontFamily: 'monospace' }}>
                     {formatRetention(editing.retention)}
                   </TableCell>
                   <TableCell align="right">{editing.kept_count}</TableCell>
-                  <TableCell align="right">{editing.deleted_count}</TableCell>
-                  <TableCell align="right">{formatBytes(editing.freed_at_least)}</TableCell>
+                  <TableCell align="right" sx={deletedSx(editing.deleted_count)}>
+                    {editing.deleted_count}
+                  </TableCell>
+                  <TableCell align="right" sx={freedSx(editing)}>
+                    {freedText(editing)}
+                  </TableCell>
                 </TableRow>
               )}
             </TableBody>

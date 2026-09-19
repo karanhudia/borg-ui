@@ -11,6 +11,7 @@ const TRIGGERS: OperationTrigger[] = [
   'followup',
   'reconcile',
   'retry',
+  'preview',
 ]
 
 interface TriggerSelectProps {

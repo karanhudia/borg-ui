@@ -206,8 +206,18 @@ the existing prune route (`keep_*`, `keep_within`). It:
    `size_before` of the removing row), the largest N (200) with the archive
    that last held each, and a per-top-level-folder rollup. `incomplete`
    and `unindexed_archive_ids` follow the changes endpoint's rule for the
-   series' archives. Cross-series survival of the same path is not checked
-   and the UI states this.
+   series' archives. A path the walk reports lost is then checked against
+   the surviving archives of every other series (a renamed plan leaves the
+   newest archives in a different series from the deleted ones): those
+   series are replayed in order for the lost paths, a path any survivor
+   holds is not lost, and an unindexed archive met on the way joins
+   `unindexed_archive_ids`. A survivor also covers a lost path when it
+   holds the same file under a new prefix: same file name, same size, and
+   one path the whole-segment tail of the other, which is what a remounted
+   source looks like in the index. Each such survivor covers one lost file,
+   not every path sharing its name, and a file of unknown size is never
+   matched this way; those go to `moved_count` / `moved_size`, out of the
+   lost totals.
 
 Response: `{archives: [{id, name, series, start, verdict: "kept"|"deleted",
 rule, deduplicated_size, stats_measured_at}], freed_at_least,
@@ -215,7 +225,13 @@ partial_measure, footprint_before, footprint_after_at_most, lost_files:
 {available, incomplete, unindexed_archive_ids, total_count, total_size,
 top: [...], by_folder: [...]}, log}`. `footprint_before` is the
 repository's stored storage size (the `storage` payload from #1030);
-`footprint_after_at_most` is `footprint_before - freed_at_least`.
+`footprint_after_at_most` is `footprint_before - freed_at_least`. The
+lost-file total is logical file data, not stored bytes: it bounds the
+freed space from above, where `freed_at_least` bounds it from below, and
+neither the comparison's `lost_size` column nor the UI subtracts it from
+the footprint. The preview shows the ceiling only while `lost_files`
+reports the index complete; with `incomplete` true the tile shows the
+lower bound alone.
 
 UI: a page, not a dialog: `/repositories/{id}/prune-preview`, reached from
 the prune dialog's dry-run button (renamed "Preview") and from the
@@ -252,7 +268,9 @@ most and says "frees the most of the compared policies".
   12 monthly, 3 yearly). A preset equal to the current policy is dropped.
 
 Each candidate runs `build_preview` steps 1, 2 and 4 (dry run, verdict
-join, freed lower bound from the stored sizes) and not steps 3 and 5: the
+join, freed lower bound from the stored sizes) and not step 3; step 5
+runs only for its total (2026-09-19, see `lost_size` below) and never
+for the per-file lists: the
 comparison runs after a backup and nothing is re-measured after a backup
 (Appendix B), so `partial_measure` is true when a candidate was never
 measured; the preview page re-measures and computes lost files when the
@@ -277,17 +295,32 @@ row).
 
 **Storage.** Table `prune_comparisons`: `repository_id`, `candidate`
 (key), `label`, `retention` (JSON of the keep fields), `kept_count`,
-`deleted_count`, `freed_at_least`, `partial_measure`, `operation_id`
-(the dry run, for its log), `archive_count_at`, `computed_at`. Replaced
-wholesale per repository on each run; deleted with the repository. One
-migration with its test.
+`deleted_count`, `freed_at_least`, `lost_size`, `partial_measure`,
+`operation_id` (the dry run, for its log), `archive_count_at`,
+`computed_at`. Replaced wholesale per repository on each run; deleted
+with the repository. One migration with its test.
+
+`lost_size` (added 2026-09-19, migration `c5d6e7f8a9b0`) is the logical
+size of the files no kept archive would hold under that policy, from the
+history index alone (step 5's total, no borg call and no repository
+lock). It is null when the plan does not include `archive_history`, when
+the repository's history capability is not `available`, while the index
+is incomplete (an unindexed archive among the deleted rows hides files
+that are really lost, one among the survivors counts files that are not,
+so the number bounds nothing), and for rows written before the column
+existed. It is file data, not stored bytes: it
+bounds the freed space from above where `freed_at_least` bounds it from
+below, and nothing subtracts it from a footprint.
 
 **API.**
 
 - `GET /repositories/{id}/prune/comparison` returns `{computed_at,
   archive_count_at, stale, candidates: [{key, label, retention,
-  kept_count, deleted_count, freed_at_least, partial_measure,
-  operation_id}]}`. `stale` is true when nothing is stored or the current
+  kept_count, deleted_count, freed_at_least, lost_size, partial_measure,
+  operation_id}]}`. `lost_size` is null on a Community plan, on a
+  repository whose history capability is not `available`, and on rows
+  stored before the column existed; the table then shows the floor
+  alone. `stale` is true when nothing is stored or the current
   archive count differs from `archive_count_at`.
 - `POST /repositories/{id}/prune/comparison/refresh` enqueues one
   `prune_compare` operation and returns its id; 409 while one is queued or
@@ -298,7 +331,11 @@ migration with its test.
   descending, top three; repositories with nothing computed or zero freed
   are left out.
 
-Community, no gate: nothing here reads the history index (4.6).
+Community, no gate for the comparison itself. The one Pro-gated field is
+`lost_size`, which reads the history index (4.6) and is null without it;
+every other figure is computed for every plan, and the UI never hides a
+row behind the gate. Tests cover both: a Pro repository with an indexed
+history stores the total, a Community one stores null.
 
 **Preview page.** A "Compared policies" section under the existing
 preview. Table columns: policy label, retention on one line (`7d 4w 6m

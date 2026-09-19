@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next'
 import type { RunChainOperation } from './RunChainRow'
 import type { FlowNode } from './runChainLanes'
 import { parseBackendDate } from '../../utils/dateUtils'
+import { formatRetention } from '../prune/formatRetention'
 
 export const SUCCEEDED = new Set(['completed', 'completed_with_warnings', 'skipped'])
 export const ACTIVE = new Set(['running', 'pending', 'queued'])
@@ -56,7 +57,19 @@ function capitalize(value: string): string {
 export function nodeLabel(node: FlowNode, t: TFunction): string {
   const { op, role } = node
   if (role === 'hook') return hookLabel(op.hook_type, t)
-  return op.label ?? capitalize(t(`operations.kind.${op.kind}`, { defaultValue: op.kind }))
+  if (op.label) return op.label
+  // the comparison's dry runs share the prune kind; only the flag tells, and
+  // the policy each one tried is what tells them apart
+  if (op.kind === 'prune' && op.dry_run) {
+    const retention = formatRetention(op.prune_retention)
+    // a step of a run (the comparison's) ran on its own; one under the
+    // preview band is the one the reader asked for
+    const key = op.trigger === 'followup' ? 'prune_dry_run_auto' : 'prune_dry_run_policy'
+    return capitalize(
+      retention ? t(`operations.kind.${key}`, { retention }) : t('operations.kind.prune_dry_run')
+    )
+  }
+  return capitalize(t(`operations.kind.${op.kind}`, { defaultValue: op.kind }))
 }
 
 export function nodeProgress(op: RunChainOperation): string | null {

@@ -1,89 +1,130 @@
 import { useTranslation } from 'react-i18next'
-import { Box, Paper, Typography } from '@mui/material'
+import { Box, Stack, Typography, alpha, useTheme } from '@mui/material'
+import { Archive, Database, Shrink, Trash2 } from 'lucide-react'
 import { formatBytes } from '../../utils/dateUtils'
+import TintedTile from '../shared/TintedTile'
 
 export interface PrunePreviewNumbersProps {
   deletedCount: number
   keptCount: number
+  /** Borg's per-archive unique sum: the floor of the storage freed. */
   freedAtLeast: number
+  /** Logical size of the files no kept archive holds, when the history index
+   * has it: the ceiling, since those bytes are stored compressed and
+   * deduplicated. Not comparable with the footprint, so it only annotates. */
+  lostSize?: number | null
   footprintBefore: number | null
   footprintAfterAtMost: number | null
 }
 
-function Tile({
-  testId,
-  label,
-  value,
-  sub,
-}: {
-  testId: string
-  label: string
-  value: string
-  sub?: string
-}) {
-  return (
-    <Paper variant="outlined" sx={{ p: 1.5 }} data-testid={testId}>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-        {label}
-      </Typography>
-      <Typography variant="h6" sx={{ fontWeight: 700 }}>
-        {value}
-      </Typography>
-      {sub && (
-        <Typography variant="caption" color="text.secondary">
-          {sub}
-        </Typography>
-      )}
-    </Paper>
-  )
-}
-
+/** One bar for the whole verdict: what stays in green, what goes in red,
+ * in proportion. The four figures sit under it in the same tones. */
 export default function PrunePreviewNumbers({
   deletedCount,
   keptCount,
   freedAtLeast,
+  lostSize,
   footprintBefore,
   footprintAfterAtMost,
 }: PrunePreviewNumbersProps) {
   const { t } = useTranslation()
+  const theme = useTheme()
+  const after = footprintAfterAtMost
+  const total = deletedCount + keptCount
+  const deletedShare = total > 0 ? (deletedCount / total) * 100 : 0
 
   return (
-    <Box
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' },
-        gap: 1.5,
-      }}
-    >
-      <Tile
-        testId="prune-preview-deleted"
-        label={t('prunePreview.deleted')}
-        value={String(deletedCount)}
-        sub={t('prunePreview.kept', { count: keptCount })}
-      />
-      <Tile
-        testId="prune-preview-freed"
-        label={t('prunePreview.freed')}
-        value={t('prunePreview.atLeast', { size: formatBytes(freedAtLeast) })}
-        sub={t('prunePreview.freedSub')}
-      />
-      <Tile
-        testId="prune-preview-before"
-        label={t('prunePreview.before')}
-        value={
-          footprintBefore != null ? formatBytes(footprintBefore) : t('prunePreview.notMeasured')
-        }
-      />
-      <Tile
-        testId="prune-preview-after"
-        label={t('prunePreview.after')}
-        value={
-          footprintAfterAtMost != null
-            ? formatBytes(footprintAfterAtMost)
-            : t('prunePreview.notMeasured')
-        }
-        sub={footprintAfterAtMost != null ? t('prunePreview.atMost') : undefined}
-      />
+    <Box>
+      <Stack
+        direction="row"
+        sx={{ justifyContent: 'space-between', alignItems: 'baseline', mb: 0.75 }}
+      >
+        <Typography variant="body2" sx={{ fontWeight: 700, color: 'success.main' }}>
+          {t('prunePreview.kept', { count: keptCount })}
+        </Typography>
+        <Typography variant="body2" sx={{ fontWeight: 700, color: 'error.main' }}>
+          {t('prunePreview.deletedCount', { count: deletedCount })}
+        </Typography>
+      </Stack>
+      <Box
+        data-testid="prune-preview-verdict-bar"
+        role="img"
+        aria-label={`${t('prunePreview.kept', { count: keptCount })}, ${t(
+          'prunePreview.deletedCount',
+          { count: deletedCount }
+        )}`}
+        sx={{
+          display: 'flex',
+          height: 12,
+          borderRadius: 6,
+          overflow: 'hidden',
+          bgcolor: alpha(theme.palette.text.primary, 0.08),
+          mb: 2,
+        }}
+      >
+        <Box
+          sx={{
+            flex: `0 0 ${100 - deletedShare}%`,
+            bgcolor: theme.palette.success.main,
+            transition: 'flex-basis 300ms ease',
+          }}
+        />
+        <Box
+          sx={{
+            flex: `0 0 ${deletedShare}%`,
+            bgcolor: theme.palette.error.main,
+            transition: 'flex-basis 300ms ease',
+          }}
+        />
+      </Box>
+
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+          gap: 1.5,
+        }}
+      >
+        <TintedTile
+          testId="prune-preview-deleted"
+          label={t('prunePreview.deleted')}
+          value={String(deletedCount)}
+          sub={t('prunePreview.kept', { count: keptCount })}
+          tone="error"
+          icon={Trash2}
+        />
+        <TintedTile
+          testId="prune-preview-freed"
+          label={t('prunePreview.freed')}
+          value={t('prunePreview.atLeast', { size: formatBytes(freedAtLeast) })}
+          sub={
+            lostSize != null
+              ? t('prunePreview.upTo', { size: formatBytes(lostSize) })
+              : t('prunePreview.freedSub')
+          }
+          tone="success"
+          icon={Shrink}
+        />
+        <TintedTile
+          testId="prune-preview-before"
+          label={t('prunePreview.before')}
+          value={
+            footprintBefore != null ? formatBytes(footprintBefore) : t('prunePreview.notMeasured')
+          }
+          tone="info"
+          icon={Database}
+          muted={footprintBefore == null}
+        />
+        <TintedTile
+          testId="prune-preview-after"
+          label={t('prunePreview.after')}
+          value={after != null ? formatBytes(after) : t('prunePreview.notMeasured')}
+          sub={after != null ? t('prunePreview.atMost') : undefined}
+          tone="info"
+          icon={Archive}
+          muted={after == null}
+        />
+      </Box>
     </Box>
   )
 }

@@ -704,6 +704,50 @@ class TestRecentActivityEndpoint:
 
 
 @pytest.mark.unit
+class TestActivityDryRunFlag:
+    def test_a_prune_dry_run_is_flagged(self, test_client, admin_headers, test_db):
+        from app.database.models import Repository
+
+        repo = Repository(
+            name="Repo", path="/tmp/repo", encryption="none", repository_type="local"
+        )
+        test_db.add(repo)
+        test_db.flush()
+        rehearsal = Operation(
+            repository_id=repo.id,
+            kind="prune",
+            category="maintenance",
+            status="completed",
+            trigger="manual",
+            priority=0,
+            run_id="run-rehearsal",
+            params={"keep_daily": 7, "dry_run": True},
+            started_at=datetime.now() - timedelta(minutes=2),
+            completed_at=datetime.now(),
+        )
+        real = Operation(
+            repository_id=repo.id,
+            kind="prune",
+            category="maintenance",
+            status="completed",
+            trigger="manual",
+            priority=0,
+            run_id="run-real",
+            params={"keep_daily": 7, "dry_run": False},
+            started_at=datetime.now() - timedelta(minutes=1),
+            completed_at=datetime.now(),
+        )
+        test_db.add_all([rehearsal, real])
+        test_db.commit()
+        response = test_client.get("/api/activity/recent", headers=admin_headers)
+        assert response.status_code == 200
+        by_id = {item["id"]: item["dry_run"] for item in response.json()}
+        assert by_id == {rehearsal.id: True, real.id: False}
+        retention = {item["id"]: item["prune_retention"] for item in response.json()}
+        assert retention[rehearsal.id] == {"keep_daily": 7}
+
+
+@pytest.mark.unit
 class TestRecentActivityPlanRunTrigger:
     def _seed(self, test_db, *, run_trigger):
         from app.database.models import BackupPlanRun, Repository

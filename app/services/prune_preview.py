@@ -118,6 +118,8 @@ async def run_prune_dry_run(
         user_id=user_id,
         run_id=run_id,
         depends_on_id=depends_on_id,
+        # the page's own dry run; a step of a run inherits the run's trigger
+        trigger="preview",
     )
     prune_kwargs = (
         {"keep_within": retention.keep_within}
@@ -363,31 +365,171 @@ def _lost_in_series(
     return lost
 
 
+FileKey = tuple[str, Optional[int]]
+
+
+def _file_key(path: str, size: Optional[int]) -> Optional[FileKey]:
+    """What the index can say two paths have in common: the file name and
+    its size. A source mounted at a new prefix backs up every file under a
+    new path, which is how a whole tree looks lost when nothing is. None
+    for a file of unknown size: a name alone is not identity, and a wrong
+    match would drop a genuinely lost file from the totals."""
+    if size is None:
+        return None
+    return (path.rsplit("/", 1)[-1], size)
+
+
+def _same_file_moved(lost: str, survivor: str) -> bool:
+    """Whether a surviving path is the same file under a new prefix: one
+    path is the tail of the other, whole segments only. Name and size alone
+    would let an unrelated README of the same length hide a real loss."""
+    return survivor.endswith("/" + lost) or lost.endswith("/" + survivor)
+
+
+def _held_by_survivors(
+    db: Session,
+    series_rows: list[list[Archive]],
+    deleted_ids: set[int],
+    lost: list[dict],
+) -> tuple[set[str], dict[FileKey, set[str]], list[int]]:
+    """What the surviving archives of the given series still hold of the
+    lost rows, by replaying each series' changes in order and reading the
+    state at every archive: the lost paths held as they are, and for the
+    rest a file of the same name and size held under another path. Also
+    returns the archives whose index is missing while a path is still in
+    question, since those could hold it too."""
+    open_paths = {f["path"] for f in lost}
+    open_keys = {k for f in lost if (k := _file_key(f["path"], f["size"])) is not None}
+    held: set[str] = set()
+    copies: dict[FileKey, set[str]] = defaultdict(set)
+    unindexed: list[int] = []
+    for archives in series_rows:
+        if not open_paths and not open_keys:
+            break
+        present: set[str] = set()
+        # key -> paths present under it, so a removal of one copy keeps another
+        present_keys: dict[FileKey, set[str]] = defaultdict(set)
+        for archive in archives:
+            if archive.history_state != "indexed":
+                unindexed.append(archive.id)
+            rows = (
+                db.query(
+                    ArchiveChange.path,
+                    ArchiveChange.change,
+                    ArchiveChange.size_before,
+                    ArchiveChange.size_after,
+                )
+                .filter(
+                    ArchiveChange.archive_id == archive.id,
+                    ArchiveChange.change != "summary",
+                )
+                .yield_per(1000)
+            )
+            for path, change, size_before, size_after in rows:
+                if path in open_paths:
+                    if change == "removed":
+                        present.discard(path)
+                    else:
+                        present.add(path)
+                if change == "modified":
+                    # the file no longer holds its old size: drop that key,
+                    # or this archive looks like it holds both versions
+                    stale = _file_key(path, size_before)
+                    if stale is not None and stale in open_keys:
+                        present_keys[stale].discard(path)
+                key = _file_key(
+                    path, size_before if change == "removed" else size_after
+                )
+                if key is not None and key in open_keys:
+                    if change == "removed":
+                        present_keys[key].discard(path)
+                    else:
+                        present_keys[key].add(path)
+            if archive.id in deleted_ids:
+                # its changes shape the state, its contents go
+                continue
+            # a survivor: what it holds is safe
+            held.update(present)
+            open_paths -= present
+            for key, paths in present_keys.items():
+                if paths and key in open_keys:
+                    # every copy this survivor holds, since one surviving
+                    # file only accounts for one lost file, not for every
+                    # path that happens to share its name and size
+                    copies[key].update(paths)
+                    open_keys.discard(key)
+            if not open_paths and not open_keys:
+                break
+    return held, copies, unindexed
+
+
 def lost_files(
     db: Session,
     repository: Repository,
     archives_by_series: dict[str, list[Archive]],
     deleted_ids: set[int],
 ) -> dict:
-    """Spec 4.4 step 5, per series, from the history index only."""
+    """Spec 4.4 step 5, from the history index only: the walk per series
+    finds the paths its survivors no longer hold, then the untouched series
+    are replayed for those paths, since a renamed plan leaves the newest
+    archives in a different series from the ones being deleted."""
     unindexed: list[int] = []
-    found: list[dict] = []
+    # path -> (last held start, row): a path two series both lose is one
+    # file, reported once, under the archive that held it last
+    newest: dict[str, tuple] = {}
+    untouched: list[list[Archive]] = []
     for series, archives in archives_by_series.items():
         if not any(a.id in deleted_ids for a in archives):
+            untouched.append(archives)
             continue
         unindexed.extend(a.id for a in archives if a.history_state != "indexed")
         for item in _lost_in_series(db, archives, deleted_ids):
             held = item["held"]
-            found.append(
-                {
-                    "path": item["path"],
-                    "size": item["size"],
-                    "series": series,
-                    "last_held_archive_id": held.id if held else None,
-                    "last_held_archive_name": held.name if held else None,
-                }
+            row = {
+                "path": item["path"],
+                "size": item["size"],
+                "series": series,
+                "last_held_archive_id": held.id if held else None,
+                "last_held_archive_name": held.name if held else None,
+            }
+            when = (held.start, held.id) if held else None
+            seen = newest.get(row["path"])
+            if seen is None or (
+                when is not None and (seen[0] is None or when > seen[0])
+            ):
+                newest[row["path"]] = (when, row)
+    found = [row for _, row in newest.values()]
+    # The same file under another path is not lost: the survivors of every
+    # series are read for the lost paths themselves and for a file of the
+    # same name and size. Those go under `moved`, out of the lost totals.
+    moved: list[dict] = []
+    if found:
+        # a touched series' own survivors were read by the walk for the path,
+        # but not for a copy of it, so they are replayed here as well
+        held, copies, unindexed_elsewhere = _held_by_survivors(
+            db, list(archives_by_series.values()), deleted_ids, found
+        )
+        unindexed.extend(unindexed_elsewhere)
+        lost = []
+        for f in found:
+            if f["path"] in held:
+                continue
+            key = _file_key(f["path"], f["size"])
+            others = sorted(
+                p
+                for p in ((copies.get(key) or set()) - {f["path"]})
+                if _same_file_moved(f["path"], p)
             )
-    found.sort(key=lambda f: (-(f["size"] or 0), f["path"]))
+            if others:
+                # spend the copy: it cannot stand in for a second lost file
+                copies[key].discard(others[0])
+                moved.append(f)
+            else:
+                lost.append(f)
+        found = lost
+    unindexed = sorted(set(unindexed))
+    by_size = lambda f: (-(f["size"] or 0), f["path"])  # noqa: E731
+    found.sort(key=by_size)
     folders: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     for f in found:
         entry = folders[_folder_of(f["path"])]
@@ -399,11 +541,13 @@ def lost_files(
     )[:TOP_FOLDERS]
     return {
         "incomplete": bool(unindexed),
-        "unindexed_archive_ids": sorted(unindexed),
+        "unindexed_archive_ids": unindexed,
         "total_count": len(found),
         "total_size": sum(f["size"] or 0 for f in found),
         "top": found[:TOP_LOST],
         "by_folder": by_folder,
+        "moved_count": len(moved),
+        "moved_size": sum(f["size"] or 0 for f in moved),
     }
 
 
@@ -412,6 +556,29 @@ from app.services.operations.followups import (
     history_capability,
     history_enabled,
 )
+
+
+def lost_size_estimate(
+    db: Session, repository: Repository, candidates: list[Archive]
+) -> Optional[int]:
+    """The logical size of the files no kept archive holds once `candidates`
+    are deleted. Compression and deduplication mean the storage this frees
+    is at most this, never exactly it, so it belongs next to
+    `freed_at_least`, not in its place. None without the history index,
+    and None while the index is incomplete: an unindexed archive on either
+    side moves the total both ways, so it is no longer a ceiling."""
+    if (
+        not history_enabled(db)
+        or history_capability(db, repository) != HISTORY_AVAILABLE
+    ):
+        return None
+    lost = lost_files(
+        db,
+        repository,
+        archives_by_series(db, repository),
+        deleted_ids={a.id for a in candidates},
+    )
+    return None if lost["incomplete"] else lost["total_size"]
 
 
 def archives_by_series(db: Session, repository: Repository) -> dict[str, list[Archive]]:

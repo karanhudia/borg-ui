@@ -59,6 +59,7 @@ def test_vocabularies_match_spec():
         "followup",
         "reconcile",
         "retry",
+        "preview",
     )
     assert vocab.TERMINAL_STATUSES == frozenset(
         {"completed", "completed_with_warnings", "failed", "cancelled", "skipped"}

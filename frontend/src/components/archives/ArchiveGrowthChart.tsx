@@ -1,19 +1,8 @@
-import { useState } from 'react'
-import {
-  Box,
-  Checkbox,
-  FormControlLabel,
-  Paper,
-  Stack,
-  Typography,
-  alpha,
-  useTheme,
-} from '@mui/material'
+import { Box, Paper, Stack, Typography, alpha, useTheme } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import {
-  Bar,
+  Area,
   CartesianGrid,
-  Cell,
   ComposedChart,
   Line,
   ResponsiveContainer,
@@ -21,32 +10,22 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import RichSelect from '../shared/RichSelect'
 import { formatBytes, formatDateCompact, formatDateShort } from '../../utils/dateUtils'
 import type { GrowthPoint, GrowthResponse } from '../../types/archives'
 
 export interface ArchiveGrowthChartProps {
   data: GrowthResponse
-  // '' means every series (the whole repository).
-  series: string
-  onSeriesChange: (series: string) => void
   onSelectArchive: (archiveId: number) => void
 }
 
-const HEIGHT = 320
-const STALE_OPACITY = 0.35
-const MEASURED_OPACITY = 0.9
-
-// Recharts hands the bar's data entry to onClick under `payload`.
-type BarClick = { payload?: GrowthPoint }
+const HEIGHT = 260
 
 interface TooltipProps {
   active?: boolean
   payload?: { payload: GrowthPoint }[]
-  showSource: boolean
 }
 
-function GrowthTooltip({ active, payload, showSource }: TooltipProps) {
+function GrowthTooltip({ active, payload }: TooltipProps) {
   const { t } = useTranslation()
   const point = payload?.[0]?.payload
   if (!active || !point) return null
@@ -68,9 +47,15 @@ function GrowthTooltip({ active, payload, showSource }: TooltipProps) {
       <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
         {formatDateCompact(point.start)}
       </Typography>
+      {row(
+        t('archives.growth.tooltipRepository'),
+        point.repository_size != null ? formatBytes(point.repository_size) : '–'
+      )}
+      {row(
+        t('archives.growth.tooltipSource'),
+        point.original_size != null ? formatBytes(point.original_size) : '–'
+      )}
       {row(t('archives.growth.tooltipAdded'), formatBytes(point.deduplicated_size))}
-      {row(t('archives.growth.tooltipFootprint'), formatBytes(point.running_total))}
-      {showSource && row(t('archives.growth.tooltipSource'), formatBytes(point.original_size))}
       {point.stale && (
         <Typography variant="caption" sx={{ color: 'warning.main', display: 'block', mt: 0.5 }}>
           {t('archives.growth.tooltipStale')}
@@ -112,30 +97,21 @@ function Swatch({
   )
 }
 
-export default function ArchiveGrowthChart({
-  data,
-  series,
-  onSeriesChange,
-  onSelectArchive,
-}: ArchiveGrowthChartProps) {
+export default function ArchiveGrowthChart({ data, onSelectArchive }: ArchiveGrowthChartProps) {
   const { t } = useTranslation()
   const theme = useTheme()
-  const [showSource, setShowSource] = useState(false)
 
-  const barColor = theme.palette.primary.main
-  // The dark info.main sits too close to the dark primary for two marks to
-  // read apart (palette check 2026-09-17); the lighter step passes.
-  const footprintColor =
-    theme.palette.mode === 'dark' ? theme.palette.info.light : theme.palette.info.main
-  const sourceColor = theme.palette.text.secondary
+  // Two lines on one axis, in the tones the repository header uses for the
+  // same figures: the repository's size after each backup in the amber of
+  // "used on disk", filled beneath so growth reads as ground gained; the
+  // source size dashed in the blue of "original size". What each archive
+  // adds on its own is in the tooltip, where it does not fight the lines.
+  const repositoryColor = theme.palette.warning.main
+  const sourceColor = theme.palette.info.main
   const gridColor = alpha(theme.palette.text.primary, 0.08)
-  const tickStyle = { fill: theme.palette.text.secondary, fontSize: 11 }
+  const tick = { fill: theme.palette.text.secondary, fontSize: 11 }
+  const dots = data.points.length <= 40
 
-  const seriesOptions = [
-    { value: '', primary: t('archives.growth.allSeries') },
-    ...data.series.map((name) => ({ value: name, primary: name })),
-  ]
-  const hasSeriesChoice = data.series.length > 1
   const enough = data.points.length >= 2
 
   return (
@@ -148,27 +124,6 @@ export default function ArchiveGrowthChart({
         <Typography variant="subtitle1" sx={{ fontWeight: 600, flexGrow: 1 }}>
           {t('archives.growth.title')}
         </Typography>
-        {hasSeriesChoice && (
-          <RichSelect
-            value={series}
-            onChange={onSeriesChange}
-            options={seriesOptions}
-            label={t('archives.growth.seriesLabel')}
-            sx={{ minWidth: 200 }}
-          />
-        )}
-        {enough && (
-          <FormControlLabel
-            control={
-              <Checkbox
-                size="small"
-                checked={showSource}
-                onChange={(event) => setShowSource(event.target.checked)}
-              />
-            }
-            label={t('archives.growth.showSource')}
-          />
-        )}
       </Stack>
 
       {!enough ? (
@@ -177,87 +132,85 @@ export default function ArchiveGrowthChart({
         </Typography>
       ) : (
         <>
-          <ResponsiveContainer
-            width="100%"
-            height={HEIGHT}
-            initialDimension={{ width: 800, height: HEIGHT }}
+          <Box
+            sx={{
+              // recharts makes the chart focusable for keyboard use; the ring
+              // is for the keyboard, not for a click on a bar
+              '& .recharts-wrapper:focus, & svg:focus': { outline: 'none' },
+              '& .recharts-wrapper:focus-visible, & svg:focus-visible': {
+                outline: `2px solid ${theme.palette.primary.main}`,
+                outlineOffset: 2,
+                borderRadius: 1,
+              },
+            }}
           >
-            <ComposedChart data={data.points} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
-              <CartesianGrid vertical={false} stroke={gridColor} />
-              <XAxis
-                dataKey="start"
-                tickFormatter={(value: string) => formatDateShort(value)}
-                minTickGap={40}
-                tick={tickStyle}
-                tickLine={false}
-                axisLine={{ stroke: gridColor }}
-              />
-              <YAxis
-                yAxisId="added"
-                tickFormatter={(value: number) => formatBytes(value)}
-                width={84}
-                tick={tickStyle}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis
-                yAxisId="total"
-                orientation="right"
-                tickFormatter={(value: number) => formatBytes(value)}
-                width={84}
-                tick={tickStyle}
-                tickLine={false}
-                axisLine={false}
-              />
-              <Tooltip
-                cursor={{ fill: alpha(theme.palette.text.primary, 0.06) }}
-                content={<GrowthTooltip showSource={showSource} />}
-              />
-              <Bar
-                yAxisId="added"
-                dataKey="deduplicated_size"
-                fill={barColor}
-                radius={[2, 2, 0, 0]}
-                maxBarSize={18}
-                isAnimationActive={false}
-                cursor="pointer"
-                onClick={(entry: BarClick) => {
-                  const id = entry.payload?.archive_id
-                  if (id != null) onSelectArchive(id)
+            <ResponsiveContainer
+              width="100%"
+              height={HEIGHT}
+              initialDimension={{ width: 800, height: HEIGHT }}
+            >
+              <ComposedChart
+                data={data.points}
+                margin={{ top: 12, right: 12, bottom: 0, left: 8 }}
+                style={{ cursor: 'pointer' }}
+                // a click anywhere in a column opens that archive
+                onClick={(state) => {
+                  const index = state?.activeTooltipIndex
+                  const point = typeof index === 'number' ? data.points[index] : undefined
+                  if (point) onSelectArchive(point.archive_id)
                 }}
               >
-                {data.points.map((point) => (
-                  <Cell
-                    key={point.archive_id}
-                    fillOpacity={point.stale ? STALE_OPACITY : MEASURED_OPACITY}
-                  />
-                ))}
-              </Bar>
-              <Line
-                yAxisId="total"
-                type="monotone"
-                dataKey="running_total"
-                stroke={footprintColor}
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
-                isAnimationActive={false}
-              />
-              {showSource && (
+                <defs>
+                  <linearGradient id="growth-repository-fill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={repositoryColor} stopOpacity={0.28} />
+                    <stop offset="100%" stopColor={repositoryColor} stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid vertical={false} stroke={gridColor} />
+                <XAxis
+                  dataKey="start"
+                  tickFormatter={(value: string) => formatDateShort(value)}
+                  minTickGap={40}
+                  tick={tick}
+                  tickLine={false}
+                  axisLine={{ stroke: gridColor }}
+                />
+                <YAxis
+                  tickFormatter={(value: number) => formatBytes(value)}
+                  width={84}
+                  tick={tick}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip
+                  cursor={{ stroke: alpha(theme.palette.text.primary, 0.2) }}
+                  content={<GrowthTooltip />}
+                />
+                <Area
+                  type="linear"
+                  dataKey="repository_size"
+                  stroke={repositoryColor}
+                  strokeWidth={2.5}
+                  fill="url(#growth-repository-fill)"
+                  dot={dots ? { r: 3.5, fill: repositoryColor, strokeWidth: 0 } : false}
+                  activeDot={{ r: 5 }}
+                  isAnimationActive={false}
+                  connectNulls
+                />
                 <Line
-                  yAxisId="total"
-                  type="monotone"
+                  type="linear"
                   dataKey="original_size"
                   stroke={sourceColor}
                   strokeWidth={1.5}
-                  strokeDasharray="4 4"
-                  dot={false}
-                  activeDot={{ r: 3 }}
+                  strokeDasharray="5 4"
+                  dot={dots ? { r: 3, fill: sourceColor, strokeWidth: 0 } : false}
+                  activeDot={{ r: 5 }}
                   isAnimationActive={false}
+                  connectNulls
                 />
-              )}
-            </ComposedChart>
-          </ResponsiveContainer>
+              </ComposedChart>
+            </ResponsiveContainer>
+          </Box>
 
           <Stack
             direction="row"
@@ -266,25 +219,13 @@ export default function ArchiveGrowthChart({
             sx={{ flexWrap: 'wrap', mt: 1.5, color: 'text.secondary', typography: 'caption' }}
           >
             <span>
-              <Swatch color={barColor} opacity={MEASURED_OPACITY} />
-              {t('archives.growth.legendAdded')}
+              <Swatch color={repositoryColor} line />
+              {t('archives.growth.legendRepository')}
             </span>
             <span>
-              <Swatch color={footprintColor} line />
-              {t('archives.growth.legendFootprint')}
+              <Swatch color={sourceColor} line dashed />
+              {t('archives.growth.legendSource')}
             </span>
-            {showSource && (
-              <span>
-                <Swatch color={sourceColor} line dashed />
-                {t('archives.growth.legendSource')}
-              </span>
-            )}
-            {data.stale_count > 0 && (
-              <span>
-                <Swatch color={barColor} opacity={STALE_OPACITY} />
-                {t('archives.growth.legendStale')}
-              </span>
-            )}
           </Stack>
 
           {(data.stale_count > 0 || data.unmeasured_count > 0) && (

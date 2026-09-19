@@ -1129,6 +1129,7 @@ export default function RepositoryCard({
                     onClick={onPrunePreview}
                     disabled={isMaintenanceRunning}
                     aria-label={t('repositoryCard.buttons.prunePreview')}
+                    sx={coloredIconBtnSx('warning')}
                   >
                     <Eye size={16} />
                   </IconButton>

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.database.models import Archive, PruneComparison, Repository
 from app.services.operations.repository_status import pending_removed_ids
 from app.services.prune_preview import (
+    lost_size_estimate,
     DryRunFailed,
     Retention,
     retention_defaults,
@@ -111,6 +112,7 @@ async def run_comparison(
                     kept_count=count,
                     deleted_count=0,
                     freed_at_least=0,
+                    lost_size=None,
                     partial_measure=False,
                     operation_id=None,
                     archive_count_at=count,
@@ -144,6 +146,7 @@ async def run_comparison(
                 kept_count=result.kept_count,
                 deleted_count=result.deleted_count,
                 freed_at_least=result.freed_at_least,
+                lost_size=lost_size_estimate(db, repository, result.candidates),
                 partial_measure=result.partial_measure,
                 operation_id=result.operation.id,
                 archive_count_at=count,
@@ -169,6 +172,7 @@ def _row_payload(row: PruneComparison) -> dict:
         "kept_count": row.kept_count,
         "deleted_count": row.deleted_count,
         "freed_at_least": row.freed_at_least,
+        "lost_size": row.lost_size,
         "partial_measure": row.partial_measure,
         "operation_id": row.operation_id,
     }

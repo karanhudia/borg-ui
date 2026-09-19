@@ -4,7 +4,6 @@ import { useLocation, useNavigate, useSearchParams, Link as RouterLink } from 'r
 import { useTranslation } from 'react-i18next'
 import {
   Box,
-  Button,
   Typography,
   useTheme,
   alpha,
@@ -12,9 +11,7 @@ import {
   ToggleButtonGroup,
   IconButton,
   Tooltip,
-  CircularProgress,
 } from '@mui/material'
-import RefreshIcon from '@mui/icons-material/Refresh'
 import { Folder, History } from 'lucide-react'
 import { repositoriesAPI, mountsAPI, restoreAPI, archivesAPI } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
@@ -38,7 +35,8 @@ import {
   suggestScale,
   type HeatmapScale,
 } from '../components/archives/heatmapScale'
-import SyncStateChip from '../components/archives/SyncStateChip'
+import StatsFreshness from '../components/StatsFreshness'
+import { statsUpdatedAt, statsUpdating } from '../utils/repositoryStats'
 import ArchiveSearchField from '../components/archives/ArchiveSearchField'
 import ArchiveSeriesHeatmap from '../components/archives/ArchiveSeriesHeatmap'
 import ArchiveGrowthChart from '../components/archives/ArchiveGrowthChart'
@@ -62,7 +60,7 @@ type ArchivesViewMode = 'heatmap' | 'list' | 'growth'
 
 function getInitialViewMode(): ArchivesViewMode {
   const stored = localStorage.getItem('archives-view-mode')
-  return stored === 'list' || stored === 'growth' ? stored : 'heatmap'
+  return stored === 'heatmap' || stored === 'growth' ? stored : 'list'
 }
 
 // Downstream actions (restore, mount, delete) key off the borg archive id,
@@ -99,6 +97,8 @@ function normalizeRepositoryId(value: number | string | null | undefined): numbe
 // One refetch per burst of index stages (an import or backup chain ends
 // stats, archive_sync, history_merge within seconds).
 const STORAGE_REFRESH_DEBOUNCE_MS = 1500
+// How often the figures are re-read while the header says "Updating".
+const STATS_POLL_MS = 3000
 
 const Archives: React.FC = () => {
   const { t } = useTranslation()
@@ -132,7 +132,6 @@ const Archives: React.FC = () => {
   const [chosenScale, setChosenScale] = useState<HeatmapScale | null>(readStoredScale)
   // '' is the whole repository; the growth endpoint restarts its running
   // total when a series is named (spec 4.3).
-  const [growthSeries, setGrowthSeries] = useState('')
 
   const queryClient = useQueryClient()
   const location = useLocation()
@@ -166,11 +165,11 @@ const Archives: React.FC = () => {
   // its refresh button. The info syncs the archive columns on the server,
   // so the figures are refetched once it has answered.
   const refreshInfoMutation = useMutation({
-    mutationFn: (repository: Repository) => new BorgApiClient(repository).getInfo(),
-    onSuccess: (_result, repository) => {
-      queryClient.invalidateQueries({ queryKey: ['repository-storage', repository.id] })
-      queryClient.invalidateQueries({ queryKey: ['repositories'] })
-      toast.success(t('repositoryStats.refreshed'))
+    mutationFn: async (repository: Repository) => {
+      await new BorgApiClient(repository).getInfo()
+      // the run that refreshes every figure; it refetches the list and the
+      // figures itself, and the caption says "Updating" until it lands
+      await resyncStoredArchives(queryClient, repository.id)
     },
     onError: (error: unknown, repository) => {
       const response = (
@@ -196,6 +195,13 @@ const Archives: React.FC = () => {
     queryFn: () => repositoriesAPI.getStorage(selectedRepositoryId!),
     enabled: !!selectedRepositoryId,
     retry: false,
+    // The event stream refetches this when index work lands; while the
+    // header says "Updating" it polls too, so a dropped stream cannot
+    // leave the caption stuck.
+    refetchInterval: (query) =>
+      statsUpdating(query.state.data?.data?.index_pending_kinds, query.state.data?.data?.sync_state)
+        ? STATS_POLL_MS
+        : false,
   })
   // Until that arrives the list's columns stand in. Only an explicit
   // `null` (the server could not compute the summary) replaces them; a
@@ -215,6 +221,8 @@ const Archives: React.FC = () => {
     queryFn: () => archivesAPI.listStored(selectedRepositoryId!),
     enabled: !!selectedRepositoryId,
     retry: false,
+    refetchInterval: (query) =>
+      query.state.data?.data?.sync_state === 'syncing' ? STATS_POLL_MS : false,
   })
 
   const { data: heatmapData } = useQuery({
@@ -225,9 +233,8 @@ const Archives: React.FC = () => {
   })
 
   const { data: growthData } = useQuery({
-    queryKey: ['repository-archives-growth', selectedRepositoryId, growthSeries],
-    queryFn: () =>
-      archivesAPI.getGrowth(selectedRepositoryId!, { series: growthSeries || undefined }),
+    queryKey: ['repository-archives-growth', selectedRepositoryId],
+    queryFn: () => archivesAPI.getGrowth(selectedRepositoryId!),
     enabled: !!selectedRepositoryId && viewMode === 'growth',
     retry: false,
   })
@@ -453,9 +460,6 @@ const Archives: React.FC = () => {
   const handleRepositoryChange = (repositoryId: number) => {
     const normalizedRepositoryId = normalizeRepositoryId(repositoryId)
     setSelectedRepositoryId(normalizedRepositoryId)
-    // A series belongs to one repository; carrying it over would filter the
-    // next repository by a name it may not have, with no select to clear it.
-    setGrowthSeries('')
     const repo = repositories.find((r: Repository) => r.id === normalizedRepositoryId)
 
     if (normalizedRepositoryId) {
@@ -599,6 +603,12 @@ const Archives: React.FC = () => {
       return parseBackendDate(b.start).getTime() - parseBackendDate(a.start).getTime()
     })
   const archivesList = storedArchives.map(archiveRowToArchive)
+  // The list carries the borg id; the detail route wants the row id. The
+  // row renders it as a link, so the page hands over the route itself.
+  const archiveHref = (archive: { id: string }) => {
+    const row = storedArchives.find((a: ArchiveRow) => a.borg_id === archive.id)
+    return row ? `/archives/${selectedRepositoryId}/${row.id}` : undefined
+  }
   const syncState = archives?.data?.sync_state ?? 'never'
   const lastSyncedAt = archives?.data?.last_synced_at ?? null
   // The list arrives newest first, so the first row of each series is that
@@ -611,18 +621,6 @@ const Archives: React.FC = () => {
     return heads
   }, [storedArchives])
   const heatmapScale: HeatmapScale = chosenScale ?? suggestScale(storedArchives)
-
-  const handleRebuildSync = () => {
-    if (!selectedRepositoryId) return
-    archivesAPI.rebuild(selectedRepositoryId, 'archives').then(() => {
-      queryClient.invalidateQueries({
-        queryKey: ['repository-archives-stored', selectedRepositoryId],
-      })
-      queryClient.invalidateQueries({
-        queryKey: ['repository-archives-heatmap', selectedRepositoryId],
-      })
-    })
-  }
 
   const handleSelectHeatmapDay = (day: HeatmapDay) => {
     if (!selectedRepositoryId || day.archive_ids.length === 0) return
@@ -691,6 +689,23 @@ const Archives: React.FC = () => {
     bgcolor: 'background.paper',
     overflow: 'hidden',
   }
+
+  const scaleToggle = (
+    <ToggleButtonGroup
+      value={heatmapScale}
+      exclusive
+      size="small"
+      aria-label={t('archives.view.scaleLabel')}
+      onChange={(_event, value: HeatmapScale | null) => {
+        if (!value) return
+        setChosenScale(value)
+        storeScale(value)
+      }}
+    >
+      <ToggleButton value="days">{t('archives.view.scaleDays')}</ToggleButton>
+      <ToggleButton value="hours">{t('archives.view.scaleHours')}</ToggleButton>
+    </ToggleButtonGroup>
+  )
 
   return (
     <Box>
@@ -764,24 +779,40 @@ const Archives: React.FC = () => {
         <Box sx={{ ...panelSx, mb: 3 }}>
           {/* Stats */}
           {selectedRepository && (
-            <Box sx={{ p: 2.5, position: 'relative' }}>
-              <Tooltip title={t('repositoryStats.refresh')}>
-                <span style={{ position: 'absolute', top: 8, right: 8 }}>
-                  <IconButton
-                    size="small"
-                    aria-label={t('repositoryStats.refresh')}
-                    disabled={refreshInfoMutation.isPending}
-                    onClick={() => refreshInfoMutation.mutate(selectedRepository)}
-                  >
-                    {refreshInfoMutation.isPending ? (
-                      <CircularProgress size={16} />
-                    ) : (
-                      <RefreshIcon fontSize="small" />
-                    )}
-                  </IconButton>
-                </span>
-              </Tooltip>
+            <Box sx={{ p: 2.5 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  mb: 1.5,
+                }}
+              >
+                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                  {t('repositoryStats.heading')}
+                </Typography>
+                <StatsFreshness
+                  updatedAt={statsUpdatedAt(repositoryStorage, lastSyncedAt)}
+                  syncState={syncState}
+                  updating={
+                    refreshInfoMutation.isPending ||
+                    statsUpdating(
+                      repositoryStorageResponse?.data?.index_pending_kinds ??
+                        selectedRepository.index_pending_kinds,
+                      syncState
+                    )
+                  }
+                  onRefresh={() => refreshInfoMutation.mutate(selectedRepository)}
+                />
+              </Box>
               <RepositoryStats
+                // the way out of the used-on-disk figure: what a prune would give back
+                freeSpaceHref={
+                  permissions.canDo(selectedRepositoryId, 'maintenance') &&
+                  getRepoCapabilities(selectedRepository).canPrune
+                    ? `/repositories/${selectedRepositoryId}/prune-preview`
+                    : undefined
+                }
                 storage={repositoryStorage}
                 // a list that could not be read is no count of zero
                 archiveCount={archivesError ? null : archivesList.length}
@@ -815,21 +846,13 @@ const Archives: React.FC = () => {
         <>
           <Box
             sx={{
-              ...panelSx,
               display: 'flex',
               flexWrap: 'wrap',
               alignItems: 'center',
               gap: 2,
-              px: 2,
-              py: 1.5,
               mb: 2,
             }}
           >
-            <SyncStateChip
-              state={syncState}
-              lastSyncedAt={lastSyncedAt}
-              onRebuild={handleRebuildSync}
-            />
             <Box sx={{ flex: '1 1 260px', minWidth: 0 }}>
               <ArchiveSearchField
                 repositoryId={selectedRepositoryId}
@@ -837,16 +860,17 @@ const Archives: React.FC = () => {
                 onRestorePath={handleRestoreSearchHit}
               />
             </Box>
-            <Button
-              component={RouterLink}
-              to={`/activity?repository_id=${selectedRepositoryId}`}
-              size="small"
-              variant="outlined"
-              startIcon={<History size={14} />}
-              sx={{ ml: { sm: 'auto' }, flexShrink: 0 }}
-            >
-              {t('archives.toolbarOperations')}
-            </Button>
+            <Tooltip title={t('archives.toolbarOperations')}>
+              <IconButton
+                component={RouterLink}
+                to={`/activity?repository_id=${selectedRepositoryId}`}
+                size="small"
+                aria-label={t('archives.toolbarOperations')}
+                sx={{ ml: { sm: 'auto' }, flexShrink: 0 }}
+              >
+                <History size={18} />
+              </IconButton>
+            </Tooltip>
             <ToggleButtonGroup
               value={viewMode}
               exclusive
@@ -857,33 +881,18 @@ const Archives: React.FC = () => {
                 localStorage.setItem('archives-view-mode', value)
               }}
             >
-              <ToggleButton value="heatmap">{t('archives.view.heatmap')}</ToggleButton>
               <ToggleButton value="list">{t('archives.view.list')}</ToggleButton>
+              <ToggleButton value="heatmap">{t('archives.view.heatmap')}</ToggleButton>
               <ToggleButton value="growth">{t('archives.view.growth')}</ToggleButton>
             </ToggleButtonGroup>
           </Box>
           {viewMode === 'heatmap' ? (
             heatmapData?.data ? (
               <Box sx={{ ...panelSx, p: 2.5 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-                  <ToggleButtonGroup
-                    value={heatmapScale}
-                    exclusive
-                    size="small"
-                    aria-label={t('archives.view.scaleLabel')}
-                    onChange={(_event, value: HeatmapScale | null) => {
-                      if (!value) return
-                      setChosenScale(value)
-                      storeScale(value)
-                    }}
-                  >
-                    <ToggleButton value="days">{t('archives.view.scaleDays')}</ToggleButton>
-                    <ToggleButton value="hours">{t('archives.view.scaleHours')}</ToggleButton>
-                  </ToggleButtonGroup>
-                </Box>
                 {heatmapScale === 'hours' ? (
                   <ArchiveHourlyHeatmap
                     archives={storedArchives}
+                    header={{ toolbar: scaleToggle }}
                     onSelectArchive={(archiveId) =>
                       navigate(`/archives/${selectedRepositoryId}/${archiveId}`)
                     }
@@ -891,6 +900,7 @@ const Archives: React.FC = () => {
                 ) : (
                   <ArchiveSeriesHeatmap
                     data={heatmapData.data}
+                    header={{ toolbar: scaleToggle }}
                     onSelectDay={handleSelectHeatmapDay}
                     onSelectArchive={(archiveId) =>
                       navigate(`/archives/${selectedRepositoryId}/${archiveId}`)
@@ -910,8 +920,6 @@ const Archives: React.FC = () => {
               <Box sx={{ ...panelSx, p: 2.5 }}>
                 <ArchiveGrowthChart
                   data={growthData.data}
-                  series={growthSeries}
-                  onSeriesChange={setGrowthSeries}
                   onSelectArchive={(archiveId) =>
                     navigate(`/archives/${selectedRepositoryId}/${archiveId}`)
                   }
@@ -924,6 +932,11 @@ const Archives: React.FC = () => {
               repositoryName={selectedRepository?.name || ''}
               loading={loadingArchives}
               onViewArchive={handleViewArchive}
+              onOpenArchive={(archive) => {
+                const href = archiveHref(archive)
+                if (href) navigate(href)
+              }}
+              archiveHref={archiveHref}
               onRestoreArchive={handleRestoreArchive}
               onMountArchive={openMountDialog}
               onDeleteArchive={(archive) => setShowDeleteConfirm(archive)}

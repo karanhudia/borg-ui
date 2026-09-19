@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
+import { type ReactElement, useCallback, useEffect, useRef, useState } from 'react'
+import useFillViewport from '../../hooks/useFillViewport'
 import { createPortal } from 'react-dom'
 import {
   Box,
@@ -209,17 +210,27 @@ export default function ArchiveFilesTab({
     />
   )
 
+  // Both panes run from their own top edge to the bottom of the window,
+  // whatever folder is open, so browsing never moves the page; the list
+  // and the details scroll inside.
+  const gridRef = useRef<HTMLDivElement>(null)
+  const paneHeight = useFillViewport(gridRef, 360)
+
   const panelSx = {
     border: 1,
     borderColor: 'divider',
     borderRadius: 2,
     bgcolor: 'background.paper',
     overflow: 'hidden',
+    height: { xs: 'auto', md: paneHeight ?? 640 },
+    display: 'flex',
+    flexDirection: 'column',
   } as const
 
   return (
     <Box onKeyDown={handleKeyDown} onMouseDownCapture={() => setCursorVisible(false)}>
       <Box
+        ref={gridRef}
         sx={{
           display: 'grid',
           gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 3fr) minmax(300px, 2fr)' },
@@ -238,7 +249,7 @@ export default function ArchiveFilesTab({
             activeIndex={cursorVisible ? activeIndex : undefined}
           />
         </Box>
-        {!isMobile && <Box sx={{ ...panelSx, position: 'sticky', top: 16 }}>{detailsPane}</Box>}
+        {!isMobile && <Box sx={{ ...panelSx, overflowY: 'auto' }}>{detailsPane}</Box>}
       </Box>
 
       {isMobile && (

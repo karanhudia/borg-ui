@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { ToggleButton, ToggleButtonGroup } from '@mui/material'
 import ArchiveHourlyHeatmap from './ArchiveHourlyHeatmap'
 import type { ArchiveRow } from '../../types/archives'
 
@@ -51,3 +52,17 @@ type Story = StoryObj<typeof meta>
 
 export const EverySixHours: Story = { args: { archives: rows } }
 export const Empty: Story = { args: { archives: [] } }
+
+export const WithHeader: Story = {
+  args: {
+    archives: rows,
+    header: {
+      toolbar: (
+        <ToggleButtonGroup value="hours" exclusive size="small">
+          <ToggleButton value="days">Days</ToggleButton>
+          <ToggleButton value="hours">Hours</ToggleButton>
+        </ToggleButtonGroup>
+      ),
+    },
+  },
+}

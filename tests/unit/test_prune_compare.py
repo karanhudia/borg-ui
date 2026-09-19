@@ -107,6 +107,32 @@ def _result(kept, deleted, freed, partial=False):
 
 
 @pytest.mark.unit
+@pytest.mark.asyncio
+async def test_lost_size_is_stored_with_the_index_and_null_without_it(
+    db, repo, monkeypatch
+):
+    """Pro with an indexed history stores step 5's total; every other plan
+    stores null and the row carries the floor alone (spec 4.5)."""
+    monkeypatch.setattr(pc, "retention_defaults", lambda db, r: {"source": "default"})
+    _archives(db, repo, 3)
+
+    monkeypatch.setattr(pc, "lost_size_estimate", lambda db, r, c: 4096)
+    fake = AsyncMock(side_effect=[_result(2, 1, 30) for _ in range(3)])
+    with patch.object(pc, "run_candidate", new=fake):
+        rows = await pc.run_comparison(db, repo, run_id="run", depends_on_id=5)
+    measured = [r for r in rows if r.retention is not None]
+    assert measured and {r.lost_size for r in measured} == {4096}
+
+    monkeypatch.setattr(pc, "lost_size_estimate", lambda db, r, c: None)
+    fake = AsyncMock(side_effect=[_result(2, 1, 30) for _ in range(3)])
+    with patch.object(pc, "run_candidate", new=fake):
+        rows = await pc.run_comparison(db, repo, run_id="run", depends_on_id=5)
+    measured = [r for r in rows if r.retention is not None]
+    assert {r.lost_size for r in measured} == {None}
+    assert {r.freed_at_least for r in measured} == {30}
+
+
+@pytest.mark.unit
 def test_candidates_start_with_current_and_drop_an_equal_preset(db, repo, monkeypatch):
     monkeypatch.setattr(
         pc,
@@ -353,6 +379,7 @@ def test_stored_reports_stale_when_the_archive_count_moved(db, repo):
     assert payload["stale"] is False
     assert payload["candidates"][0]["key"] == "standard"
     assert payload["candidates"][0]["freed_at_least"] == 20
+    assert payload["candidates"][0]["lost_size"] is None
     _archives(db, repo, 1)
     assert pc.stored(db, repo)["stale"] is True
 

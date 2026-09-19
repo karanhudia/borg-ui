@@ -17,6 +17,8 @@ function jobToRunChainOperation(job: Job): RunChainOperation {
     kind: job.kind ?? job.type ?? '',
     type: job.type,
     hook_type: job.hook_type,
+    dry_run: job.dry_run,
+    prune_retention: job.prune_retention,
     name: job.package_name,
     status: job.status,
     trigger: job.trigger,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   Box,
   ListItemText,
@@ -13,6 +13,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { addDays, format, startOfDay, subDays } from 'date-fns'
 import { formatBytes, parseBackendDate } from '../../utils/dateUtils'
+import HeatmapHeader from './HeatmapHeader'
 import { HOURLY_WEEKS } from './heatmapScale'
 import type { ArchiveRow } from '../../types/archives'
 
@@ -20,12 +21,16 @@ interface ArchiveHourlyHeatmapProps {
   archives: ArchiveRow[]
   onSelectArchive: (archiveId: number) => void
   weeks?: number
+  // The same head as the day view: absent, the grid starts at its axis.
+  header?: { toolbar?: ReactNode }
 }
 
+// Columns are days and stretch to fill the panel, like the day view; rows
+// are hours and stay short, so twenty-four of them fit on one screen.
 const MIN_CELL = 10
-const MAX_CELL = 18
-const GAP = 2
-const LABEL_WIDTH = 200
+const MAX_COL = 72
+const ROW = 16
+const GAP = 3
 const HOUR_WIDTH = 30
 const HOURS = 24
 
@@ -57,6 +62,7 @@ export default function ArchiveHourlyHeatmap({
   archives,
   onSelectArchive,
   weeks = HOURLY_WEEKS,
+  header,
 }: ArchiveHourlyHeatmapProps) {
   const { t } = useTranslation()
   const theme = useTheme()
@@ -68,24 +74,24 @@ export default function ArchiveHourlyHeatmap({
   const start = subDays(today, dayCount - 1)
   const cell = useMemo(() => {
     if (containerWidth <= 0) return MIN_CELL
-    const available = containerWidth - LABEL_WIDTH - HOUR_WIDTH - 4
-    return Math.max(MIN_CELL, Math.min(MAX_CELL, Math.floor(available / dayCount) - GAP))
+    const available = containerWidth - HOUR_WIDTH - 4
+    return Math.max(MIN_CELL, Math.min(MAX_COL, Math.floor(available / dayCount) - GAP))
   }, [containerWidth, dayCount])
+  const row = Math.min(ROW, cell)
 
-  // series -> "yyyy-MM-dd:HH" -> archives that started in that hour
-  const bands = useMemo(() => {
-    const bySeries = new Map<string, Map<string, HourCell>>()
+  // "yyyy-MM-dd:HH" -> the archives that started in that hour, every
+  // series together: one band for the repository, as the day view draws it
+  const hours = useMemo(() => {
+    const byHour = new Map<string, HourCell>()
     for (const archive of archives) {
       const at = parseBackendDate(archive.start)
       if (at < start) continue
       const key = `${format(at, 'yyyy-MM-dd')}:${at.getHours()}`
-      const series = bySeries.get(archive.series) ?? new Map<string, HourCell>()
-      const hour = series.get(key) ?? { archives: [] }
+      const hour = byHour.get(key) ?? { archives: [] }
       hour.archives.push(archive)
-      series.set(key, hour)
-      bySeries.set(archive.series, series)
+      byHour.set(key, hour)
     }
-    return [...bySeries.entries()].sort((a, b) => b[1].size - a[1].size)
+    return byHour
   }, [archives, start])
 
   useEffect(() => {
@@ -95,11 +101,19 @@ export default function ArchiveHourlyHeatmap({
 
   const days = Array.from({ length: dayCount }, (_, i) => addDays(start, i))
 
-  if (bands.length === 0) {
+  if (hours.size === 0) {
     return (
-      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-        {t('archives.hourly.none', { count: weeks })}
-      </Typography>
+      <Stack spacing={2}>
+        {header && (
+          <HeatmapHeader
+            toolbar={header.toolbar}
+            summary={t('archives.hourly.window', { count: weeks })}
+          />
+        )}
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+          {t('archives.hourly.none', { count: weeks })}
+        </Typography>
+      </Stack>
     )
   }
 
@@ -110,14 +124,21 @@ export default function ArchiveHourlyHeatmap({
 
   return (
     <Stack spacing={2}>
-      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-        {t('archives.hourly.window', { count: weeks })}
-      </Typography>
+      {header ? (
+        <HeatmapHeader
+          toolbar={header.toolbar}
+          summary={t('archives.hourly.window', { count: weeks })}
+        />
+      ) : (
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+          {t('archives.hourly.window', { count: weeks })}
+        </Typography>
+      )}
       <Box ref={scrollRef} sx={{ overflowX: 'auto', pb: 1, bgcolor: 'background.paper' }}>
         <Box sx={{ display: 'flex', alignItems: 'flex-end', mb: 0.5 }}>
           <Box
             sx={{
-              width: LABEL_WIDTH + HOUR_WIDTH,
+              width: HOUR_WIDTH,
               flexShrink: 0,
               position: 'sticky',
               left: 0,
@@ -157,142 +178,114 @@ export default function ArchiveHourlyHeatmap({
             })}
           </Box>
         </Box>
-        <Stack spacing={2}>
-          {bands.map(([series, hours]) => (
-            <Box key={series} sx={{ display: 'flex', alignItems: 'flex-start' }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+          {/* The hour axis stays put while the grid scrolls; scrolled
+              away, the cells on screen would have no time to read. */}
+          <Box
+            sx={{
+              width: HOUR_WIDTH,
+              flexShrink: 0,
+              position: 'sticky',
+              left: 0,
+              bgcolor: 'background.paper',
+              zIndex: 1,
+            }}
+          >
+            {Array.from({ length: HOURS }, (_, hour) => (
               <Typography
-                variant="body2"
-                title={series}
+                key={hour}
+                variant="caption"
                 sx={{
-                  width: LABEL_WIDTH,
-                  flexShrink: 0,
-                  pr: 2,
-                  fontWeight: 600,
-                  lineHeight: 1.3,
-                  position: 'sticky',
-                  left: 0,
-                  bgcolor: 'background.paper',
-                  zIndex: 1,
-                  display: '-webkit-box',
-                  WebkitLineClamp: 3,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                  wordBreak: 'break-word',
+                  display: 'block',
+                  height: row,
+                  lineHeight: `${row}px`,
+                  mb: `${GAP}px`,
+                  fontSize: row >= 16 ? 10 : 9,
+                  color: 'text.secondary',
+                  visibility: hour % 6 === 0 || row >= 16 ? 'visible' : 'hidden',
                 }}
               >
-                {series}
+                {`${String(hour).padStart(2, '0')}:00`}
               </Typography>
-              {/* The hour axis stays put next to the series label; scrolled
-                  away, the cells on screen would have no time to read. */}
-              <Box
-                sx={{
-                  width: HOUR_WIDTH,
-                  flexShrink: 0,
-                  position: 'sticky',
-                  left: LABEL_WIDTH,
-                  bgcolor: 'background.paper',
-                  zIndex: 1,
-                }}
-              >
-                {Array.from({ length: HOURS }, (_, hour) => (
-                  <Typography
-                    key={hour}
-                    variant="caption"
+            ))}
+          </Box>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: `repeat(${dayCount}, ${cell}px)`,
+              gridTemplateRows: `repeat(${HOURS}, ${row}px)`,
+              gridAutoFlow: 'column',
+              gap: `${GAP}px`,
+            }}
+          >
+            {days.flatMap((day) =>
+              Array.from({ length: HOURS }, (_, hour) => {
+                const iso = format(day, 'yyyy-MM-dd')
+                const entry = hours.get(`${iso}:${hour}`)
+                const count = entry?.archives.length ?? 0
+                const box = (
+                  <Box
+                    key={`${iso}:${hour}`}
+                    data-testid={`hourly-cell-repository-${iso}-${hour}`}
+                    data-count={count}
+                    role={count > 0 ? 'button' : undefined}
+                    tabIndex={count > 0 ? 0 : undefined}
+                    onClick={entry ? (event) => activate(event.currentTarget, entry) : undefined}
+                    onKeyDown={
+                      entry
+                        ? (event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              activate(event.currentTarget, entry)
+                            }
+                          }
+                        : undefined
+                    }
                     sx={{
-                      display: 'block',
-                      height: cell,
-                      lineHeight: `${cell}px`,
-                      mb: `${GAP}px`,
-                      fontSize: 9,
-                      color: 'text.secondary',
-                      visibility: hour % 6 === 0 ? 'visible' : 'hidden',
+                      width: cell,
+                      height: row,
+                      borderRadius: row >= 14 ? '4px' : '2px',
+                      cursor: count > 0 ? 'pointer' : 'default',
+                      bgcolor:
+                        count > 0
+                          ? alpha(theme.palette.primary.main, countScale(count))
+                          : alpha(theme.palette.text.primary, hour % 6 === 0 ? 0.08 : 0.05),
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: Math.max(8, row - 6),
+                      fontWeight: 700,
+                      color: theme.palette.primary.contrastText,
+                      '&:focus-visible': {
+                        outline: `2px solid ${theme.palette.primary.main}`,
+                        outlineOffset: 1,
+                      },
                     }}
                   >
-                    {`${String(hour).padStart(2, '0')}:00`}
-                  </Typography>
-                ))}
-              </Box>
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: `repeat(${dayCount}, ${cell}px)`,
-                  gridTemplateRows: `repeat(${HOURS}, ${cell}px)`,
-                  gridAutoFlow: 'column',
-                  gap: `${GAP}px`,
-                }}
-              >
-                {days.flatMap((day) =>
-                  Array.from({ length: HOURS }, (_, hour) => {
-                    const iso = format(day, 'yyyy-MM-dd')
-                    const entry = hours.get(`${iso}:${hour}`)
-                    const count = entry?.archives.length ?? 0
-                    const box = (
-                      <Box
-                        key={`${iso}:${hour}`}
-                        data-testid={`hourly-cell-${series}-${iso}-${hour}`}
-                        data-count={count}
-                        role={count > 0 ? 'button' : undefined}
-                        tabIndex={count > 0 ? 0 : undefined}
-                        onClick={
-                          entry ? (event) => activate(event.currentTarget, entry) : undefined
-                        }
-                        onKeyDown={
-                          entry
-                            ? (event) => {
-                                if (event.key === 'Enter' || event.key === ' ') {
-                                  event.preventDefault()
-                                  activate(event.currentTarget, entry)
-                                }
-                              }
-                            : undefined
-                        }
-                        sx={{
-                          width: cell,
-                          height: cell,
-                          borderRadius: cell >= 14 ? '3px' : '2px',
-                          cursor: count > 0 ? 'pointer' : 'default',
-                          bgcolor:
-                            count > 0
-                              ? alpha(theme.palette.primary.main, countScale(count))
-                              : alpha(theme.palette.text.primary, hour % 6 === 0 ? 0.08 : 0.05),
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: Math.max(8, cell - 6),
-                          fontWeight: 700,
-                          color: theme.palette.primary.contrastText,
-                          '&:focus-visible': {
-                            outline: `2px solid ${theme.palette.primary.main}`,
-                            outlineOffset: 1,
-                          },
-                        }}
-                      >
-                        {cell >= 14 && count > 1 ? count : null}
-                      </Box>
-                    )
-                    if (!entry) return box
-                    const first = entry.archives[0]
-                    return (
-                      <Tooltip
-                        key={`${iso}:${hour}`}
-                        title={t('archives.hourly.tooltip', {
-                          count,
-                          time: parseBackendDate(first.start).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          }),
-                          date: iso,
-                        })}
-                      >
-                        {box}
-                      </Tooltip>
-                    )
-                  })
-                )}
-              </Box>
-            </Box>
-          ))}
-        </Stack>
+                    {row >= 14 && count > 1 ? count : null}
+                  </Box>
+                )
+                if (!entry) return box
+                const first = entry.archives[0]
+                return (
+                  <Tooltip
+                    key={`${iso}:${hour}`}
+                    title={t('archives.hourly.tooltip', {
+                      count,
+                      time: parseBackendDate(first.start).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      }),
+                      date: iso,
+                    })}
+                  >
+                    {box}
+                  </Tooltip>
+                )
+              })
+            )}
+          </Box>
+        </Box>
       </Box>
       <Menu open={chooser != null} anchorEl={chooser?.anchor} onClose={() => setChooser(null)}>
         {chooser?.cell.archives.map((archive) => (

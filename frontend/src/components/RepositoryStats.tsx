@@ -1,8 +1,9 @@
-import type { ReactElement, ReactNode } from 'react'
+import { useState, type ReactElement, type ReactNode } from 'react'
 import {
   Box,
   Card,
   CardContent,
+  IconButton,
   Skeleton,
   Stack,
   Tooltip,
@@ -10,11 +11,10 @@ import {
   useTheme,
   alpha,
 } from '@mui/material'
-import Compress from '@mui/icons-material/Compress'
-import DataUsage from '@mui/icons-material/DataUsage'
-import Storage from '@mui/icons-material/Storage'
-import { Archive as ArchiveIcon, Database, Layers, PiggyBank } from 'lucide-react'
+import { Archive as ArchiveIcon, Database, Layers, Shrink, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { Link as RouterLink } from 'react-router-dom'
+import { Scissors } from 'lucide-react'
 import {
   repositoryStatItems,
   stateText,
@@ -25,6 +25,10 @@ import {
 
 export interface RepositoryStatsProps extends RepositoryStatsInput {
   archivesLoading?: boolean
+  /** Where a prune preview lives: the used-on-disk tile then carries a
+   * "Free space" button, since that is the figure a prune changes. Grid
+   * variant only. */
+  freeSpaceHref?: string
 }
 
 type PaletteKey = 'info' | 'warning' | 'success' | 'primary'
@@ -38,17 +42,18 @@ const TONE_PALETTE: Record<RepositoryStatTone, PaletteKey> = {
   neutral: 'primary',
 }
 
-const TILE_ICONS: Record<string, ReactNode> = {
-  archives: <ArchiveIcon size={32} />,
-  originalSize: <Layers size={32} />,
-  usedOnDisk: <Database size={32} />,
-  spaceSaved: <PiggyBank size={32} />,
+// One icon per figure, the same in the archive header tiles and the info
+// dialog cards.
+const ICONS: Record<string, LucideIcon> = {
+  archives: ArchiveIcon,
+  originalSize: Layers,
+  usedOnDisk: Database,
+  spaceSaved: Shrink,
 }
 
-const CARD_ICONS: Record<string, (color: string) => ReactNode> = {
-  originalSize: (color) => <DataUsage sx={{ color, fontSize: 24 }} />,
-  usedOnDisk: (color) => <Storage sx={{ color, fontSize: 24 }} />,
-  spaceSaved: (color) => <Compress sx={{ color, fontSize: 24 }} />,
+function StatIcon({ itemKey, size }: { itemKey: string; size: number }) {
+  const Icon = ICONS[itemKey]
+  return Icon ? <Icon size={size} /> : null
 }
 
 function withHint(item: RepositoryStatItem, node: ReactElement) {
@@ -64,22 +69,30 @@ function withHint(item: RepositoryStatItem, node: ReactElement) {
 interface StatProps {
   item: RepositoryStatItem
   text: ReactNode
+  /** An action drawn in the tile's own colour, under its icon. */
+  action?: { href: string; label: string }
 }
 
 /** The archive header's tile, as `RepositoryStatsGrid` drew it. */
-function StatTile({ item, text }: StatProps) {
+function StatTile({ item, text, action }: StatProps) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const color = theme.palette[TONE_PALETTE[item.tone]].main
   const muted = item.state !== 'value'
+  // The tile's hint is driven by hand so it steps aside while the pointer
+  // is on the action, which has a tooltip of its own.
+  const [hintOpen, setHintOpen] = useState(false)
 
-  return withHint(
-    item,
+  const tile = (
     <Box
       data-testid={`repository-stat-${item.key}`}
       data-state={item.state}
       // the hint opens on focus as well, so a keyboard reader reaches it
       tabIndex={item.hint ? 0 : undefined}
+      onMouseEnter={() => setHintOpen(true)}
+      onMouseLeave={() => setHintOpen(false)}
+      onFocus={(e) => setHintOpen(e.target === e.currentTarget)}
+      onBlur={() => setHintOpen(false)}
       sx={{
         borderRadius: 2,
         bgcolor: alpha(color, isDark ? 0.1 : 0.07),
@@ -107,28 +120,69 @@ function StatTile({ item, text }: StatProps) {
           >
             {item.label}
           </Typography>
-          <Typography
-            variant="h5"
-            sx={{
-              fontWeight: muted ? 500 : 700,
-              lineHeight: 1.2,
-              fontSize: muted ? { xs: '0.95rem', lg: '1rem' } : { xs: '1.4rem', lg: '1.5rem' },
-              color: muted ? 'text.secondary' : color,
-              fontStyle: muted ? 'italic' : 'normal',
-              wordBreak: 'break-word',
-            }}
-          >
-            {text}
-          </Typography>
+          <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
+            <Typography
+              variant="h5"
+              sx={{
+                fontWeight: muted ? 500 : 700,
+                lineHeight: 1.2,
+                fontSize: muted ? { xs: '0.95rem', lg: '1rem' } : { xs: '1.4rem', lg: '1.5rem' },
+                color: muted ? 'text.secondary' : color,
+                fontStyle: muted ? 'italic' : 'normal',
+                wordBreak: 'break-word',
+              }}
+            >
+              {text}
+            </Typography>
+            {action && (
+              // beside the figure it changes, in the tile's own colour
+              <Tooltip title={action.label}>
+                <IconButton
+                  component={RouterLink}
+                  to={action.href}
+                  size="small"
+                  aria-label={action.label}
+                  onMouseEnter={() => setHintOpen(false)}
+                  onMouseLeave={() => setHintOpen(true)}
+                  sx={{
+                    color,
+                    bgcolor: alpha(color, isDark ? 0.18 : 0.12),
+                    '&:hover': { bgcolor: alpha(color, isDark ? 0.3 : 0.22) },
+                  }}
+                >
+                  <Scissors size={16} />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Stack>
           {item.subtitle ? (
             <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
               {item.subtitle}
             </Typography>
           ) : null}
         </Box>
-        <Box sx={{ color, opacity: 0.4, mt: 0.25, flexShrink: 0 }}>{TILE_ICONS[item.key]}</Box>
+        <Box sx={{ color, opacity: 0.4, mt: 0.25, flexShrink: 0 }}>
+          <StatIcon itemKey={item.key} size={32} />
+        </Box>
       </Stack>
     </Box>
+  )
+  if (!item.hint) return tile
+  return (
+    <Tooltip
+      title={item.hint}
+      arrow
+      describeChild
+      open={hintOpen}
+      // hover and focus are driven by hand above; touch stays with MUI so a
+      // long press still reaches the hint on a phone
+      onOpen={() => setHintOpen(true)}
+      onClose={() => setHintOpen(false)}
+      disableHoverListener
+      disableFocusListener
+    >
+      {tile}
+    </Tooltip>
   )
 }
 
@@ -153,7 +207,9 @@ function StatCard({ item, text }: StatProps) {
     >
       <CardContent sx={{ py: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-          {CARD_ICONS[item.key]?.(color)}
+          <Box sx={{ color, display: 'flex' }}>
+            <StatIcon itemKey={item.key} size={24} />
+          </Box>
           <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
             {item.label}
           </Typography>
@@ -224,6 +280,7 @@ export default function RepositoryStats({
   archivesLoading = false,
   indexPendingKinds,
   variant = 'grid',
+  freeSpaceHref,
 }: RepositoryStatsProps) {
   const { t } = useTranslation()
   const items = repositoryStatItems(t, { storage, archiveCount, indexPendingKinds, variant })
@@ -246,7 +303,16 @@ export default function RepositoryStats({
         }}
       >
         {items.map((item) => (
-          <StatTile key={item.key} item={item} text={textOf(item)} />
+          <StatTile
+            key={item.key}
+            item={item}
+            text={textOf(item)}
+            action={
+              item.key === 'usedOnDisk' && freeSpaceHref
+                ? { href: freeSpaceHref, label: t('repositoryStats.freeSpace') }
+                : undefined
+            }
+          />
         ))}
       </Box>
     )

@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "storybook",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "eval \"$(fnm env)\" && fnm use 24 && npm run storybook -- --no-open --ci"],
+      "cwd": "frontend",
+      "port": 6006
+    }
+  ]
+}

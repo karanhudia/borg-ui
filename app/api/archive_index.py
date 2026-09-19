@@ -1,6 +1,7 @@
 """Database-backed archive routes (spec section 9.2): list, detail,
 heatmap, status, rebuild, and (Pro) changes, history, search."""
 
+from bisect import bisect_right
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal, Optional
 
@@ -21,6 +22,7 @@ from app.database.models import (
     SystemSettings,
     User,
     utc_now,
+    RepositorySizeSample,
 )
 from app.services.operations import anomalies
 from app.services.operations.enqueue import enqueue_chain
@@ -322,6 +324,50 @@ async def archives_heatmap(
     }
 
 
+def _attach_repository_sizes(
+    db: Session, repository_id: int, points: list[dict], boundaries: list
+) -> None:
+    """The repository's measured size after each archive: the last sample
+    taken between that archive's start and the next archive's (or now, for
+    the newest). The boundaries come from every surviving archive, not just
+    the plotted ones, so a sample taken after an archive that is unmeasured
+    or filtered out is not credited to the point before it. Archives older
+    than the first sample keep None; the history starts when the sampling
+    did."""
+    if not points:
+        return
+    samples = (
+        db.query(RepositorySizeSample.measured_at, RepositorySizeSample.size_bytes)
+        .filter(RepositorySizeSample.repository_id == repository_id)
+        .order_by(RepositorySizeSample.measured_at.asc(), RepositorySizeSample.id.asc())
+        .all()
+    )
+    if not samples:
+        return
+    # Both lists run oldest first, so one cursor walks the samples once.
+    cursor = 0
+    window: Optional[tuple] = None
+    last = None
+    for point in points:
+        lower = point["start"]
+        after = bisect_right(boundaries, lower)
+        upper = boundaries[after] if after < len(boundaries) else None
+        if window != (lower, upper):
+            # a new window; two archives started at the same instant share
+            # theirs and keep the value already read for it
+            window = (lower, upper)
+            while cursor < len(samples) and samples[cursor][0] < lower:
+                cursor += 1
+            last = None
+            while cursor < len(samples) and (
+                upper is None or samples[cursor][0] < upper
+            ):
+                last = samples[cursor][1]
+                cursor += 1
+        if last is not None:
+            point["repository_size"] = last
+
+
 @router.get("/{repo_id}/archives/growth")
 async def archives_growth(
     repo_id: int,
@@ -353,6 +399,12 @@ async def archives_growth(
     if removed:
         q = q.filter(Archive.id.notin_(removed))
     rows = q.order_by(Archive.start.asc(), Archive.id.asc()).all()
+    # Every surviving archive bounds a size sample's window, even the ones
+    # this curve does not plot (unmeasured, or another series).
+    boundary_q = db.query(Archive.start).filter(Archive.repository_id == repository.id)
+    if removed:
+        boundary_q = boundary_q.filter(Archive.id.notin_(removed))
+    boundaries = [s for (s,) in boundary_q.order_by(Archive.start.asc()).all()]
     series_q = db.query(Archive.series).filter(Archive.repository_id == repository.id)
     if removed:
         series_q = series_q.filter(Archive.id.notin_(removed))
@@ -376,9 +428,11 @@ async def archives_growth(
                 "deduplicated_size": a.deduplicated_size,
                 "original_size": a.original_size,
                 "running_total": running,
+                "repository_size": None,
                 "stale": a.stats_measured_at is None,
             }
         )
+    _attach_repository_sizes(db, repository.id, points, boundaries)
     return {
         "points": points,
         "series": all_series,

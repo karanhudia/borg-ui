@@ -98,6 +98,9 @@ export interface GrowthPoint {
   deduplicated_size: number
   original_size: number | null
   running_total: number
+  // The repository's measured size after this archive (the last sample
+  // between its start and the next archive's); null before sampling began.
+  repository_size: number | null
   // Sizes present but the measurement date was cleared by a listing that saw
   // removed archives (spec 4.1). Drawn lighter.
   stale: boolean
@@ -252,6 +255,10 @@ export interface PruneLostFiles {
   total_size?: number
   top?: PruneLostFile[]
   by_folder?: { folder: string; count: number; size: number }[]
+  /** Paths that go, whose file (same name and size) a kept archive holds
+   * under another path; not in the lost totals. */
+  moved_count?: number
+  moved_size?: number
 }
 
 export interface PrunePreviewResponse {
@@ -284,6 +291,10 @@ export interface PruneComparisonRow {
   kept_count: number
   deleted_count: number
   freed_at_least: number
+  /** Size of the files no kept archive holds; null without the history index. */
+  /** Logical size of the files no kept archive holds: an upper bound on
+   * the storage freed, not a measurement of it. */
+  lost_size: number | null
   partial_measure: boolean
   operation_id: number | null
 }

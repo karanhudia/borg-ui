@@ -62,6 +62,7 @@ export function umbrellaColor(theme: Theme, kind: UmbrellaKind): string {
     followup: theme.palette.text.secondary,
     reconcile: theme.palette.primary.main,
     retry: theme.palette.warning.main,
+    preview: theme.palette.text.secondary,
     other: theme.palette.text.secondary,
   }[kind]
 }

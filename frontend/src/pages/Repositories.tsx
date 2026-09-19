@@ -9,6 +9,7 @@ import { backupPlansAPI, repositoriesAPI, RepositoryData } from '../services/api
 import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { resyncStoredArchives } from '../utils/archiveResync'
+import { statsUpdating } from '../utils/repositoryStats'
 import { useAuth } from '../hooks/useAuth'
 import { useLockBreakPermissions } from '../hooks/useLockBreakPermissions'
 import { useOperationEvents } from '../hooks/useOperationEvents'
@@ -332,10 +333,11 @@ export default function Repositories() {
   // its refresh button. The info syncs the archive columns on the server,
   // so the list and the dialog's figures are refetched once it answers.
   const refreshInfoMutation = useMutation({
-    mutationFn: (repository: Repository) => new BorgApiClient(repository).getInfo(),
-    onSuccess: (_result, repository) => {
-      queryClient.invalidateQueries({ queryKey: ['repositories'] })
-      queryClient.invalidateQueries({ queryKey: ['repository-storage', repository.id] })
+    mutationFn: async (repository: Repository) => {
+      await new BorgApiClient(repository).getInfo()
+      // the run that refreshes every figure; it refetches the list and the
+      // dialog's figures itself
+      await resyncStoredArchives(queryClient, repository.id)
     },
     onError: (error: unknown, repository) => {
       if ((error as { response?: { status?: number } })?.response?.status === 423) {
@@ -361,6 +363,13 @@ export default function Repositories() {
     queryFn: () => repositoriesAPI.getStorage(viewingInfoRepository!.id),
     enabled: !!viewingInfoRepository,
     retry: false,
+    // While the dialog says "Updating", poll: the operation events refresh
+    // the list, not this query, and a dropped stream must not leave the
+    // caption stuck.
+    refetchInterval: (query) =>
+      statsUpdating(query.state.data?.data?.index_pending_kinds, query.state.data?.data?.sync_state)
+        ? 3000
+        : false,
   })
   // `viewingInfoRepository` is the list row as it was when the dialog
   // opened; the dialog reads the row as the list has it now, so the count
@@ -1172,6 +1181,8 @@ export default function Repositories() {
         repository={viewingRepository}
         storage={viewingRepositoryStorage}
         indexPendingKinds={viewingRepositoryIndexPending}
+        lastSyncedAt={viewingRepositoryStorageResponse?.data?.last_synced_at ?? null}
+        syncState={viewingRepositoryStorageResponse?.data?.sync_state}
         onRefresh={() => viewingRepository && refreshInfoMutation.mutate(viewingRepository)}
         isRefreshing={refreshInfoMutation.isPending}
         refreshFailed={refreshInfoMutation.isError}

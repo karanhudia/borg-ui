@@ -34,7 +34,7 @@ export type OperationStatus =
   | 'skipped'
 
 export type OperationTrigger =
-  'manual' | 'schedule' | 'plan' | 'import' | 'followup' | 'reconcile' | 'retry'
+  'manual' | 'schedule' | 'plan' | 'import' | 'followup' | 'reconcile' | 'retry' | 'preview'
 
 export interface OperationItem {
   activity_key: string | null

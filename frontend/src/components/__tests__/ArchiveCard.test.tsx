@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import ArchiveCard from '../ArchiveCard'
@@ -38,6 +39,35 @@ describe('ArchiveCard', () => {
     expect(screen.getByRole('button', { name: /mount/i })).toBeInTheDocument()
     // Delete button is an IconButton with aria-label
     expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument()
+  })
+
+  it('opens the archive on a row click, but not from an action button', () => {
+    const onOpen = vi.fn()
+    render(<ArchiveCard archive={mockArchive} {...mockHandlers} onOpen={onOpen} />)
+
+    fireEvent.click(screen.getByText('backup-2024-01-15'))
+    expect(onOpen).toHaveBeenCalledWith(mockArchive)
+
+    fireEvent.click(screen.getByRole('button', { name: /restore/i }))
+    expect(mockHandlers.onRestore).toHaveBeenCalledTimes(1)
+    expect(onOpen).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders the name as a link when the route is known', () => {
+    render(
+      <MemoryRouter>
+        <ArchiveCard
+          archive={mockArchive}
+          {...mockHandlers}
+          onOpen={vi.fn()}
+          openHref="/archives/3/7"
+        />
+      </MemoryRouter>
+    )
+    expect(screen.getByRole('link', { name: 'backup-2024-01-15' })).toHaveAttribute(
+      'href',
+      '/archives/3/7'
+    )
   })
 
   it('calls onView when View button is clicked', () => {

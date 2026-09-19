@@ -1,3 +1,4 @@
+import type { StoredPruneRetention } from './archives'
 /**
  * Type definitions for jobs and repositories used across the application
  *
@@ -53,6 +54,9 @@ export interface Job {
   trigger?: OperationTrigger | null
   depends_on_id?: number | null
   hook_type?: string | null
+  // A prune dry run (the preview page, or the retention comparison).
+  dry_run?: boolean
+  prune_retention?: StoredPruneRetention | null
   progress_current?: number | null
   progress_total?: number | null
   followups?: Job[]

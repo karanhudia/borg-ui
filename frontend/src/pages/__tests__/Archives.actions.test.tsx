@@ -17,7 +17,9 @@ vi.mock('../../components/RepositorySelectorCard', () => ({
   ),
 }))
 
-vi.mock('../../components/RepositoryStats', () => ({ default: () => <div>Stats</div> }))
+vi.mock('../../components/RepositoryStats', () => ({
+  default: ({ freeSpaceHref }: { freeSpaceHref?: string }) => <div>Stats {freeSpaceHref}</div>,
+}))
 vi.mock('../../components/LastRestoreSection', () => ({ default: () => null }))
 vi.mock('../../components/LockErrorDialog', () => ({ default: () => null }))
 
@@ -370,6 +372,17 @@ describe('Archives page actions', () => {
       expect(listStoredMock).toHaveBeenCalledTimes(1)
     })
     expect(borgGetInfoMock).not.toHaveBeenCalled()
+  })
+
+  it('offers the prune preview from the storage figures', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
+    const user = userEvent.setup()
+    renderWithProviders(<Archives />, { queryClient })
+    await user.click(await screen.findByText('Select Repo'))
+    // the grid is stubbed here; the tile itself is covered by its own test
+    expect(await screen.findByText('Stats /repositories/1/prune-preview')).toBeInTheDocument()
   })
 
   it('shows translated backend errors when archive deletion fails', async () => {

@@ -67,6 +67,19 @@ describe('umbrella', () => {
 })
 
 describe('runTitle', () => {
+  it('names a prune dry run by the policy it tried', () => {
+    const run = item({ type: 'prune', kind: 'prune', dry_run: true })
+    expect(runTitle(run, t)).toBe('Prune (dry run)')
+    expect(runChain(run).dry_run).toBe(true)
+    const tried = item({
+      type: 'prune',
+      kind: 'prune',
+      dry_run: true,
+      prune_retention: { keep_daily: 7, keep_weekly: 4, keep_within: null } as never,
+    })
+    expect(runTitle(tried, t)).toBe('Prune dry run · 7d 4w')
+  })
+
   it('uses the job type labels the table used', () => {
     expect(runTitle(item({ type: 'restore_check', kind: 'restore_check' }), t)).toBe(
       'Restore Check'
