@@ -236,6 +236,8 @@ export default function PrunePreview() {
   const showCandidate = (row: PruneComparisonRow) => {
     const form = toForm(row.retention)
     if (!form) return
+    // a choice made here outranks the row the page was waiting for
+    setWantedKey(null)
     // every selection, cache hit included, retires whatever is in flight
     const seq = nextSeq()
     setRetention(form)
@@ -262,6 +264,25 @@ export default function PrunePreview() {
       toast.error(t('repositories.toasts.pruneFailed'))
     },
   })
+
+  // Switching repository empties the page at once: the route keeps this
+  // component, and the previous repository's numbers must not sit under the
+  // new one's name while its own are still on their way. Declared before the
+  // first-preview effect so it runs first on the render that changed the
+  // route: the other way round, the new repository's preview starts and is
+  // then thrown away by this reset, with nothing left to start it again.
+  const shownRepoRef = useRef(repositoryId)
+  useEffect(() => {
+    if (shownRepoRef.current === repositoryId) return
+    shownRepoRef.current = repositoryId
+    nextSeq()
+    previewCache.current.clear()
+    setPreview(null)
+    setPreviewedRetention(null)
+    setError(null)
+    setRefreshedAt(null)
+    setWantedKey(null)
+  }, [repositoryId])
 
   // First preview, once per repository, with the retention the form is
   // prefilled with: the dialog's form when it sent us here, else the
@@ -325,22 +346,6 @@ export default function PrunePreview() {
     refreshMutation.mutate({ id: repositoryId, auto: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comparison, comparisonQuery.isFetching, pendingOpId, repositoryId])
-
-  // Switching repository empties the page at once: the route keeps this
-  // component, and the previous repository's numbers must not sit under the
-  // new one's name while its own are still on their way.
-  const shownRepoRef = useRef(repositoryId)
-  useEffect(() => {
-    if (shownRepoRef.current === repositoryId) return
-    shownRepoRef.current = repositoryId
-    nextSeq()
-    previewCache.current.clear()
-    setPreview(null)
-    setPreviewedRetention(null)
-    setError(null)
-    setRefreshedAt(null)
-    setWantedKey(null)
-  }, [repositoryId])
 
   // The candidate the page is waiting on a running comparison for. Nothing
   // is on screen until it lands, and if the comparison never produces it

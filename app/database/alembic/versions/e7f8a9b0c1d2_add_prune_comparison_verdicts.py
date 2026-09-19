@@ -1,4 +1,4 @@
-"""add prune_comparisons.verdicts and archive_max_id
+"""add prune_comparisons.verdicts and the archive-set fingerprint
 
 Revision ID: e7f8a9b0c1d2
 Revises: d6e7f8a9b0c1
@@ -18,9 +18,11 @@ def upgrade() -> None:
     with op.batch_alter_table("prune_comparisons") as batch:
         batch.add_column(sa.Column("verdicts", sa.JSON(), nullable=True))
         batch.add_column(sa.Column("archive_max_id", sa.Integer(), nullable=True))
+        batch.add_column(sa.Column("archive_seen_at", sa.DateTime(), nullable=True))
 
 
 def downgrade() -> None:
     with op.batch_alter_table("prune_comparisons") as batch:
+        batch.drop_column("archive_seen_at")
         batch.drop_column("archive_max_id")
         batch.drop_column("verdicts")

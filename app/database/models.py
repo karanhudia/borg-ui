@@ -715,10 +715,13 @@ class PruneComparison(Base):
         Integer, ForeignKey("operations.id", ondelete="SET NULL"), nullable=True
     )
     archive_count_at = Column(Integer, nullable=False, default=0)
-    # Highest archive id at the time. With the count it tells an archive set
-    # apart from one of the same size: ids only ever grow, so an archive
-    # removed and another taken since moves this even when the count does not.
+    # The archive set this was computed for, as a fingerprint: how many, the
+    # highest id, and the newest first_seen_at. SQLite hands a deleted row's
+    # id to the next insert, so the id alone can repeat; a row is only ever
+    # first seen when a listing inserts it, so that timestamp moves on every
+    # replacement the count and the id would hide.
     archive_max_id = Column(Integer, nullable=True)
+    archive_seen_at = Column(DateTime, nullable=True)
     computed_at = Column(DateTime, nullable=False, default=utc_now)
 
 
