@@ -173,22 +173,27 @@ export default function PrunePreview() {
   // Which selection the page is showing. Clicking through the table starts
   // requests that finish out of order, and a slow dry run for a row left
   // behind must not land on top of the row now on screen.
+  // The route keeps this component across repositories, so a request also
+  // carries the repository it was made for: an answer for the one just left
+  // must not land under the one now on screen.
   const selectionSeq = useRef(0)
-  const current = (seq: number) => seq === selectionSeq.current
+  const current = (seq: number, repo: number) =>
+    seq === selectionSeq.current && repo === repositoryId
+  const nextSeq = () => ++selectionSeq.current
 
   const previewMutation = useMutation({
-    mutationFn: ({ form }: { form: PruneRetention; seq: number }) =>
-      repositoriesAPI.prunePreview(repositoryId, form, previewRunId.current),
-    onSuccess: (res, { form, seq }) => {
+    mutationFn: ({ form, repo }: { form: PruneRetention; seq: number; repo: number }) =>
+      repositoriesAPI.prunePreview(repo, form, previewRunId.current),
+    onSuccess: (res, { form, seq, repo }) => {
+      if (!current(seq, repo)) return
       previewCache.current.set(cacheKey(form), { preview: res.data, at: new Date() })
-      if (!current(seq)) return
       setPreview(res.data)
       setPreviewedRetention(form)
       setError(null)
       setRefreshedAt(new Date())
     },
-    onError: (err: unknown, { seq }) => {
-      if (!current(seq)) return
+    onError: (err: unknown, { seq, repo }) => {
+      if (!current(seq, repo)) return
       const e = err as {
         response?: {
           status: number
@@ -206,12 +211,12 @@ export default function PrunePreview() {
   // the server joins them to the index again, no dry run, nothing new in
   // the timeline. Only a retention nobody compared still costs a dry run.
   const storedMutation = useMutation({
-    mutationFn: ({ row }: { row: PruneComparisonRow; seq: number }) =>
-      repositoriesAPI.pruneCandidatePreview(repositoryId, row.key),
-    onSuccess: (res, { row, seq }) => {
+    mutationFn: ({ row, repo }: { row: PruneComparisonRow; seq: number; repo: number }) =>
+      repositoriesAPI.pruneCandidatePreview(repo, row.key),
+    onSuccess: (res, { row, seq, repo }) => {
+      if (!current(seq, repo)) return
       const form = toForm(row.retention)
       if (form) previewCache.current.set(cacheKey(form), { preview: res.data, at: new Date() })
-      if (!current(seq)) return
       setPreview(res.data)
       if (form) setPreviewedRetention(form)
       setError(null)
@@ -219,10 +224,10 @@ export default function PrunePreview() {
     },
     // A stored row that has gone (a comparison replaced underneath) falls
     // back to the dry run rather than leaving the reader with nothing.
-    onError: (_err, { row, seq }) => {
-      if (!current(seq)) return
+    onError: (_err, { row, seq, repo }) => {
+      if (!current(seq, repo)) return
       const form = toForm(row.retention)
-      if (form) previewMutation.mutate({ form, seq })
+      if (form) previewMutation.mutate({ form, seq, repo })
     },
   })
 
@@ -232,7 +237,7 @@ export default function PrunePreview() {
     const form = toForm(row.retention)
     if (!form) return
     // every selection, cache hit included, retires whatever is in flight
-    const seq = ++selectionSeq.current
+    const seq = nextSeq()
     setRetention(form)
     const cached = previewCache.current.get(cacheKey(form))
     if (cached) {
@@ -242,8 +247,8 @@ export default function PrunePreview() {
       setRefreshedAt(cached.at)
       return
     }
-    if (row.readable) storedMutation.mutate({ row, seq })
-    else previewMutation.mutate({ form, seq })
+    if (row.readable) storedMutation.mutate({ row, seq, repo: repositoryId })
+    else previewMutation.mutate({ form, seq, repo: repositoryId })
   }
 
   const runPruneMutation = useMutation({
@@ -282,8 +287,8 @@ export default function PrunePreview() {
     // it has not run it yet but is about to, wait for it rather than racing
     // it with a dry run of the same policy.
     const match = comparison?.candidates.find((c) => sameRetention(c.retention, initial))
-    const seq = ++selectionSeq.current
-    if (match?.readable) storedMutation.mutate({ row: match, seq })
+    const seq = nextSeq()
+    if (match?.readable) storedMutation.mutate({ row: match, seq, repo: repositoryId })
     else if (match) {
       // A compared policy that cannot be read back yet is one the comparison
       // is about to run: wait for it. Whether the payload in hand calls
@@ -291,7 +296,7 @@ export default function PrunePreview() {
       // an earlier visit.
       setWantedKey(match.key)
       comparisonQuery.refetch()
-    } else previewMutation.mutate({ form: initial, seq })
+    } else previewMutation.mutate({ form: initial, seq, repo: repositoryId })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     defaultRetention,
@@ -321,6 +326,23 @@ export default function PrunePreview() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comparison, comparisonQuery.isFetching, pendingOpId, repositoryId])
 
+  // Switching repository empties the page at once: the route keeps this
+  // component, and the previous repository's numbers must not sit under the
+  // new one's name while its own are still on their way.
+  const shownRepoRef = useRef(repositoryId)
+  useEffect(() => {
+    if (shownRepoRef.current === repositoryId) return
+    shownRepoRef.current = repositoryId
+    nextSeq()
+    previewCache.current.clear()
+    setPreview(null)
+    setPreviewedRetention(null)
+    setError(null)
+    setRefreshedAt(null)
+    setWantedKey(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repositoryId])
+
   // The candidate the page is waiting on a running comparison for. Nothing
   // is on screen until it lands, and if the comparison never produces it
   // (too few archives, maintenance pending) the dry run takes over.
@@ -344,7 +366,7 @@ export default function PrunePreview() {
       (!comparison.stale || refreshMutation.isError)
     ) {
       setWantedKey(null)
-      previewMutation.mutate({ form: retention, seq: ++selectionSeq.current })
+      previewMutation.mutate({ form: retention, seq: nextSeq(), repo: repositoryId })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -369,7 +391,7 @@ export default function PrunePreview() {
     )
     if (!row) return
     previewCache.current.delete(cacheKey(previewedRetention))
-    storedMutation.mutate({ row, seq: ++selectionSeq.current })
+    storedMutation.mutate({ row, seq: nextSeq(), repo: repositoryId })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comparison, pendingOpId])
 
@@ -498,7 +520,7 @@ export default function PrunePreview() {
               variant="contained"
               disabled={!ready || previewMutation.isPending}
               onClick={() =>
-                previewMutation.mutate({ form: retention, seq: ++selectionSeq.current })
+                previewMutation.mutate({ form: retention, seq: nextSeq(), repo: repositoryId })
               }
             >
               {t('prunePreview.refresh')}

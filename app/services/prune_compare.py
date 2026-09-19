@@ -5,6 +5,7 @@ compared policies, would free at least. Nothing here picks a policy for the user
 import logging
 from typing import Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database.models import Archive, PruneComparison, Repository
@@ -88,11 +89,13 @@ def archive_set(db: Session, repository: Repository) -> tuple[int, Optional[int]
     grow, so an archive removed and another taken since moves the maximum even
     when the count lands back where it was."""
     removed = pending_removed_ids(db, repository.id)
-    q = db.query(Archive.id).filter(Archive.repository_id == repository.id)
+    q = db.query(func.count(Archive.id), func.max(Archive.id)).filter(
+        Archive.repository_id == repository.id
+    )
     if removed:
         q = q.filter(Archive.id.notin_(removed))
-    ids = [row[0] for row in q.all()]
-    return len(ids), max(ids) if ids else None
+    count, max_id = q.one()
+    return count or 0, max_id
 
 
 async def run_comparison(

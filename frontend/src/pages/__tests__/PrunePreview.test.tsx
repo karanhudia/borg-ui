@@ -371,6 +371,33 @@ describe('PrunePreview page', () => {
     expect(screen.getByTestId('prune-preview-deleted').textContent).not.toContain('7')
   })
 
+  it('drops an answer meant for the repository just left', async () => {
+    vi.mocked(repositoriesAPI.pruneComparison).mockResolvedValue({
+      data: storedComparison,
+    } as never)
+    let landFirst = (_v: unknown) => {}
+    vi.mocked(repositoriesAPI.prunePreview).mockImplementation(
+      (() =>
+        new Promise((resolve) => {
+          landFirst = resolve
+        })) as never
+    )
+    const { rerender } = renderPage()
+    await waitFor(() => expect(repositoriesAPI.prunePreview).toHaveBeenCalled())
+    // The reader moves on, and the new repository's defaults never arrive, so
+    // nothing it does retires the request left behind: only the repository it
+    // was made for can.
+    mockParams = { repositoryId: '8' }
+    vi.mocked(repositoriesAPI.pruneRetentionDefaults).mockReturnValue(
+      new Promise(() => {}) as never
+    )
+    rerender(<PrunePreview />)
+    await waitFor(() => expect(screen.queryByTestId('prune-preview-deleted')).toBeNull())
+    landFirst({ data: { ...preview, deleted_count: 2 } })
+    await waitFor(() => expect(repositoriesAPI.pruneComparison).toHaveBeenCalledWith(8))
+    expect(screen.queryByTestId('prune-preview-deleted')).toBeNull()
+  })
+
   it('falls back to a dry run for a policy the comparison never stored', async () => {
     vi.mocked(repositoriesAPI.pruneComparison).mockResolvedValue({
       data: {
