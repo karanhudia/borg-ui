@@ -603,6 +603,12 @@ const Archives: React.FC = () => {
       return parseBackendDate(b.start).getTime() - parseBackendDate(a.start).getTime()
     })
   const archivesList = storedArchives.map(archiveRowToArchive)
+  // The list carries the borg id; the detail route wants the row id. The
+  // row renders it as a link, so the page hands over the route itself.
+  const archiveHref = (archive: { id: string }) => {
+    const row = storedArchives.find((a: ArchiveRow) => a.borg_id === archive.id)
+    return row ? `/archives/${selectedRepositoryId}/${row.id}` : undefined
+  }
   const syncState = archives?.data?.sync_state ?? 'never'
   const lastSyncedAt = archives?.data?.last_synced_at ?? null
   // The list arrives newest first, so the first row of each series is that
@@ -927,10 +933,10 @@ const Archives: React.FC = () => {
               loading={loadingArchives}
               onViewArchive={handleViewArchive}
               onOpenArchive={(archive) => {
-                // The list carries the borg id; the detail route wants the row id.
-                const row = storedArchives.find((a) => a.borg_id === archive.id)
-                if (row) navigate(`/archives/${selectedRepositoryId}/${row.id}`)
+                const href = archiveHref(archive)
+                if (href) navigate(href)
               }}
+              archiveHref={archiveHref}
               onRestoreArchive={handleRestoreArchive}
               onMountArchive={openMountDialog}
               onDeleteArchive={(archive) => setShowDeleteConfirm(archive)}

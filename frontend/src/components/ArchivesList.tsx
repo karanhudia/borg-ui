@@ -39,6 +39,8 @@ interface ArchivesListProps {
   loading: boolean
   onViewArchive: (archive: Archive) => void
   onOpenArchive?: (archive: Archive) => void
+  /** The detail route for an archive, when the page knows it. */
+  archiveHref?: (archive: Archive) => string | undefined
   onRestoreArchive: (archive: Archive) => void
   onMountArchive: (archive: Archive) => void
   onDeleteArchive: (archive: Archive) => void
@@ -53,6 +55,7 @@ export default function ArchivesList({
   loading,
   onViewArchive,
   onOpenArchive,
+  archiveHref,
   onRestoreArchive,
   onMountArchive,
   onDeleteArchive,
@@ -643,6 +646,7 @@ export default function ArchivesList({
                     archive={archive}
                     onView={onViewArchive}
                     onOpen={onOpenArchive}
+                    openHref={archiveHref?.(archive)}
                     onRestore={onRestoreArchive}
                     onMount={onMountArchive}
                     onDelete={onDeleteArchive}
@@ -674,6 +678,7 @@ export default function ArchivesList({
                   archive={archive}
                   onView={onViewArchive}
                   onOpen={onOpenArchive}
+                  openHref={archiveHref?.(archive)}
                   onRestore={onRestoreArchive}
                   onMount={onMountArchive}
                   onDelete={onDeleteArchive}

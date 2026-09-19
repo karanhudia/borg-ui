@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import ArchiveCard from '../ArchiveCard'
@@ -64,6 +65,23 @@ describe('ArchiveCard', () => {
 
     fireEvent.keyDown(screen.getByRole('button', { name: /restore/i }), { key: 'Enter' })
     expect(onOpen).toHaveBeenCalledTimes(2)
+  })
+
+  it('renders the name as a link when the route is known', () => {
+    render(
+      <MemoryRouter>
+        <ArchiveCard
+          archive={mockArchive}
+          {...mockHandlers}
+          onOpen={vi.fn()}
+          openHref="/archives/3/7"
+        />
+      </MemoryRouter>
+    )
+    expect(screen.getByRole('link', { name: 'backup-2024-01-15' })).toHaveAttribute(
+      'href',
+      '/archives/3/7'
+    )
   })
 
   it('calls onView when View button is clicked', () => {
