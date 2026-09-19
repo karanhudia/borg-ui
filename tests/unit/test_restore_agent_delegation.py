@@ -202,6 +202,15 @@ class _FakeQuery:
     def first(self):
         return self._result
 
+    def update(self, values, synchronize_session=False):
+        # the conditional transition of the timeout handler, applied to the
+        # one fake row (its status is the expected one in these tests)
+        if self._result is None:
+            return 0
+        for column, value in values.items():
+            setattr(self._result, column.key, value)
+        return 1
+
 
 class _FakeDB:
     def __init__(self, restore_job, agent_job):
@@ -243,6 +252,7 @@ async def test_await_agent_restore_fails_when_never_claimed(monkeypatch):
         status="queued",
         progress_percent=None,
         current_file=None,
+        updated_at=None,
         nfiles=None,
         original_size=None,
         id=5,

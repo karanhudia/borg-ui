@@ -25,6 +25,14 @@ from agent.borg_ui_agent.backup import (
     parse_borg_progress,
 )
 from agent.borg_ui_agent.borg import is_warning_return_code
+from agent.borg_ui_agent.cancel import (
+    KILL_GROUP_AFTER_SECONDS,
+    SELF_CANCELLING_JOB_KINDS,
+    cancel_requested,
+    kill_process_group,
+    start_cancel_poller,
+    start_keepalive,
+)
 from agent.borg_ui_agent.client import AgentClient
 from agent.borg_ui_agent.compact_stats import (
     TAIL_LINES,
@@ -743,12 +751,34 @@ def execute_repository_operation_job(
     )
     sequence += 1
 
+    if payload.job_kind in SELF_CANCELLING_JOB_KINDS and cancel_requested(
+        should_cancel
+    ):
+        # Cancelled between dispatch and start (the log above may have waited
+        # on the server): a fast command (an archive delete) would be done
+        # before the first poll, so it is not started.
+        _remove_temp_file(rclone_config_path)
+        client.cancel_job(job_id)
+        return RepositoryOperationResult(
+            job_id=job_id,
+            status="canceled",
+            message=f"{payload.job_kind} canceled before it started",
+        )
+
+    if payload.job_kind == "repository.delete_archive":
+        # A write that holds the repository lock: a cancel has to end it.
+        try:
+            return _execute_short_repository_operation(
+                job_id, payload, client, cmd, env, should_cancel=should_cancel
+            )
+        finally:
+            _remove_temp_file(rclone_config_path)
+
     if payload.job_kind in {
         "repository.info",
         "repository.rinfo",
         "repository.archive_info",
         "repository.list_archives",
-        "repository.delete_archive",
         "repository.break_lock",
         "repository.disk_usage",
     }:
@@ -850,11 +880,27 @@ def _execute_short_repository_operation(
     client: AgentClient,
     cmd: list[str],
     env: dict[str, str],
+    *,
+    should_cancel: Optional[Callable[[], bool]] = None,
 ) -> RepositoryOperationResult:
+    """Run a command that finishes within five minutes and report its
+    captured output. With `should_cancel` it runs in its own process group
+    under a cancel poller, which ends it when the server cancels the job."""
     try:
-        process = subprocess.run(
-            cmd, text=True, capture_output=True, env=env, timeout=300
-        )
+        if should_cancel is None:
+            process = subprocess.run(
+                cmd, text=True, capture_output=True, env=env, timeout=300
+            )
+        else:
+            process, cancelled = _run_cancellable(cmd, env, should_cancel, timeout=300)
+            if cancelled:
+                client.cancel_job(job_id)
+                return RepositoryOperationResult(
+                    job_id=job_id,
+                    status="canceled",
+                    return_code=process.returncode,
+                    message=f"{payload.job_kind} canceled",
+                )
     except OSError as exc:
         error_message = f"Failed to start {payload.job_kind}: {exc}"
         client.send_log(job_id, sequence=1, stream="stderr", message=error_message)
@@ -911,6 +957,63 @@ def _execute_short_repository_operation(
         return_code=process.returncode,
         message=error_message,
     )
+
+
+def _run_cancellable(
+    cmd: list[str],
+    env: dict[str, str],
+    should_cancel: Callable[[], bool],
+    *,
+    timeout: float,
+) -> tuple[subprocess.CompletedProcess, bool]:
+    """`subprocess.run(capture_output=True, timeout=...)` with a cancel
+    poller: returns the finished process and whether a cancel ended it.
+    Raises `subprocess.TimeoutExpired` like `run` once borg is ended."""
+    popen_kwargs: dict[str, Any] = {
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.PIPE,
+        "text": True,
+        "env": env,
+    }
+    if os.name == "posix":
+        popen_kwargs["start_new_session"] = True
+    process = subprocess.Popen(cmd, **popen_kwargs)
+    done = threading.Event()
+    cancelled = _start_cancel_poller(process, should_cancel, done)
+    try:
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _terminate_process(process)
+            try:
+                process.communicate(timeout=KILL_GROUP_AFTER_SECONDS)
+            except subprocess.TimeoutExpired:
+                # A child that ignored SIGTERM still holds the pipes.
+                kill_process_group(process)
+                try:
+                    process.communicate(timeout=5)
+                except subprocess.TimeoutExpired:
+                    pass
+            raise
+        except BaseException:
+            # Interrupted (Ctrl-C on `once`): borg runs in a session of its
+            # own and would go on unsupervised, as `subprocess.run` never let
+            # it.
+            _terminate_process(process)
+            raise
+    finally:
+        done.set()
+    completed = subprocess.CompletedProcess(cmd, process.returncode, stdout, stderr)
+    return completed, cancelled.is_set()
+
+
+def _start_cancel_poller(
+    process: subprocess.Popen,
+    should_cancel: Optional[Callable[[], bool]],
+    done: threading.Event,
+) -> threading.Event:
+    """`start_cancel_poller` ending the process group (`_terminate_process`)."""
+    return start_cancel_poller(process, should_cancel, done, _terminate_process)
 
 
 def _execute_limited_output_repository_operation(
@@ -1177,7 +1280,6 @@ def _execute_streaming_artifact_operation(
     stderr_thread = threading.Thread(target=_drain_stderr, daemon=True)
     stderr_thread.start()
 
-    cancelled = threading.Event()
     timed_out = threading.Event()
     timeout_reason: list[str] = []
     watchdog_done = threading.Event()
@@ -1201,30 +1303,6 @@ def _execute_streaming_artifact_operation(
                 client.send_progress(job_id, {})
             except Exception:  # noqa: BLE001 - a keepalive is best effort
                 pass
-
-    def _cancel_requested() -> bool:
-        # The check may ask the server (the polling runtime's heartbeat) and
-        # fail while it is unreachable. An exception must not end this
-        # thread: it enforces the deadline as well, and the keepalive would
-        # then keep a job alive that nothing can stop any more.
-        if should_cancel is None:
-            return False
-        try:
-            return bool(should_cancel())
-        except Exception:  # noqa: BLE001 - unknown is not cancelled
-            return False
-
-    def _cancel_poller() -> None:
-        # Its own thread as well: on the polling transport the check is a
-        # heartbeat request with retries, and the deadlines must not wait
-        # for an unreachable server to answer it.
-        while not watchdog_done.wait(0.5):
-            if process.poll() is not None:
-                return
-            if _cancel_requested():
-                cancelled.set()
-                _terminate_process(process)
-                return
 
     def _watchdog() -> None:
         while not watchdog_done.wait(0.5):
@@ -1252,8 +1330,10 @@ def _execute_streaming_artifact_operation(
 
     watchdog = threading.Thread(target=_watchdog, daemon=True)
     watchdog.start()
-    if should_cancel is not None:
-        threading.Thread(target=_cancel_poller, daemon=True).start()
+    # Its own thread, apart from the watchdog: on the polling transport the
+    # check is a heartbeat request with retries, and the deadlines must not
+    # wait for an unreachable server to answer it.
+    cancelled = _start_cancel_poller(process, should_cancel, watchdog_done)
     if keepalive_seconds is not None:
         threading.Thread(target=_keepalive, daemon=True).start()
 
@@ -1509,27 +1589,48 @@ def _execute_streaming_repository_operation(
 
     sequence = initial_sequence
     tail: deque[str] = deque(maxlen=TAIL_LINES)
-    if process.stdout is not None:
-        for line in process.stdout:
-            message = line.rstrip("\n")
-            client.send_log(job_id, sequence=sequence, stream="stdout", message=message)
-            sequence += 1
-            if compact_stats:
-                tail.append(message)
-            progress = parse_borg_progress(message)
-            if progress:
-                client.send_progress(job_id, progress)
-            if should_cancel and should_cancel():
-                return_code = _terminate_process(process)
-                client.cancel_job(job_id)
-                return RepositoryOperationResult(
-                    job_id=job_id,
-                    status="canceled",
-                    return_code=return_code,
-                    message=f"{payload.job_kind} canceled",
+    done = threading.Event()
+    # The per-line check below answers at once while output flows; the
+    # poller reaches a Borg that prints nothing (a lock wait, a compact).
+    cancelled = _start_cancel_poller(process, should_cancel, done)
+    start_keepalive(process, client, job_id, done)
+    try:
+        if process.stdout is not None:
+            for line in process.stdout:
+                message = line.rstrip("\n")
+                client.send_log(
+                    job_id, sequence=sequence, stream="stdout", message=message
                 )
+                sequence += 1
+                if compact_stats:
+                    tail.append(message)
+                progress = parse_borg_progress(message)
+                if progress:
+                    client.send_progress(job_id, progress)
+                if cancel_requested(should_cancel) and process.poll() is None:
+                    # not once Borg ended on its own while the check ran (it
+                    # may have asked the server): that run is its verdict
+                    cancelled.set()
+                    _terminate_process(process)
+                    break
+        return_code = process.wait()
+    except BaseException:
+        # A report that failed (the server unreachable) unwinds this worker;
+        # Borg must not run on unsupervised, holding the repository.
+        _terminate_process(process)
+        raise
+    finally:
+        done.set()
 
-    return_code = process.wait()
+    if cancelled.is_set():
+        client.cancel_job(job_id)
+        return RepositoryOperationResult(
+            job_id=job_id,
+            status="canceled",
+            return_code=return_code,
+            message=f"{payload.job_kind} canceled",
+        )
+
     if return_code == 0 or _warning_exit(payload, return_code):
         status = "completed" if return_code == 0 else "completed_with_warnings"
         result: dict[str, Any] = {
@@ -1708,27 +1809,44 @@ def _execute_restore_operation(
             )
 
         sequence = initial_sequence
-        if process.stdout is not None:
-            for line in process.stdout:
-                message = line.rstrip("\n")
-                client.send_log(
-                    job_id, sequence=sequence, stream="stdout", message=message
-                )
-                sequence += 1
-                progress = parse_borg_progress(message)
-                if progress:
-                    client.send_progress(job_id, progress)
-                if should_cancel and should_cancel():
-                    return_code = _terminate_process(process)
-                    client.cancel_job(job_id)
-                    return RepositoryOperationResult(
-                        job_id=job_id,
-                        status="canceled",
-                        return_code=return_code,
-                        message=f"{payload.job_kind} canceled",
+        done = threading.Event()
+        # As in the streaming path: the poller reaches a silent extract.
+        cancelled = _start_cancel_poller(process, should_cancel, done)
+        start_keepalive(process, client, job_id, done)
+        try:
+            if process.stdout is not None:
+                for line in process.stdout:
+                    message = line.rstrip("\n")
+                    client.send_log(
+                        job_id, sequence=sequence, stream="stdout", message=message
                     )
+                    sequence += 1
+                    progress = parse_borg_progress(message)
+                    if progress:
+                        client.send_progress(job_id, progress)
+                    if cancel_requested(should_cancel) and process.poll() is None:
+                        # not once Borg ended on its own while the check ran (it
+                        # may have asked the server): that run is its verdict
+                        cancelled.set()
+                        _terminate_process(process)
+                        break
+            return_code = process.wait()
+        except BaseException:
+            # As in the streaming path: never leave Borg unsupervised.
+            _terminate_process(process)
+            raise
+        finally:
+            done.set()
 
-        return_code = process.wait()
+        if cancelled.is_set():
+            client.cancel_job(job_id)
+            return RepositoryOperationResult(
+                job_id=job_id,
+                status="canceled",
+                return_code=return_code,
+                message=f"{payload.job_kind} canceled",
+            )
+
         warning = is_warning_return_code(return_code)
 
         # A hard borg failure has no meaningful verification verdict.

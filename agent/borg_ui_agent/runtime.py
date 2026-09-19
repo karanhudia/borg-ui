@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -8,6 +9,7 @@ from typing import Optional
 from agent.borg_ui_agent import __version__
 from agent.borg_ui_agent.backup import execute_backup_create_job
 from agent.borg_ui_agent.borg import detect_borg_binaries, detect_platform
+from agent.borg_ui_agent.cancel import CANCEL_CAPABILITY
 from agent.borg_ui_agent.client import AgentClient
 from agent.borg_ui_agent.config import AgentConfig
 from agent.borg_ui_agent.filesystem import execute_filesystem_browse_job
@@ -49,6 +51,10 @@ DEFAULT_CAPABILITIES = [
     "repository.disk_usage",
     "repository.storage_usage",
     "repository.diff",
+    # the kinds in cancel.SELF_CANCELLING_JOB_KINDS stop when the job is
+    # cancelled while running, whatever Borg prints (0.1.7); an older agent
+    # finishes a silent one anyway
+    CANCEL_CAPABILITY,
     "agent.list_scripts",
     "script.run",
 ]
@@ -177,13 +183,17 @@ class AgentRuntime:
 
     def _build_cancel_checker(self, job_id: int) -> Callable[[], bool]:
         last_checked_at = 0.0
+        # The worker's per-line check and the cancel poller call this from
+        # two threads.
+        lock = threading.Lock()
 
         def should_cancel() -> bool:
             nonlocal last_checked_at
-            now = time.monotonic()
-            if now - last_checked_at < 5:
-                return False
-            last_checked_at = now
+            with lock:
+                now = time.monotonic()
+                if now - last_checked_at < 5:
+                    return False
+                last_checked_at = now
             response = self.heartbeat(running_job_ids=[job_id])
             return job_id in response.get("cancel_job_ids", [])
 

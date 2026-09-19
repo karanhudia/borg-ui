@@ -14,6 +14,7 @@ from urllib.parse import urlparse, urlunparse
 
 from agent.borg_ui_agent import __version__
 from agent.borg_ui_agent.borg import detect_borg_binaries, detect_platform
+from agent.borg_ui_agent.cancel import SELF_CANCELLING_JOB_KINDS
 from agent.borg_ui_agent.client import AGENT_AUTH_HEADER, AgentClient
 from agent.borg_ui_agent.config import AgentConfig
 from agent.borg_ui_agent.filesystem import FilesystemBrowseError, browse_filesystem
@@ -143,13 +144,19 @@ class SessionCommandClient:
                 "sequence": sequence,
                 "stream": stream,
                 "message": message,
-            }
+            },
+            lambda c: c.send_log(
+                job_id, sequence=sequence, stream=stream, message=message
+            ),
         )
         return {"accepted": True}
 
     def send_progress(self, job_id: int, progress: dict[str, Any]) -> dict[str, Any]:
         self._ensure_started(job_id)
-        self._send({"type": "progress", "job_id": job_id, **progress})
+        self._send(
+            {"type": "progress", "job_id": job_id, **progress},
+            lambda c: c.send_progress(job_id, progress),
+        )
         return {"id": job_id, "status": "running"}
 
     def complete_job(self, job_id: int, *, result: dict[str, Any]) -> dict[str, Any]:
@@ -247,10 +254,31 @@ class SessionCommandClient:
             return
         self.enqueue(ws_payload)
 
-    def _send(self, payload: dict[str, Any]) -> None:
-        """Best-effort telemetry send (job_started/progress/log/cancel). Losing
-        one is harmless; terminal results go through _deliver_terminal instead."""
-        self.enqueue(payload)
+    def _send(
+        self,
+        payload: dict[str, Any],
+        http_call: Optional[Callable[[AgentClient], Any]] = None,
+    ) -> None:
+        """Best-effort telemetry send (job_started/progress/log). Losing one
+        is harmless; terminal results go through _deliver_terminal instead.
+        Once the session is closing nothing queued here is delivered, but the
+        worker runs on and its keepalive must still reach the server (the
+        reaper fails a job without activity), so a frame the outbox refuses
+        goes over REST when `http_call` names its request."""
+        if self.enqueue(payload) or http_call is None:
+            return
+        if self.job_id is None or self._http_client is None:
+            return
+        with self._http_lock:
+            try:
+                http_call(self._http_client)
+            except Exception:  # noqa: BLE001 - best effort, the next one is due
+                logger.debug(
+                    "Dropped a %s frame for job %s after the session closed",
+                    payload.get("type"),
+                    self.job_id,
+                    exc_info=True,
+                )
 
     def enqueue(self, payload: dict[str, Any]) -> bool:
         """Hand one frame to the session thread, which owns the socket.
@@ -304,6 +332,9 @@ class AgentSessionRuntime:
         self._registry_lock = threading.Lock()
         self._cancel_events: dict[int, threading.Event] = {}
         self._pending_cancels: set[int] = set()
+        # Jobs whose worker ends its process on cancel and reports `canceled`
+        # itself (SELF_CANCELLING_JOB_KINDS); see the cancel command.
+        self._self_cancelling_jobs: set[int] = set()
         # Deadline (monotonic) while an upgrade is being requested, held
         # through the restart it causes so a job dispatched after the busy
         # check cannot start under an agent that is about to die. Guarded by
@@ -392,7 +423,11 @@ class AgentSessionRuntime:
                     # _job_id_for_dispatch for why only some messages register.
                     job_id = self._job_id_for_dispatch(message)
                     cancel_event = (
-                        self._register_cancel(job_id) if job_id is not None else None
+                        self._register_cancel(
+                            job_id, command=str(message.get("command") or "")
+                        )
+                        if job_id is not None
+                        else None
                     )
                     try:
                         worker = threading.Thread(
@@ -425,14 +460,14 @@ class AgentSessionRuntime:
                 except Exception:
                     pass
             else:
-                # The session dropped. Suppress any further frames, signal
-                # cancellation, and return *without* joining -- so run_forever
-                # reconnects right away instead of blocking on a possibly-slow
-                # job. The cancelled daemon workers wind down on their own.
+                # The session dropped. Suppress any further frames and return
+                # *without* joining -- so run_forever reconnects right away
+                # instead of blocking on a possibly-slow job. The workers keep
+                # running: a dropped socket is not a cancel, their verdicts go
+                # over REST, and the next hello reports them as running. Setting
+                # their cancel events here would make the cancel poller end a
+                # silent Borg (a long check) on every proxy hiccup.
                 closing.set()
-                with self._registry_lock:
-                    for event in self._cancel_events.values():
-                        event.set()
             try:
                 socket.close()
             except Exception:
@@ -621,15 +656,16 @@ class AgentSessionRuntime:
             return
 
         if command == "cancel":
-            # Signal the worker running this job so it actually stops; it emits
-            # its own job_canceled as it unwinds. Also record the cancel here via
-            # the cancel path (idempotent /cancel) so the outcome is captured even
-            # if no worker is running. NOT send_result — that routes through
-            # complete_job and would wrongly finalize the target job as completed,
-            # racing the worker's cancel. The server dispatches cancel
+            # Signal the worker running this job so it actually stops. A worker
+            # of a kind that ends its process on cancel emits its own
+            # job_canceled once the process has ended, which is when the
+            # server may release the repository to other work. For any other
+            # job, or when no worker runs it, the cancel is recorded here via
+            # the cancel path (idempotent /cancel) so the outcome is captured. NOT
+            # send_result — that routes through complete_job and would wrongly
+            # finalize the target job as completed. The server dispatches cancel
             # fire-and-forget (wait_for_result=False), so no response is expected.
-            if job_id is not None:
-                self._signal_cancel(job_id)
+            if job_id is not None and not self._signal_cancel(job_id):
                 client.cancel_job(job_id)
             return
 
@@ -661,7 +697,7 @@ class AgentSessionRuntime:
         # even started (see _job_id_for_dispatch); only register here when a
         # caller invoked this method directly without doing that (e.g. a test).
         if cancel_event is None:
-            cancel_event = self._register_cancel(job_id)
+            cancel_event = self._register_cancel(job_id, command=command)
         try:
             result = handler(
                 {"id": job_id, "type": command, "payload": payload},
@@ -739,32 +775,38 @@ class AgentSessionRuntime:
         with self._registry_lock:
             self._upgrading_until = None
 
-    def _register_cancel(self, job_id: int) -> threading.Event:
+    def _register_cancel(self, job_id: int, *, command: str = "") -> threading.Event:
         """Register a cancel Event for ``job_id`` — already set if a cancel for it
-        arrived before the worker thread got here (start-up race)."""
+        arrived before the worker thread got here (start-up race). ``command``
+        is the job kind; see _signal_cancel."""
         event = threading.Event()
         with self._registry_lock:
             if job_id in self._pending_cancels:
                 self._pending_cancels.discard(job_id)
                 event.set()
             self._cancel_events[job_id] = event
+            if command in SELF_CANCELLING_JOB_KINDS:
+                self._self_cancelling_jobs.add(job_id)
         return event
 
-    def _signal_cancel(self, job_id: int) -> None:
+    def _signal_cancel(self, job_id: int) -> bool:
         """Request cancellation of ``job_id``; if its worker hasn't registered
-        yet, remember the request so it isn't lost."""
+        yet, remember the request so it isn't lost. True when a registered
+        worker was signalled that reports the cancel itself."""
         with self._registry_lock:
             event = self._cancel_events.get(job_id)
             if event is not None:
                 event.set()
-            else:
-                self._pending_cancels.add(job_id)
+                return job_id in self._self_cancelling_jobs
+            self._pending_cancels.add(job_id)
+            return False
 
     def _unregister_cancel(self, job_id: int) -> None:
         """Drop the cancel Event (and any pending flag) for a finished job."""
         with self._registry_lock:
             self._cancel_events.pop(job_id, None)
             self._pending_cancels.discard(job_id)
+            self._self_cancelling_jobs.discard(job_id)
 
     def _handle_repository_defaults(
         self, client: SessionCommandClient, payload: dict[str, Any]

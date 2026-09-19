@@ -302,3 +302,22 @@ def test_execute_cancellation_terminates(scripts_dir):
 
     assert result.status == "canceled"
     assert client.calls[-1][0] == "cancel"
+
+
+def test_a_script_cancelled_before_it_starts_runs_nothing(monkeypatch):
+    import subprocess
+
+    def no_process(*args, **kwargs):
+        raise AssertionError("no process may start")
+
+    monkeypatch.setattr(subprocess, "Popen", no_process)
+    client = RecordingClient()
+
+    result = execute_script_run_job(
+        {"id": 5, "payload": {"job_kind": "script.run", "name": "anything"}},
+        client,
+        should_cancel=lambda: True,
+    )
+
+    assert result.status == "canceled"
+    assert ("cancel",) in client.calls

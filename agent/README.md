@@ -214,4 +214,6 @@ The first implementation supports:
   `repository.rclone_sync`, and `repository.diff` (the change listing the
   server's archive history is built from) for agent-owned repositories
 - log and progress upload
-- cancellation through heartbeat
+- cancellation through heartbeat; from 0.1.7 (`jobs.cancel`) a running
+  backup, check, prune, compact, restore or archive delete stops as well,
+  even while Borg prints nothing

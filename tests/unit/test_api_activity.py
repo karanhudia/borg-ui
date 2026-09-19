@@ -3051,3 +3051,736 @@ class TestBackupArchiveBorgId:
 
         item = next(i for i in response.json() if i["id"] == job.id)
         assert item["archive_borg_id"] is None
+
+
+@pytest.mark.unit
+class TestCancelFromActivity:
+    """`POST /api/activity/{job_type}/{job_id}/cancel`, the route the job
+    lists call when their caller passes no cancel handler (#1078)."""
+
+    @staticmethod
+    def _repo(test_db, name="cancel-repo"):
+        from app.database.models import Repository
+
+        repo = Repository(
+            name=name, path=f"/tmp/{name}", encryption="none", compression="lz4"
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        return repo
+
+    def test_a_queued_check_is_cancelled(self, test_client, test_db, admin_headers):
+        from app.services.operations.enqueue import enqueue
+
+        op = enqueue(test_db, "check", repository_id=self._repo(test_db).id)
+
+        response = test_client.post(
+            f"/api/activity/check/{op.id}/cancel", headers=admin_headers
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.json() == {"status": "cancel_requested"}
+        test_db.expire_all()
+        assert test_db.get(Operation, op.id).status == "cancelled"
+
+    def test_a_running_check_asks_the_runner(self, test_client, test_db, admin_headers):
+        from unittest.mock import AsyncMock, patch
+
+        from app.services.operations.enqueue import enqueue
+        from app.services.operations.runner import operation_runner
+
+        op = enqueue(test_db, "check", repository_id=self._repo(test_db).id)
+        op.status = "running"
+        test_db.commit()
+
+        with (
+            patch.dict(operation_runner.running_tasks, {op.id: object()}),
+            patch(
+                "app.api.operations.operation_runner.request_cancel",
+                new=AsyncMock(return_value=True),
+            ) as request_cancel,
+        ):
+            response = test_client.post(
+                f"/api/activity/check/{op.id}/cancel", headers=admin_headers
+            )
+
+        assert response.status_code == 200, response.text
+        request_cancel.assert_awaited_once_with(op.id)
+
+    @pytest.mark.parametrize("kind", ["prune", "backup"])
+    def test_a_finished_job_is_409_whatever_its_kind(
+        self, test_client, test_db, admin_headers, kind
+    ):
+        from app.services.operations.enqueue import enqueue
+
+        op = enqueue(test_db, kind, repository_id=self._repo(test_db).id)
+        op.status = "completed"
+        test_db.commit()
+
+        response = test_client.post(
+            f"/api/activity/{kind}/{op.id}/cancel", headers=admin_headers
+        )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == {
+            "key": "backend.errors.operations.alreadyFinished"
+        }
+
+    def test_a_running_job_that_cannot_be_stopped_is_refused(
+        self, test_client, test_db, admin_headers
+    ):
+        """A stats run does not watch the cancel flag: it would keep running
+        while the runner records it as cancelled."""
+        from app.services.operations.enqueue import enqueue
+
+        op = enqueue(test_db, "stats", repository_id=self._repo(test_db).id)
+        op.status = "running"
+        test_db.commit()
+
+        response = test_client.post(
+            f"/api/activity/stats/{op.id}/cancel", headers=admin_headers
+        )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == {
+            "key": "backend.errors.activity.cannotCancelWhileRunning",
+            "params": {"jobType": "stats"},
+        }
+        test_db.expire_all()
+        assert test_db.get(Operation, op.id).status == "running"
+
+    def test_a_running_step_the_runner_does_not_run_is_refused(
+        self, test_client, test_db, admin_headers
+    ):
+        """A prune a backup runs inline has no runner task: the runner's
+        flag would reach nothing, so the answer is not `alreadyFinished`."""
+        from unittest.mock import AsyncMock, patch
+
+        from app.services.operations.enqueue import enqueue
+
+        op = enqueue(test_db, "prune", repository_id=self._repo(test_db).id)
+        op.status = "running"
+        test_db.commit()
+
+        with patch(
+            "app.api.operations.operation_runner.request_cancel",
+            new=AsyncMock(return_value=False),
+        ) as request_cancel:
+            response = test_client.post(
+                f"/api/activity/prune/{op.id}/cancel", headers=admin_headers
+            )
+
+        assert response.status_code == 409
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.activity.cannotCancelWhileRunning"
+        )
+        request_cancel.assert_not_awaited()
+
+    def test_a_running_history_index_is_refused(
+        self, test_client, test_db, admin_headers
+    ):
+        """It reads the cancel flag per line of Borg's diff, and a diff of
+        two large archives can be silent for a long time."""
+        from unittest.mock import AsyncMock, patch
+
+        from app.services.operations.enqueue import enqueue
+        from app.services.operations.runner import operation_runner
+
+        op = enqueue(test_db, "history_index", repository_id=self._repo(test_db).id)
+        op.status = "running"
+        test_db.commit()
+
+        with (
+            patch.dict(operation_runner.running_tasks, {op.id: object()}),
+            patch(
+                "app.api.operations.operation_runner.request_cancel",
+                new=AsyncMock(return_value=True),
+            ) as request_cancel,
+        ):
+            response = test_client.post(
+                f"/api/activity/history_index/{op.id}/cancel", headers=admin_headers
+            )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == {
+            "key": "backend.errors.activity.cannotCancelWhileRunning",
+            "params": {"jobType": "history_index"},
+        }
+        request_cancel.assert_not_awaited()
+
+    def test_a_queued_job_of_any_kind_is_taken_off_the_queue(
+        self, test_client, test_db, admin_headers
+    ):
+        from app.services.operations.enqueue import enqueue
+
+        op = enqueue(test_db, "stats", repository_id=self._repo(test_db).id)
+
+        response = test_client.post(
+            f"/api/activity/stats/{op.id}/cancel", headers=admin_headers
+        )
+
+        assert response.status_code == 200, response.text
+        test_db.expire_all()
+        assert test_db.get(Operation, op.id).status == "cancelled"
+
+    def test_a_script_execution_is_refused(self, test_client, admin_headers):
+        response = test_client.post(
+            "/api/activity/script_execution/1/cancel", headers=admin_headers
+        )
+
+        assert response.status_code == 409
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.activity.cannotCancelWhileRunning"
+        )
+
+    def test_mirror_rows_are_found_by_their_sub_type(
+        self, test_client, test_db, admin_headers
+    ):
+        """Both mirror names share the `rclone_sync` kind; the row's sub-type
+        decides which name finds it."""
+        repo = self._repo(test_db)
+        hydrate = seed_job_operation(
+            test_db,
+            "rclone_sync",
+            repository_id=repo.id,
+            direction="remote_to_cache",
+            operation="hydrate",
+            status="pending",
+        )
+        test_db.commit()
+
+        wrong_name = test_client.post(
+            f"/api/activity/rclone_sync/{hydrate.id}/cancel", headers=admin_headers
+        )
+        right_name = test_client.post(
+            f"/api/activity/rclone_hydrate/{hydrate.id}/cancel", headers=admin_headers
+        )
+
+        assert wrong_name.status_code == 404
+        assert right_name.status_code == 200, right_name.text
+        test_db.expire_all()
+        assert test_db.get(Operation, hydrate.id).status == "cancelled"
+
+    def test_a_running_mirror_sync_is_refused(
+        self, test_client, test_db, admin_headers
+    ):
+        repo = self._repo(test_db)
+        sync = seed_job_operation(
+            test_db,
+            "rclone_sync",
+            repository_id=repo.id,
+            direction="primary_to_remote",
+            operation="sync",
+            status="running",
+            started_at=datetime.utcnow(),
+        )
+        test_db.commit()
+
+        response = test_client.post(
+            f"/api/activity/rclone_sync/{sync.id}/cancel", headers=admin_headers
+        )
+
+        assert response.status_code == 409
+        test_db.expire_all()
+        assert test_db.get(Operation, sync.id).status == "running"
+
+    def test_cancel_requires_the_operator_role(
+        self, test_client, test_db, auth_headers
+    ):
+        from app.services.operations.enqueue import enqueue
+
+        op = enqueue(test_db, "check", repository_id=self._repo(test_db).id)
+
+        response = test_client.post(
+            f"/api/activity/check/{op.id}/cancel", headers=auth_headers
+        )
+
+        assert response.status_code == 403
+        test_db.expire_all()
+        assert test_db.get(Operation, op.id).status == "queued"
+
+    def test_a_queued_backup_goes_through_the_backup_cancel(
+        self, test_client, test_db, admin_headers
+    ):
+        repo = self._repo(test_db)
+        job = seed_job_operation(
+            test_db, "backup", repository_id=repo.id, status="pending"
+        )
+        test_db.commit()
+
+        response = test_client.post(
+            f"/api/activity/backup/{job.id}/cancel", headers=admin_headers
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.json()["message"] == "backend.success.backup.backupCancelled"
+        test_db.expire_all()
+        assert test_db.get(Operation, job.id).status == "cancelled"
+
+    def test_a_queued_agent_backup_is_taken_off_the_queue(
+        self, test_client, test_db, admin_headers
+    ):
+        """No agent job exists while the backup waits for its lane; the
+        runner cancels it like a server backup instead of a 400."""
+        repo = self._repo(test_db)
+        job = seed_job_operation(
+            test_db,
+            "backup",
+            repository_id=repo.id,
+            status="pending",
+            execution_mode="agent",
+        )
+        test_db.commit()
+
+        response = test_client.post(
+            f"/api/activity/backup/{job.id}/cancel", headers=admin_headers
+        )
+
+        assert response.status_code == 200, response.text
+        test_db.expire_all()
+        assert test_db.get(Operation, job.id).status == "cancelled"
+
+    def test_a_mirror_job_is_not_described_to_a_user_without_the_role(
+        self, test_client, test_db, auth_headers
+    ):
+        """The role is checked before the job's state answers."""
+        repo = self._repo(test_db)
+        sync = seed_job_operation(
+            test_db,
+            "rclone_sync",
+            repository_id=repo.id,
+            direction="primary_to_remote",
+            operation="sync",
+            status="completed",
+        )
+        test_db.commit()
+
+        response = test_client.post(
+            f"/api/activity/rclone_sync/{sync.id}/cancel", headers=auth_headers
+        )
+
+        assert response.status_code == 403
+
+    def test_a_running_server_backup_stops_its_process(
+        self, test_client, test_db, admin_headers
+    ):
+        from unittest.mock import AsyncMock, patch
+
+        repo = self._repo(test_db)
+        job = seed_job_operation(
+            test_db,
+            "backup",
+            repository_id=repo.id,
+            status="running",
+            started_at=datetime.utcnow(),
+        )
+        test_db.commit()
+
+        with (
+            patch(
+                "app.api.backup.operation_runner.request_cancel",
+                new=AsyncMock(return_value=True),
+            ) as request_cancel,
+            patch(
+                "app.api.backup.backup_service.cancel_backup",
+                new=AsyncMock(return_value=True),
+            ) as kill,
+        ):
+            response = test_client.post(
+                f"/api/activity/backup/{job.id}/cancel", headers=admin_headers
+            )
+
+        assert response.status_code == 200, response.text
+        assert response.json()["process_terminated"] is True
+        request_cancel.assert_awaited_once_with(job.id)
+        kill.assert_awaited_once_with(job.id)
+        test_db.expire_all()
+        assert test_db.get(Operation, job.id).status == "cancelled"
+
+    def test_an_unknown_job_or_a_mismatched_type_is_404(
+        self, test_client, test_db, admin_headers
+    ):
+        from app.services.operations.enqueue import enqueue
+
+        op = enqueue(test_db, "check", repository_id=self._repo(test_db).id)
+
+        missing = test_client.post(
+            "/api/activity/check/999999/cancel", headers=admin_headers
+        )
+        mismatched = test_client.post(
+            f"/api/activity/backup/{op.id}/cancel", headers=admin_headers
+        )
+
+        assert missing.status_code == 404
+        assert mismatched.status_code == 404
+        test_db.expire_all()
+        assert test_db.get(Operation, op.id).status == "queued"
+
+    @staticmethod
+    def _agent_repo(test_db, capabilities, name="agent-cancel-repo"):
+        from app.core.security import get_password_hash
+        from app.database.models import AgentMachine, Repository
+
+        agent = AgentMachine(
+            name=f"{name}-agent",
+            agent_id=f"agt_{name}",
+            token_hash=get_password_hash("secret"),
+            token_prefix="secret",
+            status="online",
+            capabilities=capabilities,
+        )
+        test_db.add(agent)
+        test_db.commit()
+        repo = Repository(
+            name=name,
+            path=f"/agent/{name}",
+            encryption="none",
+            compression="lz4",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=agent.id,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        return repo
+
+    @pytest.mark.parametrize("capabilities", [["repository.check"], None])
+    def test_a_running_agent_check_is_refused_when_the_agent_cannot_stop_it(
+        self, test_client, test_db, admin_headers, capabilities
+    ):
+        """An agent before 0.1.7 finishes a silent Borg although the job was
+        cancelled; the row would say cancelled while the agent runs on."""
+        from unittest.mock import AsyncMock, patch
+
+        from app.services.operations.enqueue import enqueue
+
+        from app.services.operations.runner import operation_runner
+
+        repo = self._agent_repo(test_db, capabilities)
+        op = enqueue(test_db, "check", repository_id=repo.id)
+        op.status = "running"
+        test_db.commit()
+
+        with (
+            patch.dict(operation_runner.running_tasks, {op.id: object()}),
+            patch(
+                "app.api.operations.operation_runner.request_cancel",
+                new=AsyncMock(return_value=True),
+            ) as request_cancel,
+        ):
+            response = test_client.post(
+                f"/api/activity/check/{op.id}/cancel", headers=admin_headers
+            )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == {
+            "key": "backend.errors.activity.cannotCancelWhileRunning",
+            "params": {"jobType": "check"},
+        }
+        request_cancel.assert_not_awaited()
+        test_db.expire_all()
+        assert test_db.get(Operation, op.id).status == "running"
+
+    def test_a_running_agent_check_is_cancelled_when_the_agent_can_stop_it(
+        self, test_client, test_db, admin_headers
+    ):
+        from unittest.mock import AsyncMock, patch
+
+        from app.services.operations.enqueue import enqueue
+        from app.services.operations.runner import operation_runner
+
+        repo = self._agent_repo(test_db, ["repository.check", "jobs.cancel"])
+        op = enqueue(test_db, "check", repository_id=repo.id)
+        op.status = "running"
+        test_db.commit()
+
+        with (
+            patch.dict(operation_runner.running_tasks, {op.id: object()}),
+            patch(
+                "app.api.operations.operation_runner.request_cancel",
+                new=AsyncMock(return_value=True),
+            ) as request_cancel,
+        ):
+            response = test_client.post(
+                f"/api/activity/check/{op.id}/cancel", headers=admin_headers
+            )
+
+        assert response.status_code == 200, response.text
+        request_cancel.assert_awaited_once_with(op.id)
+
+    @staticmethod
+    def _agent_job(test_db, repo, op, *, status, kind="check", link=True):
+        from datetime import datetime
+
+        from app.database.models import AgentJob
+
+        operation = (
+            {
+                "maintenance_job": {
+                    "kind": kind,
+                    "id": op.id,
+                    "table": "operations",
+                }
+            }
+            if link
+            else {"archive": "a"}
+        )
+        job = AgentJob(
+            agent_machine_id=repo.agent_machine_id,
+            job_type="repository",
+            status=status,
+            payload={"job_kind": f"repository.{kind}", "operation": operation},
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        test_db.add(job)
+        test_db.commit()
+        return job
+
+    def _post_running_cancel(self, test_client, admin_headers, op, job_type):
+        from unittest.mock import AsyncMock, patch
+
+        from app.services.operations.runner import operation_runner
+
+        with (
+            patch.dict(operation_runner.running_tasks, {op.id: object()}),
+            patch(
+                "app.api.operations.operation_runner.request_cancel",
+                new=AsyncMock(return_value=True),
+            ) as request_cancel,
+        ):
+            response = test_client.post(
+                f"/api/activity/{job_type}/{op.id}/cancel", headers=admin_headers
+            )
+        return response, request_cancel
+
+    def test_a_running_check_whose_agent_job_waits_is_cancelled_on_an_old_agent(
+        self, test_client, test_db, admin_headers
+    ):
+        """The runner started the check but no agent took its job (the agent
+        is offline): the route takes the job off the queue itself, so an
+        agent that connects a moment later cannot run it."""
+        from app.database.models import AgentJob
+        from app.services.operations.enqueue import enqueue
+
+        repo = self._agent_repo(test_db, ["repository.check"])
+        op = enqueue(test_db, "check", repository_id=repo.id)
+        op.status = "running"
+        test_db.commit()
+        job = self._agent_job(test_db, repo, op, status="queued")
+
+        response, request_cancel = self._post_running_cancel(
+            test_client, admin_headers, op, "check"
+        )
+
+        assert response.status_code == 200, response.text
+        request_cancel.assert_awaited_once_with(op.id)
+        test_db.expire_all()
+        assert test_db.get(AgentJob, job.id).status == "canceled"
+
+    def test_an_old_agent_that_took_the_job_first_keeps_it(
+        self, test_client, test_db, admin_headers
+    ):
+        from app.database.models import AgentJob
+        from app.services.operations.enqueue import enqueue
+
+        repo = self._agent_repo(test_db, ["repository.check"])
+        op = enqueue(test_db, "check", repository_id=repo.id)
+        op.status = "running"
+        test_db.commit()
+        job = self._agent_job(test_db, repo, op, status="claimed")
+
+        response, request_cancel = self._post_running_cancel(
+            test_client, admin_headers, op, "check"
+        )
+
+        assert response.status_code == 409
+        request_cancel.assert_not_awaited()
+        test_db.expire_all()
+        assert test_db.get(AgentJob, job.id).status == "claimed"
+
+    def test_a_restore_waiting_for_an_old_agent_is_found_by_its_job_map(
+        self, test_client, test_db, admin_headers
+    ):
+        """A restore's agent job carries no link to its operation; the
+        restore service's map names it."""
+        from unittest.mock import patch
+
+        from app.database.models import AgentJob
+        from app.services.operations.enqueue import enqueue
+        from app.services.restore_service import restore_service
+
+        repo = self._agent_repo(test_db, ["repository.restore"])
+        op = enqueue(test_db, "restore", repository_id=repo.id)
+        op.status = "running"
+        test_db.commit()
+        job = self._agent_job(
+            test_db, repo, op, status="queued", kind="restore", link=False
+        )
+
+        with patch.dict(restore_service.agent_restore_jobs, {op.id: job.id}):
+            response, _ = self._post_running_cancel(
+                test_client, admin_headers, op, "restore"
+            )
+
+        assert response.status_code == 200, response.text
+        test_db.expire_all()
+        assert test_db.get(AgentJob, job.id).status == "canceled"
+
+    def _running_agent_backup(self, test_db, capabilities, agent_job_status):
+        from datetime import datetime
+
+        from app.database.models import AgentJob
+
+        repo = self._agent_repo(test_db, capabilities, name="agent-backup-repo")
+        job = seed_job_operation(
+            test_db,
+            "backup",
+            repository_id=repo.id,
+            status="running",
+            started_at=datetime.utcnow(),
+            execution_mode="agent",
+        )
+        test_db.commit()
+        agent_job = AgentJob(
+            agent_machine_id=repo.agent_machine_id,
+            job_type="backup",
+            operation_id=job.id,
+            status=agent_job_status,
+            payload={"job_kind": "backup.create"},
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        test_db.add(agent_job)
+        test_db.commit()
+        return job, agent_job
+
+    def test_a_running_agent_backup_is_refused_when_the_agent_cannot_stop_it(
+        self, test_client, test_db, admin_headers
+    ):
+        """An agent before 0.1.7 checks the cancel only between lines of
+        borg create's output; a silent one runs on."""
+        from unittest.mock import AsyncMock, patch
+
+        from app.database.models import AgentJob
+
+        job, agent_job = self._running_agent_backup(
+            test_db, ["backup.create"], "running"
+        )
+
+        with patch(
+            "app.api.backup.operation_runner.request_cancel",
+            new=AsyncMock(return_value=True),
+        ) as request_cancel:
+            response = test_client.post(
+                f"/api/activity/backup/{job.id}/cancel", headers=admin_headers
+            )
+
+        assert response.status_code == 409
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.activity.cannotCancelWhileRunning"
+        )
+        request_cancel.assert_not_awaited()
+        test_db.expire_all()
+        assert test_db.get(AgentJob, agent_job.id).status == "running"
+
+    def test_an_agent_backup_no_old_agent_took_is_taken_off_the_queue(
+        self, test_client, test_db, admin_headers
+    ):
+        from unittest.mock import AsyncMock, patch
+
+        from app.database.models import AgentJob
+
+        job, agent_job = self._running_agent_backup(
+            test_db, ["backup.create"], "queued"
+        )
+
+        with patch(
+            "app.api.backup.operation_runner.request_cancel",
+            new=AsyncMock(return_value=True),
+        ) as request_cancel:
+            response = test_client.post(
+                f"/api/activity/backup/{job.id}/cancel", headers=admin_headers
+            )
+
+        assert response.status_code == 200, response.text
+        request_cancel.assert_awaited_once_with(job.id)
+        test_db.expire_all()
+        assert test_db.get(AgentJob, agent_job.id).status == "canceled"
+        assert test_db.get(Operation, job.id).status == "cancelled"
+
+    def test_a_requeued_agent_backup_is_cancelled_without_a_lock_wait(
+        self, test_client, test_db, admin_headers
+    ):
+        """A backup put back on the queue with its agent job (a lost agent's
+        work) is cancelled by the runner in its own session: the agent job's
+        cancel is committed first, or that write waits on this one."""
+        from app.database.models import AgentJob
+
+        job, agent_job = self._running_agent_backup(
+            test_db, ["backup.create"], "queued"
+        )
+        test_db.get(Operation, job.id).status = "queued"
+        test_db.commit()
+
+        response = test_client.post(
+            f"/api/activity/backup/{job.id}/cancel", headers=admin_headers
+        )
+
+        assert response.status_code == 200, response.text
+        test_db.expire_all()
+        assert test_db.get(AgentJob, agent_job.id).status == "canceled"
+        assert test_db.get(Operation, job.id).status == "cancelled"
+
+    def test_a_running_agent_backup_is_cancelled_when_the_agent_can_stop_it(
+        self, test_client, test_db, admin_headers
+    ):
+        from unittest.mock import AsyncMock, patch
+
+        from app.database.models import AgentJob
+
+        job, agent_job = self._running_agent_backup(
+            test_db, ["backup.create", "jobs.cancel"], "running"
+        )
+
+        with (
+            patch(
+                "app.api.backup.operation_runner.request_cancel",
+                new=AsyncMock(return_value=False),  # not this process's task
+            ),
+            patch(
+                "app.services.agent_job_dispatcher.dispatch_agent_cancel_if_connected",
+                new=AsyncMock(return_value=True),
+            ) as dispatch,
+        ):
+            response = test_client.post(
+                f"/api/activity/backup/{job.id}/cancel", headers=admin_headers
+            )
+
+        assert response.status_code == 200, response.text
+        test_db.expire_all()
+        assert test_db.get(AgentJob, agent_job.id).status == "cancel_requested"
+        # the command reaches the agent from the route, not only the watcher
+        dispatch.assert_awaited_once()
+
+    def test_a_queued_agent_check_is_cancelled_whatever_the_agent_version(
+        self, test_client, test_db, admin_headers
+    ):
+        """Nothing runs yet: the queued row is taken off the queue."""
+        from app.services.operations.enqueue import enqueue
+
+        repo = self._agent_repo(test_db, ["repository.check"])
+        op = enqueue(test_db, "check", repository_id=repo.id)
+
+        response = test_client.post(
+            f"/api/activity/check/{op.id}/cancel", headers=admin_headers
+        )
+
+        assert response.status_code == 200, response.text
+        test_db.expire_all()
+        assert test_db.get(Operation, op.id).status == "cancelled"

@@ -1227,3 +1227,423 @@ async def test_restore_check_needs_backup_is_a_skip_with_that_reason(
     db.refresh(op)
     assert (op.status, op.skip_reason) == ("skipped", "needs_backup")
     assert MaintenanceJobFacade(db, op).status == "needs_backup"
+
+
+# -- cancelling an operation whose Borg runs on a managed agent (#1078) ------
+
+
+@pytest.fixture()
+def agent_repository(db):
+    from app.core.security import get_password_hash
+    from app.database.models import AgentMachine
+
+    agent = AgentMachine(
+        name="node-agent",
+        agent_id="agt_cancel",
+        token_hash=get_password_hash("secret"),
+        token_prefix="secret",
+        status="online",
+        capabilities=["repository.check", "jobs.cancel"],
+    )
+    db.add(agent)
+    db.commit()
+    repo = Repository(
+        name="agent-repo",
+        path="/repo/agent",
+        borg_version=1,
+        executor_type="agent",
+        agent_machine_id=agent.id,
+    )
+    db.add(repo)
+    db.commit()
+    return repo
+
+
+def _agent_job(db, repository, operation_id, *, status="running", kind="check"):
+    from app.database.models import AgentJob
+
+    job = AgentJob(
+        agent_machine_id=repository.agent_machine_id,
+        job_type="repository",
+        status=status,
+        payload={
+            "job_kind": f"repository.{kind}",
+            "operation": {
+                "maintenance_job": {
+                    "kind": kind,
+                    "id": operation_id,
+                    "table": "operations",
+                }
+            },
+        },
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(job)
+    db.commit()
+    return job
+
+
+async def test_cancelling_an_agent_check_asks_the_agent_to_stop(
+    db, agent_repository, monkeypatch
+):
+    """The server has no process to kill for an agent's check: the cancel
+    becomes `cancel_requested` on the agent job, and the agent's `canceled`
+    report ends the row cancelled (#1078)."""
+    from unittest.mock import AsyncMock
+
+    from app.database.models import AgentJob
+    from app.services.operations.executors import maintenance
+
+    op = _operation(db, agent_repository)
+    job = _agent_job(db, agent_repository, op.id)
+    other = _agent_job(db, agent_repository, op.id + 1000)
+    ctx = FakeContext(db, op)
+    ctx._cancelled = True
+    dispatch = AsyncMock(return_value=True)
+    monkeypatch.setattr(
+        "app.services.agent_job_dispatcher.dispatch_agent_cancel_if_connected",
+        dispatch,
+    )
+
+    async def call(self, job_id, *args, **kwargs):
+        # the agent reads the request, stops Borg and reports `canceled`
+        for _ in range(100):
+            db.expire_all()
+            if db.get(AgentJob, job.id).status == "cancel_requested":
+                break
+            await asyncio.sleep(0.05)
+        db.get(AgentJob, job.id).status = "canceled"
+        row = MaintenanceJobFacade(db, db.get(Operation, job_id))
+        row.status = "cancelled"
+        db.commit()
+        raise RuntimeError("agent check failed: Agent job canceled")
+
+    monkeypatch.setattr("app.core.borg_router.BorgRouter.check", call, raising=True)
+
+    outcome = await maintenance.run_check(ctx)
+
+    db.expire_all()
+    assert db.get(AgentJob, job.id).status == "canceled"
+    assert db.get(AgentJob, other.id).status == "running"
+    dispatch.assert_awaited_once()
+    assert outcome.status == "failed" and outcome.error_message == "cancelled"
+    assert db.get(Operation, op.id).status == "cancelled"
+
+
+async def test_an_agent_that_would_not_stop_keeps_its_running_job(
+    db, agent_repository, monkeypatch
+):
+    """An agent before 0.1.7 reports a cancelled job at once while a silent
+    Borg runs on and holds the repository; its running job is left alone,
+    and the run ends when Borg does."""
+    from unittest.mock import AsyncMock
+
+    from app.database.models import AgentJob, AgentMachine
+    from app.services.operations.executors import maintenance
+
+    agent = db.get(AgentMachine, agent_repository.agent_machine_id)
+    agent.capabilities = ["repository.check"]
+    db.commit()
+    op = _operation(db, agent_repository)
+    job = _agent_job(db, agent_repository, op.id)
+    dispatch = AsyncMock(return_value=True)
+    monkeypatch.setattr(
+        "app.services.agent_job_dispatcher.dispatch_agent_cancel_if_connected",
+        dispatch,
+    )
+
+    stopped = await maintenance.cancel_agent_operation_job(db, agent_repository, op.id)
+
+    assert stopped is True
+    db.expire_all()
+    assert db.get(AgentJob, job.id).status == "running"
+    dispatch.assert_not_awaited()
+
+
+async def test_a_failed_cancel_write_is_retried_on_the_next_poll(
+    db, agent_repository, monkeypatch
+):
+    """The watcher gives up on an exception; a failed write answers False
+    instead, so the next poll asks again."""
+    from unittest.mock import AsyncMock
+
+    from sqlalchemy.exc import OperationalError
+
+    from app.database.models import AgentJob
+    from app.services.operations.executors import maintenance
+
+    op = _operation(db, agent_repository)
+    job = _agent_job(db, agent_repository, op.id)
+    monkeypatch.setattr(
+        "app.services.agent_job_dispatcher.dispatch_agent_cancel_if_connected",
+        AsyncMock(return_value=True),
+    )
+    real_commit = db.commit
+    calls = {"n": 0}
+
+    def flaky_commit():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OperationalError("UPDATE", {}, Exception("database is locked"))
+        real_commit()
+
+    monkeypatch.setattr(db, "commit", flaky_commit)
+
+    first = await maintenance.cancel_agent_operation_job(db, agent_repository, op.id)
+    db.expire_all()
+    assert first is False
+    assert db.get(AgentJob, job.id).status == "running"
+
+    second = await maintenance.cancel_agent_operation_job(db, agent_repository, op.id)
+    db.expire_all()
+    assert second is True
+    assert db.get(AgentJob, job.id).status == "cancel_requested"
+
+
+async def test_an_undelivered_cancel_command_is_sent_again(
+    db, agent_repository, monkeypatch
+):
+    """A session agent learns of the cancel only from the command; while
+    it is not delivered the watcher keeps asking."""
+    from unittest.mock import AsyncMock
+
+    from app.database.models import AgentJob
+    from app.services.operations.executors import maintenance
+
+    op = _operation(db, agent_repository)
+    job = _agent_job(db, agent_repository, op.id)
+    dispatch = AsyncMock(side_effect=[False, True])
+    monkeypatch.setattr(
+        "app.services.agent_job_dispatcher.dispatch_agent_cancel_if_connected",
+        dispatch,
+    )
+
+    first = await maintenance.cancel_agent_operation_job(db, agent_repository, op.id)
+    second = await maintenance.cancel_agent_operation_job(db, agent_repository, op.id)
+
+    assert (first, second) == (False, True)
+    assert dispatch.await_count == 2
+    db.expire_all()
+    assert db.get(AgentJob, job.id).status == "cancel_requested"
+
+
+async def test_a_failed_cancel_read_is_retried_on_the_next_poll(
+    db, agent_repository, monkeypatch
+):
+    """A read that fails (a dropped connection) answers False like a failed
+    write, instead of ending the watcher."""
+    from sqlalchemy.exc import OperationalError
+
+    from app.services.operations.executors import maintenance
+
+    op = _operation(db, agent_repository)
+    _agent_job(db, agent_repository, op.id)
+
+    def lost_connection(*args, **kwargs):
+        raise OperationalError("SELECT", {}, Exception("connection lost"))
+
+    monkeypatch.setattr(maintenance, "_agent_job_for_operation", lost_connection)
+
+    assert (
+        await maintenance.cancel_agent_operation_job(db, agent_repository, op.id)
+        is False
+    )
+
+
+async def test_a_wait_that_fails_while_the_agent_runs_on_is_not_a_cancel(
+    db, agent_repository, monkeypatch
+):
+    """The router's wait timed out while the agent job still runs: the
+    cancel did not take effect, so the error stands."""
+    from unittest.mock import AsyncMock
+
+    import pytest
+
+    from app.services.operations.executors import maintenance
+
+    op = _operation(db, agent_repository)
+    _agent_job(db, agent_repository, op.id, status="cancel_requested")
+    ctx = FakeContext(db, op)
+    ctx._cancelled = True
+    monkeypatch.setattr(
+        "app.services.agent_job_dispatcher.dispatch_agent_cancel_if_connected",
+        AsyncMock(return_value=False),
+    )
+
+    async def call(self, job_id, *args, **kwargs):
+        raise RuntimeError("agent check failed: repositoryOperationTimeout")
+
+    monkeypatch.setattr("app.core.borg_router.BorgRouter.check", call, raising=True)
+
+    with pytest.raises(RuntimeError, match="repositoryOperationTimeout"):
+        await maintenance.run_check(ctx)
+
+
+async def test_an_agent_job_cancelled_before_the_runner_flag_is_a_cancel(
+    db, agent_repository, monkeypatch
+):
+    """A route takes a queued agent job off the queue, then asks the runner;
+    the router's wait may end in between. The cancelled agent job is the
+    verdict, not the flag's timing."""
+    from app.services.operations.executors import maintenance
+
+    op = _operation(db, agent_repository)
+    job = _agent_job(db, agent_repository, op.id, status="queued")
+    ctx = FakeContext(db, op)  # the runner's flag is not set yet
+
+    async def call(self, job_id, *args, **kwargs):
+        maintenance.take_queued_agent_job(db, agent_repository, op.id)
+        raise RuntimeError("agent check failed: Agent job canceled")
+
+    monkeypatch.setattr("app.core.borg_router.BorgRouter.check", call, raising=True)
+
+    outcome = await maintenance.run_check(ctx)
+
+    db.expire_all()
+    assert outcome.status == "failed" and outcome.error_message == "cancelled"
+    assert db.get(Operation, op.id).status == "cancelled"
+    assert job.id is not None
+
+
+@pytest.mark.parametrize(
+    "error_message, verdict",
+    [
+        # the server stopped waiting and asked the agent to stop: the failed
+        # check stands, the agent confirming the stop does not relabel it
+        ("abandoned", "failed"),
+        # a user's cancel the agent confirmed: the run ends cancelled
+        (None, "cancelled"),
+    ],
+)
+async def test_a_restore_check_the_server_stopped_waiting_for_stays_failed(
+    db, agent_repository, monkeypatch, error_message, verdict
+):
+    """The restore check's stall bound fails the run, then asks the agent to
+    stop. If the agent confirms before the runner reads the row, only a
+    user's cancel may turn the failure into `cancelled`."""
+    from app.database.models import AgentJob
+    from app.services.operations.executors import maintenance
+    from app.services.restore_check_service import restore_check_service
+
+    if error_message == "abandoned":
+        error_message = maintenance.AGENT_WAIT_ABANDONED_MESSAGE
+    op = _operation(db, agent_repository, kind="restore_check")
+    job = _agent_job(
+        db, agent_repository, op.id, status="cancel_requested", kind="restore_check"
+    )
+    ctx = FakeContext(db, op)  # no runner cancel
+
+    async def execute(job_id, repository_id):
+        row = db.get(Operation, job_id)
+        row.status = "failed"
+        row.error_message = "Restore verification failed on the agent: timed out"
+        agent_job = db.get(AgentJob, job.id)
+        agent_job.status = "canceled"
+        agent_job.completed_at = datetime.utcnow()
+        agent_job.error_message = error_message
+        db.commit()
+
+    monkeypatch.setattr(restore_check_service, "execute_restore_check", execute)
+
+    outcome = await maintenance.run_restore_check(ctx)
+
+    db.expire_all()
+    assert db.get(Operation, op.id).status == verdict
+    assert outcome.status == "failed"
+
+
+async def test_a_maintenance_link_with_a_string_id_is_found(db, agent_repository):
+    """The payload is JSON: an id stored as a string still names the
+    operation, or its cancel would never reach the agent."""
+    from app.services.operations.executors import maintenance
+
+    op = _operation(db, agent_repository)
+    job = _agent_job(db, agent_repository, op.id)
+    job.payload = {
+        "job_kind": "repository.check",
+        "operation": {"maintenance_job": {"kind": "check", "id": str(op.id)}},
+    }
+    db.commit()
+
+    found = maintenance._agent_job_for_operation(db, agent_repository, op.id)
+
+    assert found is not None and found.id == job.id
+
+
+async def test_a_queued_agent_job_is_cancelled_before_the_agent_takes_it(
+    db, agent_repository, monkeypatch
+):
+    """No agent report follows a job nobody took: the executor closes the
+    row cancelled itself."""
+    from app.database.models import AgentJob
+    from app.services.operations.executors import maintenance
+
+    op = _operation(db, agent_repository, kind="prune")
+    job = _agent_job(db, agent_repository, op.id, status="queued", kind="prune")
+    ctx = FakeContext(db, op)
+    ctx._cancelled = True
+
+    async def call(self, job_id, *args, **kwargs):
+        for _ in range(100):
+            db.expire_all()
+            if db.get(AgentJob, job.id).status == "canceled":
+                raise RuntimeError("agent prune failed: canceled")
+            await asyncio.sleep(0.05)
+        raise AssertionError("the queued agent job was never cancelled")
+
+    monkeypatch.setattr("app.core.borg_router.BorgRouter.prune", call, raising=True)
+
+    outcome = await maintenance.run_prune(ctx)
+
+    db.expire_all()
+    cancelled_job = db.get(AgentJob, job.id)
+    assert cancelled_job.status == "canceled"
+    assert cancelled_job.error_message == "Cancelled by user"
+    assert outcome.status == "failed" and outcome.error_message == "cancelled"
+    assert db.get(Operation, op.id).status == "cancelled"
+
+
+async def test_the_agent_canceller_waits_for_the_job_to_exist(
+    db, agent_repository, monkeypatch
+):
+    """A cancel can land before the router has queued the agent job; the
+    watcher asks again until there is one."""
+    from unittest.mock import AsyncMock
+
+    from app.database.models import AgentJob
+    from app.services.operations.executors.maintenance import (
+        cancel_agent_operation_job,
+    )
+
+    monkeypatch.setattr(
+        "app.services.agent_job_dispatcher.dispatch_agent_cancel_if_connected",
+        AsyncMock(return_value=True),
+    )
+    op = _operation(db, agent_repository)
+
+    assert await cancel_agent_operation_job(db, agent_repository, op.id) is False
+
+    job = _agent_job(db, agent_repository, op.id, status="claimed")
+    assert await cancel_agent_operation_job(db, agent_repository, op.id) is True
+    db.expire_all()
+    assert db.get(AgentJob, job.id).status == "cancel_requested"
+    # asking again does not start over
+    assert await cancel_agent_operation_job(db, agent_repository, op.id) is True
+
+
+async def test_a_failure_of_an_uncancelled_agent_run_still_raises(
+    db, agent_repository, monkeypatch
+):
+    from app.services.operations.executors import maintenance
+
+    op = _operation(db, agent_repository)
+    ctx = FakeContext(db, op)
+
+    async def call(self, job_id, *args, **kwargs):
+        raise RuntimeError("agent check failed: repository locked")
+
+    monkeypatch.setattr("app.core.borg_router.BorgRouter.check", call, raising=True)
+
+    with pytest.raises(RuntimeError, match="repository locked"):
+        await maintenance.run_check(ctx)
