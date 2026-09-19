@@ -453,6 +453,25 @@ class TestLostFiles:
         out = lost_files(test_db, repo, by, deleted_ids={old.id})
         assert (out["moved_count"], out["total_count"]) == (0, 1)
 
+    def test_the_estimate_is_none_while_the_index_is_incomplete(
+        self, test_db, monkeypatch
+    ):
+        """An unindexed archive moves the total either way, so there is no
+        ceiling to show (spec 4.4/4.5)."""
+        from app.services import prune_preview as pp
+
+        repo = _repo(test_db)
+        monkeypatch.setattr(pp, "history_enabled", lambda db: True)
+        monkeypatch.setattr(pp, "history_capability", lambda db, r: "available")
+        monkeypatch.setattr(
+            pp, "lost_files", lambda *a, **k: {"incomplete": True, "total_size": 500}
+        )
+        assert pp.lost_size_estimate(test_db, repo, []) is None
+        monkeypatch.setattr(
+            pp, "lost_files", lambda *a, **k: {"incomplete": False, "total_size": 500}
+        )
+        assert pp.lost_size_estimate(test_db, repo, []) == 500
+
     def test_a_file_of_unknown_size_is_never_matched_by_name(self, test_db):
         repo = _repo(test_db)
         by = {}

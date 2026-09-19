@@ -564,18 +564,21 @@ def lost_size_estimate(
     """The logical size of the files no kept archive holds once `candidates`
     are deleted. Compression and deduplication mean the storage this frees
     is at most this, never exactly it, so it belongs next to
-    `freed_at_least`, not in its place. None without the history index."""
+    `freed_at_least`, not in its place. None without the history index,
+    and None while the index is incomplete: an unindexed archive on either
+    side moves the total both ways, so it is no longer a ceiling."""
     if (
         not history_enabled(db)
         or history_capability(db, repository) != HISTORY_AVAILABLE
     ):
         return None
-    return lost_files(
+    lost = lost_files(
         db,
         repository,
         archives_by_series(db, repository),
         deleted_ids={a.id for a in candidates},
-    )["total_size"]
+    )
+    return None if lost["incomplete"] else lost["total_size"]
 
 
 def archives_by_series(db: Session, repository: Repository) -> dict[str, list[Archive]]:

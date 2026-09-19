@@ -232,6 +232,12 @@ export default function PrunePreview() {
       comparison.candidates.find((c) => sameRetention(c.retention, previewedRetention))?.key ?? null
     )
   }, [comparison, previewedRetention])
+  // The ceiling only holds while the index is complete: an unindexed
+  // archive on either side can move the total up or down.
+  const lostSize =
+    preview && preview.lost_files.available && !preview.lost_files.incomplete
+      ? (preview.lost_files.total_size ?? 0)
+      : null
   const editing =
     preview && previewedRetention && selectedKey === null
       ? {
@@ -239,7 +245,7 @@ export default function PrunePreview() {
           kept_count: preview.kept_count,
           deleted_count: preview.deleted_count,
           freed_at_least: preview.freed_at_least,
-          lost_size: preview.lost_files.available ? (preview.lost_files.total_size ?? 0) : null,
+          lost_size: lostSize,
         }
       : null
 
@@ -378,9 +384,7 @@ export default function PrunePreview() {
                 deletedCount={deletedCount}
                 keptCount={keptCount}
                 freedAtLeast={preview.freed_at_least}
-                lostSize={
-                  preview.lost_files.available ? (preview.lost_files.total_size ?? 0) : null
-                }
+                lostSize={lostSize}
                 footprintBefore={preview.footprint_before}
                 footprintAfterAtMost={preview.footprint_after_at_most}
               />

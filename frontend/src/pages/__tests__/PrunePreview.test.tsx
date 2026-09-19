@@ -200,6 +200,29 @@ describe('PrunePreview page', () => {
     expect(screen.queryByText(/another series/i)).not.toBeInTheDocument()
   })
 
+  it('drops the ceiling while the index is incomplete', async () => {
+    vi.mocked(repositoriesAPI.prunePreview).mockResolvedValue({
+      data: {
+        ...preview,
+        lost_files: {
+          available: true,
+          capability: 'available',
+          incomplete: true,
+          unindexed_archive_ids: [9],
+          total_count: 1,
+          total_size: 400,
+          top: [],
+          by_folder: [],
+        },
+      },
+    } as never)
+    renderWithProviders(<PrunePreview />, { initialRoute: '/repositories/7/prune-preview' })
+    await screen.findByTestId('prune-preview-deleted')
+    const freed = screen.getByTestId('prune-preview-freed').textContent
+    expect(freed).toMatch(/at least 300\.00 B/)
+    expect(freed).not.toMatch(/up to/)
+  })
+
   it('bounds the freed figure with the lost-file size when the index has it', async () => {
     vi.mocked(repositoriesAPI.prunePreview).mockResolvedValue({
       data: {

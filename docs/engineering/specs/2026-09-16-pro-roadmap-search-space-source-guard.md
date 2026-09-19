@@ -229,7 +229,9 @@ repository's stored storage size (the `storage` payload from #1030);
 lost-file total is logical file data, not stored bytes: it bounds the
 freed space from above, where `freed_at_least` bounds it from below, and
 neither the comparison's `lost_size` column nor the UI subtracts it from
-the footprint.
+the footprint. The preview shows the ceiling only while `lost_files`
+reports the index complete; with `incomplete` true the tile shows the
+lower bound alone.
 
 UI: a page, not a dialog: `/repositories/{id}/prune-preview`, reached from
 the prune dialog's dry-run button (renamed "Preview") and from the
@@ -302,8 +304,11 @@ with the repository. One migration with its test.
 size of the files no kept archive would hold under that policy, from the
 history index alone (step 5's total, no borg call and no repository
 lock). It is null when the plan does not include `archive_history`, when
-the repository's history capability is not `available`, and for rows
-written before the column existed. It is file data, not stored bytes: it
+the repository's history capability is not `available`, while the index
+is incomplete (an unindexed archive among the deleted rows hides files
+that are really lost, one among the survivors counts files that are not,
+so the number bounds nothing), and for rows written before the column
+existed. It is file data, not stored bytes: it
 bounds the freed space from above where `freed_at_least` bounds it from
 below, and nothing subtracts it from a footprint.
 
