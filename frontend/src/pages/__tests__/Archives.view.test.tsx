@@ -2,8 +2,8 @@
  * Archives page: the database-backed heatmap/list view (spec 10.3).
  *
  * The page reads `archivesAPI.listStored` instead of the live
- * `BorgApiClient.listArchives()`, defaults to the heatmap, and lets the user
- * switch to the list view with the choice persisted to `localStorage`.
+ * `BorgApiClient.listArchives()`, defaults to the list, and lets the user
+ * switch to the heatmap with the choice persisted to `localStorage`.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
