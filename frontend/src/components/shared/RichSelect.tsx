@@ -43,6 +43,7 @@ interface RichSelectProps {
   searchEnabled?: boolean
   searchPlaceholder?: string
   noResultsText?: string
+  size?: 'small' | 'medium'
   sx?: SxProps<Theme>
   selectSx?: SxProps<Theme>
   menuPaperSx?: SxProps<Theme>
@@ -61,6 +62,7 @@ export default function RichSelect({
   searchEnabled = false,
   searchPlaceholder,
   noResultsText,
+  size = 'medium',
   sx,
   selectSx,
   menuPaperSx,
@@ -74,6 +76,7 @@ export default function RichSelect({
   const [search, setSearch] = useState('')
   const resolvedSearchPlaceholder = searchPlaceholder ?? t('common.search')
   const resolvedNoResultsText = noResultsText ?? t('common.noResults')
+  const height = size === 'small' ? 40 : 56
   const selectSxList = toSxArray(selectSx)
   const menuPaperSxList = toSxArray(menuPaperSx)
 
@@ -122,7 +125,14 @@ export default function RichSelect({
   }
 
   return (
-    <FormControl fullWidth disabled={disabled} required={required} sx={sx} ref={rootRef}>
+    <FormControl
+      fullWidth
+      size={size}
+      disabled={disabled}
+      required={required}
+      sx={sx}
+      ref={rootRef}
+    >
       <InputLabel id={resolvedLabelId} shrink={Boolean(placeholder) || undefined}>
         {label}
       </InputLabel>
@@ -186,9 +196,9 @@ export default function RichSelect({
         }}
         sx={[
           {
-            height: 56,
+            height,
             '& .MuiSelect-select': {
-              height: 56,
+              height,
               boxSizing: 'border-box',
               display: 'flex',
               alignItems: 'center',

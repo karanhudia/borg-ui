@@ -144,7 +144,7 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
             onChange={(value) => setCompareTo(value ? Number(value) : null)}
             options={compareOptions}
             // the same 40px as the filter buttons beside it
-            selectSx={{ height: 40, '& .MuiSelect-select': { height: 40, py: 0 } }}
+            size="small"
           />
         </Box>
         <ToggleButtonGroup
