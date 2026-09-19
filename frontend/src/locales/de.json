@@ -1144,7 +1144,6 @@
         "duration": "Dauer",
         "compression": "Komprimierung",
         "compressionNotReported": "Von dieser Borg-Version nicht gemeldet",
-        "measuredAt": "Gemessen {{when}}",
         "remeasuring": "Neue Messung, nachdem Archive entfernt wurden",
         "notMeasured": "Noch nicht gemessen",
         "vsPrevious": "zum vorherigen"
@@ -2191,7 +2190,8 @@
       "followup": "Folgeaktion",
       "reconcile": "Abgleich",
       "retry": "Wiederholung",
-      "preview": "Manuell · Prune-Vorschau"
+      "preview": "Prune-Vorschau",
+      "previewAuto": "Automatisch · Prune-Vorschau"
     },
     "runTitle": {
       "reconcile": "Abgleichlauf",
@@ -6197,7 +6197,8 @@
       "prune": {
         "noKeepRule": "Vor einer Vorschau oder Ausführung eines Prunes mindestens eine Aufbewahrungsregel festlegen.",
         "dryRunFailed": "Der Testlauf von Borg ist fehlgeschlagen.",
-        "comparisonRunning": "Für dieses Repository läuft bereits ein Vergleich der Aufbewahrungsregeln."
+        "comparisonRunning": "Für dieses Repository läuft bereits ein Vergleich der Aufbewahrungsregeln.",
+        "candidateNotStored": "Diese Richtlinie wurde noch nicht verglichen. Starten Sie einen Vergleich, um sie zu sehen."
       }
     },
     "success": {

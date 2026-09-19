@@ -3,8 +3,10 @@ prune preview's dry run and stored per repository. Wording is fixed:
 compared policies, would free at least. Nothing here picks a policy for the user."""
 
 import logging
+from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database.models import Archive, PruneComparison, Repository
@@ -79,11 +81,27 @@ def candidates(
 
 
 def current_archive_count(db: Session, repository: Repository) -> int:
+    return archive_set(db, repository)[0]
+
+
+def archive_set(
+    db: Session, repository: Repository
+) -> tuple[int, Optional[int], Optional[datetime]]:
+    """A fingerprint of the repository's archive set: how many, the highest
+    id, and the newest `first_seen_at`. One aggregate query, and enough to
+    tell this set from another of the same size. The count alone misses an
+    archive removed and another taken since; the id alone misses it too,
+    because SQLite hands a deleted row's id to the next insert. A row is only
+    ever first seen when a listing inserts it, so that timestamp moves on
+    every replacement."""
     removed = pending_removed_ids(db, repository.id)
-    q = db.query(Archive.id).filter(Archive.repository_id == repository.id)
+    q = db.query(
+        func.count(Archive.id), func.max(Archive.id), func.max(Archive.first_seen_at)
+    ).filter(Archive.repository_id == repository.id)
     if removed:
         q = q.filter(Archive.id.notin_(removed))
-    return q.count()
+    count, max_id, seen_at = q.one()
+    return count or 0, max_id, seen_at
 
 
 async def run_comparison(
@@ -97,7 +115,7 @@ async def run_comparison(
     candidate whose dry run failed is left out; the others still land. When
     none did, the previous rows stay: an outage should not erase a good
     comparison."""
-    count = current_archive_count(db, repository)
+    count, max_id, seen_at = archive_set(db, repository)
     computed_at = utc_now()
     rows: list[PruneComparison] = []
     measured = 0
@@ -116,6 +134,8 @@ async def run_comparison(
                     partial_measure=False,
                     operation_id=None,
                     archive_count_at=count,
+                    archive_max_id=max_id,
+                    archive_seen_at=seen_at,
                     computed_at=computed_at,
                 )
             )
@@ -148,8 +168,15 @@ async def run_comparison(
                 freed_at_least=result.freed_at_least,
                 lost_size=lost_size_estimate(db, repository, result.candidates),
                 partial_measure=result.partial_measure,
+                # Borg's verdict lines, so the preview page can show this
+                # candidate in full without running the dry run again.
+                verdicts=[
+                    [p.borg_id, p.name, p.verdict, p.rule] for p in result.joined
+                ],
                 operation_id=result.operation.id,
                 archive_count_at=count,
+                archive_max_id=max_id,
+                archive_seen_at=seen_at,
                 computed_at=computed_at,
             )
         )
@@ -175,6 +202,9 @@ def _row_payload(row: PruneComparison) -> dict:
         "lost_size": row.lost_size,
         "partial_measure": row.partial_measure,
         "operation_id": row.operation_id,
+        # the page reads a row without a dry run only when its verdicts were
+        # kept; an empty list is a policy that matched nothing, not a gap
+        "readable": row.verdicts is not None,
     }
 
 
@@ -193,10 +223,27 @@ def stored(db: Session, repository: Repository) -> dict:
             "candidates": [],
         }
     count_at = rows[0].archive_count_at
+    computed_at = rows[0].computed_at
+    # Retention is relative to now, so the same archives fall in different
+    # buckets tomorrow: a comparison is stale once the archive set moved or
+    # the day did, whichever comes first.
+    now = utc_now()
+    count_now, max_id_now, seen_at_now = archive_set(db, repository)
+    stale = (
+        count_now != count_at
+        # a swap keeps the count, and on SQLite it can keep the highest id
+        # too, because a deleted row's id goes to the next insert
+        or max_id_now != rows[0].archive_max_id
+        or seen_at_now != rows[0].archive_seen_at
+        or (computed_at is None or computed_at.date() != now.date())
+        # a row the preview page cannot read back is not a comparison it can
+        # use: rows stored before the verdicts were kept refresh themselves
+        or any(r.retention is not None and r.verdicts is None for r in rows)
+    )
     return {
-        "computed_at": serialize_datetime(rows[0].computed_at),
+        "computed_at": serialize_datetime(computed_at),
         "archive_count_at": count_at,
-        "stale": current_archive_count(db, repository) != count_at,
+        "stale": stale,
         "candidates": [_row_payload(r) for r in rows],
     }
 

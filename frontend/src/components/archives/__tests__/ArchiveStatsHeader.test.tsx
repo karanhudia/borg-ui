@@ -61,7 +61,7 @@ describe('ArchiveStatsHeader', () => {
     // 840 s vs 900 s
     expect(screen.getByText('−1 min vs previous')).toBeInTheDocument()
     expect(screen.getByText('1.5:1')).toBeInTheDocument()
-    expect(screen.getByText(/^Measured /)).toBeInTheDocument()
+    expect(screen.queryByText(/^Measured /)).not.toBeInTheDocument()
   })
 
   it('says why the file changes are absent instead of showing zeros', () => {

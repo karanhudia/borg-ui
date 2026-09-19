@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import UUID4, BaseModel, Field
 from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session
 
@@ -449,6 +449,11 @@ class PrunePreviewRequest(BaseModel):
     keep_quarterly: int = Field(default=0, ge=0)
     keep_yearly: int = Field(default=0, ge=0)
     keep_within: Optional[str] = None
+    # One run per visit to the preview page, so the dry runs a reader sets
+    # off while trying policies land as steps of one run in the timeline
+    # instead of as loose rows. A UUID, so a client cannot join its rows to
+    # a run the server owns.
+    preview_run_id: Optional[UUID4] = None
 
 
 @router.post("/{repo_id}/prune/preview")
@@ -481,7 +486,11 @@ async def prune_preview(
         )
     try:
         return await service.build_preview(
-            db, repository, retention, user_id=current_user.id
+            db,
+            repository,
+            retention,
+            user_id=current_user.id,
+            run_id=str(body.preview_run_id) if body.preview_run_id else None,
         )
     except service.DryRunFailed as exc:
         raise HTTPException(
@@ -506,12 +515,50 @@ async def prune_comparison(
     return stored(db, _repo(db, current_user, repo_id))
 
 
-@router.post("/{repo_id}/prune/comparison/refresh")
-async def prune_comparison_refresh(
+@router.get("/{repo_id}/prune/comparison/{candidate}/preview")
+async def prune_comparison_preview(
     repo_id: int,
+    candidate: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """A stored candidate as the full preview payload. The comparison already
+    ran Borg for this policy and kept its verdicts, so opening the row is a
+    read: no dry run, no entry in the timeline."""
+    from app.database.models import PruneComparison
+    from app.services import prune_preview as service
+
+    repository = _repo(db, current_user, repo_id)
+    row = (
+        db.query(PruneComparison)
+        .filter(
+            PruneComparison.repository_id == repository.id,
+            PruneComparison.candidate == candidate,
+        )
+        .first()
+    )
+    if row is None or row.verdicts is None:
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.prune.candidateNotStored"}
+        )
+    return service.preview_from_verdicts(
+        db,
+        repository,
+        [service.Verdict(*v) for v in row.verdicts],
+        operation_id=row.operation_id,
+    )
+
+
+@router.post("/{repo_id}/prune/comparison/refresh")
+async def prune_comparison_refresh(
+    repo_id: int,
+    auto: bool = False,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """`auto` is the preview page opening on a comparison that is missing or
+    stale, as against the reader pressing Compare now: the same work, but the
+    timeline should not call it manual."""
     from app.services.operations.enqueue import enqueue
 
     repository = _repo(db, current_user, repo_id, role="operator")
@@ -532,7 +579,7 @@ async def prune_comparison_refresh(
         db,
         "prune_compare",
         repository_id=repository.id,
-        trigger="manual",
+        trigger="preview" if auto else "manual",
         triggered_by_user_id=current_user.id,
     )
     return {"operation_id": op.id}

@@ -24,6 +24,13 @@ export function formatRetention(r: StoredPruneRetention | null | undefined): str
 type AnyRetention =
   StoredPruneRetention | (Omit<StoredPruneRetention, 'keep_within'> & { keep_within: string })
 
+/** A retention as one string, field by field in a fixed order: two policies
+ * that `sameRetention` calls equal produce the same key, whatever order their
+ * object literals list the fields in. */
+export function retentionKey(r: AnyRetention): string {
+  return [...UNITS.map(([field]) => Number(r[field] ?? 0)), r.keep_within || ''].join('|')
+}
+
 /** Field by field, so key order and '' versus null for keep_within do not matter. */
 export function sameRetention(
   a: AnyRetention | null | undefined,

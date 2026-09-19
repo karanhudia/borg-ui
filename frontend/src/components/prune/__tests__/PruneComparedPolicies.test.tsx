@@ -29,6 +29,7 @@ const comparison: PruneComparison = {
       lost_size: null,
       partial_measure: false,
       operation_id: 1,
+      readable: true,
     },
     {
       key: 'standard',
@@ -40,6 +41,7 @@ const comparison: PruneComparison = {
       lost_size: 41 * 1024 ** 3,
       partial_measure: true,
       operation_id: 2,
+      readable: true,
     },
   ],
 }

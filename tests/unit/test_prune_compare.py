@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -353,14 +353,18 @@ async def test_run_comparison_keeps_old_rows_when_only_the_no_policy_row_is_left
 
 
 @pytest.mark.unit
-def test_stored_reports_stale_when_the_archive_count_moved(db, repo):
+def test_stored_reports_stale_when_the_archive_count_or_the_day_moved(
+    db, repo, monkeypatch
+):
     assert pc.stored(db, repo) == {
         "computed_at": None,
         "archive_count_at": None,
         "stale": True,
         "candidates": [],
     }
-    _archives(db, repo, 2)
+    rows = _archives(db, repo, 2)
+    now = datetime(2026, 9, 18, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(pc, "utc_now", lambda: now)
     db.add(
         PruneComparison(
             repository_id=repo.id,
@@ -371,7 +375,10 @@ def test_stored_reports_stale_when_the_archive_count_moved(db, repo):
             deleted_count=1,
             freed_at_least=20,
             archive_count_at=2,
-            computed_at=datetime(2026, 9, 18, 1, 0),
+            archive_max_id=max(a.id for a in rows),
+            archive_seen_at=max(a.first_seen_at for a in rows),
+            computed_at=now,
+            verdicts=[["ab", "a0", "kept", "daily #1"]],
         )
     )
     db.commit()
@@ -380,8 +387,126 @@ def test_stored_reports_stale_when_the_archive_count_moved(db, repo):
     assert payload["candidates"][0]["key"] == "standard"
     assert payload["candidates"][0]["freed_at_least"] == 20
     assert payload["candidates"][0]["lost_size"] is None
+    # retention buckets are relative to now, so yesterday's answer is stale
+    # even when the archive set has not moved
+    row = db.query(PruneComparison).first()
+    row.computed_at = now - timedelta(days=1)
+    db.commit()
+    assert pc.stored(db, repo)["stale"] is True
+    row.computed_at = now
+    db.commit()
+    assert pc.stored(db, repo)["stale"] is False
+
+    # one archive gone and one taken since: same count, different answer
+    db.delete(rows[0])
+    db.commit()
+    db.add(
+        Archive(
+            repository_id=repo.id,
+            name="later",
+            series="later",
+            borg_id=f"{99:064x}",
+            start=datetime(2026, 9, 20),
+            deduplicated_size=10,
+            first_seen_at=datetime(2026, 9, 20),
+            last_seen_at=datetime(2026, 9, 20),
+        )
+    )
+    db.commit()
+    assert pc.current_archive_count(db, repo) == 2
+    assert pc.stored(db, repo)["stale"] is True
+
+    row.archive_max_id, row.archive_seen_at = pc.archive_set(db, repo)[1:]
+    db.commit()
+    assert pc.stored(db, repo)["stale"] is False
     _archives(db, repo, 1)
     assert pc.stored(db, repo)["stale"] is True
+
+
+@pytest.mark.unit
+def test_stored_is_stale_when_the_highest_id_is_reused(db, repo, monkeypatch):
+    """SQLite hands a deleted row's id to the next insert, so an archive
+    replaced by another can land on the same count and the same highest id.
+    The newest first_seen_at still moves, and the comparison goes stale."""
+    now = datetime(2026, 9, 18, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(pc, "utc_now", lambda: now)
+    rows = _archives(db, repo, 2)
+    count, max_id, seen_at = pc.archive_set(db, repo)
+    db.add(
+        PruneComparison(
+            repository_id=repo.id,
+            candidate="standard",
+            label="Standard",
+            retention=Retention(keep_daily=7).as_params(),
+            kept_count=1,
+            deleted_count=1,
+            freed_at_least=20,
+            archive_count_at=count,
+            archive_max_id=max_id,
+            archive_seen_at=seen_at,
+            computed_at=now,
+            verdicts=[["ab", "a0", "kept", "daily #1"]],
+        )
+    )
+    db.commit()
+    assert pc.stored(db, repo)["stale"] is False
+
+    # the highest-id archive goes, and its replacement takes that same id back
+    highest = max(rows, key=lambda a: a.id)
+    reused_id = highest.id
+    db.delete(highest)
+    db.commit()
+    db.add(
+        Archive(
+            id=reused_id,
+            repository_id=repo.id,
+            name="replacement",
+            series="replacement",
+            borg_id=f"{123:064x}",
+            start=datetime(2026, 9, 21),
+            deduplicated_size=10,
+            first_seen_at=datetime(2026, 9, 21),
+            last_seen_at=datetime(2026, 9, 21),
+        )
+    )
+    db.commit()
+    assert pc.archive_set(db, repo)[:2] == (count, max_id)
+    assert pc.stored(db, repo)["stale"] is True
+
+
+@pytest.mark.unit
+def test_stored_is_stale_while_a_row_has_no_verdicts(db, repo, monkeypatch):
+    """A comparison the preview page cannot read back is not one it can use:
+    rows from before the verdicts were kept ask to be run again."""
+    rows = _archives(db, repo, 2)
+    now = datetime(2026, 9, 18, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(pc, "utc_now", lambda: now)
+    db.add(
+        PruneComparison(
+            repository_id=repo.id,
+            candidate="standard",
+            label="Standard",
+            retention=Retention(keep_daily=7).as_params(),
+            kept_count=1,
+            deleted_count=1,
+            freed_at_least=20,
+            archive_count_at=2,
+            archive_max_id=max(a.id for a in rows),
+            archive_seen_at=max(a.first_seen_at for a in rows),
+            computed_at=now,
+            verdicts=None,
+        )
+    )
+    db.commit()
+    payload = pc.stored(db, repo)
+    assert payload["stale"] is True
+    assert payload["candidates"][0]["readable"] is False
+    row = db.query(PruneComparison).first()
+    # a policy that matched nothing stored an empty list, which is an answer
+    row.verdicts = []
+    db.commit()
+    payload = pc.stored(db, repo)
+    assert payload["stale"] is False and payload["candidates"][0]["readable"] is True
 
 
 @pytest.mark.unit

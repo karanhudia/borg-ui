@@ -1144,7 +1144,6 @@
         "duration": "Durata",
         "compression": "Compressione",
         "compressionNotReported": "Non riportato da questa versione di Borg",
-        "measuredAt": "Misurato {{when}}",
         "remeasuring": "Nuova misurazione dopo la rimozione di archivi",
         "notMeasured": "Non ancora misurato",
         "vsPrevious": "rispetto al precedente"
@@ -2191,7 +2190,8 @@
       "followup": "Follow-up",
       "reconcile": "Riconciliazione",
       "retry": "Nuovo tentativo",
-      "preview": "Manuale · Anteprima prune"
+      "preview": "Anteprima prune",
+      "previewAuto": "Automatico · Anteprima prune"
     },
     "runTitle": {
       "reconcile": "Riconciliazione",
@@ -6197,7 +6197,8 @@
       "prune": {
         "noKeepRule": "Imposta almeno una regola di conservazione prima di visualizzare l'anteprima o eseguire un prune.",
         "dryRunFailed": "L'esecuzione di prova di Borg è fallita.",
-        "comparisonRunning": "È già in corso un confronto delle regole di conservazione per questo repository."
+        "comparisonRunning": "È già in corso un confronto delle regole di conservazione per questo repository.",
+        "candidateNotStored": "Questo criterio non è ancora stato confrontato. Esegui un confronto per vederlo."
       }
     },
     "success": {

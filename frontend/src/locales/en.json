@@ -1144,7 +1144,6 @@
         "duration": "Duration",
         "compression": "Compression",
         "compressionNotReported": "Not reported by this Borg version",
-        "measuredAt": "Measured {{when}}",
         "remeasuring": "Re-measuring after archives were removed",
         "notMeasured": "Not measured yet",
         "vsPrevious": "vs previous"
@@ -2191,7 +2190,8 @@
       "followup": "Follow-up",
       "reconcile": "Reconcile",
       "retry": "Retry",
-      "preview": "Manual · Prune preview"
+      "preview": "Prune preview",
+      "previewAuto": "Automatic · Prune preview"
     },
     "runTitle": {
       "reconcile": "Reconcile run",
@@ -6197,7 +6197,8 @@
       "prune": {
         "noKeepRule": "Set at least one keep rule before previewing or running a prune.",
         "dryRunFailed": "Borg's dry run failed.",
-        "comparisonRunning": "A retention comparison is already running for this repository."
+        "comparisonRunning": "A retention comparison is already running for this repository.",
+        "candidateNotStored": "This policy has not been compared yet. Run a comparison to see it."
       }
     },
     "success": {

@@ -379,7 +379,10 @@ export default function ArchiveDetail() {
             >
               {archive.name}
             </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
+            <Typography
+              variant="caption"
+              sx={{ color: 'text.disabled', mt: 0.25, display: 'block' }}
+            >
               {[
                 parseBackendDate(archive.start).toLocaleString(),
                 archive.hostname &&
