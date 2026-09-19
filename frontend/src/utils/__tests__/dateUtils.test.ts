@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
+  formatCalendarDay,
   formatDate,
   formatDateShort,
   formatCronHuman,
@@ -406,5 +407,26 @@ describe('convertCronToLocal', () => {
     const result = convertCronToLocal('0 2 * * 0') // UTC Sun 2 AM → local Sat 8 PM
     // (0 - 1 + 7) % 7 = 6 (Saturday)
     expect(result).toBe('0 20 * * 6')
+  })
+})
+
+describe('formatCalendarDay', () => {
+  it('reads a date-only string as the calendar day it names', () => {
+    // not UTC midnight, which is the day before west of Greenwich
+    expect(formatCalendarDay('2026-09-01')).toBe(
+      new Date(2026, 8, 1).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    )
+  })
+
+  it('hands back a day that never existed rather than rolling it over', () => {
+    expect(formatCalendarDay('2026-02-30')).toBe('2026-02-30')
+  })
+
+  it('has a fallback for nothing at all', () => {
+    expect(formatCalendarDay(null)).toBe('Never')
   })
 })

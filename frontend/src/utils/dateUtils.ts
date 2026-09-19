@@ -55,7 +55,13 @@ export const formatCalendarDay = (dateString: string | null | undefined): string
   if (!dateString) return 'Never'
   const [y, m, d] = dateString.slice(0, 10).split('-').map(Number)
   if (!y || !m || !d) return formatDateShort(dateString)
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+  const day = new Date(y, m - 1, d)
+  // the constructor rolls a bad day over ("2026-02-30" becomes March 2),
+  // so a date that did not survive the round trip was never a real day
+  if (day.getFullYear() !== y || day.getMonth() !== m - 1 || day.getDate() !== d) {
+    return dateString
+  }
+  return day.toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',

@@ -69,23 +69,12 @@ export default function ArchiveCard({
   return (
     <Box
       data-testid="archive-row"
-      // the whole row opens the archive, so it carries the button role and
-      // the keys that go with it; the action buttons stop their own clicks
-      role={onOpen ? 'button' : undefined}
-      tabIndex={onOpen ? 0 : undefined}
-      aria-label={onOpen ? t('archives.openArchive', { name: archive.name }) : undefined}
+      // A click anywhere on the row is a convenience; the archive name is
+      // the real control, a link, which is what the keyboard and assistive
+      // technology follow. The row must not claim a button role of its own:
+      // a button's children are presentational, so a focusable link inside
+      // one has no node in the accessibility tree.
       onClick={onOpen ? () => onOpen(archive) : undefined}
-      onKeyDown={
-        onOpen
-          ? (e) => {
-              if (e.target !== e.currentTarget) return
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                onOpen(archive)
-              }
-            }
-          : undefined
-      }
       sx={{
         cursor: onOpen ? 'pointer' : 'default',
         display: 'grid',

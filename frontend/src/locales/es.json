@@ -1036,7 +1036,6 @@
     "mountTimeout": "Tiempo de espera de montaje: Los repositorios grandes pueden necesitar más tiempo para montarse.",
     "mountFailed": "Error al montar el archivo: {{error}}",
     "restoreStarted": "¡Trabajo de restauración iniciado! Comprueba la pestaña de Actividad para monitorizar el progreso.",
-    "openArchive": "Abrir {{name}}",
     "restorePanel": {
       "label": "Progreso de la restauración",
       "pending": "Restauración en cola",

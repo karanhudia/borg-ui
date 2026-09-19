@@ -431,6 +431,12 @@ def _held_by_survivors(
                         present.discard(path)
                     else:
                         present.add(path)
+                if change == "modified":
+                    # the file no longer holds its old size: drop that key,
+                    # or this archive looks like it holds both versions
+                    stale = _file_key(path, size_before)
+                    if stale is not None and stale in open_keys:
+                        present_keys[stale].discard(path)
                 key = _file_key(
                     path, size_before if change == "removed" else size_after
                 )

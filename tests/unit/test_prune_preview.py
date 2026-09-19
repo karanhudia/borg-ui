@@ -416,6 +416,30 @@ class TestLostFiles:
         out = lost_files(test_db, repo, by, deleted_ids={old.id})
         assert (out["moved_count"], out["total_count"]) == (1, 1)
 
+    def test_a_survivor_that_modified_the_file_no_longer_holds_its_old_size(
+        self, test_db
+    ):
+        # The surviving copy grew to 200 bytes; the deleted 100-byte version
+        # is gone for good and must stay in the lost totals.
+        repo = _repo(test_db)
+        by = {}
+        by.update(_series(test_db, repo, ("old", 1), series="old"))
+        by.update(_series(test_db, repo, ("n1", 2), ("n2", 3), series="new"))
+        old = by["old"][0]
+        n1, n2 = by["new"]
+        _change(test_db, old, "Users/x/movie.mp4", "added", size_after=100)
+        _change(test_db, n1, "local/Users/x/movie.mp4", "added", size_after=100)
+        _change(
+            test_db,
+            n2,
+            "local/Users/x/movie.mp4",
+            "modified",
+            size_before=100,
+            size_after=200,
+        )
+        out = lost_files(test_db, repo, by, deleted_ids={old.id, n1.id})
+        assert (out["moved_count"], out["total_count"]) == (0, 1)
+
     def test_an_unrelated_namesake_of_the_same_size_does_not_rescue(self, test_db):
         # Same name, same byte count, unrelated tree: not the same file, so
         # the deleted one is still lost.

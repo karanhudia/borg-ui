@@ -266,7 +266,9 @@ most and says "frees the most of the compared policies".
   12 monthly, 3 yearly). A preset equal to the current policy is dropped.
 
 Each candidate runs `build_preview` steps 1, 2 and 4 (dry run, verdict
-join, freed lower bound from the stored sizes) and not steps 3 and 5: the
+join, freed lower bound from the stored sizes) and not step 3; step 5
+runs only for its total (2026-09-19, see `lost_size` below) and never
+for the per-file lists: the
 comparison runs after a backup and nothing is re-measured after a backup
 (Appendix B), so `partial_measure` is true when a candidate was never
 measured; the preview page re-measures and computes lost files when the
@@ -291,17 +293,29 @@ row).
 
 **Storage.** Table `prune_comparisons`: `repository_id`, `candidate`
 (key), `label`, `retention` (JSON of the keep fields), `kept_count`,
-`deleted_count`, `freed_at_least`, `partial_measure`, `operation_id`
-(the dry run, for its log), `archive_count_at`, `computed_at`. Replaced
-wholesale per repository on each run; deleted with the repository. One
-migration with its test.
+`deleted_count`, `freed_at_least`, `lost_size`, `partial_measure`,
+`operation_id` (the dry run, for its log), `archive_count_at`,
+`computed_at`. Replaced wholesale per repository on each run; deleted
+with the repository. One migration with its test.
+
+`lost_size` (added 2026-09-19, migration `c5d6e7f8a9b0`) is the logical
+size of the files no kept archive would hold under that policy, from the
+history index alone (step 5's total, no borg call and no repository
+lock). It is null when the plan does not include `archive_history`, when
+the repository's history capability is not `available`, and for rows
+written before the column existed. It is file data, not stored bytes: it
+bounds the freed space from above where `freed_at_least` bounds it from
+below, and nothing subtracts it from a footprint.
 
 **API.**
 
 - `GET /repositories/{id}/prune/comparison` returns `{computed_at,
   archive_count_at, stale, candidates: [{key, label, retention,
-  kept_count, deleted_count, freed_at_least, partial_measure,
-  operation_id}]}`. `stale` is true when nothing is stored or the current
+  kept_count, deleted_count, freed_at_least, lost_size, partial_measure,
+  operation_id}]}`. `lost_size` is null on a Community plan, on a
+  repository whose history capability is not `available`, and on rows
+  stored before the column existed; the table then shows the floor
+  alone. `stale` is true when nothing is stored or the current
   archive count differs from `archive_count_at`.
 - `POST /repositories/{id}/prune/comparison/refresh` enqueues one
   `prune_compare` operation and returns its id; 409 while one is queued or
@@ -312,7 +326,11 @@ migration with its test.
   descending, top three; repositories with nothing computed or zero freed
   are left out.
 
-Community, no gate: nothing here reads the history index (4.6).
+Community, no gate for the comparison itself. The one Pro-gated field is
+`lost_size`, which reads the history index (4.6) and is null without it;
+every other figure is computed for every plan, and the UI never hides a
+row behind the gate. Tests cover both: a Pro repository with an indexed
+history stores the total, a Community one stores null.
 
 **Preview page.** A "Compared policies" section under the existing
 preview. Table columns: policy label, retention on one line (`7d 4w 6m
