@@ -320,8 +320,16 @@ describe('PrunePreview page', () => {
     await waitFor(() =>
       expect(repositoriesAPI.pruneCandidatePreview).toHaveBeenCalledWith(7, 'standard')
     )
+    // move away, so coming back is a real selection and not a no-op
+    fireEvent.click(screen.getByText('Current'))
+    await waitFor(() =>
+      expect(repositoriesAPI.pruneCandidatePreview).toHaveBeenCalledWith(7, 'current')
+    )
     const reads = vi.mocked(repositoriesAPI.pruneCandidatePreview).mock.calls.length
     fireEvent.click(screen.getByText('Standard'))
+    await waitFor(() =>
+      expect(screen.getByText('Standard').closest('tr')).toHaveClass('Mui-selected')
+    )
     // a row seen once in this visit is already in hand
     expect(repositoriesAPI.pruneCandidatePreview).toHaveBeenCalledTimes(reads)
     // opening the row ran no dry run of its own
@@ -456,8 +464,20 @@ describe('PrunePreview page', () => {
         ),
       },
     } as never)
-    vi.mocked(repositoriesAPI.pruneComparisonRefresh).mockRejectedValue(new Error('403'))
+    let refuse = () => {}
+    vi.mocked(repositoriesAPI.pruneComparisonRefresh).mockReturnValue(
+      new Promise((_resolve, reject) => {
+        refuse = () => reject(new Error('403'))
+      }) as never
+    )
     renderPage()
+    await waitFor(() =>
+      expect(repositoriesAPI.pruneComparisonRefresh).toHaveBeenCalledWith(7, true)
+    )
+    // while the ask is in flight the page waits rather than running its own
+    await waitFor(() => expect(screen.getByText('Standard')).toBeInTheDocument())
+    expect(repositoriesAPI.prunePreview).not.toHaveBeenCalled()
+    refuse()
     await waitFor(() =>
       expect(repositoriesAPI.prunePreview).toHaveBeenCalledWith(
         7,
