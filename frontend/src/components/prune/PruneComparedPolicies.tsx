@@ -3,7 +3,6 @@ import {
   Alert,
   Box,
   Button,
-  ButtonBase,
   Chip,
   Paper,
   Stack,
@@ -118,15 +117,22 @@ export function PruneComparedPolicies({
             </TableHead>
             <TableBody>
               {rows.map((row) => (
-                <TableRow key={row.key} selected={row.key === selectedKey} hover>
-                  <TableCell>
-                    <ButtonBase
-                      onClick={() => onSelect(row)}
-                      sx={{ fontWeight: 600, textAlign: 'left' }}
-                    >
-                      {label(row)}
-                    </ButtonBase>
-                  </TableCell>
+                <TableRow
+                  key={row.key}
+                  selected={row.key === selectedKey}
+                  hover
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onSelect(row)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      onSelect(row)
+                    }
+                  }}
+                  sx={{ cursor: 'pointer' }}
+                >
+                  <TableCell sx={{ fontWeight: 600 }}>{label(row)}</TableCell>
                   <TableCell sx={{ fontFamily: 'monospace' }}>
                     {formatRetention(row.retention)}
                   </TableCell>
