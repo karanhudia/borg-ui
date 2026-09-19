@@ -305,6 +305,12 @@ def purge_operation_log_files(db: Session, filters) -> int:
     Operations write their logs to files, not to an inline column, so the
     inline-column sweep above cannot reach them. Without this the files
     outlive both retention windows and the rows that named them.
+
+    The order (clear the path, commit, unlink) is load-bearing, here and in
+    `_delete_chunked`: `_complete_finished_operation_log` rewrites a file
+    without a lock and removes it again when no operation names the path
+    any more. `test_log_purge_commits_the_cleared_path_before_unlinking`
+    and `test_row_purge_commits_the_deleted_row_before_unlinking` pin it.
     """
     total = 0
     while True:
@@ -575,6 +581,13 @@ def mark_jobs_of_pruned_archives(
     return marked
 
 
+# A finished agent job's late log lines reach its log file as they arrive
+# (app/api/agents.py), and each one moves the job's updated_at. The log
+# repair below leaves a job touched less than this long ago to that path, so
+# the two do not write the same line.
+LATE_LOG_SETTLE = timedelta(seconds=60)
+
+
 def sweep_pruned_archive_records(
     db: Session, lookback: timedelta = timedelta(days=2)
 ) -> int:
@@ -587,9 +600,10 @@ def sweep_pruned_archive_records(
     and while at it repair the linked prune job's stored log - the same race
     leaves it truncated to whatever had arrived at completion.
     """
-    since = utc_now() - lookback
+    now = utc_now()
+    since = now - lookback
     candidates = (
-        db.query(AgentJob)
+        db.query(AgentJob, AgentJob.updated_at <= now - LATE_LOG_SETTLE)
         .filter(
             AgentJob.job_type == "repository",
             AgentJob.status == "completed",
@@ -598,7 +612,7 @@ def sweep_pruned_archive_records(
         .all()
     )
     marked = 0
-    for agent_job in candidates:
+    for agent_job, settled in candidates:
         payload = agent_job.payload if isinstance(agent_job.payload, dict) else {}
         if str(payload.get("job_kind") or "") != "repository.prune":
             continue
@@ -616,7 +630,7 @@ def sweep_pruned_archive_records(
         if not full_log:
             continue
 
-        if len(full_log) > len(prune_job.logs or ""):
+        if settled and len(full_log) > len(prune_job.logs or ""):
             _store_prune_log(prune_job, full_log)
             db.commit()
 

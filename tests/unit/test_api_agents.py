@@ -1,12 +1,16 @@
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import SQLAlchemyError
 from starlette.websockets import WebSocketDisconnect
 
+import app.config as app_config
+from app.api.agents import _handle_agent_session_message
 from app.core.agent_auth import AGENT_AUTH_HEADER, AGENT_TOKEN_PREFIX_LENGTH
 from app.core.security import get_password_hash
 from app.database.models import (
@@ -2705,3 +2709,274 @@ async def test_script_and_backup_waiters_return_on_a_completion_with_warnings(
         poll_interval_seconds=0.01,
     )
     assert status_value == "completed_with_warnings"
+
+
+class TestAgentOperationLogLateLines:
+    """An agent sends its log lines over the session and its outcome over
+    REST, so the outcome often lands first. The operation's log file still
+    ends up with the whole transcript, in sequence order (#1076)."""
+
+    @pytest.fixture(autouse=True)
+    def _log_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(app_config.settings, "data_dir", str(tmp_path))
+
+    def _setup(self, test_client, test_db, admin_headers):
+        registered = _register_agent(
+            test_client, _create_enrollment_token(test_client, admin_headers)["token"]
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        repository = Repository(name="agent-prune-log", path="/agent-prune-log")
+        test_db.add(repository)
+        test_db.commit()
+        operation = Operation(
+            repository_id=repository.id,
+            kind="prune",
+            category="maintenance",
+            status="running",
+            trigger="manual",
+            priority=10,
+            run_id="run-prune-log",
+        )
+        test_db.add(operation)
+        test_db.commit()
+        job = agent_maintenance_job(
+            test_db, agent, "prune", operation.id, repository=repository
+        )
+        return agent, _agent_headers(registered["agent_token"]), operation, job
+
+    def _post_line(self, test_client, headers, job, sequence):
+        response = test_client.post(
+            f"/api/agents/jobs/{job.id}/logs",
+            json={
+                "sequence": sequence,
+                "stream": "stderr",
+                "message": f"line {sequence}",
+            },
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+
+    def _finish(self, test_client, headers, job, outcome):
+        if outcome == "complete":
+            body = {"result": {"return_code": 0}}
+        else:
+            body = {"error_message": "borg exited with code 2", "return_code": 2}
+        response = test_client.post(
+            f"/api/agents/jobs/{job.id}/{outcome}", json=body, headers=headers
+        )
+        assert response.status_code == 200, response.text
+
+    def _log(self, test_db, operation):
+        test_db.refresh(operation)
+        with open(operation.log_file_path, encoding="utf-8") as handle:
+            return handle.read()
+
+    @pytest.mark.parametrize("outcome", ["complete", "fail"])
+    def test_lines_after_the_outcome_complete_the_file_in_order(
+        self, test_client, test_db, admin_headers, outcome
+    ):
+        _, headers, operation, job = self._setup(test_client, test_db, admin_headers)
+        self._post_line(test_client, headers, job, 1)
+        self._finish(test_client, headers, job, outcome)
+        assert self._log(test_db, operation) == "line 1"
+
+        self._post_line(test_client, headers, job, 3)
+        self._post_line(test_client, headers, job, 2)
+        self._post_line(test_client, headers, job, 2)
+
+        assert self._log(test_db, operation) == "line 1\nline 2\nline 3"
+
+    @pytest.mark.asyncio
+    async def test_session_lines_after_the_outcome_complete_the_file(
+        self, test_client, test_db, admin_headers
+    ):
+        agent, headers, operation, job = self._setup(
+            test_client, test_db, admin_headers
+        )
+        self._finish(test_client, headers, job, "complete")
+        assert self._log(test_db, operation) == ""
+
+        for sequence in (1, 2):
+            await _handle_agent_session_message(
+                test_db,
+                agent.id,
+                {
+                    "type": "log",
+                    "job_id": job.id,
+                    "sequence": sequence,
+                    "stream": "stderr",
+                    "message": f"line {sequence}",
+                },
+            )
+
+        # the socket keeps its database session; no transaction is left open
+        assert not test_db.in_transaction()
+        assert self._log(test_db, operation) == "line 1\nline 2"
+
+    def test_a_line_while_the_job_runs_writes_no_file(
+        self, test_client, test_db, admin_headers
+    ):
+        _, headers, operation, job = self._setup(test_client, test_db, admin_headers)
+        self._post_line(test_client, headers, job, 1)
+
+        test_db.refresh(operation)
+        assert operation.log_file_path is None
+
+    def test_a_removed_log_file_is_not_written_again(
+        self, test_client, test_db, admin_headers
+    ):
+        _, headers, operation, job = self._setup(test_client, test_db, admin_headers)
+        self._finish(test_client, headers, job, "complete")
+        test_db.refresh(operation)
+        os.remove(operation.log_file_path)
+
+        self._post_line(test_client, headers, job, 1)
+
+        assert not os.path.exists(operation.log_file_path)
+
+    def test_a_file_removed_by_retention_before_an_append_is_not_created_again(
+        self, test_client, test_db, admin_headers
+    ):
+        """Log retention forgets the path and unlinks the file on its own
+        thread; here it does so right before the append opens the file."""
+        _, headers, operation, job = self._setup(test_client, test_db, admin_headers)
+        self._post_line(test_client, headers, job, 1)
+        self._finish(test_client, headers, job, "complete")
+        test_db.refresh(operation)
+        path = operation.log_file_path
+        real_open = os.open
+
+        def retention_removes_then_open(file, flags, *args, **kwargs):
+            if file == path and os.path.exists(path):
+                os.remove(path)
+            return real_open(file, flags, *args, **kwargs)
+
+        with patch("app.api.agents.os.open", side_effect=retention_removes_then_open):
+            self._post_line(test_client, headers, job, 2)
+
+        assert not os.path.exists(path)
+
+    def test_a_file_removed_by_retention_during_a_rewrite_is_removed_again(
+        self, test_client, test_db, admin_headers
+    ):
+        """Retention runs between the rewrite's existence check and its
+        rename; the renamed file would name nothing, so it goes again."""
+        from app.services.job_history_retention import purge_operation_log_files
+
+        _, headers, operation, job = self._setup(test_client, test_db, admin_headers)
+        self._post_line(test_client, headers, job, 1)
+        self._finish(test_client, headers, job, "complete")
+        self._post_line(test_client, headers, job, 3)
+        test_db.refresh(operation)
+        path = operation.log_file_path
+        operation_id = operation.id
+        real_replace = os.replace
+
+        def retention_then_replace(src, dst):
+            purge_operation_log_files(test_db, (Operation.id == operation_id,))
+            assert not os.path.exists(path)
+            return real_replace(src, dst)
+
+        with patch("app.api.agents.os.replace", side_effect=retention_then_replace):
+            self._post_line(test_client, headers, job, 2)
+
+        assert not os.path.exists(path)
+        assert not os.path.exists(f"{path}.tmp")
+        test_db.expire_all()
+        assert test_db.get(Operation, operation_id).log_file_path is None
+
+    def test_a_failed_rewrite_keeps_the_previous_file(
+        self, test_client, test_db, admin_headers
+    ):
+        _, headers, operation, job = self._setup(test_client, test_db, admin_headers)
+        self._post_line(test_client, headers, job, 1)
+        self._finish(test_client, headers, job, "complete")
+        self._post_line(test_client, headers, job, 3)
+
+        with patch("app.api.agents.os.replace", side_effect=OSError("disk full")):
+            self._post_line(test_client, headers, job, 2)
+
+        assert self._log(test_db, operation) == "line 1\nline 3"
+        assert not os.path.exists(f"{operation.log_file_path}.tmp")
+
+    @pytest.mark.asyncio
+    async def test_a_backup_jobs_lines_skip_the_completion_query(
+        self, test_client, test_db, admin_headers
+    ):
+        """The completion helper runs for every ingested line. A job whose
+        payload names no maintenance kind never reaches an operation's log
+        file, so its lines cost no status query, and the payload is read
+        before the commit expires the row (no refresh)."""
+        from types import SimpleNamespace
+
+        from sqlalchemy import event
+
+        agent, headers, _, _ = self._setup(test_client, test_db, admin_headers)
+        backup = AgentJob(
+            agent_machine_id=agent.id,
+            job_type="backup",
+            status="completed",
+            payload={"job_kind": "backup.create"},
+        )
+        test_db.add(backup)
+        test_db.commit()
+        backup_id = backup.id
+
+        selects = []
+
+        def record(conn, cursor, statement, parameters, context, executemany):
+            if statement.lstrip().startswith("SELECT") and "FROM agent_jobs" in (
+                statement
+            ):
+                selects.append(" ".join(statement.split()))
+
+        engine = test_db.get_bind()
+        event.listen(engine, "before_cursor_execute", record)
+        try:
+            self._post_line(test_client, headers, SimpleNamespace(id=backup_id), 1)
+            await _handle_agent_session_message(
+                test_db,
+                agent.id,
+                {
+                    "type": "log",
+                    "job_id": backup_id,
+                    "sequence": 2,
+                    "stream": "stderr",
+                    "message": "line 2",
+                },
+            )
+        finally:
+            event.remove(engine, "before_cursor_execute", record)
+
+        # Only the handlers' own lookup of the agent's job, once per line.
+        assert len(selects) == 2
+        assert all("agent_jobs.agent_machine_id = ?" in s for s in selects)
+        assert test_db.query(AgentJobLog).filter_by(agent_job_id=backup_id).count() == 2
+
+    @pytest.mark.asyncio
+    async def test_a_failure_while_completing_the_file_keeps_upload_and_session(
+        self, test_client, test_db, admin_headers
+    ):
+        agent, headers, operation, job = self._setup(
+            test_client, test_db, admin_headers
+        )
+        self._finish(test_client, headers, job, "complete")
+
+        with patch(
+            "app.api.agents._get_repository_operation_job",
+            side_effect=SQLAlchemyError("connection lost"),
+        ):
+            self._post_line(test_client, headers, job, 1)
+            await _handle_agent_session_message(
+                test_db,
+                agent.id,
+                {
+                    "type": "log",
+                    "job_id": job.id,
+                    "sequence": 2,
+                    "stream": "stderr",
+                    "message": "line 2",
+                },
+            )
+
+        assert test_db.query(AgentJobLog).filter_by(agent_job_id=job.id).count() == 2
