@@ -45,9 +45,9 @@ describe('ArchiveSeriesHeatmap', () => {
     vi.setSystemTime(new Date('2026-09-04T12:00:00Z'))
   })
 
-  it('draws the repository band, not one band per inferred series', () => {
+  it('draws one unlabelled repository band, not one band per inferred series', () => {
     render(<ArchiveSeriesHeatmap data={data} onSelectDay={vi.fn()} />)
-    expect(screen.getByText('All archives (1)')).toBeInTheDocument()
+    expect(screen.queryByText(/All archives/)).not.toBeInTheDocument()
     expect(screen.queryByText('nightly')).not.toBeInTheDocument()
   })
 
@@ -98,7 +98,6 @@ describe('ArchiveSeriesHeatmap', () => {
       series: [series('nightly', days), series('weekly-offsite', [day('2026-08-20')])],
     }
     render(<ArchiveSeriesHeatmap data={split} onSelectDay={vi.fn()} />)
-    fireEvent.click(screen.getByRole('button', { name: /group by series/i }))
     const axis = screen.getByTestId('heatmap-month-axis')
     expect(axis).toHaveTextContent(/Aug/)
     expect(axis).toHaveTextContent(/Jul/)
@@ -130,28 +129,21 @@ describe('ArchiveSeriesHeatmap', () => {
     }
     render(<ArchiveSeriesHeatmap data={split} onSelectDay={vi.fn()} />)
     // Four archives in the band, not one: the three singleton series are part
-    // of the count and part of the calendar.
-    expect(screen.getByText('All archives (4)')).toBeInTheDocument()
+    // of the calendar.
     expect(screen.getByTestId('heatmap-day-repository-2026-04-30')).toHaveAttribute(
       'data-count',
       '1'
     )
   })
 
-  it('offers the series split as a grouping below the band', () => {
+  it('never splits the band by series', () => {
     const split: HeatmapResponse = {
       ...data,
       series: [series('nightly', days), series('weekly-offsite', [day('2026-08-20')])],
     }
     render(<ArchiveSeriesHeatmap data={split} onSelectDay={vi.fn()} />)
-    fireEvent.click(screen.getByRole('button', { name: /group by series \(2\)/i }))
-    expect(screen.getByText('nightly')).toBeInTheDocument()
-    expect(screen.getByText('weekly-offsite')).toBeInTheDocument()
-  })
-
-  it('does not offer a split when there is only one series', () => {
-    render(<ArchiveSeriesHeatmap data={data} onSelectDay={vi.fn()} />)
     expect(screen.queryByRole('button', { name: /group by series/i })).not.toBeInTheDocument()
+    expect(screen.queryByText('weekly-offsite')).not.toBeInTheDocument()
   })
 
   it('places the legend under the bands', () => {

@@ -40,6 +40,18 @@ describe('ArchiveCard', () => {
     expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument()
   })
 
+  it('opens the archive on a row click, but not from an action button', () => {
+    const onOpen = vi.fn()
+    render(<ArchiveCard archive={mockArchive} {...mockHandlers} onOpen={onOpen} />)
+
+    fireEvent.click(screen.getByText('backup-2024-01-15'))
+    expect(onOpen).toHaveBeenCalledWith(mockArchive)
+
+    fireEvent.click(screen.getByRole('button', { name: /restore/i }))
+    expect(mockHandlers.onRestore).toHaveBeenCalledTimes(1)
+    expect(onOpen).toHaveBeenCalledTimes(1)
+  })
+
   it('calls onView when View button is clicked', () => {
     render(<ArchiveCard archive={mockArchive} {...mockHandlers} />)
 

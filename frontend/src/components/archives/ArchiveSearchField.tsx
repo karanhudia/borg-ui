@@ -5,7 +5,6 @@ import {
   Chip,
   DialogContent,
   DialogTitle,
-  IconButton,
   InputAdornment,
   List,
   ListItemButton,
@@ -18,6 +17,7 @@ import SearchIcon from '@mui/icons-material/Search'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import ResponsiveDialog from '../shared/ResponsiveDialog'
+import SearchBox from '../shared/SearchBox'
 import PlanGate from '../shared/PlanGate'
 import FileTypeIcon from '../FileTypeIcon'
 import FileHistoryPanel from './FileHistoryPanel'
@@ -154,24 +154,11 @@ export default function ArchiveSearchField({
   return (
     <PlanGate feature="archive_history" disabled surface="archives" operation="search">
       <Box component="form" role="search" onSubmit={handleSubmit}>
-        <TextField
-          size="small"
-          fullWidth
-          placeholder={t('archives.search.placeholder')}
+        <SearchBox
           value={query}
+          onChange={setQuery}
+          placeholder={t('archives.search.placeholder')}
           disabled={disabled}
-          onChange={(e) => setQuery(e.target.value)}
-          slotProps={{
-            input: {
-              startAdornment: (
-                <InputAdornment position="start">
-                  <IconButton type="submit" size="small" edge="start" disabled={disabled}>
-                    <SearchIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ),
-            },
-          }}
         />
       </Box>
       <ResponsiveDialog

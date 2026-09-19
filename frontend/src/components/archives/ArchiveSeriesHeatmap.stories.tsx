@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { ToggleButton, ToggleButtonGroup } from '@mui/material'
 import ArchiveSeriesHeatmap from './ArchiveSeriesHeatmap'
 import type { HeatmapDay, HeatmapResponse } from '../../types/archives'
 
@@ -111,5 +112,20 @@ export const FullYear: Story = {
         series('old-prefix-2026-04-30-1777586400', nightlyYear.slice(0, 1)),
       ],
     }),
+  },
+}
+
+export const WithHeader: Story = {
+  ...FullYear,
+  args: {
+    ...FullYear.args,
+    header: {
+      toolbar: (
+        <ToggleButtonGroup value="days" exclusive size="small">
+          <ToggleButton value="days">Days</ToggleButton>
+          <ToggleButton value="hours">Hours</ToggleButton>
+        </ToggleButtonGroup>
+      ),
+    },
   },
 }

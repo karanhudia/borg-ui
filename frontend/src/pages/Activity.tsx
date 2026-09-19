@@ -1,3 +1,4 @@
+import type { StoredPruneRetention } from '../types/archives'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -55,6 +56,9 @@ export interface ActivityItem {
   depends_on_id?: number | null
   operation_id?: number | null
   hook_type?: string | null
+  // A prune dry run (the preview page, or the retention comparison).
+  dry_run?: boolean
+  prune_retention?: StoredPruneRetention | null
   sort_at?: string | null
   progress_percent?: number | null
   progress_current?: number | null

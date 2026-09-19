@@ -22,6 +22,28 @@ describe('RunChainRow', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
+  it('labels a prune dry run as one', () => {
+    render(
+      <RunChainRow
+        operation={{
+          kind: 'prune',
+          status: 'completed',
+          followups: [
+            followup('prune_compare', 'completed'),
+            followup('prune', 'completed', { dry_run: true }),
+            followup('prune', 'completed', {
+              dry_run: true,
+              prune_retention: { keep_daily: 30, keep_yearly: 3 } as never,
+            }),
+          ],
+        }}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
+    expect(screen.getByText('Prune (dry run)')).toBeInTheDocument()
+    expect(screen.getByText('Automatic prune (dry run) · 30d 3y')).toBeInTheDocument()
+  })
+
   it('folds a chain whose steps all succeeded and expands it on click', () => {
     render(
       <RunChainRow

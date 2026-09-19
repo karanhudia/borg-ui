@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { Box, Button, Typography, useTheme } from '@mui/material'
+import { RotateCcw } from 'lucide-react'
 import ChangeBadge from './ChangeBadge'
 import { changeColor } from './changeStyle'
 import { useTranslation } from 'react-i18next'
@@ -190,7 +191,12 @@ function FileHistoryPanelContent({ repositoryId, path, onRestoreEntry }: FileHis
                   </Box>
                 </Typography>
               </Box>
-              <Button size="small" onClick={() => onRestoreEntry(entry)} sx={{ mt: -0.5 }}>
+              <Button
+                size="small"
+                startIcon={<RotateCcw size={13} />}
+                onClick={() => onRestoreEntry(entry)}
+                sx={{ mt: -0.5, flexShrink: 0 }}
+              >
                 {t('archives.files.restoreThis')}
               </Button>
             </Box>

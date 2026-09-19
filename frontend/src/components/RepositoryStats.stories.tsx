@@ -29,7 +29,12 @@ type Story = StoryObj<typeof meta>
 // The archive header: four tiles, the same on both Borg versions.
 
 export const Borg1Header: Story = {
-  args: { variant: 'grid', storage: borg1Storage, archiveCount: 21 },
+  args: {
+    variant: 'grid',
+    storage: borg1Storage,
+    archiveCount: 21,
+    freeSpaceHref: '/repositories/1/prune-preview',
+  },
 }
 
 export const Borg2Header: Story = {

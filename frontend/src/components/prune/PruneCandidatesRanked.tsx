@@ -29,7 +29,13 @@ function Row({
   return (
     <ButtonBase
       onClick={() => onOpen(archiveId)}
-      sx={{ ...rowSx, textAlign: 'left', borderRadius: 1 }}
+      sx={{
+        ...rowSx,
+        textAlign: 'left',
+        borderRadius: 1,
+        py: 0.25,
+        '&:hover': { bgcolor: 'action.hover' },
+      }}
     >
       {children}
     </ButtonBase>
@@ -62,16 +68,23 @@ export default function PruneCandidatesRanked({
           : t('prunePreview.remeasured', { count: deleted.length })}
       </Typography>
       <Stack spacing={0.75}>
-        {visible.map((a) => {
+        {visible.map((a, i) => {
           const size = a.deduplicated_size
           const width = size != null && max > 0 ? Math.max(2, (size / max) * 100) : 0
           return (
             <Row key={a.borg_id} archiveId={a.id} onOpen={onOpen}>
               <Typography
+                variant="caption"
+                sx={{ width: 20, flexShrink: 0, color: 'text.disabled', textAlign: 'right' }}
+              >
+                {i + 1}
+              </Typography>
+              <Typography
                 variant="body2"
                 sx={{
-                  width: 180,
-                  flexShrink: 0,
+                  // the name is the identifier; it gets the room, the bar the rest
+                  flex: '0 1 45%',
+                  minWidth: 180,
                   fontFamily: 'monospace',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -105,7 +118,13 @@ export default function PruneCandidatesRanked({
               )}
               <Typography
                 variant="body2"
-                sx={{ width: 88, flexShrink: 0, textAlign: 'right', fontWeight: 600 }}
+                sx={{
+                  width: 88,
+                  flexShrink: 0,
+                  textAlign: 'right',
+                  fontWeight: 600,
+                  color: size ? 'error.main' : 'text.secondary',
+                }}
               >
                 {size != null ? formatBytes(size) : t('prunePreview.notMeasured')}
               </Typography>

@@ -206,8 +206,12 @@ the existing prune route (`keep_*`, `keep_within`). It:
    `size_before` of the removing row), the largest N (200) with the archive
    that last held each, and a per-top-level-folder rollup. `incomplete`
    and `unindexed_archive_ids` follow the changes endpoint's rule for the
-   series' archives. Cross-series survival of the same path is not checked
-   and the UI states this.
+   series' archives. A path the walk reports lost is then checked against
+   the surviving archives of every other series (a renamed plan leaves the
+   newest archives in a different series from the deleted ones): those
+   series are replayed in order for the lost paths, a path any survivor
+   holds is not lost, and an unindexed archive met on the way joins
+   `unindexed_archive_ids`.
 
 Response: `{archives: [{id, name, series, start, verdict: "kept"|"deleted",
 rule, deduplicated_size, stats_measured_at}], freed_at_least,

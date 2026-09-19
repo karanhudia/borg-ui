@@ -58,6 +58,9 @@ TRIGGERS: tuple[str, ...] = (
     "followup",
     "reconcile",
     "retry",
+    # a dry run the prune preview page starts on its own: not a prune the
+    # user ran, and not a step of one
+    "preview",
 )
 
 TERMINAL_STATUSES: frozenset[str] = frozenset(
@@ -78,6 +81,7 @@ _PRIORITY_BY_TRIGGER = {
     "plan": PRIORITY_MANUAL,
     "import": PRIORITY_MANUAL,
     "retry": PRIORITY_MANUAL,
+    "preview": PRIORITY_MANUAL,
     "schedule": PRIORITY_SCHEDULE,
     "followup": PRIORITY_FOLLOWUP,
     "reconcile": PRIORITY_RECONCILE,

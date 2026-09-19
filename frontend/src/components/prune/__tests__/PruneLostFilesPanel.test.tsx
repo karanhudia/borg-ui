@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { screen } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import { renderWithProviders } from '../../../test/test-utils'
 import PruneLostFilesPanel from '../PruneLostFilesPanel'
 
@@ -39,6 +39,12 @@ describe('PruneLostFilesPanel', () => {
     expect(screen.getByText('docs/x')).toBeInTheDocument()
     const links = screen.getAllByRole('link', { name: /a4/ })
     expect(links[0]).toHaveAttribute('href', '/archives/7/4')
+
+    fireEvent.change(screen.getByRole('textbox', { name: /filter by path/i }), {
+      target: { value: 'docs/Y' },
+    })
+    expect(screen.queryByText('docs/x')).not.toBeInTheDocument()
+    expect(screen.getByText('docs/y')).toBeInTheDocument()
   })
 
   it('says why when the history index is unavailable', () => {

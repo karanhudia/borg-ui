@@ -42,9 +42,14 @@ export async function resyncStoredArchives(
   }
   invalidateStoredArchives(queryClient, repositoryId)
   // the run just asked for is pending index work: the card and the header
-  // say "indexing" for what it has not produced yet (#1063)
-  queryClient.invalidateQueries({ queryKey: ['repository-storage', repositoryId] })
-  queryClient.invalidateQueries({ queryKey: ['repositories'] })
+  // say "indexing" for what it has not produced yet (#1063). The "Updating"
+  // caption reads the pending kinds from these two, so a refresh button
+  // that awaits this call stays pending until they carry the queued run,
+  // and the caption never drops back to "Updated" for a moment in between.
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['repository-storage', repositoryId] }),
+    queryClient.invalidateQueries({ queryKey: ['repositories'] }),
+  ])
   queryClient.invalidateQueries({ queryKey: ['operations-queue'] })
   queryClient.invalidateQueries({ queryKey: ['operations-repositories'] })
 }

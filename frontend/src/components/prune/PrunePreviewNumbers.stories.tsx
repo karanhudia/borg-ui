@@ -28,3 +28,14 @@ export const NotMeasured: Story = {
     footprintAfterAtMost: null,
   },
 }
+
+export const FreedKnown: Story = {
+  args: {
+    deletedCount: 5,
+    keptCount: 13,
+    freedAtLeast: 1_400_000,
+    freed: 3_440_000,
+    footprintBefore: 22_900_000_000,
+    footprintAfterAtMost: 22_898_600_000,
+  },
+}

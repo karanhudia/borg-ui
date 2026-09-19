@@ -228,7 +228,7 @@ describe('ArchiveDetail', () => {
     vi.mocked(archivesAPI.getArchive).mockResolvedValue({ data: archive } as never)
     renderRoute('/archives/7/12')
     fireEvent.click(await screen.findByRole('tab', { name: /info/i }))
-    expect((await screen.findAllByText(/nightly/)).length).toBeGreaterThan(0)
+    expect(await screen.findByText('Hostname')).toBeInTheDocument()
   })
 
   it('opens the restore wizard with the Files tab selection', async () => {

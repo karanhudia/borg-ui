@@ -8,7 +8,6 @@ import {
   Box,
   Breadcrumbs,
   Button,
-  Chip,
   Link,
   Stack,
   Tab,
@@ -384,11 +383,6 @@ export default function ArchiveDetail() {
             <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
               {parseBackendDate(archive.start).toLocaleString()}
             </Typography>
-            <Chip
-              size="small"
-              label={`${t('archives.detail.series')}: ${archive.series}`}
-              sx={{ mt: 1.5 }}
-            />
           </Box>
         </Stack>
         <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>

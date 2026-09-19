@@ -17,6 +17,7 @@ import {
   useStepStatusColor,
 } from './runChainText'
 import { formatDurationSeconds } from '../../utils/dateUtils'
+import type { StoredPruneRetention } from '../../types/archives'
 
 export interface RunChainOperation {
   id?: number | string
@@ -40,6 +41,9 @@ export interface RunChainOperation {
   name?: string | null
   // A ready-made title for the node; otherwise the kind's own label.
   label?: string | null
+  // A prune dry run: labelled as one.
+  dry_run?: boolean
+  prune_retention?: StoredPruneRetention | null
   followups?: RunChainOperation[]
 }
 

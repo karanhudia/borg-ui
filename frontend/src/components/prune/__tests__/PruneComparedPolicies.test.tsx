@@ -26,6 +26,7 @@ const comparison: PruneComparison = {
       kept_count: 12,
       deleted_count: 0,
       freed_at_least: 0,
+      freed: null,
       partial_measure: false,
       operation_id: 1,
     },
@@ -36,6 +37,7 @@ const comparison: PruneComparison = {
       kept_count: 8,
       deleted_count: 4,
       freed_at_least: 40 * 1024 ** 3,
+      freed: 41 * 1024 ** 3,
       partial_measure: true,
       operation_id: 2,
     },
@@ -59,6 +61,8 @@ describe('PruneComparedPolicies', () => {
     expect(screen.getByText('Compared policies')).toBeInTheDocument()
     expect(screen.getByText('7d 4w 6m 1y')).toBeInTheDocument()
     expect(screen.getByText('30d 4w 6m 1y')).toBeInTheDocument()
+    expect(screen.getByText('41.00 GB')).toBeInTheDocument()
+    expect(screen.getByText(/at least 0/)).toBeInTheDocument()
     fireEvent.click(screen.getByText('Standard'))
     expect(onSelect).toHaveBeenCalledWith(comparison.candidates[1])
   })
@@ -72,6 +76,7 @@ describe('PruneComparedPolicies', () => {
           kept_count: 4,
           deleted_count: 8,
           freed_at_least: 1024,
+          freed: null,
         }}
         selectedKey={null}
         pending={false}

@@ -352,19 +352,86 @@ class TestLostFiles:
             out["total_count"] == 1 and out["top"][0]["last_held_archive_id"] == o2.id
         )
 
-    def test_series_are_independent(self, test_db):
+    def test_path_a_survivor_of_another_series_holds_is_not_lost(self, test_db):
+        # A renamed plan: the old series goes, the new one still holds the file.
         repo = _repo(test_db)
         by = {}
         by.update(_series(test_db, repo, ("n1", 1), ("n2", 2), series="nas"))
-        by.update(_series(test_db, repo, ("d1", 1), ("d2", 2), series="docs"))
+        by.update(_series(test_db, repo, ("d1", 3), ("d2", 4), series="docs"))
         n1, n2 = by["nas"]
         d1, d2 = by["docs"]
         _change(test_db, n1, "shared", "added", size_after=3)
-        _change(test_db, n2, "shared", "removed", size_before=3)
+        _change(test_db, n1, "gone", "added", size_after=5)
         _change(test_db, d1, "shared", "added", size_after=3)
-        # docs still holds "shared" in d2; the nas copy is lost anyway (cross-series not checked)
-        out = lost_files(test_db, repo, by, deleted_ids={n1.id})
+        # "shared" survives in docs (d1 and d2 keep it); "gone" was only ever in nas
+        out = lost_files(test_db, repo, by, deleted_ids={n1.id, n2.id})
+        assert [f["path"] for f in out["top"]] == ["gone"]
         assert out["total_count"] == 1 and out["top"][0]["series"] == "nas"
+        assert out["moved_count"] == 0
+
+    def test_a_path_two_series_both_lose_is_one_file_held_last_by_the_newer(
+        self, test_db
+    ):
+        repo = _repo(test_db)
+        by = {}
+        by.update(_series(test_db, repo, ("n1", 1), ("n2", 2), series="nas"))
+        by.update(_series(test_db, repo, ("d1", 3), ("d2", 4), series="docs"))
+        n1, n2 = by["nas"]
+        d1, d2 = by["docs"]
+        _change(test_db, n1, "p", "added", size_after=7)
+        _change(test_db, d1, "p", "added", size_after=7)
+        out = lost_files(test_db, repo, by, deleted_ids={n1.id, n2.id, d1.id, d2.id})
+        assert out["total_count"] == 1 and out["total_size"] == 7
+        assert out["top"][0]["last_held_archive_name"] == "d2"
+
+    def test_same_name_and_size_under_another_path_is_moved_not_lost(self, test_db):
+        # The source was remounted: March backed up "Users/x", everything
+        # since backs up "local/Users/x". Same file, and it survives.
+        repo = _repo(test_db)
+        by = {}
+        by.update(_series(test_db, repo, ("old", 1), series="old"))
+        by.update(_series(test_db, repo, ("new", 2), series="new"))
+        old = by["old"][0]
+        new = by["new"][0]
+        _change(test_db, old, "Users/x/movie.mp4", "added", size_after=100)
+        _change(test_db, old, "Users/x/notes.txt", "added", size_after=7)
+        _change(test_db, new, "local/Users/x/movie.mp4", "added", size_after=100)
+        _change(test_db, new, "local/Users/x/notes.txt", "added", size_after=8)
+        out = lost_files(test_db, repo, by, deleted_ids={old.id})
+        assert [f["path"] for f in out["top"]] == ["Users/x/notes.txt"]
+        assert (out["total_count"], out["total_size"]) == (1, 7)
+        assert (out["moved_count"], out["moved_size"]) == (1, 100)
+
+    def test_a_copy_removed_before_the_survivor_does_not_rescue(self, test_db):
+        repo = _repo(test_db)
+        by = {}
+        by.update(_series(test_db, repo, ("old", 1), series="old"))
+        by.update(_series(test_db, repo, ("n1", 2), ("n2", 3), series="new"))
+        old = by["old"][0]
+        n1, n2 = by["new"]
+        _change(test_db, old, "Users/x/movie.mp4", "added", size_after=100)
+        _change(test_db, n1, "local/Users/x/movie.mp4", "added", size_after=100)
+        _change(test_db, n2, "local/Users/x/movie.mp4", "removed", size_before=100)
+        # n1 survives and holds the copy at its time, so the file is safe
+        out = lost_files(test_db, repo, by, deleted_ids={old.id})
+        assert out["moved_count"] == 1 and out["total_count"] == 0
+        # with n1 gone too, the only kept archive has neither path
+        out = lost_files(test_db, repo, by, deleted_ids={old.id, n1.id})
+        assert out["moved_count"] == 0 and out["total_count"] == 2
+
+    def test_unindexed_survivor_of_another_series_marks_incomplete(self, test_db):
+        repo = _repo(test_db)
+        by = {}
+        by.update(_series(test_db, repo, ("n1", 1), series="nas"))
+        by.update(_series(test_db, repo, ("d1", 2), series="docs"))
+        n1 = by["nas"][0]
+        d1 = by["docs"][0]
+        d1.history_state = "pending"
+        test_db.commit()
+        _change(test_db, n1, "f", "added", size_after=1)
+        out = lost_files(test_db, repo, by, deleted_ids={n1.id})
+        assert out["total_count"] == 1
+        assert out["incomplete"] is True and out["unindexed_archive_ids"] == [d1.id]
 
     def test_unindexed_archive_of_a_touched_series_marks_incomplete(self, test_db):
         repo = _repo(test_db)
@@ -375,7 +442,7 @@ class TestLostFiles:
         out = lost_files(test_db, repo, by, deleted_ids={a1.id})
         assert out["incomplete"] is True and out["unindexed_archive_ids"] == [a2.id]
 
-    def test_untouched_series_is_not_walked(self, test_db):
+    def test_untouched_series_is_not_walked_without_candidates(self, test_db):
         repo = _repo(test_db)
         by = {}
         by.update(_series(test_db, repo, ("n1", 1), ("n2", 2), series="nas"))

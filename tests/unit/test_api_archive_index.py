@@ -401,6 +401,36 @@ class TestArchiveGrowth:
         assert body["stale_count"] == 1
         assert body["unmeasured_count"] == 1
 
+    def test_points_carry_the_repository_size_measured_after_them(
+        self, test_client, test_db, admin_headers
+    ):
+        """The growth line: each point takes the last size sample between
+        its start and the next archive's. An archive older than every
+        sample has none; the newest takes the latest."""
+        from app.database.models import RepositorySizeSample
+
+        repo = _repo(test_db)
+        a1 = self._measured(test_db, repo, "a1", 1, size=100)
+        a2 = self._measured(test_db, repo, "a2", 2, size=50)
+        a3 = self._measured(test_db, repo, "a3", 3, size=20)
+        add = lambda when, size: test_db.add(  # noqa: E731
+            RepositorySizeSample(
+                repository_id=repo.id, measured_at=when, size_bytes=size, source="t"
+            )
+        )
+        add(a2.start + timedelta(minutes=5), 5_000)  # after a2, before a3
+        add(a2.start + timedelta(hours=6), 4_000)  # a prune later that day: wins
+        add(a3.start + timedelta(minutes=5), 20_000)
+        test_db.commit()
+
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/archives/growth", headers=admin_headers
+        )
+        assert r.status_code == 200
+        sizes = [p["repository_size"] for p in r.json()["points"]]
+        assert sizes == [None, 4_000, 20_000]
+        assert a1.id  # the oldest predates the sampling and stays unknown
+
     def test_series_filter_restarts_the_running_total(
         self, test_client, test_db, admin_headers
     ):
@@ -2064,3 +2094,134 @@ class TestPruneRetentionDefaults:
         body = r.json()
         assert body["source"] == "plan" and body["plan_name"] == "Nightly"
         assert body["keep_daily"] == 14 and body["keep_within"] == "1d"
+
+
+@pytest.mark.unit
+def test_set_repository_size_appends_a_sample_for_a_stored_repository(test_db):
+    """A repository row in a session gets a history row per write, which
+    the growth chart draws; the commit is the caller's."""
+    from datetime import datetime
+
+    from app.database.models import Repository, RepositorySizeSample
+    from app.services.storage_usage import set_repository_size
+
+    repo = Repository(name="r", path="/tmp/r", encryption="none")
+    test_db.add(repo)
+    test_db.commit()
+    set_repository_size(repo, 2048, "borg2_index", measured_at=datetime(2026, 1, 1))
+    set_repository_size(repo, 4096, "compact_stats", measured_at=datetime(2026, 1, 2))
+    test_db.commit()
+    rows = (
+        test_db.query(RepositorySizeSample)
+        .filter(RepositorySizeSample.repository_id == repo.id)
+        .order_by(RepositorySizeSample.measured_at)
+        .all()
+    )
+    assert [(r.size_bytes, r.source) for r in rows] == [
+        (2048, "borg2_index"),
+        (4096, "compact_stats"),
+    ]
+
+
+@pytest.mark.unit
+def test_format_bytes_is_the_one_writer_of_a_size_string():
+    """Every module that renders a byte count shares this function: the
+    repository card, the dashboard totals, the SSH and rclone storage
+    figures, the notification bodies and the backup service's messages.
+    Two decimals, base 1024, and the top unit is EB (a value past PB used
+    to come back labelled PB in two of the copies)."""
+    from app.services.storage_usage import bytes_from_formatted, format_bytes
+
+    assert format_bytes(0) == "0.00 B"
+    assert format_bytes(999) == "999.00 B"
+    assert format_bytes(1024) == "1.00 KB"
+    assert format_bytes(1536) == "1.50 KB"
+    assert format_bytes(1024**2) == "1.00 MB"
+    assert format_bytes(5 * 1024**3) == "5.00 GB"
+    assert format_bytes(1024**4) == "1.00 TB"
+    assert format_bytes(1024**5) == "1.00 PB"
+    assert format_bytes(1024**6) == "1.00 EB"
+    # Past 2**53 the arithmetic is float, so a count just under a boundary
+    # carries to the next unit: 1 byte short of an exabyte reads "1.00 EB"
+    # rather than "1024.00 PB". Deliberate. Exact arithmetic here would buy
+    # a worse-reading string at a size no repository reaches.
+    assert format_bytes(1024**6 - 1) == "1.00 EB"
+    # the parser reads back what this writes, to the precision it prints
+    assert bytes_from_formatted(format_bytes(1024**3)) == 1024**3
+
+
+@pytest.mark.unit
+def test_stored_size_bytes_is_the_one_rule_every_reader_applies():
+    from types import SimpleNamespace
+
+    from app.services.storage_usage import bytes_from_formatted, stored_size_bytes
+
+    assert (
+        stored_size_bytes(
+            SimpleNamespace(total_size="2.19 GB", total_size_bytes=2_350_000_000)
+        )
+        == 2_350_000_000
+    )
+    assert (
+        stored_size_bytes(SimpleNamespace(total_size="1.00 KB", total_size_bytes=None))
+        == 1024
+    )
+    assert (
+        stored_size_bytes(SimpleNamespace(total_size="Unknown", total_size_bytes=None))
+        is None
+    )
+    assert (
+        stored_size_bytes(SimpleNamespace(total_size=None, total_size_bytes=None))
+        is None
+    )
+    assert bytes_from_formatted("2.40 TB") == 2_638_827_906_662
+    # the shapes older releases wrote
+    assert bytes_from_formatted("1.5GB") == 1_610_612_736
+    assert bytes_from_formatted("1 GiB") == 1_073_741_824
+    assert bytes_from_formatted("4096") == 4096
+    assert bytes_from_formatted("512 b") == 512
+    assert bytes_from_formatted("NaN KB") is None
+    assert bytes_from_formatted("-1.00 KB") is None
+    assert bytes_from_formatted("1.00 XB") is None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "text_value",
+    [
+        "2.40 TB",
+        "490.23 KB",
+        "0.00 B",
+        "1.5GB",
+        "1 GiB",
+        "4096",
+        "512 b",
+        "Unknown",
+        "N/A",
+        "",
+        None,
+        "-1 KB",
+        "1.00 XB",
+    ],
+)
+def test_the_migration_backfill_parses_like_the_service(text_value):
+    """The backfill carries its own copy of the parser (a migration imports
+    no app code); the two must agree, or `measured_at is None` stops
+    meaning what the docstrings say."""
+    import importlib.util
+    from pathlib import Path
+
+    from app.services import storage_usage
+    from app.services.storage_usage import bytes_from_formatted
+
+    versions = Path(__file__).resolve().parents[2] / "app/database/alembic/versions"
+    path = next(versions.glob("a9b8c7d6e5f4_*.py"))
+    spec = importlib.util.spec_from_file_location("size_bytes_migration", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.bytes_from_formatted(text_value) == bytes_from_formatted(text_value)
+    # a widened service pattern must be widened in the copy as well; the
+    # table above cannot know a shape added later
+    assert module._SIZE_TEXT.pattern == storage_usage._SIZE_TEXT.pattern
+    assert module._SIZE_TEXT.flags == storage_usage._SIZE_TEXT.flags
+    assert module._SIZE_UNITS == storage_usage._SIZE_UNITS

@@ -21,6 +21,7 @@ from app.database.models import (
     SystemSettings,
     User,
     utc_now,
+    RepositorySizeSample,
 )
 from app.services.operations import anomalies
 from app.services.operations.enqueue import enqueue_chain
@@ -322,6 +323,35 @@ async def archives_heatmap(
     }
 
 
+def _attach_repository_sizes(
+    db: Session, repository_id: int, points: list[dict]
+) -> None:
+    """The repository's measured size after each archive: the last sample
+    taken between that archive's start and the next one's (or now, for the
+    newest). Archives older than the first sample keep None; the history
+    starts when the sampling did."""
+    if not points:
+        return
+    samples = (
+        db.query(RepositorySizeSample.measured_at, RepositorySizeSample.size_bytes)
+        .filter(RepositorySizeSample.repository_id == repository_id)
+        .order_by(RepositorySizeSample.measured_at.asc(), RepositorySizeSample.id.asc())
+        .all()
+    )
+    if not samples:
+        return
+    starts = [p["start"] for p in points]
+    for i, point in enumerate(points):
+        lower = starts[i]
+        upper = starts[i + 1] if i + 1 < len(starts) else None
+        for measured_at, size in samples:
+            if measured_at < lower:
+                continue
+            if upper is not None and measured_at >= upper:
+                break
+            point["repository_size"] = size
+
+
 @router.get("/{repo_id}/archives/growth")
 async def archives_growth(
     repo_id: int,
@@ -376,9 +406,11 @@ async def archives_growth(
                 "deduplicated_size": a.deduplicated_size,
                 "original_size": a.original_size,
                 "running_total": running,
+                "repository_size": None,
                 "stale": a.stats_measured_at is None,
             }
         )
+    _attach_repository_sizes(db, repository.id, points)
     return {
         "points": points,
         "series": all_series,

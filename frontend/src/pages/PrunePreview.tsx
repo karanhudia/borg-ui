@@ -14,6 +14,7 @@ import {
   Box,
   Breadcrumbs,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -28,6 +29,7 @@ import {
   alpha,
   useTheme,
 } from '@mui/material'
+import { Scissors } from 'lucide-react'
 import { formatRelativeTime } from '../utils/dateUtils'
 import { operationsAPI, repositoriesAPI } from '../services/api'
 import PlanGate from '../components/shared/PlanGate'
@@ -39,6 +41,7 @@ import PruneCandidatesRanked from '../components/prune/PruneCandidatesRanked'
 import PruneLostFilesPanel from '../components/prune/PruneLostFilesPanel'
 import { PruneComparedPolicies } from '../components/prune/PruneComparedPolicies'
 import { sameRetention } from '../components/prune/formatRetention'
+import { tintChipSx } from '../components/shared/tones'
 import { dayVerdict, previewToHeatmap, sizeIntensity } from '../components/prune/previewHeatmap'
 import type { PruneRetention, PrunePreviewResponse, PruneComparisonRow } from '../types/archives'
 
@@ -236,6 +239,7 @@ export default function PrunePreview() {
           kept_count: preview.kept_count,
           deleted_count: preview.deleted_count,
           freed_at_least: preview.freed_at_least,
+          freed: preview.lost_files.available ? (preview.lost_files.total_size ?? 0) : null,
         }
       : null
 
@@ -250,10 +254,32 @@ export default function PrunePreview() {
       </Breadcrumbs>
 
       <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
-        <Paper variant="outlined" sx={{ p: 2, width: { xs: '100%', md: 300 }, flexShrink: 0 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-            {t('prunePreview.retention')}
-          </Typography>
+        <Paper
+          variant="outlined"
+          sx={{ p: 2, width: { xs: '100%', md: 300 }, flexShrink: 0, alignSelf: 'flex-start' }}
+        >
+          <Stack direction="row" sx={{ alignItems: 'center', gap: 1.25, mb: 1 }}>
+            <Box
+              sx={{
+                width: 32,
+                height: 32,
+                borderRadius: 1.5,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'primary.main',
+                bgcolor: alpha(
+                  theme.palette.primary.main,
+                  theme.palette.mode === 'dark' ? 0.16 : 0.1
+                ),
+              }}
+            >
+              <Scissors size={18} />
+            </Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              {t('prunePreview.retention')}
+            </Typography>
+          </Stack>
           {source && (
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
               {source.source === 'plan'
@@ -352,6 +378,7 @@ export default function PrunePreview() {
                 deletedCount={deletedCount}
                 keptCount={keptCount}
                 freedAtLeast={preview.freed_at_least}
+                freed={preview.lost_files.available ? (preview.lost_files.total_size ?? 0) : null}
                 footprintBefore={preview.footprint_before}
                 footprintAfterAtMost={preview.footprint_after_at_most}
               />
@@ -387,16 +414,22 @@ export default function PrunePreview() {
                     return names.join(', ') || undefined
                   }}
                 />
-                <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
-                  <Typography variant="caption" color="success.main">
-                    {t('prunePreview.legendKept')}
-                  </Typography>
-                  <Typography variant="caption" color="error.main">
-                    {t('prunePreview.legendDeleted')}
-                  </Typography>
-                  <Typography variant="caption" color="warning.main">
-                    {t('prunePreview.legendMixed')}
-                  </Typography>
+                <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
+                  <Chip
+                    size="small"
+                    label={t('prunePreview.legendKept')}
+                    sx={tintChipSx(theme, 'success')}
+                  />
+                  <Chip
+                    size="small"
+                    label={t('prunePreview.legendDeleted')}
+                    sx={tintChipSx(theme, 'error')}
+                  />
+                  <Chip
+                    size="small"
+                    label={t('prunePreview.legendMixed')}
+                    sx={tintChipSx(theme, 'warning')}
+                  />
                 </Stack>
               </Paper>
 
@@ -426,8 +459,9 @@ export default function PrunePreview() {
                     })}
                   </Alert>
                 )}
-                <Alert severity="info">{t('prunePreview.warnLowerBound')}</Alert>
-                <Alert severity="info">{t('prunePreview.warnCrossSeries')}</Alert>
+                {!preview.lost_files.available && (
+                  <Alert severity="info">{t('prunePreview.warnLowerBound')}</Alert>
+                )}
                 {preview.partial_measure && (
                   <Alert severity="warning">
                     {t('prunePreview.remeasuredPartial', { cap: 50, count: deletedCount })}
@@ -456,7 +490,47 @@ export default function PrunePreview() {
                 </Box>
               )}
 
-              <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
+              {/* The decision travels with the reader: what goes, what stays,
+                  what is lost, and the button, pinned above the fold's end. */}
+              <Paper
+                elevation={0}
+                data-testid="prune-preview-action-bar"
+                sx={{
+                  position: 'sticky',
+                  bottom: 16,
+                  mt: 3,
+                  p: 1.5,
+                  borderRadius: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  flexWrap: 'wrap',
+                  bgcolor: alpha(theme.palette.background.paper, 0.85),
+                  backdropFilter: 'blur(8px)',
+                  boxShadow: `0 0 0 1px ${alpha(
+                    theme.palette.mode === 'dark' ? '#fff' : '#000',
+                    0.1
+                  )}, 0 8px 24px ${alpha('#000', theme.palette.mode === 'dark' ? 0.4 : 0.12)}`,
+                }}
+              >
+                <Chip
+                  size="small"
+                  label={t('prunePreview.deletedCount', { count: deletedCount })}
+                  sx={tintChipSx(theme, 'error')}
+                />
+                <Chip
+                  size="small"
+                  label={t('prunePreview.kept', { count: keptCount })}
+                  sx={tintChipSx(theme, 'success')}
+                />
+                {preview.lost_files.available && (preview.lost_files.total_count ?? 0) > 0 && (
+                  <Chip
+                    size="small"
+                    label={t('prunePreview.lostShort', { count: preview.lost_files.total_count })}
+                    sx={tintChipSx(theme, 'warning')}
+                  />
+                )}
+                <Box sx={{ flex: 1 }} />
                 <Button onClick={() => navigate(-1)}>{t('prunePreview.cancel')}</Button>
                 <Button
                   variant="contained"
@@ -468,7 +542,7 @@ export default function PrunePreview() {
                 >
                   {t('prunePreview.runNow', { count: deletedCount })}
                 </Button>
-              </Stack>
+              </Paper>
             </Box>
           ) : null}
         </Stack>

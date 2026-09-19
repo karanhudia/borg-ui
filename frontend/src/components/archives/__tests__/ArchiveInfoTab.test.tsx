@@ -81,12 +81,16 @@ describe('ArchiveInfoTab', () => {
     expect(screen.queryByRole('meter')).not.toBeInTheDocument()
   })
 
-  it('lists the facts with the series, host, and user', () => {
+  it('lists the host and user but never the series', () => {
     render(<ArchiveInfoTab archive={archive()} />)
-    expect(screen.getByText('nightly')).toBeInTheDocument()
+    expect(screen.queryByText('nightly')).not.toBeInTheDocument()
     expect(screen.getByText('nas')).toBeInTheDocument()
     expect(screen.getByText('root')).toBeInTheDocument()
-    expect(screen.getByText('12,000')).toBeInTheDocument()
+  })
+
+  it('drops the details card when there is no host, user, or comment', () => {
+    render(<ArchiveInfoTab archive={archive({ hostname: null, username: null, comment: null })} />)
+    expect(screen.queryByText(/details/i)).not.toBeInTheDocument()
   })
 
   it('shows the comment as a quote only when there is one', () => {

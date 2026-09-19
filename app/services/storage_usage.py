@@ -74,6 +74,32 @@ def set_repository_size(
     repository.total_size_bytes = size_bytes
     repository.total_size_source = source
     repository.total_size_measured_at = measured_at or utc_now()
+    _record_size_sample(repository, size_bytes, source)
+
+
+def _record_size_sample(repository, size_bytes: int, source: str) -> None:
+    """Append the measurement to the repository's size history, the
+    growth chart's line. A plain object (a test's stand-in) has no session
+    and no history; the caller's commit lands the row."""
+    from sqlalchemy.orm import object_session
+    from sqlalchemy.orm.exc import UnmappedInstanceError
+
+    try:
+        session = object_session(repository)
+    except UnmappedInstanceError:
+        return
+    if session is None or repository.id is None:
+        return
+    from app.database.models import RepositorySizeSample
+
+    session.add(
+        RepositorySizeSample(
+            repository_id=repository.id,
+            measured_at=repository.total_size_measured_at,
+            size_bytes=size_bytes,
+            source=source,
+        )
+    )
 
 
 # The units a stored size string may carry: what `format_bytes` prints

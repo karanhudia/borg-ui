@@ -1,5 +1,6 @@
 import axios from 'axios'
 import type { RepositoryStorage } from '../types'
+import type { SyncState } from '../types/archives'
 import { toast } from 'react-hot-toast'
 import { BASE_PATH } from '@/utils/basePath'
 import {
@@ -276,6 +277,8 @@ export interface RepositoryStorageResponse {
   repository_id: number
   storage: RepositoryStorage | null
   index_pending_kinds: string[]
+  sync_state?: SyncState
+  last_synced_at?: string | null
 }
 
 export interface RcloneRemoteStorage {

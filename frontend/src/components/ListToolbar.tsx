@@ -1,13 +1,5 @@
-import {
-  Box,
-  InputBase,
-  MenuItem,
-  Select,
-  alpha,
-  useTheme,
-  type SelectChangeEvent,
-} from '@mui/material'
-import SearchIcon from '@mui/icons-material/Search'
+import { Box, MenuItem, Select, useTheme, type SelectChangeEvent } from '@mui/material'
+import SearchBox from './shared/SearchBox'
 import type { ReactNode } from 'react'
 import { listToolbarSelectSx } from './listToolbarStyles'
 
@@ -48,8 +40,6 @@ export default function ListToolbar({
 }: ListToolbarProps) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
-  const borderColor = isDark ? alpha('#fff', 0.1) : alpha('#000', 0.12)
-  const hoverBorderColor = isDark ? alpha('#fff', 0.2) : alpha('#000', 0.25)
 
   const selectSx = (minWidth: number) => listToolbarSelectSx(isDark, minWidth)
 
@@ -71,30 +61,12 @@ export default function ListToolbar({
         alignItems: 'center',
       }}
     >
-      <Box
-        sx={{
-          flex: '1 1 100%',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1,
-          px: 1.5,
-          height: 40,
-          borderRadius: 1.5,
-          border: '1px solid',
-          borderColor,
-          bgcolor: isDark ? alpha('#fff', 0.04) : alpha('#000', 0.02),
-          '&:focus-within': { borderColor: hoverBorderColor },
-        }}
-      >
-        <SearchIcon sx={{ fontSize: 16, color: 'text.disabled', flexShrink: 0 }} />
-        <InputBase
-          placeholder={searchPlaceholder}
-          value={searchValue}
-          onChange={(e) => onSearchChange(e.target.value)}
-          sx={{ flex: 1, fontSize: '0.875rem', minWidth: 0 }}
-          inputProps={{ 'aria-label': searchPlaceholder }}
-        />
-      </Box>
+      <SearchBox
+        value={searchValue}
+        onChange={onSearchChange}
+        placeholder={searchPlaceholder}
+        sx={{ flex: '1 1 100%' }}
+      />
 
       {sortOptions && sortValue !== undefined && onSortChange ? (
         <Select

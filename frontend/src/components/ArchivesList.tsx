@@ -38,6 +38,7 @@ interface ArchivesListProps {
   repositoryName: string
   loading: boolean
   onViewArchive: (archive: Archive) => void
+  onOpenArchive?: (archive: Archive) => void
   onRestoreArchive: (archive: Archive) => void
   onMountArchive: (archive: Archive) => void
   onDeleteArchive: (archive: Archive) => void
@@ -51,6 +52,7 @@ export default function ArchivesList({
   archives,
   loading,
   onViewArchive,
+  onOpenArchive,
   onRestoreArchive,
   onMountArchive,
   onDeleteArchive,
@@ -640,6 +642,7 @@ export default function ArchivesList({
                     key={archive.id}
                     archive={archive}
                     onView={onViewArchive}
+                    onOpen={onOpenArchive}
                     onRestore={onRestoreArchive}
                     onMount={onMountArchive}
                     onDelete={onDeleteArchive}
@@ -670,6 +673,7 @@ export default function ArchivesList({
                   key={archive.id}
                   archive={archive}
                   onView={onViewArchive}
+                  onOpen={onOpenArchive}
                   onRestore={onRestoreArchive}
                   onMount={onMountArchive}
                   onDelete={onDeleteArchive}

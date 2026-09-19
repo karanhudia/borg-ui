@@ -1,18 +1,7 @@
 import { Box, Stack, Typography, alpha, useTheme } from '@mui/material'
-import {
-  Calendar,
-  FileText,
-  HardDrive,
-  Layers,
-  MessageSquareQuote,
-  Package,
-  Server,
-  Tag,
-  Timer,
-  User,
-} from 'lucide-react'
+import { HardDrive, Layers, MessageSquareQuote, Package, Server, User } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { formatBytes, formatDurationSeconds, parseBackendDate } from '../../utils/dateUtils'
+import { formatBytes } from '../../utils/dateUtils'
 import type { ArchiveDetailResponse } from '../../types/archives'
 
 interface ArchiveInfoTabProps {
@@ -119,7 +108,8 @@ function Fact({
   )
 }
 
-// What the archive cost to store, then the facts about the run. Borg's
+// What the archive cost to store, then what the header does not already
+// say: which host and user it came from, and its comment. Borg's
 // "deduplicated size" is the chunks no other archive has, so for a daily
 // backup it is tiny and for an old archive whose data later ones share it
 // is zero. That is what deleting the archive would free, which is the
@@ -215,100 +205,77 @@ export default function ArchiveInfoTab({ archive }: ArchiveInfoTabProps) {
         )}
       </Box>
 
-      <Box
-        sx={{
-          border: 1,
-          borderColor: 'divider',
-          borderRadius: 2,
-          bgcolor: 'background.paper',
-          p: 3,
-        }}
-      >
-        <Typography variant="overline" sx={{ color: 'text.secondary', letterSpacing: '0.08em' }}>
-          {t('archives.detail.details')}
-        </Typography>
+      {(archive.hostname || archive.username || archive.comment) && (
         <Box
           sx={{
-            display: 'grid',
-            gridTemplateColumns: {
-              xs: '1fr',
-              sm: 'repeat(2, minmax(0, 1fr))',
-              md: 'repeat(3, minmax(0, 1fr))',
-            },
-            gap: 2.5,
-            mt: 1.5,
+            border: 1,
+            borderColor: 'divider',
+            borderRadius: 2,
+            bgcolor: 'background.paper',
+            p: 3,
           }}
         >
-          <Fact
-            icon={<Tag size={15} />}
-            tone="secondary"
-            label={t('archives.detail.series')}
-            value={archive.series}
-          />
-          <Fact
-            icon={<Calendar size={15} />}
-            tone="primary"
-            label={t('archives.detail.started')}
-            value={parseBackendDate(archive.start).toLocaleString()}
-          />
-          <Fact
-            icon={<Timer size={15} />}
-            tone="warning"
-            label={t('archives.detail.duration')}
-            value={
-              archive.duration_seconds != null
-                ? formatDurationSeconds(archive.duration_seconds)
-                : null
-            }
-          />
-          <Fact
-            icon={<FileText size={15} />}
-            tone="primary"
-            label={t('archives.detail.files')}
-            value={archive.nfiles?.toLocaleString() ?? null}
-          />
-          <Fact
-            icon={<Server size={15} />}
-            tone="info"
-            label={t('archives.detail.hostname')}
-            value={archive.hostname}
-          />
-          <Fact
-            icon={<User size={15} />}
-            tone="success"
-            label={t('archives.detail.username')}
-            value={archive.username}
-          />
-        </Box>
-        {archive.comment && (
-          <Stack
-            direction="row"
-            spacing={1.5}
+          <Typography variant="overline" sx={{ color: 'text.secondary', letterSpacing: '0.08em' }}>
+            {t('archives.detail.details')}
+          </Typography>
+          <Box
             sx={{
-              mt: 3,
-              p: 2,
-              borderRadius: 2,
-              borderLeft: `3px solid ${theme.palette.secondary.main}`,
-              bgcolor: alpha(
-                theme.palette.secondary.main,
-                theme.palette.mode === 'dark' ? 0.08 : 0.04
-              ),
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: 'repeat(2, minmax(0, 1fr))',
+                md: 'repeat(3, minmax(0, 1fr))',
+              },
+              gap: 2.5,
+              mt: 1.5,
             }}
           >
-            <Box sx={{ color: 'secondary.main', mt: 0.25 }}>
-              <MessageSquareQuote size={16} />
-            </Box>
-            <Box sx={{ minWidth: 0 }}>
-              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                {t('archives.detail.comment')}
-              </Typography>
-              <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {archive.comment}
-              </Typography>
-            </Box>
-          </Stack>
-        )}
-      </Box>
+            <Fact
+              icon={<Server size={15} />}
+              tone="info"
+              label={t('archives.detail.hostname')}
+              value={archive.hostname}
+            />
+            <Fact
+              icon={<User size={15} />}
+              tone="success"
+              label={t('archives.detail.username')}
+              value={archive.username}
+            />
+          </Box>
+          {archive.comment && (
+            <Stack
+              direction="row"
+              spacing={1.5}
+              sx={{
+                mt: 3,
+                p: 2,
+                borderRadius: 2,
+                borderLeft: `3px solid ${theme.palette.secondary.main}`,
+                bgcolor: alpha(
+                  theme.palette.secondary.main,
+                  theme.palette.mode === 'dark' ? 0.08 : 0.04
+                ),
+              }}
+            >
+              <Box sx={{ color: 'secondary.main', mt: 0.25 }}>
+                <MessageSquareQuote size={16} />
+              </Box>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                  {t('archives.detail.comment')}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                >
+                  {archive.comment}
+                </Typography>
+              </Box>
+            </Stack>
+          )}
+        </Box>
+      )}
     </Stack>
   )
 }

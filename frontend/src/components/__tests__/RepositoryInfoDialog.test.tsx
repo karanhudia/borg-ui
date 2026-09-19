@@ -187,9 +187,6 @@ describe('RepositoryInfoDialog', () => {
       expect(screen.getByText('Storage Statistics')).toBeInTheDocument()
       expect(screen.getByTestId('repository-stat-usedOnDisk')).toHaveTextContent('Used on Disk')
       expect(screen.getByTestId('repository-stat-usedOnDisk')).toHaveTextContent('256.00 MB')
-      expect(screen.getByTestId('repository-stat-usedOnDisk')).toHaveTextContent(
-        'from Borg 1 cache'
-      )
       expect(screen.getByTestId('repository-stat-originalSize')).toHaveTextContent('1.00 GB')
       expect(screen.getByTestId('repository-stat-spaceSaved')).toHaveTextContent('4.00×')
       expect(screen.getByTestId('repository-stat-archives')).toHaveTextContent('25')
@@ -544,9 +541,6 @@ describe('RepositoryInfoDialog', () => {
         />
       )
       expect(screen.getByTestId('repository-stat-usedOnDisk')).toHaveTextContent('6.00 GB')
-      expect(screen.getByTestId('repository-stat-usedOnDisk')).toHaveTextContent(
-        'from Borg 2 index'
-      )
       expect(screen.getByTestId('repository-stat-spaceSaved')).toHaveTextContent('1.00×')
       expect(screen.queryByText(/not reported/i)).not.toBeInTheDocument()
       expect(screen.queryByText('Deduplicated Size')).not.toBeInTheDocument()

@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next'
 import type { RepositoryStorage } from '../types'
-import { formatBytes, formatDateShort, formatRelativeTime } from './dateUtils'
+import { formatBytes, formatDateShort, parseBackendDate } from './dateUtils'
 
 /**
  * One reading of a repository's stored size figures (#981), shared by the
@@ -57,14 +57,29 @@ function sourceText(t: TFunction, source: SizeSource | undefined, prefix: string
   return text === key ? undefined : text
 }
 
-/** "2 hours ago, from the Borg 2 index": when and where the size was read. */
-function measuredLine(t: TFunction, storage: RepositoryStorage): string {
-  const source = sourceText(t, storage.size_source, 'repositoryStats.source')
-  if (!storage.measured_at) return t('repositoryStats.measuredTimeUnknown')
-  const when = formatRelativeTime(storage.measured_at)
-  return source
-    ? t('repositoryStats.measuredAt', { when, source })
-    : t('repositoryStats.measuredAtNoSource', { when })
+/** The stamp the panel's "Updated" caption shows: the older of the size
+ * measurement and the archive listing, so it never overstates. Null when
+ * neither has happened. Returned with its zone: the backend sends naive
+ * UTC, which `new Date` would read as local time. */
+export function statsUpdatedAt(
+  storage: RepositoryStorage | null | undefined,
+  lastSyncedAt: string | null | undefined
+): string | null {
+  const stamps = [storage?.measured_at, lastSyncedAt]
+    .filter((s): s is string => !!s)
+    .map((s) => parseBackendDate(s))
+  if (stamps.length === 0) return null
+  return stamps.reduce((a, b) => (a <= b ? a : b)).toISOString()
+}
+
+/** Whether the figures are being produced right now: a listing or a size
+ * measurement queued or running. */
+export function statsUpdating(
+  indexPendingKinds: string[] | null | undefined,
+  syncState?: string
+): boolean {
+  const pending = indexPendingKinds ?? []
+  return syncState === 'syncing' || pending.includes('stats') || pending.includes('archive_sync')
 }
 
 interface ItemContext {
@@ -126,7 +141,6 @@ function usedOnDiskItem(ctx: ItemContext): RepositoryStatItem {
       state: 'value',
       value: formatBytes(storage.size_bytes),
       hint: sourceText(t, storage.size_source, 'repositoryStats.sourceHint'),
-      subtitle: measuredLine(t, storage),
       tone,
     }
   }

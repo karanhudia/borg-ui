@@ -353,6 +353,7 @@ def test_stored_reports_stale_when_the_archive_count_moved(db, repo):
     assert payload["stale"] is False
     assert payload["candidates"][0]["key"] == "standard"
     assert payload["candidates"][0]["freed_at_least"] == 20
+    assert payload["candidates"][0]["freed"] is None
     _archives(db, repo, 1)
     assert pc.stored(db, repo)["stale"] is True
 

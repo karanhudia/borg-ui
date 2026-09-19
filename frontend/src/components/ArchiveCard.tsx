@@ -8,6 +8,8 @@ import { getArchiveType } from '../utils/archiveGrouping'
 interface ArchiveCardProps {
   archive: Archive
   onView: (archive: Archive) => void
+  /** Click anywhere on the row: open the archive's detail page. */
+  onOpen?: (archive: Archive) => void
   onRestore: (archive: Archive) => void
   onMount: (archive: Archive) => void
   onDelete: (archive: Archive) => void
@@ -18,6 +20,7 @@ interface ArchiveCardProps {
 export default function ArchiveCard({
   archive,
   onView,
+  onOpen,
   onRestore,
   onMount,
   onDelete,
@@ -45,7 +48,10 @@ export default function ArchiveCard({
 
   return (
     <Box
+      data-testid="archive-row"
+      onClick={onOpen ? () => onOpen(archive) : undefined}
       sx={{
+        cursor: onOpen ? 'pointer' : 'default',
         display: 'grid',
         gridTemplateColumns: desktopGridTemplate,
         alignItems: 'center',
@@ -57,6 +63,10 @@ export default function ArchiveCard({
         transition: 'all 150ms ease',
         '&:hover': {
           bgcolor: alpha(theme.palette.primary.main, isDark ? 0.04 : 0.03),
+          // The row opens the archive: say so the way a link does.
+          ...(onOpen && {
+            '& .archive-name': { textDecoration: 'underline', color: 'primary.main' },
+          }),
         },
         '@media (max-width: 767px)': {
           display: 'grid',
@@ -70,12 +80,14 @@ export default function ArchiveCard({
     >
       {/* Archive name */}
       <Box
+        className="archive-name"
         title={archive.name}
         sx={{
           fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
           fontSize: '0.78rem',
           fontWeight: 600,
           color: 'text.primary',
+          textUnderlineOffset: 3,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
@@ -143,6 +155,7 @@ export default function ArchiveCard({
 
       {/* Actions — always visible */}
       <Box
+        onClick={(e) => e.stopPropagation()}
         sx={{
           display: 'flex',
           alignItems: 'center',

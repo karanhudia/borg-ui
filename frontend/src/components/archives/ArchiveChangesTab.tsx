@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import useFillViewport from '../../hooks/useFillViewport'
 import {
   Alert,
   Box,
@@ -13,6 +14,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import RichSelect from '../shared/RichSelect'
+import SearchBox from '../shared/SearchBox'
 import PlanGate from '../shared/PlanGate'
 import IndexModeGate from './IndexModeGate'
 import { usePlan } from '../../hooks/usePlan'
@@ -40,6 +42,7 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
   const queryClient = useQueryClient()
   const [compareTo, setCompareTo] = useState<number | null>(archive.predecessor_id)
   const [activeFilters, setActiveFilters] = useState<ChangeType[]>([])
+  const [needle, setNeedle] = useState('')
   // Pages fetched after the first one, which the query owns. The route caps
   // a response and hands back a cursor, so "Show more" has to ask for the
   // next page rather than reveal rows the client never received.
@@ -54,12 +57,8 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
 
   const compareOptions = useMemo(() => {
     const older = (olderArchives?.archives || []).filter((row) => row.start < archive.start)
-    return older.map((row) => ({
-      value: String(row.id),
-      primary: row.name,
-      secondary: row.id === archive.predecessor_id ? t('archives.changes.previous') : undefined,
-    }))
-  }, [olderArchives, archive.start, archive.predecessor_id, t])
+    return older.map((row) => ({ value: String(row.id), primary: row.name }))
+  }, [olderArchives, archive.start])
 
   const {
     data: changes,
@@ -121,7 +120,14 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
   const capability = changes?.history_capability ?? archive.history_capability ?? 'available'
   const historyUnavailable = capability !== 'available'
   const canRebuild = !historyUnavailable
-  const rows = [...(changes?.changes ?? []), ...extraPages]
+  const loaded = [...(changes?.changes ?? []), ...extraPages]
+  // The path filter narrows what has been loaded; "show more" still pages
+  // the server, so a hit further down appears once its page is in.
+  const query = needle.trim().toLowerCase()
+  const rows = query ? loaded.filter((row) => row.path.toLowerCase().includes(query)) : loaded
+  const listRef = useRef<HTMLDivElement>(null)
+  // The frame mounts only once rows exist, so measure again when they do.
+  const listHeight = useFillViewport(listRef, 240, [rows.length > 0])
   const totals = changes?.totals
 
   return (
@@ -131,12 +137,14 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
         spacing={2}
         sx={{ mb: 2, alignItems: { md: 'center' } }}
       >
-        <Box sx={{ width: { xs: '100%', md: 420 } }}>
+        <Box sx={{ width: { xs: '100%', md: 300 }, flexShrink: 0 }}>
           <RichSelect
             label={t('archives.changes.compareWith')}
             value={compareTo !== null ? String(compareTo) : ''}
             onChange={(value) => setCompareTo(value ? Number(value) : null)}
             options={compareOptions}
+            // the same 40px as the filter buttons beside it
+            selectSx={{ height: 40, '& .MuiSelect-select': { height: 40, py: 0 } }}
           />
         </Box>
         <ToggleButtonGroup
@@ -191,6 +199,12 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
             )
           })}
         </ToggleButtonGroup>
+        <SearchBox
+          value={needle}
+          onChange={setNeedle}
+          placeholder={t('archives.changes.search')}
+          sx={{ flex: 1, minWidth: 200 }}
+        />
       </Stack>
 
       {changes?.history_truncated && (
@@ -246,18 +260,23 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
 
       {!isLoading && !loadFailed && historyState === 'indexed' && rows.length === 0 && (
         <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 2 }}>
-          {t('archives.changes.empty')}
+          {query ? t('archives.changes.noMatch') : t('archives.changes.empty')}
         </Typography>
       )}
 
       {!isLoading && historyState === 'indexed' && rows.length > 0 && (
         <Box
+          ref={listRef}
           sx={{
             border: 1,
             borderColor: 'divider',
             borderRadius: 2,
             bgcolor: 'background.paper',
-            overflow: 'hidden',
+            // the list runs to the bottom of the window and scrolls
+            // inside its frame; the page above it stays put
+            height: listHeight ?? 'calc(100vh - 420px)',
+            minHeight: 240,
+            overflowY: 'auto',
           }}
         >
           {rows.map((row) => (

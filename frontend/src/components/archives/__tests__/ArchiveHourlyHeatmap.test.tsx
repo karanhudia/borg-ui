@@ -50,7 +50,7 @@ describe('ArchiveHourlyHeatmap', () => {
         onSelectArchive={onSelectArchive}
       />
     )
-    const cell = screen.getByTestId(`hourly-cell-hourly-${today}-14`)
+    const cell = screen.getByTestId(`hourly-cell-repository-${today}-14`)
     expect(cell).toHaveAttribute('data-count', '1')
     fireEvent.click(cell)
     expect(onSelectArchive).toHaveBeenCalledWith(2)
@@ -64,7 +64,7 @@ describe('ArchiveHourlyHeatmap', () => {
         onSelectArchive={onSelectArchive}
       />
     )
-    fireEvent.click(screen.getByTestId(`hourly-cell-hourly-${today}-9`))
+    fireEvent.click(screen.getByTestId(`hourly-cell-repository-${today}-9`))
     expect(onSelectArchive).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('menuitem', { name: /hourly-2/ }))
     expect(onSelectArchive).toHaveBeenCalledWith(2)

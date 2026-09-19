@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { renderWithProviders } from '../../test/test-utils'
 import i18n from 'i18next'
 import RepositoryStats from '../RepositoryStats'
-import { repositoryStatItems, stateText } from '../../utils/repositoryStats'
+import { repositoryStatItems, stateText, statsUpdatedAt } from '../../utils/repositoryStats'
 import type { RepositoryStorage } from '../../types'
 
 const borg1: RepositoryStorage = {
@@ -97,12 +98,31 @@ describe('RepositoryStats', () => {
     })
   })
 
+  describe('the free space action', () => {
+    it('sits in the used-on-disk tile and links to the prune preview', () => {
+      renderWithProviders(
+        <RepositoryStats
+          storage={borg1}
+          archiveCount={21}
+          freeSpaceHref="/repositories/1/prune-preview"
+        />
+      )
+      const link = screen.getByRole('link', { name: /free space/i })
+      expect(link).toHaveAttribute('href', '/repositories/1/prune-preview')
+      expect(stat('usedOnDisk')).toContainElement(link)
+    })
+
+    it('is absent without a target', () => {
+      renderWithProviders(<RepositoryStats storage={borg1} archiveCount={21} />)
+      expect(screen.queryByRole('link', { name: /free space/i })).not.toBeInTheDocument()
+    })
+  })
+
   describe('the values', () => {
     it('renders the Borg 1 figures', () => {
       render(<RepositoryStats storage={borg1} archiveCount={21} variant="detail" />)
       expect(stat('originalSize')).toHaveTextContent('18.68 TB')
       expect(stat('usedOnDisk')).toHaveTextContent('2.40 TB')
-      expect(stat('usedOnDisk')).toHaveTextContent('from Borg 1 cache')
       expect(stat('spaceSaved')).toHaveTextContent('7.78×')
       expect(stat('archives')).toHaveTextContent('21')
       expect(stat('backupSpan')).toHaveTextContent('to')
@@ -112,15 +132,8 @@ describe('RepositoryStats', () => {
     it('renders the Borg 2 figures the same way', () => {
       render(<RepositoryStats storage={borg2} archiveCount={36} variant="detail" />)
       expect(stat('usedOnDisk')).toHaveTextContent('2.35 GB')
-      expect(stat('usedOnDisk')).toHaveTextContent('from Borg 2 index')
       expect(stat('spaceSaved')).toHaveTextContent('4.54×')
       expect(screen.queryByText(/not reported/i)).not.toBeInTheDocument()
-    })
-
-    it('says the measurement time is unknown for a backfilled size', () => {
-      render(<RepositoryStats storage={{ ...borg1, measured_at: null }} variant="detail" />)
-      expect(stat('usedOnDisk')).toHaveTextContent('2.40 TB')
-      expect(stat('usedOnDisk')).toHaveTextContent('Measurement time unknown')
     })
 
     it('shows a single date when the span is one archive', () => {
@@ -266,11 +279,20 @@ describe('RepositoryStats', () => {
     })
   })
 
+  describe('statsUpdatedAt', () => {
+    it('takes the older stamp and reads a naive one as UTC', () => {
+      const storage = { ...borg1, measured_at: '2026-09-18T12:32:24' }
+      expect(statsUpdatedAt(storage, '2026-09-18T12:30:36.750342')).toBe('2026-09-18T12:30:36.750Z')
+      expect(statsUpdatedAt(storage, null)).toBe('2026-09-18T12:32:24.000Z')
+      expect(statsUpdatedAt({ ...borg1, measured_at: null }, null)).toBeNull()
+    })
+  })
+
   describe('the hints', () => {
-    it('carries the provenance in the size hint and the time in its subtitle', () => {
+    it('carries the provenance in the size hint and no time of its own', () => {
       const [, used] = repositoryStatItems(t, { storage: borg2, variant: 'detail' })
       expect(used.hint).toContain('chunk index')
-      expect(used.subtitle).toContain('from Borg 2 index')
+      expect(used.subtitle).toBeUndefined()
     })
 
     it('names the ratio as both factors together', () => {

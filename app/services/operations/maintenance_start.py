@@ -97,6 +97,7 @@ def start_inline_maintenance(
     user_id: Optional[int],
     run_id: Optional[str] = None,
     depends_on_id: Optional[int] = None,
+    trigger: str = "manual",
 ) -> Operation:
     """An operation the caller runs itself, right now, instead of leaving to
     the runner. Created `running` so the runner's queued-only sweep (spec 7.1)
@@ -113,13 +114,15 @@ def start_inline_maintenance(
 
     # A step of a run is triggered by whatever triggered the run: the prune
     # inside a plan backup is plan work, not a manual prune, and the trigger
-    # filter should find it there. A standalone inline step stays manual.
+    # filter should find it there. A standalone inline step takes the
+    # caller's trigger: manual unless it says otherwise (the preview's
+    # dry run is `preview`).
     parent = db.get(Operation, depends_on_id) if depends_on_id is not None else None
     operation = enqueue(
         db,
         kind,
         repository_id=repository.id,
-        trigger=parent.trigger if parent is not None else "manual",
+        trigger=parent.trigger if parent is not None else trigger,
         params={key: value for key, value in params.items() if value is not None},
         triggered_by_user_id=user_id,
         run_id=run_id,

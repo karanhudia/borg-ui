@@ -21,13 +21,15 @@ import CheckIcon from '@mui/icons-material/Check'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import FileDownload from '@mui/icons-material/FileDownload'
 import Lock from '@mui/icons-material/Lock'
-import Refresh from '@mui/icons-material/Refresh'
 import Storage from '@mui/icons-material/Storage'
 import { useTranslation } from 'react-i18next'
 import { formatDateShort } from '../utils/dateUtils'
 import { repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import RepositoryStats from './RepositoryStats'
+import StatsFreshness from './StatsFreshness'
+import { statsUpdatedAt, statsUpdating } from '../utils/repositoryStats'
+import type { SyncState } from '../types/archives'
 import PlanGate from './shared/PlanGate'
 import UpgradePrompt from './UpgradePrompt'
 import type { Repository, RepositoryStorage } from '../types'
@@ -43,9 +45,12 @@ interface RepositoryInfoDialogProps {
   /** Index work still pending for the repository (#1063); falls back to
    * the repository row's own list when not given. */
   indexPendingKinds?: string[] | null
-  /** Runs a live `borg info` for the repository. The details themselves
-   * are the stored columns; this is the user's way to re-read them, and
-   * the health probe: a failure shows the recovery panel. */
+  /** The archive listing's freshness, for the "Updated" caption. */
+  lastSyncedAt?: string | null
+  syncState?: SyncState
+  /** Runs a live `borg info` for the repository as the health probe (a
+   * failure shows the recovery panel), then asks for the index run that
+   * refreshes every figure. */
   onRefresh?: () => void
   isRefreshing?: boolean
   refreshFailed?: boolean
@@ -299,6 +304,8 @@ export default function RepositoryInfoDialog({
   repository,
   storage,
   indexPendingKinds,
+  lastSyncedAt = null,
+  syncState,
   onRefresh,
   isRefreshing = false,
   refreshFailed = false,
@@ -400,20 +407,18 @@ export default function RepositoryInfoDialog({
           >
             {displayRepository?.name}
           </Typography>
-          {onRefresh && (
-            <Tooltip title={t('repositoryStats.refresh')}>
-              <span>
-                <IconButton
-                  size="small"
-                  aria-label={t('repositoryStats.refresh')}
-                  onClick={onRefresh}
-                  disabled={isRefreshing}
-                >
-                  {isRefreshing ? <CircularProgress size={18} /> : <Refresh fontSize="small" />}
-                </IconButton>
-              </span>
-            </Tooltip>
-          )}
+          <StatsFreshness
+            updatedAt={statsUpdatedAt(displayStorage, lastSyncedAt)}
+            syncState={syncState}
+            updating={
+              isRefreshing ||
+              statsUpdating(
+                displayIndexPending ?? displayRepository?.index_pending_kinds,
+                syncState
+              )
+            }
+            onRefresh={onRefresh}
+          />
         </Box>
       </DialogTitle>
       <DialogContent>
