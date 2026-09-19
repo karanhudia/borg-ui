@@ -1,0 +1,4558 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PR #1110 visual report</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f8fa;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #637083;
+      --border: #d8dee8;
+      --accent: #1769aa;
+      --changed: #b42318;
+      --added: #067647;
+      --removed: #7f56d9;
+      --shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 28px min(5vw, 56px);
+    }
+
+    main {
+      display: grid;
+      gap: 24px;
+      padding: 24px min(5vw, 56px) 48px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      font-size: clamp(1.6rem, 2.2vw, 2.4rem);
+      letter-spacing: 0;
+      line-height: 1.15;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-top: 22px;
+      max-width: 980px;
+    }
+
+    .metric {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 14px 16px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 1.6rem;
+      line-height: 1.1;
+    }
+
+    .metric span {
+      color: var(--muted);
+      display: block;
+      font-size: 0.88rem;
+      margin-top: 4px;
+    }
+
+    .meta {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .pill {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      display: inline-flex;
+      font-size: 0.84rem;
+      padding: 4px 10px;
+    }
+
+    .pill-ok { color: var(--added); border-color: #abefc6; background: #ecfdf3; }
+    .pill-changed { color: var(--changed); border-color: #fecdca; background: #fef3f2; }
+    .pill-info { color: var(--accent); border-color: #b9d6f2; background: #eff8ff; }
+
+    .section {
+      display: grid;
+      gap: 14px;
+    }
+
+    .section-title {
+      align-items: center;
+      display: flex;
+      gap: 10px;
+    }
+
+    .section-title h2 {
+      font-size: 1.08rem;
+      letter-spacing: 0;
+    }
+
+    .section-title span {
+      background: #e9eef5;
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      padding: 2px 9px;
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 12px 0;
+    }
+
+    .shot {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .shot-header {
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      justify-content: space-between;
+      padding: 14px 16px;
+    }
+
+    .shot-header h3 {
+      font-size: 0.96rem;
+      overflow-wrap: anywhere;
+    }
+
+    .shot-header p {
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .image-grid {
+      display: grid;
+      gap: 1px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      background: var(--border);
+    }
+
+    .image-grid.single {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    figure {
+      background: #f8fafc;
+      margin: 0;
+      min-width: 0;
+      padding: 12px;
+    }
+
+    figcaption {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    img {
+      background: white;
+      border: 1px solid #e5e7eb;
+      display: block;
+      height: auto;
+      max-width: 100%;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover { text-decoration: underline; }
+
+    @media (max-width: 820px) {
+      header { padding: 22px 18px; }
+      main { padding: 18px; }
+      .image-grid { grid-template-columns: minmax(0, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>PR #1110 visual report</h1>
+    <p class="subtitle">Generated Sep 19, 2026, 11:35 AM UTC</p>
+    <div class="meta">
+      <span class="pill pill-changed">Visual changes found</span>
+      
+      <span class="pill pill-info">Commit e8b993f5d871</span>
+      <a class="pill pill-info" href="https://github.com/karanhudia/borg-ui/actions/runs/35440461100">Workflow run</a>
+    </div>
+    <div class="summary">
+      <div class="metric"><strong>166</strong><span>Changed</span></div>
+      <div class="metric"><strong>14</strong><span>Added</span></div>
+      <div class="metric"><strong>6</strong><span>Removed</span></div>
+      <div class="metric"><strong>784</strong><span>Unchanged</span></div>
+      <div class="metric"><strong>964</strong><span>Current screenshots</span></div>
+      <div class="metric"><strong>956</strong><span>Baseline screenshots</span></div>
+    </div>
+  </header>
+  <main>
+    
+    <section class="section">
+      <div class="section-title">
+        <h2>Changed</h2>
+        <span>166</span>
+      </div>
+      
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-rebuildstagepicker--history-unsupported-for-agent--mobile.png</h3>
+        <p>53,649 px changed · 16.30%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-rebuildstagepicker--history-unsupported-for-agent--mobile.png"><img src="images/baseline/backgroundwork-rebuildstagepicker--history-unsupported-for-agent--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-rebuildstagepicker--history-unsupported-for-agent--mobile.png"><img src="images/actual/backgroundwork-rebuildstagepicker--history-unsupported-for-agent--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-rebuildstagepicker--history-unsupported-for-agent--mobile.png"><img src="images/diff/backgroundwork-rebuildstagepicker--history-unsupported-for-agent--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-rebuildstagepicker--history-unsupported-for-agent.png</h3>
+        <p>41,545 px changed · 4.06%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-rebuildstagepicker--history-unsupported-for-agent.png"><img src="images/baseline/backgroundwork-rebuildstagepicker--history-unsupported-for-agent.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-rebuildstagepicker--history-unsupported-for-agent.png"><img src="images/actual/backgroundwork-rebuildstagepicker--history-unsupported-for-agent.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-rebuildstagepicker--history-unsupported-for-agent.png"><img src="images/diff/backgroundwork-rebuildstagepicker--history-unsupported-for-agent.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--agent-repository--mobile.png</h3>
+        <p>1,691 px changed · 0.51%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--agent-repository--mobile.png"><img src="images/baseline/backgroundwork-repositoryhubrow--agent-repository--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--agent-repository--mobile.png"><img src="images/actual/backgroundwork-repositoryhubrow--agent-repository--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--agent-repository--mobile.png"><img src="images/diff/backgroundwork-repositoryhubrow--agent-repository--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--agent-repository.png</h3>
+        <p>1,695 px changed · 0.17%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--agent-repository.png"><img src="images/baseline/backgroundwork-repositoryhubrow--agent-repository.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--agent-repository.png"><img src="images/actual/backgroundwork-repositoryhubrow--agent-repository.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--agent-repository.png"><img src="images/diff/backgroundwork-repositoryhubrow--agent-repository.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositorytrackdialog--agent-repository--mobile.png</h3>
+        <p>7,296 px changed · 2.22%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositorytrackdialog--agent-repository--mobile.png"><img src="images/baseline/backgroundwork-repositorytrackdialog--agent-repository--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositorytrackdialog--agent-repository--mobile.png"><img src="images/actual/backgroundwork-repositorytrackdialog--agent-repository--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositorytrackdialog--agent-repository--mobile.png"><img src="images/diff/backgroundwork-repositorytrackdialog--agent-repository--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositorytrackdialog--agent-repository.png</h3>
+        <p>45,034 px changed · 4.40%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositorytrackdialog--agent-repository.png"><img src="images/baseline/backgroundwork-repositorytrackdialog--agent-repository.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositorytrackdialog--agent-repository.png"><img src="images/actual/backgroundwork-repositorytrackdialog--agent-repository.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositorytrackdialog--agent-repository.png"><img src="images/diff/backgroundwork-repositorytrackdialog--agent-repository.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivechangestab--agent-unsupported--mobile.png</h3>
+        <p>50,246 px changed · 15.26%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivechangestab--agent-unsupported--mobile.png"><img src="images/baseline/components-archives-archivechangestab--agent-unsupported--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivechangestab--agent-unsupported--mobile.png"><img src="images/actual/components-archives-archivechangestab--agent-unsupported--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivechangestab--agent-unsupported--mobile.png"><img src="images/diff/components-archives-archivechangestab--agent-unsupported--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivechangestab--agent-unsupported.png</h3>
+        <p>85,587 px changed · 8.36%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivechangestab--agent-unsupported.png"><img src="images/baseline/components-archives-archivechangestab--agent-unsupported.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivechangestab--agent-unsupported.png"><img src="images/actual/components-archives-archivechangestab--agent-unsupported.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivechangestab--agent-unsupported.png"><img src="images/diff/components-archives-archivechangestab--agent-unsupported.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivechangestab--default--mobile.png</h3>
+        <p>156,142 px changed · 47.44%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivechangestab--default--mobile.png"><img src="images/baseline/components-archives-archivechangestab--default--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivechangestab--default--mobile.png"><img src="images/actual/components-archives-archivechangestab--default--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivechangestab--default--mobile.png"><img src="images/diff/components-archives-archivechangestab--default--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivechangestab--default.png</h3>
+        <p>422,644 px changed · 41.27%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivechangestab--default.png"><img src="images/baseline/components-archives-archivechangestab--default.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivechangestab--default.png"><img src="images/actual/components-archives-archivechangestab--default.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivechangestab--default.png"><img src="images/diff/components-archives-archivechangestab--default.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivechangestab--pending--mobile.png</h3>
+        <p>58,094 px changed · 17.65%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivechangestab--pending--mobile.png"><img src="images/baseline/components-archives-archivechangestab--pending--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivechangestab--pending--mobile.png"><img src="images/actual/components-archives-archivechangestab--pending--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivechangestab--pending--mobile.png"><img src="images/diff/components-archives-archivechangestab--pending--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivechangestab--pending.png</h3>
+        <p>106,368 px changed · 10.39%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivechangestab--pending.png"><img src="images/baseline/components-archives-archivechangestab--pending.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivechangestab--pending.png"><img src="images/actual/components-archives-archivechangestab--pending.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivechangestab--pending.png"><img src="images/diff/components-archives-archivechangestab--pending.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivechangestab--truncated--mobile.png</h3>
+        <p>175,871 px changed · 53.43%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivechangestab--truncated--mobile.png"><img src="images/baseline/components-archives-archivechangestab--truncated--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivechangestab--truncated--mobile.png"><img src="images/actual/components-archives-archivechangestab--truncated--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivechangestab--truncated--mobile.png"><img src="images/diff/components-archives-archivechangestab--truncated--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivechangestab--truncated.png</h3>
+        <p>469,253 px changed · 45.83%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivechangestab--truncated.png"><img src="images/baseline/components-archives-archivechangestab--truncated.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivechangestab--truncated.png"><img src="images/actual/components-archives-archivechangestab--truncated.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivechangestab--truncated.png"><img src="images/diff/components-archives-archivechangestab--truncated.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivefiledetailspane--directory--mobile.png</h3>
+        <p>8,604 px changed · 2.61%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivefiledetailspane--directory--mobile.png"><img src="images/baseline/components-archives-archivefiledetailspane--directory--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivefiledetailspane--directory--mobile.png"><img src="images/actual/components-archives-archivefiledetailspane--directory--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivefiledetailspane--directory--mobile.png"><img src="images/diff/components-archives-archivefiledetailspane--directory--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivefiledetailspane--directory.png</h3>
+        <p>10,384 px changed · 1.01%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivefiledetailspane--directory.png"><img src="images/baseline/components-archives-archivefiledetailspane--directory.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivefiledetailspane--directory.png"><img src="images/actual/components-archives-archivefiledetailspane--directory.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivefiledetailspane--directory.png"><img src="images/diff/components-archives-archivefiledetailspane--directory.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivefiledetailspane--file--mobile.png</h3>
+        <p>6,502 px changed · 1.98%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivefiledetailspane--file--mobile.png"><img src="images/baseline/components-archives-archivefiledetailspane--file--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivefiledetailspane--file--mobile.png"><img src="images/actual/components-archives-archivefiledetailspane--file--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivefiledetailspane--file--mobile.png"><img src="images/diff/components-archives-archivefiledetailspane--file--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivefiledetailspane--file.png</h3>
+        <p>8,282 px changed · 0.81%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivefiledetailspane--file.png"><img src="images/baseline/components-archives-archivefiledetailspane--file.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivefiledetailspane--file.png"><img src="images/actual/components-archives-archivefiledetailspane--file.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivefiledetailspane--file.png"><img src="images/diff/components-archives-archivefiledetailspane--file.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivefilestab--default.png</h3>
+        <p>558,017 px changed · 54.49%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivefilestab--default.png"><img src="images/baseline/components-archives-archivefilestab--default.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivefilestab--default.png"><img src="images/actual/components-archives-archivefilestab--default.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivefilestab--default.png"><img src="images/diff/components-archives-archivefilestab--default.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivegrowthchart--dark--mobile.png</h3>
+        <p>110,688 px changed · 33.63%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivegrowthchart--dark--mobile.png"><img src="images/baseline/components-archives-archivegrowthchart--dark--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivegrowthchart--dark--mobile.png"><img src="images/actual/components-archives-archivegrowthchart--dark--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivegrowthchart--dark--mobile.png"><img src="images/diff/components-archives-archivegrowthchart--dark--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivegrowthchart--dark.png</h3>
+        <p>244,126 px changed · 23.84%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivegrowthchart--dark.png"><img src="images/baseline/components-archives-archivegrowthchart--dark.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivegrowthchart--dark.png"><img src="images/actual/components-archives-archivegrowthchart--dark.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivegrowthchart--dark.png"><img src="images/diff/components-archives-archivegrowthchart--dark.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivegrowthchart--one-series--mobile.png</h3>
+        <p>31,272 px changed · 9.50%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivegrowthchart--one-series--mobile.png"><img src="images/baseline/components-archives-archivegrowthchart--one-series--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivegrowthchart--one-series--mobile.png"><img src="images/actual/components-archives-archivegrowthchart--one-series--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivegrowthchart--one-series--mobile.png"><img src="images/diff/components-archives-archivegrowthchart--one-series--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivegrowthchart--one-series.png</h3>
+        <p>120,292 px changed · 11.75%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivegrowthchart--one-series.png"><img src="images/baseline/components-archives-archivegrowthchart--one-series.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivegrowthchart--one-series.png"><img src="images/actual/components-archives-archivegrowthchart--one-series.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivegrowthchart--one-series.png"><img src="images/diff/components-archives-archivegrowthchart--one-series.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivegrowthchart--repository--mobile.png</h3>
+        <p>41,841 px changed · 12.71%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivegrowthchart--repository--mobile.png"><img src="images/baseline/components-archives-archivegrowthchart--repository--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivegrowthchart--repository--mobile.png"><img src="images/actual/components-archives-archivegrowthchart--repository--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivegrowthchart--repository--mobile.png"><img src="images/diff/components-archives-archivegrowthchart--repository--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivegrowthchart--repository.png</h3>
+        <p>134,658 px changed · 13.15%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivegrowthchart--repository.png"><img src="images/baseline/components-archives-archivegrowthchart--repository.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivegrowthchart--repository.png"><img src="images/actual/components-archives-archivegrowthchart--repository.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivegrowthchart--repository.png"><img src="images/diff/components-archives-archivegrowthchart--repository.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivehourlyheatmap--every-six-hours--mobile.png</h3>
+        <p>75,724 px changed · 23.01%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivehourlyheatmap--every-six-hours--mobile.png"><img src="images/baseline/components-archives-archivehourlyheatmap--every-six-hours--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivehourlyheatmap--every-six-hours--mobile.png"><img src="images/actual/components-archives-archivehourlyheatmap--every-six-hours--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivehourlyheatmap--every-six-hours--mobile.png"><img src="images/diff/components-archives-archivehourlyheatmap--every-six-hours--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivehourlyheatmap--every-six-hours.png</h3>
+        <p>396,576 px changed · 38.73%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivehourlyheatmap--every-six-hours.png"><img src="images/baseline/components-archives-archivehourlyheatmap--every-six-hours.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivehourlyheatmap--every-six-hours.png"><img src="images/actual/components-archives-archivehourlyheatmap--every-six-hours.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivehourlyheatmap--every-six-hours.png"><img src="images/diff/components-archives-archivehourlyheatmap--every-six-hours.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archiveinfotab--default--mobile.png</h3>
+        <p>46,112 px changed · 14.01%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archiveinfotab--default--mobile.png"><img src="images/baseline/components-archives-archiveinfotab--default--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archiveinfotab--default--mobile.png"><img src="images/actual/components-archives-archiveinfotab--default--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archiveinfotab--default--mobile.png"><img src="images/diff/components-archives-archiveinfotab--default--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archiveinfotab--default.png</h3>
+        <p>82,283 px changed · 8.04%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archiveinfotab--default.png"><img src="images/baseline/components-archives-archiveinfotab--default.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archiveinfotab--default.png"><img src="images/actual/components-archives-archiveinfotab--default.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archiveinfotab--default.png"><img src="images/diff/components-archives-archiveinfotab--default.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archiveinfotab--no-unique-data--mobile.png</h3>
+        <p>46,112 px changed · 14.01%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archiveinfotab--no-unique-data--mobile.png"><img src="images/baseline/components-archives-archiveinfotab--no-unique-data--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archiveinfotab--no-unique-data--mobile.png"><img src="images/actual/components-archives-archiveinfotab--no-unique-data--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archiveinfotab--no-unique-data--mobile.png"><img src="images/diff/components-archives-archiveinfotab--no-unique-data--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archiveinfotab--no-unique-data.png</h3>
+        <p>82,283 px changed · 8.04%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archiveinfotab--no-unique-data.png"><img src="images/baseline/components-archives-archiveinfotab--no-unique-data.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archiveinfotab--no-unique-data.png"><img src="images/actual/components-archives-archiveinfotab--no-unique-data.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archiveinfotab--no-unique-data.png"><img src="images/diff/components-archives-archiveinfotab--no-unique-data.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archiveinfotab--sizes-unknown--mobile.png</h3>
+        <p>87,772 px changed · 26.67%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archiveinfotab--sizes-unknown--mobile.png"><img src="images/baseline/components-archives-archiveinfotab--sizes-unknown--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archiveinfotab--sizes-unknown--mobile.png"><img src="images/actual/components-archives-archiveinfotab--sizes-unknown--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archiveinfotab--sizes-unknown--mobile.png"><img src="images/diff/components-archives-archiveinfotab--sizes-unknown--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archiveinfotab--sizes-unknown.png</h3>
+        <p>82,283 px changed · 8.04%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archiveinfotab--sizes-unknown.png"><img src="images/baseline/components-archives-archiveinfotab--sizes-unknown.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archiveinfotab--sizes-unknown.png"><img src="images/actual/components-archives-archiveinfotab--sizes-unknown.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archiveinfotab--sizes-unknown.png"><img src="images/diff/components-archives-archiveinfotab--sizes-unknown.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archiveinfotab--unique-share-below-one-percent--mobile.png</h3>
+        <p>46,112 px changed · 14.01%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archiveinfotab--unique-share-below-one-percent--mobile.png"><img src="images/baseline/components-archives-archiveinfotab--unique-share-below-one-percent--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archiveinfotab--unique-share-below-one-percent--mobile.png"><img src="images/actual/components-archives-archiveinfotab--unique-share-below-one-percent--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archiveinfotab--unique-share-below-one-percent--mobile.png"><img src="images/diff/components-archives-archiveinfotab--unique-share-below-one-percent--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archiveinfotab--unique-share-below-one-percent.png</h3>
+        <p>82,283 px changed · 8.04%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archiveinfotab--unique-share-below-one-percent.png"><img src="images/baseline/components-archives-archiveinfotab--unique-share-below-one-percent.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archiveinfotab--unique-share-below-one-percent.png"><img src="images/actual/components-archives-archiveinfotab--unique-share-below-one-percent.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archiveinfotab--unique-share-below-one-percent.png"><img src="images/diff/components-archives-archiveinfotab--unique-share-below-one-percent.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archiveinfotab--with-comment--mobile.png</h3>
+        <p>33,069 px changed · 10.05%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archiveinfotab--with-comment--mobile.png"><img src="images/baseline/components-archives-archiveinfotab--with-comment--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archiveinfotab--with-comment--mobile.png"><img src="images/actual/components-archives-archiveinfotab--with-comment--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archiveinfotab--with-comment--mobile.png"><img src="images/diff/components-archives-archiveinfotab--with-comment--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archiveinfotab--with-comment.png</h3>
+        <p>182,885 px changed · 17.86%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archiveinfotab--with-comment.png"><img src="images/baseline/components-archives-archiveinfotab--with-comment.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archiveinfotab--with-comment.png"><img src="images/actual/components-archives-archiveinfotab--with-comment.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archiveinfotab--with-comment.png"><img src="images/diff/components-archives-archiveinfotab--with-comment.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivesearchfield--locked--mobile.png</h3>
+        <p>9,491 px changed · 2.88%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivesearchfield--locked--mobile.png"><img src="images/baseline/components-archives-archivesearchfield--locked--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivesearchfield--locked--mobile.png"><img src="images/actual/components-archives-archivesearchfield--locked--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivesearchfield--locked--mobile.png"><img src="images/diff/components-archives-archivesearchfield--locked--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivesearchfield--locked.png</h3>
+        <p>9,491 px changed · 0.93%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivesearchfield--locked.png"><img src="images/baseline/components-archives-archivesearchfield--locked.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivesearchfield--locked.png"><img src="images/actual/components-archives-archivesearchfield--locked.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivesearchfield--locked.png"><img src="images/diff/components-archives-archivesearchfield--locked.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivesearchfield--unlocked--mobile.png</h3>
+        <p>14,276 px changed · 4.34%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivesearchfield--unlocked--mobile.png"><img src="images/baseline/components-archives-archivesearchfield--unlocked--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivesearchfield--unlocked--mobile.png"><img src="images/actual/components-archives-archivesearchfield--unlocked--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivesearchfield--unlocked--mobile.png"><img src="images/diff/components-archives-archivesearchfield--unlocked--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivesearchfield--unlocked.png</h3>
+        <p>16,756 px changed · 1.64%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivesearchfield--unlocked.png"><img src="images/baseline/components-archives-archivesearchfield--unlocked.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivesearchfield--unlocked.png"><img src="images/actual/components-archives-archivesearchfield--unlocked.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivesearchfield--unlocked.png"><img src="images/diff/components-archives-archivesearchfield--unlocked.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archiveseriesheatmap--default--mobile.png</h3>
+        <p>19,382 px changed · 5.89%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archiveseriesheatmap--default--mobile.png"><img src="images/baseline/components-archives-archiveseriesheatmap--default--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archiveseriesheatmap--default--mobile.png"><img src="images/actual/components-archives-archiveseriesheatmap--default--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archiveseriesheatmap--default--mobile.png"><img src="images/diff/components-archives-archiveseriesheatmap--default--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archiveseriesheatmap--default.png</h3>
+        <p>89,989 px changed · 8.79%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archiveseriesheatmap--default.png"><img src="images/baseline/components-archives-archiveseriesheatmap--default.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archiveseriesheatmap--default.png"><img src="images/actual/components-archives-archiveseriesheatmap--default.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archiveseriesheatmap--default.png"><img src="images/diff/components-archives-archiveseriesheatmap--default.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archiveseriesheatmap--empty--mobile.png</h3>
+        <p>28,575 px changed · 8.68%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archiveseriesheatmap--empty--mobile.png"><img src="images/baseline/components-archives-archiveseriesheatmap--empty--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archiveseriesheatmap--empty--mobile.png"><img src="images/actual/components-archives-archiveseriesheatmap--empty--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archiveseriesheatmap--empty--mobile.png"><img src="images/diff/components-archives-archiveseriesheatmap--empty--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archiveseriesheatmap--empty.png</h3>
+        <p>124,980 px changed · 12.21%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archiveseriesheatmap--empty.png"><img src="images/baseline/components-archives-archiveseriesheatmap--empty.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archiveseriesheatmap--empty.png"><img src="images/actual/components-archives-archiveseriesheatmap--empty.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archiveseriesheatmap--empty.png"><img src="images/diff/components-archives-archiveseriesheatmap--empty.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archiveseriesheatmap--full-year--mobile.png</h3>
+        <p>32,229 px changed · 9.79%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archiveseriesheatmap--full-year--mobile.png"><img src="images/baseline/components-archives-archiveseriesheatmap--full-year--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archiveseriesheatmap--full-year--mobile.png"><img src="images/actual/components-archives-archiveseriesheatmap--full-year--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archiveseriesheatmap--full-year--mobile.png"><img src="images/diff/components-archives-archiveseriesheatmap--full-year--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archiveseriesheatmap--full-year.png</h3>
+        <p>138,687 px changed · 13.54%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archiveseriesheatmap--full-year.png"><img src="images/baseline/components-archives-archiveseriesheatmap--full-year.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archiveseriesheatmap--full-year.png"><img src="images/actual/components-archives-archiveseriesheatmap--full-year.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archiveseriesheatmap--full-year.png"><img src="images/diff/components-archives-archiveseriesheatmap--full-year.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archiveseriesheatmap--no-schedule-known--mobile.png</h3>
+        <p>18,952 px changed · 5.76%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archiveseriesheatmap--no-schedule-known--mobile.png"><img src="images/baseline/components-archives-archiveseriesheatmap--no-schedule-known--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archiveseriesheatmap--no-schedule-known--mobile.png"><img src="images/actual/components-archives-archiveseriesheatmap--no-schedule-known--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archiveseriesheatmap--no-schedule-known--mobile.png"><img src="images/diff/components-archives-archiveseriesheatmap--no-schedule-known--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archiveseriesheatmap--no-schedule-known.png</h3>
+        <p>91,359 px changed · 8.92%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archiveseriesheatmap--no-schedule-known.png"><img src="images/baseline/components-archives-archiveseriesheatmap--no-schedule-known.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archiveseriesheatmap--no-schedule-known.png"><img src="images/actual/components-archives-archiveseriesheatmap--no-schedule-known.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archiveseriesheatmap--no-schedule-known.png"><img src="images/diff/components-archives-archiveseriesheatmap--no-schedule-known.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivestatsheader--borg-2-first-of-series--mobile.png</h3>
+        <p>125,736 px changed · 38.20%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivestatsheader--borg-2-first-of-series--mobile.png"><img src="images/baseline/components-archives-archivestatsheader--borg-2-first-of-series--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivestatsheader--borg-2-first-of-series--mobile.png"><img src="images/actual/components-archives-archivestatsheader--borg-2-first-of-series--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivestatsheader--borg-2-first-of-series--mobile.png"><img src="images/diff/components-archives-archivestatsheader--borg-2-first-of-series--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivestatsheader--borg-2-first-of-series.png</h3>
+        <p>152,854 px changed · 14.93%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivestatsheader--borg-2-first-of-series.png"><img src="images/baseline/components-archives-archivestatsheader--borg-2-first-of-series.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivestatsheader--borg-2-first-of-series.png"><img src="images/actual/components-archives-archivestatsheader--borg-2-first-of-series.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivestatsheader--borg-2-first-of-series.png"><img src="images/diff/components-archives-archivestatsheader--borg-2-first-of-series.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivestatsheader--community--mobile.png</h3>
+        <p>140,892 px changed · 42.80%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivestatsheader--community--mobile.png"><img src="images/baseline/components-archives-archivestatsheader--community--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivestatsheader--community--mobile.png"><img src="images/actual/components-archives-archivestatsheader--community--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivestatsheader--community--mobile.png"><img src="images/diff/components-archives-archivestatsheader--community--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivestatsheader--community.png</h3>
+        <p>152,855 px changed · 14.93%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivestatsheader--community.png"><img src="images/baseline/components-archives-archivestatsheader--community.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivestatsheader--community.png"><img src="images/actual/components-archives-archivestatsheader--community.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivestatsheader--community.png"><img src="images/diff/components-archives-archivestatsheader--community.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivestatsheader--never-measured--mobile.png</h3>
+        <p>109,542 px changed · 33.28%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivestatsheader--never-measured--mobile.png"><img src="images/baseline/components-archives-archivestatsheader--never-measured--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivestatsheader--never-measured--mobile.png"><img src="images/actual/components-archives-archivestatsheader--never-measured--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivestatsheader--never-measured--mobile.png"><img src="images/diff/components-archives-archivestatsheader--never-measured--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivestatsheader--never-measured.png</h3>
+        <p>140,534 px changed · 13.72%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivestatsheader--never-measured.png"><img src="images/baseline/components-archives-archivestatsheader--never-measured.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivestatsheader--never-measured.png"><img src="images/actual/components-archives-archivestatsheader--never-measured.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivestatsheader--never-measured.png"><img src="images/diff/components-archives-archivestatsheader--never-measured.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivestatsheader--pro--mobile.png</h3>
+        <p>140,892 px changed · 42.80%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivestatsheader--pro--mobile.png"><img src="images/baseline/components-archives-archivestatsheader--pro--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivestatsheader--pro--mobile.png"><img src="images/actual/components-archives-archivestatsheader--pro--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivestatsheader--pro--mobile.png"><img src="images/diff/components-archives-archivestatsheader--pro--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivestatsheader--pro.png</h3>
+        <p>152,855 px changed · 14.93%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivestatsheader--pro.png"><img src="images/baseline/components-archives-archivestatsheader--pro.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivestatsheader--pro.png"><img src="images/actual/components-archives-archivestatsheader--pro.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivestatsheader--pro.png"><img src="images/diff/components-archives-archivestatsheader--pro.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivestatsheader--stale--mobile.png</h3>
+        <p>140,892 px changed · 42.80%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivestatsheader--stale--mobile.png"><img src="images/baseline/components-archives-archivestatsheader--stale--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivestatsheader--stale--mobile.png"><img src="images/actual/components-archives-archivestatsheader--stale--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivestatsheader--stale--mobile.png"><img src="images/diff/components-archives-archivestatsheader--stale--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivestatsheader--stale.png</h3>
+        <p>176,263 px changed · 17.21%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-archivestatsheader--stale.png"><img src="images/baseline/components-archives-archivestatsheader--stale.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivestatsheader--stale.png"><img src="images/actual/components-archives-archivestatsheader--stale.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-archivestatsheader--stale.png"><img src="images/diff/components-archives-archivestatsheader--stale.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-filehistorypanel--agent-unsupported--mobile.png</h3>
+        <p>7,105 px changed · 2.16%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-filehistorypanel--agent-unsupported--mobile.png"><img src="images/baseline/components-archives-filehistorypanel--agent-unsupported--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-filehistorypanel--agent-unsupported--mobile.png"><img src="images/actual/components-archives-filehistorypanel--agent-unsupported--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-filehistorypanel--agent-unsupported--mobile.png"><img src="images/diff/components-archives-filehistorypanel--agent-unsupported--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-filehistorypanel--agent-unsupported.png</h3>
+        <p>7,182 px changed · 0.70%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-filehistorypanel--agent-unsupported.png"><img src="images/baseline/components-archives-filehistorypanel--agent-unsupported.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-filehistorypanel--agent-unsupported.png"><img src="images/actual/components-archives-filehistorypanel--agent-unsupported.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-filehistorypanel--agent-unsupported.png"><img src="images/diff/components-archives-filehistorypanel--agent-unsupported.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-filehistorypanel--agent-with-older-index--mobile.png</h3>
+        <p>72 px changed · 0.02%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-filehistorypanel--agent-with-older-index--mobile.png"><img src="images/baseline/components-archives-filehistorypanel--agent-with-older-index--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-filehistorypanel--agent-with-older-index--mobile.png"><img src="images/actual/components-archives-filehistorypanel--agent-with-older-index--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-filehistorypanel--agent-with-older-index--mobile.png"><img src="images/diff/components-archives-filehistorypanel--agent-with-older-index--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-filehistorypanel--agent-with-older-index.png</h3>
+        <p>72 px changed · 0.01%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-filehistorypanel--agent-with-older-index.png"><img src="images/baseline/components-archives-filehistorypanel--agent-with-older-index.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-filehistorypanel--agent-with-older-index.png"><img src="images/actual/components-archives-filehistorypanel--agent-with-older-index.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-filehistorypanel--agent-with-older-index.png"><img src="images/diff/components-archives-filehistorypanel--agent-with-older-index.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-filehistorypanel--partially-indexed--mobile.png</h3>
+        <p>72 px changed · 0.02%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-filehistorypanel--partially-indexed--mobile.png"><img src="images/baseline/components-archives-filehistorypanel--partially-indexed--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-filehistorypanel--partially-indexed--mobile.png"><img src="images/actual/components-archives-filehistorypanel--partially-indexed--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-filehistorypanel--partially-indexed--mobile.png"><img src="images/diff/components-archives-filehistorypanel--partially-indexed--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-filehistorypanel--partially-indexed.png</h3>
+        <p>72 px changed · 0.01%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-filehistorypanel--partially-indexed.png"><img src="images/baseline/components-archives-filehistorypanel--partially-indexed.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-filehistorypanel--partially-indexed.png"><img src="images/actual/components-archives-filehistorypanel--partially-indexed.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-filehistorypanel--partially-indexed.png"><img src="images/diff/components-archives-filehistorypanel--partially-indexed.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-filehistorypanel--unlocked--mobile.png</h3>
+        <p>13,688 px changed · 4.16%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-filehistorypanel--unlocked--mobile.png"><img src="images/baseline/components-archives-filehistorypanel--unlocked--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-filehistorypanel--unlocked--mobile.png"><img src="images/actual/components-archives-filehistorypanel--unlocked--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-filehistorypanel--unlocked--mobile.png"><img src="images/diff/components-archives-filehistorypanel--unlocked--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-filehistorypanel--unlocked.png</h3>
+        <p>216 px changed · 0.02%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-filehistorypanel--unlocked.png"><img src="images/baseline/components-archives-filehistorypanel--unlocked.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-filehistorypanel--unlocked.png"><img src="images/actual/components-archives-filehistorypanel--unlocked.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-filehistorypanel--unlocked.png"><img src="images/diff/components-archives-filehistorypanel--unlocked.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-heatmaplegend--community--mobile.png</h3>
+        <p>7,106 px changed · 2.16%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-heatmaplegend--community--mobile.png"><img src="images/baseline/components-archives-heatmaplegend--community--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-heatmaplegend--community--mobile.png"><img src="images/actual/components-archives-heatmaplegend--community--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-heatmaplegend--community--mobile.png"><img src="images/diff/components-archives-heatmaplegend--community--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-heatmaplegend--community.png</h3>
+        <p>7,478 px changed · 0.73%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-heatmaplegend--community.png"><img src="images/baseline/components-archives-heatmaplegend--community.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-heatmaplegend--community.png"><img src="images/actual/components-archives-heatmaplegend--community.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-heatmaplegend--community.png"><img src="images/diff/components-archives-heatmaplegend--community.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-heatmaplegend--pro--mobile.png</h3>
+        <p>5,160 px changed · 1.57%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-heatmaplegend--pro--mobile.png"><img src="images/baseline/components-archives-heatmaplegend--pro--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-heatmaplegend--pro--mobile.png"><img src="images/actual/components-archives-heatmaplegend--pro--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-heatmaplegend--pro--mobile.png"><img src="images/diff/components-archives-heatmaplegend--pro--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-heatmaplegend--pro.png</h3>
+        <p>5,213 px changed · 0.51%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-archives-heatmaplegend--pro.png"><img src="images/baseline/components-archives-heatmaplegend--pro.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-heatmaplegend--pro.png"><img src="images/actual/components-archives-heatmaplegend--pro.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-archives-heatmaplegend--pro.png"><img src="images/diff/components-archives-heatmaplegend--pro.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunecandidatesranked--default--mobile.png</h3>
+        <p>7,292 px changed · 2.22%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-prune-prunecandidatesranked--default--mobile.png"><img src="images/baseline/components-prune-prunecandidatesranked--default--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunecandidatesranked--default--mobile.png"><img src="images/actual/components-prune-prunecandidatesranked--default--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-prune-prunecandidatesranked--default--mobile.png"><img src="images/diff/components-prune-prunecandidatesranked--default--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunecandidatesranked--default.png</h3>
+        <p>33,212 px changed · 3.24%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-prune-prunecandidatesranked--default.png"><img src="images/baseline/components-prune-prunecandidatesranked--default.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunecandidatesranked--default.png"><img src="images/actual/components-prune-prunecandidatesranked--default.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-prune-prunecandidatesranked--default.png"><img src="images/diff/components-prune-prunecandidatesranked--default.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunecandidatesranked--partial-and-stale--mobile.png</h3>
+        <p>6,786 px changed · 2.06%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-prune-prunecandidatesranked--partial-and-stale--mobile.png"><img src="images/baseline/components-prune-prunecandidatesranked--partial-and-stale--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunecandidatesranked--partial-and-stale--mobile.png"><img src="images/actual/components-prune-prunecandidatesranked--partial-and-stale--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-prune-prunecandidatesranked--partial-and-stale--mobile.png"><img src="images/diff/components-prune-prunecandidatesranked--partial-and-stale--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunecandidatesranked--partial-and-stale.png</h3>
+        <p>20,058 px changed · 1.96%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-prune-prunecandidatesranked--partial-and-stale.png"><img src="images/baseline/components-prune-prunecandidatesranked--partial-and-stale.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunecandidatesranked--partial-and-stale.png"><img src="images/actual/components-prune-prunecandidatesranked--partial-and-stale.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-prune-prunecandidatesranked--partial-and-stale.png"><img src="images/diff/components-prune-prunecandidatesranked--partial-and-stale.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunecomparedpolicies--stored--mobile.png</h3>
+        <p>45,101 px changed · 13.70%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-prune-prunecomparedpolicies--stored--mobile.png"><img src="images/baseline/components-prune-prunecomparedpolicies--stored--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunecomparedpolicies--stored--mobile.png"><img src="images/actual/components-prune-prunecomparedpolicies--stored--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-prune-prunecomparedpolicies--stored--mobile.png"><img src="images/diff/components-prune-prunecomparedpolicies--stored--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunecomparedpolicies--stored.png</h3>
+        <p>7,264 px changed · 0.71%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-prune-prunecomparedpolicies--stored.png"><img src="images/baseline/components-prune-prunecomparedpolicies--stored.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunecomparedpolicies--stored.png"><img src="images/actual/components-prune-prunecomparedpolicies--stored.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-prune-prunecomparedpolicies--stored.png"><img src="images/diff/components-prune-prunecomparedpolicies--stored.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunecomparedpolicies--with-editing-row-stale--mobile.png</h3>
+        <p>80,603 px changed · 24.49%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-prune-prunecomparedpolicies--with-editing-row-stale--mobile.png"><img src="images/baseline/components-prune-prunecomparedpolicies--with-editing-row-stale--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunecomparedpolicies--with-editing-row-stale--mobile.png"><img src="images/actual/components-prune-prunecomparedpolicies--with-editing-row-stale--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-prune-prunecomparedpolicies--with-editing-row-stale--mobile.png"><img src="images/diff/components-prune-prunecomparedpolicies--with-editing-row-stale--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunecomparedpolicies--with-editing-row-stale.png</h3>
+        <p>10,373 px changed · 1.01%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-prune-prunecomparedpolicies--with-editing-row-stale.png"><img src="images/baseline/components-prune-prunecomparedpolicies--with-editing-row-stale.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunecomparedpolicies--with-editing-row-stale.png"><img src="images/actual/components-prune-prunecomparedpolicies--with-editing-row-stale.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-prune-prunecomparedpolicies--with-editing-row-stale.png"><img src="images/diff/components-prune-prunecomparedpolicies--with-editing-row-stale.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunelostfilespanel--agent-unsupported--mobile.png</h3>
+        <p>11,095 px changed · 3.37%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-prune-prunelostfilespanel--agent-unsupported--mobile.png"><img src="images/baseline/components-prune-prunelostfilespanel--agent-unsupported--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunelostfilespanel--agent-unsupported--mobile.png"><img src="images/actual/components-prune-prunelostfilespanel--agent-unsupported--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-prune-prunelostfilespanel--agent-unsupported--mobile.png"><img src="images/diff/components-prune-prunelostfilespanel--agent-unsupported--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunelostfilespanel--agent-unsupported.png</h3>
+        <p>11,156 px changed · 1.09%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-prune-prunelostfilespanel--agent-unsupported.png"><img src="images/baseline/components-prune-prunelostfilespanel--agent-unsupported.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunelostfilespanel--agent-unsupported.png"><img src="images/actual/components-prune-prunelostfilespanel--agent-unsupported.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-prune-prunelostfilespanel--agent-unsupported.png"><img src="images/diff/components-prune-prunelostfilespanel--agent-unsupported.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunelostfilespanel--available--mobile.png</h3>
+        <p>41,930 px changed · 12.74%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-prune-prunelostfilespanel--available--mobile.png"><img src="images/baseline/components-prune-prunelostfilespanel--available--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunelostfilespanel--available--mobile.png"><img src="images/actual/components-prune-prunelostfilespanel--available--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-prune-prunelostfilespanel--available--mobile.png"><img src="images/diff/components-prune-prunelostfilespanel--available--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunelostfilespanel--available.png</h3>
+        <p>82,305 px changed · 8.04%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-prune-prunelostfilespanel--available.png"><img src="images/baseline/components-prune-prunelostfilespanel--available.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunelostfilespanel--available.png"><img src="images/actual/components-prune-prunelostfilespanel--available.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-prune-prunelostfilespanel--available.png"><img src="images/diff/components-prune-prunelostfilespanel--available.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunelostfilespanel--empty--mobile.png</h3>
+        <p>27,870 px changed · 8.47%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-prune-prunelostfilespanel--empty--mobile.png"><img src="images/baseline/components-prune-prunelostfilespanel--empty--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunelostfilespanel--empty--mobile.png"><img src="images/actual/components-prune-prunelostfilespanel--empty--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-prune-prunelostfilespanel--empty--mobile.png"><img src="images/diff/components-prune-prunelostfilespanel--empty--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunelostfilespanel--empty.png</h3>
+        <p>61,715 px changed · 6.03%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-prune-prunelostfilespanel--empty.png"><img src="images/baseline/components-prune-prunelostfilespanel--empty.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunelostfilespanel--empty.png"><img src="images/actual/components-prune-prunelostfilespanel--empty.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-prune-prunelostfilespanel--empty.png"><img src="images/diff/components-prune-prunelostfilespanel--empty.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunelostfilespanel--incomplete--mobile.png</h3>
+        <p>44,555 px changed · 13.54%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-prune-prunelostfilespanel--incomplete--mobile.png"><img src="images/baseline/components-prune-prunelostfilespanel--incomplete--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunelostfilespanel--incomplete--mobile.png"><img src="images/actual/components-prune-prunelostfilespanel--incomplete--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-prune-prunelostfilespanel--incomplete--mobile.png"><img src="images/diff/components-prune-prunelostfilespanel--incomplete--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunelostfilespanel--incomplete.png</h3>
+        <p>99,297 px changed · 9.70%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-prune-prunelostfilespanel--incomplete.png"><img src="images/baseline/components-prune-prunelostfilespanel--incomplete.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunelostfilespanel--incomplete.png"><img src="images/actual/components-prune-prunelostfilespanel--incomplete.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-prune-prunelostfilespanel--incomplete.png"><img src="images/diff/components-prune-prunelostfilespanel--incomplete.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunepreviewnumbers--default--mobile.png</h3>
+        <p>123,230 px changed · 37.44%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-prune-prunepreviewnumbers--default--mobile.png"><img src="images/baseline/components-prune-prunepreviewnumbers--default--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunepreviewnumbers--default--mobile.png"><img src="images/actual/components-prune-prunepreviewnumbers--default--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-prune-prunepreviewnumbers--default--mobile.png"><img src="images/diff/components-prune-prunepreviewnumbers--default--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunepreviewnumbers--default.png</h3>
+        <p>195,884 px changed · 19.13%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-prune-prunepreviewnumbers--default.png"><img src="images/baseline/components-prune-prunepreviewnumbers--default.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunepreviewnumbers--default.png"><img src="images/actual/components-prune-prunepreviewnumbers--default.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-prune-prunepreviewnumbers--default.png"><img src="images/diff/components-prune-prunepreviewnumbers--default.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunepreviewnumbers--not-measured--mobile.png</h3>
+        <p>109,488 px changed · 33.26%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-prune-prunepreviewnumbers--not-measured--mobile.png"><img src="images/baseline/components-prune-prunepreviewnumbers--not-measured--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunepreviewnumbers--not-measured--mobile.png"><img src="images/actual/components-prune-prunepreviewnumbers--not-measured--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-prune-prunepreviewnumbers--not-measured--mobile.png"><img src="images/diff/components-prune-prunepreviewnumbers--not-measured--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunepreviewnumbers--not-measured.png</h3>
+        <p>195,884 px changed · 19.13%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-prune-prunepreviewnumbers--not-measured.png"><img src="images/baseline/components-prune-prunepreviewnumbers--not-measured.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunepreviewnumbers--not-measured.png"><img src="images/actual/components-prune-prunepreviewnumbers--not-measured.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-prune-prunepreviewnumbers--not-measured.png"><img src="images/diff/components-prune-prunepreviewnumbers--not-measured.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--background-work-off--mobile.png</h3>
+        <p>872 px changed · 0.26%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--background-work-off--mobile.png"><img src="images/baseline/components-repositorycard--background-work-off--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--background-work-off--mobile.png"><img src="images/actual/components-repositorycard--background-work-off--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--background-work-off--mobile.png"><img src="images/diff/components-repositorycard--background-work-off--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--background-work-off.png</h3>
+        <p>730 px changed · 0.07%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--background-work-off.png"><img src="images/baseline/components-repositorycard--background-work-off.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--background-work-off.png"><img src="images/actual/components-repositorycard--background-work-off.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--background-work-off.png"><img src="images/diff/components-repositorycard--background-work-off.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--borg-1-stored-size--mobile.png</h3>
+        <p>1,065 px changed · 0.32%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--borg-1-stored-size--mobile.png"><img src="images/baseline/components-repositorycard--borg-1-stored-size--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--borg-1-stored-size--mobile.png"><img src="images/actual/components-repositorycard--borg-1-stored-size--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--borg-1-stored-size--mobile.png"><img src="images/diff/components-repositorycard--borg-1-stored-size--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--borg-1-stored-size.png</h3>
+        <p>30,015 px changed · 2.93%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--borg-1-stored-size.png"><img src="images/baseline/components-repositorycard--borg-1-stored-size.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--borg-1-stored-size.png"><img src="images/actual/components-repositorycard--borg-1-stored-size.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--borg-1-stored-size.png"><img src="images/diff/components-repositorycard--borg-1-stored-size.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--borg-2-stored-size--mobile.png</h3>
+        <p>1,052 px changed · 0.32%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--borg-2-stored-size--mobile.png"><img src="images/baseline/components-repositorycard--borg-2-stored-size--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--borg-2-stored-size--mobile.png"><img src="images/actual/components-repositorycard--borg-2-stored-size--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--borg-2-stored-size--mobile.png"><img src="images/diff/components-repositorycard--borg-2-stored-size--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--borg-2-stored-size.png</h3>
+        <p>30,516 px changed · 2.98%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--borg-2-stored-size.png"><img src="images/baseline/components-repositorycard--borg-2-stored-size.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--borg-2-stored-size.png"><img src="images/actual/components-repositorycard--borg-2-stored-size.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--borg-2-stored-size.png"><img src="images/diff/components-repositorycard--borg-2-stored-size.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--default--mobile.png</h3>
+        <p>872 px changed · 0.26%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--default--mobile.png"><img src="images/baseline/components-repositorycard--default--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--default--mobile.png"><img src="images/actual/components-repositorycard--default--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--default--mobile.png"><img src="images/diff/components-repositorycard--default--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--default.png</h3>
+        <p>730 px changed · 0.07%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--default.png"><img src="images/baseline/components-repositorycard--default.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--default.png"><img src="images/actual/components-repositorycard--default.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--default.png"><img src="images/diff/components-repositorycard--default.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--enable-cloud-mirror--mobile.png</h3>
+        <p>872 px changed · 0.26%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--enable-cloud-mirror--mobile.png"><img src="images/baseline/components-repositorycard--enable-cloud-mirror--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--enable-cloud-mirror--mobile.png"><img src="images/actual/components-repositorycard--enable-cloud-mirror--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--enable-cloud-mirror--mobile.png"><img src="images/diff/components-repositorycard--enable-cloud-mirror--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--enable-cloud-mirror-for-ssh--mobile.png</h3>
+        <p>872 px changed · 0.26%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--enable-cloud-mirror-for-ssh--mobile.png"><img src="images/baseline/components-repositorycard--enable-cloud-mirror-for-ssh--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--enable-cloud-mirror-for-ssh--mobile.png"><img src="images/actual/components-repositorycard--enable-cloud-mirror-for-ssh--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--enable-cloud-mirror-for-ssh--mobile.png"><img src="images/diff/components-repositorycard--enable-cloud-mirror-for-ssh--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--enable-cloud-mirror-for-ssh.png</h3>
+        <p>730 px changed · 0.07%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--enable-cloud-mirror-for-ssh.png"><img src="images/baseline/components-repositorycard--enable-cloud-mirror-for-ssh.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--enable-cloud-mirror-for-ssh.png"><img src="images/actual/components-repositorycard--enable-cloud-mirror-for-ssh.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--enable-cloud-mirror-for-ssh.png"><img src="images/diff/components-repositorycard--enable-cloud-mirror-for-ssh.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--enable-cloud-mirror.png</h3>
+        <p>730 px changed · 0.07%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--enable-cloud-mirror.png"><img src="images/baseline/components-repositorycard--enable-cloud-mirror.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--enable-cloud-mirror.png"><img src="images/actual/components-repositorycard--enable-cloud-mirror.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--enable-cloud-mirror.png"><img src="images/diff/components-repositorycard--enable-cloud-mirror.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--indexing-after-import--mobile.png</h3>
+        <p>872 px changed · 0.26%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--indexing-after-import--mobile.png"><img src="images/baseline/components-repositorycard--indexing-after-import--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--indexing-after-import--mobile.png"><img src="images/actual/components-repositorycard--indexing-after-import--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--indexing-after-import--mobile.png"><img src="images/diff/components-repositorycard--indexing-after-import--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--indexing-after-import.png</h3>
+        <p>28,101 px changed · 2.74%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--indexing-after-import.png"><img src="images/baseline/components-repositorycard--indexing-after-import.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--indexing-after-import.png"><img src="images/actual/components-repositorycard--indexing-after-import.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--indexing-after-import.png"><img src="images/diff/components-repositorycard--indexing-after-import.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--managed-agent-mirror-pending--mobile.png</h3>
+        <p>881 px changed · 0.27%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--managed-agent-mirror-pending--mobile.png"><img src="images/baseline/components-repositorycard--managed-agent-mirror-pending--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--managed-agent-mirror-pending--mobile.png"><img src="images/actual/components-repositorycard--managed-agent-mirror-pending--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--managed-agent-mirror-pending--mobile.png"><img src="images/diff/components-repositorycard--managed-agent-mirror-pending--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--managed-agent-mirror-pending.png</h3>
+        <p>688 px changed · 0.07%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--managed-agent-mirror-pending.png"><img src="images/baseline/components-repositorycard--managed-agent-mirror-pending.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--managed-agent-mirror-pending.png"><img src="images/actual/components-repositorycard--managed-agent-mirror-pending.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--managed-agent-mirror-pending.png"><img src="images/diff/components-repositorycard--managed-agent-mirror-pending.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--rclone-failed--mobile.png</h3>
+        <p>845 px changed · 0.26%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--rclone-failed--mobile.png"><img src="images/baseline/components-repositorycard--rclone-failed--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--rclone-failed--mobile.png"><img src="images/actual/components-repositorycard--rclone-failed--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--rclone-failed--mobile.png"><img src="images/diff/components-repositorycard--rclone-failed--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--rclone-failed.png</h3>
+        <p>694 px changed · 0.07%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--rclone-failed.png"><img src="images/baseline/components-repositorycard--rclone-failed.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--rclone-failed.png"><img src="images/actual/components-repositorycard--rclone-failed.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--rclone-failed.png"><img src="images/diff/components-repositorycard--rclone-failed.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--rclone-hydration-required--mobile.png</h3>
+        <p>845 px changed · 0.26%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--rclone-hydration-required--mobile.png"><img src="images/baseline/components-repositorycard--rclone-hydration-required--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--rclone-hydration-required--mobile.png"><img src="images/actual/components-repositorycard--rclone-hydration-required--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--rclone-hydration-required--mobile.png"><img src="images/diff/components-repositorycard--rclone-hydration-required--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--rclone-hydration-required.png</h3>
+        <p>694 px changed · 0.07%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--rclone-hydration-required.png"><img src="images/baseline/components-repositorycard--rclone-hydration-required.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--rclone-hydration-required.png"><img src="images/actual/components-repositorycard--rclone-hydration-required.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--rclone-hydration-required.png"><img src="images/diff/components-repositorycard--rclone-hydration-required.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--rclone-scheduled--mobile.png</h3>
+        <p>845 px changed · 0.26%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--rclone-scheduled--mobile.png"><img src="images/baseline/components-repositorycard--rclone-scheduled--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--rclone-scheduled--mobile.png"><img src="images/actual/components-repositorycard--rclone-scheduled--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--rclone-scheduled--mobile.png"><img src="images/diff/components-repositorycard--rclone-scheduled--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--rclone-scheduled-failed--mobile.png</h3>
+        <p>845 px changed · 0.26%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--rclone-scheduled-failed--mobile.png"><img src="images/baseline/components-repositorycard--rclone-scheduled-failed--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--rclone-scheduled-failed--mobile.png"><img src="images/actual/components-repositorycard--rclone-scheduled-failed--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--rclone-scheduled-failed--mobile.png"><img src="images/diff/components-repositorycard--rclone-scheduled-failed--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--rclone-scheduled-failed.png</h3>
+        <p>694 px changed · 0.07%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--rclone-scheduled-failed.png"><img src="images/baseline/components-repositorycard--rclone-scheduled-failed.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--rclone-scheduled-failed.png"><img src="images/actual/components-repositorycard--rclone-scheduled-failed.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--rclone-scheduled-failed.png"><img src="images/diff/components-repositorycard--rclone-scheduled-failed.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--rclone-scheduled.png</h3>
+        <p>688 px changed · 0.07%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--rclone-scheduled.png"><img src="images/baseline/components-repositorycard--rclone-scheduled.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--rclone-scheduled.png"><img src="images/actual/components-repositorycard--rclone-scheduled.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--rclone-scheduled.png"><img src="images/diff/components-repositorycard--rclone-scheduled.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--rclone-synced--mobile.png</h3>
+        <p>845 px changed · 0.26%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--rclone-synced--mobile.png"><img src="images/baseline/components-repositorycard--rclone-synced--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--rclone-synced--mobile.png"><img src="images/actual/components-repositorycard--rclone-synced--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--rclone-synced--mobile.png"><img src="images/diff/components-repositorycard--rclone-synced--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--rclone-synced.png</h3>
+        <p>694 px changed · 0.07%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--rclone-synced.png"><img src="images/baseline/components-repositorycard--rclone-synced.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--rclone-synced.png"><img src="images/actual/components-repositorycard--rclone-synced.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--rclone-synced.png"><img src="images/diff/components-repositorycard--rclone-synced.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--remote-repository-without-permanent-delete--mobile.png</h3>
+        <p>872 px changed · 0.26%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--remote-repository-without-permanent-delete--mobile.png"><img src="images/baseline/components-repositorycard--remote-repository-without-permanent-delete--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--remote-repository-without-permanent-delete--mobile.png"><img src="images/actual/components-repositorycard--remote-repository-without-permanent-delete--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--remote-repository-without-permanent-delete--mobile.png"><img src="images/diff/components-repositorycard--remote-repository-without-permanent-delete--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--remote-repository-without-permanent-delete.png</h3>
+        <p>730 px changed · 0.07%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--remote-repository-without-permanent-delete.png"><img src="images/baseline/components-repositorycard--remote-repository-without-permanent-delete.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--remote-repository-without-permanent-delete.png"><img src="images/actual/components-repositorycard--remote-repository-without-permanent-delete.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--remote-repository-without-permanent-delete.png"><img src="images/diff/components-repositorycard--remote-repository-without-permanent-delete.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--size-still-measuring--mobile.png</h3>
+        <p>1,052 px changed · 0.32%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--size-still-measuring--mobile.png"><img src="images/baseline/components-repositorycard--size-still-measuring--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--size-still-measuring--mobile.png"><img src="images/actual/components-repositorycard--size-still-measuring--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--size-still-measuring--mobile.png"><img src="images/diff/components-repositorycard--size-still-measuring--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--size-still-measuring.png</h3>
+        <p>30,610 px changed · 2.99%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--size-still-measuring.png"><img src="images/baseline/components-repositorycard--size-still-measuring.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--size-still-measuring.png"><img src="images/actual/components-repositorycard--size-still-measuring.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--size-still-measuring.png"><img src="images/diff/components-repositorycard--size-still-measuring.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--size-unknown--mobile.png</h3>
+        <p>1,052 px changed · 0.32%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--size-unknown--mobile.png"><img src="images/baseline/components-repositorycard--size-unknown--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--size-unknown--mobile.png"><img src="images/actual/components-repositorycard--size-unknown--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--size-unknown--mobile.png"><img src="images/diff/components-repositorycard--size-unknown--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--size-unknown.png</h3>
+        <p>30,596 px changed · 2.99%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--size-unknown.png"><img src="images/baseline/components-repositorycard--size-unknown.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--size-unknown.png"><img src="images/actual/components-repositorycard--size-unknown.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--size-unknown.png"><img src="images/diff/components-repositorycard--size-unknown.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--with-upload-limit--mobile.png</h3>
+        <p>872 px changed · 0.26%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--with-upload-limit--mobile.png"><img src="images/baseline/components-repositorycard--with-upload-limit--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--with-upload-limit--mobile.png"><img src="images/actual/components-repositorycard--with-upload-limit--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--with-upload-limit--mobile.png"><img src="images/diff/components-repositorycard--with-upload-limit--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--with-upload-limit.png</h3>
+        <p>730 px changed · 0.07%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--with-upload-limit.png"><img src="images/baseline/components-repositorycard--with-upload-limit.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--with-upload-limit.png"><img src="images/actual/components-repositorycard--with-upload-limit.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--with-upload-limit.png"><img src="images/diff/components-repositorycard--with-upload-limit.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--without-break-lock-access--mobile.png</h3>
+        <p>894 px changed · 0.27%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--without-break-lock-access--mobile.png"><img src="images/baseline/components-repositorycard--without-break-lock-access--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--without-break-lock-access--mobile.png"><img src="images/actual/components-repositorycard--without-break-lock-access--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--without-break-lock-access--mobile.png"><img src="images/diff/components-repositorycard--without-break-lock-access--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--without-break-lock-access.png</h3>
+        <p>730 px changed · 0.07%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--without-break-lock-access.png"><img src="images/baseline/components-repositorycard--without-break-lock-access.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--without-break-lock-access.png"><img src="images/actual/components-repositorycard--without-break-lock-access.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--without-break-lock-access.png"><img src="images/diff/components-repositorycard--without-break-lock-access.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--without-run-history--mobile.png</h3>
+        <p>872 px changed · 0.26%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--without-run-history--mobile.png"><img src="images/baseline/components-repositorycard--without-run-history--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--without-run-history--mobile.png"><img src="images/actual/components-repositorycard--without-run-history--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--without-run-history--mobile.png"><img src="images/diff/components-repositorycard--without-run-history--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorycard--without-run-history.png</h3>
+        <p>730 px changed · 0.07%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorycard--without-run-history.png"><img src="images/baseline/components-repositorycard--without-run-history.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorycard--without-run-history.png"><img src="images/actual/components-repositorycard--without-run-history.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorycard--without-run-history.png"><img src="images/diff/components-repositorycard--without-run-history.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositoryinfodialog--borg-1-stored-statistics--mobile.png</h3>
+        <p>81,824 px changed · 24.86%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositoryinfodialog--borg-1-stored-statistics--mobile.png"><img src="images/baseline/components-repositoryinfodialog--borg-1-stored-statistics--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositoryinfodialog--borg-1-stored-statistics--mobile.png"><img src="images/actual/components-repositoryinfodialog--borg-1-stored-statistics--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositoryinfodialog--borg-1-stored-statistics--mobile.png"><img src="images/diff/components-repositoryinfodialog--borg-1-stored-statistics--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositoryinfodialog--borg-1-stored-statistics.png</h3>
+        <p>204,966 px changed · 20.02%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositoryinfodialog--borg-1-stored-statistics.png"><img src="images/baseline/components-repositoryinfodialog--borg-1-stored-statistics.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositoryinfodialog--borg-1-stored-statistics.png"><img src="images/actual/components-repositoryinfodialog--borg-1-stored-statistics.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositoryinfodialog--borg-1-stored-statistics.png"><img src="images/diff/components-repositoryinfodialog--borg-1-stored-statistics.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositoryinfodialog--borg-2-stored-statistics--mobile.png</h3>
+        <p>83,016 px changed · 25.22%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositoryinfodialog--borg-2-stored-statistics--mobile.png"><img src="images/baseline/components-repositoryinfodialog--borg-2-stored-statistics--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositoryinfodialog--borg-2-stored-statistics--mobile.png"><img src="images/actual/components-repositoryinfodialog--borg-2-stored-statistics--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositoryinfodialog--borg-2-stored-statistics--mobile.png"><img src="images/diff/components-repositoryinfodialog--borg-2-stored-statistics--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositoryinfodialog--borg-2-stored-statistics.png</h3>
+        <p>206,149 px changed · 20.13%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositoryinfodialog--borg-2-stored-statistics.png"><img src="images/baseline/components-repositoryinfodialog--borg-2-stored-statistics.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositoryinfodialog--borg-2-stored-statistics.png"><img src="images/actual/components-repositoryinfodialog--borg-2-stored-statistics.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositoryinfodialog--borg-2-stored-statistics.png"><img src="images/diff/components-repositoryinfodialog--borg-2-stored-statistics.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositoryinfodialog--failed-info-recovery--mobile.png</h3>
+        <p>622 px changed · 0.19%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositoryinfodialog--failed-info-recovery--mobile.png"><img src="images/baseline/components-repositoryinfodialog--failed-info-recovery--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositoryinfodialog--failed-info-recovery--mobile.png"><img src="images/actual/components-repositoryinfodialog--failed-info-recovery--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositoryinfodialog--failed-info-recovery--mobile.png"><img src="images/diff/components-repositoryinfodialog--failed-info-recovery--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositoryinfodialog--failed-info-recovery-unavailable--mobile.png</h3>
+        <p>622 px changed · 0.19%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositoryinfodialog--failed-info-recovery-unavailable--mobile.png"><img src="images/baseline/components-repositoryinfodialog--failed-info-recovery-unavailable--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositoryinfodialog--failed-info-recovery-unavailable--mobile.png"><img src="images/actual/components-repositoryinfodialog--failed-info-recovery-unavailable--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositoryinfodialog--failed-info-recovery-unavailable--mobile.png"><img src="images/diff/components-repositoryinfodialog--failed-info-recovery-unavailable--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositoryinfodialog--failed-info-recovery-unavailable.png</h3>
+        <p>1,552 px changed · 0.15%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositoryinfodialog--failed-info-recovery-unavailable.png"><img src="images/baseline/components-repositoryinfodialog--failed-info-recovery-unavailable.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositoryinfodialog--failed-info-recovery-unavailable.png"><img src="images/actual/components-repositoryinfodialog--failed-info-recovery-unavailable.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositoryinfodialog--failed-info-recovery-unavailable.png"><img src="images/diff/components-repositoryinfodialog--failed-info-recovery-unavailable.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositoryinfodialog--failed-info-recovery.png</h3>
+        <p>1,552 px changed · 0.15%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositoryinfodialog--failed-info-recovery.png"><img src="images/baseline/components-repositoryinfodialog--failed-info-recovery.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositoryinfodialog--failed-info-recovery.png"><img src="images/actual/components-repositoryinfodialog--failed-info-recovery.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositoryinfodialog--failed-info-recovery.png"><img src="images/diff/components-repositoryinfodialog--failed-info-recovery.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositoryinfodialog--failed-info-with-agent-reason--mobile.png</h3>
+        <p>622 px changed · 0.19%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositoryinfodialog--failed-info-with-agent-reason--mobile.png"><img src="images/baseline/components-repositoryinfodialog--failed-info-with-agent-reason--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositoryinfodialog--failed-info-with-agent-reason--mobile.png"><img src="images/actual/components-repositoryinfodialog--failed-info-with-agent-reason--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositoryinfodialog--failed-info-with-agent-reason--mobile.png"><img src="images/diff/components-repositoryinfodialog--failed-info-with-agent-reason--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositoryinfodialog--failed-info-with-agent-reason.png</h3>
+        <p>1,552 px changed · 0.15%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositoryinfodialog--failed-info-with-agent-reason.png"><img src="images/baseline/components-repositoryinfodialog--failed-info-with-agent-reason.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositoryinfodialog--failed-info-with-agent-reason.png"><img src="images/actual/components-repositoryinfodialog--failed-info-with-agent-reason.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositoryinfodialog--failed-info-with-agent-reason.png"><img src="images/diff/components-repositoryinfodialog--failed-info-with-agent-reason.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositoryinfodialog--statistics-indexing-after-import--mobile.png</h3>
+        <p>1,419 px changed · 0.43%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositoryinfodialog--statistics-indexing-after-import--mobile.png"><img src="images/baseline/components-repositoryinfodialog--statistics-indexing-after-import--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositoryinfodialog--statistics-indexing-after-import--mobile.png"><img src="images/actual/components-repositoryinfodialog--statistics-indexing-after-import--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositoryinfodialog--statistics-indexing-after-import--mobile.png"><img src="images/diff/components-repositoryinfodialog--statistics-indexing-after-import--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositoryinfodialog--statistics-indexing-after-import.png</h3>
+        <p>1,418 px changed · 0.14%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositoryinfodialog--statistics-indexing-after-import.png"><img src="images/baseline/components-repositoryinfodialog--statistics-indexing-after-import.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositoryinfodialog--statistics-indexing-after-import.png"><img src="images/actual/components-repositoryinfodialog--statistics-indexing-after-import.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositoryinfodialog--statistics-indexing-after-import.png"><img src="images/diff/components-repositoryinfodialog--statistics-indexing-after-import.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositoryinfodialog--statistics-unknown--mobile.png</h3>
+        <p>91,010 px changed · 27.65%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositoryinfodialog--statistics-unknown--mobile.png"><img src="images/baseline/components-repositoryinfodialog--statistics-unknown--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositoryinfodialog--statistics-unknown--mobile.png"><img src="images/actual/components-repositoryinfodialog--statistics-unknown--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositoryinfodialog--statistics-unknown--mobile.png"><img src="images/diff/components-repositoryinfodialog--statistics-unknown--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositoryinfodialog--statistics-unknown.png</h3>
+        <p>1,552 px changed · 0.15%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositoryinfodialog--statistics-unknown.png"><img src="images/baseline/components-repositoryinfodialog--statistics-unknown.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositoryinfodialog--statistics-unknown.png"><img src="images/actual/components-repositoryinfodialog--statistics-unknown.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositoryinfodialog--statistics-unknown.png"><img src="images/diff/components-repositoryinfodialog--statistics-unknown.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--borg-1-detail--mobile.png</h3>
+        <p>72,835 px changed · 22.13%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--borg-1-detail--mobile.png"><img src="images/baseline/components-repositorystats--borg-1-detail--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--borg-1-detail--mobile.png"><img src="images/actual/components-repositorystats--borg-1-detail--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--borg-1-detail--mobile.png"><img src="images/diff/components-repositorystats--borg-1-detail--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--borg-1-detail.png</h3>
+        <p>67,366 px changed · 6.58%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--borg-1-detail.png"><img src="images/baseline/components-repositorystats--borg-1-detail.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--borg-1-detail.png"><img src="images/actual/components-repositorystats--borg-1-detail.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--borg-1-detail.png"><img src="images/diff/components-repositorystats--borg-1-detail.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--borg-1-header--mobile.png</h3>
+        <p>26,729 px changed · 8.12%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--borg-1-header--mobile.png"><img src="images/baseline/components-repositorystats--borg-1-header--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--borg-1-header--mobile.png"><img src="images/actual/components-repositorystats--borg-1-header--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--borg-1-header--mobile.png"><img src="images/diff/components-repositorystats--borg-1-header--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--borg-1-header.png</h3>
+        <p>46,781 px changed · 4.57%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--borg-1-header.png"><img src="images/baseline/components-repositorystats--borg-1-header.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--borg-1-header.png"><img src="images/actual/components-repositorystats--borg-1-header.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--borg-1-header.png"><img src="images/diff/components-repositorystats--borg-1-header.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--borg-2-detail--mobile.png</h3>
+        <p>72,889 px changed · 22.14%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--borg-2-detail--mobile.png"><img src="images/baseline/components-repositorystats--borg-2-detail--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--borg-2-detail--mobile.png"><img src="images/actual/components-repositorystats--borg-2-detail--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--borg-2-detail--mobile.png"><img src="images/diff/components-repositorystats--borg-2-detail--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--borg-2-detail.png</h3>
+        <p>67,225 px changed · 6.56%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--borg-2-detail.png"><img src="images/baseline/components-repositorystats--borg-2-detail.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--borg-2-detail.png"><img src="images/actual/components-repositorystats--borg-2-detail.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--borg-2-detail.png"><img src="images/diff/components-repositorystats--borg-2-detail.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--borg-2-header--mobile.png</h3>
+        <p>26,282 px changed · 7.98%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--borg-2-header--mobile.png"><img src="images/baseline/components-repositorystats--borg-2-header--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--borg-2-header--mobile.png"><img src="images/actual/components-repositorystats--borg-2-header--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--borg-2-header--mobile.png"><img src="images/diff/components-repositorystats--borg-2-header--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--borg-2-header.png</h3>
+        <p>27,391 px changed · 2.67%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--borg-2-header.png"><img src="images/baseline/components-repositorystats--borg-2-header.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--borg-2-header.png"><img src="images/actual/components-repositorystats--borg-2-header.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--borg-2-header.png"><img src="images/diff/components-repositorystats--borg-2-header.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--detail-backfilled-size--mobile.png</h3>
+        <p>72,807 px changed · 22.12%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--detail-backfilled-size--mobile.png"><img src="images/baseline/components-repositorystats--detail-backfilled-size--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--detail-backfilled-size--mobile.png"><img src="images/actual/components-repositorystats--detail-backfilled-size--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--detail-backfilled-size--mobile.png"><img src="images/diff/components-repositorystats--detail-backfilled-size--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--detail-backfilled-size.png</h3>
+        <p>67,344 px changed · 6.58%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--detail-backfilled-size.png"><img src="images/baseline/components-repositorystats--detail-backfilled-size.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--detail-backfilled-size.png"><img src="images/actual/components-repositorystats--detail-backfilled-size.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--detail-backfilled-size.png"><img src="images/diff/components-repositorystats--detail-backfilled-size.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--detail-indexing-after-import--mobile.png</h3>
+        <p>931 px changed · 0.28%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--detail-indexing-after-import--mobile.png"><img src="images/baseline/components-repositorystats--detail-indexing-after-import--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--detail-indexing-after-import--mobile.png"><img src="images/actual/components-repositorystats--detail-indexing-after-import--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--detail-indexing-after-import--mobile.png"><img src="images/diff/components-repositorystats--detail-indexing-after-import--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--detail-indexing-after-import.png</h3>
+        <p>931 px changed · 0.09%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--detail-indexing-after-import.png"><img src="images/baseline/components-repositorystats--detail-indexing-after-import.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--detail-indexing-after-import.png"><img src="images/actual/components-repositorystats--detail-indexing-after-import.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--detail-indexing-after-import.png"><img src="images/diff/components-repositorystats--detail-indexing-after-import.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--detail-not-loaded--mobile.png</h3>
+        <p>931 px changed · 0.28%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--detail-not-loaded--mobile.png"><img src="images/baseline/components-repositorystats--detail-not-loaded--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--detail-not-loaded--mobile.png"><img src="images/actual/components-repositorystats--detail-not-loaded--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--detail-not-loaded--mobile.png"><img src="images/diff/components-repositorystats--detail-not-loaded--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--detail-not-loaded.png</h3>
+        <p>931 px changed · 0.09%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--detail-not-loaded.png"><img src="images/baseline/components-repositorystats--detail-not-loaded.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--detail-not-loaded.png"><img src="images/actual/components-repositorystats--detail-not-loaded.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--detail-not-loaded.png"><img src="images/diff/components-repositorystats--detail-not-loaded.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--detail-unknown--mobile.png</h3>
+        <p>931 px changed · 0.28%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--detail-unknown--mobile.png"><img src="images/baseline/components-repositorystats--detail-unknown--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--detail-unknown--mobile.png"><img src="images/actual/components-repositorystats--detail-unknown--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--detail-unknown--mobile.png"><img src="images/diff/components-repositorystats--detail-unknown--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--detail-unknown.png</h3>
+        <p>931 px changed · 0.09%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--detail-unknown.png"><img src="images/baseline/components-repositorystats--detail-unknown.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--detail-unknown.png"><img src="images/actual/components-repositorystats--detail-unknown.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--detail-unknown.png"><img src="images/diff/components-repositorystats--detail-unknown.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--header-archives-loading--mobile.png</h3>
+        <p>26,165 px changed · 7.95%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--header-archives-loading--mobile.png"><img src="images/baseline/components-repositorystats--header-archives-loading--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--header-archives-loading--mobile.png"><img src="images/actual/components-repositorystats--header-archives-loading--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--header-archives-loading--mobile.png"><img src="images/diff/components-repositorystats--header-archives-loading--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--header-archives-loading.png</h3>
+        <p>46,215 px changed · 4.51%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--header-archives-loading.png"><img src="images/baseline/components-repositorystats--header-archives-loading.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--header-archives-loading.png"><img src="images/actual/components-repositorystats--header-archives-loading.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--header-archives-loading.png"><img src="images/diff/components-repositorystats--header-archives-loading.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--header-archives-withheld--mobile.png</h3>
+        <p>25,891 px changed · 7.87%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--header-archives-withheld--mobile.png"><img src="images/baseline/components-repositorystats--header-archives-withheld--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--header-archives-withheld--mobile.png"><img src="images/actual/components-repositorystats--header-archives-withheld--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--header-archives-withheld--mobile.png"><img src="images/diff/components-repositorystats--header-archives-withheld--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--header-archives-withheld.png</h3>
+        <p>27,391 px changed · 2.67%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--header-archives-withheld.png"><img src="images/baseline/components-repositorystats--header-archives-withheld.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--header-archives-withheld.png"><img src="images/actual/components-repositorystats--header-archives-withheld.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--header-archives-withheld.png"><img src="images/diff/components-repositorystats--header-archives-withheld.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--header-indexing-after-import.png</h3>
+        <p>471 px changed · 0.05%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--header-indexing-after-import.png"><img src="images/baseline/components-repositorystats--header-indexing-after-import.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--header-indexing-after-import.png"><img src="images/actual/components-repositorystats--header-indexing-after-import.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--header-indexing-after-import.png"><img src="images/diff/components-repositorystats--header-indexing-after-import.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--header-size-still-measuring.png</h3>
+        <p>471 px changed · 0.05%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--header-size-still-measuring.png"><img src="images/baseline/components-repositorystats--header-size-still-measuring.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--header-size-still-measuring.png"><img src="images/actual/components-repositorystats--header-size-still-measuring.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--header-size-still-measuring.png"><img src="images/diff/components-repositorystats--header-size-still-measuring.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-repositorystats--header-unknown.png</h3>
+        <p>471 px changed · 0.05%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/components-repositorystats--header-unknown.png"><img src="images/baseline/components-repositorystats--header-unknown.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-repositorystats--header-unknown.png"><img src="images/actual/components-repositorystats--header-unknown.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/components-repositorystats--header-unknown.png"><img src="images/diff/components-repositorystats--header-unknown.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+    </section>
+    
+    <section class="section">
+      <div class="section-title">
+        <h2>Added</h2>
+        <span>14</span>
+      </div>
+      
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archivecard--actions-only--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archivecard--actions-only--mobile.png"><img src="images/actual/components-archivecard--actions-only--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archivecard--actions-only.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archivecard--actions-only.png"><img src="images/actual/components-archivecard--actions-only.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archivecard--openable--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archivecard--openable--mobile.png"><img src="images/actual/components-archivecard--openable--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archivecard--openable.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archivecard--openable.png"><img src="images/actual/components-archivecard--openable.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivegrowthchart--sparse--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivegrowthchart--sparse--mobile.png"><img src="images/actual/components-archives-archivegrowthchart--sparse--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivegrowthchart--sparse.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivegrowthchart--sparse.png"><img src="images/actual/components-archives-archivegrowthchart--sparse.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivehourlyheatmap--with-header--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivehourlyheatmap--with-header--mobile.png"><img src="images/actual/components-archives-archivehourlyheatmap--with-header--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archivehourlyheatmap--with-header.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archivehourlyheatmap--with-header.png"><img src="images/actual/components-archives-archivehourlyheatmap--with-header.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archiveseriesheatmap--with-header--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archiveseriesheatmap--with-header--mobile.png"><img src="images/actual/components-archives-archiveseriesheatmap--with-header--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-archives-archiveseriesheatmap--with-header.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-archives-archiveseriesheatmap--with-header.png"><img src="images/actual/components-archives-archiveseriesheatmap--with-header.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunepreviewnumbers--freed-known--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunepreviewnumbers--freed-known--mobile.png"><img src="images/actual/components-prune-prunepreviewnumbers--freed-known--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>components-prune-prunepreviewnumbers--freed-known.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/components-prune-prunepreviewnumbers--freed-known.png"><img src="images/actual/components-prune-prunepreviewnumbers--freed-known.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>pages-dashboardv3-activitytimeline--same-day-chronological-order--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/pages-dashboardv3-activitytimeline--same-day-chronological-order--mobile.png"><img src="images/actual/pages-dashboardv3-activitytimeline--same-day-chronological-order--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>pages-dashboardv3-activitytimeline--same-day-chronological-order.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/pages-dashboardv3-activitytimeline--same-day-chronological-order.png"><img src="images/actual/pages-dashboardv3-activitytimeline--same-day-chronological-order.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+    </section>
+    
+    <section class="section">
+      <div class="section-title">
+        <h2>Removed</h2>
+        <span>6</span>
+      </div>
+      
+    <article class="shot">
+      <div class="shot-header">
+        <h3>pages-dashboardv3-activitytimeline--busy-installation--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/pages-dashboardv3-activitytimeline--busy-installation--mobile.png"><img src="images/baseline/pages-dashboardv3-activitytimeline--busy-installation--mobile.png" alt="Before"></a>
+    </figure>
+        
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>pages-dashboardv3-activitytimeline--busy-installation.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/pages-dashboardv3-activitytimeline--busy-installation.png"><img src="images/baseline/pages-dashboardv3-activitytimeline--busy-installation.png" alt="Before"></a>
+    </figure>
+        
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>pages-dashboardv3-activitytimeline--fortnight--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/pages-dashboardv3-activitytimeline--fortnight--mobile.png"><img src="images/baseline/pages-dashboardv3-activitytimeline--fortnight--mobile.png" alt="Before"></a>
+    </figure>
+        
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>pages-dashboardv3-activitytimeline--fortnight.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/pages-dashboardv3-activitytimeline--fortnight.png"><img src="images/baseline/pages-dashboardv3-activitytimeline--fortnight.png" alt="Before"></a>
+    </figure>
+        
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>pages-dashboardv3-activitytimeline--quiet--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/pages-dashboardv3-activitytimeline--quiet--mobile.png"><img src="images/baseline/pages-dashboardv3-activitytimeline--quiet--mobile.png" alt="Before"></a>
+    </figure>
+        
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>pages-dashboardv3-activitytimeline--quiet.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/pages-dashboardv3-activitytimeline--quiet.png"><img src="images/baseline/pages-dashboardv3-activitytimeline--quiet.png" alt="Before"></a>
+    </figure>
+        
+        
+      </div>
+    </article>
+    </section>
+  </main>
+</body>
+</html>
