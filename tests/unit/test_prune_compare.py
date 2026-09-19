@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -354,14 +354,18 @@ async def test_run_comparison_keeps_old_rows_when_only_the_no_policy_row_is_left
 
 
 @pytest.mark.unit
-def test_stored_reports_stale_when_the_archive_count_or_the_day_moved(db, repo):
+def test_stored_reports_stale_when_the_archive_count_or_the_day_moved(
+    db, repo, monkeypatch
+):
     assert pc.stored(db, repo) == {
         "computed_at": None,
         "archive_count_at": None,
         "stale": True,
         "candidates": [],
     }
-    _archives(db, repo, 2)
+    rows = _archives(db, repo, 2)
+    now = datetime(2026, 9, 18, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(pc, "utc_now", lambda: now)
     db.add(
         PruneComparison(
             repository_id=repo.id,
@@ -372,7 +376,8 @@ def test_stored_reports_stale_when_the_archive_count_or_the_day_moved(db, repo):
             deleted_count=1,
             freed_at_least=20,
             archive_count_at=2,
-            computed_at=utc_now(),
+            archive_max_id=max(a.id for a in rows),
+            computed_at=now,
             verdicts=[["ab", "a0", "kept", "daily #1"]],
         )
     )
@@ -385,10 +390,33 @@ def test_stored_reports_stale_when_the_archive_count_or_the_day_moved(db, repo):
     # retention buckets are relative to now, so yesterday's answer is stale
     # even when the archive set has not moved
     row = db.query(PruneComparison).first()
-    row.computed_at = utc_now() - timedelta(days=1)
+    row.computed_at = now - timedelta(days=1)
     db.commit()
     assert pc.stored(db, repo)["stale"] is True
-    row.computed_at = utc_now()
+    row.computed_at = now
+    db.commit()
+    assert pc.stored(db, repo)["stale"] is False
+
+    # one archive gone and one taken since: same count, different answer
+    db.delete(rows[0])
+    db.commit()
+    db.add(
+        Archive(
+            repository_id=repo.id,
+            name="later",
+            series="later",
+            borg_id=f"{99:064x}",
+            start=datetime(2026, 9, 20),
+            deduplicated_size=10,
+            first_seen_at=datetime(2026, 9, 20),
+            last_seen_at=datetime(2026, 9, 20),
+        )
+    )
+    db.commit()
+    assert pc.current_archive_count(db, repo) == 2
+    assert pc.stored(db, repo)["stale"] is True
+
+    row.archive_max_id = pc.archive_set(db, repo)[1]
     db.commit()
     assert pc.stored(db, repo)["stale"] is False
     _archives(db, repo, 1)
@@ -399,7 +427,7 @@ def test_stored_reports_stale_when_the_archive_count_or_the_day_moved(db, repo):
 def test_stored_is_stale_while_a_row_has_no_verdicts(db, repo):
     """A comparison the preview page cannot read back is not one it can use:
     rows from before the verdicts were kept ask to be run again."""
-    _archives(db, repo, 2)
+    rows = _archives(db, repo, 2)
     db.add(
         PruneComparison(
             repository_id=repo.id,
@@ -410,6 +438,7 @@ def test_stored_is_stale_while_a_row_has_no_verdicts(db, repo):
             deleted_count=1,
             freed_at_least=20,
             archive_count_at=2,
+            archive_max_id=max(a.id for a in rows),
             computed_at=utc_now(),
             verdicts=None,
         )

@@ -715,6 +715,10 @@ class PruneComparison(Base):
         Integer, ForeignKey("operations.id", ondelete="SET NULL"), nullable=True
     )
     archive_count_at = Column(Integer, nullable=False, default=0)
+    # Highest archive id at the time. With the count it tells an archive set
+    # apart from one of the same size: ids only ever grow, so an archive
+    # removed and another taken since moves this even when the count does not.
+    archive_max_id = Column(Integer, nullable=True)
     computed_at = Column(DateTime, nullable=False, default=utc_now)
 
 

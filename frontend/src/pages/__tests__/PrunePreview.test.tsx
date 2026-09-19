@@ -336,6 +336,41 @@ describe('PrunePreview page', () => {
     expect(repositoriesAPI.prunePreview).toHaveBeenCalledTimes(dryRuns)
   })
 
+  it('ignores a read that lands after the reader moved on', async () => {
+    vi.mocked(repositoriesAPI.pruneComparison).mockResolvedValue({
+      data: storedComparison,
+    } as never)
+    let landStandard = (_v: unknown) => {}
+    vi.mocked(repositoriesAPI.pruneCandidatePreview).mockImplementation(((
+      _id: number,
+      key: string
+    ) =>
+      key === 'standard'
+        ? new Promise((resolve) => {
+            landStandard = resolve
+          })
+        : Promise.resolve({
+            data: { ...preview, kept_count: 4, deleted_count: 9 },
+          })) as never)
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Standard')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Standard'))
+    await waitFor(() =>
+      expect(repositoriesAPI.pruneCandidatePreview).toHaveBeenCalledWith(7, 'standard')
+    )
+    // move on before the slow one answers
+    fireEvent.click(screen.getByText('Current'))
+    await waitFor(() =>
+      expect(screen.getByTestId('prune-preview-deleted').textContent).toContain('9')
+    )
+    landStandard({ data: { ...preview, kept_count: 1, deleted_count: 7 } })
+    // the abandoned row's answer must not replace what is on screen
+    await waitFor(() =>
+      expect(screen.getByText('Current').closest('tr')).toHaveClass('Mui-selected')
+    )
+    expect(screen.getByTestId('prune-preview-deleted').textContent).not.toContain('7')
+  })
+
   it('falls back to a dry run for a policy the comparison never stored', async () => {
     vi.mocked(repositoriesAPI.pruneComparison).mockResolvedValue({
       data: {

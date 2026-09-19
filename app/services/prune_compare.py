@@ -79,11 +79,20 @@ def candidates(
 
 
 def current_archive_count(db: Session, repository: Repository) -> int:
+    return archive_set(db, repository)[0]
+
+
+def archive_set(db: Session, repository: Repository) -> tuple[int, Optional[int]]:
+    """How many archives the repository has and the highest id among them.
+    Together they tell one archive set from another of the same size: ids only
+    grow, so an archive removed and another taken since moves the maximum even
+    when the count lands back where it was."""
     removed = pending_removed_ids(db, repository.id)
     q = db.query(Archive.id).filter(Archive.repository_id == repository.id)
     if removed:
         q = q.filter(Archive.id.notin_(removed))
-    return q.count()
+    ids = [row[0] for row in q.all()]
+    return len(ids), max(ids) if ids else None
 
 
 async def run_comparison(
@@ -97,7 +106,7 @@ async def run_comparison(
     candidate whose dry run failed is left out; the others still land. When
     none did, the previous rows stay: an outage should not erase a good
     comparison."""
-    count = current_archive_count(db, repository)
+    count, max_id = archive_set(db, repository)
     computed_at = utc_now()
     rows: list[PruneComparison] = []
     measured = 0
@@ -116,6 +125,7 @@ async def run_comparison(
                     partial_measure=False,
                     operation_id=None,
                     archive_count_at=count,
+                    archive_max_id=max_id,
                     computed_at=computed_at,
                 )
             )
@@ -155,6 +165,7 @@ async def run_comparison(
                 ],
                 operation_id=result.operation.id,
                 archive_count_at=count,
+                archive_max_id=max_id,
                 computed_at=computed_at,
             )
         )
@@ -206,8 +217,11 @@ def stored(db: Session, repository: Repository) -> dict:
     # buckets tomorrow: a comparison is stale once the archive set moved or
     # the day did, whichever comes first.
     now = utc_now()
+    count_now, max_id_now = archive_set(db, repository)
     stale = (
-        current_archive_count(db, repository) != count_at
+        count_now != count_at
+        # a swap keeps the count and still changes the answer
+        or max_id_now != rows[0].archive_max_id
         or (computed_at is None or computed_at.date() != now.date())
         # a row the preview page cannot read back is not a comparison it can
         # use: rows stored before the verdicts were kept refresh themselves
