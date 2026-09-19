@@ -706,10 +706,22 @@ class PruneComparison(Base):
     # it. None without the index.
     lost_size = Column(BigInteger, nullable=True)
     partial_measure = Column(Boolean, nullable=False, default=False)
+    # Borg's own verdict lines, as [borg_id, name, verdict, rule]. The dry
+    # run's log is subject to log retention, and the preview page reads a
+    # candidate from here instead of running Borg again; everything else the
+    # page shows is joined from the live index at read time.
+    verdicts = Column(JSON, nullable=True)
     operation_id = Column(
         Integer, ForeignKey("operations.id", ondelete="SET NULL"), nullable=True
     )
     archive_count_at = Column(Integer, nullable=False, default=0)
+    # The archive set this was computed for, as a fingerprint: how many, the
+    # highest id, and the newest first_seen_at. SQLite hands a deleted row's
+    # id to the next insert, so the id alone can repeat; a row is only ever
+    # first seen when a listing inserts it, so that timestamp moves on every
+    # replacement the count and the id would hide.
+    archive_max_id = Column(Integer, nullable=True)
+    archive_seen_at = Column(DateTime, nullable=True)
     computed_at = Column(DateTime, nullable=False, default=utc_now)
 
 

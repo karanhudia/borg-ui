@@ -297,6 +297,9 @@ export interface PruneComparisonRow {
   lost_size: number | null
   partial_measure: boolean
   operation_id: number | null
+  /** The comparison kept Borg's verdicts for this row, so the page can show
+   * it in full without a new dry run. */
+  readable: boolean
 }
 
 export interface PruneComparison {

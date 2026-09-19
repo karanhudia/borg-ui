@@ -75,6 +75,11 @@ export function umbrella(item: ActivityItem, t: TFunction): Umbrella {
         : t('activity.triggers.schedule'),
     }
   if (trigger === null) return { kind: 'other', label: capitalize(String(item.triggered_by)) }
+  // The comparison is the preview page running every policy by itself when
+  // it opens; a single dry run under the same trigger is one the reader
+  // asked for, so only the comparison says automatic.
+  if (trigger === 'preview' && (item.kind ?? item.type) === 'prune_compare')
+    return { kind: trigger, label: t('activity.triggers.previewAuto') }
   return { kind: trigger, label: t(`activity.triggers.${trigger}`) }
 }
 
