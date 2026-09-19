@@ -29,7 +29,7 @@ export interface EditingRow {
   kept_count: number
   deleted_count: number
   freed_at_least: number
-  freed: number | null
+  lost_size: number | null
 }
 
 interface Props {
@@ -53,14 +53,17 @@ export function PruneComparedPolicies({
 }: Props) {
   const { t } = useTranslation()
   const theme = useTheme()
-  const freedText = (row: { freed: number | null; freed_at_least: number }) =>
-    row.freed != null
-      ? formatBytes(row.freed)
-      : t('prunePreview.atLeast', { size: formatBytes(row.freed_at_least) })
+  const freedText = (row: { lost_size: number | null; freed_at_least: number }) =>
+    t('prunePreview.atLeast', { size: formatBytes(row.freed_at_least) }) +
+    (row.lost_size != null
+      ? `, ${t('prunePreview.upTo', { size: formatBytes(row.lost_size) })}`
+      : '')
   // the figures carry the page's tones: deletions red, space given back green
   const deletedSx = (n: number) => (n > 0 ? { color: 'error.main', fontWeight: 600 } : undefined)
-  const freedSx = (row: { freed: number | null; freed_at_least: number }) =>
-    (row.freed ?? row.freed_at_least) > 0 ? { color: 'success.main', fontWeight: 600 } : undefined
+  const freedSx = (row: { lost_size: number | null; freed_at_least: number }) =>
+    (row.lost_size ?? row.freed_at_least) > 0
+      ? { color: 'success.main', fontWeight: 600 }
+      : undefined
   const rows = comparison?.candidates ?? []
   const label = (row: PruneComparisonRow) =>
     row.key === 'current'

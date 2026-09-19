@@ -1036,6 +1036,7 @@
     "mountTimeout": "Mount timeout: Large repositories may need more time to mount.",
     "mountFailed": "Failed to mount archive: {{error}}",
     "restoreStarted": "Restore job started! Check the Activity tab to monitor progress.",
+    "openArchive": "Open {{name}}",
     "restorePanel": {
       "label": "Restore progress",
       "pending": "Restore queued",
@@ -6450,7 +6451,7 @@
     "freed": "Space freed",
     "atLeast": "at least {{size}}",
     "freedSub": "exact figure after the prune and compact",
-    "freedKnownSub": "file data no kept archive holds",
+    "upTo": "up to {{size}} of file data",
     "deletedCount": "{{count}} deleted",
     "lostShort": "{{count}} files lost forever",
     "before": "Footprint before",

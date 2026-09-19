@@ -1036,6 +1036,7 @@
     "mountTimeout": "Einhänge-Timeout: Große Repositories benötigen möglicherweise mehr Zeit zum Einhängen.",
     "mountFailed": "Fehler beim Einhängen des Archivs: {{error}}",
     "restoreStarted": "Wiederherstellungsaufgabe gestartet! Überprüfe den Aktivitäts-Tab, um den Fortschritt zu überwachen.",
+    "openArchive": "{{name}} öffnen",
     "restorePanel": {
       "label": "Wiederherstellungsfortschritt",
       "pending": "Wiederherstellung wartet",
@@ -6450,7 +6451,7 @@
     "freed": "Freigegebener Speicher",
     "atLeast": "mindestens {{size}}",
     "freedSub": "genauer Wert nach Prune und Compact",
-    "freedKnownSub": "Dateidaten, die kein behaltenes Archiv hält",
+    "upTo": "bis zu {{size}} an Dateidaten",
     "deletedCount": "{{count}} gelöscht",
     "lostShort": "{{count}} Dateien unwiederbringlich verloren",
     "before": "Footprint vorher",

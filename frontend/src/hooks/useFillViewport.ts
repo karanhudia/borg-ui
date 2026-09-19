@@ -15,6 +15,9 @@ export default function useFillViewport(
 ): number | undefined {
   const [height, setHeight] = useState<number>()
   useLayoutEffect(() => {
+    // one pending correction at a time: a resize burst would otherwise
+    // subtract the same overflow once per frame and shrink the pane
+    let frame = 0
     const measure = () => {
       const el = ref.current
       if (!el) return
@@ -24,7 +27,8 @@ export default function useFillViewport(
       setHeight(Math.max(min, Math.floor(window.innerHeight - top - below)))
       // Sub-pixel edges can still leave the page a pixel too tall; take
       // whatever overflow is left once the new height has laid out.
-      requestAnimationFrame(() => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
         const root = document.documentElement
         const overflow = root.scrollHeight - root.clientHeight
         if (overflow > 0) setHeight((h) => Math.max(min, (h ?? 0) - overflow))
@@ -32,7 +36,10 @@ export default function useFillViewport(
     }
     measure()
     window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('resize', measure)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ref, min, ...deps])
   return height

@@ -701,8 +701,10 @@ class PruneComparison(Base):
     kept_count = Column(Integer, nullable=False, default=0)
     deleted_count = Column(Integer, nullable=False, default=0)
     freed_at_least = Column(BigInteger, nullable=False, default=0)
-    # size of the files no kept archive holds; None without the history index
-    freed = Column(BigInteger, nullable=True)
+    # logical size of the files no kept archive holds, from the history
+    # index; an upper bound on the storage this frees, not a measurement of
+    # it. None without the index.
+    lost_size = Column(BigInteger, nullable=True)
     partial_measure = Column(Boolean, nullable=False, default=False)
     operation_id = Column(
         Integer, ForeignKey("operations.id", ondelete="SET NULL"), nullable=True

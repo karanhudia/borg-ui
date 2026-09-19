@@ -174,9 +174,12 @@ function StatTile({ item, text, action }: StatProps) {
       arrow
       describeChild
       open={hintOpen}
+      // hover and focus are driven by hand above; touch stays with MUI so a
+      // long press still reaches the hint on a phone
+      onOpen={() => setHintOpen(true)}
+      onClose={() => setHintOpen(false)}
       disableHoverListener
       disableFocusListener
-      disableTouchListener
     >
       {tile}
     </Tooltip>

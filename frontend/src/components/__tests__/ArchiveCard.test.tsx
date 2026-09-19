@@ -52,6 +52,20 @@ describe('ArchiveCard', () => {
     expect(onOpen).toHaveBeenCalledTimes(1)
   })
 
+  it('opens the archive from the keyboard, but not from a key on an action', () => {
+    const onOpen = vi.fn()
+    render(<ArchiveCard archive={mockArchive} {...mockHandlers} onOpen={onOpen} />)
+
+    const row = screen.getByTestId('archive-row')
+    expect(row).toHaveAttribute('tabindex', '0')
+    fireEvent.keyDown(row, { key: 'Enter' })
+    fireEvent.keyDown(row, { key: ' ' })
+    expect(onOpen).toHaveBeenCalledTimes(2)
+
+    fireEvent.keyDown(screen.getByRole('button', { name: /restore/i }), { key: 'Enter' })
+    expect(onOpen).toHaveBeenCalledTimes(2)
+  })
+
   it('calls onView when View button is clicked', () => {
     render(<ArchiveCard archive={mockArchive} {...mockHandlers} />)
 

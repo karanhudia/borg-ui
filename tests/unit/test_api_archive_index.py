@@ -431,6 +431,35 @@ class TestArchiveGrowth:
         assert sizes == [None, 4_000, 20_000]
         assert a1.id  # the oldest predates the sampling and stays unknown
 
+    def test_an_unplotted_archive_bounds_the_sample_window(
+        self, test_client, test_db, admin_headers
+    ):
+        """A sample taken after an archive this curve does not plot (another
+        series, or one the info fill never measured) belongs to that archive,
+        not to the plotted point before it."""
+        from app.database.models import RepositorySizeSample
+
+        repo = _repo(test_db)
+        self._measured(test_db, repo, "a1", 1, size=100)
+        other = self._measured(test_db, repo, "old-a2", 2, series="old", size=30)
+        self._measured(test_db, repo, "a3", 3, size=20)
+        test_db.add(
+            RepositorySizeSample(
+                repository_id=repo.id,
+                measured_at=other.start + timedelta(minutes=5),
+                size_bytes=9_000,
+                source="t",
+            )
+        )
+        test_db.commit()
+
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/archives/growth?series=nas",
+            headers=admin_headers,
+        )
+        assert r.status_code == 200
+        assert [p["repository_size"] for p in r.json()["points"]] == [None, None]
+
     def test_series_filter_restarts_the_running_total(
         self, test_client, test_db, admin_headers
     ):

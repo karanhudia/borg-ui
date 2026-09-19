@@ -200,7 +200,7 @@ describe('PrunePreview page', () => {
     expect(screen.queryByText(/another series/i)).not.toBeInTheDocument()
   })
 
-  it('shows the lost-files size as the space freed when the index has it', async () => {
+  it('bounds the freed figure with the lost-file size when the index has it', async () => {
     vi.mocked(repositoriesAPI.prunePreview).mockResolvedValue({
       data: {
         ...preview,
@@ -217,10 +217,13 @@ describe('PrunePreview page', () => {
     } as never)
     renderWithProviders(<PrunePreview />, { initialRoute: '/repositories/7/prune-preview' })
     await screen.findByTestId('prune-preview-deleted')
-    expect(screen.getByTestId('prune-preview-freed').textContent).toMatch(/400\.00 B/)
-    expect(screen.getByTestId('prune-preview-freed').textContent).not.toMatch(/at least/)
-    expect(screen.getByTestId('prune-preview-after').textContent).toMatch(/600\.00 B/)
-    expect(screen.queryByText(/lower bound/i)).not.toBeInTheDocument()
+    const freed = screen.getByTestId('prune-preview-freed').textContent
+    // storage floor from borg, file-data ceiling from the index: both shown,
+    // neither subtracted from the footprint, which is measured differently
+    expect(freed).toMatch(/at least 300\.00 B/)
+    expect(freed).toMatch(/up to 400\.00 B/)
+    expect(screen.getByTestId('prune-preview-after').textContent).toMatch(/700\.00 B/)
+    expect(screen.getByText(/lower bound/i)).toBeInTheDocument()
   })
 
   const storedComparison = {
@@ -243,7 +246,7 @@ describe('PrunePreview page', () => {
         kept_count: 2,
         deleted_count: 0,
         freed_at_least: 0,
-        freed: null,
+        lost_size: null,
         partial_measure: false,
         operation_id: 1,
       },
@@ -262,7 +265,7 @@ describe('PrunePreview page', () => {
         kept_count: 1,
         deleted_count: 1,
         freed_at_least: 100,
-        freed: null,
+        lost_size: null,
         partial_measure: false,
         operation_id: 2,
       },

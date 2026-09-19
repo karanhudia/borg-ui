@@ -1036,6 +1036,7 @@
     "mountTimeout": "Timeout mount: I repository di grandi dimensioni potrebbero richiedere più tempo per il mount.",
     "mountFailed": "Impossibile montare l'archivio: {{error}}",
     "restoreStarted": "Job di ripristino avviato! Controlla la scheda Attività per monitorare i progressi.",
+    "openArchive": "Apri {{name}}",
     "restorePanel": {
       "label": "Avanzamento del ripristino",
       "pending": "Ripristino in coda",
@@ -6450,7 +6451,7 @@
     "freed": "Spazio liberato",
     "atLeast": "almeno {{size}}",
     "freedSub": "cifra esatta dopo prune e compact",
-    "freedKnownSub": "dati di file che nessun archivio conservato contiene",
+    "upTo": "fino a {{size}} di dati dei file",
     "deletedCount": "{{count}} eliminati",
     "lostShort": "{{count}} file persi per sempre",
     "before": "Ingombro prima",

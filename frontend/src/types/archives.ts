@@ -292,7 +292,9 @@ export interface PruneComparisonRow {
   deleted_count: number
   freed_at_least: number
   /** Size of the files no kept archive holds; null without the history index. */
-  freed: number | null
+  /** Logical size of the files no kept archive holds: an upper bound on
+   * the storage freed, not a measurement of it. */
+  lost_size: number | null
   partial_measure: boolean
   operation_id: number | null
 }

@@ -368,11 +368,22 @@ def _lost_in_series(
 FileKey = tuple[str, Optional[int]]
 
 
-def _file_key(path: str, size: Optional[int]) -> FileKey:
+def _file_key(path: str, size: Optional[int]) -> Optional[FileKey]:
     """What the index can say two paths have in common: the file name and
     its size. A source mounted at a new prefix backs up every file under a
-    new path, which is how a whole tree looks lost when nothing is."""
+    new path, which is how a whole tree looks lost when nothing is. None
+    for a file of unknown size: a name alone is not identity, and a wrong
+    match would drop a genuinely lost file from the totals."""
+    if size is None:
+        return None
     return (path.rsplit("/", 1)[-1], size)
+
+
+def _same_file_moved(lost: str, survivor: str) -> bool:
+    """Whether a surviving path is the same file under a new prefix: one
+    path is the tail of the other, whole segments only. Name and size alone
+    would let an unrelated README of the same length hide a real loss."""
+    return survivor.endswith("/" + lost) or lost.endswith("/" + survivor)
 
 
 def _held_by_survivors(
@@ -380,7 +391,7 @@ def _held_by_survivors(
     series_rows: list[list[Archive]],
     deleted_ids: set[int],
     lost: list[dict],
-) -> tuple[set[str], dict[FileKey, str], list[int]]:
+) -> tuple[set[str], dict[FileKey, set[str]], list[int]]:
     """What the surviving archives of the given series still hold of the
     lost rows, by replaying each series' changes in order and reading the
     state at every archive: the lost paths held as they are, and for the
@@ -388,9 +399,9 @@ def _held_by_survivors(
     returns the archives whose index is missing while a path is still in
     question, since those could hold it too."""
     open_paths = {f["path"] for f in lost}
-    open_keys = {_file_key(f["path"], f["size"]) for f in lost}
+    open_keys = {k for f in lost if (k := _file_key(f["path"], f["size"])) is not None}
     held: set[str] = set()
-    copies: dict[FileKey, str] = {}
+    copies: dict[FileKey, set[str]] = defaultdict(set)
     unindexed: list[int] = []
     for archives in series_rows:
         if not open_paths and not open_keys:
@@ -423,7 +434,7 @@ def _held_by_survivors(
                 key = _file_key(
                     path, size_before if change == "removed" else size_after
                 )
-                if key in open_keys:
+                if key is not None and key in open_keys:
                     if change == "removed":
                         present_keys[key].discard(path)
                     else:
@@ -436,7 +447,10 @@ def _held_by_survivors(
             open_paths -= present
             for key, paths in present_keys.items():
                 if paths and key in open_keys:
-                    copies[key] = min(paths)
+                    # every copy this survivor holds, since one surviving
+                    # file only accounts for one lost file, not for every
+                    # path that happens to share its name and size
+                    copies[key].update(paths)
                     open_keys.discard(key)
             if not open_paths and not open_keys:
                 break
@@ -494,8 +508,15 @@ def lost_files(
         for f in found:
             if f["path"] in held:
                 continue
-            copy = copies.get(_file_key(f["path"], f["size"]))
-            if copy and copy != f["path"]:
+            key = _file_key(f["path"], f["size"])
+            others = sorted(
+                p
+                for p in ((copies.get(key) or set()) - {f["path"]})
+                if _same_file_moved(f["path"], p)
+            )
+            if others:
+                # spend the copy: it cannot stand in for a second lost file
+                copies[key].discard(others[0])
                 moved.append(f)
             else:
                 lost.append(f)
@@ -531,12 +552,13 @@ from app.services.operations.followups import (
 )
 
 
-def freed_estimate(
+def lost_size_estimate(
     db: Session, repository: Repository, candidates: list[Archive]
 ) -> Optional[int]:
-    """What deleting `candidates` frees, as the size of the files no kept
-    archive holds; None without the history index, when the lower bound
-    is all there is."""
+    """The logical size of the files no kept archive holds once `candidates`
+    are deleted. Compression and deduplication mean the storage this frees
+    is at most this, never exactly it, so it belongs next to
+    `freed_at_least`, not in its place. None without the history index."""
     if (
         not history_enabled(db)
         or history_capability(db, repository) != HISTORY_AVAILABLE

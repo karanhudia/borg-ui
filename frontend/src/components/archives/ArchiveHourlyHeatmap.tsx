@@ -107,7 +107,7 @@ export default function ArchiveHourlyHeatmap({
         {header && (
           <HeatmapHeader
             toolbar={header.toolbar}
-            summary={t('archives.hourly.none', { count: weeks })}
+            summary={t('archives.hourly.window', { count: weeks })}
           />
         )}
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>

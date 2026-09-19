@@ -7,10 +7,12 @@ import TintedTile from '../shared/TintedTile'
 export interface PrunePreviewNumbersProps {
   deletedCount: number
   keptCount: number
-  /** Borg's per-archive unique sum: the floor, shown only without `freed`. */
+  /** Borg's per-archive unique sum: the floor of the storage freed. */
   freedAtLeast: number
-  /** Size of the files no kept archive holds, when the history index has it. */
-  freed?: number | null
+  /** Logical size of the files no kept archive holds, when the history index
+   * has it: the ceiling, since those bytes are stored compressed and
+   * deduplicated. Not comparable with the footprint, so it only annotates. */
+  lostSize?: number | null
   footprintBefore: number | null
   footprintAfterAtMost: number | null
 }
@@ -21,18 +23,13 @@ export default function PrunePreviewNumbers({
   deletedCount,
   keptCount,
   freedAtLeast,
-  freed,
+  lostSize,
   footprintBefore,
   footprintAfterAtMost,
 }: PrunePreviewNumbersProps) {
   const { t } = useTranslation()
   const theme = useTheme()
-  const known = freed != null
-  const after = known
-    ? footprintBefore != null
-      ? Math.max(footprintBefore - freed, 0)
-      : null
-    : footprintAfterAtMost
+  const after = footprintAfterAtMost
   const total = deletedCount + keptCount
   const deletedShare = total > 0 ? (deletedCount / total) * 100 : 0
 
@@ -99,12 +96,12 @@ export default function PrunePreviewNumbers({
         <TintedTile
           testId="prune-preview-freed"
           label={t('prunePreview.freed')}
-          value={
-            known
-              ? formatBytes(freed)
-              : t('prunePreview.atLeast', { size: formatBytes(freedAtLeast) })
+          value={t('prunePreview.atLeast', { size: formatBytes(freedAtLeast) })}
+          sub={
+            lostSize != null
+              ? t('prunePreview.upTo', { size: formatBytes(lostSize) })
+              : t('prunePreview.freedSub')
           }
-          sub={known ? t('prunePreview.freedKnownSub') : t('prunePreview.freedSub')}
           tone="success"
           icon={Shrink}
         />
@@ -122,7 +119,7 @@ export default function PrunePreviewNumbers({
           testId="prune-preview-after"
           label={t('prunePreview.after')}
           value={after != null ? formatBytes(after) : t('prunePreview.notMeasured')}
-          sub={after != null && !known ? t('prunePreview.atMost') : undefined}
+          sub={after != null ? t('prunePreview.atMost') : undefined}
           tone="info"
           icon={Archive}
           muted={after == null}

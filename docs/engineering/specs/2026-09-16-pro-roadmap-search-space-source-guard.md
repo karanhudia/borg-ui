@@ -211,7 +211,13 @@ the existing prune route (`keep_*`, `keep_within`). It:
    newest archives in a different series from the deleted ones): those
    series are replayed in order for the lost paths, a path any survivor
    holds is not lost, and an unindexed archive met on the way joins
-   `unindexed_archive_ids`.
+   `unindexed_archive_ids`. A survivor also covers a lost path when it
+   holds the same file under a new prefix: same file name, same size, and
+   one path the whole-segment tail of the other, which is what a remounted
+   source looks like in the index. Each such survivor covers one lost file,
+   not every path sharing its name, and a file of unknown size is never
+   matched this way; those go to `moved_count` / `moved_size`, out of the
+   lost totals.
 
 Response: `{archives: [{id, name, series, start, verdict: "kept"|"deleted",
 rule, deduplicated_size, stats_measured_at}], freed_at_least,
@@ -219,7 +225,11 @@ partial_measure, footprint_before, footprint_after_at_most, lost_files:
 {available, incomplete, unindexed_archive_ids, total_count, total_size,
 top: [...], by_folder: [...]}, log}`. `footprint_before` is the
 repository's stored storage size (the `storage` payload from #1030);
-`footprint_after_at_most` is `footprint_before - freed_at_least`.
+`footprint_after_at_most` is `footprint_before - freed_at_least`. The
+lost-file total is logical file data, not stored bytes: it bounds the
+freed space from above, where `freed_at_least` bounds it from below, and
+neither the comparison's `lost_size` column nor the UI subtracts it from
+the footprint.
 
 UI: a page, not a dialog: `/repositories/{id}/prune-preview`, reached from
 the prune dialog's dry-run button (renamed "Preview") and from the

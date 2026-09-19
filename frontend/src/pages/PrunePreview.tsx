@@ -239,12 +239,12 @@ export default function PrunePreview() {
           kept_count: preview.kept_count,
           deleted_count: preview.deleted_count,
           freed_at_least: preview.freed_at_least,
-          freed: preview.lost_files.available ? (preview.lost_files.total_size ?? 0) : null,
+          lost_size: preview.lost_files.available ? (preview.lost_files.total_size ?? 0) : null,
         }
       : null
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box>
       <Breadcrumbs sx={{ mb: 2 }}>
         <Link component={RouterLink} to="/repositories" underline="hover">
           {t('prunePreview.crumbRepositories')}
@@ -378,7 +378,9 @@ export default function PrunePreview() {
                 deletedCount={deletedCount}
                 keptCount={keptCount}
                 freedAtLeast={preview.freed_at_least}
-                freed={preview.lost_files.available ? (preview.lost_files.total_size ?? 0) : null}
+                lostSize={
+                  preview.lost_files.available ? (preview.lost_files.total_size ?? 0) : null
+                }
                 footprintBefore={preview.footprint_before}
                 footprintAfterAtMost={preview.footprint_after_at_most}
               />
@@ -459,9 +461,7 @@ export default function PrunePreview() {
                     })}
                   </Alert>
                 )}
-                {!preview.lost_files.available && (
-                  <Alert severity="info">{t('prunePreview.warnLowerBound')}</Alert>
-                )}
+                <Alert severity="info">{t('prunePreview.warnLowerBound')}</Alert>
                 {preview.partial_measure && (
                   <Alert severity="warning">
                     {t('prunePreview.remeasuredPartial', { cap: 50, count: deletedCount })}

@@ -49,7 +49,23 @@ export default function ArchiveCard({
   return (
     <Box
       data-testid="archive-row"
+      // the whole row opens the archive, so it carries the button role and
+      // the keys that go with it; the action buttons stop their own clicks
+      role={onOpen ? 'button' : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      aria-label={onOpen ? t('archives.openArchive', { name: archive.name }) : undefined}
       onClick={onOpen ? () => onOpen(archive) : undefined}
+      onKeyDown={
+        onOpen
+          ? (e) => {
+              if (e.target !== e.currentTarget) return
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onOpen(archive)
+              }
+            }
+          : undefined
+      }
       sx={{
         cursor: onOpen ? 'pointer' : 'default',
         display: 'grid',

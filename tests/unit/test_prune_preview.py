@@ -402,6 +402,44 @@ class TestLostFiles:
         assert (out["total_count"], out["total_size"]) == (1, 7)
         assert (out["moved_count"], out["moved_size"]) == (1, 100)
 
+    def test_one_survivor_rescues_one_file_not_every_namesake(self, test_db):
+        # Two different files of the same name and byte count: one survivor
+        # under a new prefix accounts for one of them, the other is lost.
+        repo = _repo(test_db)
+        by = {}
+        by.update(_series(test_db, repo, ("old", 1), series="old"))
+        by.update(_series(test_db, repo, ("new", 2), series="new"))
+        old, new = by["old"][0], by["new"][0]
+        _change(test_db, old, "a/index.html", "added", size_after=100)
+        _change(test_db, old, "b/index.html", "added", size_after=100)
+        _change(test_db, new, "local/a/index.html", "added", size_after=100)
+        out = lost_files(test_db, repo, by, deleted_ids={old.id})
+        assert (out["moved_count"], out["total_count"]) == (1, 1)
+
+    def test_an_unrelated_namesake_of_the_same_size_does_not_rescue(self, test_db):
+        # Same name, same byte count, unrelated tree: not the same file, so
+        # the deleted one is still lost.
+        repo = _repo(test_db)
+        by = {}
+        by.update(_series(test_db, repo, ("old", 1), series="old"))
+        by.update(_series(test_db, repo, ("new", 2), series="new"))
+        old, new = by["old"][0], by["new"][0]
+        _change(test_db, old, "projects/a/README.md", "added", size_after=100)
+        _change(test_db, new, "sites/b/README.md", "added", size_after=100)
+        out = lost_files(test_db, repo, by, deleted_ids={old.id})
+        assert (out["moved_count"], out["total_count"]) == (0, 1)
+
+    def test_a_file_of_unknown_size_is_never_matched_by_name(self, test_db):
+        repo = _repo(test_db)
+        by = {}
+        by.update(_series(test_db, repo, ("old", 1), series="old"))
+        by.update(_series(test_db, repo, ("new", 2), series="new"))
+        old, new = by["old"][0], by["new"][0]
+        _change(test_db, old, "a/notes.txt", "added", size_after=None)
+        _change(test_db, new, "local/a/notes.txt", "added", size_after=None)
+        out = lost_files(test_db, repo, by, deleted_ids={old.id})
+        assert (out["moved_count"], out["total_count"]) == (0, 1)
+
     def test_a_copy_removed_before_the_survivor_does_not_rescue(self, test_db):
         repo = _repo(test_db)
         by = {}
