@@ -340,7 +340,6 @@ export default function PrunePreview() {
     setError(null)
     setRefreshedAt(null)
     setWantedKey(null)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repositoryId])
 
   // The candidate the page is waiting on a running comparison for. Nothing
