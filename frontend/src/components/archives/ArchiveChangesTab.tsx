@@ -259,9 +259,22 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
       )}
 
       {!isLoading && !loadFailed && historyState === 'indexed' && rows.length === 0 && (
-        <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 2 }}>
-          {query ? t('archives.changes.noMatch') : t('archives.changes.empty')}
-        </Typography>
+        <Box sx={{ px: 1.5, py: 2 }}>
+          <Typography variant="body2" color="text.secondary">
+            {query ? t('archives.changes.noMatch') : t('archives.changes.empty')}
+          </Typography>
+          {/* the filter only sees the pages already loaded, so a match
+              further down is still reachable while a cursor is left */}
+          {cursor != null && (
+            <Button
+              disabled={morePages.isPending}
+              onClick={() => morePages.mutate(cursor)}
+              sx={{ mt: 1, ml: -1 }}
+            >
+              {t('archives.changes.showMore')}
+            </Button>
+          )}
+        </Box>
       )}
 
       {!isLoading && historyState === 'indexed' && rows.length > 0 && (

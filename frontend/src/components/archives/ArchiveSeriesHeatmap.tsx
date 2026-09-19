@@ -16,7 +16,7 @@ import HeatmapHeader from './HeatmapHeader'
 import HeatmapLegend from './HeatmapLegend'
 import {
   formatBytes,
-  formatDateShort,
+  formatCalendarDay,
   formatDurationSeconds,
   parseBackendDate,
 } from '../../utils/dateUtils'
@@ -373,8 +373,8 @@ export default function ArchiveSeriesHeatmap({
               ? t('archives.heatmap.summary', {
                   count: band.count,
                   days: daysWithArchives,
-                  first: formatDateShort(band.first),
-                  last: formatDateShort(band.last),
+                  first: formatCalendarDay(band.first),
+                  last: formatCalendarDay(band.last),
                 })
               : t('archives.heatmap.none')
           }

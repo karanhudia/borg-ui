@@ -51,7 +51,10 @@ function GrowthTooltip({ active, payload }: TooltipProps) {
         t('archives.growth.tooltipRepository'),
         point.repository_size != null ? formatBytes(point.repository_size) : '–'
       )}
-      {row(t('archives.growth.tooltipSource'), formatBytes(point.original_size))}
+      {row(
+        t('archives.growth.tooltipSource'),
+        point.original_size != null ? formatBytes(point.original_size) : '–'
+      )}
       {row(t('archives.growth.tooltipAdded'), formatBytes(point.deduplicated_size))}
       {point.stale && (
         <Typography variant="caption" sx={{ color: 'warning.main', display: 'block', mt: 0.5 }}>

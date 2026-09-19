@@ -46,6 +46,23 @@ export const formatDateShort = (dateString: string | null | undefined): string =
 }
 
 /**
+ * Format a date-only string ("2026-09-01") in the short format, as the
+ * calendar day it names. `new Date()` reads such a string as UTC midnight,
+ * which is the day before for anyone west of Greenwich.
+ * Example: "Sep 1, 2026"
+ */
+export const formatCalendarDay = (dateString: string | null | undefined): string => {
+  if (!dateString) return 'Never'
+  const [y, m, d] = dateString.slice(0, 10).split('-').map(Number)
+  if (!y || !m || !d) return formatDateShort(dateString)
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+/**
  * Convert a cron expression (already in local time) to a compact human-readable label.
  * Falls back to the raw cron string for complex/unrecognized patterns.
  *

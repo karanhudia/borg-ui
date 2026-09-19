@@ -22,9 +22,12 @@ export default function useFillViewport(
       const el = ref.current
       if (!el) return
       const rect = el.getBoundingClientRect()
-      const top = rect.top + window.scrollY
-      const below = document.documentElement.scrollHeight - (rect.bottom + window.scrollY)
-      setHeight(Math.max(min, Math.floor(window.innerHeight - top - below)))
+      // What the page really keeps under the element, measured from the
+      // body box rather than from scrollHeight: scrollHeight never drops
+      // below the viewport, so on a page that already fits it counts the
+      // empty space below as content and the pane never grows into it.
+      const below = Math.max(0, document.body.getBoundingClientRect().bottom - rect.bottom)
+      setHeight(Math.max(min, Math.floor(window.innerHeight - rect.top - below)))
       // Sub-pixel edges can still leave the page a pixel too tall; take
       // whatever overflow is left once the new height has laid out.
       cancelAnimationFrame(frame)
