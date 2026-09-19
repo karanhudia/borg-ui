@@ -14,7 +14,7 @@ import { useNavigate } from 'react-router-dom'
 import { Alert, Box, Button, Stack, Typography } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 import { Activity, ArrowRight, Cpu, HardDrive } from 'lucide-react'
-import { differenceInDays, formatDistanceToNow } from 'date-fns'
+import { differenceInDays, format, formatDistanceToNow } from 'date-fns'
 import { useTheme } from '../context/ThemeContext'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { dashboardAPI, rcloneAPI } from '../services/api'
@@ -29,24 +29,55 @@ import { CapabilityLaunchpad } from './dashboard-v3/CapabilityLaunchpad'
 import { RepositoryHealthPanel } from './dashboard-v3/RepositoryHealthPanel'
 import { ResourceGaugeGrid } from './dashboard-v3/ResourceGaugeGrid'
 import { makeT, STATUS, TokenContext } from './dashboard-v3/tokens'
-import type { DashboardOverview } from './dashboard-v3/types'
+import type { ActivityEntry, DashboardOverview } from './dashboard-v3/types'
 import { gaugeColor, toCompactGB } from './dashboard-v3/utils'
 
+// A backend one release older sends the feed (every run of the window)
+// instead of the timeline counts and the failures; both derive from it here
+// the way this page used to.
 const RESOLVING_ACTIVITY_STATUSES = new Set(['completed', 'completed_with_warnings'])
 
-function getCurrentFailures(activityFeed: DashboardOverview['activity_feed']) {
-  return activityFeed.filter((activity) => {
+function failuresFromFeed(feed: ActivityEntry[]): ActivityEntry[] {
+  return feed.filter((activity) => {
     if (activity.status !== 'failed') return false
-
     const failedAt = new Date(activity.timestamp).getTime()
-    return !activityFeed.some(
+    return !feed.some(
       (candidate) =>
         candidate.type === activity.type &&
         candidate.repository === activity.repository &&
         RESOLVING_ACTIVITY_STATUSES.has(candidate.status) &&
-        new Date(candidate.timestamp).getTime() > failedAt
+        // a tie resolves, as on the server
+        new Date(candidate.timestamp).getTime() >= failedAt
     )
   })
+}
+
+function timelineFromFeed(
+  feed: ActivityEntry[]
+): NonNullable<DashboardOverview['activity_timeline']> {
+  const cells = new Map<string, { date: string; type: string; total: number; failed: number }>()
+  for (const activity of feed) {
+    const started = new Date(activity.timestamp)
+    // an entry the older backend could not date is skipped, not rendered
+    if (Number.isNaN(started.getTime())) continue
+    const date = format(started, 'yyyy-MM-dd')
+    const key = `${date}:${activity.type}`
+    const cell = cells.get(key) ?? { date, type: activity.type, total: 0, failed: 0 }
+    cell.total += 1
+    if (activity.status === 'failed') cell.failed += 1
+    cells.set(key, cell)
+  }
+  return Array.from(cells.values())
+}
+
+// The zone the timeline's days are bucketed in: the viewer's, so a run
+// just before local midnight lands on the day the viewer saw it start.
+function viewerTimeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined
+  } catch {
+    return undefined
+  }
 }
 
 export default function DashboardV3() {
@@ -56,6 +87,7 @@ export default function DashboardV3() {
   const { trackNavigation, EventAction } = useAnalytics()
   const T = makeT(effectiveMode === 'dark')
   const [nowMs] = React.useState(() => Date.now())
+  const [timeZone] = React.useState(viewerTimeZone)
 
   const surface = {
     bgcolor: T.bgCard,
@@ -71,8 +103,8 @@ export default function DashboardV3() {
     error,
     refetch,
   } = useQuery<DashboardOverview>({
-    queryKey: ['dashboard-v3'],
-    queryFn: () => dashboardAPI.getOverview().then((response) => response.data),
+    queryKey: ['dashboard-v3', timeZone],
+    queryFn: () => dashboardAPI.getOverview(timeZone).then((response) => response.data),
     refetchInterval: 30_000,
   })
 
@@ -132,7 +164,9 @@ export default function DashboardV3() {
     .map((r) => (r.last_backup ? new Date(r.last_backup) : null))
     .filter(Boolean)
     .sort((a, b) => b!.getTime() - a!.getTime())[0]
-  const currentFailures = getCurrentFailures(ov.activity_feed)
+  const legacyFeed = ov.activity_feed ?? []
+  const currentFailures = ov.current_failures ?? failuresFromFeed(legacyFeed)
+  const activityTimeline = ov.activity_timeline ?? timelineFromFeed(legacyFeed)
 
   return (
     <TokenContext.Provider value={T}>
@@ -705,14 +739,14 @@ export default function DashboardV3() {
                 </Stack>
               </Stack>
 
-              {ov.activity_feed.length === 0 ? (
+              {activityTimeline.length === 0 && currentFailures.length === 0 ? (
                 <Typography
                   sx={{ color: T.textMuted, textAlign: 'center', py: 3, fontSize: '0.875rem' }}
                 >
                   {t('dashboard.recentActivity.emptyRecorded')}
                 </Typography>
               ) : (
-                <ActivityTimeline activities={ov.activity_feed} />
+                <ActivityTimeline timeline={activityTimeline} />
               )}
             </Box>
           </Box>

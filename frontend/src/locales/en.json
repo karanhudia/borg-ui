@@ -881,6 +881,8 @@
       "ariaLabel": "Backup activity over last 14 days",
       "today": "today",
       "legendFailed": "failed",
+      "cellTitle_one": "{{type}}: {{count}} run, {{failed}} failed",
+      "cellTitle_other": "{{type}}: {{count}} runs, {{failed}} failed",
       "jobType": {
         "backup": "backup",
         "check": "check",

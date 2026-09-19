@@ -1206,6 +1206,8 @@ class Operation(Base):
             "ix_operations_status_priority_created", "status", "priority", "created_at"
         ),
         Index("ix_operations_category_created", "category", "created_at"),
+        # the dashboard's activity window: every row of a kind since a date
+        Index("ix_operations_kind_started_at", "kind", "started_at"),
     )
 
 

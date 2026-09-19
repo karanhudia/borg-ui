@@ -249,3 +249,33 @@ def test_started_since_archive_names_and_per_repository_helpers(db, repository):
     assert latest_backup_jobs_by_repository(db, running=True)["/repo/nas"].id == op.id
     assert newest_backup_job(db, running=True).id == op.id
     assert newest_backup_job(db, terminal=True).id == legacy.id
+
+
+def test_a_list_loads_its_details_rows_in_one_statement(db, repository):
+    """A facade constructor reads the details row; a list of facades used to
+    read one row per statement (#1082). The list preloads them instead."""
+    now = datetime.utcnow()
+    for i in range(6):
+        op = _backup_operation(
+            db, repository, status="completed", started_at=now - timedelta(hours=i)
+        )
+        BackupJobFacade(db, op).archive_name = f"nas-{i}"
+    db.commit()
+    # forget the rows, so that the list has to load them again
+    db.expunge_all()
+
+    statements: list[str] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(db.get_bind(), "before_cursor_execute", record)
+    try:
+        jobs = backup_jobs_started_since(db, now - timedelta(days=1))
+    finally:
+        event.remove(db.get_bind(), "before_cursor_execute", record)
+
+    assert len(jobs) == 6
+    assert len(statements) == 2
+    assert "operation_backup_details" in statements[1]
+    assert sorted(job.archive_name for job in jobs) == [f"nas-{i}" for i in range(6)]

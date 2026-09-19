@@ -1,21 +1,28 @@
 import { Box } from '@mui/material'
 import { useTranslation } from 'react-i18next'
-import { addDays, differenceInDays, format, startOfDay } from 'date-fns'
+import { addDays, differenceInDays, format, parseISO, startOfDay } from 'date-fns'
 import { JOB_COLOR, useT } from './tokens'
 import type { DashboardOverview } from './types'
+
+// Dots drawn per day column and lane. A busy day spreads more runs than a
+// column can show apart, so the count caps the dots and the title says the
+// real numbers.
+const MAX_DOTS_PER_CELL = 5
 
 /**
  * Activity Timeline. SVG lane chart.
  * X axis: last 14 days.
  * Y axis: job type rows (backup, check, compact, restore, prune).
- * Each dot is one job event, colored by type; a red ring marks failed.
- * Time of day is intentionally not encoded here; see the Full Log link
- * in the panel header for that level of detail.
+ * Each cell is one day of one job type: a dot per run up to a cap, colored
+ * by type; a red ring marks a failed run. The counts come per day from the
+ * server, bucketed in the viewer's time zone. Time of day is intentionally
+ * not encoded here; see the Full Log link in the panel header for that
+ * level of detail.
  */
 export function ActivityTimeline({
-  activities,
+  timeline,
 }: {
-  activities: DashboardOverview['activity_feed']
+  timeline: NonNullable<DashboardOverview['activity_timeline']>
 }) {
   const T = useT()
   const { t } = useTranslation()
@@ -49,12 +56,29 @@ export function ActivityTimeline({
 
   const today = startOfDay(new Date())
 
-  // Group activities by (day column, lane) so multiple events in the same
-  // cell can be spread horizontally within the day column. The spread is
-  // deterministic (chronological order, capped to a small max) so repeated
-  // renders look identical. The API supplies the overall feed newest-first,
-  // but positions inside a day must still run oldest-to-newest, matching the
-  // left-to-right day axis.
+  // One cell per (day column, lane), summed over the entries that land on
+  // it. A day after the viewer's today (the server fell back to UTC for a
+  // zone it does not know, and the viewer is west of it) lands in the today
+  // column rather than vanishing.
+  type Cell = { col: number; lane: number; type: string; total: number; failed: number }
+  const cells = new Map<string, Cell>()
+  for (const entry of timeline) {
+    const day = startOfDay(parseISO(entry.date))
+    if (Number.isNaN(day.getTime())) continue
+    const dayAgo = differenceInDays(today, day)
+    if (dayAgo >= DAYS) continue
+    const lane = laneIndex(entry.type)
+    if (lane < 0) continue
+    const col = DAYS - 1 - Math.max(0, dayAgo)
+    const key = `${col}:${lane}`
+    const cell = cells.get(key) ?? { col, lane, type: entry.type, total: 0, failed: 0 }
+    cell.total += entry.total
+    cell.failed += entry.failed
+    cells.set(key, cell)
+  }
+
+  // The dots inside a cell are spread horizontally, capped so a busy day
+  // still reads as one column. Failed runs take the rightmost dots.
   type Dot = {
     x: number
     y: number
@@ -62,50 +86,34 @@ export function ActivityTimeline({
     failed: boolean
     title: string
   }
-  type CellKey = string
-  const cells = new Map<CellKey, typeof activities>()
-  for (const a of activities) {
-    const date = new Date(a.timestamp)
-    const dayAgo = differenceInDays(today, startOfDay(date))
-    if (dayAgo >= DAYS || dayAgo < 0) continue
-    const lane = laneIndex(a.type)
-    if (lane < 0) continue
-    const col = DAYS - 1 - dayAgo
-    const key = `${col}:${lane}`
-    const bucket = cells.get(key)
-    if (bucket) bucket.push(a)
-    else cells.set(key, [a])
-  }
-
   const dots: Dot[] = []
-  cells.forEach((bucket, key) => {
-    const [colStr, laneStr] = key.split(':')
-    const col = Number(colStr)
-    const lane = Number(laneStr)
-    const cx = ML + (col + 0.5) * colW
-    const cy = MT + (lane + 0.5) * LANE_H
-    const chronologicalBucket = [...bucket].sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    )
-    const n = chronologicalBucket.length
-    // Horizontal spread inside the day column. Keep dots fully inside the
-    // column by clamping the spread to about 60% of column width.
+  for (const cell of cells.values()) {
+    const cx = ML + (cell.col + 0.5) * colW
+    const cy = MT + (cell.lane + 0.5) * LANE_H
+    const n = Math.min(cell.total, MAX_DOTS_PER_CELL)
+    const failedDots = Math.min(cell.failed, n)
+    // Keep dots fully inside the column by clamping the spread to about 60%
+    // of column width.
     const spreadW = Math.min(colW * 0.6, 14)
+    const title = t('dashboard.activityTimeline.cellTitle', {
+      type: t(`dashboard.activityTimeline.jobType.${cell.type}`, {
+        defaultValue: cell.type,
+      }),
+      count: cell.total,
+      failed: cell.failed,
+    })
     for (let i = 0; i < n; i++) {
-      const activity = chronologicalBucket[i]
-      const date = new Date(activity.timestamp)
+      const failed = i >= n - failedDots
       const offset = n === 1 ? 0 : (i / (n - 1) - 0.5) * spreadW
-      const jobColor =
-        activity.status === 'failed' ? T.red : (JOB_COLOR[laneKey(activity.type)] ?? T.textMuted)
       dots.push({
         x: cx + offset,
         y: cy,
-        color: jobColor,
-        failed: activity.status === 'failed',
-        title: `${activity.type} · ${activity.repository} · ${format(date, 'HH:mm')}`,
+        color: failed ? T.red : (JOB_COLOR[laneKey(cell.type)] ?? T.textMuted),
+        failed,
+        title,
       })
     }
-  })
+  }
 
   // Day column labels (show every 2nd to avoid crowding, plus the last).
   const dayLabels = Array.from({ length: DAYS }, (_, i) => {

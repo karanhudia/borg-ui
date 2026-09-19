@@ -5,6 +5,7 @@ Comprehensive unit tests for dashboard API endpoints
 import pytest
 from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 from unittest.mock import MagicMock, patch
 from types import SimpleNamespace
 from tests.utils.operations import seed_job_operation
@@ -288,20 +289,14 @@ class TestDashboardSummary:
 class TestDashboardHelpers:
     """Test dashboard helper functions directly."""
 
-    def test_maintenance_repository_name_falls_back_from_id_to_path(self):
-        from types import SimpleNamespace
-
-        from app.api.dashboard import _maintenance_repository_name
+    def test_repository_name_falls_back_from_id_to_path(self):
+        from app.api.dashboard import _repository_name
 
         names = {"/srv/backups/full": "Full Repo"}
         ids = {7: "Full Repo"}
 
         def name(repository_id, path):
-            return _maintenance_repository_name(
-                SimpleNamespace(repository_id=repository_id, repository_path=path),
-                names,
-                ids,
-            )
+            return _repository_name(repository_id, path, ids, names)
 
         assert name(7, "/elsewhere") == "Full Repo"
         assert name(None, "/srv/backups/full") == "Full Repo"
@@ -721,10 +716,14 @@ class TestDashboardHelpers:
         assert get_recent_jobs(db) == []
 
     def test_get_system_metrics_falls_back_when_component_reads_fail(self):
-        from app.api.dashboard import get_system_metrics
+        from app.api.dashboard import CpuSampler, get_system_metrics
 
-        with patch(
-            "app.api.dashboard.psutil.cpu_percent", side_effect=RuntimeError("cpu")
+        sampler = CpuSampler()
+        with (
+            patch("app.api.dashboard._cpu_sampler", sampler),
+            patch(
+                "app.api.dashboard.psutil.cpu_times", side_effect=RuntimeError("cpu")
+            ),
         ):
             with patch(
                 "app.api.dashboard.psutil.virtual_memory",
@@ -845,8 +844,14 @@ class TestDashboardScheduleAndOverview:
     def test_dashboard_metrics_returns_500_when_psutil_fails(
         self, test_client: TestClient, admin_headers
     ):
-        with patch(
-            "app.api.dashboard.psutil.cpu_percent", side_effect=RuntimeError("boom")
+        from app.api.dashboard import CpuSampler
+
+        sampler = CpuSampler()
+        with (
+            patch("app.api.dashboard._cpu_sampler", sampler),
+            patch(
+                "app.api.dashboard.psutil.cpu_times", side_effect=RuntimeError("boom")
+            ),
         ):
             response = test_client.get("/api/dashboard/metrics", headers=admin_headers)
 
@@ -1083,19 +1088,35 @@ class TestDashboardScheduleAndOverview:
             "restore": "unknown",
         }
         assert len(data["repository_health"]) == 2
-        assert [item["type"] for item in data["activity_feed"]] == [
-            "restore_check",
-            "backup",
-            "backup",
-            "check",
-            "compact",
-            "prune",
+        # one cell per day and kind, the pruned run still counted
+        assert sorted(
+            (cell["type"], cell["total"], cell["failed"])
+            for cell in data["activity_timeline"]
+        ) == [
+            ("backup", 1, 0),
+            ("backup", 1, 1),
+            ("check", 1, 0),
+            ("compact", 1, 0),
+            ("prune", 1, 0),
+            ("restore_check", 1, 1),
         ]
-        assert data["activity_feed"][0]["repository"] == "Full Repo"
-        # the pruned run is still in the feed, and says so
-        assert data["activity_feed"][1]["archive_pruned_at"] is None
-        assert data["activity_feed"][2]["status"] == "completed"
-        assert data["activity_feed"][2]["archive_pruned_at"] is not None
+        assert all(
+            len(cell["date"]) == 10 and cell["date"][4] == "-"
+            for cell in data["activity_timeline"]
+        )
+        # both failures stand: nothing of their kind completed after them
+        assert [
+            (item["type"], item["repository"], item["error"])
+            for item in data["current_failures"]
+        ] == [
+            ("restore_check", "Full Repo", "Canary manifest not found"),
+            ("backup", "Full Repo", "backup failed"),
+        ]
+        assert data["current_failures"][1]["message"] == "Backup failed"
+        assert data["current_failures"][1]["status"] == "failed"
+        # kept for one release, for an older page on a remote backend: the
+        # failures in the feed's shape
+        assert data["activity_feed"] == data["current_failures"]
         assert [item["name"] for item in data["upcoming_tasks"]] == [
             "Nightly Full Repo"
         ]
@@ -1286,27 +1307,34 @@ class TestDashboardScheduleAndOverview:
 
         assert response.status_code == 200
         data = response.json()
+        # every row inside the window counts, the queued and the skipped one
+        # too; only a failure counts as failed
+        totals = {}
+        for cell in data["activity_timeline"]:
+            kind_totals = totals.setdefault(cell["type"], [0, 0])
+            kind_totals[0] += cell["total"]
+            kind_totals[1] += cell["failed"]
+        assert totals == {
+            "check": [2, 0],
+            "compact": [1, 0],
+            "prune": [1, 1],
+            "restore_check": [4, 1],
+        }
+        # the failed prune has no completed prune after it inside the window,
+        # the queued restore check does not resolve the failed one, and the
+        # "needs backup" verdict is not a failure
         assert [
-            (item["type"], item["status"], item["repository"])
-            for item in data["activity_feed"]
+            (item["type"], item["repository"], item["message"], item["error"])
+            for item in data["current_failures"]
         ] == [
-            ("restore_check", "pending", "Ops Repo"),
-            ("restore_check", "failed", "Ops Repo"),
-            ("check", "completed", "Ops Repo"),
-            ("compact", "completed", "Ops Repo"),
-            ("restore_check", "completed", "Ops Repo"),
-            ("prune", "failed", "Ops Repo"),
-            ("check", "completed", "Unknown"),
-            ("restore_check", "needs_backup", "Empty Repo"),
+            (
+                "restore_check",
+                "Ops Repo",
+                "Restore check failed",
+                "Canary manifest not found",
+            ),
+            ("prune", "Ops Repo", "Prune failed", "prune failed"),
         ]
-        failed_prune = data["activity_feed"][5]
-        assert failed_prune["message"] == "Prune failed"
-        assert failed_prune["error"] == "prune failed"
-        needs_backup = data["activity_feed"][-1]
-        assert needs_backup["message"] == "Restore check needs backup"
-        assert (
-            needs_backup["error"] == "Run a backup, then run this restore check again"
-        )
         health = {item["name"]: item for item in data["repository_health"]}["Ops Repo"]
         # the queued run is the live status, the failed one the verdict
         assert health["latest_restore_check_status"] == "pending"
@@ -1386,3 +1414,438 @@ def test_repository_size_bytes_prefers_the_stored_number():
     assert repository_size_bytes(legacy) == 1024
     empty = SimpleNamespace(total_size=None, total_size_bytes=None)
     assert repository_size_bytes(empty) == 0
+
+
+def _metrics() -> SystemMetrics:
+    return SystemMetrics(
+        cpu_usage=1.0,
+        cpu_count=1,
+        memory_usage=1.0,
+        memory_total=1,
+        memory_available=1,
+        disk_usage=1.0,
+        disk_total=1,
+        disk_free=1,
+        uptime=1,
+    )
+
+
+def _overview(test_client: TestClient, admin_headers, **params) -> dict:
+    with patch("app.api.dashboard.get_system_metrics", return_value=_metrics()):
+        response = test_client.get(
+            "/api/dashboard/overview", headers=admin_headers, params=params
+        )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def _repository(test_db, name: str) -> Repository:
+    repository = Repository(
+        name=name,
+        path=f"/srv/backups/{name.lower()}",
+        repository_type="local",
+        mode="full",
+    )
+    test_db.add(repository)
+    test_db.commit()
+    return repository
+
+
+@pytest.mark.unit
+class TestDashboardOverviewAggregates:
+    """The overview reads its window in a fixed number of statements and
+    aggregates on the server (#1082)."""
+
+    def test_statement_count_does_not_grow_with_the_operations(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        from sqlalchemy import event
+
+        now = datetime.now(timezone.utc)
+        repo = _repository(test_db, "Busy")
+
+        def seed(count: int, offset: int) -> None:
+            for i in range(count):
+                started = now - timedelta(hours=offset + i + 1)
+                seed_job_operation(
+                    test_db,
+                    "backup",
+                    repository_id=repo.id,
+                    status="failed" if i % 3 == 0 else "completed",
+                    started_at=started,
+                    completed_at=started + timedelta(minutes=5),
+                    error_message="disk full" if i % 3 == 0 else None,
+                )
+                # rows no repository row knows: their params are read too,
+                # in the same fixed number of statements
+                test_db.add(
+                    Operation(
+                        repository_id=None,
+                        kind="check",
+                        category="maintenance",
+                        status="failed" if i % 2 == 0 else "completed",
+                        trigger="manual",
+                        priority=0,
+                        run_id=f"run-orphan-{offset}-{i}",
+                        params={"repository_path": f"/gone/{i}"},
+                        created_at=started,
+                        started_at=started,
+                        completed_at=started + timedelta(minutes=1),
+                        error_message="gone" if i % 2 == 0 else None,
+                    )
+                )
+                seed_job_operation(
+                    test_db,
+                    "prune",
+                    repository_id=repo.id,
+                    repository_path=repo.path,
+                    status="completed",
+                    started_at=started + timedelta(minutes=10),
+                    completed_at=started + timedelta(minutes=12),
+                )
+            test_db.commit()
+
+        statements: list[str] = []
+
+        def record(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement)
+
+        engine = test_db.get_bind()
+
+        def count_request() -> int:
+            statements.clear()
+            event.listen(engine, "before_cursor_execute", record)
+            try:
+                _overview(test_client, admin_headers)
+            finally:
+                event.remove(engine, "before_cursor_execute", record)
+            return len(statements)
+
+        seed(3, 0)
+        small = count_request()
+        seed(60, 10)
+        large = count_request()
+
+        assert small > 0
+        assert large == small
+        assert small <= 25
+
+    def test_a_later_completed_run_resolves_a_failure(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        now = datetime.now(timezone.utc)
+        alpha = _repository(test_db, "Alpha")
+        beta = _repository(test_db, "Beta")
+
+        def seed(kind, repository, status, hours_ago, error=None):
+            started = now - timedelta(hours=hours_ago)
+            seed_job_operation(
+                test_db,
+                kind,
+                repository_id=repository.id,
+                repository_path=repository.path,
+                status=status,
+                started_at=started,
+                completed_at=started + timedelta(minutes=5),
+                error_message=error,
+            )
+
+        # resolved: a backup with warnings completed after the failure
+        seed("backup", alpha, "failed", 3, "disk full")
+        seed("backup", alpha, "completed_with_warnings", 2)
+        # not resolved: nothing of its kind ran after it on Alpha
+        seed("check", alpha, "failed", 4, "corrupt segment")
+        # not resolved: Alpha's later backup does not speak for Beta
+        seed("backup", beta, "failed", 1, "unreachable")
+        # a queued run is no verdict either
+        seed("check", beta, "failed", 5, "still corrupt")
+        seed("check", beta, "queued", 0)
+        test_db.commit()
+
+        data = _overview(test_client, admin_headers)
+
+        assert [
+            (item["type"], item["repository"], item["error"])
+            for item in data["current_failures"]
+        ] == [
+            ("backup", "Beta", "unreachable"),
+            ("check", "Alpha", "corrupt segment"),
+            ("check", "Beta", "still corrupt"),
+        ]
+        assert all(item["status"] == "failed" for item in data["current_failures"])
+        # the resolved failure is still counted where it happened
+        backups = {
+            (cell["date"], cell["total"], cell["failed"])
+            for cell in data["activity_timeline"]
+            if cell["type"] == "backup"
+        }
+        assert sum(total for _, total, _ in backups) == 3
+        assert sum(failed for _, _, failed in backups) == 2
+
+    def test_timeline_days_follow_the_viewer_time_zone(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        from zoneinfo import ZoneInfo
+
+        now = datetime.now(timezone.utc)
+        repo = _repository(test_db, "Nightly")
+        # last night, half an hour before UTC midnight: the same run is
+        # "yesterday" in UTC and "today" in a zone nine hours ahead
+        started = (now - timedelta(days=1)).replace(
+            hour=23, minute=30, second=0, microsecond=0
+        )
+        seed_job_operation(
+            test_db,
+            "backup",
+            repository_id=repo.id,
+            status="completed",
+            started_at=started,
+            completed_at=started + timedelta(minutes=5),
+        )
+        test_db.commit()
+
+        tokyo = _overview(test_client, admin_headers, timezone="Asia/Tokyo")
+        utc = _overview(test_client, admin_headers)
+        unknown = _overview(test_client, admin_headers, timezone="Mars/Olympus")
+        # a key naming a directory of the zone database, not a zone
+        directory = _overview(test_client, admin_headers, timezone="America")
+
+        assert [cell["date"] for cell in tokyo["activity_timeline"]] == [
+            started.astimezone(ZoneInfo("Asia/Tokyo")).date().isoformat()
+        ]
+        assert [cell["date"] for cell in utc["activity_timeline"]] == [
+            started.date().isoformat()
+        ]
+        assert unknown["activity_timeline"] == utc["activity_timeline"]
+        assert directory["activity_timeline"] == utc["activity_timeline"]
+
+    def test_success_rate_and_trend_weeks_are_counted_in_the_database(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        now = datetime.now(timezone.utc)
+        repo = _repository(test_db, "Trend")
+
+        def seed(status, days_ago, hours_ago=0):
+            started = now - timedelta(days=days_ago, hours=hours_ago)
+            seed_job_operation(
+                test_db,
+                "backup",
+                repository_id=repo.id,
+                status=status,
+                started_at=started,
+                completed_at=started + timedelta(minutes=5),
+            )
+
+        seed("completed", 3)  # week 4 (the last seven days)
+        seed("failed", 3, 2)  # week 4
+        seed("completed", 10)  # week 3
+        seed("completed", 25)  # week 1
+        seed("failed", 29)  # inside 30 days, outside the four weeks
+        seed("running", 1)  # not terminal: no part of the rate
+        seed("completed", 40)  # outside the window
+        test_db.commit()
+
+        data = _overview(test_client, admin_headers)
+
+        assert data["summary"]["successful_jobs_30d"] == 3
+        assert data["summary"]["failed_jobs_30d"] == 2
+        assert data["summary"]["total_jobs_30d"] == 5
+        assert data["summary"]["success_rate_30d"] == 60.0
+        assert data["backup_trends"] == [
+            {
+                "week": "Week 1",
+                "success_rate": 100.0,
+                "successful": 1,
+                "failed": 0,
+                "total": 1,
+            },
+            {
+                "week": "Week 2",
+                "success_rate": 0,
+                "successful": 0,
+                "failed": 0,
+                "total": 0,
+            },
+            {
+                "week": "Week 3",
+                "success_rate": 100.0,
+                "successful": 1,
+                "failed": 0,
+                "total": 1,
+            },
+            # the running backup is in the week's total, as it always was
+            {
+                "week": "Week 4",
+                "success_rate": 33.3,
+                "successful": 1,
+                "failed": 1,
+                "total": 3,
+            },
+        ]
+
+    def test_a_row_without_a_repository_id_is_named_from_its_params(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """A row written before operations carried a repository id names its
+        repository in `params`, as the facades read it; the failure list
+        resolves and names it the same way."""
+        now = datetime.now(timezone.utc)
+        repo = _repository(test_db, "Named")
+
+        def row(kind, status, hours_ago, params, error=None):
+            started = now - timedelta(hours=hours_ago)
+            return Operation(
+                repository_id=None,
+                kind=kind,
+                category="backup" if kind == "backup" else "maintenance",
+                status=status,
+                trigger="manual",
+                priority=0,
+                run_id=f"run-{kind}-{hours_ago}",
+                params=params,
+                created_at=started,
+                started_at=started,
+                completed_at=started + timedelta(minutes=5),
+                error_message=error,
+            )
+
+        test_db.add_all(
+            [
+                # a failed prune named by the captured path, resolved by a
+                # later prune that captured the same path
+                row("prune", "failed", 6, {"repository_path": repo.path}, "old"),
+                row("prune", "completed", 5, {"repository_path": repo.path + "/"}),
+                # a failed check on that path with nothing after it
+                row("check", "failed", 4, {"repository_path": repo.path}, "bad"),
+                # a backup of a repository no row knows: the path's last segment
+                row("backup", "failed", 3, {"repository": "/mnt/orphan/"}, "gone"),
+                row("backup", "completed", 2, {"repository": "/mnt/other"}),
+                # two rows nothing can tell apart: the later success does not
+                # speak for the failure
+                row("check", "failed", 8, {}, "lost"),
+                row("check", "completed", 7, {}),
+                # a failure that captured the path, resolved by a run that
+                # carries the repository's id
+                row("compact", "failed", 10, {"repository_path": repo.path}, "x"),
+            ]
+        )
+        seed_job_operation(
+            test_db,
+            "compact",
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="completed",
+            started_at=now - timedelta(hours=9),
+            completed_at=now - timedelta(hours=9, minutes=-5),
+        )
+        test_db.commit()
+
+        data = _overview(test_client, admin_headers)
+
+        assert [
+            (item["type"], item["repository"], item["error"])
+            for item in data["current_failures"]
+        ] == [
+            ("backup", "orphan", "gone"),
+            ("check", "Named", "bad"),
+            ("check", "Unknown", "lost"),
+        ]
+
+    def test_rows_of_a_deleted_repository_match_by_id_and_keep_the_path_name(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Where foreign keys were not enforced (older SQLite installs), a
+        deleted repository left its operations behind: the failure is named
+        by the path a row captured, and a later run with the same id
+        resolves it whatever it captured."""
+        now = datetime.now(timezone.utc)
+
+        def row(kind, status, hours_ago, params, error=None):
+            started = now - timedelta(hours=hours_ago)
+            return Operation(
+                repository_id=999,
+                kind=kind,
+                category="maintenance",
+                status=status,
+                trigger="manual",
+                priority=0,
+                run_id=f"run-{kind}-{hours_ago}",
+                params=params,
+                created_at=started,
+                started_at=started,
+                completed_at=started + timedelta(minutes=5),
+                error_message=error,
+            )
+
+        # The dangling rows are the thing under test, so foreign keys come
+        # off for the seed, on a connection of its own, and back on after it.
+        # The pragma has to run outside a transaction.
+        with test_db.get_bind().connect() as connection:
+            connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+            with Session(bind=connection) as seed:
+                seed.add_all(
+                    [
+                        row(
+                            "check", "failed", 6, {"repository_path": "/gone/x"}, "old"
+                        ),
+                        row("check", "completed", 5, {}),
+                        row(
+                            "prune", "failed", 4, {"repository_path": "/gone/x/"}, "bad"
+                        ),
+                    ]
+                )
+                seed.flush()
+            connection.commit()
+            connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+
+        data = _overview(test_client, admin_headers)
+
+        assert [
+            (item["type"], item["repository"], item["error"])
+            for item in data["current_failures"]
+        ] == [("prune", "x", "bad")]
+
+
+@pytest.mark.unit
+class TestCpuSampler:
+    Times = __import__("collections").namedtuple("Times", "user system idle iowait")
+
+    def test_load_is_the_busy_share_between_two_snapshots(self):
+        from app.api.dashboard import CpuSampler
+
+        # busy 15 of 100, then busy 50 of 160: 35 busy of 60 elapsed
+        snapshots = [self.Times(10, 5, 85, 0), self.Times(40, 10, 100, 10)]
+        with patch("app.api.dashboard.psutil.cpu_times", side_effect=snapshots):
+            sampler = CpuSampler()
+            with patch("app.api.dashboard.time.monotonic", return_value=100.0):
+                assert sampler.read() == 58.3
+
+    def test_one_reading_is_shared_within_the_window(self):
+        from app.api.dashboard import CpuSampler
+
+        snapshots = [
+            self.Times(10, 5, 85, 0),
+            self.Times(40, 10, 100, 10),
+            self.Times(40, 10, 160, 10),
+        ]
+        clock = iter([100.0, 100.5, 101.9, 103.0])
+        with (
+            patch(
+                "app.api.dashboard.psutil.cpu_times", side_effect=snapshots
+            ) as cpu_times,
+            patch("app.api.dashboard.time.monotonic", side_effect=clock),
+        ):
+            sampler = CpuSampler()
+            assert sampler.read() == 58.3
+            assert sampler.read() == 58.3
+            assert sampler.read() == 58.3
+            # the window has passed: the idle stretch since the last snapshot
+            assert sampler.read() == 0.0
+        assert cpu_times.call_count == 3
+
+    def test_get_system_metrics_reads_the_sampler(self):
+        from app.api.dashboard import get_system_metrics
+
+        with patch("app.api.dashboard._cpu_sampler") as sampler:
+            sampler.read.return_value = 42.0
+            assert get_system_metrics().cpu_usage == 42.0

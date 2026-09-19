@@ -443,8 +443,38 @@ def _operations_query(db: Session):
     return db.query(Operation).filter(Operation.kind == "backup")
 
 
+# Rows per `IN (...)` when a reader loads by id: SQLite's default variable
+# limit is 999, the chunk stays well under it.
+IN_CHUNK = 500
+
+
+def _preload_details(db: Session, operations: list) -> list:
+    """Load the details rows of `operations` in a few `IN` queries so that
+    the `db.get` each facade constructor performs is an identity-map hit for
+    every operation that has a details row, rather than one round trip per
+    row (a list of thousands of backups used to cost thousands of
+    statements). An operation without one still costs the constructor its
+    lookup and the insert. The rows are returned because the identity map
+    only holds them weakly: the caller keeps the list alive until the
+    facades hold the rows themselves."""
+    ids = [op.id for op in operations]
+    rows = []
+    for start in range(0, len(ids), IN_CHUNK):
+        chunk = ids[start : start + IN_CHUNK]
+        rows.extend(
+            db.query(OperationBackupDetails)
+            .filter(OperationBackupDetails.operation_id.in_(chunk))
+            .all()
+        )
+    return rows
+
+
 def _facades(db: Session, operations: Iterable[Operation]) -> list:
-    return [BackupJobFacade(db, op) for op in operations]
+    operations = list(operations)
+    preloaded = _preload_details(db, operations) if len(operations) > 1 else []
+    facades = [BackupJobFacade(db, op) for op in operations]
+    del preloaded
+    return facades
 
 
 def list_backup_jobs(
