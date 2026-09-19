@@ -442,6 +442,31 @@ describe('PrunePreview page', () => {
     expect(repositoriesAPI.prunePreview).not.toHaveBeenCalled()
   })
 
+  it('runs the dry run itself when the server refuses the comparison', async () => {
+    // a reader without the rights to start one, or one already running:
+    // the page must not sit on skeletons waiting for a row nobody will write
+    vi.mocked(repositoriesAPI.pruneComparison).mockResolvedValue({
+      data: {
+        ...storedComparison,
+        stale: true,
+        candidates: storedComparison.candidates.map((c) =>
+          c.key === 'standard'
+            ? { ...c, readable: false, retention: { ...c.retention, keep_daily: 3 } }
+            : c
+        ),
+      },
+    } as never)
+    vi.mocked(repositoriesAPI.pruneComparisonRefresh).mockRejectedValue(new Error('403'))
+    renderPage()
+    await waitFor(() =>
+      expect(repositoriesAPI.prunePreview).toHaveBeenCalledWith(
+        7,
+        expect.objectContaining({ keep_daily: 3 }),
+        expect.any(String)
+      )
+    )
+  })
+
   it('starts from the candidate named in the query string', async () => {
     vi.mocked(repositoriesAPI.pruneComparison).mockResolvedValue({
       data: storedComparison,

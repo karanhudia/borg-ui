@@ -537,7 +537,7 @@ async def prune_comparison_preview(
         )
         .first()
     )
-    if row is None or not row.verdicts:
+    if row is None or row.verdicts is None:
         raise HTTPException(
             status_code=404, detail={"key": "backend.errors.prune.candidateNotStored"}
         )

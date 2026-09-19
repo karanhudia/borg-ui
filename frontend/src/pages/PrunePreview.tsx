@@ -322,20 +322,28 @@ export default function PrunePreview() {
       showCandidate(row)
       return
     }
-    // Nothing more is coming: the comparison is not running, is not about to
-    // (it does not call itself stale) and still cannot produce this row. Run
-    // the policy's own dry run rather than leave the page empty.
+    // Nothing more is coming: the comparison is not running, and either it
+    // does not call itself stale or the server refused to run it (no rights,
+    // or one already running we are not watching). Run the policy's own dry
+    // run rather than leave the page on skeletons for good.
     if (
       pendingOpId === null &&
       !comparisonQuery.isFetching &&
       !refreshMutation.isPending &&
-      !comparison.stale
+      (!comparison.stale || refreshMutation.isError)
     ) {
       setWantedKey(null)
       previewMutation.mutate(retention)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wantedKey, comparison, pendingOpId, comparisonQuery.isFetching, refreshMutation.isPending])
+  }, [
+    wantedKey,
+    comparison,
+    pendingOpId,
+    comparisonQuery.isFetching,
+    refreshMutation.isPending,
+    refreshMutation.isError,
+  ])
 
   // A finished comparison replaced every row: re-read the one on screen so
   // the numbers under it match the table above it.

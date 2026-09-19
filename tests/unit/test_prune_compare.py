@@ -419,7 +419,8 @@ def test_stored_is_stale_while_a_row_has_no_verdicts(db, repo):
     assert payload["stale"] is True
     assert payload["candidates"][0]["readable"] is False
     row = db.query(PruneComparison).first()
-    row.verdicts = [["ab", "a0", "deleted", None]]
+    # a policy that matched nothing stored an empty list, which is an answer
+    row.verdicts = []
     db.commit()
     payload = pc.stored(db, repo)
     assert payload["stale"] is False and payload["candidates"][0]["readable"] is True

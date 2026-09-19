@@ -180,8 +180,9 @@ def _row_payload(row: PruneComparison) -> dict:
         "lost_size": row.lost_size,
         "partial_measure": row.partial_measure,
         "operation_id": row.operation_id,
-        # the page reads a row without a dry run only when its verdicts kept
-        "readable": bool(row.verdicts),
+        # the page reads a row without a dry run only when its verdicts were
+        # kept; an empty list is a policy that matched nothing, not a gap
+        "readable": row.verdicts is not None,
     }
 
 
@@ -210,7 +211,7 @@ def stored(db: Session, repository: Repository) -> dict:
         or (computed_at is None or computed_at.date() != now.date())
         # a row the preview page cannot read back is not a comparison it can
         # use: rows stored before the verdicts were kept refresh themselves
-        or any(r.retention is not None and not r.verdicts for r in rows)
+        or any(r.retention is not None and r.verdicts is None for r in rows)
     )
     return {
         "computed_at": serialize_datetime(computed_at),
