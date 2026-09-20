@@ -95,31 +95,34 @@ if (hasErrors) {
 // keys as en.json while a feature shipped with untranslated English placeholders
 // (see issue #1099). This flags those without blocking merges, since some strings
 // (brand names, cognates, format-only text) are legitimately identical across
-// locales. Add a key here once you've confirmed it's a real, deliberate match.
-const IDENTICAL_TO_ENGLISH_ALLOWLIST = new Set([
-  'activity.umbrella.plan',
-  'backupPlans.runsPanel.columns.plan',
-  'backupPlans.sort.nameAZ',
-  'backupPlans.sort.nameZA',
-  'backupPlans.sourceChooser.inPrefix',
-  'cache.cacheUsageDetail',
-  'cloudStorage.sort.nameAZ',
-  'cloudStorage.sort.nameZA',
-  'common.no',
-  'exportImport.title',
-  'layout.logoAlt',
-  'login.ssoDefaultProvider',
-  'notifications.chip.repositoryCount',
-  'remoteClients.switcher.versionHelper',
-  'remoteClients.version',
-  'repositories.sort.nameAZ',
-  'repositories.sort.nameZA',
-  'repositoryCard.nextBackupWithName',
-  'repositoryCard.rcloneNextSyncBadge',
-  'sshConnections.deployDialog.presetHetzner',
-  'sshConnections.diagnostics.transferredIn',
-  'wizard.location.directRclonePathPlaceholder',
-])
+// locales. Add a key here once you've confirmed it's a real, deliberate match —
+// scoped to the specific locale file(s) where it's legitimate, since a word that's
+// a genuine loanword in one language (e.g. "Repository" in German) is often a real
+// untranslated gap in another (e.g. Spanish, which normally uses "Repositorio").
+const IDENTICAL_TO_ENGLISH_ALLOWLIST = {
+  'activity.umbrella.plan': ['de.json', 'es.json'],
+  'backupPlans.runsPanel.columns.plan': ['de.json'],
+  'backupPlans.sort.nameAZ': ['de.json'],
+  'backupPlans.sort.nameZA': ['de.json'],
+  'backupPlans.sourceChooser.inPrefix': ['de.json', 'it.json'],
+  'cache.cacheUsageDetail': ['de.json', 'es.json', 'it.json'],
+  'cloudStorage.sort.nameAZ': ['de.json'],
+  'cloudStorage.sort.nameZA': ['de.json'],
+  'common.no': ['es.json', 'it.json'],
+  'exportImport.title': ['de.json'],
+  'layout.logoAlt': ['de.json'],
+  'login.ssoDefaultProvider': ['it.json'],
+  'notifications.chip.repositoryCount': ['de.json'],
+  'remoteClients.switcher.versionHelper': ['de.json', 'es.json', 'it.json'],
+  'remoteClients.version': ['de.json', 'es.json', 'it.json'],
+  'repositories.sort.nameAZ': ['de.json'],
+  'repositories.sort.nameZA': ['de.json'],
+  'repositoryCard.nextBackupWithName': ['de.json', 'es.json', 'it.json'],
+  'repositoryCard.rcloneNextSyncBadge': ['it.json'],
+  'sshConnections.deployDialog.presetHetzner': ['de.json', 'es.json', 'it.json'],
+  'sshConnections.diagnostics.transferredIn': ['de.json', 'it.json'],
+  'wizard.location.directRclonePathPlaceholder': ['de.json', 'es.json', 'it.json'],
+}
 
 // "Identical to English AND (contains an English function word OR is 3+ words)" —
 // lets short, legitimately-identical strings (Backup, Server, Status, Repository)
@@ -128,9 +131,9 @@ const IDENTICAL_TO_ENGLISH_ALLOWLIST = new Set([
 const ENGLISH_FUNCTION_WORDS =
   /\b(the|and|or|to|a|of|is|are|for|with|from|this|that|will|can|not|when|all|your|you|be|has|have|in|on|at|it|no|yes|by|as|if|only|each|per|more|less|new|use|used|may|must|should)\b/i
 
-function findUntranslated(fileKeys, fileData) {
+function findUntranslated(file, fileKeys, fileData) {
   return [...referenceKeys]
-    .filter(k => fileKeys.has(k) && !IDENTICAL_TO_ENGLISH_ALLOWLIST.has(k))
+    .filter(k => fileKeys.has(k) && !(IDENTICAL_TO_ENGLISH_ALLOWLIST[k] || []).includes(file))
     .filter(k => {
       const enValue = getByPath(referenceData, k)
       const value = getByPath(fileData, k)
@@ -150,7 +153,7 @@ const referenceData = locales[reference]
 let warnCount = 0
 for (const file of FILES) {
   if (file === reference) continue
-  const untranslated = findUntranslated(keySets[file], locales[file])
+  const untranslated = findUntranslated(file, keySets[file], locales[file])
   if (untranslated.length > 0) {
     warnCount += untranslated.length
     console.warn(`\n[WARN] ${file} has ${untranslated.length} value(s) still identical to English:`)

@@ -1344,8 +1344,8 @@
         "matrix": "Matrix"
       },
       "stats": {
-        "schedule": "Schedule",
-        "repository": "Repository",
+        "schedule": "Programación",
+        "repository": "Repositorio",
         "lastRun": "Última ejecución",
         "nextRun": "Próxima ejecución"
       },
@@ -1566,10 +1566,10 @@
       "summaryEmpty": "Aún no se ha seleccionado ninguna fuente",
       "chooseSource": "Elegir fuente",
       "title": "Elegir fuente de copia de seguridad",
-      "kindFiles": "Files",
-      "kindDatabase": "Database",
-      "kindContainer": "Container",
-      "kindContainerSoonBadge": "Soon",
+      "kindFiles": "Archivos",
+      "kindDatabase": "Base de datos",
+      "kindContainer": "Contenedor",
+      "kindContainerSoonBadge": "Próximamente",
       "advancedCaptureMode": "Modo de captura avanzado",
       "captureModeDirect": "Directo (sin snapshot)",
       "databaseTitle": "Escaneo de base de datos",
@@ -2338,11 +2338,11 @@
       "addUser": "Agregar usuario",
       "stats": {
         "total": "Total",
-        "active": "Active",
+        "active": "Activos",
         "pendingSso": "SSO pendiente",
-        "admins": "Admins",
-        "operators": "Operators",
-        "viewers": "Viewers"
+        "admins": "Administradores",
+        "operators": "Operadores",
+        "viewers": "Visores"
       },
       "statLabels": {
         "joined": "Joined",
@@ -3170,7 +3170,8 @@
       "warningPanel": "Esto no elimina el repositorio. Borg UI conservará el registro del repositorio, los horarios, los scripts, la configuración de conexión y la capacidad de copia futura. Los datos de archivo seleccionados en esta vista previa no se podrán restaurar a través de Borg UI después de completar el borrado.",
       "previewButton": "Generar vista previa de borrado",
       "previewReady": "Vista previa lista",
-      "previewScope": "{{count}} archivos seleccionados para borrar",
+      "previewScope_one": "{{count}} archivo seleccionado para borrar",
+      "previewScope_other": "{{count}} archivos seleccionados para borrar",
       "dryRunOutput": "Salida de la simulación",
       "emptyState": "No se encontraron archivos en este repositorio. No hay nada que borrar.",
       "staleState": "La lista de archivos cambió después de generar esta vista previa. Genera una nueva vista previa antes de borrar el contenido.",
@@ -3192,7 +3193,7 @@
       "cancelled": "Se canceló el borrado del repositorio.",
       "metadata": {
         "borgVersion": "Borg",
-        "archives": "Archives",
+        "archives": "Archivos",
         "totalSize": "Tamaño total",
         "lastBackup": "Última copia de seguridad"
       }
@@ -3674,7 +3675,8 @@
         "archives": "Lista de archivos",
         "history": "Historial de ficheros"
       },
-      "workers": "{{count}} trabajadores",
+      "workers_one": "{{count}} trabajador",
+      "workers_other": "{{count}} trabajadores",
       "title": "Trabajo en segundo plano",
       "pause": "Pausar",
       "resume": "Reanudar",
@@ -3973,37 +3975,37 @@
     },
     "card": {
       "stats": {
-        "service": "Service",
-        "events": "Events",
-        "active": "active",
-        "scope": "Scope",
+        "service": "Servicio",
+        "events": "Eventos",
+        "active": "activo",
+        "scope": "Alcance",
         "allRepos": "Todos los repos",
         "repoCount_one": "{{count}} repo",
         "repoCount_other": "{{count}} repos",
         "lastUsed": "Último uso"
       },
       "categories": {
-        "backup": "Backup",
-        "restore": "Restore",
+        "backup": "Copia de seguridad",
+        "restore": "Restauración",
         "restoreCheck": "Restore Check",
-        "check": "Check",
-        "schedule": "Schedule",
-        "monitoring": "Monitoring",
-        "reports": "Reports"
+        "check": "Comprobación",
+        "schedule": "Programación",
+        "monitoring": "Monitorización",
+        "reports": "Informes"
       },
       "events": {
-        "start": "Start",
-        "success": "Success",
+        "start": "Inicio",
+        "success": "Éxito",
         "warning": "Advertencia",
-        "failure": "Failure",
-        "off": "Off",
-        "errors": "Errors",
+        "failure": "Fallo",
+        "off": "Desactivado",
+        "errors": "Errores",
         "staleBackup": "Copias antiguas",
         "reports": "Informes"
       },
       "actions": {
         "sendTest": "Enviar notificación de prueba",
-        "duplicate": "Duplicate"
+        "duplicate": "Duplicar"
       },
       "confirmDelete": {
         "messagePrefix": "¿Seguro que quieres eliminar",
@@ -6395,7 +6397,7 @@
       "security_notice": "Aviso de seguridad",
       "maintenance_notice": "Aviso de mantenimiento",
       "migration_notice": "Aviso de migración",
-      "custom_announcement": "Announcement"
+      "custom_announcement": "Anuncio"
     }
   },
   "repositoryIndexMode": {

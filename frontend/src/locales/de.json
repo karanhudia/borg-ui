@@ -1344,7 +1344,7 @@
         "matrix": "Matrix"
       },
       "stats": {
-        "schedule": "Schedule",
+        "schedule": "Zeitplan",
         "repository": "Repository",
         "lastRun": "Letzter Lauf",
         "nextRun": "Nächster Lauf"
@@ -1566,10 +1566,10 @@
       "summaryEmpty": "Noch keine Quelle ausgewählt",
       "chooseSource": "Quelle wählen",
       "title": "Sicherungsquelle wählen",
-      "kindFiles": "Files",
-      "kindDatabase": "Database",
+      "kindFiles": "Dateien",
+      "kindDatabase": "Datenbank",
       "kindContainer": "Container",
-      "kindContainerSoonBadge": "Soon",
+      "kindContainerSoonBadge": "Bald",
       "advancedCaptureMode": "Erweiterter Erfassungsmodus",
       "captureModeDirect": "Direkt (kein Snapshot)",
       "databaseTitle": "Datenbankscan",
@@ -2338,7 +2338,7 @@
       "addUser": "Benutzer hinzufügen",
       "stats": {
         "total": "Total",
-        "active": "Active",
+        "active": "Aktiv",
         "pendingSso": "Ausstehendes SSO",
         "admins": "Admins",
         "operators": "Operators",
@@ -2375,7 +2375,7 @@
       },
       "accessSummary": {
         "adminRole": "Die Admin-Rolle gewährt vollen Zugriff auf alle Repositories.",
-        "defaultAccess": "Der Standardzugriff ist auf alle Repositories als {{role}}. Wechsle zu nur ausgewählten Repositories, wenn du sie einschränken möchtest.",
+        "defaultAccess": "Der Standardzugriff gilt für alle Repositories mit der Rolle {{role}}. Wechsle zu nur ausgewählten Repositories, wenn du sie einschränken möchtest.",
         "restricted": "Dieser Benutzer ist derzeit auf nur ausgewählte Repositories beschränkt."
       },
       "table": {
@@ -3167,10 +3167,11 @@
     "repositoryWipe": {
       "title": "Repository-Inhalt löschen",
       "scopeSummary": "Dadurch werden alle Archive in diesem Repository gelöscht. Die Repository-Konfiguration bleibt erhalten, aber vorhandene Wiederherstellungspunkte gehen verloren.",
-      "warningPanel": "Dies ist keine Repository-Löschung. Borg UI behält den Repository-Datensatz, Zeitpläne, Skripte, Verbindungseinstellungen und die zukünftige Sicherungsfähigkeit. Die in dieser Vorschau ausgewählten Archivdaten können nach Abschluss der Löschung nicht mehr über Borg UI wiederherstellt werden.",
+      "warningPanel": "Dies ist keine Repository-Löschung. Borg UI behält den Repository-Datensatz, Zeitpläne, Skripte, Verbindungseinstellungen und die zukünftige Sicherungsfähigkeit. Die in dieser Vorschau ausgewählten Archivdaten können nach Abschluss der Löschung nicht mehr über Borg UI wiederhergestellt werden.",
       "previewButton": "Löschvorschau erstellen",
       "previewReady": "Vorschau bereit",
-      "previewScope": "{{count}} Archive zur Löschung ausgewählt",
+      "previewScope_one": "{{count}} Archiv zur Löschung ausgewählt",
+      "previewScope_other": "{{count}} Archive zur Löschung ausgewählt",
       "dryRunOutput": "Testlauf-Ausgabe",
       "emptyState": "In diesem Repository wurden keine Archive gefunden. Es gibt nichts zu löschen.",
       "staleState": "Die Archivliste hat sich geändert, seit diese Vorschau erstellt wurde. Erstelle eine neue Vorschau, bevor du den Inhalt löschst.",
@@ -3192,7 +3193,7 @@
       "cancelled": "Die Repository-Löschung wurde abgebrochen.",
       "metadata": {
         "borgVersion": "Borg",
-        "archives": "Archives",
+        "archives": "Archive",
         "totalSize": "Gesamtgröße",
         "lastBackup": "Letzte Sicherung"
       }
@@ -3674,7 +3675,8 @@
         "archives": "Archivliste",
         "history": "Dateiverlauf"
       },
-      "workers": "{{count}} Worker",
+      "workers_one": "{{count}} Worker",
+      "workers_other": "{{count}} Worker",
       "title": "Hintergrundarbeit",
       "pause": "Pausieren",
       "resume": "Fortsetzen",
@@ -3974,9 +3976,9 @@
     "card": {
       "stats": {
         "service": "Service",
-        "events": "Events",
-        "active": "active",
-        "scope": "Scope",
+        "events": "Ereignisse",
+        "active": "aktiv",
+        "scope": "Umfang",
         "allRepos": "Alle Repos",
         "repoCount_one": "{{count}} Repo",
         "repoCount_other": "{{count}} Repos",
@@ -3984,26 +3986,26 @@
       },
       "categories": {
         "backup": "Backup",
-        "restore": "Restore",
+        "restore": "Wiederherstellung",
         "restoreCheck": "Restore Check",
-        "check": "Check",
-        "schedule": "Schedule",
-        "monitoring": "Monitoring",
-        "reports": "Reports"
+        "check": "Prüfung",
+        "schedule": "Zeitplan",
+        "monitoring": "Überwachung",
+        "reports": "Berichte"
       },
       "events": {
         "start": "Start",
-        "success": "Success",
+        "success": "Erfolg",
         "warning": "Warnung",
-        "failure": "Failure",
-        "off": "Off",
-        "errors": "Errors",
+        "failure": "Fehler",
+        "off": "Aus",
+        "errors": "Fehler",
         "staleBackup": "Alte Backups",
         "reports": "Berichte"
       },
       "actions": {
         "sendTest": "Testbenachrichtigung senden",
-        "duplicate": "Duplicate"
+        "duplicate": "Duplizieren"
       },
       "confirmDelete": {
         "messagePrefix": "Möchtest du wirklich löschen:",
@@ -6395,7 +6397,7 @@
       "security_notice": "Sicherheitshinweis",
       "maintenance_notice": "Wartungshinweis",
       "migration_notice": "Migrationshinweis",
-      "custom_announcement": "Announcement"
+      "custom_announcement": "Ankündigung"
     }
   },
   "repositoryIndexMode": {
