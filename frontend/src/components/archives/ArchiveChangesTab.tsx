@@ -19,6 +19,8 @@ import PlanGate from '../shared/PlanGate'
 import IndexModeGate from './IndexModeGate'
 import { usePlan } from '../../hooks/usePlan'
 import { archivesAPI } from '../../services/api'
+import { getApiErrorDetail } from '../../utils/apiErrors'
+import { translateBackendKey } from '../../utils/translateBackendKey'
 import { CHANGE_GLYPH, changeColor } from './changeStyle'
 import ChangeRowLine from './ChangeRowLine'
 import ArchiveChangesPreview from './ArchiveChangesPreview'
@@ -215,7 +217,10 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
 
       {rebuildMutation.isError && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => rebuildMutation.reset()}>
-          {t('archives.changes.rebuildFailed')}
+          {translateBackendKey(
+            getApiErrorDetail(rebuildMutation.error),
+            'archives.changes.rebuildFailed'
+          )}
         </Alert>
       )}
       {rebuildMutation.isSuccess && (

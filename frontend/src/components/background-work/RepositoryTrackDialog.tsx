@@ -22,6 +22,8 @@ import { REBUILD_STAGES } from './repositoryTrack'
 import { archivesAPI, operationsAPI } from '../../services/api'
 import { usePlan } from '../../hooks/usePlan'
 import { parseBackendDate } from '../../utils/dateUtils'
+import { getApiErrorDetail } from '../../utils/apiErrors'
+import { translateBackendKey } from '../../utils/translateBackendKey'
 import type {
   HubArchive,
   HubHistorySummary,
@@ -123,7 +125,7 @@ export default function RepositoryTrackDialog({
   const theme = useTheme()
   const [stage, setStage] = useState<RebuildStage>('archives')
   const [submitting, setSubmitting] = useState(false)
-  const [failed, setFailed] = useState(false)
+  const [failed, setFailed] = useState<string | null>(null)
   const { can } = usePlan()
   // The agent restriction names itself even when the plan lacks the feature
   // too: a plan upgrade would not unlock the stage for such a repository.
@@ -160,15 +162,18 @@ export default function RepositoryTrackDialog({
 
   const handleRebuild = async () => {
     setSubmitting(true)
-    setFailed(false)
+    setFailed(null)
     try {
       await archivesAPI.rebuild(repositoryId, stage)
       onClose()
-    } catch {
-      // A rebuild can be refused (repository permissions, or the
-      // `archive_history` plan gate), and closing on failure would read as
-      // success. Keep the dialog open and say so.
-      setFailed(true)
+    } catch (error) {
+      // A rebuild can be refused (repository permissions, the
+      // `archive_history` plan gate, or history work still running on the
+      // repository), and closing on failure would read as success. Keep the
+      // dialog open and say which of them it was.
+      setFailed(
+        translateBackendKey(getApiErrorDetail(error), 'operations.background.rebuildFailed')
+      )
     } finally {
       setSubmitting(false)
     }
@@ -360,7 +365,7 @@ export default function RepositoryTrackDialog({
             </Typography>
             {failed && (
               <Alert severity="error" sx={{ mt: 1.5 }}>
-                {t('operations.background.rebuildFailed')}
+                {failed}
               </Alert>
             )}
           </Box>

@@ -6089,7 +6089,8 @@
         "repositoryNotFound": "Repositorio no encontrado",
         "fileNotFoundAfterExtraction": "Archivo no encontrado después de la extracción",
         "failedExtractFile": "Error al extraer el archivo: {{error}}",
-        "historyUnavailableForAgent": "El historial de cambios no está disponible para repositorios cuyo agente no puede generarlo, así que no hay nada que reconstruir. Asigne o habilite un agente, o actualice uno anterior al historial de cambios."
+        "historyUnavailableForAgent": "El historial de cambios no está disponible para repositorios cuyo agente no puede generarlo, así que no hay nada que reconstruir. Asigne o habilite un agente, o actualice uno anterior al historial de cambios.",
+        "historyRunning": "El historial de cambios de este repositorio todavía se está generando y esa ejecución no se detuvo al solicitarlo (operación {{operationId}}). Reconstruirlo ahora borraría filas que esa ejecución volvería a escribir, así que espere a que termine e inténtelo de nuevo."
       },
       "borg": {
         "repositoryDoesNotExist": "El repositorio no existe en la ruta especificada",

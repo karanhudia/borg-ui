@@ -24,6 +24,8 @@ import {
   type StageState,
 } from './repositoryTrack'
 import { archivesAPI, operationsAPI } from '../../services/api'
+import { getApiErrorDetail } from '../../utils/apiErrors'
+import { translateBackendKey } from '../../utils/translateBackendKey'
 import { useOperationEvents } from '../../hooks/useOperationEvents'
 import type {
   OperationItem,
@@ -108,7 +110,7 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
   const queryClient = useQueryClient()
   const { can } = usePlan()
   const [trackRepository, setTrackRepository] = useState<{ id: number; name: string } | null>(null)
-  const [rebuildFailed, setRebuildFailed] = useState(false)
+  const [rebuildFailed, setRebuildFailed] = useState<string | null>(null)
   const [resyncDeferred, setResyncDeferred] = useState(false)
   const [reconcileResult, setReconcileResult] = useState<number | null>(null)
   const [toolbar, setToolbarState] = useState<HubToolbarState>(DEFAULT_TOOLBAR)
@@ -255,10 +257,15 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
     mutationFn: ({ repositoryId, stage }: { repositoryId: number; stage: RebuildStage }) =>
       archivesAPI.rebuild(repositoryId, stage),
     onMutate: () => {
-      setRebuildFailed(false)
+      setRebuildFailed(null)
       setResyncDeferred(false)
     },
-    onError: () => setRebuildFailed(true),
+    // A rebuild refused while the repository's history is still being built
+    // says which run holds it (#1079); anything else keeps the generic line.
+    onError: (error) =>
+      setRebuildFailed(
+        translateBackendKey(getApiErrorDetail(error), 'operations.background.rebuildFailed')
+      ),
     onSettled: invalidateBoard,
   })
 
@@ -272,11 +279,14 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
   const resyncMutation = useMutation({
     mutationFn: (repositoryId: number) => archivesAPI.resync(repositoryId),
     onMutate: () => {
-      setRebuildFailed(false)
+      setRebuildFailed(null)
       setResyncDeferred(false)
     },
     onSuccess: (res) => setResyncDeferred(res.data.operations.length === 0),
-    onError: () => setRebuildFailed(true),
+    onError: (error) =>
+      setRebuildFailed(
+        translateBackendKey(getApiErrorDetail(error), 'operations.background.rebuildFailed')
+      ),
     onSettled: invalidateBoard,
   })
 
@@ -334,8 +344,8 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
   const messages = (
     <>
       {rebuildFailed && (
-        <Alert severity="error" onClose={() => setRebuildFailed(false)}>
-          {t('operations.background.rebuildFailed')}
+        <Alert severity="error" onClose={() => setRebuildFailed(null)}>
+          {rebuildFailed}
         </Alert>
       )}
       {resyncDeferred && (

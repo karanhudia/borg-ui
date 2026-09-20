@@ -6089,7 +6089,8 @@
         "repositoryNotFound": "Repository non trovato",
         "fileNotFoundAfterExtraction": "File non trovato dopo l'estrazione",
         "failedExtractFile": "Impossibile estrarre il file: {{error}}",
-        "historyUnavailableForAgent": "La cronologia delle modifiche non è disponibile per i repository il cui agente non può generarla, quindi non c'è nulla da ricostruire. Assegnare o abilitare un agente, oppure aggiornarne uno precedente alla cronologia delle modifiche."
+        "historyUnavailableForAgent": "La cronologia delle modifiche non è disponibile per i repository il cui agente non può generarla, quindi non c'è nulla da ricostruire. Assegnare o abilitare un agente, oppure aggiornarne uno precedente alla cronologia delle modifiche.",
+        "historyRunning": "La cronologia delle modifiche di questo repository è ancora in costruzione e quell'esecuzione non si è fermata quando è stato richiesto (operazione {{operationId}}). Ricostruirla ora cancellerebbe righe che quell'esecuzione riscriverebbe, quindi attendere il termine e riprovare."
       },
       "borg": {
         "repositoryDoesNotExist": "Il repository non esiste nel percorso specificato",

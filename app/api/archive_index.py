@@ -1,6 +1,7 @@
 """Database-backed archive routes (spec section 9.2): list, detail,
 heatmap, status, rebuild, and (Pro) changes, history, search."""
 
+import asyncio
 from bisect import bisect_right
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal, Optional
@@ -52,6 +53,7 @@ from app.services.operations.series import (
     crons_for_repository,
     retention_days_for_repository,
 )
+from app.services.operations.runner import operation_runner
 from app.services.operations.vocab import PRIORITY_RECONCILE, SUCCESS_STATUSES
 
 router = APIRouter()
@@ -656,6 +658,51 @@ async def repository_status_route(
     )
 
 
+# Kinds that write `archive_changes` rows. A run in flight took its archive
+# list, its excludes and its row cap before the rebuild, and goes on writing
+# rows (and marking archives `indexed`) after the rebuild deleted them, so a
+# `from = history` rebuild has to stop it first (#1079).
+HISTORY_WRITE_KINDS = ("history_index", "history_merge")
+# Cancellation is cooperative: the executor sees the flag between two lines
+# of `borg diff`, and a diff of two large archives can be silent for a long
+# time (the reason `history_index` is not cancellable from the UI either).
+# So the wait is short, and a run that does not stop in it refuses the
+# rebuild rather than having its rows deleted and written back.
+CANCEL_WAIT_SECONDS = 10.0
+
+
+async def _stop_history_writers(db: Session, repository_id: int) -> None:
+    running = (
+        db.query(Operation)
+        .filter(
+            Operation.repository_id == repository_id,
+            Operation.kind.in_(HISTORY_WRITE_KINDS),
+            Operation.status == "running",
+        )
+        .all()
+    )
+    for op in running:
+        # Read before the cancel: the runner drops the task as it finishes,
+        # and a run that ended on its own meanwhile needs no waiting.
+        task = operation_runner.running_tasks.get(op.id)
+        await operation_runner.request_cancel(op.id)
+        if task is not None:
+            done, _ = await asyncio.wait({task}, timeout=CANCEL_WAIT_SECONDS)
+            if done:
+                continue
+        else:
+            db.refresh(op)
+            if op.status != "running":
+                continue
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "key": "backend.errors.archives.historyRunning",
+                "params": {"operationId": op.id},
+            },
+        )
+
+
 class RebuildRequest(BaseModel):
     from_stage: Literal["stats", "archives", "history"] = Field(alias="from")
 
@@ -684,6 +731,7 @@ async def rebuild(
         )
     if body.from_stage == "history":
         require_feature_access(db, "archive_history")
+        await _stop_history_writers(db, repository.id)
     archives = db.query(Archive).filter(Archive.repository_id == repository.id).all()
     if body.from_stage == "archives":
         for a in archives:
