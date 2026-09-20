@@ -87,6 +87,14 @@ TERMINAL_PLAN_RUN_STATUSES = {
     "failed",
     "cancelled",
 }
+# A repository row nothing may reopen: its run is over, or `cancel_run`
+# closed it.
+TERMINAL_PLAN_RUN_REPOSITORY_STATUSES = {
+    "completed",
+    "completed_with_warnings",
+    "failed",
+    "cancelled",
+}
 SUCCESS_BACKUP_STATUSES = {"completed", "completed_with_warnings"}
 WARNING_BACKUP_STATUSES = {"completed_with_warnings", "skipped"}
 CANCELLED_MESSAGE = '{"key": "backend.errors.backup.cancelledByUser"}'
@@ -852,12 +860,7 @@ class BackupPlanExecutionService:
         run.error_message = CANCELLED_MESSAGE
 
         for child in run.repositories:
-            if child.status in {
-                "completed",
-                "completed_with_warnings",
-                "failed",
-                "cancelled",
-            }:
+            if child.status in TERMINAL_PLAN_RUN_REPOSITORY_STATUSES:
                 continue
 
             # Every child's backup is an operation. The runner owns the kill,
@@ -2044,9 +2047,42 @@ class BackupPlanExecutionService:
                 else None
             )
 
-            child.backup_operation_id = backup_job.id
-            child.status = "running"
-            child.started_at = datetime.utcnow()
+            # `cancel_run` may have closed this row while the backup was
+            # being prepared -- a window the read-work wait above can hold
+            # open for minutes. It closes a child it finds without a linked
+            # operation and has nothing to cancel, so claiming the row
+            # unconditionally would resurrect a cancelled repository and
+            # hand the runner a backup no one can stop. Claim it only while
+            # it is still open; the database re-checks the condition against
+            # whatever `cancel_run` committed.
+            claimed = (
+                db.query(BackupPlanRunRepository)
+                .filter(
+                    BackupPlanRunRepository.id == child.id,
+                    BackupPlanRunRepository.status.notin_(
+                        tuple(TERMINAL_PLAN_RUN_REPOSITORY_STATUSES)
+                    ),
+                )
+                .update(
+                    {
+                        BackupPlanRunRepository.backup_operation_id: backup_job.id,
+                        BackupPlanRunRepository.status: "running",
+                        BackupPlanRunRepository.started_at: datetime.utcnow(),
+                    },
+                    synchronize_session=False,
+                )
+            )
+            if not claimed:
+                # The rollback takes the uncommitted backup operation with
+                # it, so the runner never sees it.
+                db.rollback()
+                logger.info(
+                    "Backup plan repository was cancelled while its backup "
+                    "was being prepared",
+                    run_id=run_id,
+                    repository_id=repository_context.repository_id,
+                )
+                return "cancelled"
             db.commit()
             wake_runner()
 

@@ -160,3 +160,161 @@ async def test_a_write_in_the_way_is_refused_without_waiting(db_session):
             poll_interval_seconds=0.01,
         )
     assert time.monotonic() - started < 1
+
+
+# -- the cancel that lands while the backup is being prepared -----------------
+
+
+def _plan_run_context(**overrides):
+    from app.services.backup_plan_execution_service import PlanRunContext
+
+    defaults = dict(
+        plan_id=1,
+        plan_name="nightly",
+        source_type="local",
+        source_ssh_connection_id=None,
+        source_directories=["/data"],
+        source_locations=[{"type": "local", "path": "/data"}],
+        exclude_patterns=[],
+        archive_name_template="{plan_name}-{now}",
+        compression="lz4",
+        custom_flags=None,
+        upload_ratelimit_kib=None,
+        upload_ratelimit_schedule_policies=[],
+        repository_run_mode="series",
+        max_parallel_repositories=1,
+        failure_behavior="continue",
+        pre_backup_script_id=None,
+        post_backup_script_id=None,
+        pre_backup_script_parameters={},
+        post_backup_script_parameters={},
+        script_hooks=[],
+        run_repository_scripts=False,
+        run_prune_after=False,
+        run_compact_after=False,
+        run_check_after=False,
+        check_max_duration=3600,
+        check_extra_flags=None,
+        prune_keep_hourly=0,
+        prune_keep_daily=7,
+        prune_keep_weekly=4,
+        prune_keep_monthly=6,
+        prune_keep_quarterly=0,
+        prune_keep_yearly=1,
+        prune_keep_within=None,
+        repository_count=1,
+        timestamp="2026-09-20T00:00:00",
+        date="2026-09-20",
+        time_str="00-00-00",
+        unix_timestamp="1789862400",
+    )
+    defaults.update(overrides)
+    return PlanRunContext(**defaults)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_cancel_during_the_wait_is_not_overwritten_by_the_backup(db_engine):
+    """`cancel_run` closes a repository row that has no backup operation
+    yet, so it has nothing to cancel. The executor must not then claim that
+    row and hand the runner a backup no one can stop."""
+    from unittest.mock import patch
+
+    from sqlalchemy.orm import sessionmaker
+
+    import app.services.backup_plan_execution_service as plan_module
+    from app.database.models import (
+        BackupPlan,
+        BackupPlanRun,
+        BackupPlanRunRepository,
+        Operation,
+    )
+    from app.services.backup_plan_execution_service import (
+        CANCELLED_MESSAGE,
+        RepositoryRunContext,
+        backup_plan_execution_service,
+    )
+
+    testing_session_local = sessionmaker(bind=db_engine)
+    session = testing_session_local()
+    repo = Repository(
+        name="cancel-race",
+        path="/repos/cancel-race",
+        encryption="none",
+        repository_type="local",
+    )
+    plan = BackupPlan(name="nightly", source_directories='["/data"]')
+    session.add_all([repo, plan])
+    session.commit()
+    run = BackupPlanRun(backup_plan_id=plan.id, trigger="manual", status="running")
+    session.add(run)
+    session.commit()
+    child = BackupPlanRunRepository(
+        backup_plan_run_id=run.id, repository_id=repo.id, status="pending"
+    )
+    session.add(child)
+    session.commit()
+    run_id, repo_id, child_id = run.id, repo.id, child.id
+    session.close()
+
+    real_create = plan_module.create_backup_operation
+
+    def cancel_then_create(*args, **kwargs):
+        """The cancel lands after admission, before the child is claimed."""
+        closing = testing_session_local()
+        try:
+            closing.query(BackupPlanRun).filter(BackupPlanRun.id == run_id).update(
+                {"status": "cancelled", "error_message": CANCELLED_MESSAGE}
+            )
+            closing.query(BackupPlanRunRepository).filter(
+                BackupPlanRunRepository.id == child_id
+            ).update({"status": "cancelled", "error_message": CANCELLED_MESSAGE})
+            closing.commit()
+        finally:
+            closing.close()
+        return real_create(*args, **kwargs)
+
+    woke = []
+
+    async def _never_reached(*args, **kwargs):
+        # Without the conditional claim the executor gets this far; the
+        # stub keeps the test from hanging on a backup nothing drives, so
+        # the assertions below report the real failure.
+        return "failed"
+
+    with (
+        patch.object(plan_module, "SessionLocal", testing_session_local),
+        patch.object(plan_module, "create_backup_operation", cancel_then_create),
+        patch.object(plan_module, "wake_runner", lambda: woke.append(True)),
+        patch.object(plan_module, "wait_for_backup_operation", _never_reached),
+    ):
+        status = await backup_plan_execution_service._execute_repository(
+            run_id,
+            _plan_run_context(plan_id=1),
+            RepositoryRunContext(
+                repository_id=repo_id,
+                repository_name="cancel-race",
+                execution_order=0,
+                compression="lz4",
+                custom_flags=None,
+                upload_ratelimit_kib=None,
+                failure_behavior="continue",
+            ),
+        )
+
+    assert status == "cancelled"
+    check = testing_session_local()
+    try:
+        closed = check.query(BackupPlanRunRepository).get(child_id)
+        assert closed.status == "cancelled"
+        assert closed.backup_operation_id is None
+        # the backup it was preparing never reached the runner
+        assert (
+            check.query(Operation)
+            .filter(Operation.backup_plan_run_id == run_id)
+            .count()
+            == 0
+        )
+        assert woke == []
+    finally:
+        check.close()
