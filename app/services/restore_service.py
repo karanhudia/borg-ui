@@ -48,6 +48,8 @@ _AGENT_RESTORE_STALL_TIMEOUT_SECONDS = 600
 # off the stall timeout; this bounds how long a job may keep doing so without
 # any progress, so a hung but live process is not waited on forever.
 _AGENT_RESTORE_NO_PROGRESS_MAX_SECONDS = 6 * 3600
+# How often a cancel re-reads an agent job whose status moved under it.
+_AGENT_CANCEL_TRANSITION_ATTEMPTS = 3
 
 
 def _http_detail_text(exc) -> str:
@@ -1179,33 +1181,63 @@ class RestoreService:
             from app.services.repository_executor import TERMINAL_AGENT_STATUSES
 
             now = datetime.now(timezone.utc)
-            # A job no agent has taken is cancelled outright: no agent would
-            # pick up a `cancel_requested` one. Conditional, so a claim in
-            # between still gets the request below.
-            taken = (
-                db.query(AgentJob)
-                .filter(AgentJob.id == agent_job_id, AgentJob.status == "queued")
-                .update(
-                    {
-                        AgentJob.status: "canceled",
-                        AgentJob.completed_at: now,
-                        AgentJob.error_message: "Cancelled by user",
-                        AgentJob.updated_at: now,
-                    },
-                    synchronize_session=False,
+            # Each write is conditional on the status it was decided from, so
+            # a verdict that commits in between stands. A job that moved
+            # meanwhile (claimed, or put back on the queue by a heartbeat) is
+            # looked at again.
+            for _ in range(_AGENT_CANCEL_TRANSITION_ATTEMPTS):
+                # A job no agent has taken is cancelled outright: no agent
+                # would pick up a `cancel_requested` one.
+                taken = (
+                    db.query(AgentJob)
+                    .filter(AgentJob.id == agent_job_id, AgentJob.status == "queued")
+                    .update(
+                        {
+                            AgentJob.status: "canceled",
+                            AgentJob.completed_at: now,
+                            AgentJob.error_message: "Cancelled by user",
+                            AgentJob.updated_at: now,
+                        },
+                        synchronize_session=False,
+                    )
                 )
-            )
-            db.commit()
-            if taken:
-                return True
-            db.refresh(agent_job)
-            if agent_job.status in TERMINAL_AGENT_STATUSES:
-                # Finished meanwhile: nothing to stop, no command to send.
-                return False
-            if agent_job.status != "cancel_requested":
-                agent_job.status = "cancel_requested"
-                agent_job.updated_at = now
                 db.commit()
+                if taken:
+                    return True
+                db.refresh(agent_job)
+                if agent_job.status in TERMINAL_AGENT_STATUSES:
+                    # Finished meanwhile: nothing to stop, no command to send.
+                    return False
+                if agent_job.status == "cancel_requested":
+                    break
+                asked = (
+                    db.query(AgentJob)
+                    .filter(
+                        AgentJob.id == agent_job_id,
+                        AgentJob.status.in_(("claimed", "running")),
+                    )
+                    .update(
+                        {
+                            AgentJob.status: "cancel_requested",
+                            AgentJob.updated_at: now,
+                        },
+                        synchronize_session=False,
+                    )
+                )
+                db.commit()
+                if asked:
+                    db.refresh(agent_job)
+                    if agent_job.status in TERMINAL_AGENT_STATUSES:
+                        return False
+                    if agent_job.status == "queued":
+                        # a heartbeat that read the job before the request
+                        # put it back on the queue over it
+                        continue
+                    break
+            else:
+                db.refresh(agent_job)
+                if agent_job.status not in ("claimed", "running", "cancel_requested"):
+                    return False
             # A retry only sends the command again: a write would count as
             # the agent's activity and hold off the stall timer and reaper.
             return await dispatch_agent_cancel_if_connected(agent_job)
