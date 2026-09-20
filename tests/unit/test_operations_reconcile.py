@@ -1,4 +1,6 @@
 import asyncio
+from datetime import datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -281,6 +283,324 @@ def test_scheduler_reads_interval_live_each_poll(db, repos, monkeypatch):
     settings.stats_refresh_interval_minutes = 30
     db.commit()
     assert scheduler._interval_minutes() == 30
+
+
+T0 = datetime(2026, 1, 1, 12, 0, 0)
+
+
+class FakeClock:
+    """Stands in for `asyncio.sleep` and `utc_now` inside the reconcile
+    module: a sleep moves the clock forward instead of waiting, and every
+    reconcile tick is recorded with the time it ran at."""
+
+    def __init__(self, monkeypatch, db, now=T0):
+        self.now = now
+        self.runs: list[datetime] = []
+        self.on_sleep = None
+        self._scheduler = None
+        self._stop_at = now
+        enqueue_runs = reconcile.enqueue_reconcile_runs
+
+        def record(session, **kwargs):
+            self.runs.append(self.now)
+            if len(self.runs) > 50:  # a loop that never sleeps
+                self._scheduler.stop()
+            return enqueue_runs(session, **kwargs)
+
+        monkeypatch.setattr(reconcile, "SessionLocal", lambda: db)
+        monkeypatch.setattr(reconcile, "utc_now", lambda: self.now)
+        monkeypatch.setattr(reconcile, "asyncio", SimpleNamespace(sleep=self.sleep))
+        monkeypatch.setattr(reconcile, "enqueue_reconcile_runs", record)
+
+    async def sleep(self, seconds):
+        # A process can end in the middle of a sleep.
+        self.now = min(self.now + timedelta(seconds=seconds), self._stop_at)
+        if self.on_sleep is not None:
+            self.on_sleep(self)
+        if self.now >= self._stop_at:
+            self._scheduler.stop()
+        await asyncio.sleep(0)
+
+    async def run_scheduler(self, *, minutes):
+        """One process lifetime: a fresh scheduler, stopped after `minutes`."""
+        self._scheduler = reconcile.ReconcileScheduler()
+        self._stop_at = self.now + timedelta(minutes=minutes)
+        await asyncio.wait_for(self._scheduler.start(), timeout=5)
+
+
+def _set_interval(db, minutes):
+    db.query(SystemSettings).first().stats_refresh_interval_minutes = minutes
+    db.commit()
+
+
+def _set_last_tick(db, when):
+    db.query(SystemSettings).first().last_reconcile_tick_at = when
+    db.commit()
+
+
+def _last_tick(db):
+    db.expire_all()
+    return db.query(SystemSettings).first().last_reconcile_tick_at
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_scheduler_runs_at_once_when_the_last_tick_is_overdue(
+    db, repos, monkeypatch
+):
+    monkeypatch.setattr(
+        reconcile, "registered_kinds", lambda: {"stats", "archive_sync"}
+    )
+    a, b = repos
+    # The scheduler closes the (test-shared) session, which detaches a and b.
+    repository_ids = {a.id, b.id}
+    _set_interval(db, 60)
+    _set_last_tick(db, T0 - timedelta(hours=3))
+    clock = FakeClock(monkeypatch, db)
+    await clock.run_scheduler(minutes=30)
+    assert clock.runs == [T0]
+    queued = db.query(Operation).filter(Operation.status == "queued")
+    assert {o.repository_id for o in queued} == repository_ids
+    assert _last_tick(db) == T0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_scheduler_waits_only_the_remainder_after_a_recent_tick(
+    db, repos, monkeypatch
+):
+    _set_interval(db, 60)
+    _set_last_tick(db, T0 - timedelta(minutes=45))
+    clock = FakeClock(monkeypatch, db)
+    await clock.run_scheduler(minutes=50)
+    assert clock.runs == [T0 + timedelta(minutes=15)]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_scheduler_runs_at_once_without_a_previous_tick(db, repos, monkeypatch):
+    _set_interval(db, 60)
+    clock = FakeClock(monkeypatch, db)
+    await clock.run_scheduler(minutes=30)
+    assert clock.runs == [T0]
+    assert _last_tick(db) == T0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_scheduler_never_runs_while_disabled(db, repos, monkeypatch):
+    """An overdue last tick does not override `interval <= 0`."""
+    _set_last_tick(db, T0 - timedelta(days=30))
+    for interval in (0, -1):
+        _set_interval(db, interval)
+        clock = FakeClock(monkeypatch, db)
+        await clock.run_scheduler(minutes=7 * 24 * 60)
+        assert clock.runs == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_scheduler_resumes_an_overdue_tick_once_enabled(db, repos, monkeypatch):
+    _set_interval(db, 0)
+    _set_last_tick(db, T0 - timedelta(days=1))
+    clock = FakeClock(monkeypatch, db)
+    enable_at = T0 + timedelta(minutes=20)
+
+    def enable(c):
+        if c.now == enable_at:
+            _set_interval(db, 60)
+
+    clock.on_sleep = enable
+    await clock.run_scheduler(minutes=50)
+    assert clock.runs == [enable_at]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_scheduler_applies_an_interval_changed_while_waiting(
+    db, repos, monkeypatch
+):
+    _set_interval(db, 7 * 24 * 60)
+    _set_last_tick(db, T0)
+    clock = FakeClock(monkeypatch, db)
+
+    def shorten(c):
+        if c.now == T0 + timedelta(minutes=30):
+            _set_interval(db, 60)
+
+    clock.on_sleep = shorten
+    await clock.run_scheduler(minutes=90)
+    assert clock.runs == [T0 + timedelta(minutes=60)]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_restart_mid_interval_keeps_the_next_tick_time(db, repos, monkeypatch):
+    _set_interval(db, 60)
+    _set_last_tick(db, T0)
+    clock = FakeClock(monkeypatch, db)
+    await clock.run_scheduler(minutes=30)
+    assert clock.runs == []
+    # The process restarts half way through the interval.
+    await clock.run_scheduler(minutes=45)
+    assert clock.runs == [T0 + timedelta(minutes=60)]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_restart_after_a_single_repository_resync_keeps_the_next_tick_time(
+    db, repos, monkeypatch
+):
+    """A resync of one repository is a reconcile run too, but it is not the
+    scheduler's tick: the other repositories are still due on time."""
+    monkeypatch.setattr(
+        reconcile, "registered_kinds", lambda: {"stats", "archive_sync"}
+    )
+    # The scheduler closes the (test-shared) session, which detaches a.
+    repository_id = repos[0].id
+    _set_interval(db, 60)
+    clock = FakeClock(monkeypatch, db)
+    await clock.run_scheduler(minutes=55)
+    assert clock.runs == [T0]
+    db.query(Operation).update({"status": "completed"})
+    db.commit()
+    assert reconcile.enqueue_reconcile_run(db, repository_id, manual=True)
+    # The process restarts right after the resync.
+    await clock.run_scheduler(minutes=30)
+    assert clock.runs == [T0, T0 + timedelta(minutes=60)]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_restart_after_a_tick_that_enqueued_nothing_waits_the_remainder(
+    db, monkeypatch
+):
+    db.add(SystemSettings(stats_refresh_interval_minutes=60))
+    db.commit()
+    clock = FakeClock(monkeypatch, db)
+    await clock.run_scheduler(minutes=10)
+    assert clock.runs == [T0]
+    assert db.query(Operation).count() == 0
+    await clock.run_scheduler(minutes=120)
+    assert clock.runs == [
+        T0,
+        T0 + timedelta(minutes=60),
+        T0 + timedelta(minutes=120),
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_scheduler_survives_an_interval_beyond_the_datetime_range(
+    db, repos, monkeypatch
+):
+    _set_interval(db, 10**10)
+    _set_last_tick(db, T0)
+    clock = FakeClock(monkeypatch, db)
+    await clock.run_scheduler(minutes=60)
+    assert clock.runs == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_scheduler_yields_between_ticks_that_outlast_the_interval(
+    db, repos, monkeypatch
+):
+    """A tick that takes longer than the interval leaves the next one due
+    at once; the loop must still give way to the event loop in between."""
+    _set_interval(db, 1)
+    clock = FakeClock(monkeypatch, db)
+    enqueue_runs = reconcile.enqueue_reconcile_runs
+    events = []
+    sleep = clock.sleep
+
+    def slow(session, **kwargs):
+        events.append("tick")
+        clock.now += timedelta(minutes=2)
+        if len(events) >= 5:
+            clock._scheduler.stop()
+        return enqueue_runs(session, **kwargs)
+
+    async def recording_sleep(seconds):
+        events.append("sleep")
+        await sleep(seconds)
+
+    monkeypatch.setattr(reconcile, "enqueue_reconcile_runs", slow)
+    monkeypatch.setattr(reconcile, "asyncio", SimpleNamespace(sleep=recording_sleep))
+    await clock.run_scheduler(minutes=60)
+    assert events[:5] == ["tick", "sleep", "tick", "sleep", "tick"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_failed_read_of_the_last_tick_is_retried_not_taken_as_none(
+    db, repos, monkeypatch
+):
+    _set_interval(db, 60)
+    _set_last_tick(db, T0 - timedelta(minutes=30))
+    clock = FakeClock(monkeypatch, db)
+    failures = [RuntimeError("database is locked")]
+
+    def session():
+        if failures:
+            raise failures.pop()
+        return db
+
+    monkeypatch.setattr(reconcile, "SessionLocal", session)
+    await clock.run_scheduler(minutes=45)
+    assert clock.runs == [T0 + timedelta(minutes=30)]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_scheduler_does_not_create_the_settings_row(db, monkeypatch):
+    """The row is created by the settings routes. Without it the interval
+    is the default and the tick time is kept in memory only."""
+    clock = FakeClock(monkeypatch, db)
+    await clock.run_scheduler(minutes=90)
+    assert clock.runs == [T0, T0 + timedelta(minutes=60)]
+    assert db.query(SystemSettings).count() == 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_failed_tick_is_not_stored_and_is_repeated_after_a_restart(
+    db, repos, monkeypatch
+):
+    _set_interval(db, 60)
+    _set_last_tick(db, T0 - timedelta(hours=2))
+    clock = FakeClock(monkeypatch, db)
+    enqueue_runs = reconcile.enqueue_reconcile_runs
+    failures = [RuntimeError("database is locked")]
+
+    def fail_once(session, **kwargs):
+        enqueue_runs(session, **kwargs)  # recorded by the clock
+        if failures:
+            raise failures.pop()
+
+    monkeypatch.setattr(reconcile, "enqueue_reconcile_runs", fail_once)
+    # Within the process a failed tick waits a full interval, as before.
+    await clock.run_scheduler(minutes=30)
+    assert clock.runs == [T0]
+    assert _last_tick(db) == T0 - timedelta(hours=2)
+    await clock.run_scheduler(minutes=30)
+    assert clock.runs == [T0, T0 + timedelta(minutes=30)]
+    assert _last_tick(db) == T0 + timedelta(minutes=30)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_scheduler_runs_at_once_when_the_last_tick_is_in_the_future(
+    db, repos, monkeypatch
+):
+    """The clock moved back. Waiting for it to catch up could take
+    arbitrarily long, so the tick runs and stores a usable time."""
+    _set_interval(db, 60)
+    _set_last_tick(db, T0 + timedelta(days=1))
+    clock = FakeClock(monkeypatch, db)
+    await clock.run_scheduler(minutes=90)
+    assert clock.runs == [T0, T0 + timedelta(minutes=60)]
+    assert _last_tick(db) == T0 + timedelta(minutes=60)
 
 
 @pytest.mark.unit

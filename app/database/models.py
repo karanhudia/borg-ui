@@ -1537,6 +1537,9 @@ class SystemSettings(Base):
     # Set once the first post-phase-2 startup has enqueued a reconcile run
     # for every repository (spec 14)
     history_bootstrap_at = Column(DateTime, nullable=True)
+    # When the reconcile scheduler last ran its tick; the interval counts
+    # from here, so it survives a process restart
+    last_reconcile_tick_at = Column(DateTime, nullable=True)
     dashboard_backup_warning_days = Column(Integer, default=3, nullable=False)
     dashboard_backup_critical_days = Column(Integer, default=7, nullable=False)
     dashboard_check_warning_days = Column(Integer, default=7, nullable=False)

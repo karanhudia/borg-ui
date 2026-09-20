@@ -448,7 +448,13 @@ Rules:
   by `repository_status.last_runs`); the status route is not polled.
 - The reconcile scheduler replaces the old stats refresh loop. Every
   `stats_refresh_interval_minutes` it enqueues an index run for each
-  repository that has none queued or running. `0` disables it.
+  repository that has none queued or running. `0` or less disables it. The
+  interval counts from the last tick, not from process start: the
+  scheduler stores the time of each tick in
+  `system_settings.last_reconcile_tick_at` and at startup runs at once
+  when the next tick is overdue or none is recorded, so a restart neither
+  skips a tick nor moves the next one. Reconcile runs from other sources
+  (resync, `POST /api/operations/reconcile`) do not move it.
 - On startup, running index operations are requeued; other running
   operations are marked failed unless their recorded process is still
   alive.
