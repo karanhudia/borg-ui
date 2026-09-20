@@ -731,6 +731,10 @@ async def rebuild(
         )
     if body.from_stage == "history":
         require_feature_access(db, "archive_history")
+        # Nothing between here and the commit below awaits, so the runner
+        # cannot claim a queued writer of this repository while the rows are
+        # being deleted; one that starts after the commit reads the archive
+        # list, the excludes and the row cap fresh, which is the point.
         await _stop_history_writers(db, repository.id)
     archives = db.query(Archive).filter(Archive.repository_id == repository.id).all()
     if body.from_stage == "archives":
