@@ -88,5 +88,84 @@ if (hasErrors) {
 } else {
   const keyCount = referenceKeys.size
   console.log(`Locale parity check PASSED. All ${FILES.length} locale files share the same ${keyCount} keys.`)
-  process.exit(0)
 }
+
+// --- Soft check: values still identical to English (warn-only, never fails CI) ---
+// Key parity doesn't mean translation parity — a locale file can carry the same
+// keys as en.json while a feature shipped with untranslated English placeholders
+// (see issue #1099). This flags those without blocking merges, since some strings
+// (brand names, cognates, format-only text) are legitimately identical across
+// locales. Add a key here once you've confirmed it's a real, deliberate match.
+const IDENTICAL_TO_ENGLISH_ALLOWLIST = new Set([
+  'activity.umbrella.plan',
+  'backupPlans.runsPanel.columns.plan',
+  'backupPlans.sort.nameAZ',
+  'backupPlans.sort.nameZA',
+  'backupPlans.sourceChooser.inPrefix',
+  'cache.cacheUsageDetail',
+  'cloudStorage.sort.nameAZ',
+  'cloudStorage.sort.nameZA',
+  'common.no',
+  'exportImport.title',
+  'layout.logoAlt',
+  'login.ssoDefaultProvider',
+  'notifications.chip.repositoryCount',
+  'remoteClients.switcher.versionHelper',
+  'remoteClients.version',
+  'repositories.sort.nameAZ',
+  'repositories.sort.nameZA',
+  'repositoryCard.nextBackupWithName',
+  'repositoryCard.rcloneNextSyncBadge',
+  'sshConnections.deployDialog.presetHetzner',
+  'sshConnections.diagnostics.transferredIn',
+  'wizard.location.directRclonePathPlaceholder',
+])
+
+// "Identical to English AND (contains an English function word OR is 3+ words)" —
+// lets short, legitimately-identical strings (Backup, Server, Status, Repository)
+// through without an allowlist entry, at the cost of a few format-string false
+// positives that are cheap to allowlist by hand.
+const ENGLISH_FUNCTION_WORDS =
+  /\b(the|and|or|to|a|of|is|are|for|with|from|this|that|will|can|not|when|all|your|you|be|has|have|in|on|at|it|no|yes|by|as|if|only|each|per|more|less|new|use|used|may|must|should)\b/i
+
+function findUntranslated(fileKeys, fileData) {
+  return [...referenceKeys]
+    .filter(k => fileKeys.has(k) && !IDENTICAL_TO_ENGLISH_ALLOWLIST.has(k))
+    .filter(k => {
+      const enValue = getByPath(referenceData, k)
+      const value = getByPath(fileData, k)
+      return (
+        typeof enValue === 'string' &&
+        enValue === value &&
+        (ENGLISH_FUNCTION_WORDS.test(enValue) || enValue.trim().split(/\s+/).length >= 3)
+      )
+    })
+}
+
+function getByPath(obj, keyPath) {
+  return keyPath.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj)
+}
+
+const referenceData = locales[reference]
+let warnCount = 0
+for (const file of FILES) {
+  if (file === reference) continue
+  const untranslated = findUntranslated(keySets[file], locales[file])
+  if (untranslated.length > 0) {
+    warnCount += untranslated.length
+    console.warn(`\n[WARN] ${file} has ${untranslated.length} value(s) still identical to English:`)
+    for (const key of untranslated.sort()) {
+      console.warn(`  ~ ${key}`)
+    }
+  }
+}
+if (warnCount > 0) {
+  console.warn(
+    `\n${warnCount} untranslated value(s) found (warn-only, does not fail CI). ` +
+      'Translate them, or if identical is correct, add the key to IDENTICAL_TO_ENGLISH_ALLOWLIST above.'
+  )
+} else {
+  console.log('Translation soft check: no untranslated values found outside the allowlist.')
+}
+
+process.exit(hasErrors ? 1 : 0)
