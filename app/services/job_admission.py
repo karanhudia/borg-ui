@@ -7,6 +7,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
+import structlog
 from fastapi import HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -17,6 +18,8 @@ from app.database.models import (
     Repository,
     SystemSettings,
 )
+
+logger = structlog.get_logger()
 
 OPERATION_BACKUP = "backup"
 OPERATION_CHECK = "check"
@@ -398,12 +401,15 @@ TRANSIENT_READ_OPERATIONS = frozenset(
 TRANSIENT_READ_WAIT_SECONDS = 180.0
 
 
-def refused_by_transient_read_work(exc: BaseException) -> bool:
-    """True for the admission's 409 whose blocker is transient read work.
+def refused_by_read_work(exc: BaseException, *, transient_only: bool = True) -> bool:
+    """True for the admission's 409 whose blocker is read work.
 
-    Anything else (a conflicting write, a duplicate of the same operation,
-    a long-running read, another error) is not worth a wait and must reach
-    the caller unchanged.
+    With `transient_only` (the default) only read work that is over in
+    seconds counts; anything else (a conflicting write, a duplicate of the
+    same operation, a long-running read, another error) is not worth a
+    wait and must reach the caller unchanged. Without it any read-class
+    blocker counts, `repository.diff` included: a caller whose only other
+    answer is to fail outright prefers a bounded wait to a refusal.
     """
     if getattr(exc, "status_code", None) != status.HTTP_409_CONFLICT:
         return False
@@ -420,13 +426,12 @@ def refused_by_transient_read_work(exc: BaseException) -> bool:
     if active == params.get("requested_operation"):
         # the same operation is already active: a duplicate, not a lock wait
         return False
-    return (
-        params.get("active_operation_class") == OPERATION_CLASS_REPOSITORY_READ
-        and active in TRANSIENT_READ_OPERATIONS
-    )
+    if params.get("active_operation_class") != OPERATION_CLASS_REPOSITORY_READ:
+        return False
+    return not transient_only or active in TRANSIENT_READ_OPERATIONS
 
 
-# What `wait_for_transient_read_work` came back with.
+# What `wait_for_read_work_to_clear` came back with.
 READ_WORK_CLEARED = "cleared"  # no read work left
 READ_WORK_BLOCKED = "blocked"  # read work that will not clear on its own
 READ_WORK_UNCLAIMED = "unclaimed"  # only never-claimed jobs left, past the grace
@@ -439,11 +444,12 @@ READ_WORK_TIMEOUT = "timeout"  # transient work still active at the deadline
 UNCLAIMED_READ_WORK_GRACE_SECONDS = 30.0
 
 
-async def wait_for_transient_read_work(
+async def wait_for_read_work_to_clear(
     db: Session,
     repository: Repository,
     *,
     timeout_seconds: float,
+    transient_only: bool = True,
     poll_interval_seconds: float = 1.0,
     is_cancelled: Optional[Callable[[], bool]] = None,
     unclaimed_grace_seconds: float = UNCLAIMED_READ_WORK_GRACE_SECONDS,
@@ -451,15 +457,17 @@ async def wait_for_transient_read_work(
     """Wait until no transient read work is active on the repository.
 
     Returns `READ_WORK_CLEARED` once the repository is free of read work.
-    Returns at once with `READ_WORK_BLOCKED` when read work that will not
-    clear on its own is active (any read-class operation outside
+    With `transient_only` (the default) returns at once with
+    `READ_WORK_BLOCKED` when read work that will not clear on its own is
+    active (any read-class operation outside
     `TRANSIENT_READ_OPERATIONS`: a check, a restore, a mirror) and with
     `READ_WORK_CANCELLED` when `is_cancelled` says so; with
     `READ_WORK_UNCLAIMED` when the only read work left is queued jobs no
     agent has claimed for `unclaimed_grace_seconds`, counted from the
     moment that became the case for those jobs; and with
     `READ_WORK_TIMEOUT` when the deadline passes with transient work still
-    active. Write work is not looked at: a write refused by a write is not
+    active. Without `transient_only` no read work is treated as blocking:
+    every read-class operation is waited out until the deadline. Write work is not looked at: a write refused by a write is not
     this function's case.
 
     The session's transaction is ended before every poll and before
@@ -486,7 +494,9 @@ async def wait_for_transient_read_work(
         db.rollback()
         if not read_work:
             return READ_WORK_CLEARED
-        if any(work.operation not in TRANSIENT_READ_OPERATIONS for work in read_work):
+        if transient_only and any(
+            work.operation not in TRANSIENT_READ_OPERATIONS for work in read_work
+        ):
             return READ_WORK_BLOCKED
         now = time.monotonic()
         if all(work.status == "queued" for work in read_work):
@@ -503,6 +513,110 @@ async def wait_for_transient_read_work(
         if remaining <= 0:
             return READ_WORK_TIMEOUT
         await asyncio.sleep(min(poll_interval_seconds, remaining))
+
+
+# How long a backup plan's repository run may wait for read work on its
+# repository before giving up and failing that repository, as it did
+# before this wait existed. Sits just past the agent job reaper's window
+# (15 minutes of silence) plus one pass of its loop, so read work whose
+# agent died is cleared by the reaper and the backup still runs. Work
+# still active after that is a live long read -- a `repository.diff` over
+# a large archive -- and a plan run must not stall behind one repository
+# indefinitely.
+PLAN_BACKUP_READ_WAIT_SECONDS = 17 * 60.0
+
+READ_WORK_ADMITTED = "admitted"  # the operation passed admission
+
+
+async def admit_repository_with_read_work_wait(
+    db: Session,
+    repository: Repository,
+    operation: str,
+    *,
+    timeout_seconds: float,
+    transient_only: bool = True,
+    is_cancelled: Optional[Callable[[], bool]] = None,
+    # Each poll costs a query for the active work and, for a plan, one
+    # more for the run's cancel flag. Read work this wait is for lasts
+    # seconds at least, so polling every second buys nothing.
+    poll_interval_seconds: float = 5.0,
+    retry_pause_seconds: float = 1.0,
+) -> str:
+    """Admit `operation`, waiting out read work instead of failing on it.
+
+    Returns `READ_WORK_ADMITTED` once admission passes and
+    `READ_WORK_CANCELLED` when `is_cancelled` says the caller's run is
+    over. A refusal for anything but read work propagates unchanged, and
+    so does the latest refusal once the budget is spent or the wait
+    reports work that will not clear -- the caller then fails exactly as
+    it did before.
+
+    This is the admission-only counterpart of the wait a plan's prune and
+    compact already do before queueing their agent job; it exists for the
+    callers that only need the check, such as a plan's backup.
+    """
+    log = logger.bind(repository_id=repository.id, operation=operation)
+    deadline: Optional[float] = None
+    attempts = 0
+    while True:
+        if is_cancelled is not None and is_cancelled():
+            return READ_WORK_CANCELLED
+        attempts += 1
+        try:
+            ensure_repository_admission(db, repository, operation)
+        except HTTPException as exc:
+            if not refused_by_read_work(exc, transient_only=transient_only):
+                raise
+            refusal = exc
+        else:
+            return READ_WORK_ADMITTED
+        params = (
+            refusal.detail.get("params") if isinstance(refusal.detail, dict) else None
+        )
+        active_operation = (params or {}).get("active_operation")
+        if deadline is None:
+            deadline = time.monotonic() + max(0.0, timeout_seconds)
+            log.info(
+                "Waiting for read work on the repository before admission",
+                active_operation=active_operation,
+                timeout_seconds=timeout_seconds,
+            )
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            log.warning(
+                "Gave up waiting for read work on the repository",
+                reason="budget spent",
+                attempts=attempts,
+                active_operation=active_operation,
+                timeout_seconds=timeout_seconds,
+            )
+            raise refusal
+        # The wait ends this session's transaction around each poll, which
+        # releases the repository row lock the refused admission took.
+        outcome = await wait_for_read_work_to_clear(
+            db,
+            repository,
+            timeout_seconds=remaining,
+            transient_only=transient_only,
+            poll_interval_seconds=poll_interval_seconds,
+            is_cancelled=is_cancelled,
+        )
+        if outcome == READ_WORK_CANCELLED:
+            return READ_WORK_CANCELLED
+        if outcome != READ_WORK_CLEARED:
+            log.warning(
+                "Gave up waiting for read work on the repository",
+                reason=outcome,
+                attempts=attempts,
+                active_operation=active_operation,
+            )
+            raise refusal
+        # A short pause before asking again: the index follow-up chain
+        # queues one job after another, and a retry that lands in the gap
+        # between two of them must not spin against admission.
+        await asyncio.sleep(
+            min(retry_pause_seconds, max(0.0, deadline - time.monotonic()))
+        )
 
 
 def count_active_manual_backup_jobs(db: Session) -> int:

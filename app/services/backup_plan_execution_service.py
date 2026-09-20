@@ -46,7 +46,12 @@ from app.services.backup_route_planner import (
     plan_repository_route,
 )
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
-from app.services.job_admission import OPERATION_BACKUP, ensure_repository_admission
+from app.services.job_admission import (
+    OPERATION_BACKUP,
+    PLAN_BACKUP_READ_WAIT_SECONDS,
+    READ_WORK_CANCELLED,
+    admit_repository_with_read_work_wait,
+)
 from app.services.repository_executor import (
     is_agent_executor,
     queue_agent_script_job,
@@ -79,6 +84,14 @@ TERMINAL_PLAN_RUN_STATUSES = {
     "completed",
     "completed_with_warnings",
     "partial",
+    "failed",
+    "cancelled",
+}
+# A repository row nothing may reopen: its run is over, or `cancel_run`
+# closed it.
+TERMINAL_PLAN_RUN_REPOSITORY_STATUSES = {
+    "completed",
+    "completed_with_warnings",
     "failed",
     "cancelled",
 }
@@ -847,12 +860,7 @@ class BackupPlanExecutionService:
         run.error_message = CANCELLED_MESSAGE
 
         for child in run.repositories:
-            if child.status in {
-                "completed",
-                "completed_with_warnings",
-                "failed",
-                "cancelled",
-            }:
+            if child.status in TERMINAL_PLAN_RUN_REPOSITORY_STATUSES:
                 continue
 
             # Every child's backup is an operation. The runner owns the kill,
@@ -1973,7 +1981,27 @@ class BackupPlanExecutionService:
             if not route.supported:
                 raise ValueError(route.reason_key or "Unsupported backup route")
 
-            ensure_repository_admission(db, repo, OPERATION_BACKUP)
+            # Read work on the repository (an agent listing, a repository
+            # info, the history index's `repository.diff`) refuses a write
+            # at admission. Failing the repository for work that is about
+            # to finish turns a late backup into a failed one, so wait it
+            # out first, as the plan's prune and compact already do. The
+            # refusal still reaches the `except` below once the budget is
+            # spent.
+            admission = await admit_repository_with_read_work_wait(
+                db,
+                repo,
+                OPERATION_BACKUP,
+                timeout_seconds=PLAN_BACKUP_READ_WAIT_SECONDS,
+                transient_only=False,
+                is_cancelled=lambda: self._is_run_cancelled(run_id),
+            )
+            if admission == READ_WORK_CANCELLED:
+                child.status = "cancelled"
+                child.completed_at = datetime.utcnow()
+                child.error_message = CANCELLED_MESSAGE
+                db.commit()
+                return "cancelled"
 
             archive_name = build_archive_name(
                 job_name=context.plan_name,
@@ -2019,9 +2047,42 @@ class BackupPlanExecutionService:
                 else None
             )
 
-            child.backup_operation_id = backup_job.id
-            child.status = "running"
-            child.started_at = datetime.utcnow()
+            # `cancel_run` may have closed this row while the backup was
+            # being prepared -- a window the read-work wait above can hold
+            # open for minutes. It closes a child it finds without a linked
+            # operation and has nothing to cancel, so claiming the row
+            # unconditionally would resurrect a cancelled repository and
+            # hand the runner a backup no one can stop. Claim it only while
+            # it is still open; the database re-checks the condition against
+            # whatever `cancel_run` committed.
+            claimed = (
+                db.query(BackupPlanRunRepository)
+                .filter(
+                    BackupPlanRunRepository.id == child.id,
+                    BackupPlanRunRepository.status.notin_(
+                        tuple(TERMINAL_PLAN_RUN_REPOSITORY_STATUSES)
+                    ),
+                )
+                .update(
+                    {
+                        BackupPlanRunRepository.backup_operation_id: backup_job.id,
+                        BackupPlanRunRepository.status: "running",
+                        BackupPlanRunRepository.started_at: datetime.utcnow(),
+                    },
+                    synchronize_session=False,
+                )
+            )
+            if not claimed:
+                # The rollback takes the uncommitted backup operation with
+                # it, so the runner never sees it.
+                db.rollback()
+                logger.info(
+                    "Backup plan repository was cancelled while its backup "
+                    "was being prepared",
+                    run_id=run_id,
+                    repository_id=repository_context.repository_id,
+                )
+                return "cancelled"
             db.commit()
             wake_runner()
 
