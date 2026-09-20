@@ -6091,7 +6091,8 @@
         "repositoryNotFound": "Repository not found",
         "fileNotFoundAfterExtraction": "File not found after extraction",
         "failedExtractFile": "Failed to extract file: {{error}}",
-        "historyUnavailableForAgent": "Change history is not available for repositories whose agent cannot build it, so there is nothing to rebuild. Assign or enable an agent, or update one that predates change history."
+        "historyUnavailableForAgent": "Change history is not available for repositories whose agent cannot build it, so there is nothing to rebuild. Assign or enable an agent, or update one that predates change history.",
+        "historyRunning": "Change history is still being built for this repository, and that run did not stop when asked (operation {{operationId}}). Rebuilding now would delete rows it writes back, so wait for it to finish and try again."
       },
       "borg": {
         "repositoryDoesNotExist": "Repository does not exist at the specified path",

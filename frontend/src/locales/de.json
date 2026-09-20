@@ -6091,7 +6091,8 @@
         "repositoryNotFound": "Repository nicht gefunden",
         "fileNotFoundAfterExtraction": "Datei nach der Extraktion nicht gefunden",
         "failedExtractFile": "Fehler beim Extrahieren der Datei: {{error}}",
-        "historyUnavailableForAgent": "Für Repositories, deren Agent die Änderungshistorie nicht erstellen kann, ist sie nicht verfügbar; es gibt nichts neu aufzubauen. Einen Agent zuweisen oder aktivieren, oder einen Agent aktualisieren, der älter als die Änderungshistorie ist."
+        "historyUnavailableForAgent": "Für Repositories, deren Agent die Änderungshistorie nicht erstellen kann, ist sie nicht verfügbar; es gibt nichts neu aufzubauen. Einen Agent zuweisen oder aktivieren, oder einen Agent aktualisieren, der älter als die Änderungshistorie ist.",
+        "historyRunning": "Für dieses Repository wird die Änderungshistorie noch erstellt, und der Lauf hat auf die Abbruchanforderung nicht reagiert (Vorgang {{operationId}}). Ein Neuaufbau jetzt würde Einträge löschen, die dieser Lauf danach erneut schreibt. Warten Sie, bis er fertig ist, und versuchen Sie es erneut."
       },
       "borg": {
         "repositoryDoesNotExist": "Das Repository existiert nicht im angegebenen Pfad",

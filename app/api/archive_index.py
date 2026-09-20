@@ -1,8 +1,10 @@
 """Database-backed archive routes (spec section 9.2): list, detail,
 heatmap, status, rebuild, and (Pro) changes, history, search."""
 
+import asyncio
 from bisect import bisect_right
 from datetime import date, datetime, timedelta, timezone
+from time import monotonic
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -52,6 +54,7 @@ from app.services.operations.series import (
     crons_for_repository,
     retention_days_for_repository,
 )
+from app.services.operations.runner import operation_runner
 from app.services.operations.vocab import PRIORITY_RECONCILE, SUCCESS_STATUSES
 
 router = APIRouter()
@@ -656,6 +659,69 @@ async def repository_status_route(
     )
 
 
+# Kinds that write `archive_changes` rows. A run in flight took its archive
+# list, its excludes and its row cap before the rebuild, and goes on writing
+# rows (and marking archives `indexed`) after the rebuild deleted them, so a
+# `from = history` rebuild has to stop it first (#1079).
+HISTORY_WRITE_KINDS = ("history_index", "history_merge")
+# Cancellation is cooperative: the executor sees the flag between two lines
+# of `borg diff`, and a diff of two large archives can be silent for a long
+# time (the reason `history_index` is not cancellable from the UI either).
+# So the wait is short, and a run that does not stop in it refuses the
+# rebuild rather than having its rows deleted and written back.
+CANCEL_WAIT_SECONDS = 10.0
+
+
+async def _stop_history_writers(db: Session, repository_id: int) -> None:
+    """Leave no history writer running on the repository, or refuse.
+
+    Waiting for one is itself an await, and the run ending there wakes the
+    runner, which can claim the next queued writer of the repository before
+    this coroutine resumes. So the list is read again after every wait, and
+    what has started since is stopped in its turn, until nothing is running
+    or the budget is spent."""
+    deadline = monotonic() + CANCEL_WAIT_SECONDS
+    while True:
+        # The executor commits from its own session; end this one's read
+        # transaction so the states come from disk rather than a snapshot
+        # taken before the cancel.
+        db.rollback()
+        op = (
+            db.query(Operation)
+            .filter(
+                Operation.repository_id == repository_id,
+                Operation.kind.in_(HISTORY_WRITE_KINDS),
+                Operation.status == "running",
+            )
+            .order_by(Operation.id.asc())
+            .first()
+        )
+        if op is None:
+            return
+        # Read before the cancel: the runner drops the task as it finishes,
+        # and a run that ended on its own meanwhile needs no waiting.
+        task = operation_runner.running_tasks.get(op.id)
+        await operation_runner.request_cancel(op.id)
+        remaining = deadline - monotonic()
+        if task is not None and remaining > 0:
+            done, _ = await asyncio.wait({task}, timeout=remaining)
+            if done:
+                continue
+        elif task is None:
+            # No task here: the row is another worker's, or it ended between
+            # the query and the cancel. Only the second one lets this go on.
+            db.rollback()
+            if db.get(Operation, op.id).status != "running":
+                continue
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "key": "backend.errors.archives.historyRunning",
+                "params": {"operationId": op.id},
+            },
+        )
+
+
 class RebuildRequest(BaseModel):
     from_stage: Literal["stats", "archives", "history"] = Field(alias="from")
 
@@ -684,6 +750,15 @@ async def rebuild(
         )
     if body.from_stage == "history":
         require_feature_access(db, "archive_history")
+        # Nothing between here and the commit below awaits, so the runner
+        # cannot claim a queued writer of this repository while the rows are
+        # being deleted: it runs in this process (both entrypoints pin
+        # gunicorn to `--workers 1`, and the repository command lock is an
+        # in-process asyncio lock for the same reason), so it only advances
+        # at an await of this coroutine. A writer that starts after the
+        # commit reads the archive list, the excludes and the row cap fresh,
+        # which is the point of the rebuild.
+        await _stop_history_writers(db, repository.id)
     archives = db.query(Archive).filter(Archive.repository_id == repository.id).all()
     if body.from_stage == "archives":
         for a in archives:

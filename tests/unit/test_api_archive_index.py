@@ -1109,6 +1109,159 @@ class TestRebuild:
             a.history_state == "pending" and test_db.query(ArchiveChange).count() == 0
         )
 
+    async def test_rebuild_from_history_stops_a_running_history_index(
+        self, test_db, monkeypatch
+    ):
+        """A run in flight holds the archive list, the excludes and the row
+        cap it started with, and writes rows back after the delete (#1079),
+        so the rebuild stops it before it resets anything."""
+        import asyncio
+
+        from app.api import archive_index
+
+        repo = _repo(test_db)
+        op = _op(test_db, repo, "history_index", status="running")
+        stopping = asyncio.Event()
+        task = asyncio.create_task(stopping.wait())
+
+        async def request_cancel(operation_id):
+            assert operation_id == op.id
+            # what the runner writes as the run ends
+            op.status = "cancelled"
+            test_db.commit()
+            stopping.set()
+            return True
+
+        monkeypatch.setattr(
+            archive_index.operation_runner, "request_cancel", request_cancel
+        )
+        archive_index.operation_runner.running_tasks[op.id] = task
+        try:
+            await archive_index._stop_history_writers(test_db, repo.id)
+        finally:
+            archive_index.operation_runner.running_tasks.pop(op.id, None)
+        assert task.done()
+
+    async def test_rebuild_from_history_stops_a_writer_claimed_while_waiting(
+        self, test_db, monkeypatch
+    ):
+        """Waiting for a run is an await, and the run ending there wakes the
+        runner, which claims the repository's next queued writer. What has
+        started since the list was read is stopped in its turn."""
+        import asyncio
+
+        from app.api import archive_index
+
+        repo = _repo(test_db)
+        first = _op(test_db, repo, "history_index", status="running")
+        events = {}
+        tasks = {}
+
+        def _start(op):
+            events[op.id] = asyncio.Event()
+            tasks[op.id] = asyncio.create_task(events[op.id].wait())
+            archive_index.operation_runner.running_tasks[op.id] = tasks[op.id]
+
+        _start(first)
+        claimed = []
+
+        async def request_cancel(operation_id):
+            op = test_db.get(Operation, operation_id)
+            op.status = "cancelled"
+            # The runner claims the next queued writer as this one ends.
+            if not claimed:
+                nxt = _op(test_db, repo, "history_index", status="running")
+                claimed.append(nxt.id)
+                _start(nxt)
+            test_db.commit()
+            events[operation_id].set()
+            return True
+
+        monkeypatch.setattr(
+            archive_index.operation_runner, "request_cancel", request_cancel
+        )
+        try:
+            await archive_index._stop_history_writers(test_db, repo.id)
+        finally:
+            for op_id in list(tasks):
+                archive_index.operation_runner.running_tasks.pop(op_id, None)
+        assert claimed and all(t.done() for t in tasks.values())
+        assert (
+            test_db.query(Operation).filter(Operation.status == "running").count() == 0
+        )
+
+    async def test_rebuild_from_history_refuses_a_run_that_does_not_stop(
+        self, test_db, monkeypatch
+    ):
+        """Deleting the rows of a run that keeps going is the bug itself, so
+        a run that ignores the cancel refuses the rebuild instead."""
+        import asyncio
+
+        from fastapi import HTTPException
+
+        from app.api import archive_index
+
+        repo = _repo(test_db)
+        op = _op(test_db, repo, "history_merge", status="running")
+        task = asyncio.create_task(asyncio.Event().wait())
+
+        async def request_cancel(operation_id):
+            return True
+
+        monkeypatch.setattr(
+            archive_index.operation_runner, "request_cancel", request_cancel
+        )
+        monkeypatch.setattr(archive_index, "CANCEL_WAIT_SECONDS", 0.01)
+        archive_index.operation_runner.running_tasks[op.id] = task
+        try:
+            with pytest.raises(HTTPException) as err:
+                await archive_index._stop_history_writers(test_db, repo.id)
+        finally:
+            archive_index.operation_runner.running_tasks.pop(op.id, None)
+            task.cancel()
+        assert err.value.status_code == 409
+        assert err.value.detail["key"] == "backend.errors.archives.historyRunning"
+        assert err.value.detail["params"]["operationId"] == op.id
+
+    async def test_rebuild_from_history_refuses_a_run_of_another_worker(
+        self, test_db, monkeypatch
+    ):
+        """No task here means no cancel flag to raise: the row is another
+        worker's, and its rows would come back after the delete."""
+        from fastapi import HTTPException
+
+        from app.api import archive_index
+
+        repo = _repo(test_db)
+        _op(test_db, repo, "history_index", status="running")
+
+        async def request_cancel(operation_id):
+            return False
+
+        monkeypatch.setattr(
+            archive_index.operation_runner, "request_cancel", request_cancel
+        )
+        with pytest.raises(HTTPException) as err:
+            await archive_index._stop_history_writers(test_db, repo.id)
+        assert err.value.status_code == 409
+
+    def test_rebuild_from_history_ignores_finished_and_other_repositories(
+        self, test_client, test_db, admin_headers
+    ):
+        """Only a running history writer on this repository blocks; a
+        finished one, and another repository's run, do not."""
+        _pro(test_db)
+        repo = _repo(test_db)
+        other = _repo(test_db, name="r2")
+        _op(test_db, repo, "history_index", status="completed")
+        _op(test_db, other, "history_index", status="running")
+        r = test_client.post(
+            f"/api/repositories/{repo.id}/rebuild",
+            json={"from": "history"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 200, r.text
+
     def test_rebuild_requires_operator(self, test_client, test_db, auth_headers):
         repo = _repo(test_db)
         r = test_client.post(
