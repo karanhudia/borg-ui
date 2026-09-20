@@ -429,9 +429,18 @@ async def run_history_index(ctx) -> Outcome:
         for position, archive in enumerate(pending):
             if ctx.cancelled():
                 break
-            if budget > 0 and position and time.monotonic() - started >= budget:
-                # always index at least one archive, so a repository whose
-                # single diff outlasts the budget still makes progress
+            if (
+                budget > 0
+                and (indexed or failed)
+                and (time.monotonic() - started >= budget)
+            ):
+                # Only a diff that ran spends the budget, so a run always
+                # attempts at least one archive (a repository whose single
+                # diff outlasts the budget still makes progress), and
+                # predecessor-blocked archives, which cost nothing, never
+                # end a run on their own. A failed diff counts: it costs
+                # the same repository lock and worker time as one that
+                # succeeded.
                 remaining = total - position
                 ctx.log(f"per-run budget reached: {remaining} archives left pending")
                 break

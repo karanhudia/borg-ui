@@ -667,3 +667,22 @@ async def test_per_run_budget_leaves_the_rest_pending(db, repo, monkeypatch):
     db.refresh(a2)
     assert a1.history_state == "indexed"
     assert a2.history_state == "pending"
+
+
+@pytest.mark.unit
+async def test_budget_does_not_end_a_run_on_a_blocked_archive(db, repo, monkeypatch):
+    """A predecessor-blocked archive costs no diff, so it must not spend the
+    budget: the next series still gets indexed in this run."""
+    _archive(db, repo, "nas-first", 1, state="skipped")
+    _archive(db, repo, "nas-second", 2)
+    other = _archive(db, repo, "other-first", 3, series="other")
+    FakeRouter.lists["other-first"] = [L("a", 1)]
+    monkeypatch.setattr(history.settings, "index_history_seconds_per_run", 1)
+    monkeypatch.setattr(history.time, "monotonic", lambda: 99.0)
+
+    out = await history.run_history_index(_ctx(db, repo))
+
+    assert "remaining" not in out.result
+    assert out.result["indexed"] == 1 and out.result["left_pending"] == 1
+    db.refresh(other)
+    assert other.history_state == "indexed"
