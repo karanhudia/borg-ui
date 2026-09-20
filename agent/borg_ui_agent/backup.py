@@ -264,12 +264,25 @@ def parse_borg_progress(line: str) -> Optional[dict[str, Any]]:
             and isinstance(total, (int, float))
             and total
         ):
-            return {"progress_percent": float(current / total * 100.0)}
+            progress = {"progress_percent": float(current / total * 100.0)}
+            # `borg extract` names the file it is at in `info`
+            info = payload.get("info")
+            if isinstance(info, list) and info and isinstance(info[0], str):
+                progress["current_file"] = info[0]
+            return progress
 
     if msg_type == "file_status" and payload.get("path"):
         return {"current_file": payload["path"]}
 
     return None
+
+
+def progress_replaces_log_line(progress: Optional[dict[str, Any]]) -> bool:
+    """Whether the progress report parsed from a line says all the line did,
+    so the line is not stored as a log line too. A `file_status` line
+    (`create --list`) is both: it names the current file, and it is the
+    listing the operator asked for."""
+    return bool(progress) and set(progress) != {"current_file"}
 
 
 def _parse_created_archive_name(stdout: str) -> Optional[str]:
@@ -377,13 +390,14 @@ def execute_backup_create_job(
         if process.stderr is not None:
             for line in process.stderr:
                 message = line.rstrip("\n")
-                client.send_log(
-                    job_id, sequence=sequence, stream="stderr", message=message
-                )
-                sequence += 1
                 progress = parse_borg_progress(message)
                 if progress:
                     client.send_progress(job_id, progress)
+                if not progress_replaces_log_line(progress):
+                    client.send_log(
+                        job_id, sequence=sequence, stream="stderr", message=message
+                    )
+                    sequence += 1
                 if cancel_requested(should_cancel) and process.poll() is None:
                     # not once Borg ended on its own while the check ran (it
                     # may have asked the server): that run is its verdict
