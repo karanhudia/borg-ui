@@ -1126,6 +1126,9 @@ class TestRebuild:
 
         async def request_cancel(operation_id):
             assert operation_id == op.id
+            # what the runner writes as the run ends
+            op.status = "cancelled"
+            test_db.commit()
             stopping.set()
             return True
 
@@ -1138,6 +1141,54 @@ class TestRebuild:
         finally:
             archive_index.operation_runner.running_tasks.pop(op.id, None)
         assert task.done()
+
+    async def test_rebuild_from_history_stops_a_writer_claimed_while_waiting(
+        self, test_db, monkeypatch
+    ):
+        """Waiting for a run is an await, and the run ending there wakes the
+        runner, which claims the repository's next queued writer. What has
+        started since the list was read is stopped in its turn."""
+        import asyncio
+
+        from app.api import archive_index
+
+        repo = _repo(test_db)
+        first = _op(test_db, repo, "history_index", status="running")
+        events = {}
+        tasks = {}
+
+        def _start(op):
+            events[op.id] = asyncio.Event()
+            tasks[op.id] = asyncio.create_task(events[op.id].wait())
+            archive_index.operation_runner.running_tasks[op.id] = tasks[op.id]
+
+        _start(first)
+        claimed = []
+
+        async def request_cancel(operation_id):
+            op = test_db.get(Operation, operation_id)
+            op.status = "cancelled"
+            # The runner claims the next queued writer as this one ends.
+            if not claimed:
+                nxt = _op(test_db, repo, "history_index", status="running")
+                claimed.append(nxt.id)
+                _start(nxt)
+            test_db.commit()
+            events[operation_id].set()
+            return True
+
+        monkeypatch.setattr(
+            archive_index.operation_runner, "request_cancel", request_cancel
+        )
+        try:
+            await archive_index._stop_history_writers(test_db, repo.id)
+        finally:
+            for op_id in list(tasks):
+                archive_index.operation_runner.running_tasks.pop(op_id, None)
+        assert claimed and all(t.done() for t in tasks.values())
+        assert (
+            test_db.query(Operation).filter(Operation.status == "running").count() == 0
+        )
 
     async def test_rebuild_from_history_refuses_a_run_that_does_not_stop(
         self, test_db, monkeypatch

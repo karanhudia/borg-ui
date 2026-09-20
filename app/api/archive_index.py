@@ -4,6 +4,7 @@ heatmap, status, rebuild, and (Pro) changes, history, search."""
 import asyncio
 from bisect import bisect_right
 from datetime import date, datetime, timedelta, timezone
+from time import monotonic
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -672,27 +673,45 @@ CANCEL_WAIT_SECONDS = 10.0
 
 
 async def _stop_history_writers(db: Session, repository_id: int) -> None:
-    running = (
-        db.query(Operation)
-        .filter(
-            Operation.repository_id == repository_id,
-            Operation.kind.in_(HISTORY_WRITE_KINDS),
-            Operation.status == "running",
+    """Leave no history writer running on the repository, or refuse.
+
+    Waiting for one is itself an await, and the run ending there wakes the
+    runner, which can claim the next queued writer of the repository before
+    this coroutine resumes. So the list is read again after every wait, and
+    what has started since is stopped in its turn, until nothing is running
+    or the budget is spent."""
+    deadline = monotonic() + CANCEL_WAIT_SECONDS
+    while True:
+        # The executor commits from its own session; end this one's read
+        # transaction so the states come from disk rather than a snapshot
+        # taken before the cancel.
+        db.rollback()
+        op = (
+            db.query(Operation)
+            .filter(
+                Operation.repository_id == repository_id,
+                Operation.kind.in_(HISTORY_WRITE_KINDS),
+                Operation.status == "running",
+            )
+            .order_by(Operation.id.asc())
+            .first()
         )
-        .all()
-    )
-    for op in running:
+        if op is None:
+            return
         # Read before the cancel: the runner drops the task as it finishes,
         # and a run that ended on its own meanwhile needs no waiting.
         task = operation_runner.running_tasks.get(op.id)
         await operation_runner.request_cancel(op.id)
-        if task is not None:
-            done, _ = await asyncio.wait({task}, timeout=CANCEL_WAIT_SECONDS)
+        remaining = deadline - monotonic()
+        if task is not None and remaining > 0:
+            done, _ = await asyncio.wait({task}, timeout=remaining)
             if done:
                 continue
-        else:
-            db.refresh(op)
-            if op.status != "running":
+        elif task is None:
+            # No task here: the row is another worker's, or it ended between
+            # the query and the cancel. Only the second one lets this go on.
+            db.rollback()
+            if db.get(Operation, op.id).status != "running":
                 continue
         raise HTTPException(
             status_code=409,
