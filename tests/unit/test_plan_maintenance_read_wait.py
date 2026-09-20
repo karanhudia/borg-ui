@@ -31,8 +31,8 @@ from app.services.job_admission import (
     OPERATION_PRUNE,
     REPOSITORY_OPERATION_ACTIVE_KEY,
     ensure_repository_admission,
-    refused_by_transient_read_work,
-    wait_for_transient_read_work,
+    refused_by_read_work,
+    wait_for_read_work_to_clear,
 )
 
 
@@ -122,7 +122,7 @@ def _operation(db_session, repo, kind, status, *, category="maintenance"):
 @pytest.mark.unit
 @pytest.mark.parametrize("active", ["repository.list_archives", "repository.info"])
 def test_transient_read_work_in_the_way_is_worth_a_wait(active):
-    assert refused_by_transient_read_work(_refusal(active=active))
+    assert refused_by_read_work(_refusal(active=active))
 
 
 @pytest.mark.unit
@@ -145,7 +145,7 @@ def test_transient_read_work_in_the_way_is_worth_a_wait(active):
     ],
 )
 def test_every_other_refusal_reaches_the_caller(exc):
-    assert not refused_by_transient_read_work(exc)
+    assert not refused_by_read_work(exc)
 
 
 @pytest.mark.unit
@@ -157,7 +157,7 @@ def test_the_predicate_reads_what_admission_actually_raises(db_session):
 
     with pytest.raises(HTTPException) as refused_by_listing:
         ensure_repository_admission(db_session, repo, OPERATION_PRUNE)
-    assert refused_by_transient_read_work(refused_by_listing.value)
+    assert refused_by_read_work(refused_by_listing.value)
 
     db_session.rollback()
     db_session.query(AgentJob).delete()
@@ -165,7 +165,7 @@ def test_the_predicate_reads_what_admission_actually_raises(db_session):
 
     with pytest.raises(HTTPException) as refused_by_check:
         ensure_repository_admission(db_session, repo, OPERATION_PRUNE)
-    assert not refused_by_transient_read_work(refused_by_check.value)
+    assert not refused_by_read_work(refused_by_check.value)
 
 
 # -- the wait, against real rows ------------------------------------------------
@@ -183,7 +183,7 @@ async def test_wait_returns_once_the_listing_is_gone(db_session):
         db_session.commit()
 
     finisher = asyncio.ensure_future(_finish_listing())
-    cleared = await wait_for_transient_read_work(
+    cleared = await wait_for_read_work_to_clear(
         db_session, repo, timeout_seconds=5, poll_interval_seconds=0.01
     )
     await finisher
@@ -200,7 +200,7 @@ async def test_wait_gives_up_at_once_on_read_work_that_cannot_clear(db_session):
     _operation(db_session, repo, "check", "queued")
 
     started = time.monotonic()
-    cleared = await wait_for_transient_read_work(
+    cleared = await wait_for_read_work_to_clear(
         db_session, repo, timeout_seconds=5, poll_interval_seconds=0.01
     )
 
@@ -217,7 +217,7 @@ async def test_wait_does_not_look_at_write_work(db_session):
     _operation(db_session, repo, "backup", "running", category="backup")
 
     assert (
-        await wait_for_transient_read_work(
+        await wait_for_read_work_to_clear(
             db_session, repo, timeout_seconds=5, poll_interval_seconds=0.01
         )
         == READ_WORK_CLEARED
@@ -231,7 +231,7 @@ async def test_wait_stops_at_the_timeout_and_on_cancellation(db_session):
     _agent_job(db_session, agent, repo, kind="repository.info")
 
     started = time.monotonic()
-    outcome = await wait_for_transient_read_work(
+    outcome = await wait_for_read_work_to_clear(
         db_session, repo, timeout_seconds=0.2, poll_interval_seconds=0.01
     )
     assert outcome == READ_WORK_TIMEOUT
@@ -239,7 +239,7 @@ async def test_wait_stops_at_the_timeout_and_on_cancellation(db_session):
     assert time.monotonic() - started >= 0.2
 
     assert (
-        await wait_for_transient_read_work(
+        await wait_for_read_work_to_clear(
             db_session,
             repo,
             timeout_seconds=5,
@@ -261,7 +261,7 @@ async def test_wait_gives_up_on_a_listing_no_agent_ever_claims(db_session):
     db_session.commit()
 
     started = time.monotonic()
-    outcome = await wait_for_transient_read_work(
+    outcome = await wait_for_read_work_to_clear(
         db_session,
         repo,
         timeout_seconds=5,
@@ -290,7 +290,7 @@ async def test_the_unclaimed_grace_starts_when_only_queued_jobs_are_left(db_sess
 
     switch = asyncio.ensure_future(_finish_listing_then_queue_an_info())
     started = time.monotonic()
-    outcome = await wait_for_transient_read_work(
+    outcome = await wait_for_read_work_to_clear(
         db_session,
         repo,
         timeout_seconds=5,
@@ -324,7 +324,7 @@ async def test_wait_ends_the_transaction_before_every_poll():
         return listings.pop(0)
 
     with patch("app.services.job_admission.list_active_repository_work", _list):
-        outcome = await wait_for_transient_read_work(
+        outcome = await wait_for_read_work_to_clear(
             db, repository, timeout_seconds=5, poll_interval_seconds=0.01
         )
     assert outcome == READ_WORK_CLEARED
@@ -390,7 +390,7 @@ class _Router:
                 "app.services.repository_executor.wait_for_agent_repository_operation_job",
                 new=AsyncMock(return_value={}),
             ),
-            patch("app.services.job_admission.wait_for_transient_read_work", self.wait),
+            patch("app.services.job_admission.wait_for_read_work_to_clear", self.wait),
             patch(
                 "app.services.job_admission.TRANSIENT_READ_WAIT_SECONDS", self.budget
             ),

@@ -692,8 +692,8 @@ class BorgRouter:
             READ_WORK_CANCELLED,
             READ_WORK_CLEARED,
             TRANSIENT_READ_WAIT_SECONDS,
-            refused_by_transient_read_work,
-            wait_for_transient_read_work,
+            refused_by_read_work,
+            wait_for_read_work_to_clear,
         )
         from app.services.agent_job_dispatcher import (
             dispatch_agent_cancel_if_connected,
@@ -746,7 +746,7 @@ class BorgRouter:
             try:
                 job = _queue()
             except HTTPException as exc:
-                if not refused_by_transient_read_work(exc):
+                if not refused_by_read_work(exc):
                     raise
                 refusal = exc
             else:
@@ -786,7 +786,7 @@ class BorgRouter:
                 raise refusal
             # The wait ends this session's transaction around each poll,
             # which also releases the row lock the refused admission took.
-            outcome = await wait_for_transient_read_work(
+            outcome = await wait_for_read_work_to_clear(
                 db,
                 repository,
                 timeout_seconds=remaining,
