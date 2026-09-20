@@ -9,6 +9,7 @@ history_merge folds a removed archive's rows into its successor.
 
 import asyncio
 import re
+import time
 from collections import Counter
 from typing import Iterable, Optional
 
@@ -414,12 +415,25 @@ async def run_history_index(ctx) -> Outcome:
     env, temp_key_file = (
         ({}, None) if agent else _prepare_repository_borg_env(repository, db)
     )
-    indexed = failed = left = 0
+    indexed = failed = left = remaining = 0
     agent_unavailable: Optional[str] = None
     total = len(pending)
+    # Per-run budget (#1103). Without it one run works through every pending
+    # archive of the repository, and a backfill (an agent update reopening
+    # every skipped archive) holds an index worker for hours while the
+    # listings and stats of every other repository wait. The archives past
+    # the budget stay `pending` for the next reconcile run.
+    budget = settings.index_history_seconds_per_run
+    started = time.monotonic()
     try:
         for position, archive in enumerate(pending):
             if ctx.cancelled():
+                break
+            if budget > 0 and position and time.monotonic() - started >= budget:
+                # always index at least one archive, so a repository whose
+                # single diff outlasts the budget still makes progress
+                remaining = total - position
+                ctx.log(f"per-run budget reached: {remaining} archives left pending")
                 break
             predecessor = predecessor_of(db, archive)
             if predecessor is not None and predecessor.history_state != "indexed":
@@ -490,6 +504,8 @@ async def run_history_index(ctx) -> Outcome:
             "left_pending": left,
             "exhausted": len(exhausted),
         }
+        if remaining:
+            result["remaining"] = remaining
         if agent_unavailable is not None:
             result["agent_unavailable"] = agent_unavailable
         return Outcome(status=status, result=result)

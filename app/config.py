@@ -218,6 +218,12 @@ class Settings(BaseSettings):
     # collapsed into per-subtree summary rows (spec 6.7)
     index_history_max_rows: int = 200000
 
+    # Operations index: wall-clock budget for one history_index run. Archives
+    # past it stay `pending` for the next reconcile run, so a long backfill
+    # cannot hold an index worker (and the index work of every other
+    # repository) for hours. 0 disables the budget.
+    index_history_seconds_per_run: int = 900
+
     # Backup settings
     max_backup_jobs: int = 5
     backup_timeout: int = 3600  # 1 hour

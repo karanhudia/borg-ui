@@ -645,3 +645,25 @@ async def test_a_busy_repository_defers_the_run_without_spending_a_retry(
     db.refresh(a2)
     assert a2.history_state == "pending"
     assert (a2.history_attempts or 0) == 0
+
+
+@pytest.mark.unit
+async def test_per_run_budget_leaves_the_rest_pending(db, repo, monkeypatch):
+    """One run must not work through an unbounded backfill (#1103): archives
+    past the budget stay pending for the next run."""
+    a1 = _archive(db, repo, "first", 1)
+    a2 = _archive(db, repo, "second", 2)
+    FakeRouter.lists["first"] = [L("a", 1)]
+    FakeRouter.diffs[("first", "second")] = [D_MOD("a", 4, 0)]
+    monkeypatch.setattr(history.settings, "index_history_seconds_per_run", 1)
+    ticks = iter([0.0])
+    monkeypatch.setattr(history.time, "monotonic", lambda: next(ticks, 99.0))
+
+    out = await history.run_history_index(_ctx(db, repo))
+
+    assert out.status == "completed"
+    assert out.result["indexed"] == 1 and out.result["remaining"] == 1
+    db.refresh(a1)
+    db.refresh(a2)
+    assert a1.history_state == "indexed"
+    assert a2.history_state == "pending"

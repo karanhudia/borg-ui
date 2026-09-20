@@ -158,6 +158,7 @@ Priority for UI-managed timeout settings:
 | --- | --- | --- |
 | `INDEX_ARCHIVE_INFO_PER_RUN` | `20` | Per-archive `borg info` calls one archive listing run may make for newly seen archives; the rest are picked up by later runs |
 | `INDEX_HISTORY_MAX_ROWS` | `200000` | Change rows stored per archive by the history index; changes past the cap collapse into per-subtree summary rows and the archive is marked truncated |
+| `INDEX_HISTORY_SECONDS_PER_RUN` | `900` | Wall-clock budget for one history index run; archives past it stay pending for the next run, so a long backfill cannot hold an index worker. `0` disables the budget |
 
 The reconcile interval (`stats_refresh_interval_minutes`) and the
 `index_workers` and `background_paused` runner controls are system settings

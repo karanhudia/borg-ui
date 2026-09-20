@@ -489,7 +489,11 @@ Two more index kinds fill and maintain `archive_changes`:
   `INDEX_HISTORY_MAX_ROWS` the rest is collapsed into `summary` rows keyed
   by the first three path segments and the archive is marked truncated.
   Each archive is written in one transaction; a crash leaves it either
-  fully indexed or pending. An archive whose predecessor is not indexed
+  fully indexed or pending. A run stops once it has spent
+  `INDEX_HISTORY_SECONDS_PER_RUN` (checked between archives, so one archive
+  is always indexed); the rest stay pending for the next reconcile run and
+  the run reports `remaining`, so a long backfill cannot hold an index
+  worker for hours. An archive whose predecessor is not indexed
   yet stays pending for the next run, and the run reports
   `completed_with_warnings` so a stalled series is visible. An archive that
   failed is retried on the next run: nothing else moves it out of that
