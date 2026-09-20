@@ -70,6 +70,7 @@ export interface ActivityItem {
 type Progress = OperationProgressEvent['data']
 
 const PAGE_SIZE = 50
+const FALLBACK_POLL_MS = 15_000
 
 function withProgress(item: ActivityItem, progress: Progress): ActivityItem {
   const patched =
@@ -148,8 +149,12 @@ const Activity: React.FC = () => {
         ? undefined
         : (lastPage[lastPage.length - 1]?.sort_at?.replace('+00:00', 'Z') ?? undefined),
     // History does not change, so stop polling once the user pages into it.
-    // Live rows keep arriving over SSE either way.
-    refetchInterval: (query) => ((query.state.data?.pages.length ?? 1) > 1 ? false : 3000),
+    // Status changes invalidate the list over SSE and progress is patched
+    // into the cache, so the poll is only the fallback for rows that send no
+    // operation event (script runs, plan-run failures) and for a dropped
+    // connection.
+    refetchInterval: (query) =>
+      (query.state.data?.pages.length ?? 1) > 1 ? false : FALLBACK_POLL_MS,
   })
   // A run whose parent sat just past a page edge is pulled into that page as
   // an ancestor and comes back at the head of the next one. Keep the first
@@ -175,9 +180,9 @@ const Activity: React.FC = () => {
   const pinnedRepository = repositories.find((repo) => repo.id === repositoryId)
   const { canBreakLock, lockBreakingEnabled } = useLockBreakPermissions({ repositories })
 
-  // Progress arrives once a second over SSE; the list refetches every
-  // three. Patching the cache in between keeps bars moving without a
-  // request per tick. Status changes are rarer and get a full refetch.
+  // Progress arrives once a second over SSE. Patching the cache keeps bars
+  // moving without a request per tick. Status changes are rarer and get a
+  // full refetch.
   const onProgress = useCallback(
     (progress: Progress) => {
       queryClient.setQueriesData<{ pages: ActivityItem[][] }>({ queryKey: ['activity'] }, (old) =>
