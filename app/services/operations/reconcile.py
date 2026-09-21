@@ -3,6 +3,7 @@ instead of calling Borg for every repository in a loop, it enqueues one
 index run per repository and lets the runner pace the work."""
 
 import asyncio
+from datetime import datetime, timedelta
 from typing import Optional
 
 import structlog
@@ -30,7 +31,8 @@ RECONCILE_CHAIN = ("archive_sync", "history_merge", "history_index", "stats")
 DEFAULT_INTERVAL_MINUTES = 60
 # How often to re-check the setting while reconciliation is disabled
 # (stats_refresh_interval_minutes <= 0), so a later positive update resumes
-# it without a process restart.
+# it without a process restart. The wait for the next run is cut into the
+# same slices, so a changed interval applies within one of them.
 POLL_INTERVAL_WHEN_DISABLED_MINUTES = 5
 
 
@@ -177,7 +179,27 @@ def bootstrap_history_once(db: Session) -> int:
     return count
 
 
+def seconds_until_due(
+    last_tick: Optional[datetime], interval_minutes: int, now: datetime
+) -> float:
+    """Seconds until `last_tick + interval`; 0 when that has passed. No last
+    tick, or one in the future (the clock moved back), is due now."""
+    if last_tick is None or last_tick > now:
+        return 0.0
+    try:
+        due = last_tick + timedelta(minutes=interval_minutes)
+    except OverflowError:
+        # An interval past the datetime range is never due.
+        return float("inf")
+    return max(0.0, (due - now).total_seconds())
+
+
 class ReconcileScheduler:
+    """Runs the reconcile tick every `stats_refresh_interval_minutes`,
+    counted from the last tick rather than from process start: a restart
+    neither skips a tick nor moves the time of the next one. The time of the
+    last tick is stored on SystemSettings."""
+
     def __init__(self):
         self.running = False
 
@@ -194,30 +216,74 @@ class ReconcileScheduler:
         finally:
             db.close()
 
+    def _last_tick_at(self) -> Optional[datetime]:
+        db = SessionLocal()
+        try:
+            settings = db.query(SystemSettings).first()
+            return settings.last_reconcile_tick_at if settings else None
+        finally:
+            db.close()
+
+    def _tick(self, now: datetime) -> None:
+        db = SessionLocal()
+        try:
+            enqueue_reconcile_runs(db)
+            # Stored after the enqueue, so a tick that failed is repeated
+            # after a restart. A tick that enqueued nothing still counts.
+            # Two commits on purpose: a failed write of the time must not
+            # undo the enqueue, and a tick repeated after a crash in between
+            # skips the repositories whose run is still queued.
+            # The settings row is not created here; until it exists the
+            # tick time is only kept in memory.
+            db.query(SystemSettings).update(
+                {"last_reconcile_tick_at": now}, synchronize_session=False
+            )
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            logger.error("Reconcile run failed", error=str(exc))
+        finally:
+            db.close()
+
     def stop(self) -> None:
         self.running = False
 
     async def start(self) -> None:
+        # Startup registers the executors, recovers interrupted operations
+        # and starts the runner before this loop, so a tick that is overdue
+        # at start can be enqueued right away; the runner paces the work.
         self.running = True
         logger.info("Reconcile scheduler started")
+        poll = POLL_INTERVAL_WHEN_DISABLED_MINUTES * 60
+        last_tick = None
+        last_tick_read = False
         while self.running:
+            if not last_tick_read:
+                # A failed read is retried, not taken as "no tick yet":
+                # that would run a tick at once and move the schedule.
+                try:
+                    last_tick = self._last_tick_at()
+                    last_tick_read = True
+                except Exception as exc:
+                    logger.warning("Failed to read last reconcile tick", error=str(exc))
+                    await asyncio.sleep(poll)
+                    continue
             interval = self._interval_minutes()
             if interval <= 0:
-                await asyncio.sleep(POLL_INTERVAL_WHEN_DISABLED_MINUTES * 60)
+                await asyncio.sleep(poll)
                 continue
-            await asyncio.sleep(interval * 60)
-            if not self.running:
-                break
-            interval = self._interval_minutes()
-            if interval <= 0:
+            now = utc_now()
+            wait = seconds_until_due(last_tick, interval, now)
+            if wait > 0:
+                await asyncio.sleep(min(wait, poll))
                 continue
-            db = SessionLocal()
-            try:
-                enqueue_reconcile_runs(db)
-            except Exception as exc:
-                logger.error("Reconcile run failed", error=str(exc))
-            finally:
-                db.close()
+            # Kept in memory as well, so a tick that failed waits a full
+            # interval within this process, as it always has.
+            last_tick = now
+            self._tick(now)
+            # A tick that outlasts the interval leaves the next one due at
+            # once; give way to the event loop in between.
+            await asyncio.sleep(0)
 
 
 reconcile_scheduler = ReconcileScheduler()
