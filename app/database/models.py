@@ -1762,6 +1762,9 @@ class LicensingState(Base):
     key_id = Column(String, nullable=True)
     customer_id = Column(String, nullable=True)
     license_id = Column(String, nullable=True)
+    # Kept so the instance can manage its own license seats without the
+    # customer pasting the key again on every visit.
+    license_key = Column("license_key_encrypted", EncryptedString, nullable=True)
     max_users = Column(Integer, nullable=True)
     issued_at = Column(DateTime, nullable=True)
     starts_at = Column(DateTime, nullable=True)

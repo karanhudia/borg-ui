@@ -18,7 +18,9 @@ from app.services.licensing_service import (
     get_entitlement_summary,
     get_feature_access,
     import_offline_entitlement,
+    list_license_seats,
     refresh_entitlement,
+    release_license_seat,
 )
 
 logger = structlog.get_logger()
@@ -30,6 +32,10 @@ borg = BorgInterface()
 
 class LicenseActivationRequest(BaseModel):
     license_key: str = Field(min_length=1)
+
+
+class SeatReleaseRequest(BaseModel):
+    instance_id: str = Field(min_length=1)
 
 
 class OfflineEntitlementImportRequest(BaseModel):
@@ -154,6 +160,31 @@ async def deactivate_system_license(
     except Exception as e:
         logger.warning("Failed to deactivate paid license", error=str(e))
         raise _licensing_http_error("license_deactivation_failed", str(e))
+
+
+@router.get("/licensing/seats")
+async def list_system_license_seats(
+    db: Session = Depends(get_db),
+    _: object = Depends(get_current_admin_user),
+):
+    try:
+        return await list_license_seats(db)
+    except Exception as e:
+        logger.warning("Failed to list license seats", error=str(e))
+        raise _licensing_http_error("license_seats_failed", str(e))
+
+
+@router.post("/licensing/seats/release")
+async def release_system_license_seat(
+    request: SeatReleaseRequest,
+    db: Session = Depends(get_db),
+    _: object = Depends(get_current_admin_user),
+):
+    try:
+        return await release_license_seat(db, instance_id=request.instance_id)
+    except Exception as e:
+        logger.warning("Failed to release license seat", error=str(e))
+        raise _licensing_http_error("license_seat_release_failed", str(e))
 
 
 @router.post("/licensing/import")

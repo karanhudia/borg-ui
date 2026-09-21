@@ -187,6 +187,7 @@ def _clear_entitlement(
     state.plan = "community"
     state.status = status
     state.is_trial = False
+    state.license_key = None
     state.entitlement_id = None
     state.key_id = None
     state.customer_id = None
@@ -478,6 +479,8 @@ async def activate_paid_license(
         raise RuntimeError(error)
 
     _apply_entitlement(db, state, payload, signature, key_id=key_id)
+    state.license_key = license_key
+    db.commit()
     return {
         "result": data.get("result") or "activated",
         "entitlement": get_entitlement_summary(db),
@@ -501,6 +504,38 @@ async def deactivate_paid_license(db: Session) -> dict[str, Any]:
         "result": data.get("result") or "deactivated",
         "entitlement": get_entitlement_summary(db),
     }
+
+
+def _require_license_key(db: Session) -> tuple[LicensingState, str]:
+    state = get_or_create_licensing_state(db)
+    if not state.license_key:
+        raise RuntimeError(
+            "No license key is stored on this instance. Activate again with your "
+            "license key to manage seats."
+        )
+    return state, state.license_key
+
+
+async def list_license_seats(db: Session) -> dict[str, Any]:
+    """Every installation currently holding a seat on this license.
+
+    The license key is the credential; the seat list belongs to the license,
+    not to this instance, so it is always fetched live.
+    """
+    state, license_key = _require_license_key(db)
+    data = await _post_activation("/v1/licenses/seats", {"license_key": license_key})
+    return {"instance_id": state.instance_id, **data}
+
+
+async def release_license_seat(db: Session, *, instance_id: str) -> dict[str, Any]:
+    state, license_key = _require_license_key(db)
+    if instance_id == state.instance_id:
+        raise RuntimeError("Use deactivate to release the seat held by this instance.")
+    data = await _post_activation(
+        "/v1/licenses/seats/release",
+        {"license_key": license_key, "instance_id": instance_id},
+    )
+    return {"result": data.get("result") or "released"}
 
 
 def import_offline_entitlement(db: Session, document: dict[str, Any]) -> dict[str, Any]:

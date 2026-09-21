@@ -99,6 +99,8 @@ describe('LicensingTab', () => {
 
     renderWithProviders(<LicensingTab />)
 
+    // With a paid licence active the key field is behind "Replace licence".
+    await user.click(screen.getByRole('button', { name: /replace licence/i }))
     await user.type(screen.getByLabelText(/licence key/i), 'BORG-1234-5678-9012')
     await user.click(screen.getByRole('button', { name: /replace licence/i }))
 
