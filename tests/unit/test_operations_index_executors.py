@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -1240,6 +1240,188 @@ def test_archives_needing_info_revisits_withheld_end(db, repo, monkeypatch):
         index_exec, "agent_timezone_for_repository", lambda db_, r: "Europe/Berlin"
     )
     assert index_exec.archive_end_resolvable(db, repo) is True
+
+
+@pytest.mark.unit
+def test_archives_needing_info_serves_never_measured_rows_first(db, repo):
+    """A removal stales every survivor, so a new archive is the newest of
+    many rows without a date. Rows without sizes come first, oldest first;
+    stale rows that carry sizes take the spare slots."""
+    for borg_id, day, size in (
+        ("stale1", 1, 10),
+        ("stale2", 2, 10),
+        ("stale3", 3, 10),
+        ("never1", 4, None),
+        ("never2", 5, None),
+    ):
+        db.add(
+            Archive(
+                repository_id=repo.id,
+                borg_id=borg_id,
+                name=borg_id,
+                series="default",
+                start=datetime(2026, 9, day),
+                original_size=size,
+            )
+        )
+    db.commit()
+    ids = lambda rows: [a.borg_id for a in rows]  # noqa: E731
+    assert ids(index_exec.archives_needing_info(db, repo, limit=1)) == ["never1"]
+    assert ids(index_exec.archives_needing_info(db, repo, limit=3)) == [
+        "never1",
+        "never2",
+        "stale1",
+    ]
+    assert ids(index_exec.archives_needing_info(db, repo, limit=9)) == [
+        "never1",
+        "never2",
+        "stale1",
+        "stale2",
+        "stale3",
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_archive_sync_fills_the_new_archive_despite_stale_survivors(
+    db, repo, monkeypatch
+):
+    """A prune after every backup: each listing reports one removal and one
+    new archive. With more archives than the per-run cap the stale survivors
+    alone exhaust it, and the new archive must still get its info in the same
+    run, every round."""
+    cap, count = 20, 25
+    monkeypatch.setattr(index_exec.settings, "index_archive_info_per_run", cap)
+
+    def entry(day):
+        start = datetime(2026, 1, 1) + timedelta(days=day)
+        name = f"nas-{start:%Y-%m-%d}"
+        stamp = f"{start:%Y-%m-%dT%H:%M:%S}.000000"
+        return {
+            "archive": name,
+            "name": name,
+            "id": f"id{day:03d}",
+            "start": stamp,
+            "time": stamp,
+        }
+
+    for day in range(count):
+        db.add(
+            Archive(
+                repository_id=repo.id,
+                borg_id=f"id{day:03d}",
+                name=f"nas-{datetime(2026, 1, 1) + timedelta(days=day):%Y-%m-%d}",
+                series="nas",
+                start=datetime(2026, 1, 1) + timedelta(days=day),
+                end=datetime(2026, 1, 1, 0, 10) + timedelta(days=day),
+                nfiles=1,
+                original_size=10,
+                stats_measured_at=datetime(2026, 1, 1) + timedelta(days=day, hours=1),
+            )
+        )
+    db.commit()
+    payload = json.dumps(
+        {
+            "archives": [
+                {
+                    "end": "2026-01-01T00:10:00",
+                    "duration": 600,
+                    "stats": {
+                        "nfiles": 1,
+                        "original_size": 10,
+                        "compressed_size": 8,
+                        "deduplicated_size": 4,
+                    },
+                }
+            ]
+        }
+    )
+    info = AsyncMock(return_value={"success": True, "stdout": payload})
+    monkeypatch.setattr(index_exec, "_server_archive_info", info)
+    monkeypatch.setattr(
+        index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
+    )
+
+    for round_no in range(1, 4):
+        listed = [entry(day) for day in range(round_no, count + round_no)]
+        monkeypatch.setattr(
+            index_exec,
+            "list_archives_for_repository",
+            AsyncMock(return_value=(True, listed, "UTC")),
+        )
+        info.reset_mock()
+        outcome = await index_exec.run_archive_sync(_ctx(db, repo))
+        assert outcome.result["new"] == 1
+        assert outcome.result["info_filled"] == cap
+        # the runner stores the result; the next listing reads it to tell a
+        # new removal from a lingering row
+        db.add(
+            Operation(
+                repository_id=repo.id,
+                kind="archive_sync",
+                category="index",
+                status="completed",
+                run_id=f"run-{round_no}",
+                completed_at=datetime(2026, 2, 1, round_no),
+                result=outcome.result,
+            )
+        )
+        db.commit()
+        db.expire_all()
+        newest = (
+            db.query(Archive).filter_by(borg_id=f"id{count + round_no - 1:03d}").one()
+        )
+        assert newest.original_size == 10
+        assert newest.stats_measured_at is not None
+        removed = set(outcome.result["removed_archive_ids"])
+        unfilled = [
+            a.borg_id
+            for a in db.query(Archive).filter(Archive.original_size.is_(None)).all()
+            if a.id not in removed
+        ]
+        assert unfilled == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fill_archive_info_fetches_never_measured_rows_first(
+    db, repo, monkeypatch
+):
+    """An agent that stops answering ends the run. A stale row ahead of the
+    new archive must not cost it the slot it was picked for."""
+    rows = []
+    for name, day, size in (("stale", 1, 10), ("new", 2, None)):
+        a = Archive(
+            repository_id=repo.id,
+            borg_id=name,
+            name=name,
+            series="default",
+            start=datetime(2026, 9, day),
+            original_size=size,
+        )
+        db.add(a)
+        rows.append(a)
+    db.commit()
+    asked = []
+
+    async def fake_agent_info(db_, repository, archive, *, timeout_seconds):
+        asked.append(archive.name)
+        if archive.name == "stale":
+            raise index_exec.AgentUnavailable("no answer")
+        return {"success": True, "stdout": _agent_info_payload()}
+
+    monkeypatch.setattr(index_exec, "is_agent_executor", lambda repository: True)
+    monkeypatch.setattr(
+        index_exec, "agent_timezone_for_repository", lambda db_, r: "UTC"
+    )
+    monkeypatch.setattr(
+        index_exec, "get_operation_timeouts", lambda db_: {"info_timeout": 5}
+    )
+    monkeypatch.setattr(index_exec, "_agent_archive_info", fake_agent_info)
+    assert await index_exec.fill_archive_info(db, repo, rows, {}, limit=2) == 1
+    assert asked == ["new", "stale"]
+    db.expire_all()
+    assert db.query(Archive).filter_by(borg_id="new").one().original_size is not None
 
 
 @pytest.mark.unit
