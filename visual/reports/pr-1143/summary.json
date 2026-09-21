@@ -1,40 +1,21 @@
 {
-  "generatedAt": "2026-09-21T07:19:11.747Z",
+  "generatedAt": "2026-09-21T08:12:31.622Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1143 visual report",
-    "commitSha": "ec1b7dd307e3",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35572272586"
+    "commitSha": "e8f1db55760d",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35576579341"
   },
   "totals": {
-    "baseline": 958,
-    "actual": 958,
-    "compared": 958,
-    "changed": 1,
+    "baseline": 960,
+    "actual": 960,
+    "compared": 960,
+    "changed": 0,
     "added": 0,
     "removed": 0,
-    "unchanged": 957
+    "unchanged": 960
   },
-  "changed": [
-    {
-      "fileName": "backup-plans-reviewstep--scheduled-upload-policies--mobile.png",
-      "baselinePath": "images/baseline/backup-plans-reviewstep--scheduled-upload-policies--mobile.png",
-      "actualPath": "images/actual/backup-plans-reviewstep--scheduled-upload-policies--mobile.png",
-      "diffPath": "images/diff/backup-plans-reviewstep--scheduled-upload-policies--mobile.png",
-      "diffPixels": 329160,
-      "totalPixels": 329160,
-      "diffRatio": 1,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    }
-  ],
+  "changed": [],
   "added": [],
   "removed": [],
   "unchanged": [
@@ -433,6 +414,9 @@
     },
     {
       "fileName": "backup-plans-reviewstep--remote-direct-execution.png"
+    },
+    {
+      "fileName": "backup-plans-reviewstep--scheduled-upload-policies--mobile.png"
     },
     {
       "fileName": "backup-plans-reviewstep--scheduled-upload-policies.png"
@@ -1324,6 +1308,12 @@
     },
     {
       "fileName": "components-licensingtab--enterprise-no-upgrade-link.png"
+    },
+    {
+      "fileName": "components-licensingtab--paid-active-with-seats--mobile.png"
+    },
+    {
+      "fileName": "components-licensingtab--paid-active-with-seats.png"
     },
     {
       "fileName": "components-licensingtab--pro-with-upgrade-link--mobile.png"
