@@ -31,6 +31,7 @@ from app.database.models import (
 from app.core.borg_router import BorgRouter
 from app.core.security import get_password_hash
 from app.services.backup_plan_execution_service import backup_plan_execution_service
+from app.services.notification_service import notification_service
 from app.services.operations.backup_facade import (
     SERVICE_PARAMS,
     BackupJobFacade,
@@ -3446,28 +3447,41 @@ class TestBackupPlanRoutes:
             source_directories=json.dumps(["/srv/project"]),
         )
 
-        with patch(
-            "app.services.backup_plan_execution_service.wait_for_backup_operation",
-            new_callable=AsyncMock,
-        ) as wait_for_backup:
+        with (
+            patch(
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new_callable=AsyncMock,
+            ) as wait_for_backup,
+            patch.object(
+                notification_service, "send_backup_failure", new=AsyncMock()
+            ) as notify,
+        ):
             await backup_plan_execution_service.execute_run(run.id)
 
+        # The backup never runs; the operation exists only to report that.
         wait_for_backup.assert_not_awaited()
-        assert (
+        operation = (
             test_db.query(Operation)
             .filter(
                 Operation.kind == "backup",
                 Operation.backup_plan_run_id == run.id,
             )
-            .count()
-            == 0
+            .one()
         )
+        assert operation.status == "failed"
+        assert operation.started_at is not None
+        assert (
+            "backend.errors.backupPlans.serverSourceToAgentRepoUnsupported"
+            in operation.error_message
+        )
+        notify.assert_awaited_once()
         child = (
             test_db.query(BackupPlanRunRepository)
             .filter(BackupPlanRunRepository.backup_plan_run_id == run.id)
             .one()
         )
         assert child.status == "failed"
+        assert child.backup_operation_id == operation.id
         assert (
             "backend.errors.backupPlans.serverSourceToAgentRepoUnsupported"
             in child.error_message
@@ -3988,6 +4002,307 @@ class TestBackupPlanRoutes:
         assert statuses == {repo_a.id: "skipped", repo_b.id: "skipped"}
         assert run.status == "completed_with_warnings"
         assert run.error_message == "optional prepare skipped backup"
+
+    async def _run_with_failing_pre_script(self, test_db, run, error, **patches):
+        """Execute `run` with a plan pre-backup script that fails with `error`
+        and return the backup-failure notification mock."""
+
+        async def fake_plan_script(run_id, context, *, hook_type, **kwargs):
+            return False, error
+
+        with (
+            patch.object(
+                backup_plan_execution_service,
+                "_execute_plan_script",
+                side_effect=patches.get("plan_script", fake_plan_script),
+            ),
+            patch.object(
+                notification_service,
+                "send_backup_failure",
+                new=patches.get("notify", AsyncMock()),
+            ) as notify,
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+        test_db.expire_all()
+        return notify
+
+    @pytest.mark.asyncio
+    async def test_pre_script_failure_leaves_a_failed_backup_operation(self, test_db):
+        repo_a = _create_repo(test_db, "Primary", "/repos/primary")
+        repo_b = _create_repo(test_db, "Secondary", "/repos/secondary")
+        script = _create_script(test_db, "Dump Database")
+        _plan, run = _create_execution_plan(
+            test_db, [repo_a, repo_b], pre_backup_script_id=script.id
+        )
+
+        notify = await self._run_with_failing_pre_script(
+            test_db, run, "dump exited with 2"
+        )
+
+        run = test_db.query(BackupPlanRun).filter_by(id=run.id).one()
+        assert run.status == "failed"
+        assert run.error_message == "dump exited with 2"
+        operations = test_db.query(Operation).order_by(Operation.id).all()
+        assert [op.repository_id for op in operations] == [repo_a.id, repo_b.id]
+        for op in operations:
+            assert (op.kind, op.status, op.trigger) == ("backup", "failed", "plan")
+            assert op.backup_plan_run_id == run.id
+            assert op.error_message == "dump exited with 2"
+            assert op.started_at is not None
+            assert op.completed_at is not None
+        links = {
+            child.repository_id: (child.status, child.backup_operation_id)
+            for child in run.repositories
+        }
+        assert links == {
+            repo_a.id: ("failed", operations[0].id),
+            repo_b.id: ("failed", operations[1].id),
+        }
+        assert [call.args[1:] for call in notify.await_args_list] == [
+            (repo_a.path, "dump exited with 2", operations[0].id, "Plan execution"),
+            (repo_b.path, "dump exited with 2", operations[1].id, "Plan execution"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_source_pre_script_failure_leaves_a_failed_backup_operation(
+        self, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        _plan, run = _create_execution_plan(test_db, [repo])
+
+        async def fake_source_scripts(run_id, context, *, hook_type, **kwargs):
+            return False, "database dump failed"
+
+        with (
+            patch.object(
+                backup_plan_execution_service,
+                "_execute_source_scripts",
+                side_effect=fake_source_scripts,
+            ),
+            patch.object(
+                notification_service, "send_backup_failure", new=AsyncMock()
+            ) as notify,
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.expire_all()
+        operation = test_db.query(Operation).one()
+        child = test_db.query(BackupPlanRunRepository).one()
+        assert (operation.kind, operation.status) == ("backup", "failed")
+        assert operation.error_message == "database dump failed"
+        assert operation.backup_plan_run_id == run.id
+        assert operation.started_at is not None
+        assert (child.status, child.backup_operation_id) == ("failed", operation.id)
+        notify.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_pre_script_failure_of_a_cancelled_run_leaves_no_operation(
+        self, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        script = _create_script(test_db, "Dump Database")
+        _plan, run = _create_execution_plan(
+            test_db, [repo], pre_backup_script_id=script.id
+        )
+
+        async def cancelled_plan_script(run_id, context, *, hook_type, **kwargs):
+            # A cancellation reaches the plan runner as a failed script.
+            await backup_plan_execution_service.cancel_run(test_db, run_id)
+            return False, "script was cancelled"
+
+        notify = await self._run_with_failing_pre_script(
+            test_db, run, "unused", plan_script=cancelled_plan_script
+        )
+
+        run = test_db.query(BackupPlanRun).filter_by(id=run.id).one()
+        assert run.status == "cancelled"
+        assert [child.status for child in run.repositories] == ["cancelled"]
+        assert test_db.query(Operation).count() == 0
+        notify.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_pre_script_failure_survives_a_failing_notification(self, test_db):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        script = _create_script(test_db, "Dump Database")
+        _plan, run = _create_execution_plan(
+            test_db, [repo], pre_backup_script_id=script.id
+        )
+
+        await self._run_with_failing_pre_script(
+            test_db,
+            run,
+            "dump exited with 2",
+            notify=AsyncMock(side_effect=RuntimeError("smtp down")),
+        )
+
+        run = test_db.query(BackupPlanRun).filter_by(id=run.id).one()
+        assert run.status == "failed"
+        assert run.error_message == "dump exited with 2"
+        assert test_db.query(Operation).one().status == "failed"
+
+    @pytest.mark.asyncio
+    async def test_pre_script_failure_notifies_after_a_notification_broke_the_session(
+        self, test_db
+    ):
+        repo_a = _create_repo(test_db, "Primary", "/repos/primary")
+        repo_b = _create_repo(test_db, "Secondary", "/repos/secondary")
+        script = _create_script(test_db, "Dump Database")
+        _plan, run = _create_execution_plan(
+            test_db, [repo_a, repo_b], pre_backup_script_id=script.id
+        )
+        delivered = []
+
+        async def notify(db, repository_path, *args):
+            if not delivered:
+                delivered.append(None)
+                # a failed flush leaves the session unusable until a rollback
+                db.add(Operation())
+                db.flush()
+            delivered.append(db.query(Repository).filter_by(path=repository_path).one())
+
+        await self._run_with_failing_pre_script(
+            test_db, run, "dump exited with 2", notify=notify
+        )
+
+        assert [repo and repo.id for repo in delivered] == [None, repo_b.id]
+
+    @pytest.mark.asyncio
+    async def test_refused_admission_leaves_a_failed_backup_operation(self, test_db):
+        repo_a = _create_repo(test_db, "Primary", "/repos/primary")
+        repo_b = _create_repo(test_db, "Secondary", "/repos/secondary")
+        _plan, run = _create_execution_plan(test_db, [repo_a, repo_b])
+
+        async def refuse_primary(db, repo, *args, **kwargs):
+            if repo.id == repo_a.id:
+                raise RuntimeError("check is active on the repository")
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            job = resolve_backup_job(db, job_id)
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        with (
+            patch(
+                "app.services.backup_plan_execution_service"
+                ".admit_repository_with_read_work_wait",
+                side_effect=refuse_primary,
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
+            ),
+            patch.object(
+                notification_service, "send_backup_failure", new=AsyncMock()
+            ) as notify,
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.expire_all()
+        operations = {
+            op.repository_id: op
+            for op in test_db.query(Operation).filter_by(kind="backup")
+        }
+        refused = operations[repo_a.id]
+        assert refused.status == "failed"
+        assert refused.error_message == "check is active on the repository"
+        assert refused.started_at is not None
+        assert refused.backup_plan_run_id == run.id
+        assert operations[repo_b.id].status == "completed"
+        links = {
+            child.repository_id: (child.status, child.backup_operation_id)
+            for child in test_db.query(BackupPlanRunRepository).all()
+        }
+        assert links == {
+            repo_a.id: ("failed", refused.id),
+            repo_b.id: ("completed", operations[repo_b.id].id),
+        }
+        assert [call.args[1:4] for call in notify.await_args_list] == [
+            (repo_a.path, "check is active on the repository", refused.id)
+        ]
+
+    @pytest.mark.asyncio
+    async def test_failure_after_the_backup_was_created_adds_no_second_operation(
+        self, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        _plan, run = _create_execution_plan(test_db, [repo])
+
+        async def broken_wait(db, operation_id, **kwargs):
+            raise RuntimeError("lost the runner")
+
+        with (
+            patch(
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=broken_wait,
+            ),
+            patch.object(
+                notification_service, "send_backup_failure", new=AsyncMock()
+            ) as notify,
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.expire_all()
+        operation = test_db.query(Operation).filter_by(kind="backup").one()
+        child = test_db.query(BackupPlanRunRepository).one()
+        assert (child.status, child.backup_operation_id) == ("failed", operation.id)
+        notify.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_pre_script_failure_shows_on_the_dashboard_until_a_backup_completes(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        from app.api.dashboard import SystemMetrics
+
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        script = _create_script(test_db, "Dump Database")
+        _plan, run = _create_execution_plan(
+            test_db, [repo], pre_backup_script_id=script.id
+        )
+        await self._run_with_failing_pre_script(test_db, run, "dump exited with 2")
+        failed = test_db.query(Operation).one()
+
+        def overview() -> dict:
+            metrics = SystemMetrics(
+                cpu_usage=1.0,
+                cpu_count=1,
+                memory_usage=1.0,
+                memory_total=1,
+                memory_available=1,
+                disk_usage=1.0,
+                disk_total=1,
+                disk_free=1,
+                uptime=1,
+            )
+            with patch("app.api.dashboard.get_system_metrics", return_value=metrics):
+                response = test_client.get(
+                    "/api/dashboard/overview", headers=admin_headers
+                )
+            assert response.status_code == 200, response.text
+            return response.json()
+
+        data = overview()
+        assert [
+            (item["id"], item["type"], item["repository"], item["error"])
+            for item in data["current_failures"]
+        ] == [(failed.id, "backup", "Primary", "dump exited with 2")]
+        assert [
+            (cell["type"], cell["total"], cell["failed"])
+            for cell in data["activity_timeline"]
+        ] == [("backup", 1, 1)]
+
+        later = datetime.utcnow() + timedelta(seconds=1)
+        seed_job_operation(
+            test_db,
+            "backup",
+            repository_id=repo.id,
+            status="completed",
+            started_at=later,
+            completed_at=later,
+        )
+        test_db.commit()
+
+        assert overview()["current_failures"] == []
 
     @pytest.mark.asyncio
     async def test_execute_plan_run_records_plan_script_executions(self, test_db):
