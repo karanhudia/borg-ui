@@ -487,9 +487,11 @@ class TestOperationsRepositories:
 
         r = test_client.get("/api/operations/repositories", headers=admin_headers)
         rows = {row["repository_name"]: row for row in r.json()["repositories"]}
-        assert rows["server"]["history_capability"] == "plan_locked"
+        # The capability names what can be built, which the plan no longer
+        # decides; `history_available` is the reader's plan (spec 2026-09-21).
+        assert rows["server"]["history_capability"] == "available"
         assert rows["agent"]["history_capability"] == "agent_unsupported"
-        assert rows["capable"]["history_capability"] == "plan_locked"
+        assert rows["capable"]["history_capability"] == "available"
         assert r.json()["history_available"] is False
 
         # the first request created the single licensing row; flip that one
@@ -550,8 +552,8 @@ class TestOperationsRepositories:
         assert r.status_code == 200
         rows = {row["repository_name"]: row for row in r.json()["repositories"]}
         assert rows["agent-0"]["history_capability"] == "agent_unsupported"
-        assert rows["agent-1"]["history_capability"] == "plan_locked"
-        assert rows["agent-2"]["history_capability"] == "plan_locked"
+        assert rows["agent-1"]["history_capability"] == "available"
+        assert rows["agent-2"]["history_capability"] == "available"
         assert len(agent_queries) == 1
 
     def test_rows_cover_every_repository_with_index_totals(

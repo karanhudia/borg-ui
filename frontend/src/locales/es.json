@@ -1138,7 +1138,6 @@
         "addedToRepository": "Añadido al repositorio",
         "addedHint": "Datos exclusivos de este archivo. Eliminarlo libera al menos esta cantidad.",
         "filesChanged": "Archivos cambiados",
-        "filesChangedLocked": "Pro: cambios de archivos por copia",
         "filesChangedNotIndexed": "Aún no indexado",
         "filesChangedUnavailable": "No disponible para este repositorio",
         "dataBackedUp": "Datos respaldados",

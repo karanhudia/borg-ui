@@ -85,7 +85,7 @@ function useSearchMocks(locked = false) {
     return () => {
       mock.restore()
     }
-  }, [])
+  }, [locked])
 }
 
 function SearchFieldStory(args: ComponentProps<typeof ArchiveSearchField>) {

@@ -49,7 +49,8 @@ type Story = StoryObj<typeof meta>
 export const Pro: Story = {
   args: { archive, totals: { added: 5, removed: 2, modified: 9 }, totalsState: 'ready' },
 }
-export const Community: Story = { args: { archive, totalsState: 'plan_locked' } }
+// The counts are Community too; only the file list behind them is Pro.
+export const NotIndexed: Story = { args: { archive, totalsState: 'not_indexed' } }
 export const Stale: Story = {
   args: {
     archive: { ...archive, stats_measured_at: null },

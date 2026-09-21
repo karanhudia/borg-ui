@@ -1138,7 +1138,6 @@
         "addedToRepository": "Aggiunto al repository",
         "addedHint": "Dati presenti solo in questo archivio. Eliminandolo si libera almeno questo spazio.",
         "filesChanged": "File modificati",
-        "filesChangedLocked": "Pro: modifiche ai file per archivio",
         "filesChangedNotIndexed": "Non ancora indicizzato",
         "filesChangedUnavailable": "Non disponibile per questo repository",
         "dataBackedUp": "Dati salvati",

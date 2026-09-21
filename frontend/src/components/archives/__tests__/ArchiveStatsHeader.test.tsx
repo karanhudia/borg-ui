@@ -65,8 +65,8 @@ describe('ArchiveStatsHeader', () => {
   })
 
   it('says why the file changes are absent instead of showing zeros', () => {
-    renderWithProviders(<ArchiveStatsHeader archive={base} totalsState="plan_locked" />)
-    expect(screen.getByText('Pro: file changes per archive')).toBeInTheDocument()
+    renderWithProviders(<ArchiveStatsHeader archive={base} totalsState="not_indexed" />)
+    expect(screen.getByText('Not indexed yet')).toBeInTheDocument()
     expect(screen.queryByText('+0')).not.toBeInTheDocument()
   })
 

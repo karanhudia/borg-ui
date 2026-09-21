@@ -1138,7 +1138,6 @@
         "addedToRepository": "Zum Repository hinzugefügt",
         "addedHint": "Daten, die nur dieses Archiv enthält. Beim Löschen wird mindestens so viel frei.",
         "filesChanged": "Geänderte Dateien",
-        "filesChangedLocked": "Pro: Dateiänderungen pro Archiv",
         "filesChangedNotIndexed": "Noch nicht indiziert",
         "filesChangedUnavailable": "Für dieses Repository nicht verfügbar",
         "dataBackedUp": "Gesicherte Daten",

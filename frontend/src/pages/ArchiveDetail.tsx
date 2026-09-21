@@ -35,7 +35,6 @@ import RestoreWizard, { type RestoreData } from '../components/RestoreWizard'
 import RestoreProgressPanel from '../components/archives/RestoreProgressPanel'
 import { cornerStackSx } from '../components/archives/cornerStack'
 import { resyncStoredArchives } from '../utils/archiveResync'
-import { usePlan } from '../hooks/usePlan'
 import type { RestorePathMetadata } from '../utils/restorePaths'
 import type { ArchiveDetailResponse } from '../types/archives'
 import type { Archive, Repository } from '@/types'
@@ -51,7 +50,6 @@ function getDefaultMountPoint(archiveName: string): string {
 export default function ArchiveDetail() {
   const { t } = useTranslation()
   const theme = useTheme()
-  const { can } = usePlan()
   const { repositoryId: repositoryIdParam, archiveId: archiveIdParam } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
@@ -247,17 +245,17 @@ export default function ArchiveDetail() {
           compare_to: archive?.predecessor_id ?? undefined,
         })
         .then((res) => res.data),
-    // The counts come from a Pro route, so a Community install would take a
-    // 403 on every archive it opens. A repository that does not index file
-    // history has no counts to show either (spec 6.8), and showing them on
-    // the tab label while the tab itself says the history is not indexed is
-    // the contradiction the mode exists to avoid.
+    // The counts are Community (spec 2026-09-21, section 1), so this runs on
+    // every plan and the stat card and tab label carry them before the
+    // Changes tab is ever opened. A repository that does not index file
+    // history has no counts to show (spec 6.8), and showing them on the tab
+    // label while the tab itself says the history is not indexed is the
+    // contradiction the mode exists to avoid.
     // `!!repository` as well as the mode: `indexMode` falls back to `full`
     // while the repository list loads, and without the guard the query
     // would fire once under that fallback on a repository that indexes no
     // history.
-    enabled:
-      validParams && !!archive && !!repository && indexMode === 'full' && can('archive_history'),
+    enabled: validParams && !!archive && !!repository && indexMode === 'full',
   })
 
   if (!validParams || archiveErrored) {
@@ -276,15 +274,13 @@ export default function ArchiveDetail() {
   const totals = indexMode === 'full' ? changesForLabel?.totals : undefined
   const capability = archive.history_capability ?? 'available'
   const totalsState: ArchiveStatsHeaderProps['totalsState'] =
-    capability === 'plan_locked' || !can('archive_history')
-      ? 'plan_locked'
-      : capability !== 'available' || indexMode !== 'full'
-        ? 'unavailable'
-        : archive.history_state !== 'indexed'
-          ? 'not_indexed'
-          : totals
-            ? 'ready'
-            : 'loading'
+    capability !== 'available' || indexMode !== 'full'
+      ? 'unavailable'
+      : archive.history_state !== 'indexed'
+        ? 'not_indexed'
+        : totals
+          ? 'ready'
+          : 'loading'
   const tabLabel = (
     <Box
       component="span"

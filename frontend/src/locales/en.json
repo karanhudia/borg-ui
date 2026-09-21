@@ -1138,7 +1138,6 @@
         "addedToRepository": "Added to the repository",
         "addedHint": "Data unique to this archive. Deleting it frees at least this much.",
         "filesChanged": "Files changed",
-        "filesChangedLocked": "Pro: file changes per archive",
         "filesChangedNotIndexed": "Not indexed yet",
         "filesChangedUnavailable": "Not available for this repository",
         "dataBackedUp": "Data backed up",

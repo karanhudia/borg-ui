@@ -693,7 +693,7 @@ async def run_archive_sync(ctx) -> Outcome:
             )
             .first()
             is not None
-            and history_capability(db, repository) == HISTORY_AVAILABLE
+            and history_capability(db, repository, history=True) == HISTORY_AVAILABLE
         ):
             # The mirror image: `skipped` rows are left over from an agent
             # that could not produce the listing, on a repository whose agent
@@ -701,8 +701,8 @@ async def run_archive_sync(ctx) -> Outcome:
             # the history stage available they go back to `pending` with a
             # fresh budget, and the chain's history stage picks them up: this
             # is how an agent repository's backfill starts after the update.
-            # The plan lookup behind the capability commits, so it runs only
-            # with such rows.
+            # `history=True`: the index is built on every plan now, so only
+            # the executor can refuse (spec 2026-09-21, section 2).
             db.query(Archive).filter(
                 Archive.repository_id == repository.id,
                 Archive.history_state == "skipped",

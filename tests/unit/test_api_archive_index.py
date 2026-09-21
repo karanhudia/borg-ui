@@ -1872,8 +1872,9 @@ class TestAgentRepositoryHistoryCapability:
         r = test_client.get(
             f"/api/repositories/{capable.id}/archives", headers=admin_headers
         )
-        # Community: the plan decides, as for a server repository
-        assert r.json()["history_capability"] == "plan_locked"
+        # The capability is about the executor, not the reader's plan: the
+        # index is built on every plan (spec 2026-09-21, section 2).
+        assert r.json()["history_capability"] == "available"
 
         _pro(test_db)
         r = test_client.get(
@@ -1927,12 +1928,16 @@ class TestAgentRepositoryHistoryCapability:
         )
         assert r.json()["history_capability"] == "available"
 
-    def test_community_reads_as_plan_locked(self, test_client, test_db, admin_headers):
+    def test_community_can_build_history_but_not_read_it(
+        self, test_client, test_db, admin_headers
+    ):
+        """The capability says the stage can run; `history_available` says
+        whether this reader's plan may see the rows (spec 2026-09-21)."""
         server = _repo(test_db, name="server")
         r = test_client.get(
             f"/api/repositories/{server.id}/archives", headers=admin_headers
         )
-        assert r.json()["history_capability"] == "plan_locked"
+        assert r.json()["history_capability"] == "available"
         assert r.json()["history_available"] is False
         # the executor's reason outlasts the plan: an agent's repository
         # names it on Community too

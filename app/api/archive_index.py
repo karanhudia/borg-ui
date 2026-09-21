@@ -221,7 +221,7 @@ async def list_archives(
         # the capability says whether this repository has the stage, and
         # why not.
         "history_available": history,
-        "history_capability": history_capability(db, repository, history=history),
+        "history_capability": history_capability(db, repository, history=True),
     }
 
 
@@ -636,7 +636,7 @@ async def get_archive(
             else None
         ),
         "history_available": history,
-        "history_capability": history_capability(db, repository, history=history),
+        "history_capability": history_capability(db, repository, history=True),
     }
 
 
@@ -901,7 +901,7 @@ async def archive_changes(
         "archive_id": target.id,
         "history_state": target.history_state,
         "history_truncated": target.history_truncated,
-        "history_capability": history_capability(db, repository, history=history),
+        "history_capability": history_capability(db, repository, history=True),
     }
     if compare_to is None:
         compare = predecessor
@@ -1094,7 +1094,7 @@ async def path_history(
             "indexed": int(indexed or 0),
             "exhausted": int(exhausted or 0),
             "total": int(total or 0),
-            "capability": history_capability(db, repository, history=history),
+            "capability": history_capability(db, repository, history=True),
         },
     }
 
