@@ -118,11 +118,11 @@ export default function PlanGate({
           }}
         >
           <Box sx={{ width: 'min(100%, 460px)' }}>
-            <UpgradePrompt requiredPlan={FEATURES[feature]} message={message} />
+            <UpgradePrompt requiredPlan={FEATURES[feature]} message={message} feature={feature} />
           </Box>
         </Box>
       </Box>
     )
   }
-  return <UpgradePrompt requiredPlan={FEATURES[feature]} message={message} />
+  return <UpgradePrompt requiredPlan={FEATURES[feature]} message={message} feature={feature} />
 }

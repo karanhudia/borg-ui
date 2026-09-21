@@ -1117,6 +1117,8 @@
       "absent": "Non nell'ultimo",
       "empty": "Nessun file corrispondente",
       "truncated": "Mostrando i primi {{count}} risultati",
+      "locked": "{{count}} file corrispondono. Pro li elenca tutti, qui ci sono i primi {{shown}}.",
+      "lockedCapped": "Più di {{count}} file corrispondono. Pro li elenca tutti, qui ci sono i primi {{shown}}.",
       "lastSeen": "Visto l’ultima volta il {{date}}",
       "inArchives_one": "in {{count}} archivio",
       "inArchives_other": "in {{count}} archivi",
@@ -1160,6 +1162,7 @@
       "summaryRow": "{{count}} altri in {{path}}",
       "truncated": "L'indice di questo archivio è stato troncato al limite di righe, quindi alcuni percorsi sono riassunti.",
       "pending": "Questo archivio non è stato ancora indicizzato.",
+      "locked": "Pro elenca i file dietro questi numeri, con filtri e ricerca per percorso.",
       "skipped": "L'indicizzazione della cronologia è stata saltata per questo archivio.",
       "failed": "Non è stato possibile indicizzare questo archivio. Ricostruire l'indice della cronologia riprova.",
       "rebuildLink": "Ricostruisci l'indice della cronologia",
@@ -1200,6 +1203,8 @@
       "noSelection": "Seleziona un file o una cartella per vedere i dettagli.",
       "path": "Percorso",
       "historyEmpty": "Nessun archivio precedente contiene questo percorso.",
+      "historyLocked": "Pro mostra ogni versione con la sua dimensione e ripristina il file da una qualsiasi.",
+      "historyLockedSummary": "{{count}} versioni, dal {{first}} al {{last}}.",
       "type": "Tipo",
       "typeFile": "File",
       "typeDirectory": "Cartella",
@@ -6316,6 +6321,7 @@
     },
     "currentPlan": "Piano attuale",
     "fullAccessLabel": "Accesso completo",
+    "featureTrialLabel": "Prova Pro",
     "planSuffix": "Piano",
     "activeStatus": "Attivo",
     "descriptionCommunity": "Funzionalità di backup essenziali incluse",
@@ -6383,7 +6389,12 @@
     "defaultMessage": "Questa funzionalità richiede il piano {{plan}}.",
     "requiresPlan": "Richiede il piano {{plan}}",
     "buyLink": "Passa a borgui.com",
-    "learnMore": "Scopri cosa include →"
+    "learnMore": "Scopri cosa include →",
+    "trialFailed": "Non è stato possibile avviare la prova. Riprova più tardi.",
+    "trialNeedsAdmin": "Chiedi a un amministratore di avviare la prova.",
+    "trialUnavailable": "Nessuna prova gratuita disponibile per questa funzionalità.",
+    "trialEnded": "La tua prova gratuita di questa funzionalità è terminata.",
+    "tryFree": "Prova gratis per 14 giorni"
   },
   "announcements": {
     "latestRelease": "Ultima versione",
@@ -6457,6 +6468,7 @@
     "showAll": "Mostra tutti i {{count}}",
     "lostTitle": "File persi per sempre",
     "lostSummary": "{{count}} file, {{size}}, nessun archivio superstite li contiene",
+    "lostLocked": "Pro elenca questi file, la loro dimensione e l'archivio che ha conservato ciascuno per ultimo.",
     "lostNone": "Nessun file viene perso: ogni percorso contenuto in un archivio eliminato sopravvive in un archivio conservato.",
     "lostUnknown": "Nessun file perso trovato, ma l'indice è incompleto, quindi questa risposta non è definitiva.",
     "lostPath": "Percorso",
@@ -6497,7 +6509,11 @@
       "current": "Attuale",
       "currentNoPolicy": "Nessuna regola",
       "editing": "In modifica",
-      "presets": { "standard": "Standard", "longer": "Più lunga", "wide": "Ampia" },
+      "presets": {
+        "standard": "Standard",
+        "longer": "Più lunga",
+        "wide": "Ampia"
+      },
       "partial": "Alcune dimensioni sono valori memorizzati, non ricalcolati.",
       "refreshFailed": "Impossibile avviare il confronto."
     }

@@ -56,6 +56,22 @@ export const Incomplete: Story = {
   },
 }
 
+// Community: the count of files losing their last copy, without the list.
+export const Locked: Story = {
+  args: {
+    repositoryId: 7,
+    lost: {
+      available: true,
+      capability: 'available',
+      incomplete: false,
+      unindexed_archive_ids: [],
+      total_count: 812,
+      total_size: 4_200_000_000,
+      detail_locked: true,
+    },
+  },
+}
+
 export const AgentUnsupported: Story = {
   args: {
     repositoryId: 7,

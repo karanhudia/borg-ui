@@ -15,15 +15,13 @@ import { useTranslation } from 'react-i18next'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import RichSelect from '../shared/RichSelect'
 import SearchBox from '../shared/SearchBox'
-import PlanGate from '../shared/PlanGate'
 import IndexModeGate from './IndexModeGate'
-import { usePlan } from '../../hooks/usePlan'
 import { archivesAPI } from '../../services/api'
 import { getApiErrorDetail } from '../../utils/apiErrors'
 import { translateBackendKey } from '../../utils/translateBackendKey'
 import { CHANGE_GLYPH, changeColor } from './changeStyle'
 import ChangeRowLine from './ChangeRowLine'
-import ArchiveChangesPreview from './ArchiveChangesPreview'
+import UpgradePrompt from '../UpgradePrompt'
 import type { ArchiveDetailResponse, ChangeRow, ChangeType } from '../../types/archives'
 import type { IndexMode } from '../../types/operations'
 
@@ -131,6 +129,59 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
   // The frame mounts only once rows exist, so measure again when they do.
   const listHeight = useFillViewport(listRef, 240, [rows.length > 0])
   const totals = changes?.totals
+  // Community reads what changed and how much; which files changed is Pro.
+  // The counts are the archive's own numbers, so there is nothing to blur.
+  const locked = changes?.detail_locked === true
+
+  if (locked) {
+    return (
+      <Box>
+        <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', gap: 1 }}>
+          {CHANGE_TYPES.map((type) => {
+            const color = changeColor(theme, type)
+            return (
+              <Box
+                key={type}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.75,
+                  px: 1.5,
+                  py: 0.75,
+                  borderRadius: 1.5,
+                  bgcolor: alpha(color, 0.1),
+                  color,
+                  fontWeight: 600,
+                  fontSize: '0.8125rem',
+                }}
+              >
+                <Box component="span" sx={{ fontFamily: 'ui-monospace, monospace' }}>
+                  {CHANGE_GLYPH[type]}
+                </Box>
+                {t(`archives.changes.${type}`)}
+                <Box component="span" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                  {totals?.[type] ?? 0}
+                </Box>
+              </Box>
+            )
+          })}
+        </Stack>
+        {!isLoading && historyState !== 'indexed' && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            {capability === 'agent_unsupported'
+              ? t('archives.changes.agentUnsupported')
+              : t('archives.changes.pending')}
+          </Alert>
+        )}
+        <UpgradePrompt
+          compact
+          requiredPlan="pro"
+          message={t('archives.changes.locked')}
+          feature="archive_history"
+        />
+      </Box>
+    )
+  }
 
   return (
     <Box>
@@ -319,21 +370,12 @@ export default function ArchiveChangesTab({
   indexMode = 'full',
   ...props
 }: ArchiveChangesTabProps) {
-  const { can } = usePlan()
+  // No PlanGate: the index is built on every plan, so the totals are real on
+  // every plan and the content locks its own file list (spec 2026-09-21,
+  // section 1). The mode is the only gate left here.
   return (
-    // Plan first, then mode, never both (spec 6.8): PlanGate answers for a
-    // Community install, and the mode panel only renders behind it.
-    <PlanGate
-      feature="archive_history"
-      preview={<ArchiveChangesPreview />}
-      surface="archive_detail"
-      operation="view_changes"
-    >
-      {can('archive_history') ? (
-        <IndexModeGate mode={indexMode}>
-          <ArchiveChangesTabContent {...props} />
-        </IndexModeGate>
-      ) : null}
-    </PlanGate>
+    <IndexModeGate mode={indexMode}>
+      <ArchiveChangesTabContent {...props} />
+    </IndexModeGate>
   )
 }

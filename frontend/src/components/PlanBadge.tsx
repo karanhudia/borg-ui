@@ -14,13 +14,27 @@ interface PlanBadgeProps {
 export default function PlanBadge({ plan, entitlement, onClick }: PlanBadgeProps) {
   const { t } = useTranslation()
   const isFullAccess = entitlement?.is_full_access && entitlement.status === 'active'
-  const color = isFullAccess ? PLAN_COLOR.enterprise : PLAN_COLOR[plan]
+  const onFeatureTrial =
+    entitlement?.status === 'active' && (entitlement.trial_features ?? []).length > 0
+  const color = isFullAccess
+    ? PLAN_COLOR.enterprise
+    : onFeatureTrial
+      ? PLAN_COLOR.pro
+      : PLAN_COLOR[plan]
   const daysLeft = fullAccessDaysLeft(isFullAccess ? entitlement?.expires_at : null)
+  // A per-feature trial runs on the plan the install already has, so it does
+  // not change the plan name: it adds its own countdown (spec 2026-09-21,
+  // section 3).
+  const featureTrial =
+    !isFullAccess && onFeatureTrial ? entitlement?.trial_features?.[0] : undefined
+  const featureTrialDaysLeft = fullAccessDaysLeft(featureTrial?.expires_at)
   const label = isFullAccess
     ? daysLeft !== null && daysLeft < FULL_ACCESS_COUNTDOWN_THRESHOLD_DAYS
       ? `${t('plan.fullAccessLabel')} · ${t('plan.daysShort', { count: daysLeft })}`
       : t('plan.fullAccessLabel')
-    : PLAN_LABEL[plan]
+    : featureTrial && featureTrialDaysLeft !== null
+      ? `${t('plan.featureTrialLabel')} · ${t('plan.daysShort', { count: featureTrialDaysLeft })}`
+      : PLAN_LABEL[plan]
 
   return (
     <Box

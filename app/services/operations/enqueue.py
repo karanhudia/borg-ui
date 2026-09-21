@@ -134,16 +134,9 @@ def record_import_connect(
     connect step is recorded as already completed; the runner never runs it.
     """
     from app.database.models import utc_now
-    from app.services.operations.followups import chain_for_repository, history_enabled
+    from app.services.operations.followups import chain_for_repository
 
-    # Resolve the chain before the row exists: the plan lookup behind
-    # history_enabled commits the session, and a flushed import_connect row
-    # committed that way would outlive a failure in the enqueue step below as
-    # an orphan without its follow-ups, beyond the reach of the caller's
-    # rollback.
-    kinds = chain_for_repository(
-        db, "import_connect", repository.id, history=history_enabled(db)
-    )
+    kinds = chain_for_repository(db, "import_connect", repository.id)
     now = utc_now()
     op = Operation(
         repository_id=repository.id,

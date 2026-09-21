@@ -129,7 +129,7 @@ def test_chain_for_drops_history_kinds_for_community():
         "stats",
     ]
     assert chain_for("import_connect", history=False) == ["stats", "archive_sync"]
-    assert chain_for("backup", history=True) == [
+    assert chain_for("backup") == [
         "archive_sync",
         "history_merge",
         "history_index",
@@ -184,12 +184,18 @@ def test_community_keeps_history_merge_so_removed_archives_are_deleted():
 @pytest.mark.unit
 def test_enqueue_backup_followups_creates_the_backup_chain(db, repo, monkeypatch):
     """A backup that completed outside the runner (#933) enqueues the spec
-    7.4 chain as a follow-up run; history_index is dropped without a plan."""
+    7.4 chain as a follow-up run. The index is built on every plan, so
+    history_index is in it."""
     monkeypatch.setattr("app.services.operations.enqueue.wake_runner", lambda: None)
     ops = enqueue_backup_followups(
         db, repo.id, scheduled_job_id=None, backup_plan_run_id=None
     )
-    assert [o.kind for o in ops] == ["archive_sync", "history_merge", "stats"]
+    assert [o.kind for o in ops] == [
+        "archive_sync",
+        "history_merge",
+        "history_index",
+        "stats",
+    ]
     assert {o.trigger for o in ops} == {"followup"}
     assert {o.priority for o in ops} == {10}
     assert ops[1].depends_on_id == ops[0].id
@@ -214,8 +220,13 @@ def test_enqueue_backup_followups_ignores_a_running_index_run(db, repo, monkeypa
     db.commit()
     ops = enqueue_backup_followups(db, repo.id, commit=False)
     db.commit()
-    assert [o.kind for o in ops] == ["archive_sync", "history_merge", "stats"]
-    assert db.query(Operation).filter_by(status="queued").count() == 3
+    assert [o.kind for o in ops] == [
+        "archive_sync",
+        "history_merge",
+        "history_index",
+        "stats",
+    ]
+    assert db.query(Operation).filter_by(status="queued").count() == 4
 
 
 @pytest.mark.unit
@@ -411,7 +422,12 @@ def test_enqueue_followups_skips_a_chain_already_queued_on_the_repository(
     backup.status = "completed"
     db.commit()
     chain = enqueue_followups(db, backup, depends_on_id=backup.id)
-    assert [o.kind for o in chain] == ["archive_sync", "history_merge", "stats"]
+    assert [o.kind for o in chain] == [
+        "archive_sync",
+        "history_merge",
+        "history_index",
+        "stats",
+    ]
 
     last = None
     for kind in ("prune", "compact"):
@@ -428,7 +444,7 @@ def test_enqueue_followups_skips_a_chain_already_queued_on_the_repository(
         assert enqueue_followups(db, step, depends_on_id=step.id) == []
         last = step
 
-    assert db.query(Operation).filter(Operation.trigger == "followup").count() == 3
+    assert db.query(Operation).filter(Operation.trigger == "followup").count() == 4
     # The refresh is the last thing the run does: its head now hangs off
     # the compact, the last stage to finish, and the rest of the chain
     # still hangs off the head.
@@ -631,18 +647,18 @@ def test_history_capability_names_the_reason(db_session):
     assert history_capability(db_session, old_agent) == "agent_unsupported"
     assert history_capability(db_session, capable) == "available"
     assert history_possible(db_session, capable) is True
-    assert history_possible_for(db_session, capable.id, history=True) is True
+    assert history_possible_for(db_session, capable.id) is True
     assert history_capability(db_session, capable, history=False) == "plan_locked"
     assert history_possible(db_session, server) is True
     assert history_possible(db_session, agent) is False
     # the plan gate can be handed in by a caller that already read it
     assert history_capability(db_session, agent, history=False) == "agent_unsupported"
     assert history_capability(db_session, server, history=False) == "plan_locked"
-    assert history_possible_for(db_session, agent.id, history=True) is False
-    assert history_possible_for(db_session, server.id, history=True) is True
+    assert history_possible_for(db_session, agent.id) is False
+    assert history_possible_for(db_session, server.id) is True
     # a missing repository keeps the plan answer
-    assert history_possible_for(db_session, 999_999, history=True) is True
-    assert history_possible_for(db_session, None, history=True) is True
+    assert history_possible_for(db_session, 999_999) is True
+    assert history_possible_for(db_session, None) is True
 
 
 @pytest.mark.unit
@@ -657,7 +673,7 @@ def test_enqueue_backup_followups_omits_history_index_for_an_agent_repository(db
     db.add(agent)
     db.commit()
     load_default_executors()
-    ops = enqueue_backup_followups(db, agent.id, history=True)
+    ops = enqueue_backup_followups(db, agent.id)
     assert [o.kind for o in ops] == ["archive_sync", "history_merge", "stats"]
 
 

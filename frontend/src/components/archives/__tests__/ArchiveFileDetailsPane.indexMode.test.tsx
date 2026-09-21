@@ -51,13 +51,12 @@ describe('ArchiveFileDetailsPane index mode (spec 6.8)', () => {
     expect(screen.getByText(/archives only/i)).toBeInTheDocument()
   })
 
-  it('leaves the plan gate to answer a Community install', () => {
-    // Plan first, then mode, never both. FileHistoryPanel carries its own
-    // PlanGate, so gating it from the outside would hand a Community user
-    // the mode message in place of the upgrade prompt.
+  it('explains the mode on a Community install too', () => {
+    // The index is built on every plan, so the mode is the only gate here
+    // and it answers the same for everyone (spec 2026-09-21, section 2).
     mockPlanCan.mockReturnValue(false)
     renderPane('archives')
-    expect(screen.queryByText(/archives only/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/archives only/i)).toBeInTheDocument()
   })
 
   it('renders the history panel for a repository that indexes it', () => {

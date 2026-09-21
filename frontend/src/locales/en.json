@@ -1117,6 +1117,8 @@
       "absent": "Not in latest",
       "empty": "No matching files",
       "truncated": "Showing the first {{count}} matches",
+      "locked": "{{count}} files match. Pro lists them all; these are the first {{shown}}.",
+      "lockedCapped": "More than {{count}} files match. Pro lists them all; these are the first {{shown}}.",
       "lastSeen": "Last seen {{date}}",
       "inArchives_one": "in {{count}} archive",
       "inArchives_other": "in {{count}} archives",
@@ -1160,6 +1162,7 @@
       "summaryRow": "{{count}} more in {{path}}",
       "truncated": "This archive's index was truncated at the row cap, so some paths are summarised.",
       "pending": "This archive has not been indexed yet.",
+      "locked": "Pro lists the files behind these counts, with filters and a path search.",
       "skipped": "History indexing was skipped for this archive.",
       "failed": "This archive could not be indexed. Rebuilding the history index tries it again.",
       "rebuildLink": "Rebuild the history index",
@@ -1200,6 +1203,8 @@
       "noSelection": "Select a file or folder to see details.",
       "path": "Path",
       "historyEmpty": "No earlier archive contains this path.",
+      "historyLocked": "Pro shows every version with its size, and restores the file from any of them.",
+      "historyLockedSummary": "{{count}} versions, from {{first}} to {{last}}.",
       "type": "Type",
       "typeFile": "File",
       "typeDirectory": "Folder",
@@ -6316,6 +6321,7 @@
     },
     "currentPlan": "Your Plan",
     "fullAccessLabel": "Full Access",
+    "featureTrialLabel": "Pro trial",
     "planSuffix": "Plan",
     "activeStatus": "Active",
     "descriptionCommunity": "Core backup features included",
@@ -6383,7 +6389,12 @@
     "defaultMessage": "This feature requires the {{plan}} plan.",
     "requiresPlan": "Requires {{plan}} plan",
     "buyLink": "Upgrade at borgui.com",
-    "learnMore": "See what's included →"
+    "learnMore": "See what's included →",
+    "trialFailed": "The trial could not be started. Try again later.",
+    "trialNeedsAdmin": "Ask an administrator to start the trial.",
+    "trialUnavailable": "A free trial is not available for this feature.",
+    "trialEnded": "Your free trial of this feature has ended.",
+    "tryFree": "Try free for 14 days"
   },
   "announcements": {
     "latestRelease": "Latest release",
@@ -6457,6 +6468,7 @@
     "showAll": "Show all {{count}}",
     "lostTitle": "Files lost forever",
     "lostSummary": "{{count}} files, {{size}}, no surviving archive holds them",
+    "lostLocked": "Pro lists these files, their size and the archive that last held each one.",
     "lostNone": "No file is lost: every path a deleted archive holds survives in a kept archive.",
     "lostUnknown": "No lost file found, but the index is incomplete, so this answer is not final.",
     "lostPath": "Path",
@@ -6497,7 +6509,11 @@
       "current": "Current",
       "currentNoPolicy": "No policy",
       "editing": "Editing",
-      "presets": { "standard": "Standard", "longer": "Longer", "wide": "Wide" },
+      "presets": {
+        "standard": "Standard",
+        "longer": "Longer",
+        "wide": "Wide"
+      },
       "partial": "Some sizes are stored values, not re-measured.",
       "refreshFailed": "Could not start the comparison."
     }

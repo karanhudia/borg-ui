@@ -73,7 +73,6 @@ from app.services.borg2_compact_stats import (
 from app.services.maintenance_state import apply_compact_stats
 from app.services.operations.followups import (
     enqueue_backup_followups,
-    history_enabled,
 )
 from app.utils.datetime_utils import serialize_datetime
 
@@ -691,10 +690,7 @@ def _finish_linked_backup_job(
             # runs in a savepoint: a failed flush inside enqueue would
             # otherwise leave the session needing a rollback, and a plain
             # rollback here would discard the terminal state the caller has
-            # pending. Only the enqueue is undone; the name and the plan
-            # gate (which commits through the licensing service) are read
-            # before the savepoint opens.
-            history = history_enabled(db)
+            # pending. Only the enqueue is undone.
             try:
                 with db.begin_nested():
                     enqueue_backup_followups(
@@ -703,7 +699,6 @@ def _finish_linked_backup_job(
                         scheduled_job_id=backup_job.scheduled_job_id,
                         backup_plan_run_id=backup_job.backup_plan_run_id,
                         commit=False,
-                        history=history,
                     )
             except Exception as exc:
                 logger.warning(

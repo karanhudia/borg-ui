@@ -252,11 +252,11 @@ async def test_followups_created_on_success_only_for_registered_kinds(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_followups_skip_history_kinds_on_community(
-    db, repo, runner, registry, monkeypatch
-):
-    """A successful backup on a Community install enqueues archive_sync and
-    stats but no history_index, even though its executor is registered."""
+async def test_followups_index_history_on_community(db, repo, runner, registry):
+    """A successful backup enqueues the history stage on every plan: the
+    index is built for everyone and `archive_history` gates the reads (spec
+    2026-09-21-community-teasers-and-feature-trials, section 2). No
+    entitlement is active in this database, so this is a Community install."""
 
     async def ok(ctx):
         return Outcome()
@@ -266,14 +266,16 @@ async def test_followups_skip_history_kinds_on_community(
     registry["history_index"] = ok
     registry["stats"] = ok
 
-    monkeypatch.setattr(
-        "app.services.operations.followups.history_enabled", lambda db: False
-    )
     enqueue(db, "backup", repository_id=repo.id, trigger="manual")
     await _drain(runner)
     db.expire_all()
     rows = db.query(Operation).order_by(Operation.id).all()
-    assert [r.kind for r in rows] == ["backup", "archive_sync", "stats"]
+    assert [r.kind for r in rows] == [
+        "backup",
+        "archive_sync",
+        "history_index",
+        "stats",
+    ]
 
 
 @pytest.mark.unit

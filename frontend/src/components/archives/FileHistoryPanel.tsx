@@ -5,10 +5,9 @@ import ChangeBadge from './ChangeBadge'
 import { changeColor } from './changeStyle'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import PlanGate from '../shared/PlanGate'
-import { usePlan } from '../../hooks/usePlan'
+import UpgradePrompt from '../UpgradePrompt'
 import { archivesAPI } from '../../services/api'
-import { formatBytes, parseBackendDate } from '../../utils/dateUtils'
+import { formatBytes, formatDateShort, parseBackendDate } from '../../utils/dateUtils'
 import type { HistoryEntry } from '../../types/archives'
 
 interface FileHistoryPanelProps {
@@ -68,6 +67,9 @@ function FileHistoryPanelContent({ repositoryId, path, onRestoreEntry }: FileHis
   }, [data, seriesArchives])
 
   const entries = data?.entries ?? []
+  // Community reads how many versions of this file the index holds and the
+  // window they cover; the versions themselves are Pro.
+  const locked = data?.detail_locked === true
   // What the answer is based on. With nothing indexed the entries say
   // nothing about the path; with a partial index they cover the indexed
   // archives only, so "no earlier archive contains this path" is only true
@@ -125,6 +127,33 @@ function FileHistoryPanelContent({ repositoryId, path, onRestoreEntry }: FileHis
                 t('archives.files.historyFailed')
               : t('archives.files.historyNotIndexed')}
         </Typography>
+      </Box>
+    )
+  }
+
+  if (locked) {
+    const versions = data?.versions ?? 0
+    return (
+      <Box>
+        {versions === 0 ? (
+          <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
+            {t('archives.files.historyEmpty')}
+          </Typography>
+        ) : (
+          <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
+            {t('archives.files.historyLockedSummary', {
+              count: versions,
+              first: formatDateShort(data?.first_seen),
+              last: formatDateShort(data?.last_seen),
+            })}
+          </Typography>
+        )}
+        <UpgradePrompt
+          compact
+          requiredPlan="pro"
+          message={t('archives.files.historyLocked')}
+          feature="archive_history"
+        />
       </Box>
     )
   }
@@ -213,14 +242,7 @@ function FileHistoryPanelContent({ repositoryId, path, onRestoreEntry }: FileHis
 }
 
 export default function FileHistoryPanel(props: FileHistoryPanelProps) {
-  const { can } = usePlan()
-  return (
-    <PlanGate feature="archive_history" disabled surface="archive_files" operation="view_history">
-      {can('archive_history') ? (
-        <FileHistoryPanelContent {...props} />
-      ) : (
-        <Box sx={{ minHeight: 60 }} />
-      )}
-    </PlanGate>
-  )
+  // No PlanGate: the content renders the version count for every plan and
+  // locks the versions themselves (spec 2026-09-21, section 1).
+  return <FileHistoryPanelContent {...props} />
 }

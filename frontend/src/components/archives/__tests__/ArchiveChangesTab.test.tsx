@@ -302,9 +302,20 @@ describe('ArchiveChangesTab', () => {
     expect(screen.getByRole('button', { name: /rebuild/i })).toBeInTheDocument()
   })
 
-  it('shows the inert preview to a plan without the feature', () => {
+  it('shows the real totals and locks the rows on Community', async () => {
+    // Counts free, rows Pro (spec 2026-09-21, section 1).
     mockPlanCan.mockReturnValue(false)
+    vi.mocked(archivesAPI.getChanges).mockResolvedValue({
+      data: baseChangesResponse({
+        changes: [],
+        detail_locked: true,
+        totals: { added: 128, removed: 4, modified: 512, summary: 0 },
+      }),
+    } as never)
     renderTab()
+    expect(await screen.findByText('512')).toBeInTheDocument()
+    expect(screen.getByText('128')).toBeInTheDocument()
     expect(screen.queryByText('home/karan/docs/invoices.xlsx')).not.toBeInTheDocument()
+    expect(screen.getByText(/Pro lists the files behind these counts/i)).toBeInTheDocument()
   })
 })

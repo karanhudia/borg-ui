@@ -9,7 +9,6 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database.models import (
     Base,
-    LicensingState,
     Operation,
     Repository,
     SystemSettings,
@@ -106,7 +105,7 @@ def test_enqueue_reconcile_runs_despite_a_running_history_index(db, repos, monke
     op = enqueue(db, "history_index", repository_id=a.id)
     op.status = "running"
     db.commit()
-    count = reconcile.enqueue_reconcile_runs(db, history=True)
+    count = reconcile.enqueue_reconcile_runs(db)
     assert count == 2
     kinds = [
         r.kind
@@ -148,7 +147,7 @@ def test_enqueue_reconcile_runs_includes_history_kinds_when_registered(
         lambda: {"stats", "archive_sync", "history_merge", "history_index"},
     )
     a, _ = repos
-    reconcile.enqueue_reconcile_runs(db, history=True)
+    reconcile.enqueue_reconcile_runs(db)
     kinds = [
         r.kind
         for r in db.query(Operation)
@@ -159,31 +158,12 @@ def test_enqueue_reconcile_runs_includes_history_kinds_when_registered(
 
 
 @pytest.mark.unit
-def test_enqueue_reconcile_runs_omits_history_kinds_for_community(
+def test_enqueue_reconcile_runs_includes_history_kinds_on_community(
     db, repos, monkeypatch
 ):
-    monkeypatch.setattr(
-        reconcile,
-        "registered_kinds",
-        lambda: {"stats", "archive_sync", "history_merge", "history_index"},
-    )
-    a, _ = repos
-    reconcile.enqueue_reconcile_runs(db, history=False)
-    kinds = [
-        r.kind
-        for r in db.query(Operation)
-        .filter(Operation.repository_id == a.id)
-        .order_by(Operation.id)
-    ]
-    # history_merge stays: it is what deletes rows for archives that are gone,
-    # which Community installs need just as much as Pro ones.
-    assert kinds == ["archive_sync", "history_merge", "stats"]
-
-
-@pytest.mark.unit
-def test_enqueue_reconcile_runs_asks_the_plan_when_history_is_none(
-    db, repos, monkeypatch
-):
+    """The index is built on every plan (spec
+    2026-09-21-community-teasers-and-feature-trials, section 2). No
+    entitlement is active in this database, so this is a Community install."""
     monkeypatch.setattr(
         reconcile,
         "registered_kinds",
@@ -197,37 +177,7 @@ def test_enqueue_reconcile_runs_asks_the_plan_when_history_is_none(
         .filter(Operation.repository_id == a.id)
         .order_by(Operation.id)
     ]
-    assert kinds == ["archive_sync", "history_merge", "stats"]
-    for op in db.query(Operation).filter(Operation.repository_id == a.id):
-        op.status = "completed"
-    db.commit()
-
-    # get_or_create_licensing_state created the single row above; flip its
-    # plan rather than inserting a second one (lookups always take the
-    # first row in the table).
-    state = db.query(LicensingState).first()
-    if state is None:
-        db.add(LicensingState(instance_id="t-reconcile", plan="pro", status="active"))
-    else:
-        state.plan = "pro"
-        state.status = "active"
-    db.commit()
-    reconcile.enqueue_reconcile_runs(db)
-    kinds = [
-        r.kind
-        for r in db.query(Operation)
-        .filter(Operation.repository_id == a.id)
-        .order_by(Operation.id)
-    ]
-    assert kinds == [
-        "archive_sync",
-        "history_merge",
-        "stats",
-        "archive_sync",
-        "history_merge",
-        "history_index",
-        "stats",
-    ]
+    assert kinds == ["archive_sync", "history_merge", "history_index", "stats"]
 
 
 @pytest.mark.unit
@@ -659,12 +609,8 @@ def test_enqueue_reconcile_run_omits_history_index_for_an_agent_repository(
     db.add_all([server, agent])
     db.commit()
 
-    kinds_server = [
-        o.kind for o in reconcile.enqueue_reconcile_run(db, server.id, history=True)
-    ]
-    kinds_agent = [
-        o.kind for o in reconcile.enqueue_reconcile_run(db, agent.id, history=True)
-    ]
+    kinds_server = [o.kind for o in reconcile.enqueue_reconcile_run(db, server.id)]
+    kinds_agent = [o.kind for o in reconcile.enqueue_reconcile_run(db, agent.id)]
 
     assert kinds_server == ["archive_sync", "history_merge", "history_index", "stats"]
     assert kinds_agent == ["archive_sync", "history_merge", "stats"]

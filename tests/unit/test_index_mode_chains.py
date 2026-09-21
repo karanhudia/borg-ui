@@ -69,7 +69,7 @@ def test_chain_for_off_is_empty():
 
 def test_chain_for_repository_reads_the_repository_mode(db):
     repo = _repository(db, "archives")
-    assert chain_for_repository(db, "backup", repo.id, history=True) == [
+    assert chain_for_repository(db, "backup", repo.id) == [
         "archive_sync",
         "stats",
     ]
@@ -79,41 +79,41 @@ def test_chain_for_repository_with_no_repository_is_the_default(db):
     # Work with no repository (a package install) is not index work: it has
     # no chain of its own and no mode to read.
     _repository(db, "off")
-    assert chain_for_repository(db, "package_install", None, history=True) == []
+    assert chain_for_repository(db, "package_install", None) == []
 
 
 def test_reconcile_kinds_drop_history_in_archives_mode(db):
-    kinds = reconcile.reconcile_kinds(db, history=True, mode="archives")
+    kinds = reconcile.reconcile_kinds(db, mode="archives")
     assert "history_index" not in kinds
     assert "history_merge" not in kinds
     assert "archive_sync" in kinds
 
 
 def test_reconcile_kinds_are_empty_for_off(db):
-    assert reconcile.reconcile_kinds(db, history=True, mode="off") == []
+    assert reconcile.reconcile_kinds(db, mode="off") == []
 
 
 def test_the_reconcile_tick_enqueues_nothing_for_an_off_repository(db):
     repo = _repository(db, "off")
-    assert reconcile.enqueue_reconcile_run(db, repo.id, history=True) == []
+    assert reconcile.enqueue_reconcile_run(db, repo.id) == []
     assert db.query(Operation).count() == 0
 
 
 def test_a_manual_run_still_lists_an_off_repository(db):
     # Spec 6.8: manual work is not gated by the mode, it just does not repeat.
     repo = _repository(db, "off")
-    ops = reconcile.enqueue_reconcile_run(db, repo.id, history=True, manual=True)
+    ops = reconcile.enqueue_reconcile_run(db, repo.id, manual=True)
     assert [op.kind for op in ops] == ["archive_sync", "stats"]
 
 
 def test_a_manual_run_never_re_enables_history(db):
     repo = _repository(db, "archives")
-    ops = reconcile.enqueue_reconcile_run(db, repo.id, history=True, manual=True)
+    ops = reconcile.enqueue_reconcile_run(db, repo.id, manual=True)
     assert [op.kind for op in ops] == ["archive_sync", "stats"]
 
 
 def test_the_reconcile_sweep_skips_off_repositories(db):
     _repository(db, "off")
     full = _repository(db, "full")
-    assert reconcile.enqueue_reconcile_runs(db, history=True) == 1
+    assert reconcile.enqueue_reconcile_runs(db) == 1
     assert {op.repository_id for op in db.query(Operation).all()} == {full.id}

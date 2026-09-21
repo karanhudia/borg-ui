@@ -35,7 +35,6 @@ from app.services.operations.executors.agent_changes import (
     OperationCancelled,
 )
 from app.services.operations.executors.index import _load_repository
-from app.services.operations.followups import history_enabled
 from app.services.operations.history_fold import (
     change_to_row_dict,
     fold_pair,
@@ -396,9 +395,6 @@ async def run_history_index(ctx) -> Outcome:
             skip_reason="agent_diff_unsupported",
             result={"archives": len(candidates)},
         )
-    if not history_enabled(db):
-        # after the executor: its reason is the durable one
-        return Outcome(status="skipped", skip_reason="plan_locked")
     if not pending:
         return Outcome(
             status="completed_with_warnings" if exhausted else "completed",

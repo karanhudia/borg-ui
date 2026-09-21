@@ -1039,10 +1039,9 @@ class TestRebuild:
             headers=admin_headers,
         )
         kinds = [test_db.get(Operation, i).kind for i in r.json()["operations"]]
-        # history_merge is not plan gated: it is the only deleter of rows for
-        # archives that have left the repository, so a Community rebuild needs
-        # it too. history_index is gated and absent here.
-        assert kinds == ["archive_sync", "history_merge", "stats"]
+        # The rebuilt chain is the chain that runs in the background, which is
+        # the same on every plan.
+        assert kinds == ["archive_sync", "history_merge", "history_index", "stats"]
         ops = test_db.query(Operation).all()
         assert all(o.trigger == "manual" and o.priority == 20 for o in ops)
         test_db.refresh(a)
@@ -1060,7 +1059,7 @@ class TestRebuild:
         )
         assert r.status_code == 200, r.text
         kinds = [test_db.get(Operation, i).kind for i in r.json()["operations"]]
-        assert kinds == ["archive_sync", "history_merge", "stats"]
+        assert kinds == ["archive_sync", "history_merge", "history_index", "stats"]
         ops = test_db.query(Operation).all()
         assert all(o.trigger == "reconcile" and o.priority == 20 for o in ops)
 
@@ -1340,20 +1339,77 @@ def _change(test_db, archive, path, change, before=None, after=None, count=None)
 
 @pytest.mark.unit
 class TestProGate:
-    @pytest.mark.parametrize(
-        "path", ["/archives/1/changes", "/history?path=x", "/search?q=x"]
-    )
-    def test_community_gets_403(self, test_client, test_db, admin_headers, path):
+    """Community reads the counts, Pro reads the rows (spec
+    2026-09-21-community-teasers-and-feature-trials, section 1)."""
+
+    def test_community_gets_the_change_totals_without_the_rows(
+        self, test_client, test_db, admin_headers
+    ):
         repo = _repo(test_db)
-        _archive(test_db, repo, "a1", 1)
-        r = test_client.get(f"/api/repositories/{repo.id}{path}", headers=admin_headers)
-        assert r.status_code == 403
-        assert r.json()["detail"] == {
-            "key": "backend.errors.plan.featureNotAvailable",
-            "feature": "archive_history",
-            "required": "pro",
-            "current": "community",
-        }
+        a1 = _archive(test_db, repo, "a1", 1, state="indexed")
+        a2 = _archive(test_db, repo, "a2", 2, state="indexed")
+        _change(test_db, a1, "a", "added", after=10)
+        _change(test_db, a2, "a", "modified", before=10, after=12)
+        _change(test_db, a2, "b", "added", after=3)
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/archives/{a2.id}/changes",
+            headers=admin_headers,
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["totals"]["modified"] == 1 and body["totals"]["added"] == 1
+        assert body["changes"] == []
+        assert body["detail_locked"] is True
+        assert body["next_cursor"] is None
+
+    def test_community_gets_the_version_count_of_one_path(
+        self, test_client, test_db, admin_headers
+    ):
+        repo = _repo(test_db)
+        a1 = _archive(test_db, repo, "a1", 1, state="indexed")
+        a2 = _archive(test_db, repo, "a2", 2, state="indexed")
+        _change(test_db, a1, "a", "added", after=10)
+        _change(test_db, a2, "a", "modified", before=10, after=12)
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/history?path=a", headers=admin_headers
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["versions"] == 2
+        assert body["first_seen"] is not None and body["last_seen"] is not None
+        assert body["entries"] == [] and body["present"] == []
+        assert body["detail_locked"] is True
+
+    def test_community_search_counts_the_matches_and_shows_three(
+        self, test_client, test_db, admin_headers
+    ):
+        repo = _repo(test_db)
+        a1 = _archive(test_db, repo, "a1", 1, state="indexed")
+        for i in range(5):
+            _change(test_db, a1, f"notes-{i}.txt", "added", after=1)
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/search?q=notes", headers=admin_headers
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert len(body["results"]) == 3
+        assert body["match_count"] == 5 and body["match_count_capped"] is False
+        assert body["detail_locked"] is True
+
+    def test_pro_search_returns_every_row(self, test_client, test_db, admin_headers):
+        repo = _repo(test_db)
+        _pro(test_db)
+        a1 = _archive(test_db, repo, "a1", 1, state="indexed")
+        for i in range(5):
+            _change(test_db, a1, f"notes-{i}.txt", "added", after=1)
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/search?q=notes", headers=admin_headers
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert len(body["results"]) == 5
+        assert body["detail_locked"] is False
+        assert "match_count" not in body
 
 
 @pytest.mark.unit
@@ -2045,7 +2101,12 @@ class TestPrunePreview:
         )
         assert body["partial_measure"] is False and body["log"] == "borg said"
         assert {a.id for a in remeasure.await_args.args[2]} == {a1.id, a2.id}
-        assert body["lost_files"] == {"available": False, "capability": "plan_locked"}
+        # Community reads the count and the weight, never the file list.
+        lost = body["lost_files"]
+        assert lost["available"] is True and lost["capability"] == "available"
+        assert lost["detail_locked"] is True
+        assert "top" not in lost and "by_folder" not in lost
+        assert lost["total_count"] == 0
 
     def test_stored_candidate_reads_back_without_borg(
         self, test_client, test_db, admin_headers

@@ -32,10 +32,12 @@ FOLLOWUPS: dict[str, tuple[str, ...]] = {
 
 HISTORY_KINDS: frozenset[str] = frozenset({"history_index", "history_merge"})
 
-# Of the two, only history_index is a Pro feature. history_merge is what
-# deletes the rows of archives that are gone from the repository, and
-# apply_listing deliberately leaves that deletion to it, so a Community
-# install that dropped it would keep every pruned archive in the table.
+# Of the two, only history_index writes the change rows. history_merge is
+# what deletes the rows of archives that are gone from the repository, and
+# apply_listing deliberately leaves that deletion to it, so an install that
+# dropped it would keep every pruned archive in the table. The name is
+# historical: these kinds were plan gated until 2026-09-21, and what drops
+# history_index now is the executor, not the plan.
 PLAN_GATED_KINDS: frozenset[str] = frozenset({"history_index"})
 
 
@@ -59,9 +61,13 @@ def chain_for(
     """Return the follow-up kinds for `kind`, in order.
 
     `available` drops kinds without an executor. `history=False` drops the
-    plan gated kinds for Community installs (spec 11.2): the stage does not
-    exist rather than being created and skipped (Appendix B). history_merge
-    is not gated; see PLAN_GATED_KINDS. `mode` drops the kinds the
+    kinds that write change history when this repository cannot have it
+    built (an agent that does not produce the listing): the stage does not
+    exist rather than being created and skipped (Appendix B). The plan no
+    longer decides this; the index is built on every plan and
+    `archive_history` gates the reads instead (spec
+    2026-09-21-community-teasers-and-feature-trials, section 2).
+    history_merge is never dropped; see PLAN_GATED_KINDS. `mode` drops the kinds the
     repository's index mode does not refresh (spec 6.8), by the same rule:
     a stage that will never run does not exist.
     """
@@ -79,32 +85,24 @@ def chain_for_repository(
     kind: str,
     repository_id: Optional[int],
     *,
-    history: Optional[bool] = None,
     available: Optional[set[str]] = None,
 ) -> list[str]:
-    """`chain_for` with this install's executors, this install's plan, this
-    repository's index mode, and this repository's executor. Every
-    follow-up site calls this, so the three gates are read in one place
-    rather than six.
+    """`chain_for` with this install's executors, this repository's index
+    mode, and this repository's executor. Every follow-up site calls this,
+    so the gates are read in one place rather than six.
 
-    `history` is the plan gate; left None it is read here, which goes
-    through the licensing service and commits the session. A caller that
-    wraps this call in a savepoint reads it beforehand and passes it in.
-    With the plan gate open, the executor decides next: a repository
-    executed by a managed agent whose agent cannot produce the change
-    listing gets no history stage either (`history_capability`), by the
-    same rule as the plan and the mode: a stage that will never run does
-    not exist.
+    The plan is not one of them: history is indexed on every plan and
+    `archive_history` gates who may read the rows. What can still drop the
+    history stage is the executor, a repository executed by a managed agent
+    whose agent cannot produce the change listing (`history_capability`),
+    and the index mode: a stage that will never run does not exist.
 
     `available` is for the runner, which carries its own registry and must
     not be told about executors it was not given.
     """
     from app.services.operations.executors import registered_kinds
 
-    if history is None:
-        history = history_enabled(db)
-    if history:
-        history = history_possible_for(db, repository_id, history=True)
+    history = history_possible_for(db, repository_id)
     if available is None:
         available = registered_kinds()
     return chain_for(
@@ -292,24 +290,23 @@ def history_capability(
     return HISTORY_AVAILABLE
 
 
-def history_possible(db, repository, *, history: Optional[bool] = None) -> bool:
+def history_possible(db, repository) -> bool:
     """The `history` argument for `chain_for`: the history stage exists for
-    this repository (it is not merely created and skipped, Appendix B)."""
-    return history_capability(db, repository, history=history) == HISTORY_AVAILABLE
+    this repository (it is not merely created and skipped, Appendix B).
+    Plan independent since 2026-09-21: only the executor can refuse."""
+    return history_capability(db, repository, history=True) == HISTORY_AVAILABLE
 
 
-def history_possible_for(
-    db, repository_id: Optional[int], *, history: Optional[bool] = None
-) -> bool:
+def history_possible_for(db, repository_id: Optional[int]) -> bool:
     """`history_possible` for a caller holding only the repository id (the
-    runner, the follow-up enqueuers). A missing repository keeps the plan
-    answer; the executor skips its chain as `repository_missing` anyway."""
+    runner, the follow-up enqueuers). A missing repository reads as
+    possible; the executor skips its chain as `repository_missing` anyway."""
     from app.database.models import Repository
 
     repository = (
         db.get(Repository, repository_id) if repository_id is not None else None
     )
-    return history_possible(db, repository, history=history)
+    return history_possible(db, repository)
 
 
 def enqueue_backup_followups(
@@ -319,17 +316,12 @@ def enqueue_backup_followups(
     scheduled_job_id: Optional[int] = None,
     backup_plan_run_id: Optional[int] = None,
     commit: bool = True,
-    history: Optional[bool] = None,
 ) -> list:
     """Enqueue the `backup` chain for a backup that completed outside the
     runner: an agent completion report for a row written before phase 8, or
     for an operation the runner is no longer running (failed by restart
     recovery and finished by the agent afterwards). Every other backup gets
     its chain from the runner (spec 7.4).
-
-    `history` is the plan gate; left None it is read here, which goes
-    through the licensing service and commits the session. A caller that
-    wraps this call in a savepoint reads it beforehand and passes it in.
 
     Skipped only when an archive listing is queued and its dependency is
     already satisfied (or absent). Other queued index work cannot replace
@@ -373,9 +365,7 @@ def enqueue_backup_followups(
     )
     if queued is not None:
         return []
-    if history is None:
-        history = history_enabled(db)
-    kinds = chain_for_repository(db, "backup", repository_id, history=history)
+    kinds = chain_for_repository(db, "backup", repository_id)
     if not kinds:
         return []
     return enqueue_chain(

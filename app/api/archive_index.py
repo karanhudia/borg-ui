@@ -738,8 +738,12 @@ async def rebuild(
     """Invalidate a derived-data stage and the stages after it, then enqueue
     a manual run at priority 20 (spec 9.2)."""
     repository = _repo(db, current_user, repo_id, role="operator")
-    history = history_enabled(db)
-    capability = history_capability(db, repository, history=history)
+    # The chain that gets rebuilt is the chain that runs in the background,
+    # and that one is plan independent: only the executor can refuse the
+    # history stage. Wiping and rebuilding the change rows by hand stays Pro
+    # (the `history` branch below), since it is an expensive tool for a
+    # feature the reader cannot see.
+    capability = history_capability(db, repository, history=True)
     if body.from_stage == "history" and capability == HISTORY_AGENT_UNSUPPORTED:
         # A rebuild that can only skip again would reset every archive to
         # `pending` for nothing and read as "not yet" in the UI. Before the
@@ -844,6 +848,16 @@ async def resync(
 MAX_LIMIT = 500
 ARCHIVE_HISTORY = require_feature("archive_history")
 
+# What a Community reader gets from the three history routes: the counts,
+# and for search a handful of real rows. The file level answer is Pro (spec
+# 2026-09-21-community-teasers-and-feature-trials, section 1). The routes
+# carry no feature dependency for that reason; each one shapes its own
+# response and says so with `detail_locked`.
+TEASER_SEARCH_ROWS = 3
+# Counting every distinct match would scan the whole change table for a
+# broad query. The teaser says "500+" past this and stops counting.
+TEASER_SEARCH_COUNT_CAP = 500
+
 
 def _serialize_change(c: Change) -> dict:
     return {
@@ -864,7 +878,7 @@ def _totals(changes: list[Change]) -> dict:
     return totals
 
 
-@router.get("/{repo_id}/archives/{archive_id}/changes", dependencies=[ARCHIVE_HISTORY])
+@router.get("/{repo_id}/archives/{archive_id}/changes")
 async def archive_changes(
     repo_id: int,
     archive_id: int,
@@ -903,6 +917,7 @@ async def archive_changes(
             **base,
             "compare_to_id": compare.id if compare else None,
             "changes": [],
+            "detail_locked": not history,
             "totals": _totals([]),
             "next_cursor": None,
             "incomplete": True,
@@ -960,9 +975,11 @@ async def archive_changes(
     return {
         **base,
         "compare_to_id": compare.id if compare else None,
-        "changes": [_serialize_change(c) for c in page],
+        # The totals are the Community teaser; the rows behind them are Pro.
+        "changes": [_serialize_change(c) for c in page] if history else [],
+        "detail_locked": not history,
         "totals": totals,
-        "next_cursor": next_cursor,
+        "next_cursor": next_cursor if history else None,
         "incomplete": bool(unindexed),
         "unindexed_archive_ids": unindexed,
     }
@@ -991,7 +1008,7 @@ def present_ranges(entries: list[dict]) -> list[dict]:
     return ranges
 
 
-@router.get("/{repo_id}/history", dependencies=[ARCHIVE_HISTORY])
+@router.get("/{repo_id}/history")
 async def path_history(
     repo_id: int,
     path: str = Query(min_length=1),
@@ -1063,8 +1080,15 @@ async def path_history(
     )
     return {
         "path": path,
-        "entries": list(reversed(ascending)),
-        "present": ranges,
+        # How many versions of this path the index holds, and the window they
+        # cover: the Community teaser for one file. The versions themselves
+        # are Pro.
+        "versions": len(ascending),
+        "first_seen": ascending[0]["start"] if ascending else None,
+        "last_seen": ascending[-1]["start"] if ascending else None,
+        "detail_locked": not history,
+        "entries": list(reversed(ascending)) if history else [],
+        "present": ranges if history else [],
         "present_in_latest": present_in_latest,
         "coverage": {
             "indexed": int(indexed or 0),
@@ -1107,6 +1131,23 @@ def matching_paths(
     return paths[:limit], len(paths) > limit
 
 
+def search_match_count(
+    db: Session, repository: Repository, q: str, cap: int = TEASER_SEARCH_COUNT_CAP
+) -> tuple[int, bool]:
+    """Distinct paths a search matches, stopped at `cap`. The second value
+    says the count is a floor, which the UI renders as "500+"."""
+    inner = (
+        db.query(ArchiveChange.path)
+        .join(Archive, Archive.id == ArchiveChange.archive_id)
+        .filter(*_search_filter(repository, q))
+        .distinct()
+        .limit(cap + 1)
+        .subquery()
+    )
+    found = db.query(func.count()).select_from(inner).scalar() or 0
+    return (cap, True) if found > cap else (found, False)
+
+
 def rows_for_paths(db: Session, repository: Repository, paths: list[str]) -> list:
     """The change rows of the paths on this page, oldest archive first."""
     if not paths:
@@ -1130,7 +1171,7 @@ def rows_for_paths(db: Session, repository: Repository, paths: list[str]) -> lis
     )
 
 
-@router.get("/{repo_id}/search", dependencies=[ARCHIVE_HISTORY])
+@router.get("/{repo_id}/search")
 async def search_paths(
     repo_id: int,
     q: str = Query(min_length=1),
@@ -1141,6 +1182,9 @@ async def search_paths(
     """Filename search over archive_changes.path, grouped by path (spec
     9.2). Case-insensitive LIKE; FTS5 is a listed follow-up."""
     repository = _repo(db, current_user, repo_id)
+    pro = history_enabled(db)  # commits; before the archive rows load
+    if not pro:
+        limit = TEASER_SEARCH_ROWS
     paths, truncated = matching_paths(db, repository, q, limit)
     rows = rows_for_paths(db, repository, paths)
     grouped: dict[str, dict] = {}
@@ -1165,4 +1209,21 @@ async def search_paths(
     results = list(grouped.values())
     for entry in results:
         entry["present_in_latest"] = entry.pop("last_change") != "removed"
-    return {"query": q, "results": results, "truncated": truncated}
+    if not pro:
+        # The count is what makes the case; the rows past the first few are
+        # the feature.
+        match_count, capped = search_match_count(db, repository, q)
+        return {
+            "query": q,
+            "results": results,
+            "truncated": truncated,
+            "detail_locked": True,
+            "match_count": match_count,
+            "match_count_capped": capped,
+        }
+    return {
+        "query": q,
+        "results": results,
+        "truncated": truncated,
+        "detail_locked": False,
+    }

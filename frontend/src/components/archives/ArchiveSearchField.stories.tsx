@@ -41,10 +41,16 @@ const results = [
 
 // The search route, the path history behind a picked result, and the series
 // listing the history panel reads to say how many older archives lack it.
-function useSearchMocks() {
+function useSearchMocks(locked = false) {
   useEffect(() => {
     const mock = new MockAdapter(api, { onNoMatch: 'passthrough' })
-    mock.onGet(/\/search/).reply(200, { query: 'pdf', results, truncated: false })
+    mock.onGet(/\/search/).reply(200, {
+      query: 'pdf',
+      // Community gets the first few rows and the count behind them.
+      results: locked ? results.slice(0, 3) : results,
+      truncated: false,
+      ...(locked ? { detail_locked: true, match_count: 47, match_count_capped: false } : {}),
+    })
     // Echo the requested path, or picking the second or third result would
     // read back the first one's history.
     mock.onGet(/\/history/).reply((config) => [
@@ -91,6 +97,15 @@ function SearchFieldStory(args: ComponentProps<typeof ArchiveSearchField>) {
   )
 }
 
+function LockedSearchFieldStory(args: ComponentProps<typeof ArchiveSearchField>) {
+  useSearchMocks(true)
+  return (
+    <Box sx={{ width: 420, maxWidth: 'calc(100vw - 32px)' }}>
+      <ArchiveSearchField {...args} />
+    </Box>
+  )
+}
+
 const meta = {
   title: 'Components/Archives/ArchiveSearchField',
   component: ArchiveSearchField,
@@ -112,8 +127,10 @@ export const Unlocked: Story = {
   },
 }
 
+// Community: the search runs, the count is real, the list is Pro.
 export const Locked: Story = {
   parameters: {
     systemInfo: communitySystemInfo,
   },
+  render: (args) => <LockedSearchFieldStory {...args} />,
 }

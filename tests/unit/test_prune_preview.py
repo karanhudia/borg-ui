@@ -461,8 +461,7 @@ class TestLostFiles:
         from app.services import prune_preview as pp
 
         repo = _repo(test_db)
-        monkeypatch.setattr(pp, "history_enabled", lambda db: True)
-        monkeypatch.setattr(pp, "history_capability", lambda db, r: "available")
+        monkeypatch.setattr(pp, "history_capability", lambda db, r, **kw: "available")
         monkeypatch.setattr(
             pp, "lost_files", lambda *a, **k: {"incomplete": True, "total_size": 500}
         )

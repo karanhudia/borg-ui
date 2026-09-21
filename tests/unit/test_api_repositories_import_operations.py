@@ -19,7 +19,7 @@ def test_record_import_connect_creates_completed_row_and_followups(test_db):
     assert rows[0].kind == "import_connect" and rows[0].status == "completed"
     assert rows[0].trigger == "import" and rows[0].completed_at is not None
     assert rows[0].result == {"verified": True}
-    assert [r.kind for r in rows[1:]] == ["stats", "archive_sync"]
+    assert [r.kind for r in rows[1:]] == ["stats", "archive_sync", "history_index"]
     assert rows[1].depends_on_id == op.id
     assert all(r.run_id == op.run_id and r.trigger == "followup" for r in rows[1:])
 
@@ -103,7 +103,7 @@ def test_import_repository_records_operation_and_skips_inline_stats(
         .filter_by(repository_id=repo.id)
         .order_by(Operation.id)
     ]
-    assert kinds == ["import_connect", "stats", "archive_sync"]
+    assert kinds == ["import_connect", "stats", "archive_sync", "history_index"]
     first = test_db.query(Operation).filter_by(repository_id=repo.id).first()
     assert first.status == "completed"
     assert first.triggered_by_user_id is not None

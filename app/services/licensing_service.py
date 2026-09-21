@@ -136,6 +136,12 @@ def get_entitlement_summary(db: Session) -> dict[str, Any]:
     payload = state.payload_json or {}
     refresh_after = _parse_dt(payload.get("refresh_after"))
     is_full_access = bool(state.is_trial and state.status == "active")
+    granted = [
+        o.get("feature")
+        for o in payload.get("feature_overrides", []) or []
+        if o.get("enabled") is True and o.get("feature")
+    ]
+    expires_at = serialize_datetime(state.expires_at)
 
     return {
         "status": state.status,
@@ -151,6 +157,15 @@ def get_entitlement_summary(db: Session) -> dict[str, Any]:
         "license_id": state.license_id,
         "customer_id": state.customer_id,
         "ui_state": _ui_state(state),
+        # The features a per-feature trial is currently granting, and the
+        # ones whose trial has run out, so the UI can count down and then
+        # say the trial ended instead of offering it again (spec
+        # 2026-09-21-community-teasers-and-feature-trials, section 3).
+        "trial_features": [
+            {"feature": f, "expires_at": expires_at}
+            for f in (granted if state.status == "active" else [])
+        ],
+        "expired_trial_features": granted if state.status == "expired" else [],
         "last_refresh_at": serialize_datetime(state.last_refresh_at),
         "last_refresh_error": state.last_refresh_error,
     }
@@ -167,8 +182,12 @@ def get_feature_access(db: Session) -> dict[str, bool]:
         for feature, required in FEATURES.items()
     }
 
-    payload = state.payload_json or {}
-    for override in payload.get("feature_overrides", []) or []:
+    # Overrides ride on the entitlement document, so they end when it does.
+    # refresh_status_if_expired only flips status and plan; payload_json stays
+    # until the next _clear_entitlement, and an expired feature trial that
+    # kept granting its feature would never end.
+    payload = state.payload_json if state.status == "active" else {}
+    for override in (payload or {}).get("feature_overrides", []) or []:
         feature = override.get("feature")
         enabled = override.get("enabled")
         if feature in effective and isinstance(enabled, bool):
@@ -231,27 +250,6 @@ def _validate_entitlement_document(
     return None
 
 
-def _on_plan_changed(db: Session, before: str, after: str) -> None:
-    """Spec 11.2: a Pro activation enqueues a reconcile run for every
-    repository so history builds in the background. Lapses do nothing;
-    rows stay and the gated routes hide them."""
-    from app.core.features import Plan, plan_includes
-    from app.services.operations.reconcile import enqueue_reconcile_runs
-
-    try:
-        was_pro = plan_includes(Plan(before), Plan.PRO)
-        is_pro = plan_includes(Plan(after), Plan.PRO)
-    except ValueError:
-        return
-    if is_pro and not was_pro:
-        try:
-            enqueue_reconcile_runs(db, history=True)
-        except Exception as exc:
-            logger.warning(
-                "Failed to enqueue reconcile after activation", error=str(exc)
-            )
-
-
 def _apply_entitlement(
     db: Session,
     state: LicensingState,
@@ -260,7 +258,6 @@ def _apply_entitlement(
     key_id: str | None = None,
     refresh_error: str | None = None,
 ) -> None:
-    before = get_effective_plan_value(db)
     state.entitlement_id = payload.get("entitlement_id")
     state.key_id = key_id
     state.customer_id = payload.get("customer_id")
@@ -279,7 +276,6 @@ def _apply_entitlement(
     state.signature = signature
     refresh_status_if_expired(state)
     db.commit()
-    _on_plan_changed(db, before, get_effective_plan_value(db))
 
 
 async def _post_activation(
@@ -478,6 +474,65 @@ async def activate_paid_license(
         raise RuntimeError(error)
 
     _apply_entitlement(db, state, payload, signature, key_id=key_id)
+    return {
+        "result": data.get("result") or "activated",
+        "entitlement": get_entitlement_summary(db),
+    }
+
+
+async def request_feature_trial(
+    db: Session, *, feature: str, app_version: str
+) -> dict[str, Any]:
+    """Ask the activation service for a time limited trial of one feature.
+
+    The same `/v1/trials/activate` endpoint as the one time full access
+    trial, with `requested_feature` added: the answer is the same `denied`
+    or `entitlement` document, so nothing new is parsed here. A service
+    that does not know the field answers `denied`, which the UI reports as
+    "not available" (spec
+    2026-09-21-community-teasers-and-feature-trials, section 3).
+
+    How long the trial runs, and whether one is granted at all, is the
+    service's call. This install only records what it is handed.
+    """
+    from app.core.features import FEATURES
+
+    if feature not in FEATURES:
+        raise RuntimeError(f"Unknown feature: {feature!r}")
+
+    state = get_or_create_licensing_state(db)
+    data = await _post_activation(
+        "/v1/trials/activate",
+        {
+            "instance_id": state.instance_id,
+            "app": "borg-ui",
+            "app_version": app_version,
+            "hostname": os.getenv("HOSTNAME"),
+            "fingerprint": None,
+            "requested_feature": feature,
+        },
+    )
+
+    if data.get("result") == "denied":
+        state.last_refresh_at = utc_now()
+        db.commit()
+        return {
+            "result": "denied",
+            "reason": data.get("reason"),
+            "entitlement": get_entitlement_summary(db),
+        }
+
+    entitlement = data.get("entitlement") or {}
+    payload = entitlement.get("payload")
+    signature = entitlement.get("signature")
+    error = _validate_entitlement_document(state, payload, signature)
+    if error:
+        state.last_refresh_at = utc_now()
+        state.last_refresh_error = error
+        db.commit()
+        raise RuntimeError(error)
+
+    _apply_entitlement(db, state, payload, signature, key_id=entitlement.get("key_id"))
     return {
         "result": data.get("result") or "activated",
         "entitlement": get_entitlement_summary(db),

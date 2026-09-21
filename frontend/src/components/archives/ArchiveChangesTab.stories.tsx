@@ -143,10 +143,23 @@ export const Pending: Story = {
   },
 }
 
+// Community: the totals are real, the rows behind them are Pro.
 export const Locked: Story = {
   parameters: {
     systemInfo: communitySystemInfo,
   },
+  render: (args) => (
+    <SeededChanges
+      response={changesResponse({
+        changes: [],
+        detail_locked: true,
+        next_cursor: null,
+        totals: { added: 128, removed: 4, modified: 512, summary: 0 },
+      })}
+    >
+      <ArchiveChangesTab {...args} />
+    </SeededChanges>
+  ),
 }
 
 // An archive of a repository executed by a managed agent: the server cannot

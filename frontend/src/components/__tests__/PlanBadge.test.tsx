@@ -55,3 +55,30 @@ describe('PlanBadge full access countdown', () => {
     expect(screen.getByText('Full Access')).toBeInTheDocument()
   })
 })
+
+describe('PlanBadge feature trial countdown', () => {
+  it('names the feature trial and counts its days down', () => {
+    // A per-feature trial runs on the Community plan, so the badge shows the
+    // trial instead of the plan name (spec 2026-09-21, section 3).
+    const expires = new Date(Date.now() + 9 * 24 * 60 * 60 * 1000).toISOString()
+    renderWithProviders(
+      <PlanBadge
+        plan="community"
+        onClick={vi.fn()}
+        entitlement={{
+          status: 'active',
+          access_level: 'community',
+          is_full_access: false,
+          full_access_consumed: true,
+          expires_at: expires,
+          starts_at: null,
+          instance_id: null,
+          last_refresh_at: null,
+          last_refresh_error: null,
+          trial_features: [{ feature: 'archive_history', expires_at: expires }],
+        }}
+      />
+    )
+    expect(screen.getByText(/Pro trial · 9 days left/)).toBeInTheDocument()
+  })
+})
