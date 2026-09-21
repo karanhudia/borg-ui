@@ -926,10 +926,10 @@ sizes, `[Restore] [Mount] [Delete]` using the existing dialogs. Tabs:
 [ Changes (+12 −3 ~41) ]  [ Files ]  [ Info ]
 
 Compared with  nas-2026-09-01T02:00 (previous) ▾        net +184 MB
-  ~ home/karan/docs/invoices.xlsx        374 KB → 412 KB
-  + home/karan/photos/IMG_2291.heic       4.1 MB
-  − home/karan/docs/draft.txt             3 KB
-  ▸ 38 more modified in home/karan/Library/…
+  ~ home/alex/docs/invoices.xlsx        374 KB → 412 KB
+  + home/alex/photos/IMG_2291.heic       4.1 MB
+  − home/alex/docs/draft.txt             3 KB
+  ▸ 38 more modified in home/alex/Library/…
 ```
 
 `ArchiveChangesTab` with a `RichSelect` compare picker, change-type filter

@@ -2272,7 +2272,7 @@ Expected: all green. Paste the summary lines into the G2 report.
 2. **Folder rollup depth.** The plan groups lost files by the parent
    directory cut to three components (`srv/media/raw`). The mockup shows
    four-deep folders. Three keeps a home directory's users apart
-   (`home/karan/tmp-exports`); is that the right depth, or should it be
+   (`home/alex/tmp-exports`); is that the right depth, or should it be
    the deepest common parent per source path?
 3. **Preview on agent repositories.** The dry run goes through the agent
    (as today); the re-measure runs up to 50 `repository.archive_info`

@@ -28,6 +28,14 @@ repos:
 
   - repo: local
     hooks:
+      - id: no-personal-paths-self-test
+        name: no-personal-paths-self-test
+        entry: scripts/check-no-personal-paths.sh --self-test
+        language: system
+        pass_filenames: false
+        files: ^scripts/check-no-personal-paths\.sh$
+        stages: [pre-commit]
+
       - id: no-personal-paths
         name: no-personal-paths
         entry: scripts/check-no-personal-paths.sh
