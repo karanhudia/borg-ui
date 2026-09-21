@@ -543,17 +543,34 @@ def _matches_trigger(item: dict, trigger: List[str]) -> bool:
 
 def _attach_run_context(db: Session, items: List[dict]) -> None:
     """Name what the rows only point at: the schedule a scheduled run belongs
-    to and how a plan run was started. Batched, one query per table."""
+    to, how a plan run was started, and the plan a backup operation ran for.
+    Batched, one query per table."""
     run_ids = {i["backup_plan_run_id"] for i in items if i.get("backup_plan_run_id")}
     if run_ids:
-        triggers = dict(
-            db.query(BackupPlanRun.id, BackupPlanRun.trigger)
-            .filter(BackupPlanRun.id.in_(tuple(run_ids)))
-            .all()
-        )
+        runs = {
+            run.id: run
+            for run in db.query(
+                BackupPlanRun.id, BackupPlanRun.trigger, BackupPlanRun.backup_plan_id
+            ).filter(BackupPlanRun.id.in_(tuple(run_ids)))
+        }
+        backups = []
         for item in items:
-            if item.get("backup_plan_run_id") in triggers:
-                item["backup_plan_run_trigger"] = triggers[item["backup_plan_run_id"]]
+            run = runs.get(item.get("backup_plan_run_id"))
+            if run is None:
+                continue
+            item["backup_plan_run_trigger"] = run.trigger
+            if item.get("kind") == "backup":
+                item["backup_plan_id"] = run.backup_plan_id
+                backups.append(item)
+        plan_ids = {i["backup_plan_id"] for i in backups if i["backup_plan_id"]}
+        if plan_ids:
+            plan_names = dict(
+                db.query(BackupPlan.id, BackupPlan.name)
+                .filter(BackupPlan.id.in_(tuple(plan_ids)))
+                .all()
+            )
+            for item in backups:
+                item["backup_plan_name"] = plan_names.get(item["backup_plan_id"])
     schedule_ids = {
         i["schedule_id"]
         for i in items
@@ -571,7 +588,12 @@ def _attach_run_context(db: Session, items: List[dict]) -> None:
 
 
 def _apply_legacy_activity_shape(
-    db: Session, op: Operation, item: dict, *, log_save_policy: str
+    db: Session,
+    op: Operation,
+    item: dict,
+    *,
+    log_save_policy: str,
+    backup: Optional[tuple],
 ) -> None:
     """Give a migrated operation the Activity vocabulary its legacy table used.
 
@@ -598,25 +620,11 @@ def _apply_legacy_activity_shape(
         )
         return
     if op.kind == "backup":
-        from app.services.operations.backup_facade import (
-            BackupJobFacade,
-            archive_borg_id_for,
-            backup_job_has_logs,
-        )
-
-        job = BackupJobFacade(db, op)
+        # The plan and the schedule are named by `_attach_run_context`.
+        job, item["archive_borg_id"], item["has_logs"] = backup
         item["triggered_by"] = job.triggered_by
-        item["backup_plan_id"] = job.backup_plan_id
         item["archive_name"] = job.archive_name
-        item["archive_borg_id"] = archive_borg_id_for(db, job)
         item["archive_pruned_at"] = job.archive_pruned_at
-        item["has_logs"] = backup_job_has_logs(db, job, log_save_policy=log_save_policy)
-        if job.scheduled_job_id:
-            scheduled_job = db.get(ScheduledJob, job.scheduled_job_id)
-            item["schedule_name"] = scheduled_job.name if scheduled_job else None
-        if job.backup_plan_id:
-            plan = db.get(BackupPlan, job.backup_plan_id)
-            item["backup_plan_name"] = plan.name if plan else None
         return
     if op.kind != "rclone_sync":
         return
@@ -635,6 +643,22 @@ def _apply_legacy_activity_shape(
         output_text=[job.log_text, job.error_text],
         file_path=op.log_file_path,
     )
+
+
+def _listed_backups(db: Session, ops: List[Operation], *, log_save_policy: str) -> dict:
+    """Per backup operation id: its facade, its archive's borg id and its
+    `has_logs`. Each lookup runs once for the window, so the statement count
+    does not grow with the backups in it."""
+    from app.services.operations.backup_facade import (
+        archive_borg_ids_for,
+        backup_facades,
+        backup_jobs_have_logs,
+    )
+
+    jobs = backup_facades(db, [op for op in ops if op.kind == "backup"])
+    borg_ids = archive_borg_ids_for(db, jobs)
+    has_logs = backup_jobs_have_logs(db, jobs, log_save_policy=log_save_policy)
+    return {job.id: (job, borg_ids[job.id], has_logs[job.id]) for job in jobs}
 
 
 def _operation_activity_items(
@@ -726,6 +750,7 @@ def _operation_activity_items(
         if repo_ids
         else {}
     )
+    backups = _listed_backups(db, ops, log_save_policy=log_save_policy)
     by_id: dict[int, dict] = {}
     for op in ops:
         repo = repos.get(op.repository_id) if op.repository_id is not None else None
@@ -747,7 +772,13 @@ def _operation_activity_items(
                 for key, value in (op.params or {}).items()
                 if key.startswith("keep_")
             }
-        _apply_legacy_activity_shape(db, op, item, log_save_policy=log_save_policy)
+        _apply_legacy_activity_shape(
+            db,
+            op,
+            item,
+            log_save_policy=log_save_policy,
+            backup=backups.get(op.id),
+        )
         if (
             job_type
             and item["type"] != job_type
@@ -810,7 +841,7 @@ def _operation_activity_items(
 
 
 @router.get("/recent", response_model=List[ActivityItem])
-async def list_recent_activity(
+def list_recent_activity(
     limit: int = 100,
     before: Optional[datetime] = None,
     job_type: Optional[str] = None,  # Filter by type: 'backup', 'restore', etc.
@@ -831,6 +862,10 @@ async def list_recent_activity(
     `repository_id` narrows every source in SQL, before each source's own
     limit, so one repository's history does not depend on how busy the rest
     of the install has been.
+
+    A plain `def`: the database work is synchronous and runs in the
+    threadpool, so a page that polls this list does not hold the event loop
+    for the other requests.
     """
 
     activities = []

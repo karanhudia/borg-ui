@@ -3,7 +3,6 @@
 from datetime import datetime, timedelta
 
 import pytest
-from sqlalchemy import event
 
 from app.database.models import (
     AgentMachine,
@@ -15,6 +14,7 @@ from app.database.models import (
     ScheduledJob,
     ScheduledJobRepository,
 )
+from tests.utils.statements import count_statements
 
 
 def _add_repositories(db, machine, remote, start, stop):
@@ -73,19 +73,9 @@ def _add_repositories(db, machine, remote, start, stop):
 
 
 def _count_statements(test_client, test_db, admin_headers):
-    statements = []
-
-    def count(conn, cursor, statement, parameters, context, executemany):
-        statements.append(statement)
-
-    engine = test_db.get_bind()
-    event.listen(engine, "before_cursor_execute", count)
-    try:
-        response = test_client.get("/api/repositories/", headers=admin_headers)
-    finally:
-        event.remove(engine, "before_cursor_execute", count)
-    assert response.status_code == 200
-    return response, statements
+    return count_statements(
+        test_db, lambda: test_client.get("/api/repositories/", headers=admin_headers)
+    )
 
 
 @pytest.mark.unit
@@ -109,7 +99,7 @@ def test_list_statement_count_does_not_grow_with_repositories(
     assert len(rows) == 12
     assert sum(1 for row in rows if row.get("rclone_storage")) == 6
 
-    assert len(twelve) == len(three)
+    assert twelve == three
 
 
 @pytest.mark.unit
@@ -139,7 +129,7 @@ def test_list_statement_count_holds_when_the_decorative_columns_fail(
     rows = response.json()["repositories"]
     assert len(rows) == 12
     assert all(row["agent_machine_name"] == "machine" for row in rows)
-    assert len(twelve) == len(three)
+    assert twelve == three
 
 
 @pytest.mark.unit

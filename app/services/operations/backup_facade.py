@@ -27,7 +27,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 
-from sqlalchemy import func, nullslast
+from sqlalchemy import func, nullslast, or_, tuple_
 from sqlalchemy.orm import Session
 
 from app.database.models import (
@@ -391,38 +391,80 @@ def backup_job_has_logs(
     db: Session, job: Any, *, log_save_policy: Optional[str] = None
 ) -> bool:
     """The `has_logs` answer for either shape, agent logs included."""
-    from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
-    from app.services.repository_executor import get_agent_job_for_backup
+    return backup_jobs_have_logs(db, [job], log_save_policy=log_save_policy)[job.id]
+
+
+def backup_jobs_have_logs(
+    db: Session, jobs: list, *, log_save_policy: Optional[str] = None
+) -> dict:
+    """`has_logs` per job id for a list of backups. The agent jobs and, where
+    the policy's answer depends on them, their log lines are asked about once
+    for the list, not once per backup."""
+    from app.database.models import AgentJob, AgentJobLog
+    from app.services.log_policy import (
+        WARNING_MARKERS,
+        get_log_save_policy,
+        job_has_logs_by_policy,
+    )
+    from app.services.repository_executor import BACKUP_AGENT_JOB_TYPE
 
     policy = log_save_policy or get_log_save_policy(db)
-    output_text: list = [job.logs, job.error_message]
-    agent_job = None
-    if job.execution_mode == "agent":
-        agent_job = get_agent_job_for_backup(db, job)
-        if agent_job:
-            output_text.append(agent_job.error_message)
-    if job_has_logs_by_policy(
-        job, policy, output_text=output_text, file_path=job.log_file_path
-    ):
-        return True
-    if policy == "failed_and_warnings" and agent_job is not None:
-        from app.database.models import AgentJobLog
+    agent_ids = [job.id for job in jobs if job.execution_mode == "agent"]
+    # The newest transport job of each backup, as `get_agent_job_for_backup`
+    # picks it, without the payload and result columns.
+    agent_jobs: dict = {}
+    for start in range(0, len(agent_ids), IN_CHUNK):
+        for row in (
+            db.query(AgentJob.id, AgentJob.operation_id, AgentJob.error_message)
+            .filter(
+                AgentJob.operation_id.in_(agent_ids[start : start + IN_CHUNK]),
+                AgentJob.job_type == BACKUP_AGENT_JOB_TYPE,
+            )
+            .order_by(AgentJob.id.asc())
+        ):
+            agent_jobs[row.operation_id] = row
 
-        messages = [
-            log.message
-            for log in db.query(AgentJobLog)
-            .filter(AgentJobLog.agent_job_id == agent_job.id)
-            .order_by(AgentJobLog.sequence.asc(), AgentJobLog.id.asc())
-            .all()
-        ]
-        if messages:
-            return job_has_logs_by_policy(
+    answers: dict = {}
+    undecided: dict = {}
+    for job in jobs:
+        output_text: list = [job.logs, job.error_message]
+        agent_job = agent_jobs.get(job.id)
+        if agent_job is not None:
+            output_text.append(agent_job.error_message)
+        answers[job.id] = job_has_logs_by_policy(
+            job, policy, output_text=output_text, file_path=job.log_file_path
+        )
+        if not answers[job.id] and agent_job is not None:
+            undecided[agent_job.id] = (job, output_text)
+    if policy != "failed_and_warnings" or not undecided:
+        return answers
+
+    # What can still change the answer is a marker in the agent's log lines.
+    # The database picks one such line per job and the policy decides on it,
+    # so a status it refuses whatever the text says (a requeued backup that
+    # is pending again) stays refused, and the lines of every listed backup
+    # are not loaded to be searched here.
+    marked = or_(
+        *(func.lower(AgentJobLog.message).contains(m) for m in WARNING_MARKERS)
+    )
+    agent_job_ids = sorted(undecided)
+    for start in range(0, len(agent_job_ids), IN_CHUNK):
+        for agent_job_id, line in (
+            db.query(AgentJobLog.agent_job_id, func.min(AgentJobLog.message))
+            .filter(
+                AgentJobLog.agent_job_id.in_(agent_job_ids[start : start + IN_CHUNK]),
+                marked,
+            )
+            .group_by(AgentJobLog.agent_job_id)
+        ):
+            job, output_text = undecided[agent_job_id]
+            answers[job.id] = job_has_logs_by_policy(
                 job,
                 policy,
-                output_text=[*output_text, *messages],
+                output_text=[*output_text, line],
                 file_path=job.log_file_path,
             )
-    return False
+    return answers
 
 
 # -- readers --------------------------------------------------------------
@@ -620,27 +662,53 @@ def archive_borg_id_for(db: Session, job: "BackupJobFacade") -> Optional[str]:
 
     The sync links each new archive to its backup; rows stored before that
     link existed fall back to the same-name row nearest the job's start.
-    `Archive.name` is the full name for both Borg versions. One query on the
-    repository index per job, so a 200-row job list stays cheap.
+    `Archive.name` is the full name for both Borg versions.
     """
-    # ponytail: one lookup per listed job; batch by repository if the job
-    # lists ever get slow.
-    if not job.archive_name or job.repository_id is None:
-        return None
-    rows = (
-        db.query(
-            Archive.id, Archive.borg_id, Archive.start, Archive.backup_operation_id
-        )
-        .filter(
-            Archive.repository_id == job.repository_id,
-            Archive.name == job.archive_name,
-        )
-        .all()
-    )
-    if not rows:
-        return None
-    linked = [r for r in rows if r.backup_operation_id == job.id]
-    return (linked[0] if linked else _nearest_start(rows, job.started_at)).borg_id
+    return archive_borg_ids_for(db, [job])[job.id]
+
+
+def archive_borg_ids_for(db: Session, jobs: list) -> dict:
+    """`archive_borg_id_for` per job id for a list of backups: one query on
+    the repository index per chunk of backups, not one per listed job."""
+    named = [job for job in jobs if job.archive_name and job.repository_id is not None]
+    # Pairs, not a repository list and a name list: two independent `IN`s
+    # would also match every other listed repository's archive of that name.
+    pairs = sorted({(job.repository_id, job.archive_name) for job in named})
+    stored: dict = {}
+    for start in range(0, len(pairs), IN_CHUNK // 2):
+        for row in (
+            db.query(
+                Archive.id,
+                Archive.borg_id,
+                Archive.start,
+                Archive.backup_operation_id,
+                Archive.repository_id,
+                Archive.name,
+            )
+            .filter(
+                tuple_(Archive.repository_id, Archive.name).in_(
+                    pairs[start : start + IN_CHUNK // 2]
+                )
+            )
+            .order_by(Archive.id.asc())
+        ):
+            stored.setdefault((row.repository_id, row.name), []).append(row)
+    borg_ids: dict = {job.id: None for job in jobs}
+    for job in named:
+        rows = stored.get((job.repository_id, job.archive_name))
+        if not rows:
+            continue
+        linked = [r for r in rows if r.backup_operation_id == job.id]
+        borg_ids[job.id] = (
+            linked[0] if linked else _nearest_start(rows, job.started_at)
+        ).borg_id
+    return borg_ids
+
+
+def backup_facades(db: Session, operations: Iterable[Operation]) -> list:
+    """Facades for backup operations a caller already holds, their details
+    rows loaded once for the list."""
+    return _facades(db, operations)
 
 
 def newest_per_group(db: Session, model, group_column, order_column, filters) -> list:
