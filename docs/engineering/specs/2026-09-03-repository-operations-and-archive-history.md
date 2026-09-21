@@ -945,13 +945,13 @@ left and a new `ArchiveFileDetailsPane` on the right: metadata, `[Restore]`,
 breakpoint the details pane becomes a `ResponsiveDialog` bottom sheet.
 
 ```
-home / karan / docs                                   [🔍 search in archive]
+home / alex / docs                                    [🔍 search in archive]
 ┌───────────────────────────────────────┬───────────────────────────────────────┐
 │   Name              Size    Modified  │  invoices.xlsx                        │
 │ ▸ 📁 contracts      1.2 GB  Sep 01    │  ────────────────────────────────     │
 │ ▸ 📁 photos         8.4 GB  Aug 30    │  Size      412 KB                     │
 │ ☐ 📄 invoices.xlsx  412 KB  Sep 01 ◀  │  Modified  Sep 01, 23:14              │
-│ ☐ 📄 notes.md        12 KB  Aug 28    │  Owner     karan:staff  rw-r--r--     │
+│ ☐ 📄 notes.md        12 KB  Aug 28    │  Owner     alex:staff   rw-r--r--     │
 │ ☐ 📄 taxes.pdf      2.1 MB  Jul 15    │                                       │
 │                                       │  [Restore]  [Download]                │
 │                                       │                                       │

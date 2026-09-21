@@ -12,8 +12,8 @@ separate `borg-ui-agent` service account for common installs.
 
 The Linux installer is run with `sudo`, but it creates and runs the systemd
 service as a dedicated `borg-ui-agent` user. That is safer by default, but it
-surprises users who install as `karanhudia` and then choose repository paths
-under `/home/karanhudia`. Those paths are often not writable by
+surprises users who install as their own login and then choose repository
+paths under that home directory. Those paths are often not writable by
 `borg-ui-agent`, so `borg init` fails with permission errors.
 
 ## Desired Behavior

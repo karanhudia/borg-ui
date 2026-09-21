@@ -55,13 +55,16 @@ fi
 
 fail=0
 
-# 1. Maintainer usernames. Legitimate uses are GitHub URLs, funding/copyright
-#    metadata and engineering specs that record who owned a decision.
+# 1. Maintainer usernames. This covers engineering docs too, so a username in
+#    a spec mockup is caught however it is spaced. Legitimate uses are project
+#    URLs, funding/copyright metadata, the user-facing install docs that name
+#    the account to look for, and the Owner line that records who holds a spec.
 names=$(git grep -n -I -E '(^|[^A-Za-z0-9_-])(karanhudia|karan)([^A-Za-z0-9_-]|$)' -- \
           . ':!*.lock' ':!package-lock.json' "$SELF" \
-          ':!.github/**' ':!docs/**' ':!README.md' ':!WORKFLOW.md' ':!Dockerfile*' \
-          ':!distribution/**' ':!docker-compose.yml' \
-        | grep -v -E 'github\.com|githubusercontent|github\.io' || true)
+          ':!.github/**' ':!README.md' ':!WORKFLOW.md' ':!Dockerfile*' \
+          ':!distribution/**' ':!docker-compose.yml' ':!docs/installation.md' \
+        | grep -v -E 'github\.com|githubusercontent|github\.io|codecov\.io|star-history' \
+        | grep -v -E '^[^:]+:[0-9]+:\*\*Owner:\*\*' || true)
 if [ -n "$names" ]; then
   echo "ERROR: maintainer username in tracked source. Use a placeholder." >&2
   echo "$names" >&2; echo >&2; fail=1
