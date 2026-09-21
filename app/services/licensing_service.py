@@ -524,7 +524,8 @@ async def list_license_seats(db: Session) -> dict[str, Any]:
     """
     state, license_key = _require_license_key(db)
     data = await _post_activation("/v1/licenses/seats", {"license_key": license_key})
-    return {"instance_id": state.instance_id, **data}
+    # Ours last: the service must not be able to relabel which seat is this one.
+    return {**data, "instance_id": state.instance_id}
 
 
 async def release_license_seat(db: Session, *, instance_id: str) -> dict[str, Any]:
