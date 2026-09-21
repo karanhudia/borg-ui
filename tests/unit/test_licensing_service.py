@@ -301,3 +301,59 @@ def test_pro_activation_enqueues_reconcile_runs(db_session, activation_keys):
     # A second Pro entitlement does not enqueue again
     import_offline_entitlement(db_session, document)
     assert db_session.query(Operation).count() == 4
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_seat_management_uses_the_stored_license_key(db_session, activation_keys):
+    state = get_or_create_licensing_state(db_session)
+    activated = _build_document(
+        activation_keys,
+        instance_id=state.instance_id,
+        entitlement_id="ent_seats",
+        is_trial=False,
+        plan="pro",
+    )
+    post = AsyncMock(
+        side_effect=[
+            {"result": "activated", "entitlement": activated},
+            {
+                "license": {"plan": "pro", "expires_at": None, "max_instances": 3},
+                "seats": [{"instance_id": "other", "hostname": "old-vm"}],
+            },
+            {"result": "released"},
+        ]
+    )
+    with patch("app.services.licensing_service._post_activation", new=post):
+        await activate_paid_license(
+            db_session, license_key="BORG-SEAT-KEY", app_version="1.70.0"
+        )
+
+        seats = await licensing_service.list_license_seats(db_session)
+        assert seats["instance_id"] == state.instance_id
+        assert seats["seats"][0]["hostname"] == "old-vm"
+        assert post.call_args_list[1].args == (
+            "/v1/licenses/seats",
+            {"license_key": "BORG-SEAT-KEY"},
+        )
+
+        released = await licensing_service.release_license_seat(
+            db_session, instance_id="other"
+        )
+        assert released["result"] == "released"
+        assert post.call_args_list[2].args[1]["instance_id"] == "other"
+
+        with pytest.raises(RuntimeError, match="Use deactivate"):
+            await licensing_service.release_license_seat(
+                db_session, instance_id=state.instance_id
+            )
+
+    # Deactivating forgets the key, so seats can no longer be managed here.
+    with patch(
+        "app.services.licensing_service._post_activation",
+        new=AsyncMock(return_value={"result": "deactivated"}),
+    ):
+        await deactivate_paid_license(db_session)
+
+    with pytest.raises(RuntimeError, match="No license key is stored"):
+        await licensing_service.list_license_seats(db_session)

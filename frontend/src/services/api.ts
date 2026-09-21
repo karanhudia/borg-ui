@@ -689,6 +689,9 @@ export const licensingAPI = {
   activate: (licenseKey: string) =>
     api.post('/system/licensing/activate', { license_key: licenseKey }),
   deactivate: () => api.post('/system/licensing/deactivate'),
+  seats: () => api.get('/system/licensing/seats'),
+  releaseSeat: (instanceId: string) =>
+    api.post('/system/licensing/seats/release', { instance_id: instanceId }),
 }
 
 export const backupAPI = {
