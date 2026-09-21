@@ -71,7 +71,7 @@ function SeatMeter({ used, total }: { used: number; total: number }) {
 /** Every installation holding a seat on this licence, with a way to release
  *  the ones that are gone (a wiped database, a dead VM, a rebuilt server). */
 export default function LicenseSeatsCard() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const theme = useTheme()
   const queryClient = useQueryClient()
   const [pendingSeat, setPendingSeat] = useState<LicenseSeat | null>(null)
@@ -231,9 +231,11 @@ export default function LicenseSeatsCard() {
                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                   {t('licensing.seats.meta', {
                     version: seat.app_version || t('common.unknown'),
-                    activated: new Date(seat.activated_at).toLocaleDateString(),
+                    activated: new Date(seat.activated_at).toLocaleDateString(
+                      i18n.resolvedLanguage
+                    ),
                     lastSeen: seat.last_seen_at
-                      ? new Date(seat.last_seen_at).toLocaleString()
+                      ? new Date(seat.last_seen_at).toLocaleString(i18n.resolvedLanguage)
                       : t('common.never'),
                   })}
                 </Typography>

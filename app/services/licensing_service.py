@@ -260,10 +260,15 @@ def _apply_entitlement(
     signature: str,
     key_id: str | None = None,
     refresh_error: str | None = None,
+    license_key: str | None = None,
 ) -> None:
+    # Read the previous plan first: it commits, so nothing pending may be set
+    # before this line if it is to land with the entitlement below.
     before = get_effective_plan_value(db)
     state.entitlement_id = payload.get("entitlement_id")
     state.key_id = key_id
+    if license_key is not None:
+        state.license_key = license_key
     state.customer_id = payload.get("customer_id")
     state.license_id = payload.get("license_id")
     state.plan = payload.get("plan") or "community"
@@ -478,9 +483,11 @@ async def activate_paid_license(
         db.commit()
         raise RuntimeError(error)
 
-    _apply_entitlement(db, state, payload, signature, key_id=key_id)
-    state.license_key = license_key
-    db.commit()
+    # The key rides along with the entitlement so one commit persists both:
+    # a key stored separately can end up paired with the wrong licence.
+    _apply_entitlement(
+        db, state, payload, signature, key_id=key_id, license_key=license_key
+    )
     return {
         "result": data.get("result") or "activated",
         "entitlement": get_entitlement_summary(db),

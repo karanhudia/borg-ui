@@ -31,7 +31,7 @@ import LicenseIdentifierRow from './LicenseIdentifierRow'
 import { tintChipSx, type Tone } from './shared/tones'
 
 export default function LicensingTab() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const theme = useTheme()
   const queryClient = useQueryClient()
   const { plan, features, entitlement } = usePlan()
@@ -89,6 +89,9 @@ export default function LicensingTab() {
     mutationFn: async (nextLicenseKey: string) => licensingAPI.activate(nextLicenseKey),
     onSuccess: async (_response, nextLicenseKey) => {
       await refreshSystemInfo()
+      // The seats belong to the licence, not the instance: a replacement
+      // makes the cached list the previous licence's.
+      await queryClient.invalidateQueries({ queryKey: ['license-seats'] })
       trackPlan(EventAction.COMPLETE, {
         ...analyticsContext,
         operation: activePaidLicense ? 'replace_license' : 'activate_license',
@@ -167,7 +170,7 @@ export default function LicensingTab() {
         ? t('licensing.statusExpired')
         : t('licensing.statusCommunity')
   const expiresOn = entitlement?.expires_at
-    ? new Date(entitlement.expires_at).toLocaleDateString()
+    ? new Date(entitlement.expires_at).toLocaleDateString(i18n.resolvedLanguage)
     : null
   const headerSubline = activePaidLicense
     ? expiresOn
