@@ -42,6 +42,7 @@ the file; the manual cleanup endpoint runs VACUUM for that.
 
 from __future__ import annotations
 
+import os
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -97,38 +98,75 @@ _JOB_TABLES = (
 )
 
 
-def _prune_job_for(db: Session, payload: Any) -> Any:
-    """The prune operation an agent job's payload names, as a facade. Only
-    prunes are of interest here."""
+def _agent_maintenance_job_for(db: Session, payload: Any) -> Any:
+    """The maintenance operation an agent job's payload names, as a facade:
+    the kinds whose log file holds the agent's lines and nothing else."""
+    from app.api.agents import REPOSITORY_OPERATION_JOB_KINDS
     from app.services.operations.job_facade import resolve_agent_maintenance_job
 
-    return resolve_agent_maintenance_job(db, payload, kinds=("prune",))
+    return resolve_agent_maintenance_job(
+        db, payload, kinds=REPOSITORY_OPERATION_JOB_KINDS
+    )
 
 
-def _store_prune_log(prune_job: Any, full_log: str) -> None:
-    """Write the complete agent log onto the prune job. An operation keeps
-    only its log file, and the facade's setter never overwrites an existing
-    file (that protects a service's captured output from a later marker), so
-    the repair writes the file itself."""
-    from pathlib import Path
-
-    from app.services.operations.runner import operation_log_path
-
-    path = prune_job.log_file_path or str(operation_log_path(prune_job.id))
+def _repair_operation_log(db: Session, operation_job: Any, full_log: str) -> None:
+    """Rewrite the operation's log file when it differs from the agent's
+    stored lines. An operation keeps only its log file, and the facade's
+    setter never overwrites an existing file (that protects a service's
+    captured output from a later marker), so the repair writes the file
+    itself. Only an existing file is repaired: one that log retention
+    removed stays removed."""
+    path = operation_job.log_file_path
+    if not path:
+        return
+    # not the name `_complete_finished_operation_log` stages under
+    tmp_path = f"{path}.repair.tmp"
     try:
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as handle:
-            handle.write(full_log)
+        try:
+            # a log cut off inside a character differs, and is repaired
+            with open(path, "r", encoding="utf-8", errors="replace") as handle:
+                if handle.read() == full_log:
+                    return
+        except FileNotFoundError:
+            return
+        # A path is not unique (see `purge_operation_log_files`): a file
+        # another operation names too is not this job's to rewrite.
+        named = (
+            db.query(func.count(Operation.id))
+            .filter(Operation.log_file_path == path)
+            .scalar()
+        )
+        if named > 1:
+            return
+        # staged, so a write that fails leaves the log as it was
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as handle:
+                handle.write(full_log)
+            os.replace(tmp_path, path)
+        except OSError:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+            raise
     except OSError as exc:
         # a full or read-only data directory loses this repair, not the
         # marking below it or the rest of the retention pass
         logger.warning(
-            "Could not repair the prune operation's log file",
-            operation_id=prune_job.id,
+            "Could not repair the operation's log file",
+            operation_id=operation_job.id,
             error=str(exc),
         )
         return
-    prune_job.log_file_path = path
+    # Log retention forgets the path, commits, then unlinks the file. If
+    # it did so meanwhile, the rename brought the file back: remove it.
+    db.rollback()
+    named = db.query(Operation.id).filter(Operation.log_file_path == path).first()
+    if named is None:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
 
 
 def _older_than(model, cutoff):
@@ -591,22 +629,25 @@ LATE_LOG_SETTLE = timedelta(seconds=60)
 def sweep_pruned_archive_records(
     db: Session, lookback: timedelta = timedelta(days=2)
 ) -> int:
-    """Re-parse recent agent prune logs and mark any pruned archives' jobs.
+    """Repair recent agent maintenance logs and mark any pruned archives' jobs.
 
     The completion hook in the agents API often runs before the agent's log
     lines have all been ingested (log streaming races the command result), so
-    it can miss the 'Pruning archive:' lines entirely. By the time the daily
-    retention pass runs they are all there: parse again, mark idempotently,
-    and while at it repair the linked prune job's stored log - the same race
-    leaves it truncated to whatever had arrived at completion.
+    it can miss the 'Pruning archive:' lines entirely, and the write of a
+    late line into the log file is best effort. By the time the daily
+    retention pass runs the lines are all there: bring the linked
+    operation's log file in line with them, whatever the kind and outcome,
+    then for a completed prune parse again and mark idempotently.
     """
+    from app.api.agents import FINAL_AGENT_JOB_STATUSES
+
     now = utc_now()
     since = now - lookback
     candidates = (
         db.query(AgentJob, AgentJob.updated_at <= now - LATE_LOG_SETTLE)
         .filter(
             AgentJob.job_type == "repository",
-            AgentJob.status == "completed",
+            AgentJob.status.in_(FINAL_AGENT_JOB_STATUSES),
             AgentJob.completed_at >= since,
         )
         .all()
@@ -614,34 +655,39 @@ def sweep_pruned_archive_records(
     marked = 0
     for agent_job, settled in candidates:
         payload = agent_job.payload if isinstance(agent_job.payload, dict) else {}
-        if str(payload.get("job_kind") or "") != "repository.prune":
+        operation_job = _agent_maintenance_job_for(db, payload)
+        if operation_job is None:
             continue
-        prune_job = _prune_job_for(db, payload)
-        if prune_job is None:
+        is_completed_prune = (
+            operation_job.kind == "prune" and agent_job.status == "completed"
+        )
+        repairable = settled and bool(operation_job.log_file_path)
+        if not is_completed_prune and not repairable:
             continue
 
         lines = (
             db.query(AgentJobLog.message)
             .filter(AgentJobLog.agent_job_id == agent_job.id)
-            .order_by(AgentJobLog.sequence.asc())
+            .order_by(AgentJobLog.sequence.asc(), AgentJobLog.id.asc())
             .all()
         )
         full_log = "\n".join(row[0] for row in lines)
         if not full_log:
             continue
 
-        if settled and len(full_log) > len(prune_job.logs or ""):
-            _store_prune_log(prune_job, full_log)
-            db.commit()
+        if repairable:
+            _repair_operation_log(db, operation_job, full_log)
+        if not is_completed_prune:
+            continue
 
         marked += mark_jobs_of_pruned_archives(
             db,
-            prune_job.repository_id,
+            operation_job.repository_id,
             archive_names_from_prune_output(full_log),
             # claimed_at is the server's clock; the prune cannot have started
             # before the agent claimed the job
-            created_before=agent_job.claimed_at or prune_job.started_at,
-            pruned_at=prune_job.completed_at or agent_job.completed_at,
+            created_before=agent_job.claimed_at or operation_job.started_at,
+            pruned_at=operation_job.completed_at or agent_job.completed_at,
         )
     return marked
 

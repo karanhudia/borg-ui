@@ -951,6 +951,95 @@ async def test_a_finished_restore_job_gets_no_cancel_command(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "after_the_read, after_the_write, stored, cancelled, commanded",
+    [
+        ("completed", None, "completed", False, False),
+        ("queued", None, "canceled", True, False),
+        ("queued", "claimed", "cancel_requested", True, True),
+        (None, "queued", "canceled", True, False),
+        (None, "completed", "completed", False, False),
+    ],
+    ids=[
+        "verdict",
+        "requeue",
+        "requeue-and-reclaim",
+        "requeue-over-the-request",
+        "verdict-over-the-request",
+    ],
+)
+async def test_a_cancel_overtaken_after_its_read_does_not_overwrite(
+    testing_session_local,
+    db_session,
+    after_the_read,
+    after_the_write,
+    stored,
+    cancelled,
+    commanded,
+):
+    """The cancel read `running`; before it wrote, the agent's completion
+    committed, or a heartbeat put the job back on the queue. The verdict
+    stands; the queued job is cancelled so it cannot run later; one an agent
+    claimed again meanwhile is still asked to stop. The same holds when a
+    writer that read the job earlier lands over the request."""
+    from app.database.models import AgentJob
+
+    job = _agent_job_row(db_session, "running")
+    service = RestoreService()
+    service.agent_restore_jobs[11] = job.id
+    dispatch = AsyncMock(return_value=True)
+
+    def overtake(status):
+        other = testing_session_local()
+        try:
+            other.query(AgentJob).filter(AgentJob.id == job.id).update(
+                {AgentJob.status: status}, synchronize_session=False
+            )
+            other.commit()
+        finally:
+            other.close()
+
+    def session_whose_read_is_overtaken():
+        session = testing_session_local()
+        refresh, commit = session.refresh, session.commit
+        commits = []
+
+        def refresh_then_overtake(instance, *args, **kwargs):
+            refresh(instance, *args, **kwargs)
+            session.refresh = refresh
+            if after_the_read:
+                overtake(after_the_read)
+
+        def commit_then_overtake():
+            commit()
+            commits.append(1)
+            # the second commit is the write decided from the overtaken read
+            if after_the_write and len(commits) == 2:
+                overtake(after_the_write)
+
+        session.refresh = refresh_then_overtake
+        session.commit = commit_then_overtake
+        return session
+
+    with (
+        patch(
+            "app.services.restore_service.SessionLocal",
+            session_whose_read_is_overtaken,
+        ),
+        patch(
+            "app.services.agent_job_dispatcher.dispatch_agent_cancel_if_connected",
+            dispatch,
+        ),
+    ):
+        assert await service.cancel_restore(11) is cancelled
+
+    db_session.expire_all()
+    assert db_session.get(AgentJob, job.id).status == stored
+    assert dispatch.await_count == (1 if commanded else 0)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_a_stall_timeout_yields_to_a_verdict_that_landed_first(
     testing_session_local, db_session
 ):

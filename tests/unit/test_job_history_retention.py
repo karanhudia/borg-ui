@@ -607,6 +607,233 @@ def test_sweep_leaves_the_log_file_of_a_prune_with_recent_lines_alone(
     assert ("Pruning archive: host-old" in log_file.read_text()) is repaired
 
 
+def _agent_maintenance_log_scenario(db, kind, status, log_file_path):
+    """A finished agent maintenance job with two stored log lines, linked to
+    an operation that names `log_file_path`. Returns the operation's id."""
+    machine = _machine(db)
+    repo = _repo(db)
+    when = utc_now() - timedelta(hours=6)
+    finished = when + timedelta(minutes=5)
+    operation = seed_job_operation(
+        db,
+        kind,
+        repository_id=repo.id,
+        status=status,
+        started_at=when,
+        completed_at=finished,
+        created_at=when,
+    )
+    db.flush()
+    db.query(Operation).filter(Operation.id == operation.id).update(
+        {"log_file_path": log_file_path}, synchronize_session=False
+    )
+    agent_job = agent_maintenance_job(
+        db,
+        machine,
+        kind,
+        operation.id,
+        status=status,
+        commit=False,
+        claimed_at=when,
+        completed_at=finished,
+        created_at=when,
+        updated_at=when,
+    )
+    for seq, message in enumerate([f"Starting repository.{kind}", "late line"]):
+        db.add(
+            AgentJobLog(
+                agent_job_id=agent_job.id,
+                sequence=seq,
+                stream="stderr",
+                message=message,
+                created_at=when,
+            )
+        )
+    db.commit()
+    return operation.id
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "kind, status",
+    [
+        ("compact", "completed"),
+        ("check", "failed"),
+        ("delete_archive", "completed_with_warnings"),
+        ("prune", "canceled"),
+    ],
+)
+def test_sweep_repairs_the_log_file_of_any_agent_maintenance_job(
+    db, tmp_path, kind, status
+):
+    """The write of a late line into the log file is best effort, whatever
+    the kind and outcome; the stored lines are the repair's source."""
+    _settings(db)
+    log_file = tmp_path / f"operation_{kind}.log"
+    log_file.write_text(f"Starting repository.{kind}", encoding="utf-8")
+    _agent_maintenance_log_scenario(db, kind, status, str(log_file))
+
+    assert sweep_pruned_archive_records(db) == 0
+
+    assert log_file.read_text(encoding="utf-8") == (
+        f"Starting repository.{kind}\nlate line"
+    )
+
+
+@pytest.mark.unit
+def test_sweep_repairs_a_log_file_that_is_wrong_but_not_shorter(db, tmp_path):
+    _settings(db)
+    log_file = tmp_path / "operation_prune.log"
+    log_file.write_text(
+        "Starting repository.prune\nStarting repository.prune\nStarting",
+        encoding="utf-8",
+    )
+    _agent_maintenance_log_scenario(db, "prune", "completed", str(log_file))
+
+    sweep_pruned_archive_records(db)
+
+    assert log_file.read_text(encoding="utf-8") == (
+        "Starting repository.prune\nlate line"
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("named", [False, True], ids=["no-path", "file-gone"])
+def test_sweep_does_not_bring_back_a_log_file_retention_removed(
+    db, monkeypatch, tmp_path, named
+):
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+    _settings(db)
+    gone = tmp_path / "logs" / "operation_gone.log"
+    operation_id = _agent_maintenance_log_scenario(
+        db, "prune", "completed", str(gone) if named else None
+    )
+
+    sweep_pruned_archive_records(db)
+
+    assert [path for path in tmp_path.rglob("*") if path.is_file()] == []
+    db.expunge_all()
+    assert db.get(Operation, operation_id).log_file_path == (
+        str(gone) if named else None
+    )
+
+
+@pytest.mark.unit
+def test_sweep_leaves_a_log_file_that_another_operation_names_too(db, tmp_path):
+    """The phase 9 copy kept whatever file each legacy row named, so two
+    operations can point at one file; one job's lines are not its content."""
+    _settings(db)
+    log_file = tmp_path / "operation_shared.log"
+    log_file.write_text("Starting repository.prune", encoding="utf-8")
+    operation_id = _agent_maintenance_log_scenario(
+        db, "prune", "completed", str(log_file)
+    )
+    repository_id = db.get(Operation, operation_id).repository_id
+    other = seed_job_operation(
+        db, "check", repository_id=repository_id, status="completed"
+    )
+    db.flush()
+    db.query(Operation).filter(Operation.id == other.id).update(
+        {"log_file_path": str(log_file)}, synchronize_session=False
+    )
+    db.commit()
+
+    sweep_pruned_archive_records(db)
+
+    assert log_file.read_text(encoding="utf-8") == "Starting repository.prune"
+
+
+@pytest.mark.unit
+def test_sweep_repairs_a_log_file_cut_off_inside_a_character(db, tmp_path):
+    _settings(db)
+    log_file = tmp_path / "operation_prune.log"
+    log_file.write_bytes("Starting repository.prune\nlate lin€".encode()[:-1])
+    _agent_maintenance_log_scenario(db, "prune", "completed", str(log_file))
+
+    sweep_pruned_archive_records(db)
+
+    assert log_file.read_text(encoding="utf-8") == (
+        "Starting repository.prune\nlate line"
+    )
+
+
+@pytest.mark.unit
+def test_a_repair_that_cannot_be_written_leaves_the_log_as_it_was(db, tmp_path):
+    _settings(db)
+    log_file = tmp_path / "operation_prune.log"
+    log_file.write_text("Starting repository.prune", encoding="utf-8")
+    _agent_maintenance_log_scenario(db, "prune", "completed", str(log_file))
+    real_open = open
+
+    class FullDisk:
+        def __init__(self, handle):
+            self.handle = handle
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc_info):
+            self.handle.close()
+
+        def write(self, text):
+            raise OSError(28, "No space left on device")
+
+    def open_on_a_full_disk(file, mode="r", *args, **kwargs):
+        handle = real_open(file, mode, *args, **kwargs)
+        return FullDisk(handle) if "w" in mode else handle
+
+    with patch("builtins.open", open_on_a_full_disk):
+        sweep_pruned_archive_records(db)
+
+    assert log_file.read_text(encoding="utf-8") == "Starting repository.prune"
+    assert [path.name for path in tmp_path.iterdir()] == [log_file.name]
+
+
+@pytest.mark.unit
+def test_a_repair_overtaken_by_log_retention_does_not_bring_the_file_back(db, tmp_path):
+    """Log retention forgets the path, commits, then unlinks the file; a
+    repair that read the file before writes it after."""
+    _settings(db)
+    log_file = tmp_path / "operation_prune.log"
+    log_file.write_text("Starting repository.prune", encoding="utf-8")
+    operation_id = _agent_maintenance_log_scenario(
+        db, "prune", "completed", str(log_file)
+    )
+    real_open = open
+    other = sessionmaker(bind=db.get_bind())()
+
+    def open_after_retention(file, mode="r", *args, **kwargs):
+        if "w" in mode and log_file.exists():
+            other.query(Operation).filter(Operation.id == operation_id).update(
+                {"log_file_path": None}, synchronize_session=False
+            )
+            other.commit()
+            log_file.unlink()
+        return real_open(file, mode, *args, **kwargs)
+
+    try:
+        with patch("builtins.open", open_after_retention):
+            sweep_pruned_archive_records(db)
+    finally:
+        other.close()
+
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.unit
+def test_sweep_leaves_a_restore_check_log_to_the_service_that_wrote_it(db, tmp_path):
+    """A restore check's log file holds the service's own lines around the
+    agent's, so the agent's lines alone are not its content."""
+    _settings(db)
+    log_file = tmp_path / "operation_restore_check.log"
+    log_file.write_text("Restore check started\nlate line", encoding="utf-8")
+    _agent_maintenance_log_scenario(db, "restore_check", "completed", str(log_file))
+
+    sweep_pruned_archive_records(db)
+
+    assert log_file.read_text(encoding="utf-8") == "Restore check started\nlate line"
+
+
 @pytest.mark.unit
 def test_retention_covers_every_surviving_job_table():
     """Phase 9 left one job table plus the rows that are not operations: agent
@@ -1145,13 +1372,10 @@ def test_recent_extension_log_columns_are_kept(db):
 
 
 @pytest.mark.unit
-def test_sweep_marks_only_the_repository_of_the_prune_it_resolves(
-    db, monkeypatch, tmp_path
-):
+def test_sweep_marks_only_the_repository_of_the_prune_it_resolves(db, tmp_path):
     """The prune's payload names its operation. Another repository's backup of
     the same archive name must not be marked from it, and a data directory
     that cannot be written loses the log repair, not the marking."""
-    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
     _settings(db)
     machine = _machine(db)
     repo_b = _repo(db)
@@ -1205,6 +1429,12 @@ def test_sweep_marks_only_the_repository_of_the_prune_it_resolves(
             "                     Mon, 2026-07-20 03:00:00 [aa00] (1/1)",
             created_at=when,
         )
+    )
+    # as the completion hook leaves it when no line had arrived yet
+    log_file = tmp_path / "operation_prune.log"
+    log_file.write_text("", encoding="utf-8")
+    db.query(Operation).filter(Operation.id == prune.id).update(
+        {"log_file_path": str(log_file)}, synchronize_session=False
     )
     db.commit()
     repo_a_id, repo_b_id, prune_id = repo_a.id, repo_b.id, prune.id

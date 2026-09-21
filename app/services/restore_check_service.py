@@ -30,7 +30,10 @@ from app.utils.borg_env import (
     effective_repository_remote_path,
 )
 
-from app.services.process_cancel import terminate_tracked_process
+from app.services.process_cancel import (
+    terminate_process,
+    terminate_tracked_process,
+)
 
 logger = structlog.get_logger()
 
@@ -365,7 +368,15 @@ class RestoreCheckService:
                 job.process_start_time = get_process_start_time(process.pid)
                 db.commit()
 
-                stdout, stderr = await process.communicate()
+                # Reads the pipes while the process is terminated: its exit
+                # is not seen while a full pipe goes unread.
+                output = asyncio.ensure_future(process.communicate())
+                if job_id in self.cancelled_jobs:
+                    # The cancel landed while the process was starting and
+                    # found nothing tracked to terminate.
+                    await terminate_process(process, job_id, "restore check")
+
+                stdout, stderr = await output
                 if stdout:
                     raw_logs.extend(
                         stdout.decode("utf-8", errors="replace").splitlines()

@@ -718,6 +718,90 @@ async def test_a_check_cancelled_before_its_first_extract_runs_none(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_a_cancel_while_the_extract_starts_terminates_it(
+    testing_session_local,
+    db_session,
+    restore_check_repository,
+):
+    """The process is tracked only once it exists, so a cancel during its
+    start finds nothing to terminate; the extract must not run on. Its exit
+    is only seen once its pipes are read."""
+    import asyncio
+
+    job = seed_job_operation(
+        db_session,
+        "restore_check",
+        repository_id=restore_check_repository.id,
+        repository_path=restore_check_repository.path,
+        status="pending",
+        full_archive=True,
+    )
+    db_session.commit()
+    db_session.refresh(job)
+    service = RestoreCheckService()
+    starting = asyncio.Event()
+    cancelled = asyncio.Event()
+    pipes_read = asyncio.Event()
+    events = []
+
+    class LiveProcess(FakeRestoreCheckProcess):
+        def terminate(self):
+            events.append("terminate")
+            self.returncode = -15
+
+        async def wait(self):
+            await pipes_read.wait()
+            return self.returncode
+
+        async def communicate(self):
+            events.append("communicate")
+            pipes_read.set()
+            return await super().communicate()
+
+    async def paused_start(*args, **kwargs):
+        starting.set()
+        await cancelled.wait()
+        return LiveProcess(returncode=0)
+
+    async def cancel_during_start():
+        await starting.wait()
+        assert await service.cancel_restore_check(job.id) is False
+        cancelled.set()
+
+    with (
+        patch("app.services.restore_check_service.SessionLocal", testing_session_local),
+        patch("app.services.restore_check_service.BorgRouter", FakeBorgRouter),
+        patch(
+            "app.services.restore_check_service.build_repository_borg_env",
+            return_value=({}, None),
+        ),
+        patch("app.services.restore_check_service.cleanup_temp_key_file"),
+        patch(
+            "app.services.restore_check_service.get_process_start_time",
+            return_value=123456,
+        ),
+        patch(
+            "app.services.restore_check_service.asyncio.create_subprocess_exec",
+            side_effect=paused_start,
+        ),
+    ):
+        await asyncio.wait_for(
+            asyncio.gather(
+                service.execute_restore_check(job.id, restore_check_repository.id),
+                cancel_during_start(),
+            ),
+            timeout=2,
+        )
+
+    assert events == ["terminate", "communicate"]
+    verification = testing_session_local()
+    refreshed = resolve_maintenance_job(verification, job.id, "restore_check")
+    assert refreshed.status == "cancelled"
+    verification.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_a_cancel_for_a_check_not_running_is_not_remembered():
     service = RestoreCheckService()
 
