@@ -34,7 +34,7 @@ export const Running: Story = {
       destination: '/mnt/restore/2026-09-13',
       progress_details: {
         nfiles: 1284,
-        current_file: 'local/Users/karanhudia/Downloads/photos/2026/summer/IMG_4123.HEIC',
+        current_file: 'local/Users/alex/Downloads/photos/2026/summer/IMG_4123.HEIC',
         progress_percent: 37.5,
       },
     },

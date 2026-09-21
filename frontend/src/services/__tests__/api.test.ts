@@ -177,13 +177,13 @@ describe('archivesAPI stored-archive methods', () => {
   it('reads history for one path', async () => {
     const mock = new MockAdapter(api)
     mock.onGet('/repositories/7/history').reply(200, {
-      path: 'home/karan/docs/invoices.xlsx',
+      path: 'home/alex/docs/invoices.xlsx',
       entries: [],
       present: [],
       present_in_latest: false,
     })
-    await archivesApiClient.getPathHistory(7, 'home/karan/docs/invoices.xlsx')
-    expect(mock.history.get[0].params).toEqual({ path: 'home/karan/docs/invoices.xlsx' })
+    await archivesApiClient.getPathHistory(7, 'home/alex/docs/invoices.xlsx')
+    expect(mock.history.get[0].params).toEqual({ path: 'home/alex/docs/invoices.xlsx' })
     mock.restore()
   })
 

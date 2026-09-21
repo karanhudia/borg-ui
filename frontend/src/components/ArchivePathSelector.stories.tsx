@@ -68,11 +68,11 @@ function EmbeddedStory(args: ComponentProps<typeof ArchivePathSelector>) {
     const mock = new MockAdapter(httpClient, { onNoMatch: 'passthrough' })
     mock.onGet(/\/browse\//).reply(200, {
       items: [
-        { name: 'contracts', path: 'home/karan/contracts', type: 'directory', size: 1_200_000_000 },
-        { name: 'photos', path: 'home/karan/photos', type: 'directory', size: 8_400_000_000 },
-        { name: 'invoices.xlsx', path: 'home/karan/invoices.xlsx', type: 'file', size: 412_000 },
-        { name: 'notes.md', path: 'home/karan/notes.md', type: 'file', size: 12_000 },
-        { name: 'taxes.pdf', path: 'home/karan/taxes.pdf', type: 'file', size: 2_100_000 },
+        { name: 'contracts', path: 'home/alex/contracts', type: 'directory', size: 1_200_000_000 },
+        { name: 'photos', path: 'home/alex/photos', type: 'directory', size: 8_400_000_000 },
+        { name: 'invoices.xlsx', path: 'home/alex/invoices.xlsx', type: 'file', size: 412_000 },
+        { name: 'notes.md', path: 'home/alex/notes.md', type: 'file', size: 12_000 },
+        { name: 'taxes.pdf', path: 'home/alex/taxes.pdf', type: 'file', size: 2_100_000 },
       ],
     })
     return () => {

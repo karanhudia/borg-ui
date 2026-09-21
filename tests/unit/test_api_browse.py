@@ -414,7 +414,7 @@ class TestBrowseArchiveBehavior:
             [
                 json.dumps(
                     {
-                        "path": "home/karan/test-backup-source/file.txt",
+                        "path": "home/alex/test-backup-source/file.txt",
                         "type": "f",
                         "size": 842,
                         "mtime": "2026-05-30T15:16:14+00:00",
@@ -446,7 +446,7 @@ class TestBrowseArchiveBehavior:
             response = await browse_api.browse_archive_contents(
                 repository_id=repo.id,
                 archive_name="archive-1",
-                path="home/karan/test-backup-source",
+                path="home/alex/test-backup-source",
                 job_id=None,
                 current_user=admin_user,
                 db=test_db,
@@ -458,7 +458,7 @@ class TestBrowseArchiveBehavior:
                 "type": "file",
                 "size": 842,
                 "mtime": "2026-05-30T15:16:14+00:00",
-                "path": "home/karan/test-backup-source/file.txt",
+                "path": "home/alex/test-backup-source/file.txt",
             }
         ]
         agent_job = test_db.query(AgentJob).one()

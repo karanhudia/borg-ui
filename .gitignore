@@ -162,3 +162,7 @@ build/
 
 # pytest artifact: a mocked log path resolved to a real directory
 MagicMock/
+
+# Local lint/typecheck output (contains absolute paths)
+frontend/lint_report.txt
+frontend/lint_results.txt

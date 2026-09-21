@@ -39,7 +39,7 @@ function renderField() {
 
 function searchResult(overrides: Record<string, unknown> = {}) {
   return {
-    path: 'home/karan/docs/invoices.xlsx',
+    path: 'home/alex/docs/invoices.xlsx',
     first_seen_archive_id: 3,
     first_seen: '2026-08-24T02:00:00Z',
     last_seen_archive_id: 12,
@@ -78,7 +78,7 @@ describe('ArchiveSearchField', () => {
     renderField()
     submitSearch()
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
-    const row = await screen.findByTestId('search-result-home/karan/docs/invoices.xlsx')
+    const row = await screen.findByTestId('search-result-home/alex/docs/invoices.xlsx')
     expect(within(row).getByText('invoices.xlsx')).toBeInTheDocument()
     expect(within(row).getByText(/in 7 archives/)).toBeInTheDocument()
   })
@@ -91,15 +91,15 @@ describe('ArchiveSearchField', () => {
     respondWith([
       searchResult(),
       searchResult({
-        path: 'home/karan/photos/old.heic',
+        path: 'home/alex/photos/old.heic',
         series: 'photos',
         last_seen_archive_id: 31,
       }),
     ])
     renderField()
     submitSearch()
-    const present = await screen.findByTestId('search-result-home/karan/docs/invoices.xlsx')
-    const absent = screen.getByTestId('search-result-home/karan/photos/old.heic')
+    const present = await screen.findByTestId('search-result-home/alex/docs/invoices.xlsx')
+    const absent = screen.getByTestId('search-result-home/alex/photos/old.heic')
     expect(within(present).getByText('In latest')).toBeInTheDocument()
     expect(within(absent).getByText('Not in latest')).toBeInTheDocument()
   })
@@ -110,12 +110,12 @@ describe('ArchiveSearchField', () => {
     submitSearch()
     const dialog = await screen.findByRole('dialog')
 
-    respondWith([searchResult({ path: 'home/karan/docs/taxes.pdf' })])
+    respondWith([searchResult({ path: 'home/alex/docs/taxes.pdf' })])
     fireEvent.change(within(dialog).getByPlaceholderText(/search files/i), {
       target: { value: 'taxes' },
     })
 
-    expect(await screen.findByTestId('search-result-home/karan/docs/taxes.pdf')).toBeInTheDocument()
+    expect(await screen.findByTestId('search-result-home/alex/docs/taxes.pdf')).toBeInTheDocument()
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     await waitFor(() => expect(archivesAPI.search).toHaveBeenLastCalledWith(7, 'taxes'))
   })
@@ -124,14 +124,14 @@ describe('ArchiveSearchField', () => {
     respondWith([searchResult()])
     renderField()
     submitSearch()
-    expect(screen.queryByText('home/karan/docs/invoices.xlsx')).not.toBeInTheDocument()
+    expect(screen.queryByText('home/alex/docs/invoices.xlsx')).not.toBeInTheDocument()
 
-    fireEvent.click(await screen.findByTestId('search-result-home/karan/docs/invoices.xlsx'))
+    fireEvent.click(await screen.findByTestId('search-result-home/alex/docs/invoices.xlsx'))
 
     // The detail pane names the full path and asks the history route for it.
-    expect(await screen.findByText('home/karan/docs/invoices.xlsx')).toBeInTheDocument()
+    expect(await screen.findByText('home/alex/docs/invoices.xlsx')).toBeInTheDocument()
     await waitFor(() =>
-      expect(archivesAPI.getPathHistory).toHaveBeenCalledWith(7, 'home/karan/docs/invoices.xlsx')
+      expect(archivesAPI.getPathHistory).toHaveBeenCalledWith(7, 'home/alex/docs/invoices.xlsx')
     )
   })
 
@@ -142,7 +142,7 @@ describe('ArchiveSearchField', () => {
     respondWith([searchResult()])
     vi.mocked(archivesAPI.getPathHistory).mockResolvedValue({
       data: {
-        path: 'home/karan/docs/invoices.xlsx',
+        path: 'home/alex/docs/invoices.xlsx',
         entries: [
           {
             archive_id: 9,
@@ -161,10 +161,10 @@ describe('ArchiveSearchField', () => {
 
     renderField()
     submitSearch()
-    fireEvent.click(await screen.findByTestId('search-result-home/karan/docs/invoices.xlsx'))
+    fireEvent.click(await screen.findByTestId('search-result-home/alex/docs/invoices.xlsx'))
     fireEvent.click(await screen.findByRole('button', { name: /restore this/i }))
 
-    expect(onRestorePath).toHaveBeenCalledWith(9, 'home/karan/docs/invoices.xlsx')
+    expect(onRestorePath).toHaveBeenCalledWith(9, 'home/alex/docs/invoices.xlsx')
     // The dialog closes so the wizard is not stacked behind it.
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })

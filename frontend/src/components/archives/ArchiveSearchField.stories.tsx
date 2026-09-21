@@ -8,7 +8,7 @@ import { communitySystemInfo, proSystemInfo } from '../../services/remoteBackend
 
 const results = [
   {
-    path: 'local/Users/karanhudia/Downloads/cv_em.pdf',
+    path: 'local/Users/alex/Downloads/cv_em.pdf',
     first_seen_archive_id: 3,
     first_seen: '2026-04-30T14:00:05Z',
     last_seen_archive_id: 9,
@@ -18,7 +18,7 @@ const results = [
     present_in_latest: false,
   },
   {
-    path: 'local/Users/karanhudia/Documents/taxes/2025/return-final.pdf',
+    path: 'local/Users/alex/Documents/taxes/2025/return-final.pdf',
     first_seen_archive_id: 4,
     first_seen: '2026-05-02T02:00:00Z',
     last_seen_archive_id: 12,
@@ -28,7 +28,7 @@ const results = [
     present_in_latest: true,
   },
   {
-    path: 'local/Users/karanhudia/Documents/scans/passport.png',
+    path: 'local/Users/alex/Documents/scans/receipt-2025.png',
     first_seen_archive_id: 6,
     first_seen: '2026-06-11T02:00:00Z',
     last_seen_archive_id: 12,

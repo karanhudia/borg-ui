@@ -23,7 +23,7 @@ vi.mock('../../../services/api', () => ({
   },
 }))
 
-function renderPanel(path = 'home/karan/docs/invoices.xlsx') {
+function renderPanel(path = 'home/alex/docs/invoices.xlsx') {
   const onRestore = vi.fn()
   renderWithProviders(<FileHistoryPanel repositoryId={7} path={path} onRestoreEntry={onRestore} />)
   return { onRestore }
@@ -48,7 +48,7 @@ describe('FileHistoryPanel', () => {
   it('renders one row per history entry with its size and change', async () => {
     vi.mocked(archivesAPI.getPathHistory).mockResolvedValue({
       data: {
-        path: 'home/karan/docs/invoices.xlsx',
+        path: 'home/alex/docs/invoices.xlsx',
         entries: [
           {
             archive_id: 12,
@@ -87,7 +87,7 @@ describe('FileHistoryPanel', () => {
   it('renders a not-present range from the present ranges', async () => {
     vi.mocked(archivesAPI.getPathHistory).mockResolvedValue({
       data: {
-        path: 'home/karan/docs/invoices.xlsx',
+        path: 'home/alex/docs/invoices.xlsx',
         entries: [
           {
             archive_id: 12,
@@ -135,7 +135,7 @@ describe('FileHistoryPanel', () => {
   it('renders a restore action per entry', async () => {
     vi.mocked(archivesAPI.getPathHistory).mockResolvedValue({
       data: {
-        path: 'home/karan/docs/invoices.xlsx',
+        path: 'home/alex/docs/invoices.xlsx',
         entries: [
           {
             archive_id: 12,
@@ -344,7 +344,7 @@ describe('FileHistoryPanel', () => {
 
   it('counts older archives without the path only when those archives are indexed', async () => {
     const history = {
-      path: 'home/karan/docs/invoices.xlsx',
+      path: 'home/alex/docs/invoices.xlsx',
       entries: [
         {
           archive_id: 12,
@@ -385,7 +385,7 @@ describe('FileHistoryPanel', () => {
     const first = renderWithProviders(
       <FileHistoryPanel
         repositoryId={7}
-        path="home/karan/docs/invoices.xlsx"
+        path="home/alex/docs/invoices.xlsx"
         onRestoreEntry={vi.fn()}
       />
     )
@@ -397,7 +397,7 @@ describe('FileHistoryPanel', () => {
     renderWithProviders(
       <FileHistoryPanel
         repositoryId={7}
-        path="home/karan/docs/invoices.xlsx"
+        path="home/alex/docs/invoices.xlsx"
         onRestoreEntry={vi.fn()}
       />
     )

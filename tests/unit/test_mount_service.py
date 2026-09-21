@@ -850,7 +850,7 @@ class TestMountService:
     ):
         connection = Mock(spec=SSHConnection)
         connection.host = "192.168.1.150"
-        connection.username = "karanhudia"
+        connection.username = "alex"
         connection.port = 22
         connection.use_sudo = False
         connection.default_path = "/"
@@ -860,7 +860,7 @@ class TestMountService:
         first_process.communicate = AsyncMock(
             return_value=(
                 b"",
-                b"karanhudia@192.168.1.150:/test-backup-source: No such file or directory\n",
+                b"alex@192.168.1.150:/test-backup-source: No such file or directory\n",
             )
         )
         second_process = AsyncMock()
@@ -884,8 +884,8 @@ class TestMountService:
         assert mock_exec.await_count == 2
         first_cmd = mock_exec.await_args_list[0].args
         second_cmd = mock_exec.await_args_list[1].args
-        assert first_cmd[1] == "karanhudia@192.168.1.150:/test-backup-source"
-        assert second_cmd[1] == "karanhudia@192.168.1.150:test-backup-source"
+        assert first_cmd[1] == "alex@192.168.1.150:/test-backup-source"
+        assert second_cmd[1] == "alex@192.168.1.150:test-backup-source"
 
     @pytest.mark.asyncio
     async def test_execute_sshfs_mount_does_not_retry_relative_path_for_explicit_default_path(
@@ -893,17 +893,17 @@ class TestMountService:
     ):
         connection = Mock(spec=SSHConnection)
         connection.host = "192.168.1.150"
-        connection.username = "karanhudia"
+        connection.username = "alex"
         connection.port = 22
         connection.use_sudo = False
-        connection.default_path = "/home/karanhudia"
+        connection.default_path = "/home/alex"
 
         process = AsyncMock()
         process.returncode = 1
         process.communicate = AsyncMock(
             return_value=(
                 b"",
-                b"karanhudia@192.168.1.150:/missing: No such file or directory\n",
+                b"alex@192.168.1.150:/missing: No such file or directory\n",
             )
         )
 

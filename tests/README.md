@@ -220,7 +220,7 @@ python3 tests/manual/test_archive_contents.py
 ### 1. Setup Test Environment
 
 ```bash
-cd /Users/karanhudia/Documents/Projects/borg-ui
+cd /path/to/borg-ui
 ./tests/setup_test_env.sh
 ```
 

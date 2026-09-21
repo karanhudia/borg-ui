@@ -57,7 +57,7 @@ const archive: ArchiveDetailResponse = {
 
 const changeRows = [
   {
-    path: 'home/karan/docs/invoices.xlsx',
+    path: 'home/alex/docs/invoices.xlsx',
     change: 'modified' as const,
     size_before: 374_000,
     size_after: 412_000,
@@ -171,7 +171,7 @@ describe('ArchiveChangesTab', () => {
     } as never)
     renderTab()
     expect(await screen.findByText(/has not been indexed yet/i)).toBeInTheDocument()
-    expect(screen.queryByText('home/karan/docs/invoices.xlsx')).not.toBeInTheDocument()
+    expect(screen.queryByText('home/alex/docs/invoices.xlsx')).not.toBeInTheDocument()
   })
 
   it('warns when the index was truncated', async () => {
@@ -204,14 +204,14 @@ describe('ArchiveChangesTab', () => {
   it('fetches the next page from the cursor instead of stopping at the cap', async () => {
     const page = Array.from({ length: 200 }, (_, i) => ({
       ...changeRows[0],
-      path: `home/karan/docs/file-${i}.txt`,
+      path: `home/alex/docs/file-${i}.txt`,
     }))
     vi.mocked(archivesAPI.getChanges).mockResolvedValueOnce({
       data: baseChangesResponse({ changes: page, next_cursor: '200' }),
     } as never)
     vi.mocked(archivesAPI.getChanges).mockResolvedValueOnce({
       data: baseChangesResponse({
-        changes: [{ ...changeRows[0], path: 'home/karan/docs/last.txt' }],
+        changes: [{ ...changeRows[0], path: 'home/alex/docs/last.txt' }],
         next_cursor: null,
       }),
     } as never)
@@ -305,6 +305,6 @@ describe('ArchiveChangesTab', () => {
   it('shows the inert preview to a plan without the feature', () => {
     mockPlanCan.mockReturnValue(false)
     renderTab()
-    expect(screen.queryByText('home/karan/docs/invoices.xlsx')).not.toBeInTheDocument()
+    expect(screen.queryByText('home/alex/docs/invoices.xlsx')).not.toBeInTheDocument()
   })
 })

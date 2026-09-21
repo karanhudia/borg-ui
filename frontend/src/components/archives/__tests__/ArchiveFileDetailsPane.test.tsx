@@ -38,11 +38,11 @@ describe('ArchiveFileDetailsPane', () => {
     renderWithProviders(
       <ArchiveFileDetailsPane
         repositoryId={7}
-        selectedPath="home/karan/docs/invoices.xlsx"
+        selectedPath="home/alex/docs/invoices.xlsx"
         selectedEntry={{
           name: 'invoices.xlsx',
           type: 'file',
-          path: 'home/karan/docs/invoices.xlsx',
+          path: 'home/alex/docs/invoices.xlsx',
           size: 412_000,
         }}
         onRestore={vi.fn()}
@@ -56,11 +56,11 @@ describe('ArchiveFileDetailsPane', () => {
     renderWithProviders(
       <ArchiveFileDetailsPane
         repositoryId={7}
-        selectedPath="home/karan/docs/invoices.xlsx"
+        selectedPath="home/alex/docs/invoices.xlsx"
         selectedEntry={{
           name: 'invoices.xlsx',
           type: 'file',
-          path: 'home/karan/docs/invoices.xlsx',
+          path: 'home/alex/docs/invoices.xlsx',
         }}
         onRestore={vi.fn()}
         onDownload={vi.fn()}
@@ -75,11 +75,11 @@ describe('ArchiveFileDetailsPane', () => {
     renderWithProviders(
       <ArchiveFileDetailsPane
         repositoryId={7}
-        selectedPath="home/karan/docs/invoices.xlsx"
+        selectedPath="home/alex/docs/invoices.xlsx"
         selectedEntry={{
           name: 'invoices.xlsx',
           type: 'file',
-          path: 'home/karan/docs/invoices.xlsx',
+          path: 'home/alex/docs/invoices.xlsx',
           size: 412_000,
         }}
         onRestore={onRestore}
@@ -97,11 +97,11 @@ describe('ArchiveFileDetailsPane', () => {
     renderWithProviders(
       <ArchiveFileDetailsPane
         repositoryId={7}
-        selectedPath="home/karan/Documents/Projects"
+        selectedPath="home/alex/Documents/Projects"
         selectedEntry={{
           name: 'Projects',
           type: 'directory',
-          path: 'home/karan/Documents/Projects',
+          path: 'home/alex/Documents/Projects',
         }}
         onRestore={vi.fn()}
         onDownload={vi.fn()}

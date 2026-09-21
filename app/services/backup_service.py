@@ -1077,8 +1077,8 @@ class BackupService:
 
         # Sort by mount point path length (longer = deeper = unmount first)
         # This correctly handles parent-child relationships:
-        # - /tmp/.../home/karanhudia/test-backup-source (longer)
-        # - /tmp/.../home/karanhudia (shorter, is parent, unmount last)
+        # - /tmp/.../home/alex/test-backup-source (longer)
+        # - /tmp/.../home/alex (shorter, is parent, unmount last)
         mount_infos.sort(key=lambda x: len(x[1].mount_point), reverse=True)
 
         logger.debug(

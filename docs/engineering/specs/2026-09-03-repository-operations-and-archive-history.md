@@ -926,10 +926,10 @@ sizes, `[Restore] [Mount] [Delete]` using the existing dialogs. Tabs:
 [ Changes (+12 −3 ~41) ]  [ Files ]  [ Info ]
 
 Compared with  nas-2026-09-01T02:00 (previous) ▾        net +184 MB
-  ~ home/karan/docs/invoices.xlsx        374 KB → 412 KB
-  + home/karan/photos/IMG_2291.heic       4.1 MB
-  − home/karan/docs/draft.txt             3 KB
-  ▸ 38 more modified in home/karan/Library/…
+  ~ home/alex/docs/invoices.xlsx        374 KB → 412 KB
+  + home/alex/photos/IMG_2291.heic       4.1 MB
+  − home/alex/docs/draft.txt             3 KB
+  ▸ 38 more modified in home/alex/Library/…
 ```
 
 `ArchiveChangesTab` with a `RichSelect` compare picker, change-type filter
@@ -945,13 +945,13 @@ left and a new `ArchiveFileDetailsPane` on the right: metadata, `[Restore]`,
 breakpoint the details pane becomes a `ResponsiveDialog` bottom sheet.
 
 ```
-home / karan / docs                                   [🔍 search in archive]
+home / alex / docs                                    [🔍 search in archive]
 ┌───────────────────────────────────────┬───────────────────────────────────────┐
 │   Name              Size    Modified  │  invoices.xlsx                        │
 │ ▸ 📁 contracts      1.2 GB  Sep 01    │  ────────────────────────────────     │
 │ ▸ 📁 photos         8.4 GB  Aug 30    │  Size      412 KB                     │
 │ ☐ 📄 invoices.xlsx  412 KB  Sep 01 ◀  │  Modified  Sep 01, 23:14              │
-│ ☐ 📄 notes.md        12 KB  Aug 28    │  Owner     karan:staff  rw-r--r--     │
+│ ☐ 📄 notes.md        12 KB  Aug 28    │  Owner     alex:staff   rw-r--r--     │
 │ ☐ 📄 taxes.pdf      2.1 MB  Jul 15    │                                       │
 │                                       │  [Restore]  [Download]                │
 │                                       │                                       │

@@ -28,11 +28,11 @@ function renderPane(indexMode: IndexMode) {
     <ArchiveFileDetailsPane
       repositoryId={7}
       indexMode={indexMode}
-      selectedPath="home/karan/docs/invoices.xlsx"
+      selectedPath="home/alex/docs/invoices.xlsx"
       selectedEntry={{
         name: 'invoices.xlsx',
         type: 'file',
-        path: 'home/karan/docs/invoices.xlsx',
+        path: 'home/alex/docs/invoices.xlsx',
         size: 412_000,
       }}
       onRestore={vi.fn()}
