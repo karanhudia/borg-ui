@@ -21,8 +21,8 @@ vi.mock('../../components/archives/ArchiveFilesTab', () => ({
     onRestorePaths?: (paths: string[], items: unknown[], fromArchiveId?: number) => void
   }) => (
     <>
-      <button onClick={() => onRestorePaths?.(['home/karan/docs'], [])}>Restore selection</button>
-      <button onClick={() => onRestorePaths?.(['home/karan/docs/invoices.xlsx'], [], 9)}>
+      <button onClick={() => onRestorePaths?.(['home/alex/docs'], [])}>Restore selection</button>
+      <button onClick={() => onRestorePaths?.(['home/alex/docs/invoices.xlsx'], [], 9)}>
         Restore this version
       </button>
     </>
@@ -46,7 +46,7 @@ vi.mock('../../components/RestoreWizard', () => ({
         Wizard: {(initialSelectedPaths ?? []).join(',')} from {archive?.name}
         <button
           onClick={() =>
-            onRestore({ selected_paths: ['home/karan/docs'], restore_strategy: 'original' })
+            onRestore({ selected_paths: ['home/alex/docs'], restore_strategy: 'original' })
           }
         >
           Start restore
@@ -236,7 +236,7 @@ describe('ArchiveDetail', () => {
     renderRoute('/archives/7/12?tab=files')
     fireEvent.click(await screen.findByRole('button', { name: /restore selection/i }))
     expect(
-      await screen.findByText(/Wizard: home\/karan\/docs from nas-2026-09-02T02:00/)
+      await screen.findByText(/Wizard: home\/alex\/docs from nas-2026-09-02T02:00/)
     ).toBeInTheDocument()
   })
 
@@ -255,7 +255,7 @@ describe('ArchiveDetail', () => {
     renderRoute('/archives/7/12?tab=files')
     fireEvent.click(await screen.findByRole('button', { name: /restore this version/i }))
     expect(
-      await screen.findByText(/Wizard: home\/karan\/docs\/invoices.xlsx from nas-2026-08-24T02:00/)
+      await screen.findByText(/Wizard: home\/alex\/docs\/invoices.xlsx from nas-2026-08-24T02:00/)
     ).toBeInTheDocument()
   })
 

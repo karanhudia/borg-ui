@@ -354,7 +354,7 @@ export default function AddAgentDialog({
         label={t('managedAgents.add.defaultPath')}
         value={defaultPath}
         onChange={(event) => setDefaultPath(event.target.value)}
-        placeholder="/home/karanhudia"
+        placeholder="/home/user"
         helperText={t('managedAgents.add.defaultPathHelper')}
         fullWidth
       />

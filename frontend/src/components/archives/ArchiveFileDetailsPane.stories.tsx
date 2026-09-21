@@ -28,11 +28,11 @@ export const Folder: Story = {
 
 export const Directory: Story = {
   args: {
-    selectedPath: 'home/karan/Documents/Projects',
+    selectedPath: 'home/alex/Documents/Projects',
     selectedEntry: {
       name: 'Projects',
       type: 'directory',
-      path: 'home/karan/Documents/Projects',
+      path: 'home/alex/Documents/Projects',
     },
     onDownloadFolder: () => {},
   },
@@ -40,11 +40,11 @@ export const Directory: Story = {
 
 export const File: Story = {
   args: {
-    selectedPath: 'home/karan/docs/invoices.xlsx',
+    selectedPath: 'home/alex/docs/invoices.xlsx',
     selectedEntry: {
       name: 'invoices.xlsx',
       type: 'file',
-      path: 'home/karan/docs/invoices.xlsx',
+      path: 'home/alex/docs/invoices.xlsx',
       size: 412_000,
     },
   },

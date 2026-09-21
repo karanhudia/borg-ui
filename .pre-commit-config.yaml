@@ -28,6 +28,15 @@ repos:
 
   - repo: local
     hooks:
+      - id: no-personal-paths
+        name: no-personal-paths
+        entry: scripts/check-no-personal-paths.sh
+        language: system
+        pass_filenames: false
+        stages: [pre-commit, pre-push]
+
+  - repo: local
+    hooks:
       - id: frontend-prettier-write
         name: frontend-prettier-write
         entry: npm --prefix frontend exec -- prettier --write

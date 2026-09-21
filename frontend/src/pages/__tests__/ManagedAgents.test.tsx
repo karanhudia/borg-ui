@@ -446,7 +446,7 @@ describe('ManagedAgents', () => {
         token_prefix: 'agent-token-secret',
         expires_at: '2026-05-28T00:00:00.000Z',
         created_at: '2026-05-21T00:00:00.000Z',
-        default_path: '/home/karanhudia',
+        default_path: '/home/alex',
       },
     } as AxiosResponse)
 
@@ -459,12 +459,12 @@ describe('ManagedAgents', () => {
     await user.click(screen.getByRole('button', { name: /next/i }))
     await user.clear(screen.getByLabelText(/agent name/i))
     await user.type(screen.getByLabelText(/agent name/i), 'Odroid M1')
-    await user.type(screen.getByLabelText(/default path/i), ' /home/karanhudia ')
+    await user.type(screen.getByLabelText(/default path/i), ' /home/alex ')
     await user.click(screen.getByRole('button', { name: /generate install command/i }))
 
     expect(vi.mocked(managedAgentsAPI.createEnrollmentToken).mock.calls[0][0]).toEqual({
       name: 'Odroid M1',
-      default_path: '/home/karanhudia',
+      default_path: '/home/alex',
       expires_in_days: 7,
     })
   }, 60000)

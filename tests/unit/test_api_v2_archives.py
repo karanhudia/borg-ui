@@ -574,7 +574,7 @@ class TestV2ArchiveRoutes:
     ):
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(
-            test_db, source_directories=["/local/Users/karanhudia/Downloads"]
+            test_db, source_directories=["/local/Users/alex/Downloads"]
         )
 
         with (
@@ -613,7 +613,7 @@ class TestV2ArchiveRoutes:
     ):
         _enable_borg_v2(test_db, fast_browse=True)
         repo = _create_v2_repo(
-            test_db, source_directories=["/local/Users/karanhudia/Downloads"]
+            test_db, source_directories=["/local/Users/alex/Downloads"]
         )
 
         with (
@@ -709,7 +709,7 @@ class TestV2ArchiveRoutes:
     ):
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(
-            test_db, source_directories=["/local/Users/karanhudia/Downloads"]
+            test_db, source_directories=["/local/Users/alex/Downloads"]
         )
         archive_id = "10614da295b13209b207fc2499d67e7f10c24f4a1745e482bd3fc2595e4ec7fd"
 

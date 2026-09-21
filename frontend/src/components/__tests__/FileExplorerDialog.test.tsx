@@ -215,16 +215,12 @@ describe('FileExplorerDialog', () => {
           onSelect={mockOnSelect}
           connectionType="agent"
           agentId={42}
-          agentDefaultPath="/home/karanhudia"
+          agentDefaultPath="/home/alex"
         />
       )
 
       await waitFor(() => {
-        expect(managedAgentsAPI.browseFilesystem).toHaveBeenCalledWith(
-          42,
-          '/home/karanhudia',
-          false
-        )
+        expect(managedAgentsAPI.browseFilesystem).toHaveBeenCalledWith(42, '/home/alex', false)
       })
     })
 

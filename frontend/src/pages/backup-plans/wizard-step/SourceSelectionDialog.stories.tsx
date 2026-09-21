@@ -402,18 +402,18 @@ const localPathsState: WizardState = {
   ...createInitialState(),
   sourceType: 'local',
   sourceDirectories: [
-    '/local/Users/karanhudia/Documents/DeepikaPanCard.jpg',
-    '/local/Users/karanhudia/Documents/Karan Passport-2.pdf',
-    '/local/Users/karanhudia/Documents/Karan Passport.pdf',
+    '/local/Users/alex/Documents/scan-2024.jpg',
+    '/local/Users/alex/Documents/travel-docs-2.pdf',
+    '/local/Users/alex/Documents/travel-docs.pdf',
   ],
   sourceLocations: [
     {
       source_type: 'local',
       source_ssh_connection_id: null,
       paths: [
-        '/local/Users/karanhudia/Documents/DeepikaPanCard.jpg',
-        '/local/Users/karanhudia/Documents/Karan Passport-2.pdf',
-        '/local/Users/karanhudia/Documents/Karan Passport.pdf',
+        '/local/Users/alex/Documents/scan-2024.jpg',
+        '/local/Users/alex/Documents/travel-docs-2.pdf',
+        '/local/Users/alex/Documents/travel-docs.pdf',
       ],
     },
   ],
@@ -423,19 +423,19 @@ const mixedSinglePathState: WizardState = {
   ...createInitialState(),
   sourceType: 'mixed',
   sourceDirectories: [
-    '/local/Users/karanhudia/test-backups/restore-speed-test',
-    '/home/karanhudia/test-backup-source',
+    '/local/Users/alex/test-backups/restore-speed-test',
+    '/home/alex/test-backup-source',
   ],
   sourceLocations: [
     {
       source_type: 'remote',
       source_ssh_connection_id: 11,
-      paths: ['/home/karanhudia/test-backup-source'],
+      paths: ['/home/alex/test-backup-source'],
     },
     {
       source_type: 'local',
       source_ssh_connection_id: null,
-      paths: ['/local/Users/karanhudia/test-backups/restore-speed-test'],
+      paths: ['/local/Users/alex/test-backups/restore-speed-test'],
     },
   ],
 }

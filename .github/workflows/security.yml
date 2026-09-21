@@ -19,6 +19,17 @@ permissions:
   issues: write  # Required for posting PR comments (GitHub uses the issues API)
 
 jobs:
+  personal-paths:
+    name: Personal Path Leak Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check for personal paths in tracked files
+        run: ./scripts/check-no-personal-paths.sh
+
   npm-audit:
     name: Frontend Security (npm audit)
     runs-on: ubuntu-latest

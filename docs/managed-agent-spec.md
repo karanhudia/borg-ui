@@ -445,7 +445,7 @@ Response:
         "borg_version": 1,
         "repository_path": "ssh://backup@example.com:22/backups/laptop",
         "archive_name": "laptop-{now}",
-        "source_paths": ["/Users/karan/Documents"],
+        "source_paths": ["/Users/alex/Documents"],
         "exclude_patterns": ["*.tmp"],
         "compression": "lz4",
         "environment": {
@@ -503,7 +503,7 @@ Request:
 ```json
 {
   "progress_percent": 42.5,
-  "current_file": "/Users/karan/Documents/report.pdf",
+  "current_file": "/Users/alex/Documents/report.pdf",
   "original_size": 104857600,
   "compressed_size": 52428800,
   "deduplicated_size": 1048576,

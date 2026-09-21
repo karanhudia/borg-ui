@@ -37,7 +37,7 @@ const archive: ArchiveDetailResponse = {
 
 const changeRows: ChangeRow[] = [
   {
-    path: 'home/karan/docs/invoices.xlsx',
+    path: 'home/alex/docs/invoices.xlsx',
     change: 'modified',
     size_before: 374_000,
     size_after: 412_000,
@@ -46,7 +46,7 @@ const changeRows: ChangeRow[] = [
     summary_count: null,
   },
   {
-    path: 'home/karan/photos/2026-08-30.raf',
+    path: 'home/alex/photos/2026-08-30.raf',
     change: 'added',
     size_before: null,
     size_after: 28_400_000,

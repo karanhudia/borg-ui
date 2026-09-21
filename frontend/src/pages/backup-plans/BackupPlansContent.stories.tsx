@@ -106,12 +106,12 @@ const managedAgentPlan: BackupPlan = {
   description: 'Back up developer laptop paths through an enrolled managed agent.',
   enabled: true,
   source_type: 'agent',
-  source_directories: ['/Users/karan/Documents'],
+  source_directories: ['/Users/alex/Documents'],
   source_locations: [
     {
       source_type: 'agent',
       agent_machine_id: 42,
-      paths: ['/Users/karan/Documents'],
+      paths: ['/Users/alex/Documents'],
     },
   ],
   exclude_patterns: ['Library/Caches'],

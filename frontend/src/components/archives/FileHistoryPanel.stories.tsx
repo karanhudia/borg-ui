@@ -11,7 +11,7 @@ import type {
 } from '../../types/archives'
 
 const repositoryId = 7
-const path = 'home/karan/docs/invoices.xlsx'
+const path = 'home/alex/docs/invoices.xlsx'
 const series = 'daily'
 
 const entry = (overrides: Partial<HistoryEntry>): HistoryEntry => ({
@@ -174,7 +174,7 @@ function SeededCoverage({
 }
 
 const agentPath = 'etc/hosts'
-const partialPath = 'home/karan/notes.md'
+const partialPath = 'home/alex/notes.md'
 
 export const AgentUnsupported: Story = {
   args: { path: agentPath },

@@ -28,7 +28,7 @@ describe('RestoreWizard with preselected paths', () => {
         repository={repository}
         repositoryType="local"
         onRestore={vi.fn()}
-        initialSelectedPaths={['home/karan/docs']}
+        initialSelectedPaths={['home/alex/docs']}
       />
     )
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
@@ -47,7 +47,7 @@ describe('RestoreWizard with preselected paths', () => {
         repository={repository}
         repositoryType="local"
         onRestore={onRestore}
-        initialSelectedPaths={['home/karan/docs/invoices.xlsx']}
+        initialSelectedPaths={['home/alex/docs/invoices.xlsx']}
         initialSelectedItems={[]}
       />
     )
@@ -56,7 +56,7 @@ describe('RestoreWizard with preselected paths', () => {
     await user.click(screen.getByRole('button', { name: 'Restore Files' }))
     expect(onRestore).toHaveBeenCalledWith(
       expect.objectContaining({
-        path_metadata: [{ path: 'home/karan/docs/invoices.xlsx', type: 'file' }],
+        path_metadata: [{ path: 'home/alex/docs/invoices.xlsx', type: 'file' }],
       })
     )
   })
