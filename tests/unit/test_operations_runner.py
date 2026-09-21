@@ -7,6 +7,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.api.repositories import AgentStatsRefresh
 from app.database.models import Base, Operation, Repository, SystemSettings, utc_now
 from app.services.operations.enqueue import enqueue, enqueue_chain
 from app.services.operations.runner import (
@@ -1188,7 +1189,7 @@ async def test_stats_refusal_from_the_real_executor_is_deferred(
             )
         repository.total_size = "2.0 GB"
         session.commit()
-        return True
+        return AgentStatsRefresh(True)
 
     monkeypatch.setattr(index_exec, "is_agent_executor", lambda repository: True)
     monkeypatch.setattr(

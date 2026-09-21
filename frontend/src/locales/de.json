@@ -5128,9 +5128,14 @@
       "storage_used": "Bytes, die das Repository auf seinem Speicher belegt",
       "compact_stats": "Vom letzten Compact gemeldete Repository-Größe"
     },
-    "originalSizeHint": "Summe der Originalgröße aller Archive, die die neueste Auflistung gesehen hat",
+    "originalSizeHint": {
+      "borg1_cache_stats": "Originalgröße aller Archive, aus Borgs Cache-Statistik",
+      "compact_stats": "Originalgröße aller Archive, vom letzten Compact gemeldet",
+      "archives": "Summe der Originalgröße aller Archive, die die neueste Auflistung gesehen hat"
+    },
     "spaceSavedHint": "Originalgröße geteilt durch den belegten Platz: Deduplizierung und Kompression zusammen",
     "spaceSavedUnknownHint": "Nichts, wodurch geteilt werden kann",
+    "spaceSavedMixedHint": "Originalgröße und belegter Platz wurden zu unterschiedlichen Zeitpunkten gemessen",
     "backupSpanHint": "Das älteste und das neueste Archiv",
     "latestArchiveFilesHint": "Anzahl der Dateien im neuesten Archiv, keine Summe",
     "refresh": "Von Borg aktualisieren",

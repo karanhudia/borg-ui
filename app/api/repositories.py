@@ -112,6 +112,7 @@ from app.services.repository_info_sync import sync_archive_stats_from_info
 from app.services.storage_usage import (
     SOURCE_BORG1_CACHE_STATS,
     SOURCE_STORAGE_USED,
+    borg1_original_size,
     format_bytes,
     set_repository_size,
 )
@@ -879,9 +880,23 @@ def _agent_storage_usage_data(result: Optional[dict]) -> dict:
     return parsed if isinstance(parsed, dict) else {}
 
 
+@dataclass
+class AgentStatsRefresh:
+    """What a refresh produced: whether it ran, and the repository-level
+    source data size Borg 1 reports in the same `repo-info` call (None for
+    Borg 2, which reports it through compact instead). Truthiness is the
+    success every caller read before."""
+
+    ok: bool
+    original_size: Optional[int] = None
+
+    def __bool__(self) -> bool:
+        return self.ok
+
+
 async def _update_agent_repository_stats(
     repository: Repository, db: Session, *, raise_busy: bool = False
-) -> bool:
+) -> AgentStatsRefresh:
     """Refresh stats for an agent repo by running list + repo-info on the node.
 
     Sets archive_count, last_backup and encryption from the live agent results.
@@ -968,6 +983,7 @@ async def _update_agent_repository_stats(
         total_size_bytes = None
         total_size_source = None
         borg_last_modified = None
+        original_size = None
         try:
             rinfo_job = queue_agent_repository_operation_job(
                 db, repository, job_kind="repository.rinfo"
@@ -994,6 +1010,9 @@ async def _update_agent_repository_stats(
                 total_size = format_bytes(int(size_bytes))
                 total_size_bytes = int(size_bytes)
                 total_size_source = SOURCE_BORG1_CACHE_STATS
+            # The same payload carries the repository's source data size,
+            # which the caller files with the operation for the stats strip.
+            original_size = borg1_original_size(rinfo)
             # Both versions report the last manifest write; the agent renders
             # it in its reported zone (UTC since #889).
             borg_last_modified = _parse_borg_archive_time(
@@ -1092,7 +1111,7 @@ async def _update_agent_repository_stats(
             archive_count=archive_count,
             encryption=encryption_mode,
         )
-        return True
+        return AgentStatsRefresh(True, original_size=original_size)
     except Exception as e:
         if busy(e):
             raise
@@ -1101,7 +1120,7 @@ async def _update_agent_repository_stats(
             repository=repository.name,
             error=str(e),
         )
-        return False
+        return AgentStatsRefresh(False)
 
 
 def _decode_json_list_field(value):
@@ -1240,7 +1259,15 @@ def storage_payload(summary: Optional[StorageSummary]) -> Optional[dict]:
     and is computed on every route, so the card can tell a settled, empty
     repository from one nothing has listed; `archives_consistent` None
     says the route did not compute the archive figures (the list; the
-    detail and the storage route do). `first_backup_at` and `last_backup_at`
+    detail and the storage route do). The source data size is never
+    withheld: `original_size_source` says whether it is the sum over the
+    archive rows (`archives`), which answers while every row carries its
+    info, or the figure Borg reports for the whole repository
+    (`borg1_cache_stats` from `info`, `compact_stats` from a compact),
+    which answers while a row is still waiting for one. That figure
+    carries `original_size_at`, the time of the run that reported it: it
+    is not necessarily as new as `measured_at` beside it, and a reader
+    that says how fresh the figures are must take it into account. `first_backup_at` and `last_backup_at`
     span the current archives. `latest_archive_files` is the newest
     archive's file count, not a sum. `compact` is the statistics of that
     run as `parse_compact_stats` read them, including its
@@ -1257,6 +1284,8 @@ def storage_payload(summary: Optional[StorageSummary]) -> Optional[dict]:
         "archives_consistent": summary.archives_consistent,
         "archives_listed": summary.archives_listed,
         "original_size": summary.original_size,
+        "original_size_source": summary.original_size_source,
+        "original_size_at": format_datetime(summary.original_size_at),
         "compressed_size": summary.compressed_size,
         "deduplicated_size": summary.deduplicated_size,
         "latest_archive_files": summary.latest_archive_files,

@@ -59,6 +59,23 @@ def _compact(test_db, repo, completed_at, *, status="completed", stats=None, not
     return op
 
 
+def _stats(test_db, repo, completed_at, *, status="completed", result=None):
+    op = Operation(
+        repository_id=repo.id,
+        kind="stats",
+        category="index",
+        status=status,
+        trigger="scheduled",
+        priority=10,
+        run_id=f"stats-{repo.id}-{completed_at.isoformat()}",
+        completed_at=completed_at,
+        result=result,
+    )
+    test_db.add(op)
+    test_db.commit()
+    return op
+
+
 def _archive_sync(test_db, repo, completed_at, *, status="completed"):
     op = Operation(
         repository_id=repo.id,
@@ -156,7 +173,9 @@ def test_borg2_summary_takes_the_newest_successful_compact_statistics(test_db):
     assert summary.compact_at == at - timedelta(days=1)
     assert summary.deduplicated_size == 2_300_000_000
     assert summary.compressed_size is None  # Borg 2 does not report it
+    # every row carries its info, so the rows answer for the current set
     assert summary.original_size == 500
+    assert summary.original_size_source == "archives"
     assert summary.latest_archive_files == 922
 
 
@@ -193,6 +212,337 @@ def test_archive_sums_wait_until_every_archive_carries_its_info(test_db):
     assert summary.original_size == 150
     assert summary.compressed_size == 130
     assert summary.latest_archive_files == 9
+
+
+@pytest.mark.unit
+def test_borg1_original_size_comes_from_the_newest_stats_operation(test_db):
+    """`borg info` reports the repository's source data size in one call;
+    an archive row still waiting for its info does not blank the figure."""
+    at = datetime(2026, 9, 1, 12, 0, 0)
+    repo = _repo(test_db, "b1-repo-level", borg_version=1, archive_count=2)
+    _archive(test_db, repo, "filled", at - timedelta(days=1), original_size=100)
+    _archive(test_db, repo, "listed-only", at)  # no info yet
+    _stats(test_db, repo, at - timedelta(hours=2), result={"original_size": 140})
+    _stats(test_db, repo, at - timedelta(hours=1), result={"original_size": 150})
+    _stats(test_db, repo, at, status="failed", result={"original_size": 9})
+
+    summary = storage_summaries(test_db, [repo])[repo.id]
+
+    assert summary.original_size == 150
+    assert summary.original_size_source == "borg1_cache_stats"
+    # the per-archive figures keep their own rules
+    assert summary.latest_archive_files is None
+    assert summary.compressed_size is None
+
+
+@pytest.mark.unit
+def test_borg1_original_size_falls_back_to_the_complete_archive_sum(test_db):
+    """No `stats` operation has reported the figure (an older release's
+    rows): the sum over the archive rows serves, under its gate."""
+    at = datetime(2026, 9, 1, 12, 0, 0)
+    repo = _repo(test_db, "b1-fallback", borg_version=1, archive_count=2)
+    _archive(test_db, repo, "a1", at - timedelta(days=1), original_size=100)
+    newest = _archive(test_db, repo, "a2", at)
+    _stats(test_db, repo, at, result={"bytes": 2048, "source": "borg1_cache_stats"})
+
+    summary = storage_summaries(test_db, [repo])[repo.id]
+    assert summary.original_size is None
+    assert summary.original_size_source is None
+
+    newest.original_size = 50
+    test_db.commit()
+    summary = storage_summaries(test_db, [repo])[repo.id]
+    assert summary.original_size == 150
+    assert summary.original_size_source == "archives"
+
+
+@pytest.mark.unit
+def test_stats_operations_without_the_figure_do_not_hide_the_newest_one(test_db):
+    at = datetime(2026, 9, 1, 12, 0, 0)
+    repo = _repo(test_db, "b1-lookback", borg_version=1)
+    _stats(test_db, repo, at - timedelta(days=9), result={"original_size": 0})
+    for days in range(8):
+        _stats(test_db, repo, at - timedelta(days=days), result={"bytes": 1})
+
+    summary = storage_summaries(test_db, [repo])[repo.id]
+    assert summary.original_size == 0  # a measurement, not "nothing"
+    assert summary.original_size_source == "borg1_cache_stats"
+
+
+@pytest.mark.unit
+def test_an_unusable_original_size_in_a_stats_result_is_not_a_figure(test_db):
+    at = datetime(2026, 9, 1, 12, 0, 0)
+    repo = _repo(test_db, "b1-unusable", borg_version=1)
+    for hours, value in enumerate((None, "150", True, -1)):
+        _stats(
+            test_db, repo, at + timedelta(hours=hours), result={"original_size": value}
+        )
+        assert storage_summaries(test_db, [repo])[repo.id].original_size is None
+
+
+@pytest.mark.unit
+def test_borg2_original_size_comes_from_the_compact_statistics(test_db):
+    """Compact reports the source data size of every archive; the archive
+    sum serves only while no compact has reported one."""
+    at = datetime(2026, 9, 1, 12, 0, 0)
+    repo = _repo(test_db, "b2-repo-level", borg_version=2, archive_count=2)
+    _archive(test_db, repo, "filled", at - timedelta(days=1), original_size=100)
+    newest = _archive(test_db, repo, "listed-only", at)
+
+    summary = storage_summaries(test_db, [repo])[repo.id]
+    assert summary.original_size is None and summary.original_size_source is None
+
+    _compact(test_db, repo, at, stats={"repository_size": 7})  # no source size
+    newest.original_size = 50
+    test_db.commit()
+    summary = storage_summaries(test_db, [repo])[repo.id]
+    assert summary.original_size == 150
+    assert summary.original_size_source == "archives"
+
+    newest.original_size = None
+    test_db.commit()
+    _compact(
+        test_db,
+        repo,
+        at + timedelta(hours=1),
+        stats={"repository_size": 7, "source_size": 160},
+    )
+    summary = storage_summaries(test_db, [repo])[repo.id]
+    assert summary.original_size == 160
+    assert summary.original_size_source == "compact_stats"
+    # a Borg 1 figure filed for a Borg 2 repository is not read
+    _stats(test_db, repo, at + timedelta(hours=2), result={"original_size": 1})
+    assert storage_summaries(test_db, [repo])[repo.id].original_size == 160
+
+
+@pytest.mark.unit
+def test_a_compact_figure_gives_way_to_the_set_it_no_longer_describes(test_db):
+    """An emptied repository measures 0, not the size of the archives it
+    used to hold: its rows are complete (there are none) and a compact's
+    figure describes a set that is gone."""
+    at = datetime(2026, 9, 1, 12, 0, 0)
+    repo = _repo(test_db, "b2-emptied", borg_version=2, archive_count=0)
+    _compact(test_db, repo, at, stats={"source_size": 160, "archive_count": 2})
+    _archive_sync(test_db, repo, at + timedelta(hours=1))
+
+    summary = storage_summaries(test_db, [repo])[repo.id]
+    assert summary.original_size == 0
+    assert summary.original_size_source == "archives"
+
+
+@pytest.mark.unit
+def test_a_compact_figure_stands_while_no_complete_sum_replaces_it(test_db):
+    """The new archive's row has no info yet, so the rows cannot answer:
+    a figure that lags one archive beats no figure at all, which is the
+    whole point of reading one."""
+    at = datetime(2026, 9, 1, 12, 0, 0)
+    repo = _repo(test_db, "b2-newer-backup", borg_version=2, archive_count=2)
+    _archive(test_db, repo, "a1", at - timedelta(days=1), original_size=100)
+    _archive(test_db, repo, "a2", at)  # the new one, no info yet
+    _compact(
+        test_db,
+        repo,
+        at - timedelta(hours=1),
+        stats={"source_size": 100, "archive_count": 1},
+    )
+
+    summary = storage_summaries(test_db, [repo])[repo.id]
+    assert summary.original_size == 100
+    assert summary.original_size_source == "compact_stats"
+
+
+@pytest.mark.unit
+def test_complete_rows_outrank_a_figure_that_cannot_have_followed_them(test_db):
+    """A compact reports what it analysed and does not move until the next
+    one, so a complete set of rows is the newer answer and is taken. The
+    same holds for a Borg 1 `stats` run that no longer describes the
+    repository: the rows decide while they are complete."""
+    at = datetime(2026, 9, 1, 12, 0, 0)
+    borg2 = _repo(test_db, "b2-rows-win", borg_version=2, archive_count=1)
+    _archive(test_db, borg2, "a1", at, original_size=100)
+    _compact(test_db, borg2, at, stats={"source_size": 160})
+
+    summary = storage_summaries(test_db, [borg2])[borg2.id]
+    assert summary.original_size == 100
+    assert summary.original_size_source == "archives"
+
+    borg1 = _repo(test_db, "b1-rows-win", borg_version=1, archive_count=1)
+    _archive(test_db, borg1, "a1", at, original_size=100)
+    _stats(test_db, borg1, at, result={"original_size": 160})
+
+    summary = storage_summaries(test_db, [borg1])[borg1.id]
+    assert summary.original_size == 100
+    assert summary.original_size_source == "archives"
+
+
+@pytest.mark.unit
+def test_a_listed_repository_without_archives_measures_zero(test_db):
+    """An archive count of 0 from a listing answers on its own: no
+    archives, no source data. It must not wait for the rows, which the
+    `archives` index mode never deletes (it runs no `history_merge`), or a
+    compact's figure would outlive the archives it described for good."""
+    at = datetime(2026, 9, 1, 12, 0, 0)
+    repo = _repo(
+        test_db, "b2-lingering", borg_version=2, archive_count=0, index_mode="archives"
+    )
+    _archive(test_db, repo, "gone-1", at - timedelta(days=1), original_size=100)
+    _archive(test_db, repo, "gone-2", at, original_size=200)
+    # the listing that found the repository empty ran after those rows
+    # were last seen, and never deletes them in this mode
+    _archive_sync(test_db, repo, SEEN_AT + timedelta(hours=1))
+    _compact(test_db, repo, at, stats={"source_size": 300})
+
+    summary = storage_summaries(test_db, [repo])[repo.id]
+    assert summary.original_size == 0
+    assert summary.original_size_source == "archives"
+    # the per-archive figures still wait: the rows and the count disagree
+    assert summary.archives_consistent is False
+    assert summary.latest_archive_files is None
+
+
+@pytest.mark.unit
+def test_the_figure_carries_the_time_of_the_run_that_reported_it(test_db):
+    """`measured_at` is the size measurement's time, which moves whenever a
+    size is written; the source data size can come from an older run (a
+    repo-info that failed while a disk measurement succeeded), and a
+    compact's figure is as old as that compact. Each carries its own
+    time, so a reader cannot present it as newly measured."""
+    at = datetime(2026, 9, 1, 12, 0, 0)
+    borg1 = _repo(test_db, "b1-stamped", borg_version=1, archive_count=2)
+    _archive(test_db, borg1, "filled", at - timedelta(days=1), original_size=100)
+    _archive(test_db, borg1, "listed-only", at)
+    _stats(test_db, borg1, at - timedelta(days=2), result={"original_size": 150})
+    _stats(test_db, borg1, at, result={"bytes": 4096})  # no figure of its own
+
+    summary = storage_summaries(test_db, [borg1])[borg1.id]
+    assert summary.original_size == 150
+    assert summary.original_size_at == at - timedelta(days=2)
+
+    borg2 = _repo(test_db, "b2-stamped", borg_version=2, archive_count=2)
+    _archive(test_db, borg2, "filled", at - timedelta(days=1), original_size=100)
+    _archive(test_db, borg2, "listed-only", at)
+    _compact(test_db, borg2, at - timedelta(days=3), stats={"source_size": 160})
+
+    summary = storage_summaries(test_db, [borg2])[borg2.id]
+    assert summary.original_size == 160
+    assert summary.original_size_at == at - timedelta(days=3)
+
+
+@pytest.mark.unit
+def test_a_figure_the_rows_answer_for_carries_no_time_of_its_own(test_db):
+    """The rows are as new as the listing that wrote them, which the
+    reader already knows; only a figure from elsewhere needs a stamp."""
+    at = datetime(2026, 9, 1, 12, 0, 0)
+    repo = _repo(test_db, "b1-rows-stamped", borg_version=1, archive_count=1)
+    _archive(test_db, repo, "a1", at, original_size=100)
+    _stats(test_db, repo, at, result={"original_size": 150})
+
+    summary = storage_summaries(test_db, [repo])[repo.id]
+    assert summary.original_size == 100
+    assert summary.original_size_source == "archives"
+    assert summary.original_size_at is None
+
+
+@pytest.mark.unit
+def test_a_newer_compact_without_the_figure_does_not_hide_an_older_one(test_db):
+    """The dialog shows the newest statistics a compact reported; the
+    source data size is looked up on its own, so a later run that
+    reported a repository size without one does not blank it."""
+    at = datetime(2026, 9, 1, 12, 0, 0)
+    repo = _repo(test_db, "b2-partial", borg_version=2, archive_count=2)
+    _archive(test_db, repo, "filled", at - timedelta(days=1), original_size=100)
+    _archive(test_db, repo, "listed-only", at)  # no info yet
+    _compact(
+        test_db,
+        repo,
+        at - timedelta(days=1),
+        stats={"repository_size": 7, "source_size": 160},
+    )
+    _compact(test_db, repo, at, stats={"repository_size": 7})
+
+    summary = storage_summaries(test_db, [repo])[repo.id]
+    assert summary.original_size == 160
+    assert summary.original_size_source == "compact_stats"
+    assert summary.original_size_at == at - timedelta(days=1)
+    # the statistics on show stay the newest ones reported
+    assert summary.compact == {"repository_size": 7}
+    assert summary.compact_at == at
+
+
+@pytest.mark.unit
+def test_rows_a_listing_has_not_counted_yet_are_not_an_empty_repository(test_db):
+    """`apply_listing` commits the rows, `fill_archive_info` runs, and only
+    then is `archive_count` written: for the length of that fill a
+    repository that just gained its first archives has rows and a count of
+    0. That is not an emptied repository, and must not read as 0 B."""
+    at = datetime(2026, 9, 1, 12, 0, 0)
+    repo = _repo(test_db, "b1-arriving", borg_version=1, archive_count=0)
+    _archive_sync(test_db, repo, at)  # the listing that found it empty
+    # the sync under way stamped its rows after that; it has not completed
+    _archive(
+        test_db,
+        repo,
+        "first",
+        at + timedelta(hours=1),
+        original_size=100,
+        last_seen_at=at + timedelta(hours=1),
+    )
+    _stats(test_db, repo, at + timedelta(hours=1), result={"original_size": 100})
+
+    summary = storage_summaries(test_db, [repo])[repo.id]
+    assert summary.original_size == 100
+    assert summary.original_size_source == "borg1_cache_stats"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("leftover_row", [True, False])
+def test_a_figure_newer_than_the_empty_listing_outweighs_the_count(
+    test_db, leftover_row
+):
+    """`archive_count` is written by a listing and by nothing else, so an
+    archive created outside Borg UI leaves it at 0 until the next one. A
+    compact that ran after that listing and reported source data says the
+    repository is not empty; the count is the older evidence.
+
+    Both ways the rows can look: a row the `archives` mode never deleted,
+    and none at all. Without rows the sum has nothing to add up, and zero
+    rows all carrying their figure must not read as a measured 0."""
+    at = datetime(2026, 9, 1, 12, 0, 0)
+    repo = _repo(
+        test_db,
+        f"b2-external-{leftover_row}",
+        borg_version=2,
+        archive_count=0,
+        index_mode="archives",
+    )
+    if leftover_row:
+        _archive(test_db, repo, "gone", at, original_size=100)
+    _archive_sync(test_db, repo, SEEN_AT + timedelta(hours=1))
+    _compact(test_db, repo, SEEN_AT + timedelta(hours=2), stats={"source_size": 160})
+
+    summary = storage_summaries(test_db, [repo])[repo.id]
+    assert summary.original_size == 160
+    assert summary.original_size_source == "compact_stats"
+
+
+@pytest.mark.unit
+def test_an_unwritten_archive_count_reads_as_zero_like_everywhere_else(test_db):
+    """`archive_count` is nullable, and a row whose count was never
+    written reads as 0 for the consistency check. The empty-repository
+    answer has to read it the same way, or a listed repository with no
+    rows reports nothing where it measured zero."""
+    at = datetime(2026, 9, 1, 12, 0, 0)
+    repo = _repo(test_db, "b1-null-count", borg_version=1)
+    # the column default fills an insert, so the NULL is written after it
+    repo.archive_count = None
+    test_db.commit()
+    _archive_sync(test_db, repo, at)
+    assert repo.archive_count is None
+
+    summary = storage_summaries(test_db, [repo])[repo.id]
+    assert summary.archives_consistent is True
+    assert summary.original_size == 0
+    assert summary.original_size_source == "archives"
 
 
 @pytest.mark.unit
@@ -732,3 +1082,27 @@ def test_route_carries_the_consistency_flag(test_client, test_db, admin_headers)
     storage = single.json()["repository"]["storage"]
     assert storage["archives_consistent"] is False
     assert storage["original_size"] is None
+
+
+@pytest.mark.unit
+def test_route_carries_the_original_size_with_its_source(
+    test_client, test_db, admin_headers
+):
+    """Rows and count disagree, so the archive figures are withheld; the
+    repository-level figure does not depend on them. The list stays on the
+    stored columns."""
+    at = datetime(2026, 9, 1, 12, 0, 0)
+    repo = _repo(test_db, "sourced", borg_version=1, archive_count=2)
+    _archive(test_db, repo, "only", at, original_size=1, nfiles=1)
+    _stats(test_db, repo, at, result={"original_size": 150})
+
+    single = test_client.get(f"/api/repositories/{repo.id}", headers=admin_headers)
+    assert single.status_code == 200, single.text
+    storage = single.json()["repository"]["storage"]
+    assert storage["archives_consistent"] is False
+    assert storage["original_size"] == 150
+    assert storage["original_size_source"] == "borg1_cache_stats"
+    assert storage["latest_archive_files"] is None
+
+    light = storage_summaries(test_db, [repo], archives=False)[repo.id]
+    assert light.original_size is None and light.original_size_source is None

@@ -37,7 +37,12 @@ from app.database.models import (
 from app.services.operations import anomalies
 from app.services.operations.index_mode import mode_of as index_mode_of
 from app.services.operations.vocab import SUCCESS_STATUSES
-from app.services.storage_usage import SOURCE_BORG1_CACHE_STATS, stored_size_bytes
+from app.services.storage_usage import (
+    SOURCE_ARCHIVE_SUMS,
+    SOURCE_BORG1_CACHE_STATS,
+    SOURCE_COMPACT_STATS,
+    stored_size_bytes,
+)
 
 TERMINAL = ("completed", "completed_with_warnings", "failed", "cancelled")
 FAILED = ("failed", "cancelled")
@@ -666,7 +671,12 @@ class StorageSummary:
     repository yet (nothing to be consistent with); `archives_consistent`
     None says they were not computed at all (the list route).
     `latest_archive_files` is the newest archive's file count, not a sum;
-    `first_backup_at` and `last_backup_at` span the current archives."""
+    `first_backup_at` and `last_backup_at` span the current archives.
+    `original_size_source` names where the source data size came from: the
+    repository-level figure Borg reports (`borg1_cache_stats`,
+    `compact_stats`), with `original_size_at` the time of the run that
+    reported it, or the archive index (`archives`), which is as new as the
+    listing and carries no time of its own."""
 
     size_bytes: Optional[int] = None
     size_source: Optional[str] = None
@@ -680,6 +690,8 @@ class StorageSummary:
     original_size: Optional[int] = None
     compressed_size: Optional[int] = None
     deduplicated_size: Optional[int] = None
+    original_size_source: Optional[str] = None
+    original_size_at: Optional[datetime] = None
     latest_archive_files: Optional[int] = None
     first_backup_at: Optional[datetime] = None
     last_backup_at: Optional[datetime] = None
@@ -712,7 +724,8 @@ def _archive_sums(db: Session, current) -> dict[int, tuple]:
     """Per repository over the current archive rows: the rows, the rows
     whose per-archive info has been filled (`fill_archive_info` writes
     `original_size` and `compressed_size`; a listing alone leaves them
-    NULL), and the sums over the filled rows."""
+    NULL), the sums over the filled rows, and the stamp those rows carry
+    (the listing that last saw them)."""
     newest_seen, current = current
     rows = (
         db.query(
@@ -722,6 +735,7 @@ def _archive_sums(db: Session, current) -> dict[int, tuple]:
             func.sum(Archive.original_size),
             func.count(Archive.compressed_size),
             func.sum(Archive.compressed_size),
+            func.max(Archive.last_seen_at),
         )
         .join(newest_seen, current)
         .group_by(Archive.repository_id)
@@ -777,30 +791,36 @@ def _latest_archive_files(db: Session, current) -> dict[int, int]:
     return {repository_id: n for repository_id, n in files.items() if n is not None}
 
 
-# How many of a repository's newest successful compacts are read for their
-# statistics. The query keeps only rows whose serialized result mentions
-# the key, a textual filter; the window then tolerates a row that mentions
-# it without carrying a usable statistics dict. The newest is the one
-# wanted.
-_COMPACT_STATS_LOOKBACK = 3
+# How many of a repository's newest successful operations of a kind are
+# read for the figures in their result (a compact's statistics, a stats
+# run's source data size). The query keeps only rows whose serialized
+# result mentions the key, a textual filter; the window then tolerates a
+# row that mentions it without carrying a usable figure. The newest is the
+# one wanted.
+_RESULT_FIGURE_LOOKBACK = 3
 
 
-def _listed_repositories(db: Session, repository_ids: list[int]) -> set[int]:
-    """The repositories a listing (`archive_sync`) has completed for. A
+def _listed_repositories(
+    db: Session, repository_ids: list[int]
+) -> dict[int, Optional[datetime]]:
+    """When a listing (`archive_sync`) last completed per repository. A
     repository without one has no archive rows and the count it was
     created with, so "0 rows, count 0" says nothing about its archives;
-    with one, the same state is a measurement (an emptied repository)."""
+    with one, the same state is a measurement (an emptied repository).
+    The time tells rows a listing has already accounted for from rows it
+    has not: `archive_count` is written at the end of a listing, well
+    after the rows themselves."""
     rows = (
-        db.query(Operation.repository_id)
+        db.query(Operation.repository_id, func.max(Operation.completed_at))
         .filter(
             Operation.repository_id.in_(repository_ids),
             Operation.kind == "archive_sync",
             Operation.status.in_(SUCCESS_STATUSES),
         )
-        .distinct()
+        .group_by(Operation.repository_id)
         .all()
     )
-    return {repository_id for (repository_id,) in rows}
+    return {repository_id: completed_at for repository_id, completed_at in rows}
 
 
 def _latest_compact_stats(
@@ -835,7 +855,7 @@ def _latest_compact_stats(
     )
     rows = (
         db.query(ranked.c.repository_id, ranked.c.result, ranked.c.completed_at)
-        .filter(ranked.c.rank <= _COMPACT_STATS_LOOKBACK)
+        .filter(ranked.c.rank <= _RESULT_FIGURE_LOOKBACK)
         .order_by(ranked.c.repository_id, ranked.c.rank)
         .all()
     )
@@ -849,19 +869,91 @@ def _latest_compact_stats(
     return found
 
 
+def _borg1_reported_size(result) -> Optional[int]:
+    """Borg 1's `cache.stats.total_size`, as `run_stats` filed it."""
+    return result.get("original_size") if isinstance(result, dict) else None
+
+
+def _borg2_reported_size(result) -> Optional[int]:
+    """Borg 2's `Source data size`, inside a compact's statistics."""
+    stats = result.get("stats") if isinstance(result, dict) else None
+    return stats.get("source_size") if isinstance(stats, dict) else None
+
+
+def _latest_reported_original_size(
+    db: Session, repository_ids: list[int], *, kind: str, key: str, read
+) -> dict[int, tuple[int, datetime]]:
+    """The source data size each repository's newest successful operation
+    of `kind` reported, with the time of that run: Borg 1 files it with
+    the `stats` run that made the `info` call, Borg 2 with the compact
+    that printed it. Only rows whose serialized result mentions `key`
+    rank, a textual filter, so a run that reported no figure cannot push
+    the last one that did out of the window; the window then tolerates a
+    row that mentions the key without carrying a usable figure. The time
+    is the figure's own, which a later run without one does not move. 0 is
+    a measurement (an emptied repository); anything that is not a whole,
+    non-negative number is not a figure."""
+    ranked = (
+        db.query(
+            Operation.repository_id,
+            Operation.result,
+            Operation.completed_at,
+            func.row_number()
+            .over(
+                partition_by=Operation.repository_id,
+                order_by=(Operation.completed_at.desc(), Operation.id.desc()),
+            )
+            .label("rank"),
+        )
+        .filter(
+            Operation.repository_id.in_(repository_ids),
+            Operation.kind == kind,
+            Operation.status.in_(SUCCESS_STATUSES),
+            Operation.completed_at.isnot(None),
+            cast(Operation.result, String).like(f"%{key}%"),
+        )
+        .subquery()
+    )
+    rows = (
+        db.query(ranked.c.repository_id, ranked.c.result, ranked.c.completed_at)
+        .filter(ranked.c.rank <= _RESULT_FIGURE_LOOKBACK)
+        .order_by(ranked.c.repository_id, ranked.c.rank)
+        .all()
+    )
+    found: dict[int, tuple[int, datetime]] = {}
+    for repository_id, result, completed_at in rows:
+        if repository_id in found:
+            continue
+        value = read(result)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            continue
+        found[repository_id] = (value, completed_at)
+    return found
+
+
 def storage_summaries(
     db: Session, repositories: Iterable[Repository], *, archives: bool = True
 ) -> dict[int, StorageSummary]:
-    """One `StorageSummary` per repository. With `archives`, three grouped
-    queries add the archive sums and the newest compact statistics (the
-    detail route); without, only the stored columns are read (the list,
-    which is polled and whose card shows the size alone). Borg 1's stored
-    size is its deduplicated size (`cache.stats`), Borg 2's deduplicated
-    size comes from the newest compact statistics; compressed size is a
-    Borg 1 figure (Borg 2 does not report it). The archive sums cover the
-    rows the newest listing still saw and are reported once every one of
-    them carries the figure; until then they would read as a total they
-    are not."""
+    """One `StorageSummary` per repository. With `archives`, grouped
+    queries add the archive sums, the newest compact statistics and the
+    newest reported source data size (the detail route); without, only the
+    stored columns are read (the list, which is polled and whose card
+    shows the size alone). Borg 1's stored size is its deduplicated size
+    (`cache.stats`), Borg 2's deduplicated size comes from the newest
+    compact statistics; compressed size is a Borg 1 figure (Borg 2 does
+    not report it).
+
+    The source data size is never withheld. While the rows the newest
+    listing saw all carry their per-archive info they answer for the
+    current archive set exactly, and they are taken. Where one of them is
+    still waiting for its `borg info` the sum would read as a total it is
+    not, and the figure Borg reports for the whole repository answers
+    instead: Borg 1 in the `info` call the `stats` operation makes, Borg 2
+    in the statistics of a compact. So one unfilled row no longer blanks
+    the figure, and the reader is told which of the two it is showing,
+    because a compact's figure is only as new as that compact. The
+    per-archive figures keep the gate throughout (compressed size, the
+    newest archive's files, the backup span)."""
     repos = list(repositories)
     ids = [repository.id for repository in repos]
     if not ids:
@@ -872,16 +964,45 @@ def storage_summaries(
         files = _latest_archive_files(db, current)
         spans = _archive_span(db, current)
         compacts = _latest_compact_stats(db, ids)
+        # Each version files the figure with a different operation, so only
+        # the repositories of that version are asked for: the other query's
+        # answer would never be read. The compact rows are asked again
+        # rather than taken from `compacts`, which holds the newest
+        # statistics of any kind for the dialog: a later compact that
+        # reported a repository size without a source data size must not
+        # hide the last one that reported one.
+        by_version: dict[bool, list[int]] = {}
+        for repository in repos:
+            by_version.setdefault((repository.borg_version or 1) == 2, []).append(
+                repository.id
+            )
+        reported_original = {}
+        for is_borg2, version_ids in by_version.items():
+            reported_original.update(
+                _latest_reported_original_size(
+                    db,
+                    version_ids,
+                    kind="compact" if is_borg2 else "stats",
+                    key='"source_size"' if is_borg2 else '"original_size"',
+                    read=_borg2_reported_size if is_borg2 else _borg1_reported_size,
+                )
+            )
     else:
         sums, files, spans, compacts = {}, {}, {}, {}
+        reported_original = {}
     # on every route: the card reads it to tell a settled, empty repository
     # (listed, 0 archives) from one no listing has reached yet
     listed = _listed_repositories(db, ids)
     result: dict[int, StorageSummary] = {}
     for repository in repos:
-        count, filled_original, original, filled_compressed, compressed = sums.get(
-            repository.id, (0, 0, None, 0, None)
-        )
+        (
+            count,
+            filled_original,
+            original,
+            filled_compressed,
+            compressed,
+            rows_seen_at,
+        ) = sums.get(repository.id, (0, 0, None, 0, None, None))
         # The rows the newest listing stamped must be the archives it
         # counted: a listing that found nothing stamps nothing, so the rows
         # it reported removed would still read as current, and rows
@@ -892,15 +1013,61 @@ def storage_summaries(
         # and its `archive_sync`; the flag tells a withheld figure from an
         # absent one. Zero rows against a count of 0 is a measurement only
         # once a listing has run: before that it is the row's initial state.
+        # the column is nullable, and a row whose count was never written
+        # reads as 0 here and everywhere below: one reading, or the two
+        # answers disagree about the same repository
+        archive_count = repository.archive_count or 0
         consistent = (
-            (
-                count == (repository.archive_count or 0)
-                and (count > 0 or repository.id in listed)
-            )
+            (count == archive_count and (count > 0 or repository.id in listed))
             if archives
             else None
         )
         compact = compacts.get(repository.id)
+        borg2 = (repository.borg_version or 1) == 2
+        # An archive count of 0 answers on its own: no archives, no source
+        # data. The rows it disagrees with may never be deleted (the
+        # `archives` index mode runs no `history_merge`), which would
+        # otherwise keep a figure alive for archives that are gone. The
+        # count is only the newest word while nothing newer contradicts
+        # it: rows stamped after that listing (one commits them long
+        # before it writes the count, so a repository gaining its first
+        # archives is not an empty one), or a repository-level figure from
+        # a later run (only a listing writes the count, so an archive
+        # created outside this application leaves it behind).
+        listed_at = listed.get(repository.id)
+        reported = reported_original.get(repository.id)
+        emptied = (
+            archives
+            and listed_at is not None
+            and archive_count == 0
+            and (rows_seen_at is None or listed_at >= rows_seen_at)
+            and (reported is None or listed_at >= reported[1])
+        )
+        archive_total = (
+            0
+            if emptied
+            else int(original or 0)
+            if count > 0 and consistent and filled_original == count
+            else None
+        )
+        original_size_at = None
+        if archive_total is not None:
+            # as new as the listing that wrote the rows, which the reader
+            # already knows; only a figure from elsewhere needs a stamp
+            original_size, original_size_source = archive_total, SOURCE_ARCHIVE_SUMS
+        else:
+            # A row still waiting for its per-archive info leaves the sum
+            # unable to answer; the figure Borg reports for the whole
+            # repository answers instead, with the time of the run that
+            # reported it, because it is not necessarily as new as the
+            # size measurement beside it.
+            if reported is not None:
+                original_size, original_size_at = reported
+                original_size_source = (
+                    SOURCE_COMPACT_STATS if borg2 else SOURCE_BORG1_CACHE_STATS
+                )
+            else:
+                original_size, original_size_source = None, None
         summary = StorageSummary(
             size_bytes=stored_size_bytes(repository),
             size_source=repository.total_size_source,
@@ -908,11 +1075,9 @@ def storage_summaries(
             last_modified=repository.borg_last_modified,
             archives_consistent=consistent,
             archives_listed=repository.id in listed,
-            # a consistent, empty repository has a measured original size
-            # of 0 (every archive pruned), which is not "not measured yet"
-            original_size=(
-                int(original or 0) if consistent and filled_original == count else None
-            ),
+            original_size=original_size,
+            original_size_source=original_size_source,
+            original_size_at=original_size_at,
             latest_archive_files=files.get(repository.id) if consistent else None,
             # the span reads the rows like the sums do, and waits like them
             first_backup_at=spans[repository.id][0]
@@ -924,7 +1089,6 @@ def storage_summaries(
             compact=compact[0] if compact else None,
             compact_at=compact[1] if compact else None,
         )
-        borg2 = (repository.borg_version or 1) == 2
         if not borg2:
             # Borg 1's deduplicated size is its stored size when that came
             # from `cache.stats`: a stored column, so both routes carry it

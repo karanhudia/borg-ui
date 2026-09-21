@@ -5,8 +5,9 @@ import type { RepositoryStorage } from '../types'
  * files: Storybook reads every named export of a CSF module as a story.
  */
 
-/** A Borg 1 repository after a `stats` run: cache statistics give the
- * deduplicated size, the archive rows give the sums. */
+/** A Borg 1 repository with everything measured: `borg info` gives the
+ * deduplicated size, and every archive row carries its own figures, so
+ * the rows answer for the source data size. */
 export const borg1Storage: RepositoryStorage = {
   size_bytes: 2_638_827_906_662,
   size_source: 'borg1_cache_stats',
@@ -15,6 +16,8 @@ export const borg1Storage: RepositoryStorage = {
   archives_consistent: true,
   archives_listed: true,
   original_size: 20_540_000_000_000,
+  original_size_source: 'archives',
+  original_size_at: null,
   compressed_size: 17_790_000_000_000,
   deduplicated_size: 2_638_827_906_662,
   latest_archive_files: 566_220,
@@ -24,8 +27,8 @@ export const borg1Storage: RepositoryStorage = {
   compact_at: null,
 }
 
-/** A Borg 2 repository on a store URL: the chunk index gives the size,
- * the newest compact its statistics; no compressed size exists. */
+/** A Borg 2 repository on a store URL: the chunk index gives the size
+ * and the newest compact its statistics; no compressed size exists. */
 export const borg2Storage: RepositoryStorage = {
   size_bytes: 2_523_456_789,
   size_source: 'borg2_index',
@@ -34,6 +37,8 @@ export const borg2Storage: RepositoryStorage = {
   archives_consistent: true,
   archives_listed: true,
   original_size: 11_460_000_000,
+  original_size_source: 'archives',
+  original_size_at: null,
   compressed_size: null,
   deduplicated_size: 2_300_000_000,
   latest_archive_files: 3157,
@@ -62,6 +67,8 @@ export const unknownStorage: RepositoryStorage = {
   archives_consistent: false,
   archives_listed: false,
   original_size: null,
+  original_size_source: null,
+  original_size_at: null,
   compressed_size: null,
   deduplicated_size: null,
   latest_archive_files: null,
@@ -79,12 +86,25 @@ export const backfilledStorage: RepositoryStorage = {
 }
 
 /** The archive rows and the archive count disagree between a backup and
- * its `archive_sync`: the sums are withheld, the size stands. */
+ * its `archive_sync`: the per-archive figures are withheld, the size and
+ * the repository-level source data size stand. */
 export const withheldStorage: RepositoryStorage = {
   ...borg2Storage,
   archives_consistent: false,
-  original_size: null,
+  original_size_source: 'compact_stats',
+  original_size_at: '2026-09-14T04:48:36.000Z',
   latest_archive_files: null,
   first_backup_at: null,
   last_backup_at: null,
+}
+
+/** An archive row is still waiting for its `borg info`, so the rows
+ * cannot answer for the source data size and the figure Borg reports for
+ * the whole repository does. The per-archive figures wait. */
+export const repositoryFigureStorage: RepositoryStorage = {
+  ...borg1Storage,
+  original_size_source: 'borg1_cache_stats',
+  original_size_at: '2026-09-09T02:15:00.000Z',
+  compressed_size: null,
+  latest_archive_files: null,
 }
