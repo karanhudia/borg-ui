@@ -5,7 +5,7 @@ to the license service with the license key, so the instance has to keep the key
 it was activated with. Encrypted at rest by the EncryptedString column type.
 
 Revision ID: a1b2c3d4e5f6
-Revises: e7f8a9b0c1d2
+Revises: a7c3e9f1b5d2
 Create Date: 2026-09-21
 """
 
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 
 revision = "a1b2c3d4e5f6"
-down_revision = "e7f8a9b0c1d2"
+down_revision = "a7c3e9f1b5d2"
 branch_labels = None
 depends_on = None
 
