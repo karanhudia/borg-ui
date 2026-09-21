@@ -23,6 +23,7 @@ from agent.borg_ui_agent.backup import (
     _extract_environment,
     build_borg_env,
     parse_borg_progress,
+    progress_replaces_log_line,
 )
 from agent.borg_ui_agent.borg import is_warning_return_code
 from agent.borg_ui_agent.cancel import (
@@ -916,7 +917,20 @@ def _execute_short_repository_operation(
             job_id=job_id, status="failed", message=error_message
         )
 
-    if process.stdout:
+    succeeded = process.returncode == 0 or is_warning_return_code(process.returncode)
+    parsed = _parse_json_output(process.stdout) if succeeded else None
+    if parsed is not None and payload.job_kind in MACHINE_PARSED_JOB_KINDS:
+        # The parsed output travels in the completion report; the log keeps
+        # one line about it. A failed run, or output that did not parse,
+        # keeps what Borg printed: the server builds its error message from
+        # these lines.
+        client.send_log(
+            job_id,
+            sequence=1,
+            stream="stdout",
+            message=_output_summary(payload.job_kind, process, parsed),
+        )
+    elif process.stdout:
         client.send_log(
             job_id, sequence=1, stream="stdout", message=process.stdout.rstrip()
         )
@@ -925,11 +939,10 @@ def _execute_short_repository_operation(
             job_id, sequence=2, stream="stderr", message=process.stderr.rstrip()
         )
 
-    if process.returncode == 0 or is_warning_return_code(process.returncode):
+    if succeeded:
         # Warnings (rc 1 / 100-127) mean the operation ran through; the server
         # records completed_with_warnings from the return code, matching the
         # classification its own borg processes get.
-        parsed = _parse_json_output(process.stdout)
         client.complete_job(
             job_id,
             result={
@@ -957,6 +970,19 @@ def _execute_short_repository_operation(
         return_code=process.returncode,
         message=error_message,
     )
+
+
+def _output_summary(
+    job_kind: str, process: subprocess.CompletedProcess, parsed: Any
+) -> str:
+    """The log line that stands for a machine-parsed kind's JSON output."""
+    archives = parsed.get("archives") if isinstance(parsed, dict) else None
+    if job_kind == "repository.list_archives" and isinstance(archives, list):
+        detail = f"{len(archives)} archives"
+    else:
+        detail = f"{len(process.stdout)} characters of JSON"
+    name = job_kind.removeprefix("repository.")
+    return f"{name}: {detail}, rc {process.returncode}"
 
 
 def _run_cancellable(
@@ -1598,15 +1624,16 @@ def _execute_streaming_repository_operation(
         if process.stdout is not None:
             for line in process.stdout:
                 message = line.rstrip("\n")
-                client.send_log(
-                    job_id, sequence=sequence, stream="stdout", message=message
-                )
-                sequence += 1
                 if compact_stats:
                     tail.append(message)
                 progress = parse_borg_progress(message)
                 if progress:
                     client.send_progress(job_id, progress)
+                if not progress_replaces_log_line(progress):
+                    client.send_log(
+                        job_id, sequence=sequence, stream="stdout", message=message
+                    )
+                    sequence += 1
                 if cancel_requested(should_cancel) and process.poll() is None:
                     # not once Borg ended on its own while the check ran (it
                     # may have asked the server): that run is its verdict
@@ -1817,13 +1844,17 @@ def _execute_restore_operation(
             if process.stdout is not None:
                 for line in process.stdout:
                     message = line.rstrip("\n")
-                    client.send_log(
-                        job_id, sequence=sequence, stream="stdout", message=message
-                    )
-                    sequence += 1
                     progress = parse_borg_progress(message)
                     if progress:
                         client.send_progress(job_id, progress)
+                    if not progress_replaces_log_line(progress):
+                        client.send_log(
+                            job_id,
+                            sequence=sequence,
+                            stream="stdout",
+                            message=message,
+                        )
+                        sequence += 1
                     if cancel_requested(should_cancel) and process.poll() is None:
                         # not once Borg ended on its own while the check ran (it
                         # may have asked the server): that run is its verdict

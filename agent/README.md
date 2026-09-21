@@ -213,7 +213,13 @@ The first implementation supports:
   `repository.check`, `repository.prune`, `repository.compact`,
   `repository.rclone_sync`, and `repository.diff` (the change listing the
   server's archive history is built from) for agent-owned repositories
-- log and progress upload
+- log and progress upload; from 0.1.8 a line whose progress report says
+  all it did (`progress_percent`, `archive_progress`) is not stored as a
+  log line too, while a `file_status` line of `create --list` is reported
+  and stored, being the listing that was asked for; `repository.info`,
+  `repository.rinfo`, `repository.archive_info` and
+  `repository.list_archives` log a one-line summary instead of their JSON
+  output (a failed run keeps the output)
 - cancellation through heartbeat; from 0.1.7 (`jobs.cancel`) a running
   backup, check, prune, compact, restore or archive delete stops as well,
   even while Borg prints nothing
