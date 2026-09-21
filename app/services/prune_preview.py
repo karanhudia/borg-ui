@@ -224,8 +224,9 @@ def join_verdicts(
 async def remeasure_candidates(
     db: Session, repository: Repository, candidates: list[Archive]
 ) -> bool:
-    """Fresh `deduplicated_size` for the deletion candidates, oldest first,
-    up to MEASURE_CAP (spec 4.1: the preview re-measures synchronously).
+    """Fresh `deduplicated_size` for the deletion candidates, in
+    `fill_archive_info`'s order (rows without sizes, then oldest first), up
+    to MEASURE_CAP (spec 4.1: the preview re-measures synchronously).
     Returns True when the cap left some candidates on their stored value.
     `fill_archive_info` commits and stamps `stats_measured_at` itself."""
     if not candidates:

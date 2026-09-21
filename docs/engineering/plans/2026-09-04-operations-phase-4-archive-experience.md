@@ -295,9 +295,9 @@ describe('archivesAPI stored-archive methods', () => {
   })
 
   it('reads history for one path', async () => {
-    await archivesAPI.getPathHistory(7, 'home/karan/docs/invoices.xlsx')
+    await archivesAPI.getPathHistory(7, 'home/alex/docs/invoices.xlsx')
     expect(mockGet).toHaveBeenCalledWith('/repositories/7/history', {
-      params: { path: 'home/karan/docs/invoices.xlsx' },
+      params: { path: 'home/alex/docs/invoices.xlsx' },
     })
   })
 })
@@ -687,7 +687,7 @@ describe('ArchiveSearchField', () => {
         query: 'invoices',
         results: [
           {
-            path: 'home/karan/docs/invoices.xlsx',
+            path: 'home/alex/docs/invoices.xlsx',
             first_seen_archive_id: 3,
             first_seen: '2026-08-24T02:00:00Z',
             last_seen_archive_id: 12,
@@ -704,7 +704,7 @@ describe('ArchiveSearchField', () => {
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'invoices' } })
     fireEvent.submit(screen.getByRole('search'))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
-    expect(screen.getByText('home/karan/docs/invoices.xlsx')).toBeInTheDocument()
+    expect(screen.getByText('home/alex/docs/invoices.xlsx')).toBeInTheDocument()
   })
 
   it('disables the field on a plan without the history feature', () => {

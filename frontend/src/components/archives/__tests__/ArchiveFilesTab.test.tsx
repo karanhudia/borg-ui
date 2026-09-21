@@ -25,8 +25,8 @@ vi.mock('../../../services/api', () => ({
 }))
 
 const browseItems = [
-  { name: 'docs', type: 'directory' as const, path: 'home/karan/docs' },
-  { name: 'invoices.xlsx', type: 'file' as const, path: 'home/karan/invoices.xlsx', size: 9400 },
+  { name: 'docs', type: 'directory' as const, path: 'home/alex/docs' },
+  { name: 'invoices.xlsx', type: 'file' as const, path: 'home/alex/invoices.xlsx', size: 9400 },
 ]
 
 const focusFilterSpy = vi.fn()
@@ -51,7 +51,7 @@ function MockArchivePathSelector({
   dataRef.current = data
   useEffect(() => {
     onBrowseStateChange?.({
-      currentPath: 'home/karan',
+      currentPath: 'home/alex',
       items: browseItems,
       navigateTo: vi.fn(),
       focusFilter: focusFilterSpy,
@@ -72,10 +72,10 @@ function MockArchivePathSelector({
       data-testid="archive-path-selector"
       onClick={() =>
         onChange({
-          selectedPaths: [...data.selectedPaths, 'home/karan/docs/invoices.xlsx'],
+          selectedPaths: [...data.selectedPaths, 'home/alex/docs/invoices.xlsx'],
           selectedItems: [
             ...(data.selectedItems || []),
-            { path: 'home/karan/docs/invoices.xlsx', type: 'file' },
+            { path: 'home/alex/docs/invoices.xlsx', type: 'file' },
           ],
         })
       }
@@ -168,9 +168,9 @@ describe('ArchiveFilesTab', () => {
     )
     fireEvent.click(screen.getByTestId('archive-path-selector'))
     const bar = screen.getByRole('toolbar', { name: /selection/i })
-    expect(within(bar).queryByText('home/karan/docs/invoices.xlsx')).not.toBeInTheDocument()
+    expect(within(bar).queryByText('home/alex/docs/invoices.xlsx')).not.toBeInTheDocument()
     fireEvent.click(within(bar).getByRole('button', { name: /show selected/i }))
-    expect(within(bar).getByText('home/karan/docs/invoices.xlsx')).toBeInTheDocument()
+    expect(within(bar).getByText('home/alex/docs/invoices.xlsx')).toBeInTheDocument()
     fireEvent.click(within(bar).getByRole('button', { name: /remove invoices\.xlsx/i }))
     expect(screen.queryByRole('toolbar', { name: /selection/i })).not.toBeInTheDocument()
   })
@@ -244,7 +244,7 @@ describe('ArchiveFilesTab', () => {
       fireEvent.click(screen.getByTestId('archive-path-selector'))
       fireEvent.click(screen.getByRole('button', { name: /restore selection/i }))
       expect(onRestorePaths).toHaveBeenCalledWith(
-        ['home/karan/docs/invoices.xlsx'],
+        ['home/alex/docs/invoices.xlsx'],
         expect.any(Array)
       )
       expect(screen.queryByRole('button', { name: /^restore$/i })).not.toBeInTheDocument()
@@ -308,7 +308,7 @@ describe('ArchiveFilesTab', () => {
       fireEvent.click(screen.getByTestId('archive-path-selector'))
       fireEvent.keyDown(root, { key: 'r' })
       expect(onRestorePaths).toHaveBeenCalledWith(
-        ['home/karan/docs/invoices.xlsx'],
+        ['home/alex/docs/invoices.xlsx'],
         expect.any(Array)
       )
     })

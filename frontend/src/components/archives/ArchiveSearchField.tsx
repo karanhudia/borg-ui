@@ -76,7 +76,7 @@ function ResultRow({
         <Tooltip title={result.path} enterDelay={700} placement="top-start">
           {/* The deepest folders identify the file, so the directory is cut at
               the front: "local/Users/…/Documents/taxes/" beats a row that
-              ellipsises away everything after "local/Users/kar…". */}
+              ellipsises away everything after the home directory. */}
           <Typography
             variant="caption"
             noWrap
