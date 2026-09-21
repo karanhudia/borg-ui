@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import structlog
 from fastapi import HTTPException, status
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from app.api.repositories import (
@@ -295,7 +296,8 @@ def archives_needing_info(
     include_missing_end: bool = False,
     exclude_ids: Iterable[int] = (),
 ) -> list[Archive]:
-    """Archives whose `borg info` stats are missing or stale, oldest first.
+    """Archives whose `borg info` stats are missing or stale: rows without
+    sizes first, then stale rows, each oldest first.
 
     `exclude_ids` are the rows the listing reported removed: they linger
     until the merge deletes them (never, in the `archives` mode) and a
@@ -307,7 +309,7 @@ def archives_needing_info(
 
     `include_missing_end` also picks rows whose sizes are set but whose
     `end` is not (fill_archive_info withheld a naive end while the agent's
-    zone was unknown), but only into the slots the rows without sizes leave
+    zone was unknown), but only into the slots the rows without a date leave
     free: a row whose end can never be parsed costs at most a spare slot per
     run and never displaces an archive that has no stats at all.
     """
@@ -323,8 +325,15 @@ def archives_needing_info(
     # NULL is "never measured" and "stale" alike (spec 4.1): a listing that
     # saw archives removed cleared it on every survivor, and the same
     # bounded loop re-measures them, oldest first.
+    # Rows without sizes first: a new archive is the newest row, and behind
+    # more stale survivors than the cap holds it would never be reached
+    # while every listing reports a removal.
     removed = set(exclude_ids)
-    rows = _select(Archive.stats_measured_at.is_(None), removed, limit)
+    unmeasured = Archive.stats_measured_at.is_(None)
+    rows = _select(and_(unmeasured, Archive.original_size.is_(None)), removed, limit)
+    spare = limit - len(rows)
+    if spare > 0:
+        rows += _select(unmeasured, removed | {a.id for a in rows}, spare)
     spare = limit - len(rows)
     if include_missing_end and spare > 0:
         rows += _select(Archive.end.is_(None), removed | {a.id for a in rows}, spare)
@@ -430,7 +439,9 @@ async def fill_archive_info(
     *,
     limit: int,
 ) -> int:
-    """Run per-archive `borg info` for up to `limit` archives, oldest first.
+    """Run per-archive `borg info` for up to `limit` archives: rows without
+    sizes first, each group oldest first. An agent that stops answering ends
+    the run, and a stale row must not cost a new archive its slot.
 
     Agent repositories go through the agent's `repository.archive_info` job;
     the agent renders naive Borg 1 timestamps in its reported zone.
@@ -441,7 +452,8 @@ async def fill_archive_info(
     timezone_name = agent_timezone_for_repository(db, repository) if agent else "UTC"
     timeout_seconds = get_operation_timeouts(db)["info_timeout"] if agent else None
     filled = 0
-    for archive in sorted(archives, key=lambda a: a.start)[:limit]:
+    ordered = sorted(archives, key=lambda a: (a.original_size is not None, a.start))
+    for archive in ordered[:limit]:
         try:
             if agent:
                 result = await _agent_archive_info(
