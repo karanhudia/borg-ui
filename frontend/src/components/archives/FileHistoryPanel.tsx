@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Box, Button, Stack, Typography, useTheme } from '@mui/material'
+import { Box, Button, Typography, useTheme } from '@mui/material'
 import { RotateCcw } from 'lucide-react'
 import ChangeBadge from './ChangeBadge'
 import { changeColor } from './changeStyle'
@@ -148,37 +148,11 @@ function FileHistoryPanelContent({ repositoryId, path, onRestoreEntry }: FileHis
             })}
           </Typography>
         )}
-        {/* One dimmed row per version this path actually has, so the shape
-            of what Pro adds is visible without inventing a single figure:
-            the rows carry no dates, sizes or archive names, because the
-            server does not send them on this plan. A sample list would be a
-            picture of somebody else's data. */}
-        {versions > 0 && (
-          <Box aria-hidden sx={{ mb: 1.5, opacity: 0.4, pointerEvents: 'none' }}>
-            {Array.from({ length: Math.min(versions, 5) }).map((_, row) => (
-              <Stack key={row} direction="row" spacing={1} sx={{ alignItems: 'center', py: 0.75 }}>
-                <Box
-                  sx={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: '2px',
-                    bgcolor: 'text.disabled',
-                    flexShrink: 0,
-                  }}
-                />
-                <Box
-                  sx={{
-                    height: 8,
-                    borderRadius: 1,
-                    bgcolor: 'text.disabled',
-                    // a little variety, so it reads as a list and not a table
-                    width: `${[72, 58, 65, 50, 61][row % 5]}%`,
-                  }}
-                />
-              </Stack>
-            ))}
-          </Box>
-        )}
+        {/* No sketch of the list behind this. On this plan the server sends
+            the count and the window and nothing else, so a row per version
+            can only be blank, which reads as content still loading, or made
+            up, which is the blurred mock this panel exists to replace. The
+            line above already says everything that is known. */}
         <UpgradePrompt
           compact
           requiredPlan="pro"
