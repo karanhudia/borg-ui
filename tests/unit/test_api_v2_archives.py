@@ -78,32 +78,31 @@ class TestV2ArchiveRoutes:
     # and a route added without a decision fails this test rather than
     # shipping open (spec 2026-09-21, section 1.2).
     OPEN_ON_EVERY_PLAN = {
-        ("GET", "/api/v2/archives/{archive_id}/contents"),
-        ("GET", "/api/v2/archives/download"),
-        ("GET", "/api/v2/archives/download-folder"),
+        ("GET", "/{archive_id}/contents"),
+        ("GET", "/download"),
+        ("GET", "/download-folder"),
     }
 
     def test_only_the_read_routes_are_open_on_community(self):
-        from app.main import app
+        """Read the module's own router, not the composed application.
 
-        # Matched by path and by what the dependency closes over, not by
-        # module or dependency identity: under CI's import path the module
-        # object the test holds is not always the one the routes were built
-        # from, and identity then reports every route as ungated.
+        The routes and their dependencies are declared here; going through
+        `app.main` only adds an import graph whose state differs between a
+        full run and one shard of it. That the application serves these
+        routes, gate and all, is what the two request tests around this one
+        already prove.
+        """
+        from app.api.v2 import archives as v2_archives
+
         def gates_borg2(dependency) -> bool:
-            closure = getattr(dependency.call, "__closure__", None) or ()
+            # `require_feature` builds a new closure per call, so the feature
+            # it closed over identifies the gate; the object does not.
+            closure = getattr(dependency.dependency, "__closure__", None) or ()
             return any(cell.cell_contents == "borg_v2" for cell in closure)
 
-        module_routes = [
-            route
-            for route in app.routes
-            if getattr(route, "path", "").startswith("/api/v2/archives")
-        ]
-        assert module_routes, f"no v2 archive routes among {len(app.routes)} routes"
-
         open_routes = set()
-        for route in module_routes:
-            if not any(gates_borg2(d) for d in route.dependant.dependencies):
+        for route in v2_archives.router.routes:
+            if not any(gates_borg2(d) for d in route.dependencies):
                 for method in route.methods - {"HEAD", "OPTIONS"}:
                     open_routes.add((method, route.path))
 
