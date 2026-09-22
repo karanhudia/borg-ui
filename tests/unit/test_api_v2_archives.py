@@ -84,26 +84,26 @@ class TestV2ArchiveRoutes:
     }
 
     def test_only_the_read_routes_are_open_on_community(self):
-        from app.api.v2 import archives as v2_archives
         from app.main import app
 
-        # The module's own dependency object: `require_feature` builds a new
-        # closure per call, so identity against a fresh one never matches.
-        gate = v2_archives.BORG2.dependency
+        # Matched by path and by what the dependency closes over, not by
+        # module or dependency identity: under CI's import path the module
+        # object the test holds is not always the one the routes were built
+        # from, and identity then reports every route as ungated.
+        def gates_borg2(dependency) -> bool:
+            closure = getattr(dependency.call, "__closure__", None) or ()
+            return any(cell.cell_contents == "borg_v2" for cell in closure)
+
         module_routes = [
             route
             for route in app.routes
-            if getattr(route, "endpoint", None) is not None
-            and route.endpoint.__module__ == v2_archives.__name__
+            if getattr(route, "path", "").startswith("/api/v2/archives")
         ]
-        assert module_routes, "no v2 archive routes found"
+        assert module_routes, f"no v2 archive routes among {len(app.routes)} routes"
 
         open_routes = set()
         for route in module_routes:
-            gated = any(
-                dependency.call is gate for dependency in route.dependant.dependencies
-            )
-            if not gated:
+            if not any(gates_borg2(d) for d in route.dependant.dependencies):
                 for method in route.methods - {"HEAD", "OPTIONS"}:
                     open_routes.add((method, route.path))
 
