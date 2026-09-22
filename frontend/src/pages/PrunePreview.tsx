@@ -584,6 +584,9 @@ export default function PrunePreview() {
                 </Typography>
                 <ArchiveSeriesHeatmap
                   data={heatmapData}
+                  // These days are prune verdicts, not backup runs: the
+                  // outlier and missed-run rows describe nothing here.
+                  showFlagLegend={false}
                   onSelectDay={(day) => {
                     const id = day.archive_ids[0]
                     if (id != null) navigate(`/archives/${repositoryId}/${id}`)

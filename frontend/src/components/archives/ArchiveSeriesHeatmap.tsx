@@ -43,6 +43,12 @@ interface ArchiveSeriesHeatmapProps {
   // caller's controls on the right. Absent, the calendar starts at the
   // month axis, for a page that titles it itself.
   header?: { toolbar?: ReactNode }
+  // The outlier and missed-run rows of the legend. A caller whose cells
+  // carry no such flags (the prune preview, whose days are verdicts) passes
+  // false: `flags_available: false` there means the data has no flags at
+  // all, not that the plan lacks them, and the legend would otherwise offer
+  // an upgrade for something this calendar never shows, on every plan.
+  showFlagLegend?: boolean
 }
 
 interface Chooser {
@@ -337,6 +343,7 @@ export default function ArchiveSeriesHeatmap({
   cellColor,
   cellLabel,
   header,
+  showFlagLegend = true,
 }: ArchiveSeriesHeatmapProps) {
   const { t } = useTranslation()
   const [chooser, setChooser] = useState<Chooser | null>(null)
@@ -447,7 +454,7 @@ export default function ArchiveSeriesHeatmap({
         })}
       </Menu>
       <HeatmapLegend
-        flagsAvailable={data.flags_available}
+        flagsAvailable={showFlagLegend ? data.flags_available : undefined}
         missedTotal={missedTotal}
         cadenceKnown={data.cadence_known}
       />

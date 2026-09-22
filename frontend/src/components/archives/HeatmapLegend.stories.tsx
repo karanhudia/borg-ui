@@ -21,3 +21,7 @@ export const Pro: Story = {
     flagsAvailable: { missed_run: true, size_outlier: true, duration_outlier: true },
   },
 }
+
+// A calendar whose days carry no flags at all (the prune preview): the rows
+// are left out rather than offered as an upgrade.
+export const NoFlags: Story = { args: { flagsAvailable: undefined } }

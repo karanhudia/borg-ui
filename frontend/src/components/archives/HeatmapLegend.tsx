@@ -4,7 +4,10 @@ import { PLAN_LABEL, PLAN_COLOR } from '../../core/features'
 import type { HeatmapResponse } from '../../types/archives'
 
 interface HeatmapLegendProps {
-  flagsAvailable: HeatmapResponse['flags_available']
+  // Undefined when this calendar has no flags to describe, which is not the
+  // same as a plan that lacks them: the rows are left out rather than
+  // offered as an upgrade.
+  flagsAvailable?: HeatmapResponse['flags_available']
   missedTotal?: number
   // Without a schedule or plan cron the cadence is unknown, so no day is
   // judged and "0 missed days" would be a claim the data cannot make.
@@ -32,29 +35,32 @@ export default function HeatmapLegend({
     key: 'missed' | 'sizeOutlier' | 'durationOutlier'
     available: boolean
     sample: object
-  }[] = [
-    {
-      key: 'missed',
-      available: flagsAvailable.missed_run,
-      sample: { bgcolor: alpha(theme.palette.error.main, 0.16) },
-    },
-    {
-      key: 'sizeOutlier',
-      available: flagsAvailable.size_outlier,
-      sample: {
-        bgcolor: alpha(theme.palette.primary.main, 0.6),
-        boxShadow: `inset 0 0 0 2px ${theme.palette.warning.main}`,
-      },
-    },
-    {
-      key: 'durationOutlier',
-      available: flagsAvailable.duration_outlier,
-      sample: {
-        bgcolor: alpha(theme.palette.primary.main, 0.6),
-        boxShadow: `inset 0 0 0 2px ${theme.palette.warning.main}`,
-      },
-    },
-  ]
+  }[] =
+    flagsAvailable === undefined
+      ? []
+      : [
+          {
+            key: 'missed',
+            available: flagsAvailable.missed_run,
+            sample: { bgcolor: alpha(theme.palette.error.main, 0.16) },
+          },
+          {
+            key: 'sizeOutlier',
+            available: flagsAvailable.size_outlier,
+            sample: {
+              bgcolor: alpha(theme.palette.primary.main, 0.6),
+              boxShadow: `inset 0 0 0 2px ${theme.palette.warning.main}`,
+            },
+          },
+          {
+            key: 'durationOutlier',
+            available: flagsAvailable.duration_outlier,
+            sample: {
+              bgcolor: alpha(theme.palette.primary.main, 0.6),
+              boxShadow: `inset 0 0 0 2px ${theme.palette.warning.main}`,
+            },
+          },
+        ]
 
   return (
     <Stack

@@ -203,4 +203,16 @@ describe('ArchiveSeriesHeatmap days with several archives', () => {
     render(<ArchiveSeriesHeatmap data={data} onSelectDay={vi.fn()} />)
     expect(screen.getByText(/Nothing on record \(1 day\)/)).toBeInTheDocument()
   })
+
+  it('leaves the flag rows out where the days carry no flags', () => {
+    // The prune preview colours days by verdict, so an outlier row there
+    // would describe nothing, and its "Pro" chip would offer an upgrade that
+    // changes nothing about this calendar.
+    render(<ArchiveSeriesHeatmap data={data} onSelectDay={vi.fn()} showFlagLegend={false} />)
+    expect(screen.queryByText(/Nothing on record/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Unusually/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Pro')).not.toBeInTheDocument()
+    // the intensity scale still belongs to it
+    expect(screen.getByText('Less')).toBeInTheDocument()
+  })
 })
