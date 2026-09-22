@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-09-22T04:06:29.253Z",
+  "generatedAt": "2026-09-22T04:26:26.059Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1156 visual report",
     "commitSha": "afc8998411da",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35685509896"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35686792504"
   },
   "totals": {
     "baseline": 960,
     "actual": 964,
-    "compared": 958,
-    "changed": 28,
-    "added": 6,
-    "removed": 2,
-    "unchanged": 930
+    "compared": 954,
+    "changed": 38,
+    "added": 10,
+    "removed": 6,
+    "unchanged": 916
   },
   "changed": [
     {
@@ -21,9 +21,9 @@
       "baselinePath": "images/baseline/components-archives-archivechangestab--locked--mobile.png",
       "actualPath": "images/actual/components-archives-archivechangestab--locked--mobile.png",
       "diffPath": "images/diff/components-archives-archivechangestab--locked--mobile.png",
-      "diffPixels": 111266,
+      "diffPixels": 111249,
       "totalPixels": 329160,
-      "diffRatio": 0.33803013731923687,
+      "diffRatio": 0.3379784907036092,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -39,9 +39,9 @@
       "baselinePath": "images/baseline/components-archives-archivechangestab--locked.png",
       "actualPath": "images/actual/components-archives-archivechangestab--locked.png",
       "diffPath": "images/diff/components-archives-archivechangestab--locked.png",
-      "diffPixels": 181015,
+      "diffPixels": 181032,
       "totalPixels": 1024000,
-      "diffRatio": 0.1767724609375,
+      "diffRatio": 0.1767890625,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -89,13 +89,193 @@
       }
     },
     {
+      "fileName": "components-archives-archiveseriesheatmap--default--mobile.png",
+      "baselinePath": "images/baseline/components-archives-archiveseriesheatmap--default--mobile.png",
+      "actualPath": "images/actual/components-archives-archiveseriesheatmap--default--mobile.png",
+      "diffPath": "images/diff/components-archives-archiveseriesheatmap--default--mobile.png",
+      "diffPixels": 1300,
+      "totalPixels": 329160,
+      "diffRatio": 0.0039494470774091624,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-archives-archiveseriesheatmap--default.png",
+      "baselinePath": "images/baseline/components-archives-archiveseriesheatmap--default.png",
+      "actualPath": "images/actual/components-archives-archiveseriesheatmap--default.png",
+      "diffPath": "images/diff/components-archives-archiveseriesheatmap--default.png",
+      "diffPixels": 3145,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0030712890625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-archives-archiveseriesheatmap--empty--mobile.png",
+      "baselinePath": "images/baseline/components-archives-archiveseriesheatmap--empty--mobile.png",
+      "actualPath": "images/actual/components-archives-archiveseriesheatmap--empty--mobile.png",
+      "diffPath": "images/diff/components-archives-archiveseriesheatmap--empty--mobile.png",
+      "diffPixels": 1300,
+      "totalPixels": 329160,
+      "diffRatio": 0.0039494470774091624,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-archives-archiveseriesheatmap--empty.png",
+      "baselinePath": "images/baseline/components-archives-archiveseriesheatmap--empty.png",
+      "actualPath": "images/actual/components-archives-archiveseriesheatmap--empty.png",
+      "diffPath": "images/diff/components-archives-archiveseriesheatmap--empty.png",
+      "diffPixels": 3200,
+      "totalPixels": 1024000,
+      "diffRatio": 0.003125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-archives-archiveseriesheatmap--full-year--mobile.png",
+      "baselinePath": "images/baseline/components-archives-archiveseriesheatmap--full-year--mobile.png",
+      "actualPath": "images/actual/components-archives-archiveseriesheatmap--full-year--mobile.png",
+      "diffPath": "images/diff/components-archives-archiveseriesheatmap--full-year--mobile.png",
+      "diffPixels": 1300,
+      "totalPixels": 329160,
+      "diffRatio": 0.0039494470774091624,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-archives-archiveseriesheatmap--full-year.png",
+      "baselinePath": "images/baseline/components-archives-archiveseriesheatmap--full-year.png",
+      "actualPath": "images/actual/components-archives-archiveseriesheatmap--full-year.png",
+      "diffPath": "images/diff/components-archives-archiveseriesheatmap--full-year.png",
+      "diffPixels": 3145,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0030712890625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-archives-archiveseriesheatmap--no-schedule-known--mobile.png",
+      "baselinePath": "images/baseline/components-archives-archiveseriesheatmap--no-schedule-known--mobile.png",
+      "actualPath": "images/actual/components-archives-archiveseriesheatmap--no-schedule-known--mobile.png",
+      "diffPath": "images/diff/components-archives-archiveseriesheatmap--no-schedule-known--mobile.png",
+      "diffPixels": 1173,
+      "totalPixels": 329160,
+      "diffRatio": 0.0035636164783084214,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-archives-archiveseriesheatmap--no-schedule-known.png",
+      "baselinePath": "images/baseline/components-archives-archiveseriesheatmap--no-schedule-known.png",
+      "actualPath": "images/actual/components-archives-archiveseriesheatmap--no-schedule-known.png",
+      "diffPath": "images/diff/components-archives-archiveseriesheatmap--no-schedule-known.png",
+      "diffPixels": 4503,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0043974609375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-archives-archiveseriesheatmap--with-header--mobile.png",
+      "baselinePath": "images/baseline/components-archives-archiveseriesheatmap--with-header--mobile.png",
+      "actualPath": "images/actual/components-archives-archiveseriesheatmap--with-header--mobile.png",
+      "diffPath": "images/diff/components-archives-archiveseriesheatmap--with-header--mobile.png",
+      "diffPixels": 1300,
+      "totalPixels": 329160,
+      "diffRatio": 0.0039494470774091624,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-archives-archiveseriesheatmap--with-header.png",
+      "baselinePath": "images/baseline/components-archives-archiveseriesheatmap--with-header.png",
+      "actualPath": "images/actual/components-archives-archiveseriesheatmap--with-header.png",
+      "diffPath": "images/diff/components-archives-archiveseriesheatmap--with-header.png",
+      "diffPixels": 3145,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0030712890625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
       "fileName": "components-archives-filehistorypanel--locked--mobile.png",
       "baselinePath": "images/baseline/components-archives-filehistorypanel--locked--mobile.png",
       "actualPath": "images/actual/components-archives-filehistorypanel--locked--mobile.png",
       "diffPath": "images/diff/components-archives-filehistorypanel--locked--mobile.png",
-      "diffPixels": 8605,
+      "diffPixels": 8523,
       "totalPixels": 329160,
-      "diffRatio": 0.026142301616235264,
+      "diffRatio": 0.02589318264673715,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -531,6 +711,22 @@
       "actualPath": "images/actual/components-archives-archivestatsheader--not-indexed.png"
     },
     {
+      "fileName": "components-archives-heatmaplegend--cadence-unknown--mobile.png",
+      "actualPath": "images/actual/components-archives-heatmaplegend--cadence-unknown--mobile.png"
+    },
+    {
+      "fileName": "components-archives-heatmaplegend--cadence-unknown.png",
+      "actualPath": "images/actual/components-archives-heatmaplegend--cadence-unknown.png"
+    },
+    {
+      "fileName": "components-archives-heatmaplegend--default--mobile.png",
+      "actualPath": "images/actual/components-archives-heatmaplegend--default--mobile.png"
+    },
+    {
+      "fileName": "components-archives-heatmaplegend--default.png",
+      "actualPath": "images/actual/components-archives-heatmaplegend--default.png"
+    },
+    {
       "fileName": "components-archives-heatmaplegend--no-flags--mobile.png",
       "actualPath": "images/actual/components-archives-heatmaplegend--no-flags--mobile.png"
     },
@@ -555,6 +751,22 @@
     {
       "fileName": "components-archives-archivestatsheader--community.png",
       "baselinePath": "images/baseline/components-archives-archivestatsheader--community.png"
+    },
+    {
+      "fileName": "components-archives-heatmaplegend--community--mobile.png",
+      "baselinePath": "images/baseline/components-archives-heatmaplegend--community--mobile.png"
+    },
+    {
+      "fileName": "components-archives-heatmaplegend--community.png",
+      "baselinePath": "images/baseline/components-archives-heatmaplegend--community.png"
+    },
+    {
+      "fileName": "components-archives-heatmaplegend--pro--mobile.png",
+      "baselinePath": "images/baseline/components-archives-heatmaplegend--pro--mobile.png"
+    },
+    {
+      "fileName": "components-archives-heatmaplegend--pro.png",
+      "baselinePath": "images/baseline/components-archives-heatmaplegend--pro.png"
     }
   ],
   "unchanged": [
@@ -1399,36 +1611,6 @@
       "fileName": "components-archives-archivesearchfield--unlocked.png"
     },
     {
-      "fileName": "components-archives-archiveseriesheatmap--default--mobile.png"
-    },
-    {
-      "fileName": "components-archives-archiveseriesheatmap--default.png"
-    },
-    {
-      "fileName": "components-archives-archiveseriesheatmap--empty--mobile.png"
-    },
-    {
-      "fileName": "components-archives-archiveseriesheatmap--empty.png"
-    },
-    {
-      "fileName": "components-archives-archiveseriesheatmap--full-year--mobile.png"
-    },
-    {
-      "fileName": "components-archives-archiveseriesheatmap--full-year.png"
-    },
-    {
-      "fileName": "components-archives-archiveseriesheatmap--no-schedule-known--mobile.png"
-    },
-    {
-      "fileName": "components-archives-archiveseriesheatmap--no-schedule-known.png"
-    },
-    {
-      "fileName": "components-archives-archiveseriesheatmap--with-header--mobile.png"
-    },
-    {
-      "fileName": "components-archives-archiveseriesheatmap--with-header.png"
-    },
-    {
       "fileName": "components-archives-archivestatsheader--borg-2-first-of-series--mobile.png"
     },
     {
@@ -1505,18 +1687,6 @@
     },
     {
       "fileName": "components-archives-filehistorypanel--unlocked.png"
-    },
-    {
-      "fileName": "components-archives-heatmaplegend--community--mobile.png"
-    },
-    {
-      "fileName": "components-archives-heatmaplegend--community.png"
-    },
-    {
-      "fileName": "components-archives-heatmaplegend--pro--mobile.png"
-    },
-    {
-      "fileName": "components-archives-heatmaplegend--pro.png"
     },
     {
       "fileName": "components-archives-syncstatechip--fresh--mobile.png"
