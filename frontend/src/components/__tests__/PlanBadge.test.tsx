@@ -79,6 +79,6 @@ describe('PlanBadge feature trial countdown', () => {
         }}
       />
     )
-    expect(screen.getByText(/Pro trial · 9 days left/)).toBeInTheDocument()
+    expect(screen.getByText(/Pro preview · 9 days left/)).toBeInTheDocument()
   })
 })

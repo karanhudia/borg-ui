@@ -6321,7 +6321,7 @@
     },
     "currentPlan": "Aktueller Plan",
     "fullAccessLabel": "Voller Zugriff",
-    "featureTrialLabel": "Pro-Test",
+    "featureTrialLabel": "Pro-Vorschau",
     "planSuffix": "Plan",
     "activeStatus": "Aktiv",
     "descriptionCommunity": "Zentrale Backup-Funktionen enthalten",
@@ -6421,8 +6421,8 @@
     "trialFailed": "Der Test konnte nicht gestartet werden. Versuchen Sie es später erneut.",
     "trialNeedsAdmin": "Bitten Sie eine Administratorin oder einen Administrator, den Test zu starten.",
     "trialUnavailable": "Derzeit ist kein kostenloser Test verfügbar.",
-    "trialEnded": "Ihr kostenloser Pro-Test ist beendet.",
-    "tryFree": "Pro kostenlos testen"
+    "trialEnded": "Ihre Pro-Vorschau ist beendet.",
+    "tryFree": "Kostenlos testen"
   },
   "announcements": {
     "latestRelease": "Neueste Version",

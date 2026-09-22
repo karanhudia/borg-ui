@@ -6321,7 +6321,7 @@
     },
     "currentPlan": "Your Plan",
     "fullAccessLabel": "Full Access",
-    "featureTrialLabel": "Pro trial",
+    "featureTrialLabel": "Pro preview",
     "planSuffix": "Plan",
     "activeStatus": "Active",
     "descriptionCommunity": "Core backup features included",
@@ -6421,8 +6421,8 @@
     "trialFailed": "The trial could not be started. Try again later.",
     "trialNeedsAdmin": "Ask an administrator to start the trial.",
     "trialUnavailable": "A free trial is not available right now.",
-    "trialEnded": "Your free Pro trial has ended.",
-    "tryFree": "Try Pro free"
+    "trialEnded": "Your Pro preview has ended.",
+    "tryFree": "Try it free"
   },
   "announcements": {
     "latestRelease": "Latest release",

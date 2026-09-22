@@ -6321,7 +6321,7 @@
     },
     "currentPlan": "Piano attuale",
     "fullAccessLabel": "Accesso completo",
-    "featureTrialLabel": "Prova Pro",
+    "featureTrialLabel": "Anteprima Pro",
     "planSuffix": "Piano",
     "activeStatus": "Attivo",
     "descriptionCommunity": "Funzionalità di backup essenziali incluse",
@@ -6421,8 +6421,8 @@
     "trialFailed": "Non è stato possibile avviare la prova. Riprova più tardi.",
     "trialNeedsAdmin": "Chiedi a un amministratore di avviare la prova.",
     "trialUnavailable": "Al momento non è disponibile una prova gratuita.",
-    "trialEnded": "La tua prova gratuita di Pro è terminata.",
-    "tryFree": "Prova Pro gratis"
+    "trialEnded": "La tua anteprima Pro è terminata.",
+    "tryFree": "Provala gratis"
   },
   "announcements": {
     "latestRelease": "Ultima versione",

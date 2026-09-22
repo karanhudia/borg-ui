@@ -6321,7 +6321,7 @@
     },
     "currentPlan": "Plan actual",
     "fullAccessLabel": "Acceso completo",
-    "featureTrialLabel": "Prueba Pro",
+    "featureTrialLabel": "Vista previa de Pro",
     "planSuffix": "Plan",
     "activeStatus": "Activo",
     "descriptionCommunity": "Funciones principales de copia de seguridad incluidas",
@@ -6421,8 +6421,8 @@
     "trialFailed": "No se pudo iniciar la prueba. Inténtelo de nuevo más tarde.",
     "trialNeedsAdmin": "Pida a un administrador que inicie la prueba.",
     "trialUnavailable": "Ahora mismo no hay prueba gratuita disponible.",
-    "trialEnded": "Su prueba gratuita de Pro ha terminado.",
-    "tryFree": "Prueba Pro gratis"
+    "trialEnded": "Su vista previa de Pro ha terminado.",
+    "tryFree": "Pruébelo gratis"
   },
   "announcements": {
     "latestRelease": "Última versión",
