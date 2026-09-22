@@ -1086,6 +1086,7 @@
       "missed": "Lauf erwartet, kein Archiv und kein Lauf erfasst",
       "sizeOutlier": "Ungewöhnlich klein",
       "durationOutlier": "Ungewöhnlich langsam",
+      "unusualRun": "Ungewöhnliche Größe oder Dauer",
       "legendLess": "Weniger",
       "legendMore": "Mehr",
       "tooltip": "{{count}} am {{date}} · {{size}} · {{duration}}",

@@ -80,11 +80,6 @@ export interface HeatmapResponse {
   series: HeatmapSeries[]
   cadence_known: boolean
   retention_since: string | null
-  flags_available: {
-    missed_run: boolean
-    size_outlier: boolean
-    duration_outlier: boolean
-  }
 }
 
 // Mirrors GET /repositories/{id}/archives/growth (spec 4.3). Points are the

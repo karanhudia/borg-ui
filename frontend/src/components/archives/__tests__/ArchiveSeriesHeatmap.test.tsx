@@ -32,7 +32,6 @@ const data: HeatmapResponse = {
   series: [series('nightly', days)],
   cadence_known: true,
   retention_since: null,
-  flags_available: { missed_run: true, size_outlier: false, duration_outlier: false },
 }
 
 describe('ArchiveSeriesHeatmap', () => {

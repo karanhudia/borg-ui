@@ -63,6 +63,26 @@ that module defaults to open. `test_only_the_read_routes_are_open_on_
 community` pins the exact open set against the running app, so adding one
 without a decision fails rather than shipping.
 
+### 1.3 Outlier flags
+
+The heatmap's "unusually small" and "unusually slow" markers were Pro, and
+the legend said so with a chip beside each one. Two problems with that.
+
+`anomalies.series_flags` compares `original_size`, `nfiles` and
+`duration_seconds` between an archive and the seven before it. All three
+come from the `archives` table, not the history index, and the archive page
+already shows a Community reader every one of them with its delta against
+the predecessor. The flag is the app noticing what the reader can already
+see, and an archive that came out unusually small usually means a source was
+missing when it ran: a warning about their data, in the same class as the
+lost-file count. It is computed on every plan now, and `flags_available`
+is gone from the heatmap response, since nothing varies for it to report.
+
+Second, the two flags had a legend row each and the same swatch, because the
+calendar draws one outline for "this run stands out" and cannot tell them
+apart. One marker, one row: "Unusual size or duration". Which one it was is
+named on the day itself, where there is room for it.
+
 ### 1.1 What does not change
 
 - `archive_history` stays one feature key. No new keys, no per-surface plans.

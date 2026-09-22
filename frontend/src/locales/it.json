@@ -1086,6 +1086,7 @@
       "missed": "Esecuzione attesa, nessun archivio e nessuna esecuzione registrata",
       "sizeOutlier": "Insolitamente piccolo",
       "durationOutlier": "Insolitamente lento",
+      "unusualRun": "Dimensione o durata insolita",
       "legendLess": "Meno",
       "legendMore": "Più",
       "tooltip": "{{count}} il {{date}} · {{size}} · {{duration}}",

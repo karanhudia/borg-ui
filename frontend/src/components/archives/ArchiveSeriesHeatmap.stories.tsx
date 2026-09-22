@@ -38,7 +38,6 @@ const response = (
     series: [series('nightly', days)],
     cadence_known: true,
     retention_since: null,
-    flags_available: { missed_run: true, size_outlier: true, duration_outlier: true },
     ...overrides,
   }
 }

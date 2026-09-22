@@ -1086,6 +1086,7 @@
       "missed": "Expected run, no archive and no run on record",
       "sizeOutlier": "Unusually small",
       "durationOutlier": "Unusually slow",
+      "unusualRun": "Unusual size or duration",
       "legendLess": "Less",
       "legendMore": "More",
       "tooltip": "{{count}} on {{date}} · {{size}} · {{duration}}",

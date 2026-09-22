@@ -260,7 +260,18 @@ function Band({
                       date: iso,
                       size: formatBytes(day?.deduplicated_size ?? 0),
                       duration: formatDurationSeconds(day?.duration_seconds ?? 0),
-                    }))
+                    }) +
+                      // One legend row covers both outliers because the cell
+                      // draws one outline; the day says which it was.
+                      (hasAnomalies
+                        ? ` · ${(day?.anomalies ?? [])
+                            .map((flag) =>
+                              flag === 'size_outlier'
+                                ? t('archives.heatmap.sizeOutlier')
+                                : t('archives.heatmap.durationOutlier')
+                            )
+                            .join(', ')}`
+                        : ''))
                   : undefined
               }
               onClick={hasArchives ? (event) => activate(event.currentTarget) : undefined}
@@ -454,7 +465,7 @@ export default function ArchiveSeriesHeatmap({
         })}
       </Menu>
       <HeatmapLegend
-        flagsAvailable={showFlagLegend ? data.flags_available : undefined}
+        showFlags={showFlagLegend}
         missedTotal={missedTotal}
         cadenceKnown={data.cadence_known}
       />

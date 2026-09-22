@@ -250,11 +250,7 @@ class TestHeatmap:
             and days["2026-09-01"]["deduplicated_size"] == 100
         )
         assert {s["series"] for s in body["series"]} == {"nas", "old"}
-        assert body["flags_available"] == {
-            "missed_run": True,
-            "size_outlier": False,
-            "duration_outlier": False,
-        }
+        assert "flags_available" not in body
 
     def test_no_missed_days_without_a_cron(self, test_client, test_db, admin_headers):
         """Nothing schedules this repository, so an absent day is as likely a
@@ -348,19 +344,24 @@ class TestHeatmap:
         days = {d["date"]: d for d in r.json()["repository"]["days"]}
         assert days["2026-09-08"]["anomalies"] == []
 
-    def test_outlier_flags_only_for_pro(self, test_client, test_db, admin_headers):
+    def test_outlier_flags_are_computed_on_every_plan(
+        self, test_client, test_db, admin_headers
+    ):
+        """The flags compare original_size, nfiles and duration between
+        neighbouring archives, all of which the reader already sees, and an
+        archive that came out unusually small is a warning about their data
+        (spec 2026-09-21, section 1.3). No entitlement is active in this
+        database, so this is a Community install."""
         repo = _repo(test_db)
         for d in range(1, 8):
             _archive(test_db, repo, f"a{d}", d)
         _archive(test_db, repo, "a8", 8, size=10)
-        _pro(test_db)
         r = test_client.get(
             f"/api/repositories/{repo.id}/archives/heatmap?until=2026-09-09T00:00:00",
             headers=admin_headers,
         )
         days = {d["date"]: d for d in r.json()["repository"]["days"]}
         assert days["2026-09-08"]["anomalies"] == ["size_outlier"]
-        assert r.json()["flags_available"]["size_outlier"] is True
 
 
 @pytest.mark.unit

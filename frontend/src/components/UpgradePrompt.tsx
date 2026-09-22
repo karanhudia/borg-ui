@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react'
-import { Box, Typography, Chip, Button } from '@mui/material'
+import { Box, Typography, Chip, Button, Stack } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 import { Lock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -108,20 +108,29 @@ export default function UpgradePrompt({
             borderRadius: 1.5,
           }}
         >
-          <Lock size={16} color={color} />
-          <Typography variant="body2" sx={{ color: 'text.secondary', flex: 1 }}>
+          <Lock size={16} color={color} style={{ flexShrink: 0 }} />
+          {/* A basis wide enough that the text claims a row of its own in a
+              narrow container (the file details pane), instead of wrapping to
+              four lines beside the buttons. */}
+          <Typography variant="body2" sx={{ color: 'text.secondary', flex: '1 1 260px' }}>
             {message ?? t('upgradePrompt.defaultMessage', { plan: planLabel })}
             {trialNote != null && ` ${trialNote}`}
           </Typography>
-          {trialButton}
-          <Button
-            variant="text"
-            size="small"
-            onClick={() => setDrawerOpen(true)}
-            sx={{ textTransform: 'none' }}
+          <Stack
+            direction="row"
+            spacing={0.5}
+            sx={{ alignItems: 'center', flexWrap: 'wrap', ml: 'auto' }}
           >
-            {t('upgradePrompt.learnMore')}
-          </Button>
+            {trialButton}
+            <Button
+              variant="text"
+              size="small"
+              onClick={() => setDrawerOpen(true)}
+              sx={{ textTransform: 'none' }}
+            >
+              {t('upgradePrompt.learnMore')}
+            </Button>
+          </Stack>
         </Box>
         {drawer}
       </Fragment>

@@ -1,13 +1,11 @@
-import { Box, Chip, Stack, Typography, alpha, useTheme } from '@mui/material'
+import { Box, Stack, Typography, alpha, useTheme } from '@mui/material'
 import { useTranslation } from 'react-i18next'
-import { PLAN_LABEL, PLAN_COLOR } from '../../core/features'
-import type { HeatmapResponse } from '../../types/archives'
 
 interface HeatmapLegendProps {
-  // Undefined when this calendar has no flags to describe, which is not the
-  // same as a plan that lacks them: the rows are left out rather than
-  // offered as an upgrade.
-  flagsAvailable?: HeatmapResponse['flags_available']
+  // False when this calendar has no flags to describe: the prune preview
+  // colours its days by verdict, so the flag rows would name markers it
+  // never draws.
+  showFlags?: boolean
   missedTotal?: number
   // Without a schedule or plan cron the cadence is unknown, so no day is
   // judged and "0 missed days" would be a claim the data cannot make.
@@ -18,7 +16,7 @@ const SCALE_STEPS = [0.25, 0.425, 0.6, 0.775, 0.95]
 const SWATCH = 12
 
 export default function HeatmapLegend({
-  flagsAvailable,
+  showFlags = true,
   missedTotal,
   cadenceKnown = true,
 }: HeatmapLegendProps) {
@@ -31,36 +29,25 @@ export default function HeatmapLegend({
     />
   )
 
-  const rows: {
-    key: 'missed' | 'sizeOutlier' | 'durationOutlier'
-    available: boolean
-    sample: object
-  }[] =
-    flagsAvailable === undefined
-      ? []
-      : [
-          {
-            key: 'missed',
-            available: flagsAvailable.missed_run,
-            sample: { bgcolor: alpha(theme.palette.error.main, 0.16) },
+  // One outlined cell means one thing to the calendar: this run stands out
+  // from the seven before it. Size and duration had a legend row each and
+  // the same swatch, which promised a distinction the cells do not draw;
+  // the day's own label names which it was.
+  const rows: { key: 'missed' | 'unusualRun'; sample: object }[] = showFlags
+    ? [
+        {
+          key: 'missed',
+          sample: { bgcolor: alpha(theme.palette.error.main, 0.16) },
+        },
+        {
+          key: 'unusualRun',
+          sample: {
+            bgcolor: alpha(theme.palette.primary.main, 0.6),
+            boxShadow: `inset 0 0 0 2px ${theme.palette.warning.main}`,
           },
-          {
-            key: 'sizeOutlier',
-            available: flagsAvailable.size_outlier,
-            sample: {
-              bgcolor: alpha(theme.palette.primary.main, 0.6),
-              boxShadow: `inset 0 0 0 2px ${theme.palette.warning.main}`,
-            },
-          },
-          {
-            key: 'durationOutlier',
-            available: flagsAvailable.duration_outlier,
-            sample: {
-              bgcolor: alpha(theme.palette.primary.main, 0.6),
-              boxShadow: `inset 0 0 0 2px ${theme.palette.warning.main}`,
-            },
-          },
-        ]
+        },
+      ]
+    : []
 
   return (
     <Stack
@@ -86,12 +73,14 @@ export default function HeatmapLegend({
         useFlexGap
         sx={{ flexWrap: 'wrap', alignItems: 'center' }}
       >
-        {rows.map(({ key, available, sample }) => (
+        {rows.map(({ key, sample }) => (
           <Stack key={key} direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
             {swatch(sample)}
             <Typography variant="caption" color="text.secondary">
-              {key === 'missed' ? t('archives.heatmap.legendMissed') : t(`archives.heatmap.${key}`)}
-              {key === 'missed' && available
+              {key === 'missed'
+                ? t('archives.heatmap.legendMissed')
+                : t('archives.heatmap.unusualRun')}
+              {key === 'missed'
                 ? cadenceKnown
                   ? missedTotal != null
                     ? ` (${t('archives.heatmap.missedTotal', { count: missedTotal })})`
@@ -99,18 +88,6 @@ export default function HeatmapLegend({
                   : ` (${t('archives.heatmap.cadenceUnknown')})`
                 : ''}
             </Typography>
-            {!available && (
-              <Chip
-                size="small"
-                label={PLAN_LABEL.pro}
-                sx={{
-                  height: 18,
-                  fontSize: '0.65rem',
-                  backgroundColor: alpha(PLAN_COLOR.pro, 0.15),
-                  color: PLAN_COLOR.pro,
-                }}
-              />
-            )}
           </Stack>
         ))}
       </Stack>

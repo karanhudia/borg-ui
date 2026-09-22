@@ -245,7 +245,6 @@ async def archives_heatmap(
     repository = _repo(db, current_user, repo_id)
     until = _naive_utc(until) or utc_now().replace(tzinfo=None)
     since = _naive_utc(since)
-    pro = history_enabled(db)
     rows = (
         _archives_query(db, repository, None, since, until)
         .order_by(Archive.start.asc(), Archive.id.asc())
@@ -258,12 +257,14 @@ async def archives_heatmap(
     # Outliers stay scoped to the series even though the days are not: a
     # repository holding a 3 GB documents series and a 200 GB media series
     # would otherwise compare each archive with whatever ran before it.
+    # On every plan: the flags compare original_size, nfiles and duration
+    # between neighbouring archives, all of which the archive list already
+    # shows the reader. An archive that came out unusually small usually
+    # means a source was missing when it ran, which is a warning about
+    # their data rather than a convenience (spec 2026-09-21, section 1.3).
     flags: dict[int, list[str]] = {}
-    if pro:
-        for archives in by_series.values():
-            flags.update(anomalies.series_flags(archives))
-    else:
-        flags = {a.id: [] for a in rows}
+    for archives in by_series.values():
+        flags.update(anomalies.series_flags(archives))
 
     def band(name: Optional[str], archives: list[Archive]) -> dict:
         days: dict[str, dict] = {}
@@ -319,11 +320,6 @@ async def archives_heatmap(
         "series": [band(name, archives) for name, archives in by_series.items()],
         "cadence_known": bool(crons),
         "retention_since": retention_since.isoformat() if retention_since else None,
-        "flags_available": {
-            "missed_run": True,
-            "size_outlier": pro,
-            "duration_outlier": pro,
-        },
     }
 
 

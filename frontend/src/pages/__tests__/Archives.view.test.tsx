@@ -183,7 +183,6 @@ const heatmapResponse = {
     series: [],
     cadence_known: false,
     retention_since: null,
-    flags_available: { missed_run: false, size_outlier: false, duration_outlier: false },
   },
 }
 
