@@ -22,6 +22,7 @@ import { translateBackendKey } from '../../utils/translateBackendKey'
 import { CHANGE_GLYPH, changeColor } from './changeStyle'
 import ChangeRowLine from './ChangeRowLine'
 import UpgradePrompt from '../UpgradePrompt'
+import ArchiveChangesPreview from './ArchiveChangesPreview'
 import type { ArchiveDetailResponse, ChangeRow, ChangeType } from '../../types/archives'
 import type { IndexMode } from '../../types/operations'
 
@@ -32,6 +33,8 @@ interface ArchiveChangesTabProps {
   // predates the mode reads as the behaviour every install had.
   indexMode?: IndexMode
 }
+
+const inertPreviewProps = { inert: 'true' } as Record<string, string>
 
 const CHANGE_TYPES: Exclude<ChangeType, 'summary'>[] = ['added', 'removed', 'modified']
 const PAGE_SIZE = 200
@@ -179,6 +182,22 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
           message={t('archives.changes.locked')}
           feature="archive_history"
         />
+        {/* A sample of the rows Pro lists, dimmed and inert: the counts say how
+            much changed, this says what reading them looks like. Example paths,
+            never this archive's own. */}
+        <Box
+          aria-hidden="true"
+          {...inertPreviewProps}
+          sx={{
+            mt: 2,
+            opacity: 0.32,
+            filter: 'saturate(0.7)',
+            pointerEvents: 'none',
+            userSelect: 'none',
+          }}
+        >
+          <ArchiveChangesPreview />
+        </Box>
       </Box>
     )
   }
