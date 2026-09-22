@@ -72,6 +72,59 @@ class TestV2ArchiveRoutes:
             == "backend.errors.plan.featureNotAvailable"
         )
 
+    # Reading an existing Borg 2 archive is not the Pro feature: a Community
+    # install must still be able to browse it and get its files back. The
+    # routes that do that carry no gate; every other route in the module does,
+    # and a route added without a decision fails this test rather than
+    # shipping open (spec 2026-09-21, section 1.2).
+    OPEN_ON_EVERY_PLAN = {
+        ("GET", "/api/v2/archives/{archive_id}/contents"),
+        ("GET", "/api/v2/archives/download"),
+        ("GET", "/api/v2/archives/download-folder"),
+    }
+
+    def test_only_the_read_routes_are_open_on_community(self):
+        from app.api.v2 import archives as v2_archives
+        from app.main import app
+
+        # The module's own dependency object: `require_feature` builds a new
+        # closure per call, so identity against a fresh one never matches.
+        gate = v2_archives.BORG2.dependency
+        module_routes = [
+            route
+            for route in app.routes
+            if getattr(route, "endpoint", None) is not None
+            and route.endpoint.__module__ == v2_archives.__name__
+        ]
+        assert module_routes, "no v2 archive routes found"
+
+        open_routes = set()
+        for route in module_routes:
+            gated = any(
+                dependency.call is gate for dependency in route.dependant.dependencies
+            )
+            if not gated:
+                for method in route.methods - {"HEAD", "OPTIONS"}:
+                    open_routes.add((method, route.path))
+
+        assert open_routes == self.OPEN_ON_EVERY_PLAN
+
+    def test_community_can_browse_and_download_a_borg2_archive(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        """No entitlement is active in this database, so this is Community."""
+        repo = _create_v2_repo(test_db)
+        with patch(
+            "app.api.v2.archives.borg2.list_archive_contents",
+            new=AsyncMock(return_value={"success": True, "stdout": ""}),
+        ):
+            response = test_client.get(
+                f"/api/v2/archives/aid:abc/contents?repository={repo.id}",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200, response.text
+
     def test_list_archives_by_repository_id(
         self, test_client: TestClient, admin_headers, test_db
     ):

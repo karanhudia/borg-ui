@@ -34,6 +34,35 @@ Three of those four numbers are already computed by code that exists
 `matching_paths` in the search route). The work is in shaping responses and in
 replacing four locked states, not in new analysis.
 
+### 1.2 Reading a Borg 2 archive
+
+Found while testing the above, and fixed in the same branch: the whole
+`/api/v2` surface carried `dependencies=[require_feature("borg_v2")]`, so a
+Community install could not browse or download from an existing Borg 2
+repository. The archive browser answered "This feature is not available on
+your current plan" in place of the file tree, and the restore wizard had no
+tree to pick from.
+
+Borg 2 support stays the Pro feature. Getting your own files back does not:
+a backup tool that refuses to hand them over because a plan lapsed has
+stopped being a backup tool, and the people who hit it are exactly those
+whose trial ended. Three routes are now open on every plan:
+
+- `GET /{archive_id}/contents`
+- `GET /download`
+- `GET /download-folder`
+
+`list`, `info`, the archive delete and its job status keep the gate, as do
+`v2/backups.py` and `v2/repositories.py` in full, so creating Borg 2
+repositories and backing up to them is unchanged. `info` and `list` were
+considered and left gated: no screen calls `info`, and the archive list is
+read from the ungated index.
+
+The gate moved from the router to each route, which means a new route in
+that module defaults to open. `test_only_the_read_routes_are_open_on_
+community` pins the exact open set against the running app, so adding one
+without a decision fails rather than shipping.
+
 ### 1.1 What does not change
 
 - `archive_history` stays one feature key. No new keys, no per-surface plans.
