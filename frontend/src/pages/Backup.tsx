@@ -330,6 +330,19 @@ const Backup: React.FC = () => {
     }
   }, [legacyBackupRepositories, loadingRepositories, selectedRepository])
 
+  const legacyTabApplies = !loadingRepositories && legacyBackupRepositories.length > 0
+  // Not the same as `!legacyTabApplies`: while the repository list loads there
+  // is no tab yet either, and resetting then would throw away a deep link
+  // into it before its repositories have arrived.
+  const legacyTabGone = !loadingRepositories && legacyBackupRepositories.length === 0
+
+  // Deleting the last legacy repository while its tab is open would leave the
+  // page with a selected tab that no longer exists and a body that renders
+  // nothing.
+  useEffect(() => {
+    if (legacyTabGone) setActiveTab((current) => (current === 'legacy' ? 'plans' : current))
+  }, [legacyTabGone])
+
   useTrackedJobOutcomes<BackupJob>({
     jobs: recentJobs,
     onTerminal: (job) => {
@@ -434,7 +447,12 @@ const Backup: React.FC = () => {
         onChange={(_, value: BackupTab) => setActiveTab(value)}
       >
         <Tab value="plans" label={t('backup.tabs.backupPlans')} />
-        <Tab value="legacy" label={t('backup.tabs.legacyBackup')} />
+        {/* Nothing in this tab works without a legacy repository: the select
+            has nothing to offer, Start Backup stays disabled, and the job
+            history is scoped to a selected repository, so it is empty too.
+            An empty tab named "Backup automations" reads as a feature that
+            is broken rather than one that does not apply. */}
+        {legacyTabApplies && <Tab value="legacy" label={t('backup.tabs.legacyBackup')} />}
       </PageTabs>
 
       {activeTab === 'plans' && (

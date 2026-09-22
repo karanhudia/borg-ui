@@ -702,13 +702,31 @@ describe('Backup page', () => {
       })
     )
 
+    // Without backup permission no repository qualifies for a manual run, so
+    // the tab has nothing behind it and goes rather than standing there empty
+    // with a disabled button.
     canDoBackup = false
     unmount()
     renderBackup()
-    await openBackupAutomationsTab(user)
 
+    expect(await screen.findByRole('tab', { name: /backup plans/i })).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.queryByRole('tab', { name: /backup automations/i })).not.toBeInTheDocument()
+    )
     expect(screen.queryByRole('button', { name: /choose primary repo/i })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /start backup/i })).toBeDisabled()
+  })
+
+  it('drops the automations tab when no repository carries source paths', async () => {
+    repositoriesPayload = repositoriesPayload.map((repo) => ({
+      ...repo,
+      source_directories: [],
+    }))
+    renderBackup()
+
+    expect(await screen.findByRole('tab', { name: /backup plans/i })).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.queryByRole('tab', { name: /backup automations/i })).not.toBeInTheDocument()
+    )
   })
 
   it('shows the generated borg command preview for the selected repository', async () => {
