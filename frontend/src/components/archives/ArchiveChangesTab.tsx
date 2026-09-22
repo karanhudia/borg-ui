@@ -34,8 +34,6 @@ interface ArchiveChangesTabProps {
   indexMode?: IndexMode
 }
 
-const inertPreviewProps = { inert: 'true' } as Record<string, string>
-
 const CHANGE_TYPES: Exclude<ChangeType, 'summary'>[] = ['added', 'removed', 'modified']
 const PAGE_SIZE = 200
 
@@ -187,7 +185,7 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
             never this archive's own. */}
         <Box
           aria-hidden="true"
-          {...inertPreviewProps}
+          inert
           sx={{
             mt: 2,
             opacity: 0.32,

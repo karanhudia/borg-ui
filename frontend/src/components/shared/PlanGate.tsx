@@ -6,8 +6,6 @@ import { useFeatureAnalytics } from '../../hooks/useFeatureAnalytics'
 import { usePlan } from '../../hooks/usePlan'
 import UpgradePrompt from '../UpgradePrompt'
 
-const inertPreviewProps = { inert: 'true' } as Record<string, string>
-
 interface PlanGateProps {
   feature: Feature
   children: ReactNode
@@ -96,7 +94,7 @@ export default function PlanGate({
       <Box sx={{ position: 'relative', minHeight: 220 }}>
         <Box
           aria-hidden="true"
-          {...inertPreviewProps}
+          inert
           sx={{
             opacity: 0.32,
             filter: 'saturate(0.7)',
