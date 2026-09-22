@@ -450,7 +450,10 @@ describe('FileHistoryPanel', () => {
     } as never)
     renderPanel()
     expect(await screen.findByText(/14 versions/i)).toBeInTheDocument()
+    // The sample of what Pro lists is decoration: out of the accessibility
+    // tree, so its restore buttons are not offered to anyone.
     expect(screen.queryByRole('button', { name: /restore this/i })).not.toBeInTheDocument()
+    expect(screen.getByText('example-2026-09-02')).toBeInTheDocument()
     expect(screen.getByText(/Pro shows every version/i)).toBeInTheDocument()
   })
 })
