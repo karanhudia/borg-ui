@@ -52,17 +52,20 @@ export function PruneComparedPolicies({
 }: Props) {
   const { t } = useTranslation()
   const theme = useTheme()
-  const freedText = (row: { lost_size: number | null; freed_at_least: number }) =>
-    t('prunePreview.atLeast', { size: formatBytes(row.freed_at_least) }) +
-    (row.lost_size != null
-      ? `, ${t('prunePreview.upTo', { size: formatBytes(row.lost_size) })}`
-      : '')
+  // Disk freed and file data lost are different measures, so they get a
+  // column each: read as one string they looked like a range from the first
+  // to the second, which is four orders of magnitude on a deduplicated
+  // repository.
+  const freedText = (row: { freed_at_least: number }) =>
+    t('prunePreview.atLeast', { size: formatBytes(row.freed_at_least) })
+  const lostText = (row: { lost_size: number | null }) =>
+    row.lost_size != null ? formatBytes(row.lost_size) : '–'
   // the figures carry the page's tones: deletions red, space given back green
   const deletedSx = (n: number) => (n > 0 ? { color: 'error.main', fontWeight: 600 } : undefined)
-  const freedSx = (row: { lost_size: number | null; freed_at_least: number }) =>
-    (row.lost_size ?? row.freed_at_least) > 0
-      ? { color: 'success.main', fontWeight: 600 }
-      : undefined
+  const freedSx = (row: { freed_at_least: number }) =>
+    row.freed_at_least > 0 ? { color: 'success.main', fontWeight: 600 } : undefined
+  const lostSx = (row: { lost_size: number | null }) =>
+    (row.lost_size ?? 0) > 0 ? { color: 'warning.main', fontWeight: 600 } : undefined
   const rows = comparison?.candidates ?? []
   const label = (row: PruneComparisonRow) =>
     row.key === 'current'
@@ -113,6 +116,7 @@ export function PruneComparedPolicies({
                 <TableCell align="right">{t('prunePreview.compare.colKept')}</TableCell>
                 <TableCell align="right">{t('prunePreview.compare.colDeleted')}</TableCell>
                 <TableCell align="right">{t('prunePreview.compare.colFree')}</TableCell>
+                <TableCell align="right">{t('prunePreview.compare.colLost')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -143,6 +147,9 @@ export function PruneComparedPolicies({
                   <TableCell align="right" sx={freedSx(row)}>
                     {freedText(row)}
                   </TableCell>
+                  <TableCell align="right" sx={lostSx(row)}>
+                    {lostText(row)}
+                  </TableCell>
                 </TableRow>
               ))}
               {editing && (
@@ -163,6 +170,9 @@ export function PruneComparedPolicies({
                   </TableCell>
                   <TableCell align="right" sx={freedSx(editing)}>
                     {freedText(editing)}
+                  </TableCell>
+                  <TableCell align="right" sx={lostSx(editing)}>
+                    {lostText(editing)}
                   </TableCell>
                 </TableRow>
               )}

@@ -18,11 +18,10 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import ResponsiveDialog from '../shared/ResponsiveDialog'
 import SearchBox from '../shared/SearchBox'
-import PlanGate from '../shared/PlanGate'
+import UpgradePrompt from '../UpgradePrompt'
 import FileTypeIcon from '../FileTypeIcon'
 import FileHistoryPanel from './FileHistoryPanel'
 import { splitPath } from './pathParts'
-import { usePlan } from '../../hooks/usePlan'
 import { archivesAPI } from '../../services/api'
 import { parseBackendDate } from '../../utils/dateUtils'
 import type { SearchResult } from '../../types/archives'
@@ -117,7 +116,6 @@ export default function ArchiveSearchField({
   onRestorePath,
 }: ArchiveSearchFieldProps) {
   const { t } = useTranslation()
-  const { can } = usePlan()
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   // What the dialog's own field holds, and the debounced value behind it that
@@ -125,7 +123,6 @@ export default function ArchiveSearchField({
   const [refined, setRefined] = useState('')
   const [term, setTerm] = useState('')
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
-  const disabled = !can('archive_history')
 
   useEffect(() => {
     const id = setTimeout(() => setTerm(refined.trim()), DEBOUNCE_MS)
@@ -140,7 +137,7 @@ export default function ArchiveSearchField({
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
-    if (disabled || !query.trim()) return
+    if (!query.trim()) return
     setRefined(query.trim())
     setTerm(query.trim())
     setSelectedPath(null)
@@ -148,17 +145,19 @@ export default function ArchiveSearchField({
   }
 
   const results = data?.results ?? []
+  // Community runs the search and sees the first few hits with the count
+  // behind them; the whole list is Pro (spec 2026-09-21, section 1).
+  const locked = data?.detail_locked === true
   const isPresent = (result: SearchResult) =>
     result.last_seen_archive_id === newestArchiveIdBySeries[result.series]
 
   return (
-    <PlanGate feature="archive_history" disabled surface="archives" operation="search">
+    <>
       <Box component="form" role="search" onSubmit={handleSubmit}>
         <SearchBox
           value={query}
           onChange={setQuery}
           placeholder={t('archives.search.placeholder')}
-          disabled={disabled}
         />
       </Box>
       <ResponsiveDialog
@@ -219,7 +218,22 @@ export default function ArchiveSearchField({
                 overflowY: 'auto',
               })}
             >
-              {data?.truncated && (
+              {locked && results.length > 0 && (
+                <Box sx={{ px: 1.5, py: 1.5 }}>
+                  <UpgradePrompt
+                    compact
+                    requiredPlan="pro"
+                    feature="archive_history"
+                    message={t(
+                      data?.match_count_capped
+                        ? 'archives.search.lockedCapped'
+                        : 'archives.search.locked',
+                      { count: data?.match_count ?? results.length, shown: results.length }
+                    )}
+                  />
+                </Box>
+              )}
+              {!locked && data?.truncated && (
                 <Alert severity="info" square sx={{ borderRadius: 0 }}>
                   {t('archives.search.truncated', { count: results.length })}
                 </Alert>
@@ -284,6 +298,6 @@ export default function ArchiveSearchField({
           </Box>
         </DialogContent>
       </ResponsiveDialog>
-    </PlanGate>
+    </>
   )
 }

@@ -32,7 +32,6 @@ import {
 import { Scissors } from 'lucide-react'
 import { formatRelativeTime } from '../utils/dateUtils'
 import { operationsAPI, repositoriesAPI } from '../services/api'
-import PlanGate from '../components/shared/PlanGate'
 import ArchiveSeriesHeatmap from '../components/archives/ArchiveSeriesHeatmap'
 import PruneRetentionFields from '../components/prune/PruneRetentionFields'
 import { DEFAULT_RETENTION } from '../components/prune/defaultRetention'
@@ -574,7 +573,6 @@ export default function PrunePreview() {
                 deletedCount={deletedCount}
                 keptCount={keptCount}
                 freedAtLeast={preview.freed_at_least}
-                lostSize={lostSize}
                 footprintBefore={preview.footprint_before}
                 footprintAfterAtMost={preview.footprint_after_at_most}
               />
@@ -585,6 +583,9 @@ export default function PrunePreview() {
                 </Typography>
                 <ArchiveSeriesHeatmap
                   data={heatmapData}
+                  // These days are prune verdicts, not backup runs: the
+                  // outlier and missed-run rows describe nothing here.
+                  showFlagLegend={false}
                   onSelectDay={(day) => {
                     const id = day.archive_ids[0]
                     if (id != null) navigate(`/archives/${repositoryId}/${id}`)
@@ -637,14 +638,11 @@ export default function PrunePreview() {
                 />
               </Paper>
 
+              {/* No PlanGate: the count of files losing their last copy is a
+                  warning in front of an irreversible delete, so it shows on
+                  every plan. The panel locks its own file list. */}
               <Paper variant="outlined" sx={{ p: 2, mt: 3 }}>
-                <PlanGate
-                  feature="archive_history"
-                  surface="prune_preview"
-                  operation="view_lost_files"
-                >
-                  <PruneLostFilesPanel repositoryId={repositoryId} lost={preview.lost_files} />
-                </PlanGate>
+                <PruneLostFilesPanel repositoryId={repositoryId} lost={preview.lost_files} />
               </Paper>
 
               <Stack spacing={1} sx={{ mt: 3 }}>

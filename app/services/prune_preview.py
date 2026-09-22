@@ -568,10 +568,7 @@ def lost_size_estimate(
     `freed_at_least`, not in its place. None without the history index,
     and None while the index is incomplete: an unindexed archive on either
     side moves the total both ways, so it is no longer a ceiling."""
-    if (
-        not history_enabled(db)
-        or history_capability(db, repository) != HISTORY_AVAILABLE
-    ):
+    if history_capability(db, repository, history=True) != HISTORY_AVAILABLE:
         return None
     lost = lost_files(
         db,
@@ -683,9 +680,11 @@ def assemble_preview(
     pro = history_enabled(db)  # commits; before the archive rows load
     before = footprint(db, repository)
     deleted_ids = {p.id for p in joined if p.verdict == "deleted" and p.id is not None}
-    capability = history_capability(db, repository)
+    # The index is built on every plan, so the capability here is about the
+    # executor, not the reader.
+    capability = history_capability(db, repository, history=True)
     lost: dict = {"available": False, "capability": capability}
-    if pro and capability == HISTORY_AVAILABLE:
+    if capability == HISTORY_AVAILABLE:
         lost = {
             "available": True,
             "capability": capability,
@@ -696,6 +695,13 @@ def assemble_preview(
                 deleted_ids=deleted_ids,
             ),
         }
+        if not pro:
+            # How many files lose their last copy, and how much they weigh,
+            # is the warning that belongs in front of an irreversible
+            # delete. Which files they are is Pro (spec
+            # 2026-09-21-community-teasers-and-feature-trials, section 1).
+            lost = {k: v for k, v in lost.items() if k not in ("top", "by_folder")}
+            lost["detail_locked"] = True
     joined.sort(key=lambda p: (p.start is None, p.start or datetime.min, p.id or 0))
     return {
         "operation_id": operation_id,

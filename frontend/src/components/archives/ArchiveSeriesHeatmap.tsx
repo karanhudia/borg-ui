@@ -43,6 +43,12 @@ interface ArchiveSeriesHeatmapProps {
   // caller's controls on the right. Absent, the calendar starts at the
   // month axis, for a page that titles it itself.
   header?: { toolbar?: ReactNode }
+  // The outlier and missed-run rows of the legend. A caller whose cells
+  // carry no such flags (the prune preview, whose days are verdicts) passes
+  // false: `flags_available: false` there means the data has no flags at
+  // all, not that the plan lacks them, and the legend would otherwise offer
+  // an upgrade for something this calendar never shows, on every plan.
+  showFlagLegend?: boolean
 }
 
 interface Chooser {
@@ -254,7 +260,18 @@ function Band({
                       date: iso,
                       size: formatBytes(day?.deduplicated_size ?? 0),
                       duration: formatDurationSeconds(day?.duration_seconds ?? 0),
-                    }))
+                    }) +
+                      // One legend row covers both outliers because the cell
+                      // draws one outline; the day says which it was.
+                      (hasAnomalies
+                        ? ` · ${(day?.anomalies ?? [])
+                            .map((flag) =>
+                              flag === 'size_outlier'
+                                ? t('archives.heatmap.sizeOutlier')
+                                : t('archives.heatmap.durationOutlier')
+                            )
+                            .join(', ')}`
+                        : ''))
                   : undefined
               }
               onClick={hasArchives ? (event) => activate(event.currentTarget) : undefined}
@@ -337,6 +354,7 @@ export default function ArchiveSeriesHeatmap({
   cellColor,
   cellLabel,
   header,
+  showFlagLegend = true,
 }: ArchiveSeriesHeatmapProps) {
   const { t } = useTranslation()
   const [chooser, setChooser] = useState<Chooser | null>(null)
@@ -447,7 +465,7 @@ export default function ArchiveSeriesHeatmap({
         })}
       </Menu>
       <HeatmapLegend
-        flagsAvailable={data.flags_available}
+        showFlags={showFlagLegend}
         missedTotal={missedTotal}
         cadenceKnown={data.cadence_known}
       />

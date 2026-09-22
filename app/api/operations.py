@@ -616,8 +616,10 @@ async def get_repositories_hub(
                 last_history_at=facts["last_history_at"] if facts else None,
                 archives=facts["archives"] if facts else 0,
                 history=facts["summary"] if facts else HistorySummary(),
+                # Whether the stage can be built, which no longer depends on
+                # the plan (spec 2026-09-21, section 2).
                 history_capability=history_capability(
-                    db, repo, history=history_plan, agents=agents
+                    db, repo, history=True, agents=agents
                 ),
             )
         )

@@ -15,7 +15,7 @@ export interface ArchiveStatsHeaderProps {
   // on Community, or in a non-full index mode.
   totals?: { added: number; removed: number; modified: number }
   // Why the totals are absent, so the tile can say so instead of showing 0.
-  totalsState: 'ready' | 'loading' | 'plan_locked' | 'not_indexed' | 'unavailable'
+  totalsState: 'ready' | 'loading' | 'not_indexed' | 'unavailable'
 }
 
 const MINUS = '−'
@@ -103,8 +103,6 @@ export default function ArchiveStatsHeader({
           ~{totals.modified}
         </Box>
       </Box>
-    ) : totalsState === 'plan_locked' ? (
-      muted(t('archives.detail.stats.filesChangedLocked'))
     ) : totalsState === 'not_indexed' ? (
       muted(t('archives.detail.stats.filesChangedNotIndexed'))
     ) : totalsState === 'unavailable' ? (

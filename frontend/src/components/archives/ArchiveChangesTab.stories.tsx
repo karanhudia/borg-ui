@@ -2,7 +2,11 @@ import { useState, type ReactNode } from 'react'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { useQueryClient } from '@tanstack/react-query'
 import ArchiveChangesTab from './ArchiveChangesTab'
-import { communitySystemInfo, proSystemInfo } from '../../services/remoteBackends/planStoryFixtures'
+import {
+  communitySystemInfo,
+  proSystemInfo,
+  trialEndedSystemInfo,
+} from '../../services/remoteBackends/planStoryFixtures'
 import type { ArchiveDetailResponse, ChangeRow } from '../../types/archives'
 
 const archive: ArchiveDetailResponse = {
@@ -143,10 +147,43 @@ export const Pending: Story = {
   },
 }
 
+// Community: the totals are real, the rows behind them are Pro.
 export const Locked: Story = {
   parameters: {
     systemInfo: communitySystemInfo,
   },
+  render: (args) => (
+    <SeededChanges
+      response={changesResponse({
+        changes: [],
+        detail_locked: true,
+        next_cursor: null,
+        totals: { added: 128, removed: 4, modified: 512, summary: 0 },
+      })}
+    >
+      <ArchiveChangesTab {...args} />
+    </SeededChanges>
+  ),
+}
+
+// The same panel once the release-bundle trial has run out: no trial to
+// offer, so the purchase takes the row on its own.
+export const LockedTrialEnded: Story = {
+  parameters: {
+    systemInfo: trialEndedSystemInfo,
+  },
+  render: (args) => (
+    <SeededChanges
+      response={changesResponse({
+        changes: [],
+        detail_locked: true,
+        next_cursor: null,
+        totals: { added: 128, removed: 4, modified: 512, summary: 0 },
+      })}
+    >
+      <ArchiveChangesTab {...args} />
+    </SeededChanges>
+  ),
 }
 
 // An archive of a repository executed by a managed agent: the server cannot

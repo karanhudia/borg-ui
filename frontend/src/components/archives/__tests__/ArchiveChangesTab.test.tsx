@@ -302,9 +302,37 @@ describe('ArchiveChangesTab', () => {
     expect(screen.getByRole('button', { name: /rebuild/i })).toBeInTheDocument()
   })
 
-  it('shows the inert preview to a plan without the feature', () => {
+  it('shows the real totals and locks the rows on Community', async () => {
+    // Counts free, rows Pro (spec 2026-09-21, section 1).
     mockPlanCan.mockReturnValue(false)
+    vi.mocked(archivesAPI.getChanges).mockResolvedValue({
+      data: baseChangesResponse({
+        changes: [],
+        detail_locked: true,
+        totals: { added: 128, removed: 4, modified: 512, summary: 0 },
+      }),
+    } as never)
     renderTab()
+    expect(await screen.findByText('512')).toBeInTheDocument()
+    expect(screen.getByText('128')).toBeInTheDocument()
     expect(screen.queryByText('home/alex/docs/invoices.xlsx')).not.toBeInTheDocument()
+    expect(screen.getByText(/Pro lists the files behind these counts/i)).toBeInTheDocument()
+  })
+
+  it('reads the index state the same way once the rows are locked', async () => {
+    // "Not indexed yet" under a failed index would leave a Community reader
+    // waiting for something that will not arrive.
+    mockPlanCan.mockReturnValue(false)
+    vi.mocked(archivesAPI.getChanges).mockResolvedValue({
+      data: baseChangesResponse({
+        changes: [],
+        detail_locked: true,
+        history_state: 'failed',
+        history_capability: 'available',
+      }),
+    } as never)
+    renderTab()
+    expect(await screen.findByText(/could not be indexed/i)).toBeInTheDocument()
+    expect(screen.queryByText(/has not been indexed yet/i)).not.toBeInTheDocument()
   })
 })

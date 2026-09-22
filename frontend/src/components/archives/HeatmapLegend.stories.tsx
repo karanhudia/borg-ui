@@ -10,14 +10,10 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-export const Community: Story = {
-  args: {
-    flagsAvailable: { missed_run: true, size_outlier: false, duration_outlier: false },
-  },
-}
+export const Default: Story = { args: { missedTotal: 2 } }
 
-export const Pro: Story = {
-  args: {
-    flagsAvailable: { missed_run: true, size_outlier: true, duration_outlier: true },
-  },
-}
+export const CadenceUnknown: Story = { args: { cadenceKnown: false } }
+
+// A calendar whose days carry no flags at all (the prune preview): the rows
+// are left out rather than named for markers it never draws.
+export const NoFlags: Story = { args: { showFlags: false } }

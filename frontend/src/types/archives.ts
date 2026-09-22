@@ -80,11 +80,6 @@ export interface HeatmapResponse {
   series: HeatmapSeries[]
   cadence_known: boolean
   retention_since: string | null
-  flags_available: {
-    missed_run: boolean
-    size_outlier: boolean
-    duration_outlier: boolean
-  }
 }
 
 // Mirrors GET /repositories/{id}/archives/growth (spec 4.3). Points are the
@@ -150,6 +145,9 @@ export interface ChangesResponse {
   changes: ChangeRow[]
   totals: ChangeTotals
   next_cursor: string | null
+  /** Community reads the totals; the rows behind them are Pro, and arrive
+   *  empty with this set (spec 2026-09-21, section 1). */
+  detail_locked?: boolean
   incomplete: boolean
   unindexed_archive_ids: number[]
   history_state?: HistoryState
@@ -190,6 +188,12 @@ export interface HistoryCoverage {
 
 export interface PathHistoryResponse {
   path: string
+  /** How many versions of this path the index holds, and the window they
+   *  cover. Community reads these; `entries` and `present` are Pro. */
+  versions?: number
+  first_seen?: string | null
+  last_seen?: string | null
+  detail_locked?: boolean
   entries: HistoryEntry[]
   present: PresentRange[]
   present_in_latest: boolean
@@ -211,6 +215,11 @@ export interface SearchResponse {
   query: string
   results: SearchResult[]
   truncated: boolean
+  /** Community gets the count and the first few rows; Pro gets the list. */
+  detail_locked?: boolean
+  match_count?: number
+  /** The count stopped at its cap, so it reads as "500+". */
+  match_count_capped?: boolean
 }
 
 // Mirrors POST /repositories/{id}/prune/preview and the retention fields
@@ -255,6 +264,8 @@ export interface PruneLostFiles {
   total_size?: number
   top?: PruneLostFile[]
   by_folder?: { folder: string; count: number; size: number }[]
+  /** Community reads the count and the weight; which files they are is Pro. */
+  detail_locked?: boolean
   /** Paths that go, whose file (same name and size) a kept archive holds
    * under another path; not in the lost totals. */
   moved_count?: number

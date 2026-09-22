@@ -15,7 +15,6 @@ from app.services.operations.enqueue import enqueue_chain
 from app.services.operations.executors import registered_kinds
 from app.services.operations.followups import (
     PLAN_GATED_KINDS,
-    history_enabled,
     history_possible_for,
 )
 from app.services.operations.index_mode import (
@@ -59,14 +58,12 @@ def has_active_index_work(db: Session, repository_id: int) -> bool:
 
 
 def reconcile_kinds(
-    db: Session, *, history: Optional[bool] = None, mode: str = DEFAULT_INDEX_MODE
+    db: Session, *, history: bool = True, mode: str = DEFAULT_INDEX_MODE
 ) -> list:
     """The reconcile chain, minus kinds this install has no executor for,
-    kinds the plan does not include, and kinds the repository's index mode
-    does not refresh (spec 6.8)."""
+    kinds this repository cannot have built (`history`, the executor gate),
+    and kinds the repository's index mode does not refresh (spec 6.8)."""
     available = registered_kinds()
-    if history is None:
-        history = history_enabled(db)
     return filter_kinds(
         mode,
         [
@@ -81,7 +78,6 @@ def enqueue_reconcile_run(
     db: Session,
     repository_id: int,
     *,
-    history: Optional[bool] = None,
     manual: bool = False,
     force: bool = False,
     commit: bool = True,
@@ -109,11 +105,10 @@ def enqueue_reconcile_run(
     if manual and mode == "off":
         # The one-off look: archive_sync and stats, this once.
         mode = "archives"
-    # The plan gate is read once by the caller; the executor gate is per
-    # repository (an agent's repository gets a history stage only while its
-    # agent runs `repository.diff`).
+    # The executor gate is per repository (an agent's repository gets a
+    # history stage only while its agent runs `repository.diff`).
     kinds = reconcile_kinds(
-        db, history=history_possible_for(db, repository_id, history=history), mode=mode
+        db, history=history_possible_for(db, repository_id), mode=mode
     )
     if not kinds or (not force and has_active_index_work(db, repository_id)):
         return []
@@ -127,15 +122,13 @@ def enqueue_reconcile_run(
     )
 
 
-def enqueue_reconcile_runs(db: Session, *, history: Optional[bool] = None) -> int:
+def enqueue_reconcile_runs(db: Session) -> int:
     # No early return on an empty chain: the chain now differs per
     # repository (spec 6.8), so it is resolved inside the loop, and the
     # kinds are left out of the log for the same reason.
-    if history is None:
-        history = history_enabled(db)
     count = 0
     for repo in db.query(Repository).all():
-        if enqueue_reconcile_run(db, repo.id, history=history, commit=False):
+        if enqueue_reconcile_run(db, repo.id, commit=False):
             count += 1
     db.commit()
     logger.info("Reconcile runs enqueued", repositories=count)

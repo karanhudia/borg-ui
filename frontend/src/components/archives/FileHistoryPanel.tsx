@@ -1,14 +1,12 @@
 import { useMemo } from 'react'
-import { Box, Button, Typography, useTheme } from '@mui/material'
-import { RotateCcw } from 'lucide-react'
-import ChangeBadge from './ChangeBadge'
-import { changeColor } from './changeStyle'
+import { Box, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import PlanGate from '../shared/PlanGate'
-import { usePlan } from '../../hooks/usePlan'
+import UpgradePrompt from '../UpgradePrompt'
+import FileHistoryEntryLine from './FileHistoryEntryLine'
+import FileHistoryPreview from './FileHistoryPreview'
 import { archivesAPI } from '../../services/api'
-import { formatBytes, parseBackendDate } from '../../utils/dateUtils'
+import { formatDateShort } from '../../utils/dateUtils'
 import type { HistoryEntry } from '../../types/archives'
 
 interface FileHistoryPanelProps {
@@ -68,6 +66,9 @@ function FileHistoryPanelContent({ repositoryId, path, onRestoreEntry }: FileHis
   }, [data, seriesArchives])
 
   const entries = data?.entries ?? []
+  // Community reads how many versions of this file the index holds and the
+  // window they cover; the versions themselves are Pro.
+  const locked = data?.detail_locked === true
   // What the answer is based on. With nothing indexed the entries say
   // nothing about the path; with a partial index they cover the indexed
   // archives only, so "no earlier archive contains this path" is only true
@@ -103,8 +104,6 @@ function FileHistoryPanelContent({ repositoryId, path, onRestoreEntry }: FileHis
     .filter((e) => e.change === 'added')
     .sort((a, b) => (a.start < b.start ? -1 : 1))[0]?.archive_id
 
-  const theme = useTheme()
-
   // With nothing to show for the path on an agent's repository, the reason
   // comes first: no index at all, or one that stays partial (whatever was
   // indexed on the server before the move stays, nothing is added). Only a
@@ -129,6 +128,49 @@ function FileHistoryPanelContent({ repositoryId, path, onRestoreEntry }: FileHis
     )
   }
 
+  if (locked) {
+    const versions = data?.versions ?? 0
+    return (
+      <Box>
+        {versions === 0 ? (
+          <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
+            {t('archives.files.historyEmpty')}
+          </Typography>
+        ) : (
+          <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
+            {t('archives.files.historyLockedSummary', {
+              count: versions,
+              first: formatDateShort(data?.first_seen),
+              last: formatDateShort(data?.last_seen),
+            })}
+          </Typography>
+        )}
+        <UpgradePrompt
+          compact
+          requiredPlan="pro"
+          message={t('archives.files.historyLocked')}
+          feature="archive_history"
+        />
+        {/* A sample of the versions Pro lists, dimmed and inert: the line
+            above says what is true of this path, this says what reading it
+            looks like. Example archives, never this path's own. */}
+        <Box
+          inert
+          aria-hidden="true"
+          sx={{
+            mt: 2,
+            opacity: 0.32,
+            filter: 'saturate(0.7)',
+            pointerEvents: 'none',
+            userSelect: 'none',
+          }}
+        >
+          <FileHistoryPreview />
+        </Box>
+      </Box>
+    )
+  }
+
   return (
     <Box>
       {data && sortedEntries.length === 0 && (
@@ -147,61 +189,14 @@ function FileHistoryPanelContent({ repositoryId, path, onRestoreEntry }: FileHis
         </Typography>
       )}
       <Box>
-        {sortedEntries.map((entry) => {
-          const isFirst = entry.archive_id === firstAddedId
-          const change = isFirst ? 'added' : entry.change === 'summary' ? 'modified' : entry.change
-          const detail = isFirst
-            ? t('archives.files.firstSeen')
-            : entry.change === 'modified'
-              ? `${formatBytes(entry.size_before)} → ${formatBytes(entry.size_after)}`
-              : t(`archives.changes.${entry.change === 'summary' ? 'modified' : entry.change}`)
-          return (
-            <Box
-              key={entry.archive_id}
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: '20px minmax(0, 1fr) auto',
-                columnGap: 1.5,
-                alignItems: 'start',
-                py: 1.25,
-                borderTop: 1,
-                borderColor: 'divider',
-                '&:first-of-type': { borderTop: 0 },
-              }}
-            >
-              <Box sx={{ pt: 0.25 }}>
-                <ChangeBadge change={change} size={18} />
-              </Box>
-              <Box sx={{ minWidth: 0 }}>
-                <Typography
-                  variant="body2"
-                  noWrap
-                  title={entry.archive_name}
-                  sx={{ fontWeight: 600 }}
-                >
-                  {entry.archive_name}
-                </Typography>
-                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                  {parseBackendDate(entry.start).toLocaleString()}
-                  <Box
-                    component="span"
-                    sx={{ color: changeColor(theme, change), ml: 1, fontWeight: 600 }}
-                  >
-                    {detail}
-                  </Box>
-                </Typography>
-              </Box>
-              <Button
-                size="small"
-                startIcon={<RotateCcw size={13} />}
-                onClick={() => onRestoreEntry(entry)}
-                sx={{ mt: -0.5, flexShrink: 0 }}
-              >
-                {t('archives.files.restoreThis')}
-              </Button>
-            </Box>
-          )
-        })}
+        {sortedEntries.map((entry) => (
+          <FileHistoryEntryLine
+            key={entry.archive_id}
+            entry={entry}
+            isFirst={entry.archive_id === firstAddedId}
+            onRestore={onRestoreEntry}
+          />
+        ))}
       </Box>
       {olderArchivesIndexed && notPresentOlderCount > 0 && (
         <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1 }}>
@@ -213,14 +208,7 @@ function FileHistoryPanelContent({ repositoryId, path, onRestoreEntry }: FileHis
 }
 
 export default function FileHistoryPanel(props: FileHistoryPanelProps) {
-  const { can } = usePlan()
-  return (
-    <PlanGate feature="archive_history" disabled surface="archive_files" operation="view_history">
-      {can('archive_history') ? (
-        <FileHistoryPanelContent {...props} />
-      ) : (
-        <Box sx={{ minHeight: 60 }} />
-      )}
-    </PlanGate>
-  )
+  // No PlanGate: the content renders the version count for every plan and
+  // locks the versions themselves (spec 2026-09-21, section 1).
+  return <FileHistoryPanelContent {...props} />
 }

@@ -141,7 +141,6 @@ describe('archivesAPI stored-archive methods', () => {
       series: [],
       cadence_known: true,
       retention_since: null,
-      flags_available: { missed_run: true, size_outlier: true, duration_outlier: true },
     })
     await archivesApiClient.getHeatmap(7)
     expect(mock.history.get[0].url).toBe('/repositories/7/archives/heatmap')

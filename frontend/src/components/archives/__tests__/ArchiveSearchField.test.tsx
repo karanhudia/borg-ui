@@ -169,9 +169,24 @@ describe('ArchiveSearchField', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
-  it('disables the field on a plan without the history feature', () => {
+  it('runs the search on Community and says how many matched', async () => {
+    // The search runs on every plan; the rows past the first few are Pro
+    // (spec 2026-09-21, section 1).
     mockPlanCan.mockReturnValue(false)
+    vi.mocked(archivesAPI.search).mockResolvedValue({
+      data: {
+        query: 'invoices',
+        results: [searchResult()],
+        truncated: false,
+        detail_locked: true,
+        match_count: 47,
+        match_count_capped: false,
+      },
+    } as never)
     renderField()
-    expect(screen.getByRole('textbox')).toBeDisabled()
+    expect(screen.getByRole('textbox')).not.toBeDisabled()
+    submitSearch()
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(await screen.findByText(/47 files match/i)).toBeInTheDocument()
   })
 })

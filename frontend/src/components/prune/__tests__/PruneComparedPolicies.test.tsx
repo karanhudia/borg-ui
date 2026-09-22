@@ -63,7 +63,11 @@ describe('PruneComparedPolicies', () => {
     expect(screen.getByText('Compared policies')).toBeInTheDocument()
     expect(screen.getByText('7d 4w 6m 1y')).toBeInTheDocument()
     expect(screen.getByText('30d 4w 6m 1y')).toBeInTheDocument()
-    expect(screen.getByText(/at least 40.00 GB, up to 41.00 GB/)).toBeInTheDocument()
+    // Disk freed and file data lost are separate columns: read as one cell
+    // they looked like a range from the first figure to the second.
+    expect(screen.getByText(/at least 40.00 GB/)).toBeInTheDocument()
+    expect(screen.getByText('41.00 GB')).toBeInTheDocument()
+    expect(screen.getByText('File data lost')).toBeInTheDocument()
     expect(screen.getByText(/at least 0/)).toBeInTheDocument()
     fireEvent.click(screen.getByText('Standard'))
     expect(onSelect).toHaveBeenCalledWith(comparison.candidates[1])

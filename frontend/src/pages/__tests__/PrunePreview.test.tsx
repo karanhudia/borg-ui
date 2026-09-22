@@ -233,7 +233,7 @@ describe('PrunePreview page', () => {
     expect(freed).not.toMatch(/up to/)
   })
 
-  it('bounds the freed figure with the lost-file size when the index has it', async () => {
+  it('keeps the freed figure to disk space and the lost size to its own panel', async () => {
     vi.mocked(repositoriesAPI.prunePreview).mockResolvedValue({
       data: {
         ...preview,
@@ -251,10 +251,12 @@ describe('PrunePreview page', () => {
     renderWithProviders(<PrunePreview />, { initialRoute: '/repositories/7/prune-preview' })
     await screen.findByTestId('prune-preview-deleted')
     const freed = screen.getByTestId('prune-preview-freed').textContent
-    // storage floor from borg, file-data ceiling from the index: both shown,
-    // neither subtracted from the footprint, which is measured differently
+    // The tile is disk space: borg's floor, and nothing else. The lost file
+    // data is a different measure and reads as a range when put beside it,
+    // so it stays in the lost-files panel, which says what it is.
     expect(freed).toMatch(/at least 300\.00 B/)
-    expect(freed).toMatch(/up to 400\.00 B/)
+    expect(freed).not.toMatch(/400\.00 B/)
+    expect(await screen.findByText(/1 files, 400\.00 B/)).toBeInTheDocument()
     expect(screen.getByTestId('prune-preview-after').textContent).toMatch(/700\.00 B/)
     expect(screen.getByText(/lower bound/i)).toBeInTheDocument()
   })

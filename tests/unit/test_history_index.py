@@ -126,7 +126,6 @@ def _patches():
     with (
         patch.object(history, "_prepare_repository_borg_env", return_value=({}, None)),
         patch.object(history, "BorgRouter", FakeRouter),
-        patch.object(history, "history_enabled", return_value=True),
     ):
         FakeRouter.lists = {}
         FakeRouter.diffs = {}
@@ -378,16 +377,6 @@ async def test_agent_repository_skips_all_pending(db, repo):
     assert a1.history_state == "skipped"
     assert given_up.history_state == "skipped"
     assert done.history_state == "indexed"
-
-
-@pytest.mark.unit
-async def test_plan_locked_skips_without_touching_archives(db, repo):
-    a1 = _archive(db, repo, "first", 1)
-    with patch.object(history, "history_enabled", return_value=False):
-        out = await history.run_history_index(_ctx(db, repo))
-    assert out.status == "skipped" and out.skip_reason == "plan_locked"
-    db.refresh(a1)
-    assert a1.history_state == "pending"
 
 
 @pytest.mark.unit

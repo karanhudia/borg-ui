@@ -110,6 +110,8 @@ function SeededHistory({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+const lockedPath = 'home/alex/docs/taxes.pdf'
+
 const meta = {
   title: 'Components/Archives/FileHistoryPanel',
   component: FileHistoryPanel,
@@ -137,10 +139,31 @@ export const Unlocked: Story = {
   },
 }
 
+// Community: how many versions the index holds and the window they cover.
 export const Locked: Story = {
   parameters: {
     systemInfo: communitySystemInfo,
   },
+  decorators: [
+    (Story) => (
+      <SeededCoverage
+        storyPath={lockedPath}
+        response={{
+          path: lockedPath,
+          versions: 14,
+          first_seen: '2026-03-03T02:00:00Z',
+          last_seen: '2026-09-02T02:00:00Z',
+          detail_locked: true,
+          entries: [],
+          present: [],
+          present_in_latest: true,
+        }}
+      >
+        <Story />
+      </SeededCoverage>
+    ),
+  ],
+  args: { path: lockedPath },
 }
 
 // The panel says what its answer is based on. A repository executed by an

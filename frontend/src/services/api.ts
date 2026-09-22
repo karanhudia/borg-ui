@@ -689,6 +689,10 @@ export const licensingAPI = {
   activate: (licenseKey: string) =>
     api.post('/system/licensing/activate', { license_key: licenseKey }),
   deactivate: () => api.post('/system/licensing/deactivate'),
+  featureTrial: (feature: string) =>
+    api.post<{ result: string; reason?: string }>('/system/licensing/feature-trial', {
+      feature,
+    }),
   seats: () => api.get('/system/licensing/seats'),
   releaseSeat: (instanceId: string) =>
     api.post('/system/licensing/seats/release', { instance_id: instanceId }),

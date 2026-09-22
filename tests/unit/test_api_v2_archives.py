@@ -72,6 +72,58 @@ class TestV2ArchiveRoutes:
             == "backend.errors.plan.featureNotAvailable"
         )
 
+    # Reading an existing Borg 2 archive is not the Pro feature: a Community
+    # install must still be able to browse it and get its files back. The
+    # routes that do that carry no gate; every other route in the module does,
+    # and a route added without a decision fails this test rather than
+    # shipping open (spec 2026-09-21, section 1.2).
+    OPEN_ON_EVERY_PLAN = {
+        ("GET", "/{archive_id}/contents"),
+        ("GET", "/download"),
+        ("GET", "/download-folder"),
+    }
+
+    def test_only_the_read_routes_are_open_on_community(self):
+        """Read the module's own router, not the composed application.
+
+        The routes and their dependencies are declared here; going through
+        `app.main` only adds an import graph whose state differs between a
+        full run and one shard of it. That the application serves these
+        routes, gate and all, is what the two request tests around this one
+        already prove.
+        """
+        from app.api.v2 import archives as v2_archives
+
+        def gates_borg2(dependency) -> bool:
+            # `require_feature` builds a new closure per call, so the feature
+            # it closed over identifies the gate; the object does not.
+            closure = getattr(dependency.dependency, "__closure__", None) or ()
+            return any(cell.cell_contents == "borg_v2" for cell in closure)
+
+        open_routes = set()
+        for route in v2_archives.router.routes:
+            if not any(gates_borg2(d) for d in route.dependencies):
+                for method in route.methods - {"HEAD", "OPTIONS"}:
+                    open_routes.add((method, route.path))
+
+        assert open_routes == self.OPEN_ON_EVERY_PLAN
+
+    def test_community_can_browse_and_download_a_borg2_archive(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        """No entitlement is active in this database, so this is Community."""
+        repo = _create_v2_repo(test_db)
+        with patch(
+            "app.api.v2.archives.borg2.list_archive_contents",
+            new=AsyncMock(return_value={"success": True, "stdout": ""}),
+        ):
+            response = test_client.get(
+                f"/api/v2/archives/aid:abc/contents?repository={repo.id}",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200, response.text
+
     def test_list_archives_by_repository_id(
         self, test_client: TestClient, admin_headers, test_db
     ):

@@ -173,7 +173,12 @@ async def test_post_hook_failure_still_enqueues_the_index_chain(
         .order_by(Operation.id)
         .all()
     )
-    assert [c.kind for c in chain] == ["archive_sync", "history_merge", "stats"]
+    assert [c.kind for c in chain] == [
+        "archive_sync",
+        "history_merge",
+        "history_index",
+        "stats",
+    ]
     assert chain[0].depends_on_id is None
     assert chain[0].trigger == "followup"
 

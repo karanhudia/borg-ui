@@ -15,14 +15,13 @@ import { useTranslation } from 'react-i18next'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import RichSelect from '../shared/RichSelect'
 import SearchBox from '../shared/SearchBox'
-import PlanGate from '../shared/PlanGate'
 import IndexModeGate from './IndexModeGate'
-import { usePlan } from '../../hooks/usePlan'
 import { archivesAPI } from '../../services/api'
 import { getApiErrorDetail } from '../../utils/apiErrors'
 import { translateBackendKey } from '../../utils/translateBackendKey'
 import { CHANGE_GLYPH, changeColor } from './changeStyle'
 import ChangeRowLine from './ChangeRowLine'
+import UpgradePrompt from '../UpgradePrompt'
 import ArchiveChangesPreview from './ArchiveChangesPreview'
 import type { ArchiveDetailResponse, ChangeRow, ChangeType } from '../../types/archives'
 import type { IndexMode } from '../../types/operations'
@@ -131,6 +130,88 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
   // The frame mounts only once rows exist, so measure again when they do.
   const listHeight = useFillViewport(listRef, 240, [rows.length > 0])
   const totals = changes?.totals
+  // Community reads what changed and how much; which files changed is Pro.
+  // The counts are the archive's own numbers, so there is nothing to blur.
+  const locked = changes?.detail_locked === true
+  // The same reading of the index state in both branches: a locked view that
+  // told a Community reader "not indexed yet" while the index had failed sent
+  // them waiting for something that will not arrive.
+  const historyStateMessage =
+    capability === 'agent_unsupported'
+      ? // whatever the archive's own state says (a failure recorded
+        // before the move included): the failed wording promises a
+        // rebuild this repository cannot have
+        t('archives.changes.agentUnsupported')
+      : historyState === 'skipped'
+        ? t('archives.changes.skipped')
+        : historyState === 'failed'
+          ? t('archives.changes.failed')
+          : t('archives.changes.pending')
+  const historyStateSeverity = historyState === 'failed' && !historyUnavailable ? 'warning' : 'info'
+
+  if (locked) {
+    return (
+      <Box>
+        <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', gap: 1 }}>
+          {CHANGE_TYPES.map((type) => {
+            const color = changeColor(theme, type)
+            return (
+              <Box
+                key={type}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.75,
+                  px: 1.5,
+                  py: 0.75,
+                  borderRadius: 1.5,
+                  bgcolor: alpha(color, 0.1),
+                  color,
+                  fontWeight: 600,
+                  fontSize: '0.8125rem',
+                }}
+              >
+                <Box component="span" sx={{ fontFamily: 'ui-monospace, monospace' }}>
+                  {CHANGE_GLYPH[type]}
+                </Box>
+                {t(`archives.changes.${type}`)}
+                <Box component="span" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                  {totals?.[type] ?? 0}
+                </Box>
+              </Box>
+            )
+          })}
+        </Stack>
+        {!isLoading && historyState !== 'indexed' && (
+          <Alert severity={historyStateSeverity} sx={{ mb: 2 }}>
+            {historyStateMessage}
+          </Alert>
+        )}
+        <UpgradePrompt
+          compact
+          requiredPlan="pro"
+          message={t('archives.changes.locked')}
+          feature="archive_history"
+        />
+        {/* A sample of the rows Pro lists, dimmed and inert: the counts say how
+            much changed, this says what reading them looks like. Example paths,
+            never this archive's own. */}
+        <Box
+          aria-hidden="true"
+          inert
+          sx={{
+            mt: 2,
+            opacity: 0.32,
+            filter: 'saturate(0.7)',
+            pointerEvents: 'none',
+            userSelect: 'none',
+          }}
+        >
+          <ArchiveChangesPreview />
+        </Box>
+      </Box>
+    )
+  }
 
   return (
     <Box>
@@ -231,7 +312,7 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
 
       {!isLoading && historyState !== 'indexed' && (
         <Alert
-          severity={historyState === 'failed' && !historyUnavailable ? 'warning' : 'info'}
+          severity={historyStateSeverity}
           action={
             canRebuild ? (
               <Button
@@ -244,16 +325,7 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
             ) : undefined
           }
         >
-          {capability === 'agent_unsupported'
-            ? // whatever the archive's own state says (a failure recorded
-              // before the move included): the failed wording promises a
-              // rebuild this repository cannot have
-              t('archives.changes.agentUnsupported')
-            : historyState === 'skipped'
-              ? t('archives.changes.skipped')
-              : historyState === 'failed'
-                ? t('archives.changes.failed')
-                : t('archives.changes.pending')}
+          {historyStateMessage}
         </Alert>
       )}
 
@@ -319,21 +391,12 @@ export default function ArchiveChangesTab({
   indexMode = 'full',
   ...props
 }: ArchiveChangesTabProps) {
-  const { can } = usePlan()
+  // No PlanGate: the index is built on every plan, so the totals are real on
+  // every plan and the content locks its own file list (spec 2026-09-21,
+  // section 1). The mode is the only gate left here.
   return (
-    // Plan first, then mode, never both (spec 6.8): PlanGate answers for a
-    // Community install, and the mode panel only renders behind it.
-    <PlanGate
-      feature="archive_history"
-      preview={<ArchiveChangesPreview />}
-      surface="archive_detail"
-      operation="view_changes"
-    >
-      {can('archive_history') ? (
-        <IndexModeGate mode={indexMode}>
-          <ArchiveChangesTabContent {...props} />
-        </IndexModeGate>
-      ) : null}
-    </PlanGate>
+    <IndexModeGate mode={indexMode}>
+      <ArchiveChangesTabContent {...props} />
+    </IndexModeGate>
   )
 }

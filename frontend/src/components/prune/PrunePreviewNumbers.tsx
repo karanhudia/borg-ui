@@ -7,12 +7,11 @@ import TintedTile from '../shared/TintedTile'
 export interface PrunePreviewNumbersProps {
   deletedCount: number
   keptCount: number
-  /** Borg's per-archive unique sum: the floor of the storage freed. */
+  /** Borg's per-archive unique sum: the floor of the storage freed.
+   *  The logical size of the files that go is deliberately not here: it is
+   *  file data, not disk space, and pairing the two read as a range from
+   *  one to the other. It has its own panel, which says what it means. */
   freedAtLeast: number
-  /** Logical size of the files no kept archive holds, when the history index
-   * has it: the ceiling, since those bytes are stored compressed and
-   * deduplicated. Not comparable with the footprint, so it only annotates. */
-  lostSize?: number | null
   footprintBefore: number | null
   footprintAfterAtMost: number | null
 }
@@ -23,7 +22,6 @@ export default function PrunePreviewNumbers({
   deletedCount,
   keptCount,
   freedAtLeast,
-  lostSize,
   footprintBefore,
   footprintAfterAtMost,
 }: PrunePreviewNumbersProps) {
@@ -97,11 +95,7 @@ export default function PrunePreviewNumbers({
           testId="prune-preview-freed"
           label={t('prunePreview.freed')}
           value={t('prunePreview.atLeast', { size: formatBytes(freedAtLeast) })}
-          sub={
-            lostSize != null
-              ? t('prunePreview.upTo', { size: formatBytes(lostSize) })
-              : t('prunePreview.freedSub')
-          }
+          sub={t('prunePreview.freedSub')}
           tone="success"
           icon={Shrink}
         />

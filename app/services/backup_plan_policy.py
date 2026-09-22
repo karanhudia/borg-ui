@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.features import FEATURES, Plan, get_current_plan, plan_includes
+from app.core.features import FEATURES, Plan, get_current_plan, has_feature
 from app.utils.source_locations import decode_source_locations
 
 if TYPE_CHECKING:
@@ -85,7 +85,7 @@ def evaluate_backup_plan_feature_access(
             reason = source_reason
 
     required = FEATURES[feature]
-    allowed = reason is None or plan_includes(current_plan, required)
+    allowed = reason is None or has_feature(db, feature)
     return BackupPlanFeatureDecision(
         allowed=allowed,
         current=current_plan,

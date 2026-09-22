@@ -52,7 +52,14 @@ from app.utils.borg_env import effective_repository_remote_path, repository_borg
 from app.utils.datetime_utils import serialize_borg_archive_time, serialize_datetime
 
 logger = structlog.get_logger()
-router = APIRouter(tags=["Archives v2"], dependencies=[require_feature("borg_v2")])
+# Borg 2 support is the Pro feature, but reading an existing Borg 2 archive is
+# not: a backup tool that refuses to hand back your own files because a plan
+# lapsed is not a backup tool. `contents`, `download` and `download-folder`
+# are open on every plan; everything else here carries BORG2 (spec
+# 2026-09-21-community-teasers-and-feature-trials, section 1.2).
+router = APIRouter(tags=["Archives v2"])
+
+BORG2 = require_feature("borg_v2")
 
 
 _UNSUPPORTED_VERSION = re.compile(
@@ -281,7 +288,7 @@ def _get_browse_raw_cache_key(archive_ref: str) -> str:
 # ── List archives ──────────────────────────────────────────────────────────────
 
 
-@router.get("/list")
+@router.get("/list", dependencies=[BORG2])
 async def list_archives(
     repository: str,
     current_user: User = Depends(get_current_user),
@@ -320,7 +327,7 @@ async def list_archives(
 # ── Archive info ───────────────────────────────────────────────────────────────
 
 
-@router.get("/{archive_id}/info")
+@router.get("/{archive_id}/info", dependencies=[BORG2])
 async def get_archive_info(
     repository: str,
     archive_id: str,
@@ -587,7 +594,7 @@ async def get_archive_contents(
 # ── Delete archive ─────────────────────────────────────────────────────────────
 
 
-@router.delete("/{archive_id}")
+@router.delete("/{archive_id}", dependencies=[BORG2])
 async def delete_archive(
     repository: str,
     archive_id: str,
@@ -780,7 +787,7 @@ async def _tar_download_response(stream, directory_path: str) -> StreamingRespon
 # ── Delete job status ──────────────────────────────────────────────────────────
 
 
-@router.get("/delete-jobs/{job_id}")
+@router.get("/delete-jobs/{job_id}", dependencies=[BORG2])
 async def get_delete_job_status(
     job_id: int,
     current_user: User = Depends(get_current_user),

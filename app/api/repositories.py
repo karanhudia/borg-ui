@@ -69,7 +69,7 @@ from app.core.borg2 import (
 from app.core.features import (
     FEATURES,
     get_current_plan,
-    plan_includes,
+    has_feature,
     require_feature_access,
 )
 from app.config import settings
@@ -2339,7 +2339,7 @@ def _agent_machine_summary(
 def _require_borg2_feature(db: Session) -> None:
     current_plan = get_current_plan(db)
     required = FEATURES["borg_v2"]
-    if not plan_includes(current_plan, required):
+    if not has_feature(db, "borg_v2"):
         raise HTTPException(
             status_code=403,
             detail={

@@ -372,8 +372,10 @@ async def test_run_archive_sync_marks_agent_archives_skipped(
     # a `skipped` row is left over from an agent that could not produce the
     # listing: reopened with a fresh budget where the history stage exists
     # now (a server's repository, or an agent updated since), left alone
-    # everywhere else; this is how an updated agent's backfill starts
-    reopened = (not agent or capable) and plan_has_history
+    # everywhere else; this is how an updated agent's backfill starts.
+    # The plan is not part of it: the index is built on every plan (spec
+    # 2026-09-21, section 2).
+    reopened = not agent or capable
     assert states.pop("leftover") == ("pending" if reopened else "skipped")
     assert db.query(Archive).filter_by(name="leftover").one().history_attempts == (
         0 if reopened else 3

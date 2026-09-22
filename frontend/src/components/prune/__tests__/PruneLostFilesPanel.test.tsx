@@ -47,6 +47,28 @@ describe('PruneLostFilesPanel', () => {
     expect(screen.getByText('docs/y')).toBeInTheDocument()
   })
 
+  it('keeps the count and locks the file list on Community', () => {
+    // The count is the warning in front of an irreversible delete, so it
+    // shows on every plan (spec 2026-09-21, section 1).
+    renderWithProviders(
+      <PruneLostFilesPanel
+        repositoryId={7}
+        lost={{
+          available: true,
+          capability: 'available',
+          incomplete: false,
+          unindexed_archive_ids: [],
+          total_count: 812,
+          total_size: 4_200_000_000,
+          detail_locked: true,
+        }}
+      />
+    )
+    expect(screen.getByText(/812 files/)).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: /filter by path/i })).not.toBeInTheDocument()
+    expect(screen.getByText(/Pro lists these files/i)).toBeInTheDocument()
+  })
+
   it('says why when the history index is unavailable', () => {
     renderWithProviders(
       <PruneLostFilesPanel
@@ -55,6 +77,9 @@ describe('PruneLostFilesPanel', () => {
       />
     )
     expect(screen.getByText(/agent/i)).toBeInTheDocument()
+    // The index is what is missing, not the plan: a Pro chip here would
+    // offer an upgrade that changes nothing.
+    expect(screen.queryByText('Pro')).not.toBeInTheDocument()
   })
 
   it('warns when the index is incomplete', () => {

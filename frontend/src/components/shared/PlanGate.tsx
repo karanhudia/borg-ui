@@ -6,8 +6,6 @@ import { useFeatureAnalytics } from '../../hooks/useFeatureAnalytics'
 import { usePlan } from '../../hooks/usePlan'
 import UpgradePrompt from '../UpgradePrompt'
 
-const inertPreviewProps = { inert: 'true' } as Record<string, string>
-
 interface PlanGateProps {
   feature: Feature
   children: ReactNode
@@ -96,7 +94,7 @@ export default function PlanGate({
       <Box sx={{ position: 'relative', minHeight: 220 }}>
         <Box
           aria-hidden="true"
-          {...inertPreviewProps}
+          inert
           sx={{
             opacity: 0.32,
             filter: 'saturate(0.7)',
@@ -124,5 +122,10 @@ export default function PlanGate({
       </Box>
     )
   }
+  // No `feature`, so no trial offer here. The long standing Pro locks were
+  // already part of the full access trial every install gets; offering them
+  // again as a second free ride would read as a second helping of the same
+  // thing. The trial belongs to the teasers this release added, which hand it
+  // to the prompt themselves (spec 2026-09-21, section 3.1).
   return <UpgradePrompt requiredPlan={FEATURES[feature]} message={message} />
 }

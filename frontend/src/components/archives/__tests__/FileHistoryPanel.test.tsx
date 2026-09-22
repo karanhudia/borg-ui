@@ -433,9 +433,27 @@ describe('FileHistoryPanel', () => {
     expect(screen.getByText(/0 of 4 archives indexed/i)).toBeInTheDocument()
   })
 
-  it('renders disabled when the plan lacks the feature', () => {
+  it('counts the versions on Community and locks the list', async () => {
     mockPlanCan.mockReturnValue(false)
+    vi.mocked(archivesAPI.getPathHistory).mockResolvedValue({
+      data: {
+        path: 'home/alex/docs/invoices.xlsx',
+        versions: 14,
+        first_seen: '2026-03-03T02:00:00Z',
+        last_seen: '2026-09-02T02:00:00Z',
+        detail_locked: true,
+        entries: [],
+        present: [],
+        present_in_latest: true,
+        coverage: { indexed: 4, exhausted: 0, total: 4, capability: 'available' },
+      },
+    } as never)
     renderPanel()
+    expect(await screen.findByText(/14 versions/i)).toBeInTheDocument()
+    // The sample of what Pro lists is decoration: out of the accessibility
+    // tree, so its restore buttons are not offered to anyone.
     expect(screen.queryByRole('button', { name: /restore this/i })).not.toBeInTheDocument()
+    expect(screen.getByText('example-2026-09-02')).toBeInTheDocument()
+    expect(screen.getByText(/Pro shows every version/i)).toBeInTheDocument()
   })
 })

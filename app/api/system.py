@@ -14,6 +14,7 @@ from app.config import get_runtime_app_version
 from app.database.database import get_db
 from app.services.licensing_service import (
     activate_paid_license,
+    request_feature_trial,
     deactivate_paid_license,
     get_entitlement_summary,
     get_feature_access,
@@ -32,6 +33,10 @@ borg = BorgInterface()
 
 class LicenseActivationRequest(BaseModel):
     license_key: str = Field(min_length=1)
+
+
+class FeatureTrialRequest(BaseModel):
+    feature: str = Field(min_length=1)
 
 
 class SeatReleaseRequest(BaseModel):
@@ -148,6 +153,25 @@ async def activate_system_license(
     except Exception as e:
         logger.warning("Failed to activate paid license", error=str(e))
         raise _licensing_http_error("license_activation_failed", str(e))
+
+
+@router.post("/licensing/feature-trial")
+async def start_feature_trial(
+    request: FeatureTrialRequest,
+    db: Session = Depends(get_db),
+    _: object = Depends(get_current_admin_user),
+):
+    """Ask the activation service for a trial of one feature. A refusal is a
+    result, not an error: the caller shows it where the offer was."""
+    try:
+        return await request_feature_trial(
+            db,
+            feature=request.feature,
+            app_version=get_runtime_app_version(),
+        )
+    except Exception as e:
+        logger.warning("Failed to start feature trial", error=str(e))
+        raise _licensing_http_error("feature_trial_failed", str(e))
 
 
 @router.post("/licensing/deactivate")
