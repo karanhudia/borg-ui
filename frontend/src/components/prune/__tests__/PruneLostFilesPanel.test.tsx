@@ -77,6 +77,9 @@ describe('PruneLostFilesPanel', () => {
       />
     )
     expect(screen.getByText(/agent/i)).toBeInTheDocument()
+    // The index is what is missing, not the plan: a Pro chip here would
+    // offer an upgrade that changes nothing.
+    expect(screen.queryByText('Pro')).not.toBeInTheDocument()
   })
 
   it('warns when the index is incomplete', () => {

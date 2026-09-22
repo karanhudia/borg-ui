@@ -82,7 +82,9 @@ export default function PruneLostFilesPanel({ repositoryId, lost }: PruneLostFil
         : t('prunePreview.lostUnavailable')
     return (
       <Box>
-        <Header tone="primary" />
+        {/* No plan chip: what is missing here is the index, and neither
+            reason below is one an upgrade fixes. */}
+        <Header tone="primary" showPlanChip={false} />
         <Typography variant="body2" color="text.secondary">
           {reason}
         </Typography>
