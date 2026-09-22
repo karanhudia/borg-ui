@@ -19,6 +19,8 @@ const borg1: RepositoryStorage = {
   latest_archive_files: 566_220,
   first_backup_at: '2026-03-12T02:00:14.000Z',
   last_backup_at: '2026-09-09T02:00:11.000Z',
+  original_size_source: 'archives',
+  original_size_at: null,
   compact: null,
   compact_at: null,
 }
@@ -36,6 +38,8 @@ const borg2: RepositoryStorage = {
   latest_archive_files: 3157,
   first_backup_at: '2026-08-19T18:03:15.000Z',
   last_backup_at: '2026-09-14T05:46:44.000Z',
+  original_size_source: 'archives',
+  original_size_at: null,
   compact: null,
   compact_at: null,
 }
@@ -53,6 +57,8 @@ const unknown: RepositoryStorage = {
   latest_archive_files: null,
   first_backup_at: null,
   last_backup_at: null,
+  original_size_source: null,
+  original_size_at: null,
   compact: null,
   compact_at: null,
 }
@@ -134,6 +140,56 @@ describe('RepositoryStats', () => {
       expect(stat('usedOnDisk')).toHaveTextContent('2.35 GB')
       expect(stat('spaceSaved')).toHaveTextContent('4.54×')
       expect(screen.queryByText(/not reported/i)).not.toBeInTheDocument()
+    })
+
+    it('names where the source data size came from', () => {
+      const hint = (storage: RepositoryStorage) =>
+        repositoryStatItems(t, { storage, variant: 'detail' })[0].hint
+      const fromBorg1 = { ...borg1, original_size_source: 'borg1_cache_stats' }
+      const fromCompact = { ...borg2, original_size_source: 'compact_stats' }
+      expect(hint(fromBorg1)).toMatch(/cache statistics/i)
+      expect(hint(fromCompact)).toMatch(/last compact/i)
+      expect(hint(borg1)).toMatch(/newest listing/i)
+      // a payload from before the distinction: its figure was the sum
+      expect(hint({ ...borg1, original_size_source: null })).toMatch(/newest listing/i)
+      // an unknown label says nothing rather than the wrong thing
+      expect(hint({ ...borg1, original_size_source: 'something_new' })).toBeUndefined()
+      // three distinct texts, so the tile never claims the wrong provenance
+      expect(new Set([hint(fromBorg1), hint(fromCompact), hint(borg1)]).size).toBe(3)
+    })
+
+    it('withholds the ratio when its two sides are different measurements', () => {
+      // the source data size is the one the last compact reported, the
+      // space used on disk was measured since: dividing them describes no
+      // moment the repository was ever in
+      const mixed = {
+        ...borg2,
+        original_size_source: 'compact_stats',
+        original_size_at: '2026-09-11T04:48:36.000Z',
+        size_source: 'borg2_index' as const,
+      }
+      const [, , mixedSaved] = repositoryStatItems(t, { storage: mixed, variant: 'grid' }).slice(1)
+      expect(mixedSaved.state).not.toBe('value')
+      expect(mixedSaved.hint).toMatch(/different|measured/i)
+
+      // neither the two labels nor the order of the two stamps proves one
+      // measurement: a compact can write the size without reporting a
+      // source data size, and a Borg 1 stats run can report the source
+      // data size while the size it measured was unavailable
+      for (const variantOfMixed of [
+        { ...mixed, size_source: 'compact_stats' as const },
+        { ...mixed, measured_at: '2026-09-01T00:00:00.000Z' },
+      ]) {
+        const [, , saved] = repositoryStatItems(t, {
+          storage: variantOfMixed,
+          variant: 'grid',
+        }).slice(1)
+        expect(saved.state).not.toBe('value')
+      }
+
+      // the archive rows against the measured size: unchanged behaviour
+      const [, , rowsSaved] = repositoryStatItems(t, { storage: borg2, variant: 'grid' }).slice(1)
+      expect(rowsSaved.state).toBe('value')
     })
 
     it('shows a single date when the span is one archive', () => {
@@ -285,6 +341,24 @@ describe('RepositoryStats', () => {
       expect(statsUpdatedAt(storage, '2026-09-18T12:30:36.750342')).toBe('2026-09-18T12:30:36.750Z')
       expect(statsUpdatedAt(storage, null)).toBe('2026-09-18T12:32:24.000Z')
       expect(statsUpdatedAt({ ...borg1, measured_at: null }, null)).toBeNull()
+    })
+
+    it('counts the run a shown figure came from, which can be older', () => {
+      const fromBorg = {
+        ...borg2,
+        measured_at: '2026-09-18T12:32:24',
+        original_size_source: 'compact_stats',
+        original_size_at: '2026-09-11T04:48:36',
+      }
+      expect(statsUpdatedAt(fromBorg, '2026-09-18T12:30:36')).toBe('2026-09-11T04:48:36.000Z')
+      // a figure the archive rows answer for carries no stamp: it is as
+      // new as the listing
+      expect(
+        statsUpdatedAt(
+          { ...fromBorg, original_size_source: 'archives', original_size_at: null },
+          '2026-09-18T12:30:36'
+        )
+      ).toBe('2026-09-18T12:30:36.000Z')
     })
   })
 

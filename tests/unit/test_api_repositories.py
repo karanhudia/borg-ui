@@ -1599,7 +1599,7 @@ class TestRepositoriesCreate:
                 result = await _update_agent_repository_stats(
                     repo, test_db, raise_busy=raise_busy
                 )
-                assert result is expect_result
+                assert bool(result) is expect_result
 
         test_db.refresh(repo)
         # a refused list writes nothing; after it the listing is written and
@@ -1690,7 +1690,7 @@ class TestRepositoriesCreate:
 
         # the list timing out ends the refresh; a later job timing out only
         # costs what it would have added
-        assert ok is (timed_out_job != "repository.list_archives")
+        assert bool(ok) is (timed_out_job != "repository.list_archives")
         assert cancel.await_count == 0
         if claimed:
             # the agent is running it: left alone, the reaper's if the agent
@@ -1757,7 +1757,7 @@ class TestRepositoriesCreate:
                 await _update_agent_repository_stats(repo, test_db, raise_busy=True)
             assert repository_busy(raised.value)
             assert raised.value.detail["params"]["active_job_id"] == earlier.id
-            assert await _update_agent_repository_stats(repo, test_db) is False
+            assert not await _update_agent_repository_stats(repo, test_db)
 
         test_db.refresh(repo)
         assert repo.archive_count == 5
@@ -1809,7 +1809,7 @@ class TestRepositoriesCreate:
         ):
             ok = await _update_agent_repository_stats(repo, test_db)
 
-        assert ok is True
+        assert bool(ok) is True
         test_db.refresh(repo)
         assert repo.archive_count == 5  # preserved, not overwritten with 0
 
@@ -1865,7 +1865,7 @@ class TestRepositoriesCreate:
         ):
             ok = await _update_agent_repository_stats(repo, test_db)
 
-        assert ok is True
+        assert bool(ok) is True
         test_db.refresh(repo)
         # 12:45 CEST (UTC+2 on this date) stored as naive UTC.
         assert repo.last_backup == datetime(2026, 9, 2, 10, 45, 14)

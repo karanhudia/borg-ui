@@ -7,6 +7,7 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
+from app.api.repositories import AgentStatsRefresh
 from app.database.models import Archive, Base, Operation, Repository, SystemSettings
 from app.services.operations.executors import index as index_exec
 from app.services.operations.runner import Outcome
@@ -519,13 +520,15 @@ async def test_run_stats_agent_repository_leaves_size_alone_when_unmeasurable(
 
     async def fake_update(repository, session, **kwargs):
         assert kwargs == {"raise_busy": True}
-        return True
+        return AgentStatsRefresh(True)
 
     monkeypatch.setattr(
         "app.api.repositories._update_agent_repository_stats", fake_update
     )
     with patch.object(index_exec, "_publish_mqtt_state"):
         outcome = await index_exec.run_stats(_ctx(db, repo, kind="stats"))
+    # no figure reported (Borg 2, or a repo-info that carried none): the
+    # key stays out rather than a null aging the last real one out
     assert outcome.result == {"total_size": "keep", "executor": "agent"}
     db.refresh(repo)
     assert repo.total_size == "keep"
@@ -1475,7 +1478,7 @@ async def test_run_stats_refreshes_agent_repository_through_the_agent(
         assert kwargs == {"raise_busy": True}
         repository.total_size = "5.0 GB"
         session.commit()
-        return True
+        return AgentStatsRefresh(True, original_size=356_668_788)
 
     monkeypatch.setattr(
         "app.api.repositories._update_agent_repository_stats", fake_update
@@ -1484,6 +1487,8 @@ async def test_run_stats_refreshes_agent_repository_through_the_agent(
         outcome = await index_exec.run_stats(_ctx(db, repo, kind="stats"))
     assert outcome.status == "completed"
     assert outcome.result["total_size"] == "5.0 GB"
+    # Borg 1 reports the repository's source data size in the same call
+    assert outcome.result["original_size"] == 356_668_788
 
 
 @pytest.mark.unit
@@ -1496,7 +1501,7 @@ async def test_run_stats_fails_when_agent_refresh_fails(db, repo, monkeypatch):
 
     async def fake_update(repository, session, **kwargs):
         assert kwargs == {"raise_busy": True}
-        return False
+        return AgentStatsRefresh(False)
 
     monkeypatch.setattr(
         "app.api.repositories._update_agent_repository_stats", fake_update

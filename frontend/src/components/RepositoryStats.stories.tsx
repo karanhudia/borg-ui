@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Box } from '@mui/material'
 import RepositoryStats from './RepositoryStats'
 import {
+  repositoryFigureStorage,
   backfilledStorage,
   borg1Storage,
   borg2Storage,
@@ -100,4 +101,10 @@ export const DetailIndexingAfterImport: Story = {
 
 export const DetailNotLoaded: Story = {
   args: { variant: 'detail', storage: undefined, archiveCount: 21 },
+}
+
+// An archive row is still waiting for its info: the figure Borg reports
+// for the whole repository answers, and the tile's hint says so.
+export const DetailOriginalSizeFromBorg: Story = {
+  args: { variant: 'detail', storage: repositoryFigureStorage, archiveCount: 21 },
 }

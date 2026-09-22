@@ -547,10 +547,7 @@ class TestRepositoryHelperContracts:
                 new=fake_wait,
             ),
         ):
-            assert (
-                await repositories_api._update_agent_repository_stats(repo, test_db)
-                is True
-            )
+            assert await repositories_api._update_agent_repository_stats(repo, test_db)
         assert repo.total_size == "4.00 KB" and repo.total_size_source == "storage_used"
         assert repo.total_size_bytes == 4096
         assert repo.total_size_measured_at is not None
@@ -606,10 +603,7 @@ class TestRepositoryHelperContracts:
                 "app.services.repository_executor.cancel_unclaimed_agent_repository_job"
             ) as cancel_unclaimed,
         ):
-            assert (
-                await repositories_api._update_agent_repository_stats(repo, test_db)
-                is True
-            )
+            assert await repositories_api._update_agent_repository_stats(repo, test_db)
         cancel_unclaimed.assert_called_once_with(test_db, 1)
 
     def _agent(self, test_db, capabilities):

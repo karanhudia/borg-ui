@@ -5128,9 +5128,14 @@
       "storage_used": "Bytes the repository occupies on its storage",
       "compact_stats": "Repository size reported by the last compact"
     },
-    "originalSizeHint": "Sum of the original size of every archive the newest listing saw",
+    "originalSizeHint": {
+      "borg1_cache_stats": "Source data size of every archive, from Borg's cache statistics",
+      "compact_stats": "Source data size of every archive, reported by the last compact",
+      "archives": "Sum of the original size of every archive the newest listing saw"
+    },
     "spaceSavedHint": "Original size divided by the space used on disk: deduplication and compression together",
     "spaceSavedUnknownHint": "Nothing to divide by",
+    "spaceSavedMixedHint": "The source data size and the space used on disk were measured at different times",
     "backupSpanHint": "The oldest and the newest archive",
     "latestArchiveFilesHint": "Number of files in the newest archive, not a total",
     "refresh": "Refresh from Borg",

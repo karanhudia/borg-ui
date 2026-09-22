@@ -549,9 +549,15 @@ async def run_stats(ctx) -> Outcome:
             )
         _publish_mqtt_state(db, "operations stats")
         ctx.log(f"agent repository size {repository.total_size}")
-        return Outcome(
-            result={"total_size": repository.total_size, "executor": "agent"}
-        )
+        result = {"total_size": repository.total_size, "executor": "agent"}
+        # Borg 1 reports the repository's source data size in the same
+        # call; the stats strip reads the newest row that carries it, so a
+        # run without a figure leaves the key out rather than writing a
+        # null that would age the last real one out of the window. Borg 2
+        # reports the figure through compact instead.
+        if updated.original_size is not None:
+            result["original_size"] = updated.original_size
+        return Outcome(result=result)
     env, temp_key_file = _prepare_repository_borg_env(repository, db)
     try:
         system_settings = db.query(SystemSettings).first()
@@ -584,16 +590,17 @@ async def run_stats(ctx) -> Outcome:
         ctx.log(
             f"repository size {measured.bytes} bytes ({measured.source or 'unknown'})"
         )
-        return Outcome(
-            result={
-                "bytes": measured.bytes,
-                "objects": measured.objects,
-                "source": measured.source,
-                "last_modified": measured.last_modified.isoformat()
-                if measured.last_modified
-                else None,
-            }
-        )
+        result = {
+            "bytes": measured.bytes,
+            "objects": measured.objects,
+            "source": measured.source,
+            "last_modified": measured.last_modified.isoformat()
+            if measured.last_modified
+            else None,
+        }
+        if measured.original_size is not None:
+            result["original_size"] = measured.original_size
+        return Outcome(result=result)
     finally:
         cleanup_temp_key_file(temp_key_file)
 

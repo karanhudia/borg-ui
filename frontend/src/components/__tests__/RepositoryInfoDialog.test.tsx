@@ -39,6 +39,8 @@ const storedBorg1 = {
   archives_consistent: true,
   archives_listed: true,
   original_size: 1073741824, // 1 GB
+  original_size_source: 'archives' as const,
+  original_size_at: null,
   compressed_size: 536870912, // 512 MB
   deduplicated_size: 268435456,
   latest_archive_files: 10000,
@@ -56,6 +58,8 @@ const storedBorg2 = {
   archives_consistent: true,
   archives_listed: true,
   original_size: 6 * 1024 * 1024 * 1024,
+  original_size_source: 'archives' as const,
+  original_size_at: null,
   compressed_size: null,
   deduplicated_size: 2 * 1024 * 1024 * 1024,
   latest_archive_files: 2500,
@@ -79,6 +83,8 @@ const unmeasured = {
   archives_consistent: false,
   archives_listed: false,
   original_size: null,
+  original_size_source: null,
+  original_size_at: null,
   compressed_size: null,
   deduplicated_size: null,
   latest_archive_files: null,

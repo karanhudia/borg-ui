@@ -48,24 +48,29 @@ export interface RepositoryStatsInput {
   variant?: RepositoryStatsVariant
 }
 
-type SizeSource = RepositoryStorage['size_source']
+/** A provenance label the backend sends: where a size came from. */
+type FigureSource = RepositoryStorage['size_source' | 'original_size_source']
 
-function sourceText(t: TFunction, source: SizeSource | undefined, prefix: string) {
+function sourceText(t: TFunction, source: FigureSource | undefined, prefix: string) {
   if (!source) return undefined
   const key = `${prefix}.${source}`
   const text = t(key)
   return text === key ? undefined : text
 }
 
-/** The stamp the panel's "Updated" caption shows: the older of the size
- * measurement and the archive listing, so it never overstates. Null when
- * neither has happened. Returned with its zone: the backend sends naive
- * UTC, which `new Date` would read as local time. */
+/** The stamp the panel's "Updated" caption shows: the oldest of the
+ * stamps behind the figures on screen, so it never overstates. Those are
+ * the size measurement, the archive listing, and the run that reported
+ * the source data size where Borg reported it for the whole repository
+ * (`original_size_at`) — the last compact, or a `stats` run older than
+ * the one that wrote the size. Null when none of them has happened.
+ * Returned with its zone: the backend sends naive UTC, which `new Date`
+ * would read as local time. */
 export function statsUpdatedAt(
   storage: RepositoryStorage | null | undefined,
   lastSyncedAt: string | null | undefined
 ): string | null {
-  const stamps = [storage?.measured_at, lastSyncedAt]
+  const stamps = [storage?.measured_at, lastSyncedAt, storage?.original_size_at]
     .filter((s): s is string => !!s)
     .map((s) => parseBackendDate(s))
   if (stamps.length === 0) return null
@@ -165,12 +170,36 @@ function originalSizeItem(ctx: ItemContext): RepositoryStatItem {
       label,
       state: 'value',
       value: formatBytes(storage.original_size),
-      hint: t('repositoryStats.originalSizeHint'),
+      // the figure Borg reports for the whole repository, or the sum over
+      // the archive rows where it reports none: the tile says which. A
+      // payload that names no source predates the distinction, and its
+      // figure was the sum; one that names an unknown source says nothing
+      // rather than the wrong thing.
+      hint: storage.original_size_source
+        ? sourceText(t, storage.original_size_source, 'repositoryStats.originalSizeHint')
+        : t('repositoryStats.originalSizeHint.archives'),
       tone,
     }
   }
   const state = archiveFigureState(ctx)
   return { key: 'originalSize', label, state, value: null, hint: placeholderHint(t, state), tone }
+}
+
+/** Whether the two sides of the ratio describe one state of the
+ * repository. The archive index and the stored size are each refreshed
+ * after every change this application makes, so dividing one by the other
+ * is what the ratio has always been; a payload that names no source
+ * predates the distinction and carried that figure. A figure Borg
+ * reported for the whole repository is a different matter, and neither
+ * the two labels nor the order of the two stamps proves it belongs with
+ * the size: a compact can write the size without reporting a source data
+ * size, and a `stats` run can report the source data size while the size
+ * it measured was unavailable. Nothing in the payload settles it, so the
+ * ratio waits for the archive index rather than divide across two states.
+ */
+function fromOneMeasurement(storage: RepositoryStorage): boolean {
+  const source = storage.original_size_source
+  return !source || source === 'archives'
 }
 
 /** Original size over the space used on disk: the two factors multiplied. */
@@ -182,7 +211,17 @@ function spaceSavedItem(
   const { t, storage } = ctx
   const label = t('repositoryStats.spaceSaved')
   const tone: RepositoryStatTone = 'success'
-  if (original.state === 'value' && used.state === 'value' && storage) {
+  if (storage && original.state === 'value' && used.state === 'value') {
+    if (!fromOneMeasurement(storage)) {
+      return {
+        key: 'spaceSaved',
+        label,
+        state: 'unknown',
+        value: null,
+        hint: t('repositoryStats.spaceSavedMixedHint'),
+        tone,
+      }
+    }
     const bytes = storage.size_bytes ?? 0
     // every archive pruned and nothing compacted yet: 0 B of source data
     // over what is still on disk is no saving either

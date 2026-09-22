@@ -60,6 +60,11 @@ export interface SourceLocation {
 export type RepositorySizeSource =
   'borg1_cache_stats' | 'borg2_index' | 'storage_used' | 'compact_stats'
 
+/** Where the source data size came from: the figure Borg reports for the
+ * whole repository (`info` on Borg 1, a compact's statistics on Borg 2),
+ * or the sum over the archive rows where there is none. */
+export type RepositoryOriginalSizeSource = 'borg1_cache_stats' | 'compact_stats' | 'archives'
+
 /** The newest successful compact's statistics (Borg 2 with `--stats`). */
 export interface RepositoryCompactStats {
   repository_size?: number | null
@@ -95,6 +100,11 @@ export interface RepositoryStorage {
    * produced them yet. */
   archives_listed: boolean | null
   original_size: number | null
+  original_size_source: RepositoryOriginalSizeSource | string | null
+  /** The time of the run that reported a repository-level source data
+   * size; null when the archive index answered, which is as new as the
+   * listing. */
+  original_size_at: string | null
   compressed_size: number | null
   deduplicated_size: number | null
   latest_archive_files: number | null

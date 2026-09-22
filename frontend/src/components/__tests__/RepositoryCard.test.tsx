@@ -50,6 +50,8 @@ describe('RepositoryCard', () => {
     archives_consistent: null,
     archives_listed: null,
     original_size: null,
+    original_size_source: null,
+    original_size_at: null,
     compressed_size: null,
     deduplicated_size: null,
     latest_archive_files: null,

@@ -19,9 +19,12 @@ repository whose packs are fully indexed the index sum matched it byte for
 byte in every measurement taken (b23, b24), but the two are not identical
 by definition. Storage used adds the index and other store files on top.
 
-Borg 1 keeps `info --json` `cache.stats.unique_csize`. Both versions also
-report `repository.last_modified` (the last manifest write), which the
-caller persists alongside.
+Borg 1 keeps `info --json` `cache.stats.unique_csize`. The same payload
+also reports the source data size of every archive
+(`cache.stats.total_size`), which the caller carries alongside: one
+repository-level figure, where Borg 2 reports it through `compact
+--stats`. Both versions also report `repository.last_modified` (the last
+manifest write), which the caller persists.
 """
 
 import asyncio
@@ -47,6 +50,9 @@ SOURCE_BORG2_INDEX = "borg2_index"
 SOURCE_STORAGE_USED = "storage_used"
 # Written by the compact paths (maintenance_state), not measured here.
 SOURCE_COMPACT_STATS = "compact_stats"
+# Not a size measurement: the provenance of a figure summed over the
+# archive rows, where Borg reported no repository-level one.
+SOURCE_ARCHIVE_SUMS = "archives"
 
 
 def format_bytes(bytes_size: int) -> str:
@@ -127,6 +133,22 @@ def bytes_from_formatted(text: Optional[str]) -> Optional[int]:
     exponent = _SIZE_UNITS[match.group("unit").upper()]
     scaled = value * (Decimal(1024) ** exponent)
     return int(scaled.to_integral_value(rounding=ROUND_HALF_UP))
+
+
+def borg1_original_size(payload) -> Optional[int]:
+    """The source data size of every archive in a Borg 1 `info --json`
+    payload (`cache.stats.total_size`): one repository-level figure, where
+    the archive rows carry one per archive. 0 is a measurement (an emptied
+    repository); anything that is not a whole, non-negative number is not
+    a figure. The agent's `repository.rinfo` returns the same payload."""
+    if not isinstance(payload, dict):
+        return None
+    cache = payload.get("cache")
+    stats = cache.get("stats") if isinstance(cache, dict) else None
+    value = stats.get("total_size") if isinstance(stats, dict) else None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value
 
 
 def stored_size_bytes(repository) -> Optional[int]:
@@ -225,6 +247,9 @@ class SizeResult:
     objects: Optional[int] = None
     source: Optional[str] = None
     last_modified: Optional[datetime] = None
+    # Borg 1 only: the source data size of every archive, from the same
+    # `info --json` call (`cache.stats.total_size`).
+    original_size: Optional[int] = None
 
 
 async def _communicate(process, timeout: int) -> tuple[bytes, bytes]:
@@ -620,6 +645,7 @@ async def measure_repository_size(
             bytes=size,
             source=SOURCE_BORG1_CACHE_STATS if size else None,
             last_modified=_last_modified(payload),
+            original_size=borg1_original_size(payload),
         )
 
     from app.core.borg2 import _get_borg2_binary, borg2

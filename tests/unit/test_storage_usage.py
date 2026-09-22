@@ -12,6 +12,7 @@ from app.services.storage_usage import (
     SOURCE_BORG2_INDEX,
     SOURCE_STORAGE_USED,
     SizeResult,
+    borg1_original_size,
     borg2_index_size,
     borg2_interpreter,
     measure_repository_size,
@@ -276,6 +277,35 @@ async def test_measure_borg1_without_a_usable_size_reports_no_source(stats):
     assert result == SizeResult(
         bytes=None, source=None, last_modified=datetime(2026, 9, 5, 12, 29, 48)
     )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_measure_borg1_reads_the_original_size_from_cache_stats():
+    """The same `borg info` reports the source data size of every archive
+    (`cache.stats.total_size`); 0 is a measurement (an emptied repository)."""
+    repo = _repo(borg_version=1, path="/backups/repo")
+    for total_size, expected in ((356668788, 356668788), (0, 0)):
+        payload = {"cache": {"stats": {"unique_csize": 2048, "total_size": total_size}}}
+        execute = AsyncMock(
+            return_value={"success": True, "stdout": json.dumps(payload)}
+        )
+        with patch("app.core.borg.borg._execute_command", execute):
+            result = await measure_repository_size(repo, env={})
+        assert result.original_size == expected
+        assert result.bytes == 2048
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("total_size", [None, -1, "356668788", True, 1.5])
+def test_borg1_original_size_takes_whole_non_negative_numbers_only(total_size):
+    payload = {"cache": {"stats": {"total_size": total_size}}}
+    assert borg1_original_size(payload) is None
+    assert borg1_original_size({"cache": None}) is None
+    assert borg1_original_size([]) is None
+    # a payload whose shape is not the documented one is not a measurement
+    assert borg1_original_size({"cache": "invalid"}) is None
+    assert borg1_original_size({"cache": {"stats": "invalid"}}) is None
 
 
 @pytest.mark.unit
