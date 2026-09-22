@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-09-22T04:26:26.059Z",
+  "generatedAt": "2026-09-22T09:08:09.304Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1156 visual report",
-    "commitSha": "afc8998411da",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35686792504"
+    "commitSha": "18a2c44affa8",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35708521561"
   },
   "totals": {
-    "baseline": 960,
+    "baseline": 962,
     "actual": 964,
     "compared": 954,
-    "changed": 38,
+    "changed": 40,
     "added": 10,
-    "removed": 6,
-    "unchanged": 916
+    "removed": 8,
+    "unchanged": 914
   },
   "changed": [
     {
@@ -21,9 +21,9 @@
       "baselinePath": "images/baseline/components-archives-archivechangestab--locked--mobile.png",
       "actualPath": "images/actual/components-archives-archivechangestab--locked--mobile.png",
       "diffPath": "images/diff/components-archives-archivechangestab--locked--mobile.png",
-      "diffPixels": 111249,
+      "diffPixels": 119228,
       "totalPixels": 329160,
-      "diffRatio": 0.3379784907036092,
+      "diffRatio": 0.3622189816502613,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -39,9 +39,9 @@
       "baselinePath": "images/baseline/components-archives-archivechangestab--locked.png",
       "actualPath": "images/actual/components-archives-archivechangestab--locked.png",
       "diffPath": "images/diff/components-archives-archivechangestab--locked.png",
-      "diffPixels": 181032,
+      "diffPixels": 193466,
       "totalPixels": 1024000,
-      "diffRatio": 0.1767890625,
+      "diffRatio": 0.188931640625,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -273,9 +273,9 @@
       "baselinePath": "images/baseline/components-archives-filehistorypanel--locked--mobile.png",
       "actualPath": "images/actual/components-archives-filehistorypanel--locked--mobile.png",
       "diffPath": "images/diff/components-archives-filehistorypanel--locked--mobile.png",
-      "diffPixels": 8523,
+      "diffPixels": 17281,
       "totalPixels": 329160,
-      "diffRatio": 0.02589318264673715,
+      "diffRatio": 0.05250030380362134,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -291,9 +291,9 @@
       "baselinePath": "images/baseline/components-archives-filehistorypanel--locked.png",
       "actualPath": "images/actual/components-archives-filehistorypanel--locked.png",
       "diffPath": "images/diff/components-archives-filehistorypanel--locked.png",
-      "diffPixels": 9829,
+      "diffPixels": 20330,
       "totalPixels": 1024000,
-      "diffRatio": 0.0095986328125,
+      "diffRatio": 0.019853515625,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -309,9 +309,9 @@
       "baselinePath": "images/baseline/components-plangate--with-message--mobile.png",
       "actualPath": "images/actual/components-plangate--with-message--mobile.png",
       "diffPath": "images/diff/components-plangate--with-message--mobile.png",
-      "diffPixels": 68752,
+      "diffPixels": 68343,
       "totalPixels": 329160,
-      "diffRatio": 0.20887106574310366,
+      "diffRatio": 0.20762850893182647,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -327,9 +327,9 @@
       "baselinePath": "images/baseline/components-plangate--with-message.png",
       "actualPath": "images/actual/components-plangate--with-message.png",
       "diffPath": "images/diff/components-plangate--with-message.png",
-      "diffPixels": 77645,
+      "diffPixels": 77236,
       "totalPixels": 1024000,
-      "diffRatio": 0.0758251953125,
+      "diffRatio": 0.07542578125,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -345,9 +345,9 @@
       "baselinePath": "images/baseline/components-plangate--with-preview--mobile.png",
       "actualPath": "images/actual/components-plangate--with-preview--mobile.png",
       "diffPath": "images/diff/components-plangate--with-preview--mobile.png",
-      "diffPixels": 50283,
+      "diffPixels": 50249,
       "totalPixels": 329160,
-      "diffRatio": 0.15276157491797301,
+      "diffRatio": 0.15265828168671772,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -363,9 +363,9 @@
       "baselinePath": "images/baseline/components-plangate--with-preview.png",
       "actualPath": "images/actual/components-plangate--with-preview.png",
       "diffPath": "images/diff/components-plangate--with-preview.png",
-      "diffPixels": 62291,
+      "diffPixels": 62257,
       "totalPixels": 1024000,
-      "diffRatio": 0.0608310546875,
+      "diffRatio": 0.0607978515625,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -593,13 +593,49 @@
       }
     },
     {
+      "fileName": "components-repositorystats--header-archives-withheld--mobile.png",
+      "baselinePath": "images/baseline/components-repositorystats--header-archives-withheld--mobile.png",
+      "actualPath": "images/actual/components-repositorystats--header-archives-withheld--mobile.png",
+      "diffPath": "images/diff/components-repositorystats--header-archives-withheld--mobile.png",
+      "diffPixels": 28860,
+      "totalPixels": 329160,
+      "diffRatio": 0.08767772511848342,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-repositorystats--header-archives-withheld.png",
+      "baselinePath": "images/baseline/components-repositorystats--header-archives-withheld.png",
+      "actualPath": "images/actual/components-repositorystats--header-archives-withheld.png",
+      "diffPath": "images/diff/components-repositorystats--header-archives-withheld.png",
+      "diffPixels": 1947,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0019013671875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
       "fileName": "pages-cloudstorage--locked-community--mobile.png",
       "baselinePath": "images/baseline/pages-cloudstorage--locked-community--mobile.png",
       "actualPath": "images/actual/pages-cloudstorage--locked-community--mobile.png",
       "diffPath": "images/diff/pages-cloudstorage--locked-community--mobile.png",
-      "diffPixels": 47492,
+      "diffPixels": 47458,
       "totalPixels": 329160,
-      "diffRatio": 0.1442824158463969,
+      "diffRatio": 0.14417912261514157,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -615,9 +651,9 @@
       "baselinePath": "images/baseline/pages-cloudstorage--locked-community.png",
       "actualPath": "images/actual/pages-cloudstorage--locked-community.png",
       "diffPath": "images/diff/pages-cloudstorage--locked-community.png",
-      "diffPixels": 62290,
+      "diffPixels": 62256,
       "totalPixels": 1024000,
-      "diffRatio": 0.060830078125,
+      "diffRatio": 0.060796875,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -633,9 +669,9 @@
       "baselinePath": "images/baseline/pages-managedagents--locked-community--mobile.png",
       "actualPath": "images/actual/pages-managedagents--locked-community--mobile.png",
       "diffPath": "images/diff/pages-managedagents--locked-community--mobile.png",
-      "diffPixels": 47492,
+      "diffPixels": 47458,
       "totalPixels": 329160,
-      "diffRatio": 0.1442824158463969,
+      "diffRatio": 0.14417912261514157,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -651,9 +687,9 @@
       "baselinePath": "images/baseline/pages-managedagents--locked-community.png",
       "actualPath": "images/actual/pages-managedagents--locked-community.png",
       "diffPath": "images/diff/pages-managedagents--locked-community.png",
-      "diffPixels": 62290,
+      "diffPixels": 62256,
       "totalPixels": 1024000,
-      "diffRatio": 0.060830078125,
+      "diffRatio": 0.060796875,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -669,9 +705,9 @@
       "baselinePath": "images/baseline/pages-remoteclients--locked-community--mobile.png",
       "actualPath": "images/actual/pages-remoteclients--locked-community--mobile.png",
       "diffPath": "images/diff/pages-remoteclients--locked-community--mobile.png",
-      "diffPixels": 47492,
+      "diffPixels": 47458,
       "totalPixels": 329160,
-      "diffRatio": 0.1442824158463969,
+      "diffRatio": 0.14417912261514157,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -687,9 +723,9 @@
       "baselinePath": "images/baseline/pages-remoteclients--locked-community.png",
       "actualPath": "images/actual/pages-remoteclients--locked-community.png",
       "diffPath": "images/diff/pages-remoteclients--locked-community.png",
-      "diffPixels": 62286,
+      "diffPixels": 62252,
       "totalPixels": 1024000,
-      "diffRatio": 0.060826171875,
+      "diffRatio": 0.06079296875,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -767,6 +803,14 @@
     {
       "fileName": "components-archives-heatmaplegend--pro.png",
       "baselinePath": "images/baseline/components-archives-heatmaplegend--pro.png"
+    },
+    {
+      "fileName": "components-repositorystats--detail-original-size-from-borg--mobile.png",
+      "baselinePath": "images/baseline/components-repositorystats--detail-original-size-from-borg--mobile.png"
+    },
+    {
+      "fileName": "components-repositorystats--detail-original-size-from-borg.png",
+      "baselinePath": "images/baseline/components-repositorystats--detail-original-size-from-borg.png"
     }
   ],
   "unchanged": [
@@ -2503,12 +2547,6 @@
     },
     {
       "fileName": "components-repositorystats--header-archives-loading.png"
-    },
-    {
-      "fileName": "components-repositorystats--header-archives-withheld--mobile.png"
-    },
-    {
-      "fileName": "components-repositorystats--header-archives-withheld.png"
     },
     {
       "fileName": "components-repositorystats--header-indexing-after-import--mobile.png"
