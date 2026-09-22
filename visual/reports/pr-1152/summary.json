@@ -1,21 +1,255 @@
 {
-  "generatedAt": "2026-09-21T12:11:25.649Z",
+  "generatedAt": "2026-09-22T05:57:01.844Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1152 visual report",
-    "commitSha": "63942ca60167",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35597928258"
+    "commitSha": "5d3724ac6df4",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35692624216"
   },
   "totals": {
     "baseline": 960,
     "actual": 962,
     "compared": 960,
-    "changed": 2,
+    "changed": 15,
     "added": 2,
     "removed": 0,
-    "unchanged": 958
+    "unchanged": 945
   },
   "changed": [
+    {
+      "fileName": "backup-plans-sourceselectiondialog--community-mixed-sources-locked.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--community-mixed-sources-locked.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--community-mixed-sources-locked.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--community-mixed-sources-locked.png",
+      "diffPixels": 2977,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0029072265625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups.png",
+      "diffPixels": 2977,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0029072265625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
+      "diffPixels": 2773,
+      "totalPixels": 329160,
+      "diffRatio": 0.008424474419735083,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-local-selections.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-with-local-selections.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-with-local-selections.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-with-local-selections.png",
+      "diffPixels": 5170,
+      "totalPixels": 1024000,
+      "diffRatio": 0.005048828125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "backup-plans-sourcestep--single-local-group.png",
+      "baselinePath": "images/baseline/backup-plans-sourcestep--single-local-group.png",
+      "actualPath": "images/actual/backup-plans-sourcestep--single-local-group.png",
+      "diffPath": "images/diff/backup-plans-sourcestep--single-local-group.png",
+      "diffPixels": 1103,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0010771484375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-archives-archivechangestab--default--mobile.png",
+      "baselinePath": "images/baseline/components-archives-archivechangestab--default--mobile.png",
+      "actualPath": "images/actual/components-archives-archivechangestab--default--mobile.png",
+      "diffPath": "images/diff/components-archives-archivechangestab--default--mobile.png",
+      "diffPixels": 2908,
+      "totalPixels": 329160,
+      "diffRatio": 0.008834609308542957,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-archives-archivechangestab--default.png",
+      "baselinePath": "images/baseline/components-archives-archivechangestab--default.png",
+      "actualPath": "images/actual/components-archives-archivechangestab--default.png",
+      "diffPath": "images/diff/components-archives-archivechangestab--default.png",
+      "diffPixels": 2908,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00283984375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-archives-archivechangestab--truncated--mobile.png",
+      "baselinePath": "images/baseline/components-archives-archivechangestab--truncated--mobile.png",
+      "actualPath": "images/actual/components-archives-archivechangestab--truncated--mobile.png",
+      "diffPath": "images/diff/components-archives-archivechangestab--truncated--mobile.png",
+      "diffPixels": 2908,
+      "totalPixels": 329160,
+      "diffRatio": 0.008834609308542957,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-archives-archivechangestab--truncated.png",
+      "baselinePath": "images/baseline/components-archives-archivechangestab--truncated.png",
+      "actualPath": "images/actual/components-archives-archivechangestab--truncated.png",
+      "diffPath": "images/diff/components-archives-archivechangestab--truncated.png",
+      "diffPixels": 2908,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00283984375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-archives-archivefiledetailspane--directory--mobile.png",
+      "baselinePath": "images/baseline/components-archives-archivefiledetailspane--directory--mobile.png",
+      "actualPath": "images/actual/components-archives-archivefiledetailspane--directory--mobile.png",
+      "diffPath": "images/diff/components-archives-archivefiledetailspane--directory--mobile.png",
+      "diffPixels": 1341,
+      "totalPixels": 329160,
+      "diffRatio": 0.004074006562158221,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-archives-archivefiledetailspane--directory.png",
+      "baselinePath": "images/baseline/components-archives-archivefiledetailspane--directory.png",
+      "actualPath": "images/actual/components-archives-archivefiledetailspane--directory.png",
+      "diffPath": "images/diff/components-archives-archivefiledetailspane--directory.png",
+      "diffPixels": 1341,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0013095703125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-archives-archivefiledetailspane--file--mobile.png",
+      "baselinePath": "images/baseline/components-archives-archivefiledetailspane--file--mobile.png",
+      "actualPath": "images/actual/components-archives-archivefiledetailspane--file--mobile.png",
+      "diffPath": "images/diff/components-archives-archivefiledetailspane--file--mobile.png",
+      "diffPixels": 1258,
+      "totalPixels": 329160,
+      "diffRatio": 0.003821849556446713,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-archives-archivefiledetailspane--file.png",
+      "baselinePath": "images/baseline/components-archives-archivefiledetailspane--file.png",
+      "actualPath": "images/actual/components-archives-archivefiledetailspane--file.png",
+      "diffPath": "images/diff/components-archives-archivefiledetailspane--file.png",
+      "diffPixels": 1258,
+      "totalPixels": 1024000,
+      "diffRatio": 0.001228515625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
     {
       "fileName": "components-repositorystats--header-archives-withheld--mobile.png",
       "baselinePath": "images/baseline/components-repositorystats--header-archives-withheld--mobile.png",
@@ -513,9 +747,6 @@
       "fileName": "backup-plans-sourceselectiondialog--community-mixed-sources-locked--mobile.png"
     },
     {
-      "fileName": "backup-plans-sourceselectiondialog--community-mixed-sources-locked.png"
-    },
-    {
       "fileName": "backup-plans-sourceselectiondialog--community-pro-source-kinds-locked--mobile.png"
     },
     {
@@ -645,9 +876,6 @@
       "fileName": "backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png"
     },
     {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups.png"
-    },
-    {
       "fileName": "backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png"
     },
     {
@@ -658,12 +886,6 @@
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--path-picker-with-incomplete-zfs-snapshot.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-local-selections.png"
     },
     {
       "fileName": "backup-plans-sourcestep--btrfs-snapshot-source--mobile.png"
@@ -703,9 +925,6 @@
     },
     {
       "fileName": "backup-plans-sourcestep--single-local-group--mobile.png"
-    },
-    {
-      "fileName": "backup-plans-sourcestep--single-local-group.png"
     },
     {
       "fileName": "components-activebackupplanruncard--backup-in-progress--mobile.png"
@@ -810,12 +1029,6 @@
       "fileName": "components-archives-archivechangestab--agent-unsupported.png"
     },
     {
-      "fileName": "components-archives-archivechangestab--default--mobile.png"
-    },
-    {
-      "fileName": "components-archives-archivechangestab--default.png"
-    },
-    {
       "fileName": "components-archives-archivechangestab--locked--mobile.png"
     },
     {
@@ -826,24 +1039,6 @@
     },
     {
       "fileName": "components-archives-archivechangestab--pending.png"
-    },
-    {
-      "fileName": "components-archives-archivechangestab--truncated--mobile.png"
-    },
-    {
-      "fileName": "components-archives-archivechangestab--truncated.png"
-    },
-    {
-      "fileName": "components-archives-archivefiledetailspane--directory--mobile.png"
-    },
-    {
-      "fileName": "components-archives-archivefiledetailspane--directory.png"
-    },
-    {
-      "fileName": "components-archives-archivefiledetailspane--file--mobile.png"
-    },
-    {
-      "fileName": "components-archives-archivefiledetailspane--file.png"
     },
     {
       "fileName": "components-archives-archivefiledetailspane--folder--mobile.png"
