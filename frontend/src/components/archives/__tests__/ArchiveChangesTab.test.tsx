@@ -318,4 +318,21 @@ describe('ArchiveChangesTab', () => {
     expect(screen.queryByText('home/alex/docs/invoices.xlsx')).not.toBeInTheDocument()
     expect(screen.getByText(/Pro lists the files behind these counts/i)).toBeInTheDocument()
   })
+
+  it('reads the index state the same way once the rows are locked', async () => {
+    // "Not indexed yet" under a failed index would leave a Community reader
+    // waiting for something that will not arrive.
+    mockPlanCan.mockReturnValue(false)
+    vi.mocked(archivesAPI.getChanges).mockResolvedValue({
+      data: baseChangesResponse({
+        changes: [],
+        detail_locked: true,
+        history_state: 'failed',
+        history_capability: 'available',
+      }),
+    } as never)
+    renderTab()
+    expect(await screen.findByText(/could not be indexed/i)).toBeInTheDocument()
+    expect(screen.queryByText(/has not been indexed yet/i)).not.toBeInTheDocument()
+  })
 })

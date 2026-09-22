@@ -133,6 +133,21 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
   // Community reads what changed and how much; which files changed is Pro.
   // The counts are the archive's own numbers, so there is nothing to blur.
   const locked = changes?.detail_locked === true
+  // The same reading of the index state in both branches: a locked view that
+  // told a Community reader "not indexed yet" while the index had failed sent
+  // them waiting for something that will not arrive.
+  const historyStateMessage =
+    capability === 'agent_unsupported'
+      ? // whatever the archive's own state says (a failure recorded
+        // before the move included): the failed wording promises a
+        // rebuild this repository cannot have
+        t('archives.changes.agentUnsupported')
+      : historyState === 'skipped'
+        ? t('archives.changes.skipped')
+        : historyState === 'failed'
+          ? t('archives.changes.failed')
+          : t('archives.changes.pending')
+  const historyStateSeverity = historyState === 'failed' && !historyUnavailable ? 'warning' : 'info'
 
   if (locked) {
     return (
@@ -168,10 +183,8 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
           })}
         </Stack>
         {!isLoading && historyState !== 'indexed' && (
-          <Alert severity="info" sx={{ mb: 2 }}>
-            {capability === 'agent_unsupported'
-              ? t('archives.changes.agentUnsupported')
-              : t('archives.changes.pending')}
+          <Alert severity={historyStateSeverity} sx={{ mb: 2 }}>
+            {historyStateMessage}
           </Alert>
         )}
         <UpgradePrompt
@@ -299,7 +312,7 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
 
       {!isLoading && historyState !== 'indexed' && (
         <Alert
-          severity={historyState === 'failed' && !historyUnavailable ? 'warning' : 'info'}
+          severity={historyStateSeverity}
           action={
             canRebuild ? (
               <Button
@@ -312,16 +325,7 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
             ) : undefined
           }
         >
-          {capability === 'agent_unsupported'
-            ? // whatever the archive's own state says (a failure recorded
-              // before the move included): the failed wording promises a
-              // rebuild this repository cannot have
-              t('archives.changes.agentUnsupported')
-            : historyState === 'skipped'
-              ? t('archives.changes.skipped')
-              : historyState === 'failed'
-                ? t('archives.changes.failed')
-                : t('archives.changes.pending')}
+          {historyStateMessage}
         </Alert>
       )}
 
