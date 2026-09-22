@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-09-22T10:33:14.075Z",
+  "generatedAt": "2026-09-22T13:45:38.579Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1156 visual report",
     "commitSha": "18a2c44affa8",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35716464509"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35735450701"
   },
   "totals": {
     "baseline": 962,
-    "actual": 964,
+    "actual": 966,
     "compared": 954,
-    "changed": 42,
-    "added": 10,
+    "changed": 32,
+    "added": 12,
     "removed": 8,
-    "unchanged": 912
+    "unchanged": 922
   },
   "changed": [
     {
@@ -21,9 +21,9 @@
       "baselinePath": "images/baseline/components-archives-archivechangestab--locked--mobile.png",
       "actualPath": "images/actual/components-archives-archivechangestab--locked--mobile.png",
       "diffPath": "images/diff/components-archives-archivechangestab--locked--mobile.png",
-      "diffPixels": 119228,
+      "diffPixels": 120182,
       "totalPixels": 329160,
-      "diffRatio": 0.3622189816502613,
+      "diffRatio": 0.3651172681978369,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -39,9 +39,9 @@
       "baselinePath": "images/baseline/components-archives-archivechangestab--locked.png",
       "actualPath": "images/actual/components-archives-archivechangestab--locked.png",
       "diffPath": "images/diff/components-archives-archivechangestab--locked.png",
-      "diffPixels": 193466,
+      "diffPixels": 228811,
       "totalPixels": 1024000,
-      "diffRatio": 0.188931640625,
+      "diffRatio": 0.2234482421875,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -273,9 +273,9 @@
       "baselinePath": "images/baseline/components-archives-filehistorypanel--locked--mobile.png",
       "actualPath": "images/actual/components-archives-filehistorypanel--locked--mobile.png",
       "diffPath": "images/diff/components-archives-filehistorypanel--locked--mobile.png",
-      "diffPixels": 17281,
+      "diffPixels": 63621,
       "totalPixels": 329160,
-      "diffRatio": 0.05250030380362134,
+      "diffRatio": 0.19328290193219103,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -291,81 +291,9 @@
       "baselinePath": "images/baseline/components-archives-filehistorypanel--locked.png",
       "actualPath": "images/actual/components-archives-filehistorypanel--locked.png",
       "diffPath": "images/diff/components-archives-filehistorypanel--locked.png",
-      "diffPixels": 20330,
+      "diffPixels": 90631,
       "totalPixels": 1024000,
-      "diffRatio": 0.019853515625,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-plangate--with-message--mobile.png",
-      "baselinePath": "images/baseline/components-plangate--with-message--mobile.png",
-      "actualPath": "images/actual/components-plangate--with-message--mobile.png",
-      "diffPath": "images/diff/components-plangate--with-message--mobile.png",
-      "diffPixels": 68343,
-      "totalPixels": 329160,
-      "diffRatio": 0.20762850893182647,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-plangate--with-message.png",
-      "baselinePath": "images/baseline/components-plangate--with-message.png",
-      "actualPath": "images/actual/components-plangate--with-message.png",
-      "diffPath": "images/diff/components-plangate--with-message.png",
-      "diffPixels": 77236,
-      "totalPixels": 1024000,
-      "diffRatio": 0.07542578125,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-plangate--with-preview--mobile.png",
-      "baselinePath": "images/baseline/components-plangate--with-preview--mobile.png",
-      "actualPath": "images/actual/components-plangate--with-preview--mobile.png",
-      "diffPath": "images/diff/components-plangate--with-preview--mobile.png",
-      "diffPixels": 50249,
-      "totalPixels": 329160,
-      "diffRatio": 0.15265828168671772,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-plangate--with-preview.png",
-      "baselinePath": "images/baseline/components-plangate--with-preview.png",
-      "actualPath": "images/actual/components-plangate--with-preview.png",
-      "diffPath": "images/diff/components-plangate--with-preview.png",
-      "diffPixels": 62257,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0607978515625,
+      "diffRatio": 0.0885068359375,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -663,117 +591,17 @@
         "width": 1280,
         "height": 800
       }
-    },
-    {
-      "fileName": "pages-cloudstorage--locked-community--mobile.png",
-      "baselinePath": "images/baseline/pages-cloudstorage--locked-community--mobile.png",
-      "actualPath": "images/actual/pages-cloudstorage--locked-community--mobile.png",
-      "diffPath": "images/diff/pages-cloudstorage--locked-community--mobile.png",
-      "diffPixels": 47458,
-      "totalPixels": 329160,
-      "diffRatio": 0.14417912261514157,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "pages-cloudstorage--locked-community.png",
-      "baselinePath": "images/baseline/pages-cloudstorage--locked-community.png",
-      "actualPath": "images/actual/pages-cloudstorage--locked-community.png",
-      "diffPath": "images/diff/pages-cloudstorage--locked-community.png",
-      "diffPixels": 62256,
-      "totalPixels": 1024000,
-      "diffRatio": 0.060796875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "pages-managedagents--locked-community--mobile.png",
-      "baselinePath": "images/baseline/pages-managedagents--locked-community--mobile.png",
-      "actualPath": "images/actual/pages-managedagents--locked-community--mobile.png",
-      "diffPath": "images/diff/pages-managedagents--locked-community--mobile.png",
-      "diffPixels": 47458,
-      "totalPixels": 329160,
-      "diffRatio": 0.14417912261514157,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "pages-managedagents--locked-community.png",
-      "baselinePath": "images/baseline/pages-managedagents--locked-community.png",
-      "actualPath": "images/actual/pages-managedagents--locked-community.png",
-      "diffPath": "images/diff/pages-managedagents--locked-community.png",
-      "diffPixels": 62256,
-      "totalPixels": 1024000,
-      "diffRatio": 0.060796875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "pages-remoteclients--locked-community--mobile.png",
-      "baselinePath": "images/baseline/pages-remoteclients--locked-community--mobile.png",
-      "actualPath": "images/actual/pages-remoteclients--locked-community--mobile.png",
-      "diffPath": "images/diff/pages-remoteclients--locked-community--mobile.png",
-      "diffPixels": 47458,
-      "totalPixels": 329160,
-      "diffRatio": 0.14417912261514157,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "pages-remoteclients--locked-community.png",
-      "baselinePath": "images/baseline/pages-remoteclients--locked-community.png",
-      "actualPath": "images/actual/pages-remoteclients--locked-community.png",
-      "diffPath": "images/diff/pages-remoteclients--locked-community.png",
-      "diffPixels": 62252,
-      "totalPixels": 1024000,
-      "diffRatio": 0.06079296875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
     }
   ],
   "added": [
+    {
+      "fileName": "components-archives-archivechangestab--locked-trial-ended--mobile.png",
+      "actualPath": "images/actual/components-archives-archivechangestab--locked-trial-ended--mobile.png"
+    },
+    {
+      "fileName": "components-archives-archivechangestab--locked-trial-ended.png",
+      "actualPath": "images/actual/components-archives-archivechangestab--locked-trial-ended.png"
+    },
     {
       "fileName": "components-archives-archivestatsheader--not-indexed--mobile.png",
       "actualPath": "images/actual/components-archives-archivestatsheader--not-indexed--mobile.png"
@@ -2237,6 +2065,18 @@
       "fileName": "components-planbadge--pro.png"
     },
     {
+      "fileName": "components-plangate--with-message--mobile.png"
+    },
+    {
+      "fileName": "components-plangate--with-message.png"
+    },
+    {
+      "fileName": "components-plangate--with-preview--mobile.png"
+    },
+    {
+      "fileName": "components-plangate--with-preview.png"
+    },
+    {
       "fileName": "components-planinfodrawer--community-upgrade-drawer--mobile.png"
     },
     {
@@ -3227,6 +3067,12 @@
       "fileName": "pages-cloudstorage--empty.png"
     },
     {
+      "fileName": "pages-cloudstorage--locked-community--mobile.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--locked-community.png"
+    },
+    {
       "fileName": "pages-cloudstorage--overview--mobile.png"
     },
     {
@@ -3401,6 +3247,12 @@
       "fileName": "pages-managedagents--fleet-overview.png"
     },
     {
+      "fileName": "pages-managedagents--locked-community--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--locked-community.png"
+    },
+    {
       "fileName": "pages-managedagents--setup-help-details--mobile.png"
     },
     {
@@ -3417,6 +3269,12 @@
     },
     {
       "fileName": "pages-remoteclients--empty.png"
+    },
+    {
+      "fileName": "pages-remoteclients--locked-community--mobile.png"
+    },
+    {
+      "fileName": "pages-remoteclients--locked-community.png"
     },
     {
       "fileName": "pages-remoteclients--overview--mobile.png"
