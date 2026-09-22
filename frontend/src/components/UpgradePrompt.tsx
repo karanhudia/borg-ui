@@ -79,21 +79,10 @@ export default function UpgradePrompt({
     : trialExpired
       ? t('upgradePrompt.trialEnded')
       : null
-  const trialButton = offerTrial ? (
-    <Button
-      variant="outlined"
-      size="small"
-      disabled={trial.isPending}
-      onClick={() => trial.mutate()}
-      sx={{ textTransform: 'none' }}
-    >
-      {t('upgradePrompt.tryFree')}
-    </Button>
-  ) : null
   // One lead action, the rest subordinate: the free trial while it is on
   // offer, the purchase once it is not. Three buttons of equal weight read
   // as a disabled row and get skipped.
-  const compactTrialButton = offerTrial ? (
+  const trialButton = offerTrial ? (
     <Button
       variant="contained"
       size="small"
@@ -149,7 +138,7 @@ export default function UpgradePrompt({
             spacing={0.5}
             sx={{ alignItems: 'center', flexWrap: 'wrap', ml: 'auto' }}
           >
-            {compactTrialButton}
+            {trialButton}
             {/* The purchase is offered at every lock, not only in the drawer:
                 a reader whose trial has ended has no other way out of this
                 panel. It leads once the trial is no longer on offer. */}
@@ -158,7 +147,7 @@ export default function UpgradePrompt({
               href={BUY_URL}
               target="_blank"
               rel="noreferrer"
-              variant={compactTrialButton ? 'text' : 'contained'}
+              variant={trialButton ? 'text' : 'contained'}
               disableElevation
               size="small"
               sx={{ textTransform: 'none' }}
@@ -230,7 +219,7 @@ export default function UpgradePrompt({
           href={BUY_URL}
           target="_blank"
           rel="noreferrer"
-          variant="contained"
+          variant={trialButton ? 'outlined' : 'contained'}
           size="small"
           sx={{ mt: 0.5 }}
         >
