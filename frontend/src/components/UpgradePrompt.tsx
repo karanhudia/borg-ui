@@ -50,7 +50,11 @@ export default function UpgradePrompt({
         return
       }
       setTrialRefusal(null)
-      queryClient.invalidateQueries({ queryKey: ['system-info'] })
+      // Everything the plan touches, not just the plan itself: the panels
+      // around this prompt hold answers the server shaped for a reader
+      // without the feature, and they would keep showing the lock until
+      // something else happened to refetch them.
+      queryClient.invalidateQueries()
     },
     onError: (error) =>
       setTrialRefusal(
@@ -66,7 +70,11 @@ export default function UpgradePrompt({
           ? 'upgradePrompt.trialFailed'
           : trialRefusal === 'needsAdmin'
             ? 'upgradePrompt.trialNeedsAdmin'
-            : 'upgradePrompt.trialUnavailable'
+            : // The service says this install has already had it: the reader
+              // gets the ended wording, not "no trial exists for this".
+              trialRefusal === 'trial_already_used'
+              ? 'upgradePrompt.trialEnded'
+              : 'upgradePrompt.trialUnavailable'
       )
     : trialExpired
       ? t('upgradePrompt.trialEnded')
@@ -75,6 +83,21 @@ export default function UpgradePrompt({
     <Button
       variant="outlined"
       size="small"
+      disabled={trial.isPending}
+      onClick={() => trial.mutate()}
+      sx={{ textTransform: 'none' }}
+    >
+      {t('upgradePrompt.tryFree')}
+    </Button>
+  ) : null
+  // One lead action, the rest subordinate: the free trial while it is on
+  // offer, the purchase once it is not. Three buttons of equal weight read
+  // as a disabled row and get skipped.
+  const compactTrialButton = offerTrial ? (
+    <Button
+      variant="contained"
+      size="small"
+      disableElevation
       disabled={trial.isPending}
       onClick={() => trial.mutate()}
       sx={{ textTransform: 'none' }}
@@ -102,9 +125,14 @@ export default function UpgradePrompt({
             gap: 1,
             flexWrap: 'wrap',
             px: 1.5,
-            py: 1,
-            border: '1px dashed',
-            borderColor: 'divider',
+            py: 1.25,
+            // Tinted panel rather than a dashed outline: dashed reads as an
+            // empty slot waiting for content, which is how this strip came
+            // to be missed under the counts. No shadow, so it stays quieter
+            // than the real data above it.
+            border: '1px solid',
+            borderColor: alpha(color, 0.28),
+            bgcolor: alpha(color, 0.05),
             borderRadius: 1.5,
           }}
         >
@@ -112,7 +140,7 @@ export default function UpgradePrompt({
           {/* A basis wide enough that the text claims a row of its own in a
               narrow container (the file details pane), instead of wrapping to
               four lines beside the buttons. */}
-          <Typography variant="body2" sx={{ color: 'text.secondary', flex: '1 1 260px' }}>
+          <Typography variant="body2" sx={{ color: 'text.primary', flex: '1 1 260px' }}>
             {message ?? t('upgradePrompt.defaultMessage', { plan: planLabel })}
             {trialNote != null && ` ${trialNote}`}
           </Typography>
@@ -121,12 +149,27 @@ export default function UpgradePrompt({
             spacing={0.5}
             sx={{ alignItems: 'center', flexWrap: 'wrap', ml: 'auto' }}
           >
-            {trialButton}
+            {compactTrialButton}
+            {/* The purchase is offered at every lock, not only in the drawer:
+                a reader whose trial has ended has no other way out of this
+                panel. It leads once the trial is no longer on offer. */}
+            <Button
+              component="a"
+              href={BUY_URL}
+              target="_blank"
+              rel="noreferrer"
+              variant={compactTrialButton ? 'text' : 'contained'}
+              disableElevation
+              size="small"
+              sx={{ textTransform: 'none' }}
+            >
+              {t('plan.buyLink', { plan: planLabel })}
+            </Button>
             <Button
               variant="text"
               size="small"
               onClick={() => setDrawerOpen(true)}
-              sx={{ textTransform: 'none' }}
+              sx={{ textTransform: 'none', color: 'text.secondary' }}
             >
               {t('upgradePrompt.learnMore')}
             </Button>
