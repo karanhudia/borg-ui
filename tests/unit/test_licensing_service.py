@@ -378,6 +378,75 @@ async def test_feature_trial_grants_the_feature_on_a_community_plan(
 
 
 @pytest.mark.unit
+def test_a_spent_trial_stays_spent_after_the_entitlement_is_cleared(
+    db_session, activation_keys
+):
+    """The offer must not come back with the next downgrade.
+
+    The document that granted the trial is gone by then, so the record of it
+    lives on the install's own row (spec 2026-09-21, section 3).
+    """
+    state = get_or_create_licensing_state(db_session)
+    import_offline_entitlement(
+        db_session,
+        _build_document(
+            activation_keys,
+            instance_id=state.instance_id,
+            plan="community",
+            is_trial=False,
+            expires_offset_days=14,
+            feature_overrides=[{"feature": "archive_history", "enabled": True}],
+        ),
+    )
+    summary = get_entitlement_summary(db_session)
+    assert [f["feature"] for f in summary["trial_features"]] == ["archive_history"]
+    assert summary["expired_trial_features"] == []
+
+    # What a refresh does once the trial has run out.
+    licensing_service._clear_entitlement(db_session, state, status="expired")
+
+    summary = get_entitlement_summary(db_session)
+    assert summary["trial_features"] == []
+    assert summary["expired_trial_features"] == ["archive_history"]
+    assert licensing_service.get_feature_access(db_session)["archive_history"] is False
+
+
+@pytest.mark.unit
+def test_an_override_opens_the_gates_behind_it(db_session, activation_keys):
+    """The summary is not the only reader: the dependency behind each route
+    and `history_enabled` must honour the override too, or a trial reads as
+    granted in the UI and refused by everything under it."""
+    from app.core.features import has_feature, require_feature_access
+    from app.services.operations.followups import history_enabled
+
+    state = get_or_create_licensing_state(db_session)
+    assert has_feature(db_session, "archive_history") is False
+    assert history_enabled(db_session) is False
+
+    import_offline_entitlement(
+        db_session,
+        _build_document(
+            activation_keys,
+            instance_id=state.instance_id,
+            plan="community",
+            is_trial=False,
+            expires_offset_days=14,
+            feature_overrides=[{"feature": "archive_history", "enabled": True}],
+        ),
+    )
+
+    assert has_feature(db_session, "archive_history") is True
+    assert history_enabled(db_session) is True
+    require_feature_access(db_session, "archive_history")
+    # The override grants one feature, not the plan above it.
+    assert has_feature(db_session, "rclone") is False
+    assert get_effective_plan_value(db_session) == "community"
+    # And a trial is not a lapsed install: the licensing screen keeps its
+    # own wording rather than announcing that access has ended.
+    assert get_entitlement_summary(db_session)["ui_state"] == "community"
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_a_denied_feature_trial_leaves_the_plan_alone(db_session):
     state = get_or_create_licensing_state(db_session)

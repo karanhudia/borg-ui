@@ -128,6 +128,15 @@ def refresh_status_if_expired(state: LicensingState) -> None:
         state.plan = "community"
 
 
+def _granted_overrides(payload: dict[str, Any]) -> list[str]:
+    """The features an entitlement document grants on top of its plan."""
+    return [
+        o.get("feature")
+        for o in (payload or {}).get("feature_overrides", []) or []
+        if o.get("enabled") is True and o.get("feature")
+    ]
+
+
 def get_entitlement_summary(db: Session) -> dict[str, Any]:
     state = get_or_create_licensing_state(db)
     refresh_status_if_expired(state)
@@ -136,11 +145,7 @@ def get_entitlement_summary(db: Session) -> dict[str, Any]:
     payload = state.payload_json or {}
     refresh_after = _parse_dt(payload.get("refresh_after"))
     is_full_access = bool(state.is_trial and state.status == "active")
-    granted = [
-        o.get("feature")
-        for o in payload.get("feature_overrides", []) or []
-        if o.get("enabled") is True and o.get("feature")
-    ]
+    granted = _granted_overrides(payload)
     expires_at = serialize_datetime(state.expires_at)
 
     return {
@@ -165,7 +170,13 @@ def get_entitlement_summary(db: Session) -> dict[str, Any]:
             {"feature": f, "expires_at": expires_at}
             for f in (granted if state.status == "active" else [])
         ],
-        "expired_trial_features": granted if state.status == "expired" else [],
+        # Everything this install has spent that it is not being granted
+        # right now, whether the entitlement that granted it is expired or
+        # already cleared.
+        "expired_trial_features": sorted(
+            set(state.trial_features_used or [])
+            - set(granted if state.status == "active" else [])
+        ),
         "last_refresh_at": serialize_datetime(state.last_refresh_at),
         "last_refresh_error": state.last_refresh_error,
     }
@@ -278,6 +289,14 @@ def _apply_entitlement(
     state.last_refresh_error = refresh_error
     state.payload_json = payload
     state.signature = signature
+    # A trial is spent the moment it is granted, not when it lapses: by then
+    # this document is gone. Recorded by feature, so a later release's own
+    # features are still on offer.
+    granted = _granted_overrides(payload)
+    if granted:
+        state.trial_features_used = sorted(
+            set(state.trial_features_used or []) | set(granted)
+        )
     refresh_status_if_expired(state)
     db.commit()
 
@@ -333,6 +352,11 @@ def _ui_state(state: LicensingState) -> str:
     # the key field and the buy link rather than reading it as a paid license.
     if state.status == "active" and (state.plan or "community") != "community":
         return "paid_active"
+    # ...and while it runs, this install is not an install whose access has
+    # lapsed: saying "full access has ended, you are on Community now" over a
+    # running trial contradicts the countdown beside it.
+    if state.status == "active" and _granted_overrides(state.payload_json or {}):
+        return "community"
     if state.trial_consumed:
         return "full_access_expired"
     return "community"

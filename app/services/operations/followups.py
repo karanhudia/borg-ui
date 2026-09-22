@@ -233,12 +233,15 @@ def enqueue_followups(
 
 
 def history_enabled(db) -> bool:
-    """True when the current plan includes the archive_history feature
-    (spec 11.2). Imported lazily: app.core.features pulls in the licensing
-    service, which must not be an import-time dependency of the runner."""
-    from app.core.features import Plan, get_current_plan, plan_includes
+    """True when this install may read archive history (spec 11.2).
 
-    return plan_includes(get_current_plan(db), Plan.PRO)
+    The feature, not the plan rank: a trial grants it on the community plan
+    through an entitlement override. Imported lazily: app.core.features pulls
+    in the licensing service, which must not be an import-time dependency of
+    the runner."""
+    from app.core.features import has_feature
+
+    return has_feature(db, "archive_history")
 
 
 HistoryCapability = Literal["available", "plan_locked", "agent_unsupported"]

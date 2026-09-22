@@ -1758,6 +1758,10 @@ class LicensingState(Base):
     )  # none, active, expired, invalid
     is_trial = Column(Boolean, default=False, nullable=False)
     trial_consumed = Column(Boolean, default=False, nullable=False)
+    # The features whose trial this install has already spent. Kept apart from
+    # the entitlement because the entitlement is cleared when it lapses, and
+    # the offer must not come back with it (spec 2026-09-21, section 3).
+    trial_features_used = Column(JSON, nullable=True)
     entitlement_id = Column(String, nullable=True, unique=True)
     key_id = Column(String, nullable=True)
     customer_id = Column(String, nullable=True)
