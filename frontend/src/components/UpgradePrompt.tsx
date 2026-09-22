@@ -133,10 +133,13 @@ export default function UpgradePrompt({
             {message ?? t('upgradePrompt.defaultMessage', { plan: planLabel })}
             {trialNote != null && ` ${trialNote}`}
           </Typography>
+          {/* Right of the text when both fit on one row; at phone width the
+              text claims the row and the buttons wrap under it, where they
+              line up with its left edge rather than hanging off the right. */}
           <Stack
             direction="row"
             spacing={0.5}
-            sx={{ alignItems: 'center', flexWrap: 'wrap', ml: 'auto' }}
+            sx={{ alignItems: 'center', flexWrap: 'wrap', ml: { xs: 0, sm: 'auto' } }}
           >
             {trialButton}
             {/* The purchase is offered at every lock, not only in the drawer:
@@ -147,7 +150,7 @@ export default function UpgradePrompt({
               href={BUY_URL}
               target="_blank"
               rel="noreferrer"
-              variant={trialButton ? 'text' : 'contained'}
+              variant={trialButton ? 'outlined' : 'contained'}
               disableElevation
               size="small"
               sx={{ textTransform: 'none' }}
