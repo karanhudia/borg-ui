@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-09-22T09:08:09.304Z",
+  "generatedAt": "2026-09-22T09:29:32.340Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1156 visual report",
     "commitSha": "18a2c44affa8",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35708521561"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35710533821"
   },
   "totals": {
     "baseline": 962,
     "actual": 964,
     "compared": 954,
-    "changed": 40,
+    "changed": 42,
     "added": 10,
     "removed": 8,
-    "unchanged": 914
+    "unchanged": 912
   },
   "changed": [
     {
@@ -438,6 +438,42 @@
       "diffPixels": 14074,
       "totalPixels": 1024000,
       "diffRatio": 0.013744140625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-prune-prunelostfilespanel--agent-unsupported--mobile.png",
+      "baselinePath": "images/baseline/components-prune-prunelostfilespanel--agent-unsupported--mobile.png",
+      "actualPath": "images/actual/components-prune-prunelostfilespanel--agent-unsupported--mobile.png",
+      "diffPath": "images/diff/components-prune-prunelostfilespanel--agent-unsupported--mobile.png",
+      "diffPixels": 892,
+      "totalPixels": 329160,
+      "diffRatio": 0.002709928302345364,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-prune-prunelostfilespanel--agent-unsupported.png",
+      "baselinePath": "images/baseline/components-prune-prunelostfilespanel--agent-unsupported.png",
+      "actualPath": "images/actual/components-prune-prunelostfilespanel--agent-unsupported.png",
+      "diffPath": "images/diff/components-prune-prunelostfilespanel--agent-unsupported.png",
+      "diffPixels": 892,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00087109375,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -2253,12 +2289,6 @@
     },
     {
       "fileName": "components-prune-prunecomparedpolicies--empty.png"
-    },
-    {
-      "fileName": "components-prune-prunelostfilespanel--agent-unsupported--mobile.png"
-    },
-    {
-      "fileName": "components-prune-prunelostfilespanel--agent-unsupported.png"
     },
     {
       "fileName": "components-prune-prunepreviewnumbers--default--mobile.png"
