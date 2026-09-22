@@ -6420,9 +6420,9 @@
     "learnMore": "See what's included →",
     "trialFailed": "The trial could not be started. Try again later.",
     "trialNeedsAdmin": "Ask an administrator to start the trial.",
-    "trialUnavailable": "A free trial is not available for this feature.",
-    "trialEnded": "Your free trial of this feature has ended.",
-    "tryFree": "Try free for 14 days"
+    "trialUnavailable": "A free trial is not available right now.",
+    "trialEnded": "Your free Pro trial has ended.",
+    "tryFree": "Try Pro free"
   },
   "announcements": {
     "latestRelease": "Latest release",

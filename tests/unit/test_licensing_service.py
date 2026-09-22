@@ -372,6 +372,9 @@ async def test_feature_trial_grants_the_feature_on_a_community_plan(
     summary = get_entitlement_summary(db_session)
     assert [f["feature"] for f in summary["trial_features"]] == ["archive_history"]
     assert summary["expired_trial_features"] == []
+    # A trial is not a license: the licensing screen still offers the key
+    # field and the buy link while it runs.
+    assert summary["ui_state"] == "community"
 
 
 @pytest.mark.unit

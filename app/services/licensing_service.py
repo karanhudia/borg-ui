@@ -328,7 +328,10 @@ def _access_level(state: LicensingState) -> str:
 def _ui_state(state: LicensingState) -> str:
     if state.status == "active" and state.is_trial:
         return "full_access_active"
-    if state.status == "active":
+    # A feature trial is an active entitlement on the community plan: it grants
+    # its features and nothing else, so the licensing screen must keep offering
+    # the key field and the buy link rather than reading it as a paid license.
+    if state.status == "active" and (state.plan or "community") != "community":
         return "paid_active"
     if state.trial_consumed:
         return "full_access_expired"

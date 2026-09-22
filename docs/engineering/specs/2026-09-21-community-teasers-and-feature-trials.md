@@ -165,16 +165,23 @@ install is an entitlement with `plan: "community"`, one override, and an
   (feature plus `expires_at`, from the overrides of an active entitlement) and
   `expired_trial_features` (the same from an entitlement that has lapsed), so
   the UI can show a countdown and an end-of-trial state without new local state.
-- **Policy lives on the server.** One trial per feature per instance, the
-  length, and whether a new release re-opens one are the activation service's
-  call, not a local ledger. This is self-hosted software: a local ledger is
-  both more code and trivially editable.
+- **Policy lives on the server.** How much one claim opens, the length, and
+  whether a new release re-opens one are the activation service's call, not a
+  local ledger. This is self-hosted software: a local ledger is both more code
+  and trivially editable.
+- **One claim per release, not per feature (agreed 2026-09-22).** The prompt
+  appears at every Pro lock, so claiming feature by feature would be a chore
+  for the reader and a rolling free ride for us. The service maps the
+  requested feature to the release bundle it belongs to and opens all of it;
+  a second lock during the trial is already open, and after it a second claim
+  answers `trial_already_used`. An instance already holding a license, an
+  admin grant or a running full-access trial is answered `already_entitled`.
 - **14 days, not 7.** Value here appears on backup and prune cadence. A weekly
   plan plus a monthly prune shows a 7-day trial almost nothing.
 
 ### 3.1 UI
 
-- `UpgradePrompt` gains a "Try free for 14 days" action when the feature has no
+- `UpgradePrompt` gains a "Try Pro free" action when the feature has no
   trial recorded. A `denied` answer replaces it inline with the reason; nothing
   is pre-checked, so no extra round trip on every render.
 - A countdown next to the plan badge while a feature trial is active: "Pro
@@ -209,7 +216,7 @@ half-translated screen is the failure mode, not the extra strings.
 | --- | --- | --- |
 | 1 Indexing for everyone | done, not committed | `history_enabled` stays the read gate; the build path stops calling it (`chain_for_repository`, `history_possible`, `history_possible_for`, `enqueue_backup_followups`, `enqueue_reconcile_run(s)`, `reconcile_kinds` lose their `history` parameter, the `history_index` executor loses its `plan_locked` skip, and the `rebuild` route resolves its chain with `history=True`). `_on_plan_changed` deleted. |
 | 2 Free teasers | done, not committed | `/changes`, `/history` and `/search` lose their `ARCHIVE_HISTORY` dependency and shape their own responses with `detail_locked`; `lost_files` is computed on every plan and stripped of `top` and `by_folder` for Community. Four locked states replaced: the lost-files panel keeps its count, the changes tab shows a totals strip, search runs with a match count, the file history panel shows a version count. `ArchiveChangesPreview` (the blurred mock) deleted. |
-| 3 Per-feature trials | done, not committed | `request_feature_trial` posts `requested_feature` to `/v1/trials/activate`; `POST /api/system/licensing/feature-trial` (admin); `trial_features` and `expired_trial_features` on the entitlement summary; a "Try free for 14 days" action on `UpgradePrompt` at every lock, and a countdown on `PlanBadge`. The activation service does not implement `requested_feature` yet, so today every request comes back `denied` and the UI says the trial is unavailable. |
+| 3 Per-feature trials | done, not committed | `request_feature_trial` posts `requested_feature` to `/v1/trials/activate`; `POST /api/system/licensing/feature-trial` (admin); `trial_features` and `expired_trial_features` on the entitlement summary; a "Try Pro free" action on `UpgradePrompt` at every lock, and a countdown on `PlanBadge`. The activation service implements `requested_feature` as a release bundle (borg-ui-license-platform, `feature-trials.ts`): one claim per instance opens every Pro feature 2.3 offers a trial on, for 14 days, so a reader does not claim each lock in turn. The grant is a community-plan entitlement carrying an override per feature, `is_trial` false, reissued on refresh while it runs. |
 
 Verified 2026-09-21: backend unit suite, frontend typecheck, lint, 2878 tests,
 locale parity (4 locales) and format all green. Storybook checked in light and

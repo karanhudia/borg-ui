@@ -6420,9 +6420,9 @@
     "learnMore": "Siehe, was enthalten ist →",
     "trialFailed": "Der Test konnte nicht gestartet werden. Versuchen Sie es später erneut.",
     "trialNeedsAdmin": "Bitten Sie eine Administratorin oder einen Administrator, den Test zu starten.",
-    "trialUnavailable": "Für diese Funktion ist kein kostenloser Test verfügbar.",
-    "trialEnded": "Ihr kostenloser Test dieser Funktion ist beendet.",
-    "tryFree": "14 Tage kostenlos testen"
+    "trialUnavailable": "Derzeit ist kein kostenloser Test verfügbar.",
+    "trialEnded": "Ihr kostenloser Pro-Test ist beendet.",
+    "tryFree": "Pro kostenlos testen"
   },
   "announcements": {
     "latestRelease": "Neueste Version",

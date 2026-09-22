@@ -6420,9 +6420,9 @@
     "learnMore": "Ver qué incluye →",
     "trialFailed": "No se pudo iniciar la prueba. Inténtelo de nuevo más tarde.",
     "trialNeedsAdmin": "Pida a un administrador que inicie la prueba.",
-    "trialUnavailable": "No hay prueba gratuita disponible para esta función.",
-    "trialEnded": "Su prueba gratuita de esta función ha terminado.",
-    "tryFree": "Prueba gratis 14 días"
+    "trialUnavailable": "Ahora mismo no hay prueba gratuita disponible.",
+    "trialEnded": "Su prueba gratuita de Pro ha terminado.",
+    "tryFree": "Prueba Pro gratis"
   },
   "announcements": {
     "latestRelease": "Última versión",
