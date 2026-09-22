@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-09-22T14:36:28.087Z",
+  "generatedAt": "2026-09-22T14:57:40.012Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1156 visual report",
     "commitSha": "18a2c44affa8",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35741329794"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35743703565"
   },
   "totals": {
     "baseline": 962,
@@ -21,9 +21,9 @@
       "baselinePath": "images/baseline/components-archives-archivechangestab--locked--mobile.png",
       "actualPath": "images/actual/components-archives-archivechangestab--locked--mobile.png",
       "diffPath": "images/diff/components-archives-archivechangestab--locked--mobile.png",
-      "diffPixels": 120182,
+      "diffPixels": 120314,
       "totalPixels": 329160,
-      "diffRatio": 0.3651172681978369,
+      "diffRatio": 0.3655182889780046,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -39,9 +39,9 @@
       "baselinePath": "images/baseline/components-archives-archivechangestab--locked.png",
       "actualPath": "images/actual/components-archives-archivechangestab--locked.png",
       "diffPath": "images/diff/components-archives-archivechangestab--locked.png",
-      "diffPixels": 228811,
+      "diffPixels": 230313,
       "totalPixels": 1024000,
-      "diffRatio": 0.2234482421875,
+      "diffRatio": 0.2249150390625,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -273,9 +273,9 @@
       "baselinePath": "images/baseline/components-archives-filehistorypanel--locked--mobile.png",
       "actualPath": "images/actual/components-archives-filehistorypanel--locked--mobile.png",
       "diffPath": "images/diff/components-archives-filehistorypanel--locked--mobile.png",
-      "diffPixels": 63621,
+      "diffPixels": 64305,
       "totalPixels": 329160,
-      "diffRatio": 0.19328290193219103,
+      "diffRatio": 0.19536091870215094,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -291,9 +291,9 @@
       "baselinePath": "images/baseline/components-archives-filehistorypanel--locked.png",
       "actualPath": "images/actual/components-archives-filehistorypanel--locked.png",
       "diffPath": "images/diff/components-archives-filehistorypanel--locked.png",
-      "diffPixels": 90631,
+      "diffPixels": 93095,
       "totalPixels": 1024000,
-      "diffRatio": 0.0885068359375,
+      "diffRatio": 0.0909130859375,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
