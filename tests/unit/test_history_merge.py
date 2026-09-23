@@ -371,3 +371,31 @@ async def test_a_history_merge_queued_before_the_upgrade_is_skipped(db, repo):
     )
     assert out.status == "skipped"
     assert out.skip_reason == "merged_by_archive_sync"
+
+
+@pytest.mark.unit
+async def test_a_failed_fold_does_not_fail_the_listing(db, repo, monkeypatch):
+    """One archive whose fold fails must not cost the listing its count, its
+    other deletions, or the stats run that depends on it: the row stays for
+    the next listing and the run finishes with warnings."""
+    keep = _archive(db, repo, "keep", 5, state="pending")
+    stuck = _archive(db, repo, "stuck", 1, state="pending")
+    gone = _archive(db, repo, "gone", 2, state="pending")
+    stuck_id, gone_id = stuck.id, gone.id
+    real = history.merge_removed_archive
+
+    def merge(db, removed, **kwargs):
+        if removed.id == stuck_id:
+            db.rollback()
+            raise RuntimeError("disk full")
+        return real(db, removed, **kwargs)
+
+    monkeypatch.setattr(history, "merge_removed_archive", merge)
+    out = await _sync(db, repo, stuck, gone, monkeypatch=monkeypatch)
+    assert out.status == "completed_with_warnings"
+    assert out.result["fold_failed"] == [stuck_id]
+    assert db.get(Archive, gone_id) is None
+    assert db.get(Archive, stuck_id) is not None
+    db.refresh(repo)
+    assert repo.archive_count == 1
+    assert repo.last_backup == keep.start

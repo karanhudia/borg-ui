@@ -695,15 +695,31 @@ async def run_archive_sync(ctx) -> Outcome:
         from app.services.operations.executors.history import merge_removed_archive
 
         folds = {"folded": 0, "reset": 0, "dropped": 0}
+        fold_failed: list[int] = []
         for archive_id in removed_ids:
             removed = db.get(Archive, archive_id)
             if removed is None:
                 continue
-            # A successor that loses its base waits for a history run, or
-            # takes the state the listing writes below where none will come.
-            outcome = merge_removed_archive(
-                db, removed, reset_state="skipped" if history_unreachable else "pending"
-            )
+            try:
+                # A successor that loses its base waits for a history run, or
+                # takes the state the listing writes below where none will come.
+                outcome = merge_removed_archive(
+                    db,
+                    removed,
+                    reset_state="skipped" if history_unreachable else "pending",
+                )
+            except Exception as exc:
+                # The fold rolled back and the row stays for the next listing;
+                # one stuck archive must not cost the listing its count or the
+                # stats run that depends on it.
+                logger.warning(
+                    "folding a removed archive failed",
+                    repository_id=repository.id,
+                    archive_id=archive_id,
+                    error=str(exc),
+                )
+                fold_failed.append(archive_id)
+                continue
             folds[outcome] += 1
         if history_unreachable:
             # No history run reaches an agent's repository whose agent cannot
@@ -758,7 +774,7 @@ async def run_archive_sync(ctx) -> Outcome:
             env,
             limit=settings.index_archive_info_per_run,
         )
-        write_repository_archive_columns(db, repository)
+        write_repository_archive_columns(db, repository, exclude_ids=fold_failed)
         _publish_mqtt_state(db, "operations archive sync")
         ctx.log(
             f"listed {len(entries)} archives, {len(new_rows)} new, "
@@ -769,15 +785,17 @@ async def run_archive_sync(ctx) -> Outcome:
             total=len(entries),
             message=f"{len(entries)} archives",
         )
-        return Outcome(
-            result={
-                "listed": len(entries),
-                "new": len(new_rows),
-                "info_filled": filled,
-                "removed_archive_ids": removed_ids,
-                **folds,
-            }
-        )
+        result = {
+            "listed": len(entries),
+            "new": len(new_rows),
+            "info_filled": filled,
+            "removed_archive_ids": removed_ids,
+            **folds,
+        }
+        if fold_failed:
+            result["fold_failed"] = fold_failed
+            return Outcome(status="completed_with_warnings", result=result)
+        return Outcome(result=result)
     finally:
         cleanup_temp_key_file(temp_key_file)
 

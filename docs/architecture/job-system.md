@@ -516,8 +516,11 @@ Two more index kinds fill and maintain `archive_changes`:
   the same transaction, one per archive. The listing holds the repository's
   metadata lane throughout, so nothing can reuse a row ID in between, and a
   run that dies halfway leaves rows the next listing reports and deletes
-  again. The result keeps `removed_archive_ids` (the prune evidence and the
-  retention comparison read it) and the fold outcome counts. The info
+  again. A fold that fails is logged and left for the next listing; the
+  run still writes the count (without that row) and finishes
+  `completed_with_warnings`, naming it in `fold_failed`, so its `stats`
+  still runs. The result keeps `removed_archive_ids` (the prune evidence and
+  the retention comparison read it) and the fold outcome counts. The info
   dialog's own listing reports removals without deleting them (it runs
   outside the lane); the next `archive_sync` deletes them, and the storage
   sums leave them out in between.
