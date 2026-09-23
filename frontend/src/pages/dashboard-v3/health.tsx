@@ -12,7 +12,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { formatDateTimeFull } from '../../utils/dateUtils'
-import { useT } from './tokens'
+import { useT, type Tokens } from './tokens'
 
 /**
  * Status dot. Was an animated pulse ring with a colored glow; now a static
@@ -43,12 +43,8 @@ type DimStatusItem = {
   tooltip?: string
 }
 
-const DIM_STATUS: Record<string, { color: string }> = {
-  healthy: { color: '#22c55e' },
-  warning: { color: '#f59e0b' },
-  critical: { color: '#ef4444' },
-  unknown: { color: '#475569' },
-}
+const dimStatusColor = (status: string, T: Tokens): string =>
+  ({ healthy: T.green, warning: T.amber, critical: T.red })[status] ?? T.textMuted
 
 function dimSince(dt: string | null, t: (key: string) => string): string {
   if (!dt) return t('common.never')
@@ -84,7 +80,7 @@ function restoreDimValue(
 }
 
 function DimIcon({ status, size = 11 }: { status: string; size?: number }) {
-  const { color } = DIM_STATUS[status] ?? DIM_STATUS.unknown
+  const color = dimStatusColor(status, useT())
   if (status === 'healthy') return <CheckCircle2 size={size} color={color} />
   if (status === 'warning') return <AlertTriangle size={size} color={color} />
   if (status === 'critical') return <XCircle size={size} color={color} />
@@ -189,7 +185,7 @@ export function DimStatusGrid({
       }}
     >
       {items.map((item) => {
-        const { color } = DIM_STATUS[item.status] ?? DIM_STATUS.unknown
+        const color = dimStatusColor(item.status, T)
         return (
           <Stack
             key={item.label}

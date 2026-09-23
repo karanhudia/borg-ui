@@ -51,7 +51,7 @@ export default function SyncStateChip({
         icon={<Box sx={{ display: 'flex', alignItems: 'center', pl: 0.5, color }}>{icon}</Box>}
         label={label}
         sx={{
-          bgcolor: alpha(color, theme.palette.mode === 'dark' ? 0.18 : 0.1),
+          bgcolor: alpha(color, theme.palette.mode === 'dark' ? 0.16 : 0.1),
           color,
           fontWeight: 600,
           '& .MuiChip-icon': { color },

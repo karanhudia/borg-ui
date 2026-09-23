@@ -206,9 +206,10 @@ function ColorizedOutput({ text, isFailed = false }: ColorizedOutputProps) {
           : theme.palette.error.dark,
     rule: isDark ? theme.palette.warning.light : '#b45309',
     name: isDark ? alpha('#fff', 0.82) : alpha('#000', 0.82),
-    date: isDark ? alpha('#fff', 0.45) : alpha('#000', 0.42),
-    hash: isDark ? alpha('#fff', 0.25) : alpha('#000', 0.28),
-    plain: isDark ? alpha('#fff', 0.55) : alpha('#000', 0.55),
+    // Quieter than the name, but every span stays at 4.5:1 or better.
+    date: isDark ? alpha('#fff', 0.66) : alpha('#000', 0.62),
+    hash: isDark ? alpha('#fff', 0.6) : alpha('#000', 0.58),
+    plain: isDark ? alpha('#fff', 0.66) : alpha('#000', 0.62),
   }
 
   return (

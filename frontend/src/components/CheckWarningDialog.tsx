@@ -150,7 +150,7 @@ export default function CheckWarningDialog({
               display: 'flex',
               alignItems: 'center',
               gap: 0.5,
-              color: 'warning.light',
+              color: 'warning.main',
             }}
           >
             <Typography

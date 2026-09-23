@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Box, Divider } from '@mui/material'
-import { ThemeProvider } from '@mui/material/styles'
+import { ThemeProvider, alpha } from '@mui/material/styles'
+import { getPlanAccent } from './planDrawerColors'
 import { SidebarUpdateNoticeView } from './SidebarUpdateNotice'
 import { darkTheme } from '../theme'
 
@@ -150,9 +151,10 @@ export const StackedAbovePlanBadge: Story = {
             px: 1,
             py: 0.625,
             borderRadius: 1.5,
-            bgcolor: 'rgba(91, 33, 182, 0.08)',
-            border: '1px solid rgba(91, 33, 182, 0.22)',
-            color: '#5b21b6',
+            bgcolor: (theme) => alpha(getPlanAccent('pro', theme), 0.08),
+            border: '1px solid',
+            borderColor: (theme) => alpha(getPlanAccent('pro', theme), 0.22),
+            color: (theme) => getPlanAccent('pro', theme),
             fontWeight: 700,
             fontSize: '0.7rem',
             letterSpacing: '0.05em',

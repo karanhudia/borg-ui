@@ -105,7 +105,7 @@ export default function PasswordSetupCard({ onComplete }: { onComplete: () => vo
         >
           {t('firstLoginSetup.title')}
         </h2>
-        <p style={{ margin: 0, fontSize: 14, color: '#64748b' }}>
+        <p style={{ margin: 0, fontSize: 14, color: '#8391a5' }}>
           {t('firstLoginSetup.description')}
         </p>
       </div>
@@ -151,7 +151,7 @@ export default function PasswordSetupCard({ onComplete }: { onComplete: () => vo
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
-                  color: '#64748b',
+                  color: '#8391a5',
                   display: 'flex',
                   alignItems: 'center',
                   padding: 4,
@@ -159,7 +159,7 @@ export default function PasswordSetupCard({ onComplete }: { onComplete: () => vo
                   transition: 'color 0.15s ease',
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.color = '#94a3b8')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = '#64748b')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = '#8391a5')}
               >
                 {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
@@ -206,7 +206,7 @@ export default function PasswordSetupCard({ onComplete }: { onComplete: () => vo
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
-                  color: '#64748b',
+                  color: '#8391a5',
                   display: 'flex',
                   alignItems: 'center',
                   padding: 4,
@@ -214,7 +214,7 @@ export default function PasswordSetupCard({ onComplete }: { onComplete: () => vo
                   transition: 'color 0.15s ease',
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.color = '#94a3b8')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = '#64748b')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = '#8391a5')}
               >
                 {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>

@@ -1,4 +1,4 @@
-import { Alert, Box, Chip, Stack, Typography } from '@mui/material'
+import { Alert, Box, Chip, Stack, Typography, useTheme } from '@mui/material'
 import {
   CalendarClock,
   Code,
@@ -26,10 +26,6 @@ import { buildRoutePreviews, routeExecutorLabelKey } from '../routePreview'
 import { formatSshConnectionLabel, getPathBasename } from './helpers'
 import type { BackupPlanWizardStepProps } from './types'
 
-const REVIEW_BLUE = '#3b82f6'
-const REVIEW_VIOLET = '#8b5cf6'
-const REVIEW_EMERALD = '#10b981'
-
 type ReviewStepProps = Pick<
   BackupPlanWizardStepProps,
   'wizardState' | 'repositories' | 'agentMachines' | 'selectedSourceConnection' | 'scripts' | 't'
@@ -43,6 +39,7 @@ export function ReviewStep({
   scripts,
   t,
 }: ReviewStepProps) {
+  const theme = useTheme()
   const sourceLocationLabel =
     wizardState.sourceType === 'agent'
       ? t('backupPlans.sourceChooser.managedAgent')
@@ -134,7 +131,7 @@ export function ReviewStep({
         <ReviewSectionCard
           icon={<ListChecks size={14} />}
           label={t('backupPlans.wizard.review.plan')}
-          accentColor={REVIEW_BLUE}
+          accentColor={theme.palette.primary.main}
         >
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
             <Typography
@@ -323,7 +320,7 @@ export function ReviewStep({
         <ReviewSectionCard
           icon={<Database size={14} />}
           label={t('backupPlans.wizard.review.repositories')}
-          accentColor={REVIEW_BLUE}
+          accentColor={theme.palette.primary.main}
           trailing={
             wizardState.repositoryIds.length > 1 ? (
               <ReviewCount>{wizardState.repositoryIds.length}</ReviewCount>
@@ -449,7 +446,7 @@ export function ReviewStep({
         <ReviewSectionCard
           icon={<Settings size={14} />}
           label={t('backupPlans.wizard.steps.settings')}
-          accentColor={REVIEW_VIOLET}
+          accentColor={theme.palette.secondary.main}
         >
           <ReviewAttrRow label={t('backupPlans.wizard.fields.archiveNameTemplate')}>
             <ReviewCodePill maxChars={28}>{wizardState.archiveNameTemplate}</ReviewCodePill>
@@ -535,7 +532,7 @@ export function ReviewStep({
         <ReviewSectionCard
           icon={<Code size={14} />}
           label={t('backupPlans.wizard.steps.scripts')}
-          accentColor={REVIEW_VIOLET}
+          accentColor={theme.palette.secondary.main}
         >
           <ReviewAttrRow label={t('backupPlans.wizard.review.planPreScript')}>
             <Typography
@@ -570,7 +567,7 @@ export function ReviewStep({
         <ReviewSectionCard
           icon={<CalendarClock size={14} />}
           label={t('backupPlans.wizard.steps.schedule')}
-          accentColor={REVIEW_EMERALD}
+          accentColor={theme.palette.success.main}
           trailing={
             <ReviewStatus
               enabled={wizardState.scheduleEnabled}
@@ -638,7 +635,7 @@ export function ReviewStep({
         <ReviewSectionCard
           icon={<Wrench size={14} />}
           label={t('backupPlans.wizard.maintenance.title')}
-          accentColor={REVIEW_EMERALD}
+          accentColor={theme.palette.success.main}
         >
           <ReviewAttrRow label={t('backupPlans.wizard.review.prune')}>
             <ReviewStatus

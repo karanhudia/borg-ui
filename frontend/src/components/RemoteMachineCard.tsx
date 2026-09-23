@@ -8,6 +8,8 @@ import {
   useTheme,
   alpha,
 } from '@mui/material'
+import type { Theme } from '@mui/material/styles'
+import { toneColor, type Tone } from './shared/tones'
 import {
   CheckCircle,
   XCircle,
@@ -69,13 +71,16 @@ interface RemoteMachineCardProps {
   canManageConnections?: boolean
 }
 
-const STATUS_ACCENT: Record<string, string> = {
-  connected: '#059669',
-  failed: '#ef4444',
-  testing: '#f59e0b',
+// Palette tones, not hex: the accent is also the status label's text
+// colour, and the theme's shades are the ones that stay readable.
+const STATUS_ACCENT: Record<string, Tone> = {
+  connected: 'success',
+  failed: 'error',
+  testing: 'warning',
 }
 
-const getStatusAccent = (status: string) => STATUS_ACCENT[status] ?? '#6b7280'
+const getStatusAccent = (status: string, theme: Theme) =>
+  toneColor(theme, STATUS_ACCENT[status] ?? 'neutral')
 
 const getStatusIcon = (status: string) => {
   switch (status) {
@@ -109,7 +114,7 @@ export default function RemoteMachineCard({
   const { t } = useTranslation()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
-  const accent = getStatusAccent(machine.status)
+  const accent = getStatusAccent(machine.status, theme)
   // df cannot run on a Borg-only key, so storage refresh is a dead end there.
   const isRestricted = Boolean(machine.shell_restricted)
   const refreshStorageTooltip = isRestricted
@@ -132,7 +137,7 @@ export default function RemoteMachineCard({
     const color = theme.palette[colorKey].main
     return {
       ...iconBtnSx,
-      color: alpha(color, isDark ? 0.65 : 0.55),
+      color: alpha(color, 0.75),
       '&:hover': {
         bgcolor: alpha(color, isDark ? 0.12 : 0.09),
         color,
@@ -189,7 +194,7 @@ export default function RemoteMachineCard({
                   fontWeight: 700,
                   textTransform: 'uppercase',
                   letterSpacing: '0.08em',
-                  color: alpha(accent, 0.9),
+                  color: accent,
                   lineHeight: 1,
                 }}
               >
@@ -339,7 +344,7 @@ export default function RemoteMachineCard({
                       fontWeight: 700,
                       textTransform: 'uppercase',
                       letterSpacing: '0.06em',
-                      color: alpha(col.color, 0.75),
+                      color: col.color,
                       lineHeight: 1,
                       mb: 0.5,
                     }}
@@ -646,7 +651,7 @@ export default function RemoteMachineCard({
                   onClick={() => onDelete(machine)}
                   sx={{
                     ...iconBtnSx,
-                    color: alpha(theme.palette.error.main, 0.6),
+                    color: alpha(theme.palette.error.main, 0.75),
                     '&:hover': {
                       color: theme.palette.error.main,
                       bgcolor: alpha(theme.palette.error.main, isDark ? 0.15 : 0.1),

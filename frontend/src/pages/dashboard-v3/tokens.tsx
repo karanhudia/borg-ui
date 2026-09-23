@@ -17,17 +17,22 @@ export const makeT = (isDark: boolean) => ({
   border: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)',
   borderHover: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.18)',
   textPrimary: isDark ? '#e2e8f0' : '#1e293b',
-  textMuted: isDark ? '#94a3b8' : '#64748b',
-  textDim: isDark ? '#64748b' : '#94a3b8',
-  green: '#22c55e',
+  textMuted: isDark ? '#94a3b8' : '#475569',
+  textDim: isDark ? '#8b98ab' : '#5b6576',
+  // Accents are used as text and icon colour, not only as fills, so each
+  // theme gets a shade that clears WCAG AA 4.5:1 on its card surfaces and
+  // on the accent's own dim tint. The *Dim tints stay on the bright hue.
+  green: isDark ? '#4ade80' : '#15733a',
   greenDim: isDark ? 'rgba(34,197,94,0.1)' : 'rgba(34,197,94,0.12)',
-  amber: '#f59e0b',
+  amber: isDark ? '#fbbf24' : '#92400e',
   amberDim: isDark ? 'rgba(245,158,11,0.1)' : 'rgba(245,158,11,0.12)',
-  red: '#ef4444',
+  red: isDark ? '#f98080' : '#b91c1c',
   redDim: isDark ? 'rgba(239,68,68,0.1)' : 'rgba(239,68,68,0.12)',
-  blue: '#3b82f6',
+  blue: isDark ? '#6aabfa' : '#1d4ed8',
   blueDim: isDark ? 'rgba(59,130,246,0.1)' : 'rgba(59,130,246,0.12)',
-  indigo: '#6366f1',
+  indigo: isDark ? '#a5b4fc' : '#4338ca',
+  violet: isDark ? '#c4b5fd' : '#6d28d9',
+  cyan: isDark ? '#22d3ee' : '#0e6f8a',
   indigoDim: isDark ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.1)',
   mono: '"JetBrains Mono","Fira Code","Cascadia Code",ui-monospace,monospace',
   radius: '14px',
@@ -38,7 +43,7 @@ export const makeT = (isDark: boolean) => ({
   repoBadgeBg: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
   hoverBg: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
   todayCol: isDark ? 'rgba(99,102,241,0.06)' : 'rgba(99,102,241,0.08)',
-  axisLabel: isDark ? '#475569' : '#94a3b8',
+  axisLabel: isDark ? '#8b98ab' : '#5b6576',
   insetLine: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
 })
 
@@ -84,9 +89,10 @@ export const JOB_COLOR: Record<string, string> = {
 // Repository destination type → accent color. Picked so chips are
 // distinguishable from status colors (green/amber/red) and from each
 // other. LOCAL is the brand blue since it's the default destination.
-export const TYPE_COLOR: Record<string, string> = {
-  local: '#3b82f6',
-  ssh: '#6366f1',
-  sftp: '#8b5cf6',
-  rclone: '#06b6d4',
-}
+export const typeColor = (type: string, T: Tokens): string =>
+  ({
+    local: T.blue,
+    ssh: T.indigo,
+    sftp: T.violet,
+    rclone: T.cyan,
+  })[type.toLowerCase()] ?? T.textMuted

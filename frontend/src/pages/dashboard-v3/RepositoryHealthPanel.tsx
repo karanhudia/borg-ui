@@ -7,7 +7,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { formatDateTimeFull } from '../../utils/dateUtils'
 import { translateBackendKey } from '../../utils/translateBackendKey'
 import { DimStatusGrid, PulseDot, ScheduleBadge } from './health'
-import { STATUS, TYPE_COLOR, type Tokens } from './tokens'
+import { STATUS, typeColor, type Tokens } from './tokens'
 import type { DashboardOverview } from './types'
 
 type RepositoryHealth = DashboardOverview['repository_health']
@@ -16,12 +16,12 @@ type CurrentFailures = NonNullable<DashboardOverview['current_failures']>
 
 /**
  * Two small chips rendered identically on both the compact and full repo
- * card variants: the destination-type chip (colored by `TYPE_COLOR`) and an
+ * card variants: the destination-type chip (colored by `typeColor`) and an
  * optional "Observe Only" chip when the repo is in observe mode.
  */
 function RepoTypeChips({ repo, T }: { repo: RepoCardData; T: Tokens }) {
   const { t } = useTranslation()
-  const tColor = TYPE_COLOR[repo.type.toLowerCase()] ?? T.textMuted
+  const tColor = typeColor(repo.type, T)
   return (
     <>
       <Chip

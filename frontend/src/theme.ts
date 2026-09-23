@@ -10,37 +10,45 @@ export const subjectText = (theme: Theme) => alpha(theme.palette.text.primary, 0
 export const theme = createTheme({
   palette: {
     mode: 'light',
+    // Every `main` below is used as text on white, on gray-50 and on the
+    // 8-16% tints chips and stat tiles lay under it, so each one clears
+    // WCAG AA 4.5:1 on all of those, and white text on it clears 4.5:1 too.
+    // `light` keeps the brighter shade for fills, borders and icons.
     primary: {
-      main: '#2563eb', // Blue 600
-      light: '#3b82f6', // Blue 500
-      dark: '#1e40af', // Blue 700
+      main: '#1d4ed8', // Blue 700
+      light: '#2563eb', // Blue 600
+      dark: '#1e40af', // Blue 800
       contrastText: '#ffffff',
     },
     secondary: {
-      main: '#7c3aed', // Violet 600
-      light: '#8b5cf6', // Violet 500
-      dark: '#6d28d9', // Violet 700
+      main: '#6d28d9', // Violet 700
+      light: '#7c3aed', // Violet 600
+      dark: '#5b21b6', // Violet 800
       contrastText: '#ffffff',
     },
     success: {
-      main: '#16a34a', // Green 600
-      light: '#22c55e', // Green 500
-      dark: '#15803d', // Green 700
+      main: '#15733a', // Between Green 700 and 800
+      light: '#16a34a', // Green 600
+      dark: '#166534', // Green 800
+      contrastText: '#ffffff',
     },
     error: {
-      main: '#dc2626', // Red 600
-      light: '#ef4444', // Red 500
-      dark: '#b91c1c', // Red 700
+      main: '#b91c1c', // Red 700
+      light: '#dc2626', // Red 600
+      dark: '#991b1b', // Red 800
+      contrastText: '#ffffff',
     },
     warning: {
-      main: '#ea580c', // Orange 600
-      light: '#f97316', // Orange 500
-      dark: '#c2410c', // Orange 700
+      main: '#96500a', // Amber-orange, kept 30 degrees away from error red
+      light: '#ea580c', // Orange 600
+      dark: '#9a3412', // Orange 800
+      contrastText: '#ffffff',
     },
     info: {
-      main: '#0891b2', // Cyan 600
-      light: '#06b6d4', // Cyan 500
-      dark: '#0e7490', // Cyan 700
+      main: '#0c6780', // Between Cyan 700 and 800
+      light: '#0891b2', // Cyan 600
+      dark: '#155e75', // Cyan 800
+      contrastText: '#ffffff',
     },
     background: {
       default: '#f9fafb', // Gray 50
@@ -49,7 +57,9 @@ export const theme = createTheme({
     text: {
       primary: '#111827', // Gray 900
       secondary: '#4b5563', // Gray 600 (WCAG AA on tinted surfaces: 7.04:1 on gray-100)
-      disabled: '#6b7280', // Gray 500 (reserved for disabled states only)
+      // Lighter than secondary, but still 4.5:1 on tinted surfaces: 136
+      // call sites use it for quiet captions, not only disabled controls.
+      disabled: '#5f6672',
     },
   },
   typography: {
@@ -175,17 +185,45 @@ export const darkTheme = createTheme({
   ...theme,
   palette: {
     mode: 'dark',
+    // Same rule as light, against zinc-800 paper and its 16% tints. The
+    // mains are 300/400 shades, so filled controls carry dark text.
+    // Without these, success/warning/error/info fell back to MUI's
+    // defaults, and its #f44336 error red fails as text on paper.
     primary: {
-      main: '#3b82f6', // Blue 500
-      light: '#60a5fa', // Blue 400
-      dark: '#2563eb', // Blue 600
-      contrastText: '#ffffff',
+      main: '#6aabfa', // Blue 400, lifted
+      light: '#93c5fd', // Blue 300
+      dark: '#3b82f6', // Blue 500
+      contrastText: '#0f172a',
     },
     secondary: {
-      main: '#8b5cf6', // Violet 500
-      light: '#a78bfa', // Violet 400
-      dark: '#7c3aed', // Violet 600
-      contrastText: '#ffffff',
+      main: '#ae96fb', // Between Violet 300 and 400
+      light: '#c4b5fd', // Violet 300
+      dark: '#8b5cf6', // Violet 500
+      contrastText: '#0f172a',
+    },
+    success: {
+      main: '#4ade80', // Green 400
+      light: '#86efac', // Green 300
+      dark: '#22c55e', // Green 500
+      contrastText: '#0f172a',
+    },
+    error: {
+      main: '#f98080', // Red 400, lifted
+      light: '#fca5a5', // Red 300
+      dark: '#ef4444', // Red 500
+      contrastText: '#0f172a',
+    },
+    warning: {
+      main: '#fb923c', // Orange 400
+      light: '#fdba74', // Orange 300
+      dark: '#f97316', // Orange 500
+      contrastText: '#0f172a',
+    },
+    info: {
+      main: '#22d3ee', // Cyan 400
+      light: '#67e8f9', // Cyan 300
+      dark: '#06b6d4', // Cyan 500
+      contrastText: '#0f172a',
     },
     background: {
       default: '#1a1a1a', // Soft dark gray
@@ -193,7 +231,7 @@ export const darkTheme = createTheme({
     },
     text: {
       primary: '#fafafa', // Zinc 50
-      secondary: '#a1a1aa', // Zinc 400
+      secondary: '#adadb5', // Zinc 400, lifted for 4.5:1 on chip fills
     },
   },
 })

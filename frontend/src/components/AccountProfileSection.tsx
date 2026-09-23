@@ -5,6 +5,7 @@ import {
   Stack,
   TextField,
   Typography,
+  alpha,
   useTheme,
 } from '@mui/material'
 import { User, Building2, Pencil, ShieldCheck, KeyRound, Calendar, Fingerprint } from 'lucide-react'
@@ -80,26 +81,25 @@ export default function AccountProfileSection({
   const iconBoxBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'
 
   // Badge color schemes
+  // Badge text takes the theme's palette shades, which clear 4.5:1 on their
+  // own tint in both modes. The 400-level hues these used were dark-only.
+  const tintBadge = (color: string) => ({
+    bg: alpha(color, 0.12),
+    border: alpha(color, 0.28),
+    text: color,
+  })
   const roleBadge = isAdmin
-    ? {
-        bg: 'rgba(168,85,247,0.12)',
-        border: 'rgba(168,85,247,0.28)',
-        text: 'rgb(192,132,252)',
-        icon: ShieldCheck,
-      }
+    ? { ...tintBadge(theme.palette.secondary.main), icon: ShieldCheck }
     : isOperator
-      ? {
-          bg: 'rgba(14,165,233,0.12)',
-          border: 'rgba(14,165,233,0.28)',
-          text: 'rgb(56,189,248)',
-          icon: KeyRound,
-        }
+      ? { ...tintBadge(theme.palette.info.main), icon: KeyRound }
       : {
           bg: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
           border: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)',
-          text: isDark ? 'rgb(161,161,170)' : 'rgb(113,113,122)',
+          text: theme.palette.text.secondary,
           icon: User,
         }
+  const totpBadge = tintBadge(theme.palette.success.main)
+  const passkeyBadge = tintBadge(theme.palette.warning.main)
 
   const RoleIcon = roleBadge.icon
 
@@ -155,7 +155,7 @@ export default function AccountProfileSection({
                     fontWeight: 700,
                     textTransform: 'uppercase',
                     letterSpacing: '0.08em',
-                    color: 'info.light',
+                    color: 'info.main',
                     mb: 0.35,
                   }}
                 >
@@ -220,16 +220,16 @@ export default function AccountProfileSection({
                     px: 1.25,
                     py: 0.5,
                     borderRadius: 10,
-                    bgcolor: 'rgba(34,197,94,0.10)',
-                    border: '1px solid rgba(34,197,94,0.24)',
+                    bgcolor: totpBadge.bg,
+                    border: `1px solid ${totpBadge.border}`,
                   }}
                 >
-                  <ShieldCheck size={12} style={{ color: 'rgb(74,222,128)' }} />
+                  <ShieldCheck size={12} style={{ color: totpBadge.text }} />
                   <Typography
                     variant="caption"
                     sx={{
                       fontWeight: 700,
-                      color: 'rgb(74,222,128)',
+                      color: totpBadge.text,
                       lineHeight: 1,
                       letterSpacing: '0.02em',
                     }}
@@ -249,16 +249,16 @@ export default function AccountProfileSection({
                     px: 1.25,
                     py: 0.5,
                     borderRadius: 10,
-                    bgcolor: 'rgba(251,191,36,0.10)',
-                    border: '1px solid rgba(251,191,36,0.24)',
+                    bgcolor: passkeyBadge.bg,
+                    border: `1px solid ${passkeyBadge.border}`,
                   }}
                 >
-                  <Fingerprint size={12} style={{ color: 'rgb(252,211,77)' }} />
+                  <Fingerprint size={12} style={{ color: passkeyBadge.text }} />
                   <Typography
                     variant="caption"
                     sx={{
                       fontWeight: 700,
-                      color: 'rgb(252,211,77)',
+                      color: passkeyBadge.text,
                       lineHeight: 1,
                       letterSpacing: '0.02em',
                     }}
@@ -283,7 +283,7 @@ export default function AccountProfileSection({
                     borderColor: subtleBorder,
                   }}
                 >
-                  <Calendar size={12} style={{ color: 'rgb(161,161,170)', opacity: 0.8 }} />
+                  <Calendar size={12} style={{ color: theme.palette.text.secondary }} />
                   <Typography
                     variant="caption"
                     sx={{

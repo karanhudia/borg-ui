@@ -18,7 +18,7 @@ export default function BorgVersionChip({ borgVersion, compact = false }: BorgVe
         fontSize: compact ? '0.6rem' : '0.65rem',
         fontWeight: 700,
         fontFamily: 'monospace',
-        bgcolor: '#6366f1',
+        bgcolor: '#4f46e5', // Indigo 600: white text clears 4.5:1
         color: '#fff',
         border: 'none',
         letterSpacing: 0.5,

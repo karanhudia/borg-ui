@@ -30,6 +30,8 @@ import {
   Typography,
   useTheme,
 } from '@mui/material'
+import type { Theme } from '@mui/material/styles'
+import { toneColor, type Tone } from '../components/shared/tones'
 import {
   Activity,
   AlertTriangle,
@@ -978,14 +980,17 @@ export function AgentSetupHelpContent({
   )
 }
 
-const AGENT_STATUS_ACCENT: Record<string, string> = {
-  online: '#059669',
-  offline: '#6b7280',
-  revoked: '#ef4444',
-  disabled: '#ef4444',
+// Palette tones, not hex: the accent is also the status label's text
+// colour, and the theme's shades are the ones that stay readable.
+const AGENT_STATUS_ACCENT: Record<string, Tone | 'neutral'> = {
+  online: 'success',
+  offline: 'neutral',
+  revoked: 'error',
+  disabled: 'error',
 }
 
-const getAgentStatusAccent = (status: string) => AGENT_STATUS_ACCENT[status] ?? '#6b7280'
+const getAgentStatusAccent = (status: string, theme: Theme) =>
+  toneColor(theme, AGENT_STATUS_ACCENT[status] ?? 'neutral')
 
 const getAgentStatusIcon = (status: string) => {
   switch (status) {
@@ -1650,7 +1655,7 @@ export function AgentList({
         }}
       >
         {agents.map((agent) => {
-          const accent = getAgentStatusAccent(agent.status)
+          const accent = getAgentStatusAccent(agent.status, theme)
           const borgVersions = agent.borg_versions ?? []
           const hasUsableBorg = borgVersions.length > 0
           const borgValue = hasUsableBorg
@@ -1740,7 +1745,7 @@ export function AgentList({
                           fontWeight: 700,
                           textTransform: 'uppercase',
                           letterSpacing: '0.08em',
-                          color: alpha(accent, 0.9),
+                          color: accent,
                           lineHeight: 1,
                         }}
                       >
@@ -2125,7 +2130,7 @@ export function AgentList({
                           width: { xs: 40, sm: 34 },
                           height: { xs: 40, sm: 34 },
                           borderRadius: 1.5,
-                          color: alpha(theme.palette.error.main, 0.6),
+                          color: alpha(theme.palette.error.main, 0.75),
                           '&:hover': {
                             color: theme.palette.error.main,
                             bgcolor: alpha(theme.palette.error.main, isDark ? 0.15 : 0.1),
@@ -2153,7 +2158,7 @@ export function AgentList({
                         width: { xs: 40, sm: 34 },
                         height: { xs: 40, sm: 34 },
                         borderRadius: 1.5,
-                        color: alpha(theme.palette.error.main, 0.6),
+                        color: alpha(theme.palette.error.main, 0.75),
                         '&:hover': {
                           color: theme.palette.error.main,
                           bgcolor: alpha(theme.palette.error.main, isDark ? 0.15 : 0.1),
@@ -2174,7 +2179,7 @@ export function AgentList({
                           width: { xs: 40, sm: 34 },
                           height: { xs: 40, sm: 34 },
                           borderRadius: 1.5,
-                          color: alpha(theme.palette.error.main, 0.6),
+                          color: alpha(theme.palette.error.main, 0.75),
                           '&:hover': {
                             color: theme.palette.error.main,
                             bgcolor: alpha(theme.palette.error.main, isDark ? 0.15 : 0.1),

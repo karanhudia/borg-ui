@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Box, Typography, Chip, IconButton, Tooltip, alpha } from '@mui/material'
+import { Box, Typography, Chip, IconButton, Tooltip, alpha, useTheme } from '@mui/material'
 import {
   FolderOpen,
   Shield,
@@ -137,6 +137,7 @@ export default function WizardStepReview({
     return { host: '', username: '', port: 22 }
   }
 
+  const theme = useTheme()
   const repoDetails = getRepoConnectionDetails()
   const selectedAgent =
     executionTarget === 'agent' && data.agentMachineId
@@ -153,12 +154,6 @@ export default function WizardStepReview({
   const cloudMirrorTarget = data.rcloneRemoteName
     ? `${data.rcloneRemoteName}:${data.rcloneRemotePath || ''}`
     : data.rcloneRemotePath || t('wizard.review.notSet')
-
-  const EMERALD = '#10b981'
-  const BLUE = '#3b82f6'
-  const AMBER = '#f59e0b'
-  const VIOLET = '#8b5cf6'
-  const ERROR = '#ef4444'
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -213,11 +208,11 @@ export default function WizardStepReview({
                 height: 20,
                 fontSize: '0.65rem',
                 fontWeight: 600,
-                bgcolor: alpha(EMERALD, 0.1),
-                color: EMERALD,
-                border: `1px solid ${alpha(EMERALD, 0.25)}`,
+                bgcolor: alpha(theme.palette.success.main, 0.1),
+                color: theme.palette.success.main,
+                border: `1px solid ${alpha(theme.palette.success.main, 0.25)}`,
                 cursor: 'help',
-                '& .MuiChip-icon': { color: EMERALD, ml: '6px' },
+                '& .MuiChip-icon': { color: theme.palette.success.main, ml: '6px' },
                 '& .MuiChip-label': { px: '8px' },
               }}
             />
@@ -245,7 +240,7 @@ export default function WizardStepReview({
         <ReviewSectionCard
           icon={<FolderOpen size={14} />}
           label={t('wizard.review.repository')}
-          accentColor={BLUE}
+          accentColor={theme.palette.primary.main}
         >
           <ReviewAttrRow label={t('wizard.review.name')}>
             <Typography
@@ -375,7 +370,7 @@ export default function WizardStepReview({
           <ReviewSectionCard
             icon={<Cloud size={14} />}
             label={t('wizard.review.cloudMirror')}
-            accentColor={VIOLET}
+            accentColor={theme.palette.secondary.main}
           >
             <ReviewAttrRow label={t('wizard.review.rcloneRoute')}>
               <Typography
@@ -416,15 +411,15 @@ export default function WizardStepReview({
         <ReviewSectionCard
           icon={<Shield size={14} />}
           label={t('wizard.review.security')}
-          accentColor={isEncrypted ? EMERALD : ERROR}
+          accentColor={isEncrypted ? theme.palette.success.main : theme.palette.error.main}
         >
           {mode === 'create' && (
             <ReviewAttrRow label={t('wizard.review.encryption')}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4 }}>
                 {isEncrypted ? (
-                  <Lock size={11} color={EMERALD} />
+                  <Lock size={11} color={theme.palette.success.main} />
                 ) : (
-                  <Unlock size={11} color={ERROR} />
+                  <Unlock size={11} color={theme.palette.error.main} />
                 )}
                 <Chip
                   label={t(getEncryptionLabelKey(data.encryption))}
@@ -489,7 +484,7 @@ export default function WizardStepReview({
           <ReviewSectionCard
             icon={<Info size={14} />}
             label={t('wizard.review.planOwnedSources')}
-            accentColor={AMBER}
+            accentColor={theme.palette.warning.main}
           >
             <ReviewAttrRow label={t('wizard.review.source')}>
               <Typography
@@ -518,7 +513,7 @@ export default function WizardStepReview({
           <ReviewSectionCard
             icon={data.dataSource === 'local' ? <HardDrive size={14} /> : <Laptop size={14} />}
             label={t('wizard.review.dataSource')}
-            accentColor={AMBER}
+            accentColor={theme.palette.warning.main}
           >
             <ReviewAttrRow label={t('wizard.review.source')}>
               <Typography
@@ -569,7 +564,7 @@ export default function WizardStepReview({
           <ReviewSectionCard
             icon={<Settings size={14} />}
             label={t('wizard.review.backupConfiguration')}
-            accentColor={VIOLET}
+            accentColor={theme.palette.secondary.main}
           >
             <ReviewAttrRow label={t('wizard.review.compression')}>
               <ReviewCodePill>{data.compression}</ReviewCodePill>
