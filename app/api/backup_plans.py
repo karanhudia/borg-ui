@@ -13,6 +13,7 @@ from app.core.security import (
     check_repo_access,
     encrypt_secret,
     get_current_user,
+    repository_role_allows,
     require_any_role,
 )
 from app.database.database import get_db
@@ -29,6 +30,7 @@ from app.database.models import (
     Script,
     ScriptExecution,
     User,
+    UserRepositoryPermission,
 )
 from app.services.backup_plan_policy import (
     evaluate_backup_plan_access,
@@ -843,18 +845,34 @@ def _serialize_plan_run(
 
 
 def _can_view_plan(db: Session, user: User, plan: BackupPlan) -> bool:
+    return bool(_plans_viewable(db, user, [plan]))
+
+
+def _plans_viewable(db: Session, user: User, plans) -> list:
+    """The plans among `plans` the user may view: every repository a plan
+    links must be one they may view, and a plan linking none is nobody's
+    but an admin's. The user's permission rows are read once for the list,
+    not once per link, and the rule is `check_repo_access`'s."""
+    plans = list(plans)
     if user.role == "admin":
-        return True
-    if not plan.repositories:
-        return False
-    for link in plan.repositories:
-        if not link.repository:
-            continue
-        try:
-            check_repo_access(db, user, link.repository, "viewer")
-        except HTTPException:
-            return False
-    return True
+        return plans
+    roles = {}
+    if plans:
+        roles = dict(
+            db.query(
+                UserRepositoryPermission.repository_id, UserRepositoryPermission.role
+            ).filter(UserRepositoryPermission.user_id == user.id)
+        )
+    return [
+        plan
+        for plan in plans
+        if plan.repositories
+        and all(
+            repository_role_allows(user, roles.get(link.repository_id), "viewer")
+            for link in plan.repositories
+            if link.repository
+        )
+    ]
 
 
 def _require_plan_operator_access(db: Session, user: User, plan: BackupPlan) -> None:

@@ -38,6 +38,7 @@ from app.services.operations.backup_facade import (
     CANCELLED_PROCESS_NOT_FOUND,
     archive_borg_id_for,
     backup_job_has_logs,
+    backup_jobs_have_logs,
     create_backup_operation,
     is_backup_operation,
     list_backup_jobs,
@@ -533,7 +534,9 @@ async def get_all_backup_jobs(
             except HTTPException:
                 continue
 
-        log_save_policy = get_log_save_policy(db)
+        has_logs = backup_jobs_have_logs(
+            db, visible_jobs, log_save_policy=get_log_save_policy(db)
+        )
         return {
             "jobs": [
                 {
@@ -544,9 +547,7 @@ async def get_all_backup_jobs(
                     "completed_at": serialize_datetime(job.completed_at),
                     "progress": job.progress,
                     "error_message": job.error_message,
-                    "has_logs": _backup_job_has_logs(
-                        db, job, log_save_policy=log_save_policy
-                    ),
+                    "has_logs": has_logs[job.id],
                     "maintenance_status": job.maintenance_status,
                     "scheduled_job_id": job.scheduled_job_id,  # Include for filtering by schedule
                     "backup_plan_id": job.backup_plan_id,

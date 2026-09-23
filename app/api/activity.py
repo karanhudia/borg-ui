@@ -7,8 +7,8 @@ Provides a unified view of all operations (backups, restores, checks, compacts, 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
-from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy import case, func, or_
+from sqlalchemy.orm import Session, defer, selectinload
 from typing import Any, List, Optional
 from datetime import datetime
 from pydantic import BaseModel
@@ -34,7 +34,12 @@ from app.api.auth import get_current_user, User
 from app.core.security import check_repo_access, get_current_download_user
 from app.utils.datetime_utils import serialize_datetime
 from app.services.backup_service import backup_service
-from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
+from app.services.log_policy import (
+    WARNING_MARKERS,
+    get_log_save_policy,
+    job_has_logs_by_policy,
+    job_is_pending,
+)
 from app.services.operations import vocab as op_vocab
 from app.services.operations.models import serialize_operation
 
@@ -541,6 +546,70 @@ def _matches_trigger(item: dict, trigger: List[str]) -> bool:
     )
 
 
+def _names_by_id(db: Session, model, ids) -> dict:
+    """`{id: name}` for the rows of `model` (a plan, a schedule) a list of
+    items points at, in one query; empty for no ids."""
+    ids = {i for i in ids if i is not None}
+    if not ids:
+        return {}
+    return dict(db.query(model.id, model.name).filter(model.id.in_(tuple(ids))).all())
+
+
+def _script_executions_have_logs(
+    db: Session, executions: List[ScriptExecution], *, log_save_policy: str
+) -> dict:
+    """`has_logs` per execution id. The policy decides on the status, the
+    exit code and the error message; only a clean completion under
+    `failed_and_warnings` needs its output searched, and for those the
+    database names the marker it finds instead of the list loading every
+    execution's stdout and stderr.
+
+    The search is the database's `LIKE`, which SQLite runs over a text up
+    to its first NUL byte (Postgres stores none), so a marker behind a NUL
+    in a hook's output goes unseen here; the log route, which reads the
+    whole text, still serves it. The same holds for the agent log lines a
+    list of backups is answered by (`backup_jobs_have_logs`); one backup's
+    routes read its transcript as well (`backup_job_has_logs`)."""
+    answers: dict = {}
+    undecided: dict = {}
+    for execution in executions:
+        answers[execution.id] = job_has_logs_by_policy(
+            execution,
+            log_save_policy,
+            output_text=[execution.error_message],
+            exit_code=execution.exit_code,
+        )
+        if not answers[execution.id] and not job_is_pending(execution):
+            undecided[execution.id] = execution
+    if log_save_policy != "failed_and_warnings" or not undecided:
+        return answers
+    found = case(
+        *(
+            (
+                or_(
+                    func.lower(ScriptExecution.stdout).contains(marker),
+                    func.lower(ScriptExecution.stderr).contains(marker),
+                ),
+                marker,
+            )
+            for marker in WARNING_MARKERS
+        )
+    )
+    for execution_id, marker in (
+        db.query(ScriptExecution.id, found)
+        .filter(ScriptExecution.id.in_(tuple(undecided)), found.isnot(None))
+        .all()
+    ):
+        execution = undecided[execution_id]
+        answers[execution_id] = job_has_logs_by_policy(
+            execution,
+            log_save_policy,
+            output_text=[execution.error_message, marker],
+            exit_code=execution.exit_code,
+        )
+    return answers
+
+
 def _attach_run_context(db: Session, items: List[dict]) -> None:
     """Name what the rows only point at: the schedule a scheduled run belongs
     to, how a plan run was started, and the plan a backup operation ran for.
@@ -562,29 +631,19 @@ def _attach_run_context(db: Session, items: List[dict]) -> None:
             if item.get("kind") == "backup":
                 item["backup_plan_id"] = run.backup_plan_id
                 backups.append(item)
-        plan_ids = {i["backup_plan_id"] for i in backups if i["backup_plan_id"]}
-        if plan_ids:
-            plan_names = dict(
-                db.query(BackupPlan.id, BackupPlan.name)
-                .filter(BackupPlan.id.in_(tuple(plan_ids)))
-                .all()
-            )
-            for item in backups:
-                item["backup_plan_name"] = plan_names.get(item["backup_plan_id"])
-    schedule_ids = {
-        i["schedule_id"]
-        for i in items
-        if i.get("schedule_id") and not i.get("schedule_name")
-    }
-    if schedule_ids:
-        names = dict(
-            db.query(ScheduledJob.id, ScheduledJob.name)
-            .filter(ScheduledJob.id.in_(tuple(schedule_ids)))
-            .all()
+        plan_names = _names_by_id(
+            db, BackupPlan, (i["backup_plan_id"] for i in backups)
         )
-        for item in items:
-            if not item.get("schedule_name") and item.get("schedule_id") in names:
-                item["schedule_name"] = names[item["schedule_id"]]
+        for item in backups:
+            item["backup_plan_name"] = plan_names.get(item["backup_plan_id"])
+    names = _names_by_id(
+        db,
+        ScheduledJob,
+        (i.get("schedule_id") for i in items if not i.get("schedule_name")),
+    )
+    for item in items:
+        if not item.get("schedule_name") and item.get("schedule_id") in names:
+            item["schedule_name"] = names[item["schedule_id"]]
 
 
 def _apply_legacy_activity_shape(
@@ -902,10 +961,11 @@ def list_recent_activity(
             .limit(limit)
             .all()
         )
+        plan_names = _names_by_id(
+            db, BackupPlan, (run.backup_plan_id for run in plan_skips)
+        )
         for run in plan_skips:
-            plan = (
-                db.get(BackupPlan, run.backup_plan_id) if run.backup_plan_id else None
-            )
+            plan_name = plan_names.get(run.backup_plan_id)
             activities.append(
                 {
                     "activity_key": f"backup-plan-run-{run.id}",
@@ -915,13 +975,13 @@ def list_recent_activity(
                     "started_at": run.started_at,
                     "completed_at": run.completed_at,
                     "error_message": run.error_message,
-                    "repository": plan.name if plan else "Backup plan",
+                    "repository": plan_name or "Backup plan",
                     "repository_path": None,
                     "log_file_path": None,
                     "triggered_by": "backup_plan",
                     "backup_plan_id": run.backup_plan_id,
                     "backup_plan_run_id": run.id,
-                    "backup_plan_name": plan.name if plan else None,
+                    "backup_plan_name": plan_name,
                     "skip_reason": run.skip_reason,
                     "has_logs": False,
                     "_sort_at": run.completed_at or run.created_at,
@@ -941,8 +1001,11 @@ def list_recent_activity(
             .limit(limit)
             .all()
         )
+        schedule_names = _names_by_id(
+            db, ScheduledJob, (skip.scheduled_job_id for skip in automation_skips)
+        )
         for skip in automation_skips:
-            schedule = db.get(ScheduledJob, skip.scheduled_job_id)
+            schedule_name = schedule_names.get(skip.scheduled_job_id)
             activities.append(
                 {
                     "activity_key": f"availability-schedule-skip-{skip.id}",
@@ -952,12 +1015,12 @@ def list_recent_activity(
                     "started_at": skip.occurred_at,
                     "completed_at": skip.occurred_at,
                     "error_message": None,
-                    "repository": schedule.name if schedule else "Backup automation",
+                    "repository": schedule_name or "Backup automation",
                     "repository_path": None,
                     "log_file_path": None,
                     "triggered_by": "schedule",
                     "schedule_id": skip.scheduled_job_id,
-                    "schedule_name": schedule.name if schedule else None,
+                    "schedule_name": schedule_name,
                     "skip_reason": skip.reason,
                     "has_logs": False,
                     "_sort_at": skip.occurred_at,
@@ -974,7 +1037,7 @@ def list_recent_activity(
         and (not status or status == "failed")
         and not repository_scoped
     ):
-        from app.api.backup_plans import _can_view_plan
+        from app.api.backup_plans import _plans_viewable
         from app.api.operations import accessible_repository_ids
 
         run_query = db.query(BackupPlanRun).filter(BackupPlanRun.status == "failed")
@@ -1020,17 +1083,35 @@ def list_recent_activity(
             if run_ids
             else set()
         )
+        plan_ids = {
+            run.backup_plan_id
+            for run in runs
+            if run.backup_plan_id and run.id not in spoken_for
+        }
+        plan_query = db.query(BackupPlan).filter(BackupPlan.id.in_(tuple(plan_ids)))
+        if current_user.role != "admin":
+            # The rule below walks each plan's links and their repositories
+            # for every non-admin, a wildcard grant included; loaded with the
+            # plans so the walk asks the database nothing.
+            plan_query = plan_query.options(
+                selectinload(BackupPlan.repositories).selectinload(
+                    BackupPlanRepository.repository
+                )
+            )
+        # The row carries the plan's name and the error it failed with, and a
+        # plan spans repositories: only someone who may view all of them may
+        # read that. Filtered here rather than in the query because the rule
+        # walks the plan's repository links.
+        plans = (
+            {plan.id: plan for plan in _plans_viewable(db, current_user, plan_query)}
+            if plan_ids
+            else {}
+        )
         for run in runs:
             if run.id in spoken_for:
                 continue
-            plan = (
-                db.get(BackupPlan, run.backup_plan_id) if run.backup_plan_id else None
-            )
-            # The row carries the plan's name and the error it failed with, and
-            # a plan spans repositories: only someone who may view all of them
-            # may read that. Filtered here rather than in the query because the
-            # rule walks the plan's repository links.
-            if plan is None or not _can_view_plan(db, current_user, plan):
+            plan = plans.get(run.backup_plan_id)
+            if plan is None:
                 continue
             activities.append(
                 {
@@ -1059,7 +1140,17 @@ def list_recent_activity(
     if not job_type or job_type == "script_execution":
         from app.api.operations import accessible_repository_ids
 
-        script_query = db.query(ScriptExecution)
+        # The list shows an execution's names and its status, not its output:
+        # the stdout and stderr columns stay in the database (the policy asks
+        # for them separately, below), and the script, plan and repository the
+        # rows point at come in one query each rather than one per row.
+        script_query = db.query(ScriptExecution).options(
+            defer(ScriptExecution.stdout),
+            defer(ScriptExecution.stderr),
+            selectinload(ScriptExecution.script),
+            selectinload(ScriptExecution.backup_plan),
+            selectinload(ScriptExecution.repository),
+        )
         # Same rule as operations: rows with no repository are system rows
         # every user may see; the rest need a permission on the repository.
         accessible = accessible_repository_ids(db, current_user)
@@ -1078,6 +1169,9 @@ def list_recent_activity(
             script_query = script_query.filter(ScriptExecution.started_at < before)
         script_executions = (
             script_query.order_by(ScriptExecution.started_at.desc()).limit(limit).all()
+        )
+        script_has_logs = _script_executions_have_logs(
+            db, script_executions, log_save_policy=log_save_policy
         )
         for execution in script_executions:
             script_name = _script_execution_display_name(execution)
@@ -1110,16 +1204,7 @@ def list_recent_activity(
                     "backup_plan_name": backup_plan_name,
                     "archive_name": execution.hook_type,
                     "package_name": script_name,
-                    "has_logs": job_has_logs_by_policy(
-                        execution,
-                        log_save_policy,
-                        output_text=[
-                            execution.stdout,
-                            execution.stderr,
-                            execution.error_message,
-                        ],
-                        exit_code=execution.exit_code,
-                    ),
+                    "has_logs": script_has_logs[execution.id],
                     "_sort_at": execution.started_at,
                 }
             )

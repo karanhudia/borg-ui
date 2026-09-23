@@ -69,6 +69,18 @@ def job_has_logs_by_policy(
     return False
 
 
+def job_is_pending(job: Any, status: str | None = None) -> bool:
+    """A pending job has no logs whatever its output says (the first rule of
+    `job_has_logs_by_policy`), so a lister need not fetch its text to
+    decide."""
+    return (
+        _normalize_status(
+            status if status is not None else getattr(job, "status", None)
+        )
+        in PENDING_STATUSES
+    )
+
+
 def _normalize_status(status: Any) -> str:
     return str(status or "").strip().lower()
 

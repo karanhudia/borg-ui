@@ -27,7 +27,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 
-from sqlalchemy import func, nullslast, or_, tuple_
+from sqlalchemy import case, func, nullslast, or_, tuple_
 from sqlalchemy.orm import Session
 
 from app.database.models import (
@@ -390,21 +390,42 @@ async def wait_for_backup_operation(
 def backup_job_has_logs(
     db: Session, job: Any, *, log_save_policy: Optional[str] = None
 ) -> bool:
-    """The `has_logs` answer for either shape, agent logs included."""
-    return backup_jobs_have_logs(db, [job], log_save_policy=log_save_policy)[job.id]
+    """The `has_logs` answer for one backup, agent logs included. One backup
+    can afford its transcript: the file is read even where the agent's log
+    lines carry no marker, so a marker the database's `LIKE` does not see
+    (SQLite reads a text up to its first NUL byte) still counts, as the
+    routes that serve the text expect."""
+    return backup_jobs_have_logs(
+        db, [job], log_save_policy=log_save_policy, lines_decide=False
+    )[job.id]
 
 
 def backup_jobs_have_logs(
-    db: Session, jobs: list, *, log_save_policy: Optional[str] = None
+    db: Session,
+    jobs: list,
+    *,
+    log_save_policy: Optional[str] = None,
+    lines_decide: bool = True,
 ) -> dict:
     """`has_logs` per job id for a list of backups. The agent jobs and, where
     the policy's answer depends on them, their log lines are asked about once
-    for the list, not once per backup."""
+    for the list, not once per backup.
+
+    The transcript is the last thing consulted: the policy decides on the
+    status, the exit code and the error messages first, and only a backup
+    those leave undecided (a clean completion under `failed_and_warnings`)
+    has its text searched for a marker. Two of the three policies never
+    look at text, so listing backups under them opens no file.
+
+    With `lines_decide`, an agent backup whose log lines carry no marker
+    is answered by them and its file is left unread (a list's choice);
+    without it, the file is read after the lines (`backup_job_has_logs`)."""
     from app.database.models import AgentJob, AgentJobLog
     from app.services.log_policy import (
         WARNING_MARKERS,
         get_log_save_policy,
         job_has_logs_by_policy,
+        job_is_pending,
     )
     from app.services.repository_executor import BACKUP_AGENT_JOB_TYPE
 
@@ -427,15 +448,15 @@ def backup_jobs_have_logs(
     answers: dict = {}
     undecided: dict = {}
     for job in jobs:
-        output_text: list = [job.logs, job.error_message]
+        output_text: list = [job.error_message]
         agent_job = agent_jobs.get(job.id)
         if agent_job is not None:
             output_text.append(agent_job.error_message)
         answers[job.id] = job_has_logs_by_policy(
             job, policy, output_text=output_text, file_path=job.log_file_path
         )
-        if not answers[job.id] and agent_job is not None:
-            undecided[agent_job.id] = (job, output_text)
+        if not answers[job.id] and not job_is_pending(job):
+            undecided[job.id] = (job, output_text, agent_job)
     if policy != "failed_and_warnings" or not undecided:
         return answers
 
@@ -443,27 +464,51 @@ def backup_jobs_have_logs(
     # The database picks one such line per job and the policy decides on it,
     # so a status it refuses whatever the text says (a requeued backup that
     # is pending again) stays refused, and the lines of every listed backup
-    # are not loaded to be searched here.
+    # are not loaded to be searched here. An agent backup's log file is
+    # written from these lines when it completes, so lines that carry no
+    # marker answer for the file too; only a backup whose lines are gone
+    # falls through to its file below.
     marked = or_(
         *(func.lower(AgentJobLog.message).contains(m) for m in WARNING_MARKERS)
     )
-    agent_job_ids = sorted(undecided)
+    by_agent_job = {
+        agent_job.id: job_id
+        for job_id, (_, _, agent_job) in undecided.items()
+        if agent_job is not None
+    }
+    agent_job_ids = sorted(by_agent_job)
     for start in range(0, len(agent_job_ids), IN_CHUNK):
         for agent_job_id, line in (
-            db.query(AgentJobLog.agent_job_id, func.min(AgentJobLog.message))
+            db.query(
+                AgentJobLog.agent_job_id,
+                func.min(case((marked, AgentJobLog.message))),
+            )
             .filter(
-                AgentJobLog.agent_job_id.in_(agent_job_ids[start : start + IN_CHUNK]),
-                marked,
+                AgentJobLog.agent_job_id.in_(agent_job_ids[start : start + IN_CHUNK])
             )
             .group_by(AgentJobLog.agent_job_id)
         ):
-            job, output_text = undecided[agent_job_id]
+            job_id = by_agent_job[agent_job_id]
+            if line is None:
+                if lines_decide:
+                    undecided.pop(job_id)
+                continue
+            job, output_text, _ = undecided.pop(job_id)
             answers[job.id] = job_has_logs_by_policy(
                 job,
                 policy,
                 output_text=[*output_text, line],
                 file_path=job.log_file_path,
             )
+    for job, output_text, _ in undecided.values():
+        if not job.log_file_path:
+            continue
+        answers[job.id] = job_has_logs_by_policy(
+            job,
+            policy,
+            output_text=[*output_text, job.logs],
+            file_path=job.log_file_path,
+        )
     return answers
 
 

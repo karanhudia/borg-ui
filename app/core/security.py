@@ -611,25 +611,34 @@ def check_repo_access(db: Session, user: User, repo, required_role: str) -> None
     if user.role == "admin":
         return
 
-    effective_role = getattr(user, "all_repositories_role", None)
     perm = (
         db.query(UserRepositoryPermission)
         .filter_by(user_id=user.id, repository_id=repo.id)
         .first()
     )
-    if perm and (
-        effective_role is None
-        or REPO_ROLE_RANK.get(perm.role, 0) > REPO_ROLE_RANK.get(effective_role, 0)
-    ):
-        effective_role = perm.role
-
-    if effective_role is None or REPO_ROLE_RANK.get(
-        effective_role, 0
-    ) < REPO_ROLE_RANK.get(required_role, 0):
+    if not repository_role_allows(user, perm.role if perm else None, required_role):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"key": "backend.errors.auth.notEnoughPermissions"},
         )
+
+
+def repository_role_allows(
+    user: User, permission_role: Optional[str], required_role: str
+) -> bool:
+    """`check_repo_access`'s rule on a permission row already read: the
+    user's role on all repositories, raised by a grant on this one that
+    outranks it, must reach `required_role`. Admin is decided before this."""
+    effective_role = getattr(user, "all_repositories_role", None)
+    if permission_role and (
+        effective_role is None
+        or REPO_ROLE_RANK.get(permission_role, 0)
+        > REPO_ROLE_RANK.get(effective_role, 0)
+    ):
+        effective_role = permission_role
+    return effective_role is not None and REPO_ROLE_RANK.get(
+        effective_role, 0
+    ) >= REPO_ROLE_RANK.get(required_role, 0)
 
 
 def get_repository_by_path_or_404(
