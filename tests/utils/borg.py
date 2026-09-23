@@ -12,8 +12,6 @@ from typing import TYPE_CHECKING, Iterable, Optional
 
 import pytest
 
-from app.core.borg2 import BORG2_ENCRYPTION_FLAGS
-
 if TYPE_CHECKING:
     from app.database.models import Repository
 
@@ -78,6 +76,10 @@ def init_borg_repo(
     repo_path.mkdir(parents=True, exist_ok=True)
     borg_name = Path(borg_binary).name
     if borg_name.startswith("borg2"):
+        # Imported here: the smoke scripts load this module without the app's
+        # environment, and importing app.config creates /data.
+        from app.core.borg2 import BORG2_ENCRYPTION_FLAGS
+
         run_borg(
             borg_binary,
             [
