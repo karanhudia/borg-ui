@@ -95,7 +95,7 @@ function normalizeRepositoryId(value: number | string | null | undefined): numbe
 }
 
 // One refetch per burst of index stages (an import or backup chain ends
-// stats, archive_sync, history_merge within seconds).
+// archive_sync and stats within seconds).
 const STORAGE_REFRESH_DEBOUNCE_MS = 1500
 // How often the figures are re-read while the header says "Updating".
 const STATS_POLL_MS = 3000

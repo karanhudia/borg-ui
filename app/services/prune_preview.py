@@ -156,10 +156,7 @@ from app.services.operations.executors.index import (
     _prepare_repository_borg_env,
     fill_archive_info,
 )
-from app.services.operations.repository_status import (
-    pending_removed_ids,
-    storage_summaries,
-)
+from app.services.operations.repository_status import storage_summaries
 from app.utils.borg_env import cleanup_temp_key_file
 
 # Candidates re-measured synchronously before the preview answers (spec
@@ -185,12 +182,10 @@ def join_verdicts(
     db: Session, repository: Repository, verdicts: list[Verdict]
 ) -> list[PreviewArchive]:
     """Each verdict line joined to its `archives` row by Borg id (Borg 2
-    series share a name). A line whose id the index does not hold, or whose
-    row the newest listing reported removed, keeps Borg's name and verdict
-    with no row behind it."""
+    series share a name). A line whose id the index does not hold keeps
+    Borg's name and verdict with no row behind it."""
     ids = [v.borg_id for v in verdicts]
     rows: dict[str, Archive] = {}
-    removed = pending_removed_ids(db, repository.id)
     for i in range(0, len(ids), 500):
         for row in (
             db.query(Archive)
@@ -200,8 +195,7 @@ def join_verdicts(
             )
             .all()
         ):
-            if row.id not in removed:
-                rows[row.borg_id] = row
+            rows[row.borg_id] = row
     out: list[PreviewArchive] = []
     for v in verdicts:
         row = rows.get(v.borg_id)
@@ -580,10 +574,7 @@ def lost_size_estimate(
 
 
 def archives_by_series(db: Session, repository: Repository) -> dict[str, list[Archive]]:
-    removed = pending_removed_ids(db, repository.id)
     q = db.query(Archive).filter(Archive.repository_id == repository.id)
-    if removed:
-        q = q.filter(Archive.id.notin_(removed))
     out: dict[str, list[Archive]] = {}
     for a in q.order_by(
         Archive.series.asc(), Archive.start.asc(), Archive.id.asc()

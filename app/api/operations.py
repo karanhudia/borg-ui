@@ -820,7 +820,6 @@ CANCELLABLE_WHILE_RUNNING = frozenset(
         "prune",
         "delete_archive",
         "restore_check",
-        "history_merge",
     }
 )
 

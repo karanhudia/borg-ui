@@ -81,7 +81,8 @@ a live Borg call, and only the archive count and newest timestamp are stored.
   recovery.
 - New persisted tables: `archives`, `archive_changes`.
 - New operation kinds: `stats`, `archive_sync`, `history_index`,
-  `history_merge`.
+  `history_merge` (retired 2026-09-23: `archive_sync` deletes removed
+  archives itself, #1141).
 - A follow-up convention: every exclusive operation on a repository enqueues
   the derived-data chain for that repository.
 - Migration of all existing job kinds onto `operations`, in phases, with the
@@ -213,7 +214,7 @@ Stored as strings, validated in Python. Defined once in
 | `stats` | index | no | `borg info`. Uses `bypass_lock_on_list` if set. |
 | `archive_sync` | index | no | `borg list` or `repo-list`. |
 | `history_index` | index | yes | `borg diff` per pair. Exclusive because it can run for minutes. |
-| `history_merge` | index | no | Pure SQL. |
+| `history_merge` | index | no | Retired (#1141). A row queued by an older version finishes `skipped`. |
 
 **category:** `import`, `backup`, `restore`, `maintenance`, `index`, `mirror`, `system`.
 
@@ -352,9 +353,9 @@ makes it a per-repository choice.
 - `repository.index_mode` (new column, `String`, not null, default `full`).
   Values:
 
-| Mode | `archive_sync` | `history_merge`, `history_index` | `stats` | Meant for |
+| Mode | `archive_sync` (lists, and deletes removed archives) | `history_index` | `stats` | Meant for |
 | --- | --- | --- | --- | --- |
-| `full` | yes | yes (Pro) | yes | The default. |
+| `full` | yes | yes | yes | The default. |
 | `archives` | yes | no | yes | Repositories too large to diff. Keeps the archive list, heatmap, health, and last-backup age current. |
 | `off` | no | no | no | Slow or rarely reachable remotes. Nothing derived is refreshed; the archive list, the card's last-run entries, and dashboard age go stale for this repository and say so. |
 
@@ -484,8 +485,7 @@ SSE event, a `log()` sink writing to `log_file_path`, and a
   `legacy_running_exclusive(repository_id)`, which is deleted in phase 9.
 - Non-exclusive index kinds may run alongside an exclusive operation only if
   `bypass_lock_on_list` is enabled; otherwise they wait too.
-- No two of the non-exclusive index kinds (`archive_sync`, `history_merge`,
-  `stats`) run on one repository at the same time, and no `history_index`
+- No two of the non-exclusive index kinds (`archive_sync`, `stats`) run on one repository at the same time, and no `history_index`
   starts next to one of them; the bypass settings do not change that (#1003:
   two chains of one run started their stats side by side, and on an agent's
   repository a listing next to the stats' `rinfo` failed with rc 2 on the
@@ -519,12 +519,12 @@ Existing settings keep their meaning and move behind one function,
 | after | chain (in order, each depends on the previous) |
 | --- | --- |
 | `import_connect` | `stats`, `archive_sync`, `history_index` |
-| `backup` | `archive_sync`, `history_merge`, `history_index`, `stats` |
-| `prune` | `archive_sync`, `history_merge`, `stats` |
-| `delete_archive` | `archive_sync`, `history_merge`, `stats` |
+| `backup` | `archive_sync`, `history_index`, `stats` |
+| `prune` | `archive_sync`, `stats` |
+| `delete_archive` | `archive_sync`, `stats` |
 | `compact` | `stats` |
 | `check` | none |
-| `wipe` | `archive_sync`, `history_merge`, `stats` |
+| `wipe` | `archive_sync`, `stats` |
 | `restore`, `restore_check`, `rclone_sync`, `package_install` | none |
 
 Follow-ups are created by the runner when the parent reaches a terminal
@@ -534,12 +534,11 @@ moves backups into the runner, the legacy backup completion paths call
 `followups.enqueue_backup_followups` themselves (#933), which enqueues the
 `backup` chain unless an `archive_sync` is queued with no dependency or an
 already satisfied dependency. Other queued index stages and running listings
-do not suppress it. `history_merge` immediately follows the listing on every
-plan to delete removed archive rows. `archive_sync` then derives `archive_count` and `last_backup` from the
-listing instead of the completion path writing them.
+do not suppress it. `archive_sync` deletes the rows of removed archives
+(8.4) and derives `archive_count` and `last_backup` from the listing
+instead of the completion path writing them.
 
-`archive_sync` runs before `history_merge` so the merge knows which archives
-disappeared. `history_index` skips pairs whose predecessor is not yet
+`history_index` skips pairs whose predecessor is not yet
 indexed and leaves them `pending`; the next run picks them up.
 
 From phase 10, `chain_for()` also drops the kinds the repository's
@@ -550,7 +549,7 @@ From phase 10, `chain_for()` also drops the kinds the repository's
 Replaces `stats_refresh_scheduler`. Same setting
 (`stats_refresh_interval_minutes`, `0` disables). On each tick, for every
 repository without a queued or running index operation, enqueue one run:
-`archive_sync`, `history_merge`, `history_index`, `stats`, with
+`archive_sync`, `history_index`, `stats`, with
 `trigger = reconcile`, `priority = 20`. This catches archives created or
 pruned outside Borg UI.
 
@@ -611,11 +610,11 @@ as today. Replaces the size half of `update_repository_stats`.
 1. `BorgRouter.list_archives()`.
 2. Upsert rows into `archives` by `(repository_id, borg_id)`. Update
    `last_seen_at`. Compute `series`.
-3. Rows in `archives` not present in the list are collected as
-   `result["removed_archive_ids"]` and left in place. The result also carries
-   `removed_archive_borg_ids`, mapping each row ID (as a JSON object key) to
-   its Borg ID, captured while the listing owns the metadata lane.
-   `history_merge` consumes and deletes matching rows.
+3. Rows in `archives` not present in the list are reported as
+   `result["removed_archive_ids"]`, their neighbours' measurements are
+   staled (Borg 1, #1137), and each is folded into its successor and
+   deleted (8.4), in every index mode. The result also carries the fold
+   outcome counts (`folded`, `reset`, `dropped`).
 4. For up to `INDEX_ARCHIVE_INFO_PER_RUN` archives, oldest first, run
    per-archive `borg info` and fill sizes, `end`, and duration: archives
    without stats first, archives missing only `end` into the slots left
@@ -659,16 +658,16 @@ normalised `ChangeRecord(path, change, size_before, size_after,
 mode_changed, owner_changed)`. Fixtures come from real Borg output captured
 with the `borg-live-debug` skill.
 
-### 8.4 `history_merge`
+### 8.4 Removed archives
 
-Input: archives that `archive_sync` reported removed. A target must match
-both its row ID and Borg ID in the listing result, within the same repository.
-Another chain can delete the original and SQLite can reuse its row ID before
-this merge starts or retries. Missing or mismatching identities are skipped.
-Legacy results containing only row IDs are also skipped: the next listing
-rediscovers remaining stale rows and supplies their identities for cleanup.
+Run by `archive_sync` (8.2 step 3) for every archive its listing no longer
+sees, in every index mode. Until 2026-09-23 this was a separate
+`history_merge` stage after the listing; the `archives` index mode ran no
+such stage, so its removed archives were never deleted (#1141), and the gap
+between the two stages needed identity checks against SQLite reusing a row
+ID. The listing holds the metadata lane throughout, so neither applies now.
 
-For each matching removed archive `R`, find its successor `S` in the same
+For each removed archive `R`, find its successor `S` in the same
 series by `start`.
 
 If `S` exists, fold `R`'s rows into `S`:
@@ -689,20 +688,11 @@ If `S` does not exist (the newest archive was removed), `R`'s rows are
 simply deleted.
 
 Then delete the `archives` row for `R`, which cascades to its remaining
-rows. All of this is SQL inside one transaction per removed archive,
-including a completion checkpoint in the operation's params. Replay preserves
-completed outcome counts and never revisits checkpointed targets, including
-skipped targets. This stage makes no Borg call and uses the repository's
-metadata lane. Removal targets must match the repository, database ID,
-Borg ID, persisted row-generation UUID, and last-seen observation captured
-by the parent listing. Each
-sighting advances the observation timestamp even if the wall clock does
-not advance, protecting archives rediscovered before a delayed merge.
-The row-generation UUID remains independent of SQLite ID reuse and wall time,
-so deleting and recreating the same Borg archive cannot revive an old target.
-The next listing initializes migrated rows whose generation is NULL, including
-absent rows. Legacy results missing any required identity skip deletion until
-a fresh listing can report the missing rows safely.
+rows. All of this is SQL inside one transaction per removed archive, with
+no Borg call. A run that dies halfway leaves the remaining rows in place;
+the next listing reports them again and finishes the job. A successor that
+loses its base goes back to `pending`, or to `skipped` on a repository whose
+agent cannot produce the change listing.
 
 The visible effect is honest: a change that happened in a pruned archive now
 shows at the next surviving archive, which is the earliest place the user can
@@ -868,8 +858,7 @@ per repository per refresh); it was withdrawn in favour of the row entries
 (#937, Appendix B).
 
 Evidence per cell (#935): backup is the newest archive in the archives table,
-whatever created it (rows the newest listing reported removed and
-`history_merge` has not deleted yet are excluded, as for `last_backup`);
+whatever created it;
 a failed or cancelled Borg UI attempt newer than that archive shows as
 that attempt; with no archives the newest job row stands. Prune is the
 newest successful `archive_sync` that reported removed archives (a
@@ -1007,7 +996,7 @@ Today
   02:00  ● backup   plan: nightly                       41.2 GB   2h 11m
          └ archive_sync ✓ · history_index ● 14/38 · stats ○
   01:30  ✓ prune    schedule: weekly                    −3 archives
-         └ history_merge ✓ · archive_sync ✓ · stats ✓
+         └ archive_sync ✓ · stats ✓
 Yesterday
   02:00  ✓ backup   plan: nightly                       41.0 GB   2h 04m
          └ 3 follow-ups ✓
@@ -1494,3 +1483,4 @@ Recorded so later sessions do not re-derive or re-litigate them.
 | Phase 10 review (2026-09-11): the `off` card's two last-run entries read "Background work is off for this repository" as plain text with a tooltip pointing at the setting, not as a link | Spec 6.8: the entries link to the setting | The card's metadata row renders plain label/value pairs with tooltips and has no link affordance; adding one to two of its rows would be the only link in the row |
 | Phase 10 review (2026-09-11): leaving `full` relinks the queued work that survives onto its nearest surviving dependency before cancelling the rest | Cancel the doomed rows and leave the chain as it falls | A follow-up chain is linear with `stats` last, so cancelling the history stages left `stats` depending on a `cancelled` row, which the runner skips as `dependency_failed`: the size refresh `archives` mode exists to keep would be lost and a failed stage would appear on a repository the user just opted out |
 | Phase 10 review (2026-09-11): the catch-up run on returning to `full` forces past the in-flight check | Let it defer to the work already queued, as every other reconcile caller does | The queued work was built for the narrower mode and can never produce the history stages, so deferring meant no catch-up at all until the next tick, which is what 6.8 promises it would avoid |
+| #1141 (2026-09-23): `archive_sync` folds and deletes the archives its listing no longer sees, and `history_merge` leaves every chain; a row an older version queued finishes `skipped` | Add `history_merge` to the `archives` mode, or hide the lingering rows from the archive list | The mode table dropped the one stage that deleted rows, so `archives` repositories kept every archive they ever had. Deleting where the removal is found fixes every mode at once and removes the delayed-deletion identity checks and the `pending_removed_ids` exclusions the gap needed |

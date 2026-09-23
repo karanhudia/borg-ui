@@ -1198,11 +1198,10 @@ def _storage_summary_or_none(
 
 
 def index_pending_kinds(db: Session, repository_ids) -> dict[int, list[str]]:
-    """The index kinds (`stats`, `archive_sync`, `history_merge`,
-    `history_index`) queued or running per repository (#1063), for the
-    card to say "indexing" while a chain a user's action started (an
-    import, a backup, a manual refresh) has not produced a count or a
-    size yet, instead of showing 0 archives and no size as if the
+    """The index kinds (`stats`, `archive_sync`, `history_index`) queued
+    or running per repository (#1063), for the card to say "indexing"
+    while a chain a user's action started (an import, a backup, a manual
+    refresh) has not produced a count or a size yet, instead of showing 0 archives and no size as if the
     repository were empty. Every trigger counts, the periodic reconcile
     and a manual resync included: the reader replaces only a placeholder
     (a count of 0, no size, no last backup) with "indexing", so a settled

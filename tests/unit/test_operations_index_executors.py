@@ -188,9 +188,9 @@ async def test_run_archive_sync_updates_repository_columns(db, repo, monkeypatch
         "new": 1,
         "info_filled": 1,
         "removed_archive_ids": [],
-        "removed_archive_borg_ids": {},
-        "removed_archive_last_seen_at": {},
-        "removed_archive_generations": {},
+        "folded": 0,
+        "reset": 0,
+        "dropped": 0,
     }
     db.refresh(repo)
     assert repo.archive_count == 1
@@ -238,29 +238,14 @@ async def test_run_archive_sync_stales_survivors_when_archives_were_removed(
         index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
     )
 
+    gone_id = gone.id
     await index_exec.run_archive_sync(_ctx(db, repo))
     db.refresh(survivor)
-    db.refresh(gone)
     assert survivor.stats_measured_at is None
-    # The removed row keeps its date: with none it would take an info slot
-    # on every run until the merge deletes it.
-    assert gone.stats_measured_at == measured
+    assert db.get(Archive, gone_id) is None
 
-    # Second listing. archive_sync never deletes rows (history_merge does,
-    # and never in the `archives` index mode), so `gone` is reported removed
-    # again; the newest listing on record already knows it, and a freshly
-    # measured date survives.
-    db.add(
-        Operation(
-            repository_id=repo.id,
-            kind="archive_sync",
-            category="index",
-            status="completed",
-            run_id="run-1",
-            completed_at=datetime(2026, 9, 2, 3),
-            result={"removed_archive_ids": [gone.id]},
-        )
-    )
+    # Second listing: the removal was dealt with, so a freshly measured date
+    # survives.
     survivor.stats_measured_at = measured
     db.commit()
     await index_exec.run_archive_sync(_ctx(db, repo))
@@ -343,7 +328,7 @@ def test_neighbours_of_removed_uses_a_total_order(db, repo):
     db.add_all(rows)
     db.commit()
     gone = {rows[1].id}
-    assert index_exec._neighbours_of_removed(db, repo, gone, gone) == {
+    assert index_exec._neighbours_of_removed(db, repo, gone) == {
         rows[0].id,
         rows[2].id,
     }
@@ -401,7 +386,7 @@ async def test_run_archive_sync_marks_agent_archives_skipped(
     earlier = Archive(
         repository_id=repo.id,
         borg_id="earlier",
-        name="earlier",
+        name="nas-2026-09-01T02:00:00",
         series="nas",
         start=datetime(2026, 9, 1, 2),
         history_state="indexed",
@@ -409,7 +394,7 @@ async def test_run_archive_sync_marks_agent_archives_skipped(
     given_up = Archive(
         repository_id=repo.id,
         borg_id="given-up",
-        name="given-up",
+        name="nas-2026-09-01T03:00:00",
         series="nas",
         start=datetime(2026, 9, 1, 3),
         history_state="failed",
@@ -417,7 +402,7 @@ async def test_run_archive_sync_marks_agent_archives_skipped(
     leftover = Archive(
         repository_id=repo.id,
         borg_id="leftover",
-        name="leftover",
+        name="nas-2026-09-01T04:00:00",
         series="nas",
         start=datetime(2026, 9, 1, 4),
         history_state="skipped",
@@ -439,11 +424,32 @@ async def test_run_archive_sync_marks_agent_archives_skipped(
         )
     )
     db.commit()
+    # the listing still has every archive: this test is about the states it
+    # writes, not about removals
+    monkeypatch.setattr(
+        index_exec,
+        "list_archives_for_repository",
+        AsyncMock(
+            return_value=(
+                True,
+                [BORG1_ENTRY]
+                + [
+                    {
+                        "id": a.borg_id,
+                        "name": a.name,
+                        "start": f"{a.start:%Y-%m-%dT%H:%M:%S}",
+                    }
+                    for a in (earlier, given_up, leftover)
+                ],
+                "UTC",
+            )
+        ),
+    )
 
     await index_exec.run_archive_sync(_ctx(db, repo))
 
     db.expire_all()
-    states = {a.name: a.history_state for a in db.query(Archive).all()}
+    states = {a.borg_id: a.history_state for a in db.query(Archive).all()}
     assert states.pop("earlier") == "indexed"
     assert states.pop("elsewhere") == "pending"  # another repository's row
     # a failure is marked with the rest where the listing marks, kept otherwise
@@ -458,7 +464,7 @@ async def test_run_archive_sync_marks_agent_archives_skipped(
     # 2026-09-21, section 2).
     reopened = not agent or capable
     assert states.pop("leftover") == ("pending" if reopened else "skipped")
-    assert db.query(Archive).filter_by(name="leftover").one().history_attempts == (
+    assert db.query(Archive).filter_by(borg_id="leftover").one().history_attempts == (
         0 if reopened else 3
     )
     assert states and all(state == expected_state for state in states.values())
@@ -1211,37 +1217,6 @@ async def test_fill_archive_info_stamps_stats_measured_at(db, repo, monkeypatch)
 
 
 @pytest.mark.unit
-def test_archives_needing_info_skips_rows_the_listing_reported_removed(db, repo):
-    """A removed row lingers until the merge deletes it; a never-measured one
-    (no date) and a measured one without an end would both take a slot."""
-    for borg_id, measured, end in (
-        ("gone-never", None, None),
-        ("gone-no-end", datetime(2026, 9, 1), None),
-        ("live", None, None),
-    ):
-        db.add(
-            Archive(
-                repository_id=repo.id,
-                borg_id=borg_id,
-                name=borg_id,
-                series="default",
-                start=datetime(2026, 9, 1),
-                original_size=10 if measured else None,
-                stats_measured_at=measured,
-                end=end,
-            )
-        )
-    db.commit()
-    gone = {
-        a.id for a in db.query(Archive).filter(Archive.borg_id.like("gone-%")).all()
-    }
-    picked = index_exec.archives_needing_info(
-        db, repo, limit=5, include_missing_end=True, exclude_ids=gone
-    )
-    assert [a.borg_id for a in picked] == ["live"]
-
-
-@pytest.mark.unit
 def test_archives_needing_info_backfills_across_runs(db, repo):
     """The per-run cap means later runs must pick up archives an earlier run
     left unfilled, not just the rows they created themselves."""
@@ -1935,12 +1910,11 @@ async def test_run_stats_persists_an_empty_borg2_index_but_not_failed_measuremen
 
 
 @pytest.mark.unit
-async def test_archive_sync_reports_stable_identities_for_removed_archives(
+async def test_archive_sync_deletes_the_archives_its_listing_no_longer_has(
     db, repo, monkeypatch
 ):
     index_exec.apply_listing(db, repo, [BORG1_ENTRY], timezone_name="UTC")
-    removed = db.query(Archive).one()
-    removed_id = removed.id
+    removed_id = db.query(Archive).one().id
     monkeypatch.setattr(
         index_exec,
         "list_archives_for_repository",
@@ -1954,13 +1928,8 @@ async def test_archive_sync_reports_stable_identities_for_removed_archives(
     outcome = await index_exec.run_archive_sync(_ctx(db, repo))
 
     assert outcome.result["removed_archive_ids"] == [removed_id]
-    assert outcome.result["removed_archive_borg_ids"] == {str(removed_id): "aa11"}
-    assert outcome.result["removed_archive_last_seen_at"] == {
-        str(removed_id): removed.last_seen_at.isoformat()
-    }
-    assert outcome.result["removed_archive_generations"] == {
-        str(removed_id): removed.generation_id
-    }
+    assert outcome.result["dropped"] == 1
+    assert db.query(Archive).count() == 0
 
 
 @pytest.mark.unit

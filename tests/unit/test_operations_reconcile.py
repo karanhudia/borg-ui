@@ -99,7 +99,7 @@ def test_enqueue_reconcile_runs_despite_a_running_history_index(db, repos, monke
     monkeypatch.setattr(
         reconcile,
         "registered_kinds",
-        lambda: {"stats", "archive_sync", "history_merge", "history_index"},
+        lambda: {"stats", "archive_sync", "history_index"},
     )
     a, b = repos
     op = enqueue(db, "history_index", repository_id=a.id)
@@ -114,7 +114,7 @@ def test_enqueue_reconcile_runs_despite_a_running_history_index(db, repos, monke
         .order_by(Operation.id)
         .all()
     ]
-    assert kinds == ["archive_sync", "history_merge", "history_index", "stats"]
+    assert kinds == ["archive_sync", "history_index", "stats"]
 
 
 @pytest.mark.unit
@@ -144,7 +144,7 @@ def test_enqueue_reconcile_runs_includes_history_kinds_when_registered(
     monkeypatch.setattr(
         reconcile,
         "registered_kinds",
-        lambda: {"stats", "archive_sync", "history_merge", "history_index"},
+        lambda: {"stats", "archive_sync", "history_index"},
     )
     a, _ = repos
     reconcile.enqueue_reconcile_runs(db)
@@ -154,7 +154,7 @@ def test_enqueue_reconcile_runs_includes_history_kinds_when_registered(
         .filter(Operation.repository_id == a.id)
         .order_by(Operation.id)
     ]
-    assert kinds == ["archive_sync", "history_merge", "history_index", "stats"]
+    assert kinds == ["archive_sync", "history_index", "stats"]
 
 
 @pytest.mark.unit
@@ -167,7 +167,7 @@ def test_enqueue_reconcile_runs_includes_history_kinds_on_community(
     monkeypatch.setattr(
         reconcile,
         "registered_kinds",
-        lambda: {"stats", "archive_sync", "history_merge", "history_index"},
+        lambda: {"stats", "archive_sync", "history_index"},
     )
     a, _ = repos
     reconcile.enqueue_reconcile_runs(db)
@@ -177,7 +177,7 @@ def test_enqueue_reconcile_runs_includes_history_kinds_on_community(
         .filter(Operation.repository_id == a.id)
         .order_by(Operation.id)
     ]
-    assert kinds == ["archive_sync", "history_merge", "history_index", "stats"]
+    assert kinds == ["archive_sync", "history_index", "stats"]
 
 
 @pytest.mark.unit
@@ -596,7 +596,7 @@ def test_enqueue_reconcile_run_omits_history_index_for_an_agent_repository(
     monkeypatch.setattr(
         reconcile,
         "registered_kinds",
-        lambda: {"archive_sync", "history_merge", "history_index", "stats"},
+        lambda: {"archive_sync", "history_index", "stats"},
     )
     server = Repository(name="server", path="/repo/server", borg_version=1)
     agent = Repository(
@@ -612,5 +612,5 @@ def test_enqueue_reconcile_run_omits_history_index_for_an_agent_repository(
     kinds_server = [o.kind for o in reconcile.enqueue_reconcile_run(db, server.id)]
     kinds_agent = [o.kind for o in reconcile.enqueue_reconcile_run(db, agent.id)]
 
-    assert kinds_server == ["archive_sync", "history_merge", "history_index", "stats"]
-    assert kinds_agent == ["archive_sync", "history_merge", "stats"]
+    assert kinds_server == ["archive_sync", "history_index", "stats"]
+    assert kinds_agent == ["archive_sync", "stats"]

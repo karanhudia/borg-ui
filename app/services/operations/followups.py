@@ -13,12 +13,12 @@ from app.services.operations.vocab import validate_kind
 
 FOLLOWUPS: dict[str, tuple[str, ...]] = {
     "import_connect": ("stats", "archive_sync", "history_index"),
-    "backup": ("archive_sync", "history_merge", "history_index", "stats"),
-    "prune": ("archive_sync", "history_merge", "stats"),
-    "delete_archive": ("archive_sync", "history_merge", "stats"),
+    "backup": ("archive_sync", "history_index", "stats"),
+    "prune": ("archive_sync", "stats"),
+    "delete_archive": ("archive_sync", "stats"),
     "compact": ("stats",),
     "check": (),
-    "wipe": ("archive_sync", "history_merge", "stats"),
+    "wipe": ("archive_sync", "stats"),
     "restore": (),
     "restore_check": (),
     "rclone_sync": (),
@@ -26,18 +26,12 @@ FOLLOWUPS: dict[str, tuple[str, ...]] = {
     "stats": (),
     "archive_sync": ("prune_compare",),
     "history_index": (),
-    "history_merge": (),
     "prune_compare": (),
 }
 
-HISTORY_KINDS: frozenset[str] = frozenset({"history_index", "history_merge"})
-
-# Of the two, only history_index writes the change rows. history_merge is
-# what deletes the rows of archives that are gone from the repository, and
-# apply_listing deliberately leaves that deletion to it, so an install that
-# dropped it would keep every pruned archive in the table. The name is
-# historical: these kinds were plan gated until 2026-09-21, and what drops
-# history_index now is the executor, not the plan.
+# The name is historical: history_index was plan gated until 2026-09-21, and
+# what drops it now is the executor, not the plan. Removed archives are
+# deleted by archive_sync, which no gate drops.
 PLAN_GATED_KINDS: frozenset[str] = frozenset({"history_index"})
 
 
@@ -67,9 +61,9 @@ def chain_for(
     longer decides this; the index is built on every plan and
     `archive_history` gates the reads instead (spec
     2026-09-21-community-teasers-and-feature-trials, section 2).
-    history_merge is never dropped; see PLAN_GATED_KINDS. `mode` drops the kinds the
-    repository's index mode does not refresh (spec 6.8), by the same rule:
-    a stage that will never run does not exist.
+    `mode` drops the kinds the repository's index mode does not refresh
+    (spec 6.8), by the same rule: a stage that will never run does not
+    exist.
     """
     validate_kind(kind)
     chain = list(FOLLOWUPS[kind])

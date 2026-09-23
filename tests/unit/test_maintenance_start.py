@@ -312,10 +312,8 @@ def test_finish_inline_enqueues_the_followup_chain(db, repository):
         .order_by(Operation.id.asc())
         .all()
     )
-    # Spec 7.4: prune is followed by archive_sync, history_merge, stats.
-    # history_merge is not plan gated (only history_index is), so the chain is
-    # the same on Community.
-    assert [f.kind for f in followups] == ["archive_sync", "history_merge", "stats"]
+    # Spec 7.4: prune is followed by archive_sync and stats, on every plan.
+    assert [f.kind for f in followups] == ["archive_sync", "stats"]
     assert all(f.trigger == "followup" for f in followups)
 
 

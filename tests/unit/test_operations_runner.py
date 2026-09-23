@@ -321,7 +321,6 @@ async def test_followups_omit_history_index_for_an_agent_repository(
 
     registry["backup"] = ok
     registry["archive_sync"] = ok
-    registry["history_merge"] = ok
     registry["history_index"] = ok
     registry["stats"] = ok
     monkeypatch.setattr(
@@ -346,7 +345,6 @@ async def test_followups_omit_history_index_for_an_agent_repository(
     assert [r.kind for r in rows] == [
         "backup",
         "archive_sync",
-        "history_merge",
         "stats",
     ]
 

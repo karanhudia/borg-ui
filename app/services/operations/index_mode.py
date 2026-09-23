@@ -12,15 +12,13 @@ from typing import Iterable, Optional
 DEFAULT_INDEX_MODE = "full"
 INDEX_MODES: tuple[str, ...] = ("full", "archives", "off")
 
-# The four kinds the mode governs. Anything else in a chain is work someone
+# The kinds the mode governs. Anything else in a chain is work someone
 # asked for and is never dropped here.
-INDEX_KINDS: frozenset[str] = frozenset(
-    {"stats", "archive_sync", "history_index", "history_merge"}
-)
+INDEX_KINDS: frozenset[str] = frozenset({"stats", "archive_sync", "history_index"})
 
 # Spec 6.8: what each mode keeps refreshing.
 MODE_KINDS: dict[str, frozenset[str]] = {
-    "full": frozenset({"stats", "archive_sync", "history_index", "history_merge"}),
+    "full": frozenset({"stats", "archive_sync", "history_index"}),
     "archives": frozenset({"stats", "archive_sync"}),
     "off": frozenset(),
 }

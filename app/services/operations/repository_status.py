@@ -125,30 +125,7 @@ def job_evidence(db: Session, repository_id: int, cell: str, spec: dict) -> Cell
     return result
 
 
-def pending_removed_ids(db: Session, repository_id: int) -> set[int]:
-    """Archive rows the newest successful archive_sync reported removed and
-    history_merge has not deleted yet: archive_sync never deletes (spec
-    6.4), so between the two the rows are still in the table. The same
-    exclusion `write_repository_archive_columns` applies to last_backup."""
-    row = (
-        db.query(Operation.result)
-        .filter(
-            Operation.repository_id == repository_id,
-            Operation.kind == "archive_sync",
-            Operation.status.in_(SUCCESS_STATUSES),
-            Operation.completed_at.isnot(None),
-        )
-        .order_by(Operation.completed_at.desc())
-        .first()
-    )
-    if row is None:
-        return set()
-    return set((row[0] or {}).get("removed_archive_ids") or [])
-
-
-def series_starts(
-    db: Session, repository_id: int, exclude: set[int] = frozenset()
-) -> dict[str, list[datetime]]:
+def series_starts(db: Session, repository_id: int) -> dict[str, list[datetime]]:
     """Archive start times per series, each ascending. Archives without a
     series form one group of their own: a cadence is a property of a
     series, and timestamps of different series interleave (two nightly
@@ -165,12 +142,11 @@ def series_starts(
         )
         .label("rank")
     )
-    ranked = db.query(
-        Archive.series.label("series"), Archive.start.label("start"), rank
-    ).filter(Archive.repository_id == repository_id)
-    if exclude:
-        ranked = ranked.filter(Archive.id.notin_(list(exclude)))
-    ranked = ranked.subquery()
+    ranked = (
+        db.query(Archive.series.label("series"), Archive.start.label("start"), rank)
+        .filter(Archive.repository_id == repository_id)
+        .subquery()
+    )
     result: dict[str, list[datetime]] = {}
     for series, start in (
         db.query(ranked.c.series, ranked.c.start)
@@ -532,8 +508,7 @@ def repository_status(
     db: Session, repository: Repository, *, now: datetime, pro: bool
 ) -> dict:
     """The status payload: one cell per applicable category."""
-    pending = pending_removed_ids(db, repository.id)
-    by_series = series_starts(db, repository.id, pending)
+    by_series = series_starts(db, repository.id)
     starts = sorted(start for group in by_series.values() for start in group)
     mirror_applies = repository.repository_type == "rclone"
     # Nothing is refreshed for an `off` repository, so an index cell would
@@ -702,9 +677,10 @@ class StorageSummary:
 def _current_archives(db: Session, repository_ids: list[int]):
     """A filter for the archive rows the newest listing still saw: every
     listing stamps the rows it sees with one `last_seen_at`, so a row an
-    earlier listing stamped was reported removed and waits for
-    `history_merge` to drop it. `archive_count` excludes those rows, and so
-    do the sums."""
+    earlier listing stamped was reported removed and waits for the next
+    archive_sync to drop it (the info dialog's listing reports removals
+    without deleting). `archive_count` excludes those rows, and so do the
+    sums."""
     newest_seen = (
         db.query(
             Archive.repository_id.label("repository_id"),
@@ -1005,8 +981,8 @@ def storage_summaries(
         ) = sums.get(repository.id, (0, 0, None, 0, None, None))
         # The rows the newest listing stamped must be the archives it
         # counted: a listing that found nothing stamps nothing, so the rows
-        # it reported removed would still read as current, and rows
-        # `history_merge` has not dropped yet drift the same way. On a
+        # it reported removed would still read as current, and rows an
+        # archive_sync has not dropped yet drift the same way. On a
         # mismatch the archive figures are not reported.
         # `archive_count` also moves without the rows (an agent's own
         # listing, an info sync), so the gate can close between a backup
@@ -1025,9 +1001,9 @@ def storage_summaries(
         compact = compacts.get(repository.id)
         borg2 = (repository.borg_version or 1) == 2
         # An archive count of 0 answers on its own: no archives, no source
-        # data. The rows it disagrees with may never be deleted (the
-        # `archives` index mode runs no `history_merge`), which would
-        # otherwise keep a figure alive for archives that are gone. The
+        # data. The rows it disagrees with may not be deleted yet (the info
+        # dialog's listing leaves them for the next archive_sync), which
+        # would otherwise keep a figure alive for archives that are gone. The
         # count is only the newest word while nothing newer contradicts
         # it: rows stamped after that listing (one commits them long
         # before it writes the count, so a repository gaining its first
