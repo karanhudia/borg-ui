@@ -42,6 +42,15 @@ from app.utils.redaction import install_log_redaction, redact_secrets
         ('{"password": "two words, and more"}', '{"password": "***"}'),
         ("password='a b' user=x", "password='***' user=x"),
         ('{"password_set": false}', '{"password_set": false}'),
+        (
+            """BORG_PASSPHRASE='a'"'"'b c' borg list""",
+            "BORG_PASSPHRASE='***' borg list",
+        ),
+        (
+            "rclone lsd --s3-secret-access-key XYZ --s3-region eu",
+            "rclone lsd --s3-secret-access-key *** --s3-region eu",
+        ),
+        ("password=*** already", "password=*** already"),
         ('{"db_password": "hunter2"}', '{"db_password": "***"}'),
         ('{"has_password": true}', '{"has_password": true}'),
         ("api_key=abc123&x=1", "api_key=***&x=1"),
@@ -51,6 +60,7 @@ from app.utils.redaction import install_log_redaction, redact_secrets
 )
 def test_redact_secrets(text, expected):
     assert redact_secrets(text) == expected
+    assert redact_secrets(expected) == expected  # idempotent
 
 
 @pytest.mark.unit

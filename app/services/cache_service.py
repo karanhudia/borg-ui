@@ -827,7 +827,6 @@ class ArchiveCacheService:
                 )
 
             # Reconfigure Redis connection
-            old_backend_type = self.get_backend_type()
 
             # Reset to in-memory first
             self._current_backend = self._memory_backend

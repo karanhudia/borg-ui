@@ -27,12 +27,15 @@ _SECRET_WORDS = (
 )
 _SECRET_KEY = rf"[\w-]*{_SECRET_WORDS}[\w-]*"  # AWS_SECRET_ACCESS_KEY, db_password
 # key=value (structlog console, env assignments, query strings, including a
-# percent-encoded `%3D` inside an encoded URL) and "key": "value" (JSON).
-# A quoted value is masked whole, spaces included. Booleans and nulls are
-# flags, not secrets.
+# percent-encoded `%3D` inside an encoded URL), "key": "value" (JSON) and
+# `--flag value` (CLI arguments). A quoted value is masked whole, spaces and
+# shell-escaped quotes ('"'"') included. Booleans and nulls are flags, not
+# secrets, and an existing `***` is left alone so redacting twice is a no-op.
 _KEY_VALUE = re.compile(
-    rf"""(?i)(\b{_SECRET_KEY}["']?\s*(?:=|%3D)\s*|"{_SECRET_KEY}"\s*:\s*)"""
-    r"""("(?:[^"\\]|\\.)*"|'[^']*'|(?!(?:true|false|null|none)\b)[^\s"'&,;}]+)"""
+    rf"""(?i)(\b{_SECRET_KEY}["']?\s*(?:=|%3D)\s*|"{_SECRET_KEY}"\s*:\s*"""
+    rf"""|(?<![\w-])--{_SECRET_KEY}\s+)"""
+    r"""("(?:[^"\\]|\\.)*"|'(?:[^']|'"'"')*'"""
+    r"""|(?!(?:true|false|null|none)\b|\*\*\*)[^\s"'&,;}]+)"""
 )
 
 
