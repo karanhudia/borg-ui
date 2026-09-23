@@ -9,7 +9,9 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import sessionmaker
 
+from app.database.database import get_db
 from app.database.models import Repository
 from tests.integration.helpers import (
     parse_archives_payload,
@@ -579,6 +581,7 @@ class TestBackupCreationIntegration:
         admin_headers,
         test_db,
         tmp_path,
+        monkeypatch,
     ):
         repo, _repo_path, source_path = _create_borg2_registered_repo(test_db, tmp_path)
         large_source_dir = source_path / "large"
@@ -587,6 +590,24 @@ class TestBackupCreationIntegration:
         _prepare_repository_for_backup(repo, test_db, [source_path])
         repo.compression = "none"
         test_db.commit()
+        repo_id, repo_path = repo.id, repo.path
+
+        # This test polls from one thread while the backup request runs in
+        # another. The fixture hands every request the one shared session, and
+        # a SQLAlchemy session is not safe across threads, so give each request
+        # its own session here, as production does.
+        session_factory = sessionmaker(bind=test_db.get_bind())
+
+        def _session_per_request():
+            db = session_factory()
+            try:
+                yield db
+            finally:
+                db.close()
+
+        monkeypatch.setitem(
+            test_client.app.dependency_overrides, get_db, _session_per_request
+        )
 
         result_queue: queue.Queue = queue.Queue()
 
@@ -594,7 +615,7 @@ class TestBackupCreationIntegration:
             try:
                 response = test_client.post(
                     "/api/v2/backup/run",
-                    json={"repository_id": repo.id},
+                    json={"repository_id": repo_id},
                     headers=admin_headers,
                 )
                 result_queue.put(("response", response))
@@ -607,14 +628,14 @@ class TestBackupCreationIntegration:
         job_id = _wait_for_manual_backup_job_id(
             test_client,
             admin_headers,
-            repository_path=repo.path,
+            repository_path=repo_path,
             timeout=45,
         )
         _wait_for_live_progress(
             test_client,
             job_id,
             admin_headers,
-            repository_path=repo.path,
+            repository_path=repo_path,
             timeout=90,
         )
 
