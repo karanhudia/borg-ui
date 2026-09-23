@@ -317,7 +317,19 @@ export default function RepositoryHubRow({
           )}
         </Box>
 
-        <CurrentStage stage={stage} now={now} onRetry={onRetry} />
+        <CurrentStage
+          stage={stage}
+          now={now}
+          onRetry={onRetry}
+          // Nothing is refreshed for an `off` repository, so "Idle" would
+          // promise work that never comes (spec 6.8). A manual one-off run
+          // still shows its stage.
+          restLabel={
+            repository && (repository.index_mode ?? 'full') === 'off'
+              ? t('operations.background.hub.trackOff')
+              : t('operations.background.strip.idle')
+          }
+        />
 
         {repository ? (
           <>
@@ -392,15 +404,6 @@ export default function RepositoryHubRow({
           )}
         </Box>
       </Box>
-
-      {/* Nothing is refreshed for an `off` repository, so an empty stage
-          cell would read as work that failed to start (spec 6.8). A manual
-          one-off run still shows its stage. */}
-      {repository && (repository.index_mode ?? 'full') === 'off' && !stage && (
-        <Typography variant="caption" sx={{ display: 'block', mt: 1.5, color: 'text.secondary' }}>
-          {t('operations.background.hub.trackOff')}
-        </Typography>
-      )}
     </Box>
   )
 }

@@ -183,7 +183,7 @@ describe('PipelineBoard', () => {
     await waitFor(() => expect(screen.getAllByTestId('repository-row')).toHaveLength(2))
     const rows = screen.getAllByTestId('repository-row')
     expect(within(rows[0]).getByText('nas')).toBeInTheDocument()
-    expect(within(rows[0]).getByTestId('current-stage')).toBeEmptyDOMElement()
+    expect(within(rows[0]).getByTestId('current-stage')).toHaveTextContent('Idle')
     expect(within(rows[1]).getByText('photos')).toBeInTheDocument()
     expect(within(rows[1]).getByTestId('stage-stats')).toHaveAttribute('data-status', 'running')
   })

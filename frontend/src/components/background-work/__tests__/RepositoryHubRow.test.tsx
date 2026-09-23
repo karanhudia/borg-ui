@@ -207,9 +207,9 @@ describe('RepositoryHubRow', () => {
     expect(screen.getByText(/16 of 18 indexed/i)).toBeInTheDocument()
   })
 
-  it('leaves the stage cell empty at rest', () => {
+  it('says the repository is idle at rest', () => {
     renderRow({ track: null })
-    expect(screen.getByTestId('current-stage')).toBeEmptyDOMElement()
+    expect(screen.getByTestId('current-stage')).toHaveTextContent('Idle')
   })
 
   it('retries from the failed stage', () => {
@@ -293,7 +293,7 @@ describe('index mode (spec 6.8)', () => {
     renderRow({ repository: repository({ index_mode: 'off' }) })
     expect(screen.getByText(/not indexed/i)).toBeInTheDocument()
     expect(screen.getByText(/background work is off/i)).toBeInTheDocument()
-    expect(screen.getByTestId('current-stage')).toBeEmptyDOMElement()
+    expect(screen.getByTestId('current-stage')).toHaveTextContent(/background work is off/i)
   })
 
   it('shows the stage for an off repository while a manual run is going', () => {
