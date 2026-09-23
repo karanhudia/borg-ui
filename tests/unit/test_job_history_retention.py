@@ -697,6 +697,146 @@ def test_sweep_repairs_a_log_file_that_is_wrong_but_not_shorter(db, tmp_path):
     )
 
 
+def _finished_days_earlier(db, days):
+    """Move every agent job and operation `days` further into the past."""
+    shift = timedelta(days=days)
+    for model, columns in (
+        (AgentJob, ("claimed_at", "completed_at", "created_at", "updated_at")),
+        (Operation, ("started_at", "completed_at", "created_at")),
+    ):
+        for row in db.query(model).all():
+            for column in columns:
+                if getattr(row, column) is not None:
+                    setattr(row, column, getattr(row, column) - shift)
+    db.commit()
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "days_ago, window_days, repaired",
+    [(3, 30, True), (29, 30, True), (31, 30, False), (0, 0, False)],
+    ids=["3-days", "29-days", "31-days", "no-window"],
+)
+def test_sweep_repairs_a_log_file_for_the_given_window(
+    db, tmp_path, days_ago, window_days, repaired
+):
+    _settings(db)
+    log_file = tmp_path / "operation_compact.log"
+    log_file.write_text("Starting repository.compact", encoding="utf-8")
+    _agent_maintenance_log_scenario(db, "compact", "completed", str(log_file))
+    _finished_days_earlier(db, days_ago)
+
+    sweep_pruned_archive_records(db, repair_lookback=timedelta(days=window_days))
+
+    assert ("late line" in log_file.read_text(encoding="utf-8")) is repaired
+
+
+@pytest.mark.unit
+def test_sweep_reads_its_candidates_in_batches(db, tmp_path, monkeypatch):
+    monkeypatch.setattr("app.services.job_history_retention.CHUNK_SIZE", 1)
+    _settings(db)
+    log_files = [tmp_path / f"operation_{n}.log" for n in range(3)]
+    for path in log_files:
+        path.write_text("Starting repository.compact", encoding="utf-8")
+    _agent_maintenance_log_scenario(db, "compact", "completed", str(log_files[0]))
+    # two more jobs like the first, on the same machine and repository
+    template = db.query(AgentJob).one()
+    for path in log_files[1:]:
+        operation = seed_job_operation(
+            db,
+            "compact",
+            repository_id=db.query(Repository).one().id,
+            status="completed",
+        )
+        db.flush()
+        db.query(Operation).filter(Operation.id == operation.id).update(
+            {"log_file_path": str(path)}, synchronize_session=False
+        )
+        agent_job = agent_maintenance_job(
+            db,
+            db.get(AgentMachine, template.agent_machine_id),
+            "compact",
+            operation.id,
+            status="completed",
+            commit=False,
+            claimed_at=template.claimed_at,
+            completed_at=template.completed_at,
+            created_at=template.created_at,
+            updated_at=template.updated_at,
+        )
+        for seq, message in enumerate(["Starting repository.compact", "late line"]):
+            db.add(
+                AgentJobLog(
+                    agent_job_id=agent_job.id,
+                    sequence=seq,
+                    stream="stderr",
+                    message=message,
+                    created_at=template.created_at,
+                )
+            )
+        db.commit()
+
+    candidate_reads = []
+
+    @event.listens_for(db.get_bind(), "before_cursor_execute")
+    def _record(conn, cursor, statement, parameters, context, executemany):
+        if "agent_jobs.payload" in statement and "FROM agent_jobs" in statement:
+            candidate_reads.append(statement)
+
+    try:
+        sweep_pruned_archive_records(db)
+    finally:
+        event.remove(db.get_bind(), "before_cursor_execute", _record)
+
+    assert [path.read_text(encoding="utf-8") for path in log_files] == [
+        "Starting repository.compact\nlate line"
+    ] * 3
+    # one bounded read per job, then the empty read that ends the loop
+    assert len(candidate_reads) == 4
+    assert all("LIMIT" in statement for statement in candidate_reads)
+
+
+@pytest.mark.unit
+def test_the_daily_pass_repairs_a_log_file_for_as_long_as_its_lines_are_kept(
+    db, tmp_path
+):
+    """The rows and the file both stay for log_retention_days, so a line
+    that missed the file (a full disk, an instance down for days) is still
+    worth writing after the first two days."""
+    _settings(db, log_retention_days=30)
+    log_file = tmp_path / "operation_check.log"
+    log_file.write_text("Starting repository.check", encoding="utf-8")
+    _agent_maintenance_log_scenario(db, "check", "failed", str(log_file))
+    _finished_days_earlier(db, 3)
+
+    run_retention(db)
+
+    assert log_file.read_text(encoding="utf-8") == (
+        "Starting repository.check\nlate line"
+    )
+
+
+@pytest.mark.unit
+def test_the_wider_repair_window_does_not_widen_the_marking(db, tmp_path):
+    """Marking keeps its two days: the completion hook and the first passes
+    after a prune have long marked what its lines name."""
+    _settings(db)
+    pruned_id, prune_row_id, _ = _late_prune_log_scenario(db)
+    log_file = tmp_path / "operation_prune.log"
+    log_file.write_text("Starting repository.prune", encoding="utf-8")
+    db.query(Operation).filter(Operation.id == prune_row_id).update(
+        {"log_file_path": str(log_file)}, synchronize_session=False
+    )
+    db.commit()
+    _finished_days_earlier(db, 3)
+
+    assert run_retention(db)["pruned_archive_records_marked"] == 0
+
+    assert "Pruning archive: host-old" in log_file.read_text(encoding="utf-8")
+    db.expunge_all()
+    assert db.get(OperationBackupDetails, pruned_id).archive_pruned_at is None
+
+
 @pytest.mark.unit
 @pytest.mark.parametrize("named", [False, True], ids=["no-path", "file-gone"])
 def test_sweep_does_not_bring_back_a_log_file_retention_removed(
