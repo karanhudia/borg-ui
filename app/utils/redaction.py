@@ -36,8 +36,15 @@ _SECRET_WORDS = (
 # A whole key token containing a secret word: AWS_SECRET_ACCESS_KEY, db_password.
 _SECRET_KEY = rf"(?=[\w-]*{_SECRET_WORDS})[\w-]+"
 # A quoted value is masked whole: spaces, backslash escapes (Python's repr
-# writes 'it\'s') and shell-escaped quotes ('"'"') included.
-_QUOTED = r""""(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.|'"'"')*'"""
+# writes 'it\'s') and shell-escaped quotes ('"'"') included. The closing
+# quote is optional and the value stops at a line end, so an unterminated
+# value is still masked and never sends the scan to the end of the text.
+_DOUBLE_QUOTED = r""""(?:[^"\\\n]|\\.)*"""
+_SINGLE_QUOTED = r"""'(?:[^'\\\n]|\\.|'"'"')*"""
+_QUOTED = rf"""{_DOUBLE_QUOTED}"?|{_SINGLE_QUOTED}'?"""
+# A quote inside a bare value is part of the secret (`ab"cd`); one followed
+# by a delimiter or the end closes the string around it (JSON, a repr).
+_INNER_QUOTE = r"""["'](?![\s,;:}\]&#]|$)"""
 # key=value (structlog console, env assignments, query strings, including a
 # percent-encoded `%3D` inside an encoded URL), "key": "value" (JSON),
 # 'key': 'value' (a Python dict formatted into the message) and
@@ -46,28 +53,46 @@ _QUOTED = r""""(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.|'"'"')*'"""
 _KEY_VALUE = re.compile(
     rf"""(?i)((?<![\w-]){_SECRET_KEY}["']?\s*(?:=|%3D)\s*|(["']){_SECRET_KEY}\2\s*:\s*"""
     rf"""|(?<![\w-])--{_SECRET_KEY}\s+)"""
-    rf"""({_QUOTED}|(?!(?:true|false|null|none)\b|\*\*\*)[^\s"'&,;}}]+)"""
+    rf"""((?!["']?\*\*\*)(?:{_QUOTED}|(?!(?:true|false|null|none)\b)(?:[^\s"'&,;}}]|{_INNER_QUOTE})+))"""
 )
 
 _SECRET_NAME = re.compile(rf"(?i){_SECRET_KEY}")
 # ?key=value / &key=value. The key is decoded before the name check because
 # URL parsers (redis-py included) decode it too: `pass%77ord` is `password`.
-# Neither side runs past `?`, so a nested URL's own query is checked too.
-_QUERY_PAIR = re.compile(rf"""([?&])([^?=&\s"'#]+)=({_QUOTED}|[^?&\s"'#]*)""")
+_QUERY_KEY = re.compile(r"""[?&]([^?=&\s"'#]+)=""")
+# A secret's value: quoted up to its closing quote (escaped quotes, `&`
+# and `?` inside it included), an unterminated quote up to the next `&`, `#` or line end, or
+# a bare value up to the next `&` (a literal `?` is part of the value).
+_QUERY_VALUE = re.compile(
+    rf"""{_DOUBLE_QUOTED}"|{_SINGLE_QUOTED}'|["'][^&#\n]*|(?:[^&\s"'#]|{_INNER_QUOTE})*"""
+)
 
 
 def _mask(value: str) -> str:
-    """`***`, keeping the value's surrounding quotes."""
+    """`***`, keeping the value's quotes (a closing one only if it had one)."""
     quote = value[0] if value[:1] in ('"', "'") else ""
-    return f"{quote}***{quote}"
+    closing = quote if quote and len(value) > 1 and value.endswith(quote) else ""
+    return f"{quote}***{closing}"
 
 
-def _redact_query_pair(match: re.Match) -> str:
-    separator, key, value = match.group(1), match.group(2), match.group(3)
-    if _SECRET_NAME.fullmatch(unquote_plus(key)):
-        return f"{separator}{key}={_mask(value)}"
-    # A quoted value can hold a whole URL; check that URL's own query too.
-    return f"{separator}{key}={_QUERY_PAIR.sub(_redact_query_pair, value)}"
+def _redact_query(text: str) -> str:
+    """Mask the values of secret-named query parameters.
+
+    A scan rather than one substitution: only a secret key's value is read
+    and skipped. Any other value is scanned on from just after its `=`, so a
+    URL nested in it has its own query checked, and each character is read
+    a bounded number of times however deeply URLs nest.
+    """
+    out, pos = [], 0
+    while match := _QUERY_KEY.search(text, pos):
+        out.append(text[pos : match.end()])
+        pos = match.end()
+        if _SECRET_NAME.fullmatch(unquote_plus(match.group(1))):
+            value = _QUERY_VALUE.match(text, pos)
+            out.append(_mask(value.group()))
+            pos = value.end()
+    out.append(text[pos:])
+    return "".join(out)
 
 
 def _redact_value(match: re.Match) -> str:
@@ -96,7 +121,7 @@ def redact_secrets(text: Optional[str]) -> Optional[str]:
         return text
     for pattern, at, colon in _URL_PATTERNS:
         text = pattern.sub(lambda m: _redact_netloc(m, at, colon), text)
-    text = _QUERY_PAIR.sub(_redact_query_pair, text)
+    text = _redact_query(text)
     return _KEY_VALUE.sub(_redact_value, text)
 
 
