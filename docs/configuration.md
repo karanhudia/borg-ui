@@ -161,7 +161,7 @@ Priority for UI-managed timeout settings:
 | `INDEX_HISTORY_SECONDS_PER_RUN` | `900` | Wall-clock budget for one history index run; archives past it stay pending for the next run, so a long backfill cannot hold an index worker. `0` disables the budget |
 
 The reconcile interval (`stats_refresh_interval_minutes`) and the
-`index_workers` and `background_paused` runner controls are system settings
+`index_workers` and `paused_stages` (the stages paused on the Background work tab) runner controls are system settings
 managed in the UI and through `/api/operations`, not environment variables.
 
 ## Archive Browsing Limits

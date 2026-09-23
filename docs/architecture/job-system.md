@@ -478,6 +478,10 @@ Rules:
 
 The `/api/operations` routes expose the list, a live queue view, cancel,
 pause and resume of background triggers, and the `index_workers` limit.
+Pausing is per stage (`vocab.STAGES`: archives, retention, history, stats,
+stored in `SystemSettings.paused_stages`): `can_start` holds the `followup`
+and `reconcile` work of a paused stage and lets manual runs through.
+`/pause` and `/resume` pause or resume every stage.
 Activity includes operations rows; index-category rows are hidden unless
 the Index category filter is on.
 
