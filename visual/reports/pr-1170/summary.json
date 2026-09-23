@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-09-23T11:06:47.197Z",
+  "generatedAt": "2026-09-23T11:23:11.851Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1170 visual report",
     "commitSha": "1abd0ad2d8af",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35852523160"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35854085465"
   },
   "totals": {
     "baseline": 986,
-    "actual": 1002,
-    "compared": 984,
-    "changed": 55,
+    "actual": 994,
+    "compared": 976,
+    "changed": 63,
     "added": 18,
-    "removed": 2,
-    "unchanged": 929
+    "removed": 10,
+    "unchanged": 913
   },
   "changed": [
     {
@@ -705,9 +705,9 @@
       "baselinePath": "images/baseline/backgroundwork-repositorytrackdialog--agent-repository.png",
       "actualPath": "images/actual/backgroundwork-repositorytrackdialog--agent-repository.png",
       "diffPath": "images/diff/backgroundwork-repositorytrackdialog--agent-repository.png",
-      "diffPixels": 224408,
+      "diffPixels": 474747,
       "totalPixels": 1024000,
-      "diffRatio": 0.2191484375,
+      "diffRatio": 0.4636201171875,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -741,9 +741,9 @@
       "baselinePath": "images/baseline/backgroundwork-repositorytrackdialog--all-indexed.png",
       "actualPath": "images/actual/backgroundwork-repositorytrackdialog--all-indexed.png",
       "diffPath": "images/diff/backgroundwork-repositorytrackdialog--all-indexed.png",
-      "diffPixels": 324515,
+      "diffPixels": 435389,
       "totalPixels": 1024000,
-      "diffRatio": 0.3169091796875,
+      "diffRatio": 0.4251845703125,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -777,9 +777,9 @@
       "baselinePath": "images/baseline/backgroundwork-repositorytrackdialog--archives-only-mode.png",
       "actualPath": "images/actual/backgroundwork-repositorytrackdialog--archives-only-mode.png",
       "diffPath": "images/diff/backgroundwork-repositorytrackdialog--archives-only-mode.png",
-      "diffPixels": 298987,
+      "diffPixels": 437852,
       "totalPixels": 1024000,
-      "diffRatio": 0.2919794921875,
+      "diffRatio": 0.42758984375,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -813,9 +813,9 @@
       "baselinePath": "images/baseline/backgroundwork-repositorytrackdialog--history-partial.png",
       "actualPath": "images/actual/backgroundwork-repositorytrackdialog--history-partial.png",
       "diffPath": "images/diff/backgroundwork-repositorytrackdialog--history-partial.png",
-      "diffPixels": 324488,
+      "diffPixels": 435377,
       "totalPixels": 1024000,
-      "diffRatio": 0.3168828125,
+      "diffRatio": 0.4251728515625,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -849,9 +849,153 @@
       "baselinePath": "images/baseline/backgroundwork-repositorytrackdialog--with-problems.png",
       "actualPath": "images/actual/backgroundwork-repositorytrackdialog--with-problems.png",
       "diffPath": "images/diff/backgroundwork-repositorytrackdialog--with-problems.png",
-      "diffPixels": 205996,
+      "diffPixels": 205663,
       "totalPixels": 1024000,
-      "diffRatio": 0.20116796875,
+      "diffRatio": 0.2008427734375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-archives-syncstatechip--fresh--mobile.png",
+      "baselinePath": "images/baseline/components-archives-syncstatechip--fresh--mobile.png",
+      "actualPath": "images/actual/components-archives-syncstatechip--fresh--mobile.png",
+      "diffPath": "images/diff/components-archives-syncstatechip--fresh--mobile.png",
+      "diffPixels": 5845,
+      "totalPixels": 329160,
+      "diffRatio": 0.017757321667274274,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-archives-syncstatechip--fresh.png",
+      "baselinePath": "images/baseline/components-archives-syncstatechip--fresh.png",
+      "actualPath": "images/actual/components-archives-syncstatechip--fresh.png",
+      "diffPath": "images/diff/components-archives-syncstatechip--fresh.png",
+      "diffPixels": 5845,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0057080078125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-archives-syncstatechip--never--mobile.png",
+      "baselinePath": "images/baseline/components-archives-syncstatechip--never--mobile.png",
+      "actualPath": "images/actual/components-archives-syncstatechip--never--mobile.png",
+      "diffPath": "images/diff/components-archives-syncstatechip--never--mobile.png",
+      "diffPixels": 4698,
+      "totalPixels": 329160,
+      "diffRatio": 0.014272694130514036,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-archives-syncstatechip--never.png",
+      "baselinePath": "images/baseline/components-archives-syncstatechip--never.png",
+      "actualPath": "images/actual/components-archives-syncstatechip--never.png",
+      "diffPath": "images/diff/components-archives-syncstatechip--never.png",
+      "diffPixels": 4698,
+      "totalPixels": 1024000,
+      "diffRatio": 0.004587890625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-archives-syncstatechip--stale--mobile.png",
+      "baselinePath": "images/baseline/components-archives-syncstatechip--stale--mobile.png",
+      "actualPath": "images/actual/components-archives-syncstatechip--stale--mobile.png",
+      "diffPath": "images/diff/components-archives-syncstatechip--stale--mobile.png",
+      "diffPixels": 5195,
+      "totalPixels": 329160,
+      "diffRatio": 0.01578259812856969,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-archives-syncstatechip--stale.png",
+      "baselinePath": "images/baseline/components-archives-syncstatechip--stale.png",
+      "actualPath": "images/actual/components-archives-syncstatechip--stale.png",
+      "diffPath": "images/diff/components-archives-syncstatechip--stale.png",
+      "diffPixels": 5195,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0050732421875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-archives-syncstatechip--syncing--mobile.png",
+      "baselinePath": "images/baseline/components-archives-syncstatechip--syncing--mobile.png",
+      "actualPath": "images/actual/components-archives-syncstatechip--syncing--mobile.png",
+      "diffPath": "images/diff/components-archives-syncstatechip--syncing--mobile.png",
+      "diffPixels": 648,
+      "totalPixels": 329160,
+      "diffRatio": 0.001968647466277798,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-archives-syncstatechip--syncing.png",
+      "baselinePath": "images/baseline/components-archives-syncstatechip--syncing.png",
+      "actualPath": "images/actual/components-archives-syncstatechip--syncing.png",
+      "diffPath": "images/diff/components-archives-syncstatechip--syncing.png",
+      "diffPixels": 648,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0006328125,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -867,9 +1011,9 @@
       "baselinePath": "images/baseline/settings-backgroundworktab--busy--mobile.png",
       "actualPath": "images/actual/settings-backgroundworktab--busy--mobile.png",
       "diffPath": "images/diff/settings-backgroundworktab--busy--mobile.png",
-      "diffPixels": 31521,
+      "diffPixels": 31545,
       "totalPixels": 329160,
-      "diffRatio": 0.09576193948231863,
+      "diffRatio": 0.09583485235144003,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -885,9 +1029,9 @@
       "baselinePath": "images/baseline/settings-backgroundworktab--busy.png",
       "actualPath": "images/actual/settings-backgroundworktab--busy.png",
       "diffPath": "images/diff/settings-backgroundworktab--busy.png",
-      "diffPixels": 394673,
+      "diffPixels": 394700,
       "totalPixels": 1024000,
-      "diffRatio": 0.3854228515625,
+      "diffRatio": 0.38544921875,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -921,9 +1065,9 @@
       "baselinePath": "images/baseline/settings-backgroundworktab--idle.png",
       "actualPath": "images/actual/settings-backgroundworktab--idle.png",
       "diffPath": "images/diff/settings-backgroundworktab--idle.png",
-      "diffPixels": 290796,
+      "diffPixels": 290770,
       "totalPixels": 1024000,
-      "diffRatio": 0.28398046875,
+      "diffRatio": 0.283955078125,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -1082,6 +1226,38 @@
     }
   ],
   "removed": [
+    {
+      "fileName": "backgroundwork-rebuildstagepicker--community--mobile.png",
+      "baselinePath": "images/baseline/backgroundwork-rebuildstagepicker--community--mobile.png"
+    },
+    {
+      "fileName": "backgroundwork-rebuildstagepicker--community.png",
+      "baselinePath": "images/baseline/backgroundwork-rebuildstagepicker--community.png"
+    },
+    {
+      "fileName": "backgroundwork-rebuildstagepicker--from-archives--mobile.png",
+      "baselinePath": "images/baseline/backgroundwork-rebuildstagepicker--from-archives--mobile.png"
+    },
+    {
+      "fileName": "backgroundwork-rebuildstagepicker--from-archives.png",
+      "baselinePath": "images/baseline/backgroundwork-rebuildstagepicker--from-archives.png"
+    },
+    {
+      "fileName": "backgroundwork-rebuildstagepicker--from-stats--mobile.png",
+      "baselinePath": "images/baseline/backgroundwork-rebuildstagepicker--from-stats--mobile.png"
+    },
+    {
+      "fileName": "backgroundwork-rebuildstagepicker--from-stats.png",
+      "baselinePath": "images/baseline/backgroundwork-rebuildstagepicker--from-stats.png"
+    },
+    {
+      "fileName": "backgroundwork-rebuildstagepicker--history-unsupported-for-agent--mobile.png",
+      "baselinePath": "images/baseline/backgroundwork-rebuildstagepicker--history-unsupported-for-agent--mobile.png"
+    },
+    {
+      "fileName": "backgroundwork-rebuildstagepicker--history-unsupported-for-agent.png",
+      "baselinePath": "images/baseline/backgroundwork-rebuildstagepicker--history-unsupported-for-agent.png"
+    },
     {
       "fileName": "backgroundwork-repositoryhubrow--community--mobile.png",
       "baselinePath": "images/baseline/backgroundwork-repositoryhubrow--community--mobile.png"
@@ -1292,30 +1468,6 @@
     },
     {
       "fileName": "backgroundwork-pipelineboard--no-repositories.png"
-    },
-    {
-      "fileName": "backgroundwork-rebuildstagepicker--community--mobile.png"
-    },
-    {
-      "fileName": "backgroundwork-rebuildstagepicker--community.png"
-    },
-    {
-      "fileName": "backgroundwork-rebuildstagepicker--from-archives--mobile.png"
-    },
-    {
-      "fileName": "backgroundwork-rebuildstagepicker--from-archives.png"
-    },
-    {
-      "fileName": "backgroundwork-rebuildstagepicker--from-stats--mobile.png"
-    },
-    {
-      "fileName": "backgroundwork-rebuildstagepicker--from-stats.png"
-    },
-    {
-      "fileName": "backgroundwork-rebuildstagepicker--history-unsupported-for-agent--mobile.png"
-    },
-    {
-      "fileName": "backgroundwork-rebuildstagepicker--history-unsupported-for-agent.png"
     },
     {
       "fileName": "backup-plans-reviewstep--agent-source-to-same-agent-repo--mobile.png"
@@ -1964,30 +2116,6 @@
     },
     {
       "fileName": "components-archives-heatmaplegend--no-flags.png"
-    },
-    {
-      "fileName": "components-archives-syncstatechip--fresh--mobile.png"
-    },
-    {
-      "fileName": "components-archives-syncstatechip--fresh.png"
-    },
-    {
-      "fileName": "components-archives-syncstatechip--never--mobile.png"
-    },
-    {
-      "fileName": "components-archives-syncstatechip--never.png"
-    },
-    {
-      "fileName": "components-archives-syncstatechip--stale--mobile.png"
-    },
-    {
-      "fileName": "components-archives-syncstatechip--stale.png"
-    },
-    {
-      "fileName": "components-archives-syncstatechip--syncing--mobile.png"
-    },
-    {
-      "fileName": "components-archives-syncstatechip--syncing.png"
     },
     {
       "fileName": "components-backendtargetselect--locked-community--mobile.png"
