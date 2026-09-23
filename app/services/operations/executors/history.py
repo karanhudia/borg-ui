@@ -4,7 +4,8 @@ history_index streams `borg diff` per (predecessor, archive) pair, or a
 full `borg list` for the first archive of a series, drops excluded paths,
 resolves absolute sizes for modified files from the last known size in the
 series, caps rows per archive, and writes each archive in one transaction.
-history_merge folds a removed archive's rows into its successor.
+merge_removed_archive folds a removed archive's rows into its successor;
+archive_sync calls it for every archive its listing no longer sees.
 """
 
 import asyncio
@@ -24,7 +25,6 @@ from app.database.models import (
     DEFAULT_HISTORY_INDEX_EXCLUDES,
     Archive,
     ArchiveChange,
-    Operation,
     Repository,
     utc_now,
 )
@@ -518,34 +518,7 @@ async def run_history_index(ctx) -> Outcome:
         cleanup_temp_key_file(temp_key_file)
 
 
-# -- executor: history_merge ----------------------------------------------------
-
-
-def removed_archive_targets_from_dependency(
-    db: Session, operation
-) -> list[tuple[int, str | None, str | None, str | None]]:
-    """archive_sync reports removed archives in its result; history_merge
-    always directly depends on it (spec 7.4 and 7.5 chains)."""
-    depends_on_id = getattr(operation, "depends_on_id", None)
-    if depends_on_id is None:
-        return []
-    parent = db.get(Operation, depends_on_id)
-    if parent is None or parent.kind != "archive_sync":
-        return []
-    result = parent.result or {}
-    ids = result.get("removed_archive_ids") or []
-    identities = result.get("removed_archive_borg_ids") or {}
-    observations = result.get("removed_archive_last_seen_at") or {}
-    generations = result.get("removed_archive_generations") or {}
-    return [
-        (
-            int(i),
-            identities.get(str(i)),
-            observations.get(str(i)),
-            generations.get(str(i)),
-        )
-        for i in ids
-    ]
+# -- removed archives ------------------------------------------------------------
 
 
 def _delete_rows(db: Session, archive_id: int) -> None:
@@ -554,28 +527,13 @@ def _delete_rows(db: Session, archive_id: int) -> None:
     )
 
 
-def _checkpoint_merge(operation: Operation, archive_id: int, outcome: str) -> None:
-    params = operation.params or {}
-    operation.params = {
-        **params,
-        "history_merge_completed": {
-            **params.get("history_merge_completed", {}),
-            str(archive_id): outcome,
-        },
-    }
-
-
 def merge_removed_archive(
     db: Session,
     removed: Archive,
     *,
     reset_state: str = "pending",
-    operation: Operation | None = None,
 ) -> str:
     """Fold `removed` into its successor and delete it, in one transaction.
-
-    When run by an operation, checkpoint the deletion in that same commit:
-    a replay must never mistake a reused SQLite ID for the removed archive.
 
     Returns "folded" when both archives were indexed, "reset" when the
     successor was indexed against an archive that never was (its delta is
@@ -629,8 +587,6 @@ def merge_removed_archive(
         # foreign_keys=ON, which the app does not guarantee.
         _delete_rows(db, removed.id)
         db.delete(removed)
-        if operation is not None:
-            _checkpoint_merge(operation, removed.id, outcome)
         db.commit()
     except Exception:
         db.rollback()
@@ -639,69 +595,11 @@ def merge_removed_archive(
 
 
 async def run_history_merge(ctx) -> Outcome:
-    repository = _load_repository(ctx)
-    if repository is None:
-        return Outcome(status="skipped", skip_reason="repository_missing")
-    db = ctx.db
-    counts = {"merged": 0, "folded": 0, "reset": 0, "dropped": 0}
-    targets = removed_archive_targets_from_dependency(db, ctx.operation)
-    # A reset successor reads as "not yet"; on an agent's repository whose
-    # agent cannot produce the listing no run comes on any plan (the
-    # capability is the agent's), so it takes the state the listing writes
-    # there.
-    reset_state = (
-        "skipped"
-        if is_agent_executor(repository)
-        and not agent_supports_job(db, repository, AGENT_DIFF_JOB_KIND)
-        else "pending"
-    )
-    for position, (archive_id, borg_id, last_seen_at, generation_id) in enumerate(
-        targets
-    ):
-        if ctx.cancelled():
-            break
-        completed = (ctx.operation.params or {}).get("history_merge_completed", {})
-        if str(archive_id) in completed:
-            outcome = completed[str(archive_id)]
-            if outcome != "skipped":
-                counts[outcome] += 1
-                counts["merged"] += 1
-            continue
-        removed = db.get(Archive, archive_id)
-        if (
-            removed is None
-            or removed.repository_id != repository.id
-            or borg_id is None
-            or removed.borg_id != borg_id
-            or generation_id is None
-            or removed.generation_id != generation_id
-            or last_seen_at is None
-            or removed.last_seen_at.isoformat() != last_seen_at
-        ):
-            # IDs can be reused between chains, even before our first run.
-            # A later listing may also rediscover the same Borg archive.
-            # Recreated rows may reuse IDs and timestamps, but not the nonce.
-            # Results without all identities cannot safely delete:
-            # leave them for the next listing to rediscover with identities.
-            # Checkpoint skipped targets as final decisions on replay too.
-            try:
-                _checkpoint_merge(ctx.operation, archive_id, "skipped")
-                db.commit()
-            except Exception:
-                db.rollback()
-                raise
-            continue
-        # The row is gone (and expired) after the merge commits.
-        name = removed.name
-        outcome = merge_removed_archive(
-            db, removed, reset_state=reset_state, operation=ctx.operation
-        )
-        counts[outcome] += 1
-        counts["merged"] += 1
-        ctx.log(f"{name}: {outcome}")
-        await ctx.progress(current=position + 1, total=len(targets), message=name)
-        await asyncio.sleep(0)
-    return Outcome(result=counts)
+    """history_merge left every chain: archive_sync deletes the archives its
+    listing no longer sees. A row an older version queued finishes here,
+    which frees its dependents; the next listing reports its targets again
+    and deletes them."""
+    return Outcome(status="skipped", skip_reason="merged_by_archive_sync")
 
 
 executors.register("history_index", run_history_index)

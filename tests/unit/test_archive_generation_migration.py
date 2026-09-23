@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from app.database.db_upgrade import _alembic_config, _engine
 from app.database.models import Archive, Repository
-from app.services.operations.executors.index import apply_listing
 
 PREVIOUS = "a9b8c7d6e5f4"
 REVISION = "f2a3b4c5d6e7"
@@ -62,17 +61,6 @@ def test_upgrade_and_downgrade_preserve_history_and_initialize_legacy_identity(
     with Session(engine) as db:
         row = db.get(Archive, archive_id)
         assert row.generation_id is None
-        # An absent legacy row also needs an identity for a fresh merge.
-        _, removed = apply_listing(
-            db, db.get(Repository, repo_id), [], timezone_name="UTC"
-        )
-        assert removed == [archive_id]
-        generation = row.generation_id
-        assert generation
-        db.expire_all()
-        assert db.get(Archive, archive_id).generation_id == generation
-        apply_listing(db, db.get(Repository, repo_id), [], timezone_name="UTC")
-        assert row.generation_id == generation
     _migrate(url, PREVIOUS, down=True)
     assert "generation_id" not in {
         c["name"] for c in inspect(engine).get_columns("archives")

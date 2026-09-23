@@ -144,19 +144,6 @@ class TestJoinVerdicts:
             and out[0].name == "ghost"
         )
 
-    def test_a_row_the_last_listing_reported_removed_is_not_joined(
-        self, test_db, monkeypatch
-    ):
-        repo = _repo(test_db)
-        a = _archive(test_db, repo, "gone", 1)
-        a.borg_id = HEX(1)
-        test_db.commit()
-        monkeypatch.setattr(
-            prune_preview, "pending_removed_ids", lambda db, rid: {a.id}
-        )
-        out = join_verdicts(test_db, repo, _verdicts((1, "gone", "deleted", None)))
-        assert out[0].id is None
-
 
 class TestFreedAtLeast:
     def test_sums_measured_candidates_and_skips_unmeasured(self, test_db):

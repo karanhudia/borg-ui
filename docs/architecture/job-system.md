@@ -45,7 +45,7 @@ keep their inputs in `operations.params`.
 | `stats` | index | no | Refresh a repository's size and archive count |
 | `archive_sync` | index | no | Refresh the persisted archive list |
 | `history_index` | index | yes | Index an archive's file history |
-| `history_merge` | index | no | Fold indexed history into the series |
+| `history_merge` | index | no | Retired: a row queued by an older version finishes `skipped` |
 
 An exclusive kind holds its repository's lane: only one of them runs against a
 repository at a time.
@@ -70,7 +70,7 @@ Every creation site enqueues through `create_backup_operation`: `POST
 multi repository schedules, backup plan runs, and `POST /api/v2/backups/run`.
 The operations runner dispatches the row when the repository lane is free
 and the concurrency limits allow, and enqueues the index follow-up chain
-(`archive_sync`, `history_merge`, `history_index`, `stats`) when the backup
+(`archive_sync`, `history_index`, `stats`) when the backup
 succeeds.
 
 Typical flow:
@@ -324,9 +324,9 @@ Rules:
   exclusive operations wait. Index operations wait too unless
   `bypass_lock_on_list` or the repository's bypass setting allows them to
   run alongside.
-- No two of the shared index kinds (`archive_sync`, `history_merge`,
-  `stats`) run on one repository at the same time, and no `history_index`
-  starts next to one of them. The bypass settings do not change that: they
+- No two of the shared index kinds (`archive_sync`, `stats`) run on one
+  repository at the same time, and no `history_index` starts next to one
+  of them. The bypass settings do not change that: they
   read past a backup's lock, not past another index job. Two chains of one
   run (the backup's follow-ups and the prune's) otherwise started their
   stats side by side, and on an agent's repository a listing next to the
@@ -376,8 +376,7 @@ Rules:
   same way, so the archive index and `last_backup` follow within a runner
   tick instead of waiting for the next reconcile run. Only a queued
   `archive_sync` with no dependency or an already satisfied dependency
-  suppresses a duplicate listing. `history_merge` follows the listing on
-  every plan so removed archives leave the database as well.
+  suppresses a duplicate listing.
 - `stats` measures the repository read-only through the best source Borg
   offers and records it in `repositories.total_size` (formatted),
   `total_size_bytes`, `total_size_source` and `total_size_measured_at`,
@@ -509,22 +508,22 @@ Two more index kinds fill and maintain `archive_changes`:
   reach the executor anyway, it skips with `agent_diff_unsupported`. One
   whose agent advertises the job is indexed through it, as described
   above.
-- `history_merge` consumes `removed_archive_ids` from the `archive_sync`
-  it depends on. A removed archive's rows are folded into its successor
+- `archive_sync` deletes the archives its listing no longer sees, in every
+  index mode (#1141). A removed archive's rows are folded into its successor
   (the table in the spec, section 8.4), or the successor is reset to
   pending when the removed archive was never indexed, or the rows are
-  simply dropped when there is no successor. The archive row is deleted
-  afterwards. Each deletion and its outcome are checkpointed in the
-  operation's parameters in the same transaction. Replayed operations
-  skip completed or previously missing IDs, so an ID reused by SQLite
-  cannot cause a replacement archive to be deleted. Targets also carry the
-  Borg identity and last-seen observation; a later listing that rediscovers
-  the same archive invalidates a delayed deletion. Last-seen timestamps
-  advance on every sighting, even across wall-clock rollback. Legacy
-  results missing required identities wait for a fresh listing. A persisted
-  `generation_id` UUID also distinguishes recreated archive rows when SQLite
-  IDs, Borg IDs, and timestamps all repeat. The migration adds a nullable
-  column; the next listing initializes existing rows, including absent ones.
+  simply dropped when there is no successor; the archive row is deleted in
+  the same transaction, one per archive. The listing holds the repository's
+  metadata lane throughout, so nothing can reuse a row ID in between, and a
+  run that dies halfway leaves rows the next listing reports and deletes
+  again. A fold that fails is logged and left for the next listing; the
+  run still writes the count (without that row) and finishes
+  `completed_with_warnings`, naming it in `fold_failed`, so its `stats`
+  still runs. The result keeps `removed_archive_ids` (the prune evidence and
+  the retention comparison read it) and the fold outcome counts. The info
+  dialog's own listing reports removals without deleting them (it runs
+  outside the lane); the next `archive_sync` deletes them, and the storage
+  sums leave them out in between.
 
 Only `history_index` is gated on the plan including `archive_history`; on
 Community installs the follow-up chains and the reconcile run omit it, and
@@ -543,7 +542,7 @@ the agent's capabilities, so no follow-up site decides on its own. The rebuild r
 executor and the agent's advertised capabilities when read, not stored. `archive_sync` marks such a repository's
 `pending` and `failed` archives `skipped`, the state the history run used
 to write for them (nothing there could retry a failure), and
-`history_merge` resets a successor to `skipped` rather than `pending`
+the fold resets a successor to `skipped` rather than `pending`
 there; updating its agent to one that advertises the job, or moving the
 repository back to the server, puts them back to `pending` with a fresh
 retry budget and queues an index run (a server's
@@ -555,9 +554,6 @@ yet"; the file history panel reads `coverage` (indexed archives out of
 all) before it calls a repository unindexed or a path absent, and the
 series' own archive states before it counts older archives without the
 path.
-`history_merge` runs on every plan, because it is what deletes the rows of
-archives that have left the repository: `archive_sync` reports them and
-deliberately leaves the deletion to it.
 `POST /api/repositories/{id}/rebuild` with `from = history` resets the
 index; `from = archives` refetches per-archive info; `from = stats`
 re-measures the repository.

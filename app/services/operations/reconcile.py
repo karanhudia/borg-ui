@@ -26,7 +26,7 @@ from app.services.operations.vocab import PRIORITY_RECONCILE
 
 logger = structlog.get_logger()
 
-RECONCILE_CHAIN = ("archive_sync", "history_merge", "history_index", "stats")
+RECONCILE_CHAIN = ("archive_sync", "history_index", "stats")
 DEFAULT_INTERVAL_MINUTES = 60
 # How often to re-check the setting while reconciliation is disabled
 # (stats_refresh_interval_minutes <= 0), so a later positive update resumes

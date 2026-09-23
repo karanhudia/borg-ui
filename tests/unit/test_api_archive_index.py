@@ -222,6 +222,57 @@ class TestArchiveList:
             f"/api/repositories/{repo.id}/archives", headers=auth_headers
         ).status_code in (403, 404)
 
+    @pytest.mark.asyncio
+    async def test_a_removed_archive_leaves_the_list_in_archives_mode(
+        self, test_client, test_db, admin_headers, monkeypatch
+    ):
+        """#1141: the `archives` index mode has no history stage, and the list
+        and heatmap kept every archive the repository ever had. The listing
+        that finds a removal deletes the row, so both agree with the count."""
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock
+
+        from app.services.operations.executors import index as index_exec
+
+        repo = _repo(test_db, borg_version=1, index_mode="archives")
+        kept = [_archive(test_db, repo, f"a{d}", d) for d in (1, 3)]
+        _archive(test_db, repo, "a2", 2)
+        listing = [
+            {"id": a.borg_id, "name": a.name, "start": f"{a.start:%Y-%m-%dT%H:%M:%S}"}
+            for a in kept
+        ]
+        monkeypatch.setattr(
+            index_exec,
+            "list_archives_for_repository",
+            AsyncMock(return_value=(True, listing, "UTC")),
+        )
+        monkeypatch.setattr(index_exec, "fill_archive_info", AsyncMock(return_value=0))
+        monkeypatch.setattr(
+            index_exec,
+            "_prepare_repository_borg_env",
+            lambda repository, db: ({}, None),
+        )
+        await index_exec.run_archive_sync(
+            SimpleNamespace(
+                db=test_db,
+                repository_id=repo.id,
+                progress=AsyncMock(),
+                log=lambda line: None,
+                cancelled=lambda: False,
+            )
+        )
+
+        body = test_client.get(
+            f"/api/repositories/{repo.id}/archives", headers=admin_headers
+        ).json()
+        assert [a["name"] for a in body["archives"]] == ["a3", "a1"]
+        heatmap = test_client.get(
+            f"/api/repositories/{repo.id}/archives/heatmap", headers=admin_headers
+        ).json()
+        assert heatmap["repository"]["count"] == 2
+        test_db.refresh(repo)
+        assert repo.archive_count == 2
+
 
 @pytest.mark.unit
 class TestHeatmap:
@@ -482,36 +533,6 @@ class TestArchiveGrowth:
         assert [p["running_total"] for p in body["points"]] == [30, 50]
         assert body["series"] == ["nas", "old"]
 
-    def test_rows_reported_removed_are_not_points(
-        self, test_client, test_db, admin_headers
-    ):
-        """A row the newest listing reported removed lingers until
-        history_merge deletes it (never in the `archives` index mode). It is
-        no longer in the repository, so it adds nothing to the footprint."""
-        repo = _repo(test_db)
-        self._measured(test_db, repo, "a1", 1, size=100)
-        removed = self._measured(test_db, repo, "a2", 2, series="gone", size=50)
-        self._measured(test_db, repo, "a3", 3, size=20)
-        unmeasured = _archive(test_db, repo, "old-a4", 4, series="old")
-        unmeasured.deduplicated_size = None
-        test_db.commit()
-        sync = _op(
-            test_db, repo, "archive_sync", completed_at=datetime(2026, 9, 5, 9, 54)
-        )
-        sync.result = {"listed": 2, "removed_archive_ids": [removed.id]}
-        test_db.commit()
-
-        r = test_client.get(
-            f"/api/repositories/{repo.id}/archives/growth", headers=admin_headers
-        )
-        assert r.status_code == 200
-        body = r.json()
-        assert [p["name"] for p in body["points"]] == ["a1", "a3"]
-        assert [p["running_total"] for p in body["points"]] == [100, 120]
-        # The selector lists surviving series only, measured or not.
-        assert body["series"] == ["nas", "old"]
-        assert body["unmeasured_count"] == 1
-
     def test_requires_repository_access(self, test_client, test_db, auth_headers):
         repo = _repo(test_db)
         assert test_client.get(
@@ -644,24 +665,6 @@ class TestRepositoryStatus:
         assert cells["backup"]["status"] == "failed"
         assert cells["backup"]["source"] == "operations"
         assert cells["backup"]["completed_at"].startswith("2026-09-03")
-
-    def test_removed_archive_pending_history_merge_is_no_backup_evidence(
-        self, test_client, test_db, admin_headers
-    ):
-        """archive_sync reports a removed archive and leaves the row to
-        history_merge; until that runs the row is no evidence, as for
-        last_backup."""
-        repo = _repo(test_db)
-        older = _archive(test_db, repo, "a1", 1)
-        removed = _archive(test_db, repo, "a2", 5)
-        sync = _op(
-            test_db, repo, "archive_sync", completed_at=datetime(2026, 9, 5, 9, 54)
-        )
-        sync.result = {"listed": 1, "removed_archive_ids": [removed.id]}
-        test_db.commit()
-        _, cells = _cells(test_client, admin_headers, repo)
-        assert cells["backup"]["source"] == "archive"
-        assert cells["backup"]["completed_at"].startswith(older.start.isoformat()[:19])
 
     def test_a_prune_preview_is_not_the_last_prune(
         self, test_client, test_db, admin_headers
@@ -1042,7 +1045,7 @@ class TestRebuild:
         kinds = [test_db.get(Operation, i).kind for i in r.json()["operations"]]
         # The rebuilt chain is the chain that runs in the background, which is
         # the same on every plan.
-        assert kinds == ["archive_sync", "history_merge", "history_index", "stats"]
+        assert kinds == ["archive_sync", "history_index", "stats"]
         ops = test_db.query(Operation).all()
         assert all(o.trigger == "manual" and o.priority == 20 for o in ops)
         test_db.refresh(a)
@@ -1060,7 +1063,7 @@ class TestRebuild:
         )
         assert r.status_code == 200, r.text
         kinds = [test_db.get(Operation, i).kind for i in r.json()["operations"]]
-        assert kinds == ["archive_sync", "history_merge", "history_index", "stats"]
+        assert kinds == ["archive_sync", "history_index", "stats"]
         ops = test_db.query(Operation).all()
         assert all(o.trigger == "reconcile" and o.priority == 20 for o in ops)
 
@@ -1202,7 +1205,7 @@ class TestRebuild:
         from app.api import archive_index
 
         repo = _repo(test_db)
-        op = _op(test_db, repo, "history_merge", status="running")
+        op = _op(test_db, repo, "history_index", status="running")
         task = asyncio.create_task(asyncio.Event().wait())
 
         async def request_cancel(operation_id):
@@ -1982,7 +1985,7 @@ class TestAgentRepositoryHistoryCapability:
         )
         assert r.status_code == 200
         kinds = [test_db.get(Operation, i).kind for i in r.json()["operations"]]
-        assert kinds == ["archive_sync", "history_merge", "stats"]
+        assert kinds == ["archive_sync", "stats"]
 
     def test_path_history_reports_its_coverage(
         self, test_client, test_db, admin_headers
