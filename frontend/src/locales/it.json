@@ -1066,8 +1066,7 @@
       "fresh": "Sincronizzato {{ago}}",
       "syncing": "Sincronizzazione in corso",
       "stale": "La sincronizzazione non è aggiornata",
-      "never": "Non ancora indicizzato",
-      "rebuild": "Ricostruisci indice"
+      "never": "Non ancora indicizzato"
     },
     "view": {
       "heatmap": "Mappa di calore",
@@ -3686,7 +3685,6 @@
       "workers_other": "{{count}} worker",
       "title": "Lavoro in background",
       "pauseFailed": "Impossibile modificare lo stato della coda in background.",
-      "openTrack": "Apri la traccia di esecuzione di {{repository}}",
       "rebuildFailed": "Non è stato possibile avviare la ricostruzione.",
       "queueFailed": "Impossibile caricare la coda in background.",
       "pauseAdminOnly": "Solo gli amministratori possono mettere in pausa il lavoro in background.",
@@ -3700,38 +3698,15 @@
       },
       "foregroundRunning": "{{kind}} in esecuzione da {{elapsed}}",
       "viewRuns": "Vedi esecuzioni",
-      "stageDone": "Fatto",
       "stageFailed": "Fallito",
-      "stageSkipped": "Saltato",
       "repositoryColumn": "Repository",
-      "workersLabel": "Worker di indicizzazione",
       "workersDecrease": "Meno worker di indicizzazione",
       "workersIncrease": "Più worker di indicizzazione",
       "workersFailed": "Impossibile cambiare il numero di worker.",
       "pausedBanner": "Il lavoro in background è in pausa. I passaggi in coda non partiranno finché non riprendi.",
       "subtitle": "Cosa sta facendo Borg UI sui tuoi repository e cosa conserva per ciascuno di essi.",
       "rebuildRow": "Ricostruisci {{repository}}",
-      "proOnly": "Pro",
-      "stages": {
-        "stats": {
-          "title": "Statistiche",
-          "what": "Dimensione del repository e numero di archivi nella scheda del repository e nella dashboard. Aggiornate alla fine di ogni esecuzione.",
-          "cost": "Richiede secondi."
-        },
-        "archives": {
-          "title": "Elenco archivi",
-          "what": "L'elenco degli archivi dietro la pagina Archivi, la heatmap e il browser degli archivi.",
-          "cost": "Meno di un minuto per la maggior parte dei repository."
-        },
-        "history": {
-          "title": "Cronologia file",
-          "what": "Cosa è cambiato tra gli archivi, per la scheda Modifiche, la cronologia dei file e la ricerca.",
-          "cost": "Il passaggio più lento. Indicizza un archivio alla volta in background."
-        }
-      },
-      "rebuildSummary": "Ricostruisci {{stages}} per {{repository}}. Navigazione e backup continuano a funzionare nel frattempo; i nuovi dati sostituiscono i vecchi al termine di ogni passaggio.",
       "rebuildSummaryAll": "Ricostruisci tutto per {{repository}}. Navigazione e backup continuano a funzionare nel frattempo; i nuovi dati sostituiscono i vecchi al termine di ogni passaggio.",
-      "stageJoin": " e ",
       "hub": {
         "repositories_one": "{{count}} repository",
         "repositories_other": "{{count}} repository",
@@ -3791,7 +3766,6 @@
         "historyPending_other": "{{count}} in attesa",
         "historyNone": "Ancora nessuna cronologia dei file",
         "historyShare": "{{percent}}% di tutte le righe di cronologia",
-        "statsRefreshed": "Aggiornato {{ago}}",
         "syncOff": "Non aggiornato",
         "modeArchives": "Solo archivi",
         "modeOff": "Non indicizzato",
@@ -3807,7 +3781,7 @@
         "detailAttempts_other": "{{count}} tentativi",
         "detailPartial": "La cronologia dei file copre {{indexed}} di {{total}} archivi.",
         "detailAllIndexed": "Ogni archivio ha la sua cronologia dei file.",
-        "detailHint": "Ricostruisci da Cronologia dei file per indicizzare di nuovo questi archivi.",
+        "detailHint": "Ricostruisci per indicizzare di nuovo questi archivi.",
         "viewIndexRuns": "Vedi esecuzioni di indicizzazione",
         "openRepository": "Apri repository",
         "historyAgentUnsupported": "Richiede un agente in grado di farlo",
@@ -3815,14 +3789,9 @@
         "updatedNever": "Non ancora aggiornato",
         "statsLastRefreshed": "Ultimo aggiornamento"
       },
-      "rebuildMenuHint": "Ogni fase successiva a quella scelta viene ricostruita a sua volta. Le fasi precedenti restano. Le statistiche vengono sempre per ultime, perché sommano ciò che le altre fasi hanno prodotto.",
       "rebuildTitle": "Ricostruisci i dati derivati",
       "rebuildAction": "Ricostruisci",
-      "stageWillRebuild": "Verrà ricostruito",
-      "stageKept": "Conservato",
-      "stageStart": "Inizia qui",
       "currentRun": "Esecuzione corrente",
-      "stageAgentUnsupported": "Non disponibile per i repository il cui agente non può generare la cronologia delle modifiche: nessuno è assegnato o utilizzabile, oppure è precedente alla funzione",
       "strip": {
         "idle": "Inattiva",
         "running_one": "{{count}} in corso",

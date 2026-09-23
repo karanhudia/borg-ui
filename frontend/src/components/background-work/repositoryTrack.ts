@@ -30,13 +30,9 @@ const STAGE_FOR_KIND: Partial<Record<OperationKind, StageKey>> = {
   stats: 'stats',
 }
 
-// The stages a rebuild can start from, in run order: starting at one
-// rebuilds it and every stage after it, so the archive list means
-// everything and stats means the totals alone.
-export const REBUILD_STAGES: RebuildStage[] = ['archives', 'history', 'stats']
-
-// `connect` is the synchronous import request and `retention` is refreshed
-// by the listing or the prune preview page, so neither has a rebuild stage.
+// The stage a failed stage's Retry rebuilds from: that stage and the ones
+// after it. `connect` is the synchronous import request and `retention` is
+// refreshed by the listing or the prune preview page, so neither has one.
 export const REBUILD_STAGE_FOR: Partial<Record<StageKey, RebuildStage>> = {
   archives: 'archives',
   history: 'history',

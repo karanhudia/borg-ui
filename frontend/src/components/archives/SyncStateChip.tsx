@@ -1,5 +1,5 @@
-import { Box, Button, Chip, CircularProgress, alpha, useTheme } from '@mui/material'
-import { AlertTriangle, CheckCircle2, CircleDashed, RotateCw } from 'lucide-react'
+import { Box, Chip, CircularProgress, alpha, useTheme } from '@mui/material'
+import { AlertTriangle, CheckCircle2, CircleDashed } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatDistanceToNow } from 'date-fns'
 import { parseBackendDate } from '../../utils/dateUtils'
@@ -8,20 +8,11 @@ import type { SyncState } from '../../types/archives'
 interface SyncStateChipProps {
   state: SyncState
   lastSyncedAt: string | null
-  onRebuild?: () => void
-  // The Background work hub shows the chip beside its own rebuild menu, so
-  // it turns the button off.
-  showRebuild?: boolean
 }
 
 // The archive index's freshness, coloured by state: green when fresh,
 // amber when stale, neutral when never built, blue while syncing.
-export default function SyncStateChip({
-  state,
-  lastSyncedAt,
-  onRebuild,
-  showRebuild = true,
-}: SyncStateChipProps) {
+export default function SyncStateChip({ state, lastSyncedAt }: SyncStateChipProps) {
   const { t } = useTranslation()
   const theme = useTheme()
   const label =
@@ -45,29 +36,16 @@ export default function SyncStateChip({
   }[state]
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-      <Chip
-        size="small"
-        icon={<Box sx={{ display: 'flex', alignItems: 'center', pl: 0.5, color }}>{icon}</Box>}
-        label={label}
-        sx={{
-          bgcolor: alpha(color, theme.palette.mode === 'dark' ? 0.16 : 0.1),
-          color,
-          fontWeight: 600,
-          '& .MuiChip-icon': { color },
-        }}
-      />
-      {showRebuild && onRebuild && state !== 'syncing' && (
-        <Button
-          size="small"
-          variant="outlined"
-          startIcon={<RotateCw size={14} />}
-          onClick={onRebuild}
-          sx={{ flexShrink: 0 }}
-        >
-          {t('archives.sync.rebuild')}
-        </Button>
-      )}
-    </Box>
+    <Chip
+      size="small"
+      icon={<Box sx={{ display: 'flex', alignItems: 'center', pl: 0.5, color }}>{icon}</Box>}
+      label={label}
+      sx={{
+        bgcolor: alpha(color, theme.palette.mode === 'dark' ? 0.16 : 0.1),
+        color,
+        fontWeight: 600,
+        '& .MuiChip-icon': { color },
+      }}
+    />
   )
 }

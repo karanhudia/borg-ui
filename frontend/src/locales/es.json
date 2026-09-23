@@ -1066,8 +1066,7 @@
       "fresh": "Sincronizado {{ago}}",
       "syncing": "Sincronizando",
       "stale": "La sincronización está desactualizada",
-      "never": "Aún no indexado",
-      "rebuild": "Reconstruir índice"
+      "never": "Aún no indexado"
     },
     "view": {
       "heatmap": "Mapa de calor",
@@ -3686,7 +3685,6 @@
       "workers_other": "{{count}} trabajadores",
       "title": "Trabajo en segundo plano",
       "pauseFailed": "No se pudo cambiar el estado de la cola en segundo plano.",
-      "openTrack": "Abrir el seguimiento de ejecución de {{repository}}",
       "rebuildFailed": "No se pudo iniciar la reconstrucción.",
       "queueFailed": "No se pudo cargar la cola en segundo plano.",
       "pauseAdminOnly": "Solo los administradores pueden pausar el trabajo en segundo plano.",
@@ -3700,38 +3698,15 @@
       },
       "foregroundRunning": "{{kind}} en ejecución desde hace {{elapsed}}",
       "viewRuns": "Ver ejecuciones",
-      "stageDone": "Listo",
       "stageFailed": "Fallido",
-      "stageSkipped": "Omitido",
       "repositoryColumn": "Repositorio",
-      "workersLabel": "Workers de índice",
       "workersDecrease": "Menos workers de índice",
       "workersIncrease": "Más workers de índice",
       "workersFailed": "No se pudo cambiar el número de workers.",
       "pausedBanner": "El trabajo en segundo plano está en pausa. Los pasos en cola no empezarán hasta que lo reanudes.",
       "subtitle": "Lo que Borg UI está haciendo con tus repositorios y lo que guarda de cada uno.",
       "rebuildRow": "Reconstruir {{repository}}",
-      "proOnly": "Pro",
-      "stages": {
-        "stats": {
-          "title": "Estadísticas",
-          "what": "Tamaño del repositorio y número de archivos en la tarjeta del repositorio y el panel. Se actualizan al final de cada ejecución.",
-          "cost": "Tarda segundos."
-        },
-        "archives": {
-          "title": "Lista de archivos",
-          "what": "La lista de archivos detrás de la página Archivos, el mapa de calor y el navegador de archivos.",
-          "cost": "Menos de un minuto en la mayoría de repositorios."
-        },
-        "history": {
-          "title": "Historial de ficheros",
-          "what": "Qué cambió entre archivos, para la pestaña Cambios, el historial de ficheros y la búsqueda.",
-          "cost": "La etapa más lenta. Indexa un archivo cada vez en segundo plano."
-        }
-      },
-      "rebuildSummary": "Reconstruir {{stages}} de {{repository}}. Navegar y las copias siguen funcionando mientras tanto; los datos nuevos sustituyen a los antiguos cuando termina cada etapa.",
       "rebuildSummaryAll": "Reconstruir todo de {{repository}}. Navegar y las copias siguen funcionando mientras tanto; los datos nuevos sustituyen a los antiguos cuando termina cada etapa.",
-      "stageJoin": " y ",
       "hub": {
         "repositories_one": "{{count}} repositorio",
         "repositories_other": "{{count}} repositorios",
@@ -3791,7 +3766,6 @@
         "historyPending_other": "{{count}} en espera",
         "historyNone": "Aún sin historial de ficheros",
         "historyShare": "{{percent}}% de todas las filas de historial",
-        "statsRefreshed": "Actualizado {{ago}}",
         "syncOff": "Sin actualizar",
         "modeArchives": "Solo archivos",
         "modeOff": "Sin indexar",
@@ -3807,7 +3781,7 @@
         "detailAttempts_other": "{{count}} intentos",
         "detailPartial": "El historial de ficheros cubre {{indexed}} de {{total}} archivos.",
         "detailAllIndexed": "Todos los archivos tienen su historial de ficheros.",
-        "detailHint": "Reconstruye desde Historial de ficheros para indexar estos archivos de nuevo.",
+        "detailHint": "Reconstruye para indexar estos archivos de nuevo.",
         "viewIndexRuns": "Ver ejecuciones de índice",
         "openRepository": "Abrir repositorio",
         "historyAgentUnsupported": "Necesita un agente capaz",
@@ -3815,14 +3789,9 @@
         "updatedNever": "Aún no actualizado",
         "statsLastRefreshed": "Última actualización"
       },
-      "rebuildMenuHint": "Cada etapa posterior a la elegida también se reconstruye. Las anteriores se conservan. Las estadísticas siempre van al final, porque suman lo que produjeron las demás etapas.",
       "rebuildTitle": "Reconstruir datos derivados",
       "rebuildAction": "Reconstruir",
-      "stageWillRebuild": "Se reconstruirá",
-      "stageKept": "Se conserva",
-      "stageStart": "Empezar aquí",
       "currentRun": "Ejecución actual",
-      "stageAgentUnsupported": "No disponible para repositorios cuyo agente no puede generar el historial de cambios: no hay ninguno asignado o utilizable, o es anterior a la función",
       "strip": {
         "idle": "Inactiva",
         "running_one": "{{count}} en curso",

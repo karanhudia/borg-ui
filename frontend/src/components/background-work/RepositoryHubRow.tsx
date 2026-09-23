@@ -115,11 +115,7 @@ function LastUpdatedCell({ repository }: { repository: HubRepository }) {
   const flags = (
     <>
       {repository.sync_state !== 'fresh' && (
-        <SyncStateChip
-          state={repository.sync_state}
-          lastSyncedAt={repository.last_synced_at}
-          showRebuild={false}
-        />
+        <SyncStateChip state={repository.sync_state} lastSyncedAt={repository.last_synced_at} />
       )}
       {mode === 'full' && history.failed > 0 && (
         <Flag

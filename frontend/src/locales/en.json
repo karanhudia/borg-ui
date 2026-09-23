@@ -1066,8 +1066,7 @@
       "fresh": "Synced {{ago}}",
       "syncing": "Syncing",
       "stale": "Sync is out of date",
-      "never": "Not indexed yet",
-      "rebuild": "Rebuild index"
+      "never": "Not indexed yet"
     },
     "view": {
       "heatmap": "Heatmap",
@@ -3686,7 +3685,6 @@
       "workers_other": "{{count}} workers",
       "title": "Background work",
       "pauseFailed": "Could not change the background queue state.",
-      "openTrack": "Open the run track for {{repository}}",
       "rebuildFailed": "The rebuild could not be started.",
       "queueFailed": "The background queue could not be loaded.",
       "pauseAdminOnly": "Only administrators can pause background work.",
@@ -3700,38 +3698,15 @@
       },
       "foregroundRunning": "{{kind}} running for {{elapsed}}",
       "viewRuns": "View runs",
-      "stageDone": "Done",
       "stageFailed": "Failed",
-      "stageSkipped": "Skipped",
       "repositoryColumn": "Repository",
-      "workersLabel": "Index workers",
       "workersDecrease": "Fewer index workers",
       "workersIncrease": "More index workers",
       "workersFailed": "The worker count could not be changed.",
       "pausedBanner": "Background work is paused. Queued stages will not start until you resume.",
       "subtitle": "What Borg UI is doing to your repositories, and what it keeps for each of them.",
       "rebuildRow": "Rebuild {{repository}}",
-      "proOnly": "Pro",
-      "stages": {
-        "stats": {
-          "title": "Stats",
-          "what": "Repository size and archive count on the repository card and dashboard. Refreshed at the end of every run.",
-          "cost": "Takes seconds."
-        },
-        "archives": {
-          "title": "Archive list",
-          "what": "The list of archives behind the Archives page, the heatmap, and the archive browser.",
-          "cost": "Under a minute for most repositories."
-        },
-        "history": {
-          "title": "File history",
-          "what": "What changed between archives, for the Changes tab, file history, and search.",
-          "cost": "The slowest stage. Indexes one archive at a time in the background."
-        }
-      },
-      "rebuildSummary": "Rebuild {{stages}} for {{repository}}. Browsing and backups keep working while it runs; the new data replaces the old when each stage finishes.",
       "rebuildSummaryAll": "Rebuild everything for {{repository}}. Browsing and backups keep working while it runs; the new data replaces the old when each stage finishes.",
-      "stageJoin": " and ",
       "hub": {
         "repositories_one": "{{count}} repository",
         "repositories_other": "{{count}} repositories",
@@ -3791,7 +3766,6 @@
         "historyPending_other": "{{count}} waiting",
         "historyNone": "No file history yet",
         "historyShare": "{{percent}}% of all history rows",
-        "statsRefreshed": "Refreshed {{ago}}",
         "syncOff": "Not refreshed",
         "modeArchives": "Archives only",
         "modeOff": "Not indexed",
@@ -3807,7 +3781,7 @@
         "detailAttempts_other": "{{count}} attempts",
         "detailPartial": "File history covers {{indexed}} of {{total}} archives.",
         "detailAllIndexed": "Every archive has its file history.",
-        "detailHint": "Rebuild from File history to index these archives again.",
+        "detailHint": "Rebuild to index these archives again.",
         "viewIndexRuns": "View index runs",
         "openRepository": "Open repository",
         "historyAgentUnsupported": "Needs a capable agent",
@@ -3815,14 +3789,9 @@
         "updatedNever": "Not updated yet",
         "statsLastRefreshed": "Last refreshed"
       },
-      "rebuildMenuHint": "Every stage after the one you pick is rebuilt too. Earlier stages are kept. Stats always run last, because they total up what the other stages produced.",
       "rebuildTitle": "Rebuild derived data",
       "rebuildAction": "Rebuild",
-      "stageWillRebuild": "Will rebuild",
-      "stageKept": "Kept",
-      "stageStart": "Start here",
       "currentRun": "Current run",
-      "stageAgentUnsupported": "Not available for repositories whose agent cannot build change history: none is assigned or usable, or it predates the feature",
       "strip": {
         "idle": "Idle",
         "running_one": "{{count}} running",

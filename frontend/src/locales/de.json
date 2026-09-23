@@ -1066,8 +1066,7 @@
       "fresh": "Synchronisiert {{ago}}",
       "syncing": "Wird synchronisiert",
       "stale": "Synchronisierung ist veraltet",
-      "never": "Noch nicht indiziert",
-      "rebuild": "Index neu aufbauen"
+      "never": "Noch nicht indiziert"
     },
     "view": {
       "heatmap": "Heatmap",
@@ -3686,7 +3685,6 @@
       "workers_other": "{{count}} Worker",
       "title": "Hintergrundarbeit",
       "pauseFailed": "Der Zustand der Hintergrundwarteschlange konnte nicht geändert werden.",
-      "openTrack": "Ablaufverfolgung für {{repository}} öffnen",
       "rebuildFailed": "Der Neuaufbau konnte nicht gestartet werden.",
       "queueFailed": "Die Hintergrundwarteschlange konnte nicht geladen werden.",
       "pauseAdminOnly": "Nur Administratoren können Hintergrundarbeiten pausieren.",
@@ -3700,38 +3698,15 @@
       },
       "foregroundRunning": "{{kind}} läuft seit {{elapsed}}",
       "viewRuns": "Läufe anzeigen",
-      "stageDone": "Fertig",
       "stageFailed": "Fehlgeschlagen",
-      "stageSkipped": "Übersprungen",
       "repositoryColumn": "Repository",
-      "workersLabel": "Index-Worker",
       "workersDecrease": "Weniger Index-Worker",
       "workersIncrease": "Mehr Index-Worker",
       "workersFailed": "Die Anzahl der Worker konnte nicht geändert werden.",
       "pausedBanner": "Hintergrundarbeit ist pausiert. Wartende Schritte starten erst nach dem Fortsetzen.",
       "subtitle": "Was Borg UI mit deinen Repositorys macht und was es für jedes davon vorhält.",
       "rebuildRow": "{{repository}} neu aufbauen",
-      "proOnly": "Pro",
-      "stages": {
-        "stats": {
-          "title": "Statistiken",
-          "what": "Repository-Größe und Archivanzahl auf der Repository-Karte und dem Dashboard. Wird am Ende jedes Laufs aktualisiert.",
-          "cost": "Dauert Sekunden."
-        },
-        "archives": {
-          "title": "Archivliste",
-          "what": "Die Archivliste hinter der Archivseite, der Heatmap und dem Archiv-Browser.",
-          "cost": "Unter einer Minute für die meisten Repositorys."
-        },
-        "history": {
-          "title": "Dateiverlauf",
-          "what": "Was sich zwischen Archiven geändert hat, für den Änderungen-Tab, den Dateiverlauf und die Suche.",
-          "cost": "Der langsamste Schritt. Indiziert im Hintergrund ein Archiv nach dem anderen."
-        }
-      },
-      "rebuildSummary": "{{stages}} für {{repository}} neu aufbauen. Durchsuchen und Backups laufen währenddessen weiter; die neuen Daten ersetzen die alten, sobald ein Schritt fertig ist.",
       "rebuildSummaryAll": "Alles für {{repository}} neu aufbauen. Durchsuchen und Backups laufen währenddessen weiter; die neuen Daten ersetzen die alten, sobald ein Schritt fertig ist.",
-      "stageJoin": " und ",
       "hub": {
         "repositories_one": "{{count}} Repository",
         "repositories_other": "{{count}} Repositorys",
@@ -3791,7 +3766,6 @@
         "historyPending_other": "{{count}} warten",
         "historyNone": "Noch kein Dateiverlauf",
         "historyShare": "{{percent}}% aller Verlaufszeilen",
-        "statsRefreshed": "Aktualisiert {{ago}}",
         "syncOff": "Nicht aktualisiert",
         "modeArchives": "Nur Archive",
         "modeOff": "Nicht indiziert",
@@ -3807,7 +3781,7 @@
         "detailAttempts_other": "{{count}} Versuche",
         "detailPartial": "Der Dateiverlauf deckt {{indexed}} von {{total}} Archiven ab.",
         "detailAllIndexed": "Jedes Archiv hat seinen Dateiverlauf.",
-        "detailHint": "Baue ab Dateiverlauf neu auf, um diese Archive erneut zu indizieren.",
+        "detailHint": "Baue neu auf, um diese Archive erneut zu indizieren.",
         "viewIndexRuns": "Indexläufe anzeigen",
         "openRepository": "Repository öffnen",
         "historyAgentUnsupported": "Braucht einen fähigen Agent",
@@ -3815,14 +3789,9 @@
         "updatedNever": "Noch nicht aktualisiert",
         "statsLastRefreshed": "Zuletzt aktualisiert"
       },
-      "rebuildMenuHint": "Jede Stufe nach der gewählten wird ebenfalls neu aufgebaut. Frühere Stufen bleiben erhalten. Statistiken laufen immer zuletzt, weil sie zusammenzählen, was die anderen Stufen erzeugt haben.",
       "rebuildTitle": "Abgeleitete Daten neu aufbauen",
       "rebuildAction": "Neu aufbauen",
-      "stageWillRebuild": "Wird neu aufgebaut",
-      "stageKept": "Bleibt erhalten",
-      "stageStart": "Hier beginnen",
       "currentRun": "Aktueller Lauf",
-      "stageAgentUnsupported": "Für Repositories, deren Agent die Änderungshistorie nicht erstellen kann, nicht verfügbar: Es ist keiner zugewiesen oder nutzbar, oder er ist älter als die Funktion",
       "strip": {
         "idle": "Leerlauf",
         "running_one": "{{count}} läuft",
