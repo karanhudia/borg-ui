@@ -8,6 +8,7 @@ Reference: https://borgbackup.readthedocs.io/en/stable/usage/general.html#return
 """
 
 import re as _re
+from typing import Any
 
 # Exit code mappings (modern exit codes)
 # Source: https://borgbackup.readthedocs.io/en/stable/internals/frontends.html#message-ids
@@ -297,6 +298,27 @@ def is_borg_warning_exit_code(exit_code) -> bool:
         isinstance(exit_code, int)
         and not isinstance(exit_code, bool)
         and (exit_code == 1 or 100 <= exit_code <= 127)
+    )
+
+
+# Borg's modern exit codes for a lock another process holds: LockTimeout
+# (73), and LockError / LockErrorT (70, 71) for a lock that could not be
+# taken. Not LockFailed (72), the lock file could not be created (a
+# read-only or foreign-owned repository), nor NotLocked / NotMyLock (74,
+# 75), about a lock that is not there: waiting changes neither.
+LOCK_CONTENTION_EXIT_CODES = (70, 71, 73)
+
+# The key a waiter's failure detail carries when the agent's Borg run ended
+# on such a lock, for the operations runner: the repository is taken for
+# now, and the operation is deferred like one the admission refused.
+LOCK_CONTENTION_DETAIL_KEY = "lock_contention"
+
+
+def is_lock_contention_exit_code(exit_code: Any) -> bool:
+    return (
+        isinstance(exit_code, int)
+        and not isinstance(exit_code, bool)
+        and exit_code in LOCK_CONTENTION_EXIT_CODES
     )
 
 

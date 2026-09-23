@@ -3100,3 +3100,372 @@ class TestAgentOperationLogLateLines:
             )
 
         assert test_db.query(AgentJobLog).filter_by(agent_job_id=job.id).count() == 2
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fail_report_carries_borgs_reason_before_its_log_line(
+    test_client, test_db, admin_headers
+):
+    """The agent's stderr log line often lands after its failure report; the
+    reason must come from the report's own stderr tail (#1056)."""
+    from app.services.repository_executor import (
+        wait_for_agent_repository_operation_job,
+    )
+
+    registered = _register_agent(
+        test_client, _create_enrollment_token(test_client, admin_headers)["token"]
+    )
+    agent = _get_agent(test_db, registered["agent_id"])
+    job = _create_agent_job(test_db, agent, status="running")
+    lock_line = "Failed to create/acquire the lock /repo/lock.exclusive (timeout)."
+
+    response = test_client.post(
+        f"/api/agents/jobs/{job.id}/fail",
+        json={
+            "error_message": "repository.list_archives exited with code 2",
+            "return_code": 2,
+            "stderr_tail": f"some earlier line\n{lock_line}",
+            "failure_kind": "lock_contention",
+        },
+        headers=_agent_headers(registered["agent_token"]),
+    )
+    assert response.status_code == 200
+
+    with pytest.raises(HTTPException) as excinfo:
+        await wait_for_agent_repository_operation_job(
+            test_db, job.id, timeout_seconds=2, poll_interval_seconds=0.01
+        )
+    assert excinfo.value.detail["params"]["reason"] == (
+        f"repository.list_archives exited with code 2: {lock_line}"
+    )
+
+
+@pytest.mark.unit
+class TestLockContentionDeferral:
+    """A lock failure of a runner-driven maintenance job leaves its operation
+    row for the runner to run again (#1056)."""
+
+    def _flagged_check_job(self, test_client, test_db, admin_headers):
+        from app.services.repository_executor import LOCK_CONTENTION_DEFERS_KEY
+
+        registered = _register_agent(
+            test_client, _create_enrollment_token(test_client, admin_headers)["token"]
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        repository = Repository(name="locked-repo", path="/locked-repo")
+        test_db.add(repository)
+        test_db.commit()
+        operation = seed_job_operation(
+            test_db, "check", repository_id=repository.id, status="running"
+        )
+        test_db.commit()
+        now = datetime.now(timezone.utc)
+        job = agent_maintenance_job(
+            test_db,
+            agent,
+            "check",
+            operation.id,
+            repository=repository,
+            created_at=now,
+            updated_at=now,
+        )
+        job.payload = {**job.payload, LOCK_CONTENTION_DEFERS_KEY: True}
+        test_db.commit()
+        test_db.refresh(job)
+        return job, operation, _agent_headers(registered["agent_token"])
+
+    def test_a_lock_failure_leaves_the_operation_row_and_sends_no_notification(
+        self, test_client, test_db, admin_headers
+    ):
+        job, operation, headers = self._flagged_check_job(
+            test_client, test_db, admin_headers
+        )
+
+        with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
+            response = test_client.post(
+                f"/api/agents/jobs/{job.id}/fail",
+                json={
+                    "error_message": "repository.check exited with code 73",
+                    "return_code": 73,
+                    "stderr_tail": "Failed to create/acquire the lock /r (timeout).",
+                    "failure_kind": "lock_contention",
+                },
+                headers=headers,
+            )
+
+        assert response.status_code == 200
+        test_db.refresh(job)
+        test_db.refresh(operation)
+        assert job.status == "failed"
+        assert job.result == {
+            "return_code": 73,
+            "stderr_tail": "Failed to create/acquire the lock /r (timeout).",
+            "failure_kind": "lock_contention",
+            "deferred": True,
+        }
+        # the runner's wait raises this failure as a deferral and runs the
+        # operation again on this row
+        assert operation.status == "running"
+        assert operation.completed_at is None
+        assert operation.error_message is None
+        notifier.send_check_completion.assert_not_awaited()
+
+    def test_a_deferred_attempts_late_log_lines_stay_out_of_the_operation_log(
+        self, test_client, test_db, admin_headers, tmp_path, monkeypatch
+    ):
+        """The row goes on to another attempt, whose transcript the operation
+        log holds; a line of the deferred attempt that lands late must not
+        be appended to it or rewrite it."""
+        monkeypatch.setattr(app_config.settings, "data_dir", str(tmp_path))
+        job, operation, headers = self._flagged_check_job(
+            test_client, test_db, admin_headers
+        )
+        log_path = tmp_path / "operation.log"
+        log_path.write_text("the next attempt's transcript", encoding="utf-8")
+        operation.log_file_path = str(log_path)
+        test_db.commit()
+
+        response = test_client.post(
+            f"/api/agents/jobs/{job.id}/fail",
+            json={
+                "error_message": "repository.check exited with code 73",
+                "return_code": 73,
+                "stderr_tail": "Failed to create/acquire the lock /r (timeout).",
+                "failure_kind": "lock_contention",
+            },
+            headers=headers,
+        )
+        assert response.status_code == 200
+        # the runner has moved on meanwhile: the next attempt spent the budget
+        from app.services.operations.runner import MAX_DEFERRALS
+
+        test_db.refresh(job)
+        assert job.result["deferred"] is True
+        operation.params = {**(operation.params or {}), "deferrals": MAX_DEFERRALS}
+        test_db.commit()
+        for sequence in (3, 1):
+            response = test_client.post(
+                f"/api/agents/jobs/{job.id}/logs",
+                json={"sequence": sequence, "stream": "stderr", "message": "late"},
+                headers=headers,
+            )
+            assert response.status_code == 200, response.text
+
+        assert log_path.read_text(encoding="utf-8") == "the next attempt's transcript"
+
+    def test_a_lock_failure_past_the_deferral_budget_is_recorded_and_notified(
+        self, test_client, test_db, admin_headers
+    ):
+        """The runner records the attempt after the last deferral as the
+        failure; the report finishes the row for it, so the check's failure
+        notification goes out with Borg's reason."""
+        from app.services.operations.runner import MAX_DEFERRALS
+
+        job, operation, headers = self._flagged_check_job(
+            test_client, test_db, admin_headers
+        )
+        operation.params = {**(operation.params or {}), "deferrals": MAX_DEFERRALS}
+        test_db.commit()
+
+        with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
+            response = test_client.post(
+                f"/api/agents/jobs/{job.id}/fail",
+                json={
+                    "error_message": "repository.check exited with code 73",
+                    "return_code": 73,
+                    "stderr_tail": "Failed to create/acquire the lock /r (timeout).",
+                    "failure_kind": "lock_contention",
+                },
+                headers=headers,
+            )
+
+        assert response.status_code == 200
+        test_db.refresh(job)
+        test_db.refresh(operation)
+        assert "deferred" not in job.result
+        assert operation.status == "failed"
+        notifier.send_check_completion.assert_awaited_once()
+        kwargs = notifier.send_check_completion.await_args.kwargs
+        assert kwargs["status"] == "failed"
+        assert kwargs["error_message"] == (
+            "repository.check exited with code 73: "
+            "Failed to create/acquire the lock /r (timeout)."
+        )
+
+    def test_an_old_agents_lost_lock_is_recorded_not_deferred(
+        self, test_client, test_db, admin_headers
+    ):
+        """An agent before 0.1.10 reports exit code 73 without a kind; the
+        log row that says Borg lost its own lock (already there) rules the
+        deferral out, and the failure is recorded."""
+        job, operation, headers = self._flagged_check_job(
+            test_client, test_db, admin_headers
+        )
+        test_db.add(
+            AgentJobLog(
+                agent_job_id=job.id,
+                sequence=2,
+                stream="stderr",
+                message="Failed to create/acquire the lock /r (timeout). "
+                "Our lock was killed by another borg - there is no safe way "
+                "to continue.",
+                created_at=datetime.utcnow(),
+            )
+        )
+        test_db.commit()
+
+        with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
+            response = test_client.post(
+                f"/api/agents/jobs/{job.id}/fail",
+                json={
+                    "error_message": "repository.check exited with code 73",
+                    "return_code": 73,
+                },
+                headers=headers,
+            )
+
+        assert response.status_code == 200
+        test_db.refresh(job)
+        test_db.refresh(operation)
+        assert "deferred" not in job.result
+        assert operation.status == "failed"
+        notifier.send_check_completion.assert_awaited_once()
+
+    def test_any_other_failure_of_the_flagged_job_is_recorded(
+        self, test_client, test_db, admin_headers
+    ):
+        job, operation, headers = self._flagged_check_job(
+            test_client, test_db, admin_headers
+        )
+
+        with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
+            response = test_client.post(
+                f"/api/agents/jobs/{job.id}/fail",
+                json={
+                    "error_message": "repository.check exited with code 2",
+                    "return_code": 2,
+                    "stderr_tail": "Repository /r does not exist.",
+                    "failure_kind": "other",
+                },
+                headers=headers,
+            )
+
+        assert response.status_code == 200
+        test_db.refresh(job)
+        test_db.refresh(operation)
+        assert operation.status == "failed"
+        # the row and its notification carry Borg's reason from the report;
+        # the agent job keeps the message as the agent sent it
+        assert operation.error_message == (
+            "repository.check exited with code 2: Repository /r does not exist."
+        )
+        assert job.error_message == "repository.check exited with code 2"
+        notifier.send_check_completion.assert_awaited_once()
+        assert notifier.send_check_completion.await_args.kwargs["error_message"] == (
+            "repository.check exited with code 2: Repository /r does not exist."
+        )
+
+    def test_credentials_in_the_tail_are_redacted_before_they_are_kept(
+        self, test_client, test_db, admin_headers
+    ):
+        """Borg names the repository in its messages; a location with
+        credentials must not reach the row's message or a notification."""
+        job, operation, headers = self._flagged_check_job(
+            test_client, test_db, admin_headers
+        )
+
+        with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
+            response = test_client.post(
+                f"/api/agents/jobs/{job.id}/fail",
+                json={
+                    "error_message": "repository.check exited with code 2",
+                    "return_code": 2,
+                    "stderr_tail": (
+                        "Repository ssh://user:s3cret@host/repo does not exist."
+                    ),
+                    "failure_kind": "other",
+                },
+                headers=headers,
+            )
+
+        assert response.status_code == 200
+        test_db.refresh(job)
+        test_db.refresh(operation)
+        assert "s3cret" not in job.result["stderr_tail"]
+        assert "s3cret" not in operation.error_message
+        # redacted before the bound: a location cut in the middle would
+        # otherwise keep its credential
+        from app.services.repository_executor import (
+            FAILURE_TAIL_MAX_CHARS,
+            agent_failure_result,
+        )
+
+        crossing = "a" * (FAILURE_TAIL_MAX_CHARS - 10) + " ssh://user:s3cret@host/repo"
+        assert (
+            "s3cret" not in agent_failure_result(2, stderr_tail=crossing)["stderr_tail"]
+        )
+        assert (
+            "s3cret"
+            not in (notifier.send_check_completion.await_args.kwargs["error_message"])
+        )
+        assert "ssh://user:***@host/repo" in operation.error_message
+
+    def test_an_unknown_failure_kind_and_a_long_tail_are_normalized(
+        self, test_client, test_db, admin_headers
+    ):
+        from app.services.repository_executor import FAILURE_TAIL_MAX_CHARS
+
+        job, operation, headers = self._flagged_check_job(
+            test_client, test_db, admin_headers
+        )
+
+        response = test_client.post(
+            f"/api/agents/jobs/{job.id}/fail",
+            json={
+                "error_message": "repository.check exited with code 2",
+                "return_code": 2,
+                "stderr_tail": "x" * (FAILURE_TAIL_MAX_CHARS + 10) + "end",
+                "failure_kind": "something_newer",
+            },
+            headers=headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(job)
+        assert job.result["failure_kind"] == "other"
+        assert len(job.result["stderr_tail"]) == FAILURE_TAIL_MAX_CHARS
+        assert job.result["stderr_tail"].endswith("end")
+
+    @pytest.mark.asyncio
+    async def test_the_session_transport_carries_the_report(
+        self, test_client, test_db, admin_headers
+    ):
+        job, operation, headers = self._flagged_check_job(
+            test_client, test_db, admin_headers
+        )
+        with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
+            await _handle_agent_session_message(
+                test_db,
+                job.agent_machine_id,
+                {
+                    "type": "command_error",
+                    "job_id": job.id,
+                    "error": {
+                        "message": "repository.check exited with code 73",
+                        "return_code": 73,
+                        "stderr_tail": "Failed to create/acquire the lock /r (timeout).",
+                        "failure_kind": "lock_contention",
+                    },
+                },
+            )
+
+        test_db.refresh(job)
+        test_db.refresh(operation)
+        assert job.status == "failed"
+        assert job.result["failure_kind"] == "lock_contention"
+        assert job.result["stderr_tail"] == (
+            "Failed to create/acquire the lock /r (timeout)."
+        )
+        assert operation.status == "running"
+        notifier.send_check_completion.assert_not_awaited()

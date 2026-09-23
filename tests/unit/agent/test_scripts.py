@@ -32,7 +32,7 @@ class RecordingClient:
     def complete_job(self, job_id, *, result):
         self.calls.append(("complete", result))
 
-    def fail_job(self, job_id, *, error_message, return_code=None):
+    def fail_job(self, job_id, *, error_message, return_code=None, **report):
         self.calls.append(("fail", error_message, return_code))
 
     def cancel_job(self, job_id):

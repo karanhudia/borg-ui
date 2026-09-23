@@ -169,17 +169,31 @@ class SessionCommandClient:
         return {"id": job_id, "status": "completed"}
 
     def fail_job(
-        self, job_id: int, *, error_message: str, return_code: Optional[int] = None
+        self,
+        job_id: int,
+        *,
+        error_message: str,
+        return_code: Optional[int] = None,
+        stderr_tail: Optional[str] = None,
+        failure_kind: Optional[str] = None,
     ) -> dict[str, Any]:
         self._ensure_started(job_id)
         self.finished = True
         error: dict[str, Any] = {"message": error_message}
         if return_code is not None:
             error["return_code"] = return_code
+        if stderr_tail is not None:
+            error["stderr_tail"] = stderr_tail
+        if failure_kind is not None:
+            error["failure_kind"] = failure_kind
         self._deliver_terminal(
             {"type": "command_error", "job_id": job_id, "error": error},
             lambda c: c.fail_job(
-                job_id, error_message=error_message, return_code=return_code
+                job_id,
+                error_message=error_message,
+                return_code=return_code,
+                stderr_tail=stderr_tail,
+                failure_kind=failure_kind,
             ),
         )
         return {"id": job_id, "status": "failed"}

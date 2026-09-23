@@ -164,13 +164,26 @@ class AgentClient:
         )
 
     def fail_job(
-        self, job_id: int, *, error_message: str, return_code: Optional[int] = None
+        self,
+        job_id: int,
+        *,
+        error_message: str,
+        return_code: Optional[int] = None,
+        stderr_tail: Optional[str] = None,
+        failure_kind: Optional[str] = None,
     ) -> dict[str, Any]:
-        return self._request(
-            "POST",
-            f"/api/agents/jobs/{job_id}/fail",
-            json={"error_message": error_message, "return_code": return_code},
-        )
+        """`stderr_tail` and `failure_kind` (see `failure_report`) ride with
+        the report: the log lines that carry Borg's reason can land after
+        it, and a server before them ignores the two fields."""
+        body: dict[str, Any] = {
+            "error_message": error_message,
+            "return_code": return_code,
+        }
+        if stderr_tail is not None:
+            body["stderr_tail"] = stderr_tail
+        if failure_kind is not None:
+            body["failure_kind"] = failure_kind
+        return self._request("POST", f"/api/agents/jobs/{job_id}/fail", json=body)
 
     def cancel_job(self, job_id: int) -> dict[str, Any]:
         return self._request("POST", f"/api/agents/jobs/{job_id}/cancel", json={})

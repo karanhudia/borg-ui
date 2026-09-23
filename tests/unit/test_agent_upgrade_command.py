@@ -28,7 +28,7 @@ class _HttpClient:
     def complete_job(self, job_id, *, result):
         return {"id": job_id, "status": "completed"}
 
-    def fail_job(self, job_id, *, error_message, return_code=None):
+    def fail_job(self, job_id, *, error_message, return_code=None, **report):
         self.failed.append((job_id, error_message))
         return {"id": job_id, "status": "failed"}
 
