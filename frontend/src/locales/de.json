@@ -3812,7 +3812,8 @@
         "openRepository": "Repository öffnen",
         "historyAgentUnsupported": "Braucht einen fähigen Agent",
         "updatedAgo": "Aktualisiert {{ago}}",
-        "updatedNever": "Noch nicht aktualisiert"
+        "updatedNever": "Noch nicht aktualisiert",
+        "statsLastRefreshed": "Zuletzt aktualisiert"
       },
       "rebuildMenuHint": "Jede Stufe nach der gewählten wird ebenfalls neu aufgebaut. Frühere Stufen bleiben erhalten. Statistiken laufen immer zuletzt, weil sie zusammenzählen, was die anderen Stufen erzeugt haben.",
       "rebuildTitle": "Abgeleitete Daten neu aufbauen",

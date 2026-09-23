@@ -3812,7 +3812,8 @@
         "openRepository": "Abrir repositorio",
         "historyAgentUnsupported": "Necesita un agente capaz",
         "updatedAgo": "Actualizado {{ago}}",
-        "updatedNever": "Aún no actualizado"
+        "updatedNever": "Aún no actualizado",
+        "statsLastRefreshed": "Última actualización"
       },
       "rebuildMenuHint": "Cada etapa posterior a la elegida también se reconstruye. Las anteriores se conservan. Las estadísticas siempre van al final, porque suman lo que produjeron las demás etapas.",
       "rebuildTitle": "Reconstruir datos derivados",

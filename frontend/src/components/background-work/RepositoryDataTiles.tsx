@@ -1,7 +1,7 @@
 import { Box } from '@mui/material'
 import { BarChart3, History, ListChecks } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow, formatDistanceToNowStrict } from 'date-fns'
 import TintedTile from '../shared/TintedTile'
 import type { Tone } from '../shared/tones'
 import { PLAN_LABEL } from '../../core/features'
@@ -107,9 +107,12 @@ export default function RepositoryDataTiles({
     icon: BarChart3,
     tone: 'success',
     muted: repository.last_stats_at == null,
+    // The time is the figure here, as the counts are in the other tiles; a
+    // whole sentence would wrap in the tile's large type.
     value: repository.last_stats_at
-      ? hub('statsRefreshed', { ago: ago(repository.last_stats_at) })
+      ? formatDistanceToNowStrict(parseBackendDate(repository.last_stats_at), { addSuffix: true })
       : hub('statsNever'),
+    sub: repository.last_stats_at ? hub('statsLastRefreshed') : undefined,
   }
 
   return (

@@ -43,7 +43,8 @@ describe('RepositoryDataTiles', () => {
     expect(history).toHaveTextContent(/50% of all history rows/i)
     expect(history).toHaveTextContent(/2 failed/i)
     expect(history).toHaveTextContent(/1 truncated/i)
-    expect(within(stats).getByText(/refreshed 11 minutes ago/i)).toBeInTheDocument()
+    expect(within(stats).getByText('11 minutes ago')).toBeInTheDocument()
+    expect(stats).toHaveTextContent(/last refreshed/i)
   })
 
   it('says when nothing has been built yet', () => {

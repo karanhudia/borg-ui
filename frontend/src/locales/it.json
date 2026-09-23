@@ -3812,7 +3812,8 @@
         "openRepository": "Apri repository",
         "historyAgentUnsupported": "Richiede un agente in grado di farlo",
         "updatedAgo": "Aggiornato {{ago}}",
-        "updatedNever": "Non ancora aggiornato"
+        "updatedNever": "Non ancora aggiornato",
+        "statsLastRefreshed": "Ultimo aggiornamento"
       },
       "rebuildMenuHint": "Ogni fase successiva a quella scelta viene ricostruita a sua volta. Le fasi precedenti restano. Le statistiche vengono sempre per ultime, perché sommano ciò che le altre fasi hanno prodotto.",
       "rebuildTitle": "Ricostruisci i dati derivati",

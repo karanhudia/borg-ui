@@ -3812,7 +3812,8 @@
         "openRepository": "Open repository",
         "historyAgentUnsupported": "Needs a capable agent",
         "updatedAgo": "Updated {{ago}}",
-        "updatedNever": "Not updated yet"
+        "updatedNever": "Not updated yet",
+        "statsLastRefreshed": "Last refreshed"
       },
       "rebuildMenuHint": "Every stage after the one you pick is rebuilt too. Earlier stages are kept. Stats always run last, because they total up what the other stages produced.",
       "rebuildTitle": "Rebuild derived data",
