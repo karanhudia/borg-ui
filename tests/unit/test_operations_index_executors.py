@@ -270,6 +270,87 @@ async def test_run_archive_sync_stales_survivors_when_archives_were_removed(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.parametrize("borg_version, expect_stale", [(1, True), (2, False)])
+async def test_run_archive_sync_stales_only_the_removed_archives_neighbours(
+    db, repo, monkeypatch, borg_version, expect_stale
+):
+    """#1137: a removal changes deduplicated_size of the archives it shared
+    chunks with, its neighbours in the series. Staling every survivor made a
+    prune-after-backup repository re-measure the whole cap every listing.
+    Borg 2 reports no deduplicated_size, so nothing is staled there."""
+    repo.borg_version = borg_version
+    measured = datetime(2026, 9, 1, 3)
+
+    def row(borg_id, series, day):
+        return Archive(
+            repository_id=repo.id,
+            borg_id=borg_id,
+            name=f"{series}-2026-09-{day:02d}T00:00:00",
+            series=series,
+            start=datetime(2026, 9, day),
+            original_size=10,
+            stats_measured_at=measured,
+        )
+
+    rows = {
+        "far": row("far", "nas", 1),
+        "before": row("before", "nas", 2),
+        "gone": row("gone", "nas", 3),
+        "after": row("after", "nas", 4),
+        "later": row("later", "nas", 5),
+        "other": row("other", "db", 3),
+    }
+    db.add_all(rows.values())
+    db.commit()
+    listed = [
+        {"archive": a.name, "name": a.name, "id": a.borg_id, "start": stamp}
+        for a in rows.values()
+        if a.borg_id != "gone"
+        for stamp in [f"{a.start:%Y-%m-%dT%H:%M:%S}.000000"]
+    ]
+    monkeypatch.setattr(
+        index_exec,
+        "list_archives_for_repository",
+        AsyncMock(return_value=(True, listed, "UTC")),
+    )
+    monkeypatch.setattr(index_exec, "fill_archive_info", AsyncMock(return_value=0))
+    monkeypatch.setattr(
+        index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
+    )
+
+    await index_exec.run_archive_sync(_ctx(db, repo))
+    db.expire_all()
+    stale = {a.borg_id for a in db.query(Archive).all() if a.stats_measured_at is None}
+    assert stale == ({"before", "after"} if expect_stale else set())
+
+
+@pytest.mark.unit
+def test_neighbours_of_removed_uses_a_total_order(db, repo):
+    """Two archives of a series with the same start: the survivor is still a
+    neighbour, on whichever side its id puts it."""
+    start = datetime(2026, 9, 3)
+    rows = [
+        Archive(
+            repository_id=repo.id,
+            borg_id=borg_id,
+            name=borg_id,
+            series="nas",
+            start=start,
+        )
+        for borg_id in ("twin", "gone", "later")
+    ]
+    rows[2].start = start + timedelta(days=1)
+    db.add_all(rows)
+    db.commit()
+    gone = {rows[1].id}
+    assert index_exec._neighbours_of_removed(db, repo, gone, gone) == {
+        rows[0].id,
+        rows[2].id,
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "agent, capable, plan_has_history, expected_state",
     [
@@ -1357,7 +1438,9 @@ async def test_run_archive_sync_fills_the_new_archive_despite_stale_survivors(
         info.reset_mock()
         outcome = await index_exec.run_archive_sync(_ctx(db, repo))
         assert outcome.result["new"] == 1
-        assert outcome.result["info_filled"] == cap
+        # the new archive and the removed one's surviving neighbour, not the
+        # whole cap (#1137)
+        assert outcome.result["info_filled"] == 2
         # the runner stores the result; the next listing reads it to tell a
         # new removal from a lingering row
         db.add(
