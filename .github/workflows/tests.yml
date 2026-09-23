@@ -212,12 +212,32 @@ jobs:
           MINIMUM_GREEN: 70
           MINIMUM_ORANGE: 50
 
+  runtime-base-image:
+    name: Backend / Resolve runtime base image
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.tag.outputs.image }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Compute runtime base tag
+        id: tag
+        run: echo "image=docker.io/ainullcode/borg-ui-runtime-base:$(bash docker/runtime-base-tag.sh)" >> "$GITHUB_OUTPUT"
+
   backend-api-integration:
     name: Backend / Integration Tests
     runs-on: ubuntu-latest
+    needs: runtime-base-image
     # Without a cap a hung test holds the runner for GitHub's six hour
     # default; the suite finishes in a couple of minutes.
     timeout-minutes: 20
+    # Run inside the runtime base image so both Borg 1 and Borg 2 are the exact
+    # builds users get (apt only ships a Borg 1, and b24 cannot be built or run
+    # on the runner's glibc/OpenSSL). A Borg bump PR stays red here until its
+    # base image is pushed, same as the Dockerfile base-image guard.
+    container:
+      image: ${{ needs.runtime-base-image.outputs.image }}
 
     services:
       redis:
@@ -227,28 +247,15 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-        ports:
-          - 6379:6379
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v7
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y borgbackup shellcheck
-
       - name: Verify Borg installation
         run: |
           borg --version
-          which borg
+          borg2 --version
 
       - name: Install Python dependencies
         run: |
@@ -261,11 +268,15 @@ jobs:
           mkdir -p data
           mkdir -p logs
 
+      # The container runs as root, which can create any path and so hides
+      # permission failures. Run as the image's non-root borg user, the way the
+      # app runs in production and the way the job ran on the plain runner.
       - name: Run backend integration suite
         run: |
-          pytest tests/integration -v
+          chown -R borg:borg . /tmp/borg-ui-tests
+          gosu borg pytest tests/integration -v
         env:
-          REDIS_HOST: localhost
+          REDIS_HOST: redis
           REDIS_PORT: 6379
 
   typecheck-lint-format:

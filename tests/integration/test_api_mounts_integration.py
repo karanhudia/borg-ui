@@ -67,7 +67,14 @@ def _create_borg2_repo_with_archives(test_db, tmp_path):
     env = make_borg_test_env(str(tmp_path))
 
     init_result = subprocess.run(
-        [borg2_binary, "-r", str(repo_path), "repo-create", "--encryption", "none"],
+        [
+            borg2_binary,
+            "-r",
+            str(repo_path),
+            "repo-create",
+            "--encryption",
+            "none-sha256",
+        ],
         capture_output=True,
         text=True,
         env=env,
