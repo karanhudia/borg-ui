@@ -139,7 +139,7 @@ describe('RepositoryHubRow', () => {
     expect(screen.queryByText('Pro')).not.toBeInTheDocument()
   })
 
-  it('shows only the stages that belong to the run', () => {
+  it('shows the one stage the repository is in', () => {
     renderRow({
       track: track({
         stages: [
@@ -150,68 +150,66 @@ describe('RepositoryHubRow', () => {
         ],
       }),
     })
-    expect(screen.queryByTestId('stage-connect')).not.toBeInTheDocument()
+    const cell = screen.getByTestId('current-stage')
+    expect(within(cell).getByTestId('stage-stats')).toHaveAttribute('data-status', 'running')
+    expect(within(cell).getByText('Stats')).toBeInTheDocument()
     expect(screen.queryByTestId('stage-archives')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('stage-history')).not.toBeInTheDocument()
-    expect(screen.getByTestId('stage-stats')).toHaveAttribute('data-status', 'running')
   })
 
-  it('keeps every stage in its own column so bars never move between runs', () => {
+  it('prefers the running stage over waiting ones', () => {
     renderRow({
       track: track({
         stages: [
           stage('connect'),
-          stage('stats'),
-          stage('archives'),
-          stage('history', { status: 'running', operation: op({ status: 'running' }) }),
+          stage('archives', { status: 'done', operation: op({ status: 'completed' }) }),
+          stage('history', {
+            status: 'running',
+            operation: op({ status: 'running', started_at: new Date().toISOString() }),
+          }),
+          stage('stats', { status: 'waiting', operation: op({}), reason: 'queued' }),
         ],
       }),
     })
-    const cells = screen.getAllByTestId(/^stage-cell-/)
-    expect(cells.map((cell) => cell.dataset.stage)).toEqual([
-      'connect',
-      'archives',
-      'history',
-      'stats',
-    ])
-    expect(screen.getByTestId('stage-cell-stats')).toHaveAttribute('data-empty', 'true')
-    expect(screen.getByTestId('stage-cell-history')).toHaveAttribute('data-empty', 'false')
+    expect(screen.getByTestId('stage-history')).toHaveAttribute('data-status', 'running')
+    expect(screen.queryByText(/next in line/i)).not.toBeInTheDocument()
   })
 
-  it('says a stage was skipped rather than done', () => {
-    renderRow({
+  it('offers a retry on a failed stage', () => {
+    const { onRetry } = renderRow({
       track: track({
         stages: [
           stage('connect'),
-          stage('stats'),
           stage('archives', { status: 'failed', operation: op({ status: 'failed' }) }),
           stage('history', { status: 'skipped', operation: op({ status: 'skipped' }) }),
+          stage('stats'),
         ],
       }),
     })
-    expect(screen.getByTestId('stage-history')).toHaveAttribute('data-status', 'skipped')
-    expect(screen.getByText(/^skipped$/i)).toBeInTheDocument()
-    expect(screen.queryByText(/^done$/i)).not.toBeInTheDocument()
+    const cell = screen.getByTestId('current-stage')
+    expect(within(cell).getByTestId('stage-archives')).toHaveAttribute('data-status', 'failed')
+    fireEvent.click(within(cell).getByRole('button', { name: /retry/i }))
+    expect(onRetry).toHaveBeenCalledWith(expect.objectContaining({ key: 'archives' }))
   })
 
-  it('renders the stage track under the numbers while work is running', () => {
+  it('says why a waiting stage has not started, next to the numbers', () => {
     renderRow({
       track: track({
         stages: [
           stage('connect', { status: 'done', operation: op({ status: 'completed' }) }),
-          stage('stats', {
-            status: 'running',
-            operation: op({ status: 'running', started_at: new Date().toISOString() }),
-          }),
-          stage('archives', { status: 'waiting', operation: op({}), reason: 'queued' }),
-          stage('history', { status: 'waiting', operation: op({}), reason: 'workers' }),
+          stage('archives', { status: 'done', operation: op({ status: 'completed' }) }),
+          stage('history', { status: 'waiting', operation: op({}), reason: 'upstream_paused' }),
+          stage('stats', { status: 'waiting', operation: op({}), reason: 'queued' }),
         ],
       }),
     })
-    expect(screen.getByTestId('stage-stats')).toHaveAttribute('data-status', 'running')
-    expect(screen.getByText(/waiting for an index worker/i)).toBeInTheDocument()
-    expect(screen.getByText(/next in line/i)).toBeInTheDocument()
+    expect(screen.getByTestId('stage-history')).toHaveAttribute('data-status', 'waiting')
+    expect(screen.getByText(/waiting on a paused stage/i)).toBeInTheDocument()
     expect(screen.getByText(/16 of 18 indexed/i)).toBeInTheDocument()
+  })
+
+  it('leaves the stage cell empty at rest', () => {
+    renderRow({ track: null })
+    expect(screen.getByTestId('current-stage')).toBeEmptyDOMElement()
   })
 
   it('retries from the failed stage', () => {
@@ -295,10 +293,10 @@ describe('index mode (spec 6.8)', () => {
     renderRow({ repository: repository({ index_mode: 'off' }) })
     expect(screen.getByText(/not indexed/i)).toBeInTheDocument()
     expect(screen.getByText(/background work is off/i)).toBeInTheDocument()
-    expect(screen.queryByTestId('stage-track')).not.toBeInTheDocument()
+    expect(screen.getByTestId('current-stage')).toBeEmptyDOMElement()
   })
 
-  it('shows the track for an off repository while a manual run is going', () => {
+  it('shows the stage for an off repository while a manual run is going', () => {
     renderRow({
       repository: repository({ index_mode: 'off' }),
       track: track({
@@ -310,6 +308,7 @@ describe('index mode (spec 6.8)', () => {
         ],
       }),
     })
-    expect(screen.getByTestId('stage-track')).toBeInTheDocument()
+    expect(screen.getByTestId('stage-archives')).toBeInTheDocument()
+    expect(screen.queryByText(/background work is off/i)).not.toBeInTheDocument()
   })
 })

@@ -260,6 +260,7 @@ export const busyQueue: QueueResponse = {
     max_concurrent_scheduled_checks: 4,
   },
   paused: false,
+  paused_stages: [],
 }
 
 export const emptyQueue: QueueResponse = {
@@ -272,6 +273,7 @@ export const emptyQueue: QueueResponse = {
     max_concurrent_scheduled_checks: 4,
   },
   paused: false,
+  paused_stages: [],
 }
 
 // The same queue with a prune holding the lane instead of a backup: the

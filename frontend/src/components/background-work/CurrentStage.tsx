@@ -1,12 +1,7 @@
 import { Box, Button, LinearProgress, Typography, alpha, useTheme } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { elapsedSince } from './elapsed'
-import {
-  HUB_GRID_COLUMNS,
-  REBUILD_STAGE_FOR,
-  STAGE_ORDER,
-  type StageState,
-} from './repositoryTrack'
+import { REBUILD_STAGE_FOR, type StageState } from './repositoryTrack'
 
 function StageSegment({
   stage,
@@ -61,17 +56,9 @@ function StageSegment({
 
   return (
     <Box data-testid={`stage-${stage.key}`} data-status={stage.status} sx={{ minWidth: 0 }}>
-      {/* On desktop the table header above the track names the column;
-          on small screens the columns stack, so each segment says which
-          stage it is. */}
       <Typography
         variant="caption"
-        sx={{
-          display: { xs: 'block', md: 'none' },
-          color: 'text.secondary',
-          fontWeight: 500,
-          mb: 0.5,
-        }}
+        sx={{ display: 'block', color: 'text.primary', fontWeight: 600, mb: 0.5 }}
       >
         {t(`operations.background.stage.${stage.key}`)}
       </Typography>
@@ -124,48 +111,20 @@ function StageSegment({
   )
 }
 
-interface StageTrackProps {
-  stages: StageState[]
+interface CurrentStageProps {
+  // Null when the repository is at rest: the cell stays empty.
+  stage: StageState | null
   now: number
   onRetry: (stage: StageState) => void
 }
 
-// One run's stages laid out on the hub grid, so every stage sits under
-// the table column that describes it: connect under the repository name,
-// then archive list, file history, and stats. A stage the run never had
-// leaves its column empty rather than shifting the others.
-export default function StageTrack({ stages, now, onRetry }: StageTrackProps) {
+// The stage a repository is in right now (`currentStage`), with its
+// progress, why it waits, or a retry when it failed. The strip above the
+// table counts the same thing across every repository.
+export default function CurrentStage({ stage, now, onRetry }: CurrentStageProps) {
   return (
-    <Box
-      data-testid="stage-track"
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: HUB_GRID_COLUMNS,
-        columnGap: 2,
-        rowGap: 1.5,
-        alignItems: 'start',
-      }}
-    >
-      {STAGE_ORDER.map((key) => {
-        const stage = stages.find((s) => s.key === key)
-        const present = stage != null && stage.status !== 'idle'
-        return (
-          <Box
-            key={key}
-            data-testid={`stage-cell-${key}`}
-            data-stage={key}
-            data-empty={present ? 'false' : 'true'}
-            sx={{
-              minWidth: 0,
-              display: { xs: present ? 'block' : 'none', md: 'block' },
-              gridColumn: { xs: '1 / -1', md: 'auto' },
-            }}
-          >
-            {present && stage && <StageSegment stage={stage} now={now} onRetry={onRetry} />}
-          </Box>
-        )
-      })}
-      <Box sx={{ display: { xs: 'none', md: 'block' } }} />
+    <Box data-testid="current-stage" sx={{ minWidth: 0, gridColumn: { xs: '1 / -1', md: 'auto' } }}>
+      {stage && <StageSegment stage={stage} now={now} onRetry={onRetry} />}
     </Box>
   )
 }

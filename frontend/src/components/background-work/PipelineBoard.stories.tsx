@@ -72,6 +72,15 @@ export const Busy: Story = {
   ),
 }
 
+// File history is paused: its block says so and its queued work waits.
+export const StagePaused: Story = {
+  render: () => (
+    <StoryProviders queue={{ ...busyQueue, paused_stages: ['history'] }} hub={hubResponse}>
+      <PipelineBoard canManage />
+    </StoryProviders>
+  ),
+}
+
 // A prune holds the lane: the queued stages name it instead of claiming a
 // backup is running.
 export const MaintenanceHoldsTheLane: Story = {

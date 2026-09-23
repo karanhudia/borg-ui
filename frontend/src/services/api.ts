@@ -31,6 +31,7 @@ import type {
   HubRepositoryDetail,
   HubResponse,
   OperationItem,
+  PausableStage,
   QueueResponse,
   QueueLimits,
   RebuildStage,
@@ -798,6 +799,8 @@ export const operationsAPI = {
     }),
   pause: () => api.post('/operations/pause'),
   resume: () => api.post('/operations/resume'),
+  pauseStage: (stage: PausableStage) => api.post(`/operations/stages/${stage}/pause`),
+  resumeStage: (stage: PausableStage) => api.post(`/operations/stages/${stage}/resume`),
   updateLimits: (indexWorkers: number) =>
     api.put<QueueLimits>('/operations/limits', { index_workers: indexWorkers }),
   cancel: (operationId: number) => api.post(`/operations/${operationId}/cancel`),

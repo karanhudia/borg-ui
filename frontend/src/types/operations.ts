@@ -106,10 +106,17 @@ export interface QueueRepository {
   operations: OperationItem[]
 }
 
+// The Background work stages that can be paused, in run order. Mirrors
+// STAGES in app/services/operations/vocab.py.
+export type PausableStage = 'archives' | 'retention' | 'history' | 'stats'
+export const PAUSABLE_STAGES: PausableStage[] = ['archives', 'retention', 'history', 'stats']
+
 export interface QueueResponse {
   repositories: QueueRepository[]
   limits: QueueLimits
+  // Every stage paused.
   paused: boolean
+  paused_stages: PausableStage[]
 }
 
 // GET /operations/repositories: derived data at rest, one row per repository.

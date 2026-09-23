@@ -3679,17 +3679,15 @@
         "connect": "Connect",
         "stats": "Stats",
         "archives": "Archive list",
-        "history": "File history"
+        "history": "File history",
+        "retention": "Retention preview"
       },
       "workers_one": "{{count}} worker",
       "workers_other": "{{count}} workers",
       "title": "Background work",
-      "pause": "Pause",
-      "resume": "Resume",
       "pauseFailed": "Could not change the background queue state.",
       "openTrack": "Open the run track for {{repository}}",
       "rebuildFailed": "The rebuild could not be started.",
-      "retryDeferred": "Index work for this repository is already queued or running, so nothing more was queued.",
       "queueFailed": "The background queue could not be loaded.",
       "pauseAdminOnly": "Only administrators can pause background work.",
       "reason": {
@@ -3697,7 +3695,8 @@
         "lane_busy": "{{kind}} still running",
         "index_busy": "Waiting for this repository's other index work to finish",
         "workers": "Waiting for an index worker",
-        "queued": "Next in line"
+        "queued": "Next in line",
+        "upstream_paused": "Waiting on a paused stage"
       },
       "foregroundRunning": "{{kind}} running for {{elapsed}}",
       "viewRuns": "View runs",
@@ -3820,7 +3819,23 @@
       "stageKept": "Kept",
       "stageStart": "Start here",
       "currentRun": "Current run",
-      "stageAgentUnsupported": "Not available for repositories whose agent cannot build change history: none is assigned or usable, or it predates the feature"
+      "stageAgentUnsupported": "Not available for repositories whose agent cannot build change history: none is assigned or usable, or it predates the feature",
+      "strip": {
+        "idle": "Idle",
+        "running_one": "{{count}} running",
+        "running_other": "{{count}} running",
+        "waiting_one": "{{count}} waiting",
+        "waiting_other": "{{count}} waiting",
+        "failed_one": "{{count}} failed",
+        "failed_other": "{{count}} failed",
+        "paused": "Paused",
+        "pauseStage": "Pause {{stage}}",
+        "resumeStage": "Resume {{stage}}",
+        "label": "Background stages"
+      },
+      "pauseAll": "Pause all",
+      "resumeAll": "Resume all",
+      "currentStageColumn": "Current stage"
     },
     "status": {
       "queued": "Queued",

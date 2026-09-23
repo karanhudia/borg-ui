@@ -58,7 +58,7 @@ export default function BackgroundWorkTab() {
                 startIcon={<Pause size={14} />}
                 onClick={() => pauseMutation.mutate()}
               >
-                {t('operations.background.pause')}
+                {t('operations.background.pauseAll')}
               </Button>
             </span>
           </Tooltip>
@@ -77,7 +77,7 @@ export default function BackgroundWorkTab() {
                 startIcon={<Play size={14} />}
                 onClick={() => resumeMutation.mutate()}
               >
-                {t('operations.background.resume')}
+                {t('operations.background.resumeAll')}
               </Button>
             ) : undefined
           }

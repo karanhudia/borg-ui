@@ -6,7 +6,7 @@ import { busyQueue, hubRepositories, hubRepository, op } from './storyFixtures'
 
 const trackFor = (repositoryId: number) => {
   const group = busyQueue.repositories.find((r) => r.repository_id === repositoryId)
-  return group ? deriveTrack(group, busyQueue.limits, busyQueue.paused) : null
+  return group ? deriveTrack(group, busyQueue.limits, busyQueue.paused_stages) : null
 }
 
 const meta = {
@@ -106,7 +106,56 @@ export const SiblingBranchesWaitWithinOneRun: Story = {
         ],
       },
       busyQueue.limits,
-      false
+      []
+    ),
+  },
+}
+
+// The archive list is paused, so the stats queued behind it say so rather
+// than "next in line".
+export const WaitingOnAPausedStage: Story = {
+  args: {
+    repository: hubRepositories[2],
+    track: deriveTrack(
+      {
+        repository_id: 3,
+        repository_name: hubRepositories[2].repository_name,
+        lane_busy: false,
+        index_holder_ids: [],
+        operations: [
+          op({ id: 21, kind: 'archive_sync', status: 'queued', repository_id: 3 }),
+          op({ id: 22, kind: 'stats', status: 'queued', repository_id: 3, depends_on_id: 21 }),
+        ],
+      },
+      busyQueue.limits,
+      ['archives']
+    ),
+  },
+}
+
+// The retention comparison is a stage of the chain, not a foreground job.
+export const RetentionPreviewRunning: Story = {
+  args: {
+    repository: hubRepositories[2],
+    track: deriveTrack(
+      {
+        repository_id: 3,
+        repository_name: hubRepositories[2].repository_name,
+        lane_busy: false,
+        index_holder_ids: [],
+        operations: [
+          op({
+            id: 31,
+            kind: 'prune_compare',
+            category: 'maintenance',
+            status: 'running',
+            repository_id: 3,
+            started_at: new Date(Date.now() - 40 * 1000).toISOString(),
+          }),
+        ],
+      },
+      busyQueue.limits,
+      []
     ),
   },
 }
@@ -124,9 +173,10 @@ export const SystemLane: Story = {
       foreground: null,
       stages: [
         { key: 'connect', status: 'idle', operation: null, reason: null },
-        { key: 'stats', status: 'idle', operation: null, reason: null },
         { key: 'archives', status: 'idle', operation: null, reason: null },
+        { key: 'retention', status: 'idle', operation: null, reason: null },
         { key: 'history', status: 'idle', operation: null, reason: null },
+        { key: 'stats', status: 'idle', operation: null, reason: null },
       ],
     },
   },

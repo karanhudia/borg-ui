@@ -3679,17 +3679,15 @@
         "connect": "Conectar",
         "stats": "Estadísticas",
         "archives": "Lista de archivos",
-        "history": "Historial de ficheros"
+        "history": "Historial de ficheros",
+        "retention": "Vista previa de retención"
       },
       "workers_one": "{{count}} trabajador",
       "workers_other": "{{count}} trabajadores",
       "title": "Trabajo en segundo plano",
-      "pause": "Pausar",
-      "resume": "Reanudar",
       "pauseFailed": "No se pudo cambiar el estado de la cola en segundo plano.",
       "openTrack": "Abrir el seguimiento de ejecución de {{repository}}",
       "rebuildFailed": "No se pudo iniciar la reconstrucción.",
-      "retryDeferred": "Ya hay trabajo de índice en cola o en curso para este repositorio, por lo que no se puso nada más en cola.",
       "queueFailed": "No se pudo cargar la cola en segundo plano.",
       "pauseAdminOnly": "Solo los administradores pueden pausar el trabajo en segundo plano.",
       "reason": {
@@ -3697,7 +3695,8 @@
         "lane_busy": "{{kind}} aún en ejecución",
         "index_busy": "Esperando a que termine el otro trabajo de índice de este repositorio",
         "workers": "Esperando un worker de índice",
-        "queued": "Siguiente en la cola"
+        "queued": "Siguiente en la cola",
+        "upstream_paused": "Esperando a una etapa en pausa"
       },
       "foregroundRunning": "{{kind}} en ejecución desde hace {{elapsed}}",
       "viewRuns": "Ver ejecuciones",
@@ -3820,7 +3819,23 @@
       "stageKept": "Se conserva",
       "stageStart": "Empezar aquí",
       "currentRun": "Ejecución actual",
-      "stageAgentUnsupported": "No disponible para repositorios cuyo agente no puede generar el historial de cambios: no hay ninguno asignado o utilizable, o es anterior a la función"
+      "stageAgentUnsupported": "No disponible para repositorios cuyo agente no puede generar el historial de cambios: no hay ninguno asignado o utilizable, o es anterior a la función",
+      "strip": {
+        "idle": "Inactiva",
+        "running_one": "{{count}} en curso",
+        "running_other": "{{count}} en curso",
+        "waiting_one": "{{count}} en espera",
+        "waiting_other": "{{count}} en espera",
+        "failed_one": "{{count}} con error",
+        "failed_other": "{{count}} con error",
+        "paused": "En pausa",
+        "pauseStage": "Pausar {{stage}}",
+        "resumeStage": "Reanudar {{stage}}",
+        "label": "Etapas en segundo plano"
+      },
+      "pauseAll": "Pausar todo",
+      "resumeAll": "Reanudar todo",
+      "currentStageColumn": "Etapa actual"
     },
     "status": {
       "queued": "En cola",

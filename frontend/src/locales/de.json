@@ -3679,17 +3679,15 @@
         "connect": "Verbinden",
         "stats": "Statistik",
         "archives": "Archivliste",
-        "history": "Dateiverlauf"
+        "history": "Dateiverlauf",
+        "retention": "Aufbewahrungsvorschau"
       },
       "workers_one": "{{count}} Worker",
       "workers_other": "{{count}} Worker",
       "title": "Hintergrundarbeit",
-      "pause": "Pausieren",
-      "resume": "Fortsetzen",
       "pauseFailed": "Der Zustand der Hintergrundwarteschlange konnte nicht geändert werden.",
       "openTrack": "Ablaufverfolgung für {{repository}} öffnen",
       "rebuildFailed": "Der Neuaufbau konnte nicht gestartet werden.",
-      "retryDeferred": "Für dieses Repository ist bereits Index-Arbeit eingereiht oder aktiv, daher wurde nichts weiter eingereiht.",
       "queueFailed": "Die Hintergrundwarteschlange konnte nicht geladen werden.",
       "pauseAdminOnly": "Nur Administratoren können Hintergrundarbeiten pausieren.",
       "reason": {
@@ -3697,7 +3695,8 @@
         "lane_busy": "{{kind}} läuft noch",
         "index_busy": "Wartet, bis die andere Index-Arbeit dieses Repositorys fertig ist",
         "workers": "Wartet auf einen Index-Worker",
-        "queued": "Als Nächstes dran"
+        "queued": "Als Nächstes dran",
+        "upstream_paused": "Wartet auf eine pausierte Phase"
       },
       "foregroundRunning": "{{kind}} läuft seit {{elapsed}}",
       "viewRuns": "Läufe anzeigen",
@@ -3820,7 +3819,23 @@
       "stageKept": "Bleibt erhalten",
       "stageStart": "Hier beginnen",
       "currentRun": "Aktueller Lauf",
-      "stageAgentUnsupported": "Für Repositories, deren Agent die Änderungshistorie nicht erstellen kann, nicht verfügbar: Es ist keiner zugewiesen oder nutzbar, oder er ist älter als die Funktion"
+      "stageAgentUnsupported": "Für Repositories, deren Agent die Änderungshistorie nicht erstellen kann, nicht verfügbar: Es ist keiner zugewiesen oder nutzbar, oder er ist älter als die Funktion",
+      "strip": {
+        "idle": "Leerlauf",
+        "running_one": "{{count}} läuft",
+        "running_other": "{{count}} laufen",
+        "waiting_one": "{{count}} wartet",
+        "waiting_other": "{{count}} warten",
+        "failed_one": "{{count}} fehlgeschlagen",
+        "failed_other": "{{count}} fehlgeschlagen",
+        "paused": "Pausiert",
+        "pauseStage": "{{stage}} pausieren",
+        "resumeStage": "{{stage}} fortsetzen",
+        "label": "Hintergrundphasen"
+      },
+      "pauseAll": "Alle pausieren",
+      "resumeAll": "Alle fortsetzen",
+      "currentStageColumn": "Aktuelle Phase"
     },
     "status": {
       "queued": "In Warteschlange",

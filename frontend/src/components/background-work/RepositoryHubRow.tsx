@@ -14,12 +14,17 @@ import { useTranslation } from 'react-i18next'
 import { formatDistanceToNow } from 'date-fns'
 import CategoryToken from '../CategoryToken'
 import SyncStateChip from '../archives/SyncStateChip'
-import StageTrack from './StageTrack'
+import CurrentStage from './CurrentStage'
 import { elapsedSince, useNow } from './elapsed'
 import { PLAN_LABEL } from '../../core/features'
 import { getPlanAccent } from '../planDrawerColors'
 import { parseBackendDate } from '../../utils/dateUtils'
-import { HUB_GRID_COLUMNS, type RepositoryTrack, type StageState } from './repositoryTrack'
+import {
+  HUB_GRID_COLUMNS,
+  currentStage,
+  type RepositoryTrack,
+  type StageState,
+} from './repositoryTrack'
 import type { HubRepository } from '../../types/operations'
 import type { HistoryCapability } from '../../types/archives'
 
@@ -225,7 +230,7 @@ export default function RepositoryHubRow({
   const now = useNow(running)
   const name = repository?.repository_name ?? track?.repositoryName ?? ''
   const repositoryId = repository?.repository_id ?? track?.repositoryId ?? null
-  const active = track != null && track.stages.some((s) => s.status !== 'idle')
+  const stage = currentStage(track)
 
   return (
     <Box
@@ -312,6 +317,8 @@ export default function RepositoryHubRow({
           )}
         </Box>
 
+        <CurrentStage stage={stage} now={now} onRetry={onRetry} />
+
         {repository ? (
           <>
             <Box sx={{ minWidth: 0, gridColumn: { xs: '1 / -1', md: 'auto' } }}>
@@ -386,27 +393,13 @@ export default function RepositoryHubRow({
         </Box>
       </Box>
 
-      {/* Nothing is refreshed for an `off` repository, so the four empty
-          stage columns would read as work that failed to start (spec 6.8).
-          A manual one-off run still shows its track, below. */}
-      {repository && (repository.index_mode ?? 'full') === 'off' && !active && (
+      {/* Nothing is refreshed for an `off` repository, so an empty stage
+          cell would read as work that failed to start (spec 6.8). A manual
+          one-off run still shows its stage. */}
+      {repository && (repository.index_mode ?? 'full') === 'off' && !stage && (
         <Typography variant="caption" sx={{ display: 'block', mt: 1.5, color: 'text.secondary' }}>
           {t('operations.background.hub.trackOff')}
         </Typography>
-      )}
-
-      {active && track && (
-        <Box
-          sx={{
-            mt: 1.5,
-            mx: -2.5,
-            px: 2.5,
-            py: 1.5,
-            bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.08 : 0.04),
-          }}
-        >
-          <StageTrack stages={track.stages} now={now} onRetry={onRetry} />
-        </Box>
       )}
     </Box>
   )

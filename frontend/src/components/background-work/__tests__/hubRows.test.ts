@@ -3,11 +3,13 @@ import {
   ATTENTION_FILTERS,
   attentionCounts,
   applyToolbar,
+  DEFAULT_TOOLBAR,
   mergeRows,
+  stageCounts,
   trackIsActive,
   type HubRow,
 } from '../hubRows'
-import type { RepositoryTrack } from '../repositoryTrack'
+import type { RepositoryTrack, StageKey, StageStatus } from '../repositoryTrack'
 import type { HubRepository } from '../../../types/operations'
 
 const repo = (overrides: Partial<HubRepository> = {}): HubRepository => ({
@@ -228,5 +230,52 @@ describe('index mode (spec 6.8)', () => {
     // A manual one-off run is exactly the case (spec 6.8).
     const rows = [row(repo({ index_mode: 'off' }), runningTrack(1, 'nas'))]
     expect(attentionCounts(rows).running).toBe(1)
+  })
+})
+
+const trackIn = (repositoryId: number, key: StageKey, status: StageStatus): RepositoryTrack => ({
+  repositoryId,
+  repositoryName: `repo-${repositoryId}`,
+  foreground: null,
+  stages: [{ key, status, operation: null, reason: null }],
+})
+
+const rowIn = (id: number, key: StageKey, status: StageStatus): HubRow =>
+  row(repo({ repository_id: id, repository_name: `repo-${id}` }), trackIn(id, key, status))
+
+const systemRow = (key: StageKey): HubRow => ({
+  key: 'system-System',
+  repository: null,
+  track: { ...trackIn(0, key, 'running'), repositoryId: null, repositoryName: 'System' },
+})
+
+describe('stage filter and counts', () => {
+  it('filters rows to the stage they are in', () => {
+    const rows = [
+      rowIn(1, 'archives', 'running'),
+      rowIn(2, 'stats', 'waiting'),
+      row(fixtures.fresh),
+    ]
+    const shown = applyToolbar(rows, { ...DEFAULT_TOOLBAR, stage: 'stats' })
+    expect(shown.map((r) => r.repository?.repository_id)).toEqual([2])
+  })
+
+  it('hides the system lane while a stage is selected', () => {
+    const rows = [rowIn(1, 'stats', 'running'), systemRow('stats')]
+    expect(applyToolbar(rows, { ...DEFAULT_TOOLBAR, stage: 'stats' })).toHaveLength(1)
+  })
+
+  it('counts each repository once, in its current stage, without the system lane', () => {
+    const counts = stageCounts([
+      rowIn(1, 'archives', 'running'),
+      rowIn(2, 'archives', 'waiting'),
+      rowIn(3, 'history', 'failed'),
+      rowIn(4, 'stats', 'done'),
+      systemRow('stats'),
+    ])
+    expect(counts.archives).toEqual({ total: 2, running: 1, waiting: 1, failed: 0 })
+    expect(counts.history).toEqual({ total: 1, running: 0, waiting: 0, failed: 1 })
+    expect(counts.stats.total).toBe(0)
+    expect(counts.connect.total).toBe(0)
   })
 })
