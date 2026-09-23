@@ -10,7 +10,6 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database.models import Archive, PruneComparison, Repository
-from app.services.operations.repository_status import pending_removed_ids
 from app.services.prune_preview import (
     lost_size_estimate,
     DryRunFailed,
@@ -94,13 +93,15 @@ def archive_set(
     because SQLite hands a deleted row's id to the next insert. A row is only
     ever first seen when a listing inserts it, so that timestamp moves on
     every replacement."""
-    removed = pending_removed_ids(db, repository.id)
-    q = db.query(
-        func.count(Archive.id), func.max(Archive.id), func.max(Archive.first_seen_at)
-    ).filter(Archive.repository_id == repository.id)
-    if removed:
-        q = q.filter(Archive.id.notin_(removed))
-    count, max_id, seen_at = q.one()
+    count, max_id, seen_at = (
+        db.query(
+            func.count(Archive.id),
+            func.max(Archive.id),
+            func.max(Archive.first_seen_at),
+        )
+        .filter(Archive.repository_id == repository.id)
+        .one()
+    )
     return count or 0, max_id, seen_at
 
 

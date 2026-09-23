@@ -37,12 +37,12 @@ def repo(db):
 def test_chain_table_matches_spec_7_4():
     assert FOLLOWUPS == {
         "import_connect": ("stats", "archive_sync", "history_index"),
-        "backup": ("archive_sync", "history_merge", "history_index", "stats"),
-        "prune": ("archive_sync", "history_merge", "stats"),
-        "delete_archive": ("archive_sync", "history_merge", "stats"),
+        "backup": ("archive_sync", "history_index", "stats"),
+        "prune": ("archive_sync", "stats"),
+        "delete_archive": ("archive_sync", "stats"),
         "compact": ("stats",),
         "check": (),
-        "wipe": ("archive_sync", "history_merge", "stats"),
+        "wipe": ("archive_sync", "stats"),
         "restore": (),
         "restore_check": (),
         "rclone_sync": (),
@@ -50,7 +50,6 @@ def test_chain_table_matches_spec_7_4():
         "stats": (),
         "archive_sync": ("prune_compare",),
         "history_index": (),
-        "history_merge": (),
         "prune_compare": (),
     }
 
@@ -120,18 +119,13 @@ def test_chain_for_rejects_unknown_kind():
 
 @pytest.mark.unit
 def test_chain_for_drops_history_kinds_for_community():
-    from app.services.operations.followups import HISTORY_KINDS
-
-    assert HISTORY_KINDS == {"history_index", "history_merge"}
     assert chain_for("backup", history=False) == [
         "archive_sync",
-        "history_merge",
         "stats",
     ]
     assert chain_for("import_connect", history=False) == ["stats", "archive_sync"]
     assert chain_for("backup") == [
         "archive_sync",
-        "history_merge",
         "history_index",
         "stats",
     ]
@@ -157,28 +151,17 @@ def test_history_enabled_follows_plan(db_session):
 
 
 @pytest.mark.unit
-def test_community_keeps_history_merge_so_removed_archives_are_deleted():
-    """history_merge is the only place an Archive row is deleted, so dropping
-    it on Community would leave every pruned archive in the table forever.
-    Only history_index is plan gated (spec 11.2)."""
+def test_no_chain_carries_a_separate_removal_stage():
+    """archive_sync deletes the archives its listing no longer sees (#1141),
+    so no chain on any plan or mode needs history_merge after it; only
+    history_index is plan gated (spec 11.2)."""
     from app.services.operations.followups import PLAN_GATED_KINDS
 
     assert PLAN_GATED_KINDS == {"history_index"}
-    assert chain_for("prune", history=False) == [
-        "archive_sync",
-        "history_merge",
-        "stats",
-    ]
-    assert chain_for("delete_archive", history=False) == [
-        "archive_sync",
-        "history_merge",
-        "stats",
-    ]
-    assert chain_for("wipe", history=False) == [
-        "archive_sync",
-        "history_merge",
-        "stats",
-    ]
+    for kind in FOLLOWUPS:
+        for history in (True, False):
+            assert "history_merge" not in chain_for(kind, history=history)
+    assert chain_for("prune", history=False) == ["archive_sync", "stats"]
 
 
 @pytest.mark.unit
@@ -192,7 +175,6 @@ def test_enqueue_backup_followups_creates_the_backup_chain(db, repo, monkeypatch
     )
     assert [o.kind for o in ops] == [
         "archive_sync",
-        "history_merge",
         "history_index",
         "stats",
     ]
@@ -222,11 +204,10 @@ def test_enqueue_backup_followups_ignores_a_running_index_run(db, repo, monkeypa
     db.commit()
     assert [o.kind for o in ops] == [
         "archive_sync",
-        "history_merge",
         "history_index",
         "stats",
     ]
-    assert db.query(Operation).filter_by(status="queued").count() == 4
+    assert db.query(Operation).filter_by(status="queued").count() == 3
 
 
 @pytest.mark.unit
@@ -388,7 +369,6 @@ async def test_backup_followup_chain_deletes_removed_archive_and_keeps_survivor(
         session_factory=sessionmaker(bind=db.get_bind()),
         registry={
             "archive_sync": index.run_archive_sync,
-            "history_merge": history.run_history_merge,
             "history_index": history.run_history_index,
             "stats": index.run_stats,
         },
@@ -424,7 +404,6 @@ def test_enqueue_followups_skips_a_chain_already_queued_on_the_repository(
     chain = enqueue_followups(db, backup, depends_on_id=backup.id)
     assert [o.kind for o in chain] == [
         "archive_sync",
-        "history_merge",
         "history_index",
         "stats",
     ]
@@ -444,7 +423,7 @@ def test_enqueue_followups_skips_a_chain_already_queued_on_the_repository(
         assert enqueue_followups(db, step, depends_on_id=step.id) == []
         last = step
 
-    assert db.query(Operation).filter(Operation.trigger == "followup").count() == 4
+    assert db.query(Operation).filter(Operation.trigger == "followup").count() == 3
     # The refresh is the last thing the run does: its head now hangs off
     # the compact, the last stage to finish, and the rest of the chain
     # still hangs off the head.
@@ -516,7 +495,7 @@ def test_enqueue_followups_does_not_trust_a_chain_behind_a_failed_row(
     prune.status = "completed"
     db.commit()
     chain = enqueue_followups(db, prune, depends_on_id=prune.id)
-    assert [o.kind for o in chain] == ["archive_sync", "history_merge", "stats"]
+    assert [o.kind for o in chain] == ["archive_sync", "stats"]
 
 
 @pytest.mark.unit
@@ -535,7 +514,7 @@ def test_enqueue_followups_does_not_trust_a_chain_behind_a_missing_row(
     prune.status = "completed"
     db.commit()
     chain = enqueue_followups(db, prune, depends_on_id=prune.id)
-    assert [o.kind for o in chain] == ["archive_sync", "history_merge", "stats"]
+    assert [o.kind for o in chain] == ["archive_sync", "stats"]
 
 
 @pytest.mark.unit
@@ -552,7 +531,7 @@ def test_enqueue_followups_ignores_a_running_chain(db, repo, monkeypatch):
     prune.status = "completed"
     db.commit()
     chain = enqueue_followups(db, prune, depends_on_id=prune.id)
-    assert [o.kind for o in chain] == ["archive_sync", "history_merge", "stats"]
+    assert [o.kind for o in chain] == ["archive_sync", "stats"]
 
 
 @pytest.mark.unit
@@ -674,7 +653,7 @@ def test_enqueue_backup_followups_omits_history_index_for_an_agent_repository(db
     db.commit()
     load_default_executors()
     ops = enqueue_backup_followups(db, agent.id)
-    assert [o.kind for o in ops] == ["archive_sync", "history_merge", "stats"]
+    assert [o.kind for o in ops] == ["archive_sync", "stats"]
 
 
 @pytest.mark.unit
@@ -704,13 +683,11 @@ def test_chain_for_repository_gives_an_agent_repository_no_history_stage(
 
     assert chain_for_repository(db, "backup", server.id) == [
         "archive_sync",
-        "history_merge",
         "history_index",
         "stats",
     ]
     assert chain_for_repository(db, "backup", agent.id) == [
         "archive_sync",
-        "history_merge",
         "stats",
     ]
     # the mode still applies on top: an `archives` agent repository keeps
@@ -736,7 +713,6 @@ def test_chain_for_repository_gives_an_agent_repository_no_history_stage(
     db.commit()
     assert chain_for_repository(db, "backup", agent.id) == [
         "archive_sync",
-        "history_merge",
         "history_index",
         "stats",
     ]

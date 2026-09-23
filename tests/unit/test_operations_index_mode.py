@@ -6,24 +6,22 @@ from app.services.operations import index_mode as im
 
 
 def test_full_keeps_every_index_kind():
-    assert im.filter_kinds(
-        "full", ["archive_sync", "history_merge", "history_index", "stats"]
-    ) == ["archive_sync", "history_merge", "history_index", "stats"]
+    assert im.filter_kinds("full", ["archive_sync", "history_index", "stats"]) == [
+        "archive_sync",
+        "history_index",
+        "stats",
+    ]
 
 
 def test_archives_drops_only_the_history_kinds():
-    assert im.filter_kinds(
-        "archives", ["archive_sync", "history_merge", "history_index", "stats"]
-    ) == ["archive_sync", "stats"]
+    assert im.filter_kinds("archives", ["archive_sync", "history_index", "stats"]) == [
+        "archive_sync",
+        "stats",
+    ]
 
 
 def test_off_drops_every_index_kind():
-    assert (
-        im.filter_kinds(
-            "off", ["archive_sync", "history_merge", "history_index", "stats"]
-        )
-        == []
-    )
+    assert im.filter_kinds("off", ["archive_sync", "history_index", "stats"]) == []
 
 
 def test_kinds_outside_the_index_category_are_never_dropped():

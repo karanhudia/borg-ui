@@ -487,7 +487,7 @@ class RepositoryWipeService:
         self, db: Session, repository: Repository
     ) -> None:
         # No stats refresh here: spec 7.4 gives wipe the follow-up chain
-        # archive_sync, history_merge, stats, which the runner enqueues when
+        # archive_sync, stats, which the runner enqueues when
         # the operation reaches a success state.
         try:
             from app.services.cache_service import archive_cache

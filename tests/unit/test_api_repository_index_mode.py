@@ -216,9 +216,8 @@ def test_the_catch_up_run_is_not_swallowed_by_queued_work(
         .filter(Operation.repository_id == repo.id)
         .all()
     ]
-    # history_index is plan gated and this install is Community, so the
-    # fold is the stage that proves the full chain, not the narrow one, ran.
-    assert "history_merge" in kinds
+    # the history stage proves the full chain, not the narrow one, ran
+    assert "history_index" in kinds
 
 
 def test_the_cleanup_reruns_when_the_same_mode_is_sent_again(

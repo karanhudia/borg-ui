@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -57,7 +57,8 @@ def _archive(db, repo, name, day, state="indexed", series="nas", truncated=False
     a = Archive(
         repository_id=repo.id,
         borg_id=f"id-{name}",
-        name=name,
+        # a name the listing infers the same series from
+        name=f"{series}-2026-09-{day:02d}T02:00:00",
         series=series,
         start=datetime(2026, 9, day, 2),
         history_state=state,
@@ -82,64 +83,50 @@ def _row(db, archive, path, change, before=None, after=None, count=None):
     db.commit()
 
 
-def _ops(db, repo, removed_ids):
-    parent = Operation(
-        repository_id=repo.id,
-        kind="archive_sync",
-        category="index",
-        status="completed",
-        trigger="reconcile",
-        priority=20,
-        run_id="run",
-        result={
-            "removed_archive_ids": removed_ids,
-            "removed_archive_generations": {
-                str(a.id): a.generation_id
-                for a in db.query(Archive).filter(Archive.id.in_(removed_ids)).all()
-            },
-            "removed_archive_last_seen_at": {
-                str(a.id): a.last_seen_at.isoformat()
-                for a in db.query(Archive).filter(Archive.id.in_(removed_ids)).all()
-            },
-            "removed_archive_borg_ids": {
-                str(a.id): a.borg_id
-                for a in db.query(Archive).filter(Archive.id.in_(removed_ids)).all()
-            },
-        },
-    )
-    db.add(parent)
-    db.commit()
-    child = Operation(
-        repository_id=repo.id,
-        kind="history_merge",
-        category="index",
-        status="running",
-        trigger="reconcile",
-        priority=20,
-        run_id="run",
-        depends_on_id=parent.id,
-    )
-    db.add(child)
-    db.commit()
-    return child
+def _listed(db, repo, removed):
+    """The listing Borg would return: every archive of `repo` except the
+    rows in `removed`."""
+    gone = {a.id for a in removed}
+    return [
+        {"id": a.borg_id, "name": a.name, "start": f"{a.start:%Y-%m-%dT%H:%M:%S}"}
+        for a in db.query(Archive).filter_by(repository_id=repo.id).all()
+        if a.id not in gone
+    ]
 
 
-def _ctx(db, repo, op):
+def _ctx(db, repo):
     return SimpleNamespace(
         db=db,
         repository_id=repo.id,
-        operation_id=op.id,
-        kind="history_merge",
+        operation_id=1,
+        kind="archive_sync",
         params={},
-        operation=op,
         progress=AsyncMock(),
         log=lambda line: None,
         cancelled=lambda: False,
     )
 
 
+async def _sync(db, repo, *removed, monkeypatch):
+    """Run archive_sync on a listing that no longer has `removed`."""
+    monkeypatch.setattr(
+        index_exec,
+        "list_archives_for_repository",
+        AsyncMock(return_value=(True, _listed(db, repo, removed), "UTC")),
+    )
+    monkeypatch.setattr(index_exec, "fill_archive_info", AsyncMock(return_value=0))
+    monkeypatch.setattr(
+        index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
+    )
+    return await index_exec.run_archive_sync(_ctx(db, repo))
+
+
+def _counts(out):
+    return {k: out.result[k] for k in ("folded", "reset", "dropped")}
+
+
 @pytest.mark.unit
-async def test_removed_archive_folds_into_indexed_successor(db, repo):
+async def test_removed_archive_folds_into_indexed_successor(db, repo, monkeypatch):
     r = _archive(db, repo, "r", 2, truncated=True)
     s = _archive(db, repo, "s", 3)
     _row(db, r, "a", "added", after=3)
@@ -149,11 +136,12 @@ async def test_removed_archive_folds_into_indexed_successor(db, repo):
     _row(db, s, "b", "modified", before=2, after=9)
     _row(db, s, "c", "added", after=7)
     _row(db, s, "d", "added", after=1)
-    op = _ops(db, repo, [r.id])
-    out = await history.run_history_merge(_ctx(db, repo, op))
+    r_id = r.id
+    out = await _sync(db, repo, r, monkeypatch=monkeypatch)
     assert out.status == "completed"
-    assert out.result == {"merged": 1, "folded": 1, "reset": 0, "dropped": 0}
-    assert db.get(Archive, r.id) is None
+    assert _counts(out) == {"folded": 1, "reset": 0, "dropped": 0}
+    assert out.result["removed_archive_ids"] == [r_id]
+    assert db.get(Archive, r_id) is None
     rows = {x.path: x for x in db.query(ArchiveChange).filter_by(archive_id=s.id)}
     assert set(rows) == {"b", "c", "d"}
     assert (rows["b"].size_before, rows["b"].size_after) == (1, 9)
@@ -164,44 +152,48 @@ async def test_removed_archive_folds_into_indexed_successor(db, repo):
 
 
 @pytest.mark.unit
-async def test_fold_sums_summary_counts(db, repo):
+async def test_fold_sums_summary_counts(db, repo, monkeypatch):
     r = _archive(db, repo, "r", 2)
     s = _archive(db, repo, "s", 3)
     _row(db, r, "x/y/z", "summary", count=10)
     _row(db, s, "x/y/z", "summary", count=5)
-    op = _ops(db, repo, [r.id])
-    await history.run_history_merge(_ctx(db, repo, op))
+    await _sync(db, repo, r, monkeypatch=monkeypatch)
     row = db.query(ArchiveChange).filter_by(archive_id=s.id).one()
     assert row.change == "summary" and row.summary_count == 15
 
 
 @pytest.mark.unit
-async def test_unindexed_removed_archive_resets_indexed_successor(db, repo):
+async def test_unindexed_removed_archive_resets_indexed_successor(
+    db, repo, monkeypatch
+):
     r = _archive(db, repo, "r", 2, state="pending")
     s = _archive(db, repo, "s", 3)
     _row(db, s, "a", "added", after=1)
-    op = _ops(db, repo, [r.id])
-    out = await history.run_history_merge(_ctx(db, repo, op))
+    r_id = r.id
+    out = await _sync(db, repo, r, monkeypatch=monkeypatch)
     assert out.result["reset"] == 1
     db.refresh(s)
     assert s.history_state == "pending" and s.history_rows is None
     assert db.query(ArchiveChange).filter_by(archive_id=s.id).count() == 0
-    assert db.get(Archive, r.id) is None
+    assert db.get(Archive, r_id) is None
 
 
 @pytest.mark.unit
-async def test_reset_successor_of_an_agent_repository_is_skipped_not_pending(db, repo):
-    """No history run comes for an agent's repository on any plan, so a
-    successor that loses its base takes the state the listing writes there;
-    `pending` would read as "not yet" for good."""
+async def test_reset_successor_of_an_agent_repository_is_skipped_not_pending(
+    db, repo, monkeypatch
+):
+    """No history run comes for an agent's repository whose agent cannot
+    produce the change listing, so a successor that loses its base takes the
+    state the listing writes there; `pending` would read as "not yet" for
+    good."""
     repo.executor_type = "agent"
     repo.execution_target = "agent"
     db.commit()
     r = _archive(db, repo, "r", 2, state="skipped")
     s = _archive(db, repo, "s", 3)
     _row(db, s, "a", "added", after=1)
-    op = _ops(db, repo, [r.id])
-    out = await history.run_history_merge(_ctx(db, repo, op))
+    monkeypatch.setattr(index_exec, "archive_end_resolvable", lambda db, repo: True)
+    out = await _sync(db, repo, r, monkeypatch=monkeypatch)
     assert out.result["reset"] == 1
     db.refresh(s)
     assert s.history_state == "skipped" and s.history_rows is None
@@ -209,7 +201,9 @@ async def test_reset_successor_of_an_agent_repository_is_skipped_not_pending(db,
 
 
 @pytest.mark.unit
-async def test_reset_successor_of_a_capable_agent_repository_is_pending(db, repo):
+async def test_reset_successor_of_a_capable_agent_repository_is_pending(
+    db, repo, monkeypatch
+):
     """An agent that produces the change listing gets its history run like
     any repository, so a successor that loses its base waits for it."""
     repo.executor_type = "agent"
@@ -218,37 +212,36 @@ async def test_reset_successor_of_a_capable_agent_repository_is_pending(db, repo
     r = _archive(db, repo, "r", 2, state="skipped")
     s = _archive(db, repo, "s", 3)
     _row(db, s, "a", "added", after=1)
-    op = _ops(db, repo, [r.id])
-    with patch.object(history, "agent_supports_job", return_value=True):
-        out = await history.run_history_merge(_ctx(db, repo, op))
+    monkeypatch.setattr(index_exec, "archive_end_resolvable", lambda db, repo: True)
+    monkeypatch.setattr(index_exec, "agent_supports_job", lambda *a, **k: True)
+    out = await _sync(db, repo, r, monkeypatch=monkeypatch)
     assert out.result["reset"] == 1
     db.refresh(s)
     assert s.history_state == "pending" and s.history_rows is None
 
 
 @pytest.mark.unit
-async def test_pending_successor_or_no_successor_just_drops(db, repo):
+async def test_pending_successor_or_no_successor_just_drops(db, repo, monkeypatch):
     r1 = _archive(db, repo, "r1", 1)
     _row(db, r1, "a", "added", after=1)
     s = _archive(db, repo, "s", 2, state="pending")
     r2 = _archive(db, repo, "newest", 5, series="other")
-    op = _ops(db, repo, [r1.id, r2.id])
-    out = await history.run_history_merge(_ctx(db, repo, op))
-    assert out.result["dropped"] == 2 and out.result["merged"] == 2
-    assert db.get(Archive, r1.id) is None and db.get(Archive, r2.id) is None
+    ids = (r1.id, r2.id)
+    out = await _sync(db, repo, r1, r2, monkeypatch=monkeypatch)
+    assert _counts(out) == {"folded": 0, "reset": 0, "dropped": 2}
+    assert all(db.get(Archive, i) is None for i in ids)
     assert db.query(ArchiveChange).count() == 0
     db.refresh(s)
     assert s.history_state == "pending"
 
 
 @pytest.mark.unit
-async def test_successor_is_found_within_the_same_series_only(db, repo):
+async def test_successor_is_found_within_the_same_series_only(db, repo, monkeypatch):
     r = _archive(db, repo, "r", 2)
     other = _archive(db, repo, "o", 3, series="other")
     _row(db, r, "a", "added", after=1)
     _row(db, other, "b", "added", after=1)
-    op = _ops(db, repo, [r.id])
-    out = await history.run_history_merge(_ctx(db, repo, op))
+    out = await _sync(db, repo, r, monkeypatch=monkeypatch)
     assert out.result["dropped"] == 1
     assert {x.path for x in db.query(ArchiveChange).filter_by(archive_id=other.id)} == {
         "b"
@@ -256,69 +249,15 @@ async def test_successor_is_found_within_the_same_series_only(db, repo):
 
 
 @pytest.mark.unit
-async def test_ignores_other_repositories_and_missing_ids(db, repo):
+async def test_other_repositories_are_untouched(db, repo, monkeypatch):
     other = Repository(name="o", path="/tmp/o", encryption="none", compression="lz4")
     db.add(other)
     db.commit()
-    foreign = Archive(
-        repository_id=other.id,
-        borg_id="f",
-        name="f",
-        series="d",
-        start=datetime(2026, 9, 1),
-    )
-    db.add(foreign)
-    db.commit()
-    op = _ops(db, repo, [foreign.id, 9999])
-    out = await history.run_history_merge(_ctx(db, repo, op))
-    assert out.result["merged"] == 0
+    foreign = _archive(db, other, "foreign", 2)
+    r = _archive(db, repo, "r", 2)
+    out = await _sync(db, repo, r, monkeypatch=monkeypatch)
+    assert out.result["dropped"] == 1
     assert db.get(Archive, foreign.id) is not None
-
-
-@pytest.mark.unit
-async def test_no_dependency_result_merges_nothing(db, repo):
-    op = Operation(
-        repository_id=repo.id,
-        kind="history_merge",
-        category="index",
-        status="running",
-        trigger="manual",
-        priority=0,
-        run_id="x",
-    )
-    db.add(op)
-    db.commit()
-    out = await history.run_history_merge(_ctx(db, repo, op))
-    assert out.result["merged"] == 0
-
-
-@pytest.mark.unit
-async def test_dependency_that_is_not_archive_sync_merges_nothing(db, repo):
-    parent = Operation(
-        repository_id=repo.id,
-        kind="stats",
-        category="index",
-        status="completed",
-        trigger="manual",
-        priority=0,
-        run_id="x",
-        result={"removed_archive_ids": [1]},
-    )
-    db.add(parent)
-    db.commit()
-    child = Operation(
-        repository_id=repo.id,
-        kind="history_merge",
-        category="index",
-        status="running",
-        trigger="manual",
-        priority=0,
-        run_id="x",
-        depends_on_id=parent.id,
-    )
-    db.add(child)
-    db.commit()
-    assert history.removed_archive_targets_from_dependency(db, child) == []
 
 
 @pytest.mark.unit
@@ -327,7 +266,6 @@ async def test_merge_is_atomic_per_archive(db, repo):
     s = _archive(db, repo, "s", 3)
     _row(db, r, "a", "added", after=3)
     _row(db, s, "b", "added", after=1)
-    _ops(db, repo, [r.id])
     with patch.object(
         db, "bulk_insert_mappings", side_effect=RuntimeError("disk full")
     ):
@@ -335,19 +273,6 @@ async def test_merge_is_atomic_per_archive(db, repo):
             history.merge_removed_archive(db, r)
     assert db.get(Archive, r.id) is not None
     assert {x.path for x in db.query(ArchiveChange).filter_by(archive_id=s.id)} == {"b"}
-
-
-@pytest.mark.unit
-async def test_progress_and_log_name_the_removed_archive(db, repo):
-    r = _archive(db, repo, "gone", 2)
-    _ops(db, repo, [r.id])
-    op = _ops(db, repo, [r.id])
-    ctx = _ctx(db, repo, op)
-    logged = []
-    ctx.log = logged.append
-    await history.run_history_merge(ctx)
-    assert logged == ["gone: dropped"]
-    assert ctx.progress.await_args_list[-1].kwargs["message"] == "gone"
 
 
 @pytest.mark.unit
@@ -362,9 +287,8 @@ async def test_fold_result_is_capped_like_an_indexed_archive(db, repo, monkeypat
         _row(db, r, f"old/dir/f{i}", "added", after=1)
     for i in range(3):
         _row(db, s, f"new/dir/f{i}", "added", after=1)
-    op = _ops(db, repo, [r.id])
 
-    out = await history.run_history_merge(_ctx(db, repo, op))
+    out = await _sync(db, repo, r, monkeypatch=monkeypatch)
 
     assert out.result["folded"] == 1
     rows = db.query(ArchiveChange).filter_by(archive_id=s.id).all()
@@ -377,253 +301,73 @@ async def test_fold_result_is_capped_like_an_indexed_archive(db, repo, monkeypat
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("interrupt_after_delete", [False, True])
-async def test_replay_preserves_new_archive_reusing_deleted_id(
-    db, repo, interrupt_after_delete
+@pytest.mark.parametrize("mode", ["full", "archives"])
+async def test_a_removed_archive_is_deleted_by_the_listing_in_every_mode(
+    db, repo, monkeypatch, mode
 ):
-    removed = _archive(db, repo, "removed", 1)
-    removed_id = removed.id
-    op = _ops(db, repo, [removed_id])
-    operation_id = op.id
-    repository_id = repo.id
-    ctx = _ctx(db, repo, op)
-    if interrupt_after_delete:
-        ctx.progress.side_effect = RuntimeError("progress unavailable")
-        with pytest.raises(RuntimeError, match="progress unavailable"):
-            await history.run_history_merge(ctx)
-    else:
-        await history.run_history_merge(ctx)
-    # The runner's terminal write did not commit. Only executor checkpoints
-    # survive a new session, as when an abandoned operation is requeued.
-    db.rollback()
-    db.expunge_all()
-    op = db.get(Operation, operation_id)
-    repo = db.get(Repository, repository_id)
-    replacement = _archive(db, repo, "replacement", 2)
-    assert replacement.id == removed_id
-    _row(db, replacement, "keep", "added", after=9)
-
-    out = await history.run_history_merge(_ctx(db, repo, op))
-
-    assert db.get(Archive, removed_id) is not None
-    assert db.query(ArchiveChange).filter_by(archive_id=removed_id).one().path == "keep"
-    assert out.result == {"merged": 1, "folded": 0, "reset": 0, "dropped": 1}
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize("foreign_target", [False, True])
-async def test_replay_does_not_revisit_previously_skipped_ids(db, repo, foreign_target):
-    if foreign_target:
-        other = Repository(name="other", path="/tmp/other", encryption="none")
-        db.add(other)
-        db.commit()
-        target = _archive(db, other, "foreign", 1)
-        target_id = target.id
-    else:
-        target_id = 1
-    op = _ops(db, repo, [target_id])
-    await history.run_history_merge(_ctx(db, repo, op))
-    if foreign_target:
-        db.delete(target)
-        db.commit()
-    replacement = _archive(db, repo, "replacement", 2)
-    assert replacement.id == target_id
-
-    out = await history.run_history_merge(_ctx(db, repo, op))
-
-    assert db.get(Archive, target_id) is not None
-    assert out.result["merged"] == 0
-
-
-@pytest.mark.unit
-async def test_failed_merge_commit_does_not_checkpoint_uncommitted_deletion(db, repo):
-    removed = _archive(db, repo, "removed", 1)
-    removed_id = removed.id
-    op = _ops(db, repo, [removed_id])
-    with patch.object(db, "commit", side_effect=RuntimeError("disk full")):
-        with pytest.raises(RuntimeError, match="disk full"):
-            await history.run_history_merge(_ctx(db, repo, op))
-    assert db.get(Archive, removed_id) is not None
-
-    out = await history.run_history_merge(_ctx(db, repo, op))
-
-    assert db.get(Archive, removed_id) is None
-    assert out.result == {"merged": 1, "folded": 0, "reset": 0, "dropped": 1}
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize("partially_merged", [False, True])
-async def test_overtaking_chain_cannot_make_merge_delete_reused_unvisited_id(
-    db, repo, partially_merged
-):
-    first = _archive(db, repo, "first", 1, series="first")
-    second = _archive(db, repo, "second", 2, series="second")
-    removed_ids = [first.id, second.id]
-    delayed = _ops(db, repo, removed_ids)
-    delayed_id = delayed.id
-    repository_id = repo.id
-    if partially_merged:
-        ctx = _ctx(db, repo, delayed)
-        ctx.progress.side_effect = RuntimeError("progress unavailable")
-        with pytest.raises(RuntimeError, match="progress unavailable"):
-            await history.run_history_merge(ctx)
-    # Another chain runs before this merge first starts, or during its retry
-    # backoff. Its listing rediscovers and its merge deletes the remaining rows.
-    _, remaining = index_exec.apply_listing(db, repo, [], timezone_name="UTC")
-    overtaking = _ops(db, repo, remaining)
-    await history.run_history_merge(_ctx(db, repo, overtaking))
-    first_new = _archive(db, repo, "first-new", 3)
-    second_new = _archive(db, repo, "second-new", 4)
-    assert [first_new.id, second_new.id] == removed_ids
-    _row(db, second_new, "keep", "added", after=9)
-    db.rollback()
-    db.expunge_all()
-    repo = db.get(Repository, repository_id)
-    delayed = db.get(Operation, delayed_id)
-
-    out = await history.run_history_merge(_ctx(db, repo, delayed))
-
-    assert [a.borg_id for a in db.query(Archive).order_by(Archive.id)] == [
-        "id-first-new",
-        "id-second-new",
-    ]
-    assert db.query(ArchiveChange).one().path == "keep"
-    assert out.result["merged"] == int(partially_merged)
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize(
-    "missing_identity",
-    [
-        "removed_archive_borg_ids",
-        "removed_archive_last_seen_at",
-        "removed_archive_generations",
-    ],
-)
-async def test_legacy_targets_wait_for_a_listing_with_complete_identities(
-    db, repo, missing_identity
-):
-    removed = _archive(db, repo, "removed", 1)
-    removed_id = removed.id
-    legacy = _ops(db, repo, [removed_id])
-    parent = db.get(Operation, legacy.depends_on_id)
-    parent.result = {k: v for k, v in parent.result.items() if k != missing_identity}
+    """#1141: the `archives` index mode runs no history stage, and the row of
+    a removed archive stayed in the table for good. The listing that finds
+    the removal deletes it, whatever the mode."""
+    repo.index_mode = mode
     db.commit()
-
-    out = await history.run_history_merge(_ctx(db, repo, legacy))
-
-    assert out.result["merged"] == 0
-    assert db.get(Archive, removed_id) is not None
-    _, rediscovered = index_exec.apply_listing(db, repo, [], timezone_name="UTC")
-    assert rediscovered == [removed_id]
-    followup = _ops(db, repo, rediscovered)
-    out = await history.run_history_merge(_ctx(db, repo, followup))
-    assert out.result["merged"] == 1
-    assert db.get(Archive, removed_id) is None
+    keep = _archive(db, repo, "keep", 3, state="pending")
+    gone = _archive(db, repo, "gone", 2, state="pending")
+    gone_id = gone.id
+    await _sync(db, repo, gone, monkeypatch=monkeypatch)
+    assert db.get(Archive, gone_id) is None
+    db.refresh(repo)
+    assert repo.archive_count == 1
+    assert [a.id for a in db.query(Archive).all()] == [keep.id]
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("partially_merged", [False, True])
-@pytest.mark.parametrize("clock_delta", [-1, 0, 1])
-async def test_delayed_merge_preserves_rediscovered_archive(
-    db, repo, monkeypatch, partially_merged, clock_delta
+async def test_rows_left_by_an_earlier_listing_are_deleted_by_the_next(
+    db, repo, monkeypatch
 ):
-    first = _archive(db, repo, "first", 1, series="first")
-    revived = _archive(db, repo, "revived", 2, series="revived")
-    revived_id = revived.id
-    last_seen = datetime(2026, 9, 10, 12)
-    revived.last_seen_at = last_seen
-    db.commit()
-    _row(db, revived, "keep", "added", after=9)
-    delayed = _ops(db, repo, [first.id, revived_id])
-    if partially_merged:
-        ctx = _ctx(db, repo, delayed)
-        ctx.progress.side_effect = RuntimeError("progress unavailable")
-        with pytest.raises(RuntimeError, match="progress unavailable"):
-            await history.run_history_merge(ctx)
-
-    # A later successful listing sees the same archive in the same DB row.
-    # Its observation must invalidate deletion even if wall time is unchanged
-    # or moves backward, and even when the merge is resuming after a failure.
-    monkeypatch.setattr(
-        index_exec, "utc_now", lambda: last_seen + timedelta(seconds=clock_delta)
-    )
-    index_exec.apply_listing(
-        db,
-        repo,
-        [
-            {
-                "id": revived.borg_id,
-                "name": "revived",
-                "start": revived.start.isoformat(),
-            }
-        ],
-        timezone_name="UTC",
-    )
-    db.expire_all()
-
-    for _ in range(2):
-        out = await history.run_history_merge(_ctx(db, repo, delayed))
-        assert db.get(Archive, revived_id) is not None
-        assert (
-            db.query(ArchiveChange).filter_by(archive_id=revived_id).one().path
-            == "keep"
+    """Rows the old behaviour left behind (every `archives` repository, or a
+    listing that died before its merge) are simply absent from the next
+    listing, which deletes them."""
+    keep = _archive(db, repo, "keep", 5, state="pending")
+    lingering = [_archive(db, repo, f"old{d}", d, state="pending") for d in (1, 2)]
+    ids = [a.id for a in lingering]
+    # an earlier listing already reported them removed and left them in place
+    db.add(
+        Operation(
+            repository_id=repo.id,
+            kind="archive_sync",
+            category="index",
+            status="completed",
+            trigger="reconcile",
+            priority=20,
+            run_id="old",
+            completed_at=datetime(2026, 9, 6),
+            result={"removed_archive_ids": ids},
         )
-        assert out.result["merged"] == 1
-
-    # A fresh absence observation may still legitimately remove it later.
-    _, absent = index_exec.apply_listing(db, repo, [], timezone_name="UTC")
-    followup = _ops(db, repo, absent)
-    out = await history.run_history_merge(_ctx(db, repo, followup))
-    assert out.result["merged"] == 1
-    assert db.get(Archive, revived_id) is None
+    )
+    db.commit()
+    out = await _sync(db, repo, *lingering, monkeypatch=monkeypatch)
+    assert sorted(out.result["removed_archive_ids"]) == sorted(ids)
+    assert [a.id for a in db.query(Archive).all()] == [keep.id]
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("partially_merged", [False, True])
-async def test_delayed_merge_preserves_recreated_archive_with_identical_timestamps(
-    db, repo, monkeypatch, partially_merged
-):
-    first = _archive(db, repo, "first", 1, series="first")
-    old = _archive(db, repo, "recreated", 2, series="recreated")
-    old_id = old.id
-    captured_time = datetime(2026, 9, 12, 12)
-    old.last_seen_at = captured_time
-    db.commit()
-    delayed = _ops(db, repo, [first.id, old_id])
-    if partially_merged:
-        ctx = _ctx(db, repo, delayed)
-        ctx.progress.side_effect = RuntimeError("progress unavailable")
-        with pytest.raises(RuntimeError, match="progress unavailable"):
-            await history.run_history_merge(ctx)
-
-    _, absent = index_exec.apply_listing(db, repo, [], timezone_name="UTC")
-    overtaking = _ops(db, repo, absent)
-    await history.run_history_merge(_ctx(db, repo, overtaking))
-    monkeypatch.setattr(index_exec, "utc_now", lambda: captured_time)
-    index_exec.apply_listing(
-        db,
-        repo,
-        [
-            {"id": "id-first-new", "name": "first-new", "start": "2026-09-01T02:00:00"},
-            {
-                "id": "id-recreated",
-                "name": "recreated",
-                "start": "2026-09-02T02:00:00",
-                "comment": "new metadata",
-            },
-        ],
-        timezone_name="UTC",
+async def test_a_history_merge_queued_before_the_upgrade_is_skipped(db, repo):
+    """history_merge left the chains; a row queued by an older version
+    finishes `skipped`, which frees its dependents, and the next listing
+    deletes whatever it would have."""
+    op = Operation(
+        repository_id=repo.id,
+        kind="history_merge",
+        category="index",
+        status="running",
+        trigger="followup",
+        priority=10,
+        run_id="old",
     )
-    replacement = db.query(Archive).filter_by(borg_id="id-recreated").one()
-    assert replacement.id == old_id
-    assert replacement.last_seen_at == captured_time
-    _row(db, replacement, "keep", "added", after=9)
-    db.expire_all()
-
-    for _ in range(2):
-        await history.run_history_merge(_ctx(db, repo, delayed))
-        replacement = db.get(Archive, old_id)
-        assert replacement is not None
-        assert replacement.comment == "new metadata"
-        assert db.query(ArchiveChange).filter_by(archive_id=old_id).one().path == "keep"
+    db.add(op)
+    db.commit()
+    out = await history.run_history_merge(
+        SimpleNamespace(db=db, repository_id=repo.id, operation=op)
+    )
+    assert out.status == "skipped"
+    assert out.skip_reason == "merged_by_archive_sync"

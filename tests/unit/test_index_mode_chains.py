@@ -10,7 +10,7 @@ from app.services.operations import reconcile
 from app.services.operations.followups import chain_for, chain_for_repository
 
 
-ALL_KINDS = {"stats", "archive_sync", "history_index", "history_merge"}
+ALL_KINDS = {"stats", "archive_sync", "history_index"}
 
 
 @pytest.fixture(autouse=True)
@@ -51,12 +51,7 @@ def _repository(db, mode, name=None):
 
 
 def test_chain_for_full_is_unchanged():
-    assert chain_for("backup") == [
-        "archive_sync",
-        "history_merge",
-        "history_index",
-        "stats",
-    ]
+    assert chain_for("backup") == ["archive_sync", "history_index", "stats"]
 
 
 def test_chain_for_archives_keeps_the_listing_and_the_size():
@@ -85,7 +80,6 @@ def test_chain_for_repository_with_no_repository_is_the_default(db):
 def test_reconcile_kinds_drop_history_in_archives_mode(db):
     kinds = reconcile.reconcile_kinds(db, mode="archives")
     assert "history_index" not in kinds
-    assert "history_merge" not in kinds
     assert "archive_sync" in kinds
 
 

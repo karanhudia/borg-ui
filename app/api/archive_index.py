@@ -46,10 +46,7 @@ from app.services.operations.index_mode import allows as mode_allows
 from app.services.operations.index_mode import filter_kinds
 from app.services.operations.index_mode import mode_of as index_mode_of
 from app.services.operations.reconcile import RECONCILE_CHAIN, enqueue_reconcile_run
-from app.services.operations.repository_status import (
-    pending_removed_ids,
-    repository_status,
-)
+from app.services.operations.repository_status import repository_status
 from app.services.operations.series import (
     crons_for_repository,
     retention_days_for_repository,
@@ -390,23 +387,16 @@ async def archives_growth(
     fail validation.
     """
     repository = _repo(db, current_user, repo_id)
-    # Rows the newest listing reported removed linger until history_merge
-    # deletes them (never in the `archives` index mode); they are gone from
-    # the repository and must not add to the footprint.
-    removed = pending_removed_ids(db, repository.id)
-    q = _archives_query(db, repository, series, None, None)
-    if removed:
-        q = q.filter(Archive.id.notin_(removed))
-    rows = q.order_by(Archive.start.asc(), Archive.id.asc()).all()
+    rows = (
+        _archives_query(db, repository, series, None, None)
+        .order_by(Archive.start.asc(), Archive.id.asc())
+        .all()
+    )
     # Every surviving archive bounds a size sample's window, even the ones
     # this curve does not plot (unmeasured, or another series).
     boundary_q = db.query(Archive.start).filter(Archive.repository_id == repository.id)
-    if removed:
-        boundary_q = boundary_q.filter(Archive.id.notin_(removed))
     boundaries = [s for (s,) in boundary_q.order_by(Archive.start.asc()).all()]
     series_q = db.query(Archive.series).filter(Archive.repository_id == repository.id)
-    if removed:
-        series_q = series_q.filter(Archive.id.notin_(removed))
     all_series = [
         s for (s,) in series_q.distinct().order_by(Archive.series.asc()).all()
     ]
@@ -658,8 +648,10 @@ async def repository_status_route(
 # Kinds that write `archive_changes` rows. A run in flight took its archive
 # list, its excludes and its row cap before the rebuild, and goes on writing
 # rows (and marking archives `indexed`) after the rebuild deleted them, so a
-# `from = history` rebuild has to stop it first (#1079).
-HISTORY_WRITE_KINDS = ("history_index", "history_merge")
+# `from = history` rebuild has to stop it first (#1079). archive_sync's fold
+# of a removed archive also writes rows, but reads the states it folds in the
+# same synchronous step, so a rebuild before it leaves nothing stale to write.
+HISTORY_WRITE_KINDS = ("history_index",)
 # Cancellation is cooperative: the executor sees the flag between two lines
 # of `borg diff`, and a diff of two large archives can be silent for a long
 # time (the reason `history_index` is not cancellable from the UI either).
@@ -763,7 +755,7 @@ async def rebuild(
     if body.from_stage == "archives":
         for a in archives:
             a.original_size = None
-        kinds = ["archive_sync", "history_merge", "history_index", "stats"]
+        kinds = ["archive_sync", "history_index", "stats"]
     elif body.from_stage == "history":
         ids = [a.id for a in archives]
         if ids:
@@ -820,9 +812,8 @@ async def resync(
 ):
     """Bring the stored archive list back in line with the repository after
     work that removed archives (delete, prune, wipe). Unlike /rebuild this
-    invalidates nothing: archive_sync reconciles the list, history_merge
-    folds the rows of archives that have gone, and stats refreshes the
-    totals. A run already in flight is reused rather than duplicated.
+    invalidates nothing: archive_sync reconciles the list and folds the rows
+    of archives that have gone, and stats refreshes the totals. A run already in flight is reused rather than duplicated.
 
     An `off` repository is listed once here and then goes quiet again, and a
     mode that excludes file history keeps excluding it (spec 6.8)."""

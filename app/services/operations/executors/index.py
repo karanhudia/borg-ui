@@ -6,7 +6,6 @@ import json
 import re
 from datetime import timedelta
 from typing import Iterable, Optional, Sequence
-from uuid import uuid4
 
 import structlog
 from fastapi import HTTPException, status
@@ -103,18 +102,14 @@ def apply_listing(
 ) -> tuple[list[Archive], list[int]]:
     """Upsert archives rows from a listing. Returns (new_rows, removed_ids).
 
-    Rows missing from the listing are reported, never deleted here; the
-    history_merge executor (phase 2) consumes and deletes them.
+    Rows missing from the listing are reported, never deleted here:
+    archive_sync folds and deletes them under the metadata lane, and the
+    info dialog's listing leaves them for the next archive_sync.
     """
     existing = {
         a.borg_id: a
         for a in db.query(Archive).filter(Archive.repository_id == repository.id).all()
     }
-    # Initialize migrated rows, including absent targets a fresh merge will
-    # consume. Never replace an existing row's recreation identity.
-    for archive in existing.values():
-        if archive.generation_id is None:
-            archive.generation_id = str(uuid4())
     seen: set[str] = set()
     new_rows: list[Archive] = []
     now = utc_now()
@@ -147,8 +142,9 @@ def apply_listing(
                 if key == "series" and value != row.series:
                     row.history_state = "pending"
                 setattr(row, key, value)
-        # This also identifies the observation used by a delayed merge.
-        # Always advance it, including when the wall clock moves backward.
+        # Every row one listing saw shares its newest stamp, which is how
+        # readers tell them from rows it did not see: always advance it,
+        # including when the wall clock moves backward.
         row.last_seen_at = (
             max(now, row.last_seen_at + timedelta(microseconds=1))
             if row.last_seen_at is not None
@@ -165,8 +161,8 @@ def write_repository_archive_columns(
     db: Session, repository: Repository, *, exclude_ids: Iterable[int] = ()
 ) -> None:
     """Derive archive_count and last_backup from the archives table (spec
-    6.4). `exclude_ids` are rows reported removed that history_merge has
-    not deleted yet."""
+    6.4). `exclude_ids` are rows a listing reported removed and left in
+    place (the info dialog's listing; archive_sync deletes its own)."""
     excluded = set(exclude_ids)
     rows = [
         a
@@ -294,14 +290,9 @@ def archives_needing_info(
     *,
     limit: int,
     include_missing_end: bool = False,
-    exclude_ids: Iterable[int] = (),
 ) -> list[Archive]:
     """Archives whose `borg info` stats are missing or stale: rows without
     sizes first, then stale rows, each oldest first.
-
-    `exclude_ids` are the rows the listing reported removed: they linger
-    until the merge deletes them (never, in the `archives` mode) and a
-    `borg info` on them would fail and waste a slot.
 
     Not just the rows this run created: a repository imported with more
     archives than `INDEX_ARCHIVE_INFO_PER_RUN` fills the oldest few now and
@@ -316,10 +307,10 @@ def archives_needing_info(
     if limit <= 0:
         return []
 
-    def _select(predicate, exclude_ids: set[int], n: int) -> list[Archive]:
+    def _select(predicate, picked: set[int], n: int) -> list[Archive]:
         q = db.query(Archive).filter(Archive.repository_id == repository.id, predicate)
-        if exclude_ids:
-            q = q.filter(Archive.id.notin_(exclude_ids))
+        if picked:
+            q = q.filter(Archive.id.notin_(picked))
         return q.order_by(Archive.start.asc()).limit(n).all()
 
     # NULL is "never measured" and "stale" alike (spec 4.1): a listing that
@@ -328,24 +319,22 @@ def archives_needing_info(
     # Rows without sizes first: a new archive is the newest row, and behind
     # more stale survivors than the cap holds it would never be reached
     # while every listing reports a removal.
-    removed = set(exclude_ids)
     unmeasured = Archive.stats_measured_at.is_(None)
-    rows = _select(and_(unmeasured, Archive.original_size.is_(None)), removed, limit)
+    rows = _select(and_(unmeasured, Archive.original_size.is_(None)), set(), limit)
     spare = limit - len(rows)
     if spare > 0:
-        rows += _select(unmeasured, removed | {a.id for a in rows}, spare)
+        rows += _select(unmeasured, {a.id for a in rows}, spare)
     spare = limit - len(rows)
     if include_missing_end and spare > 0:
-        rows += _select(Archive.end.is_(None), removed | {a.id for a in rows}, spare)
+        rows += _select(Archive.end.is_(None), {a.id for a in rows}, spare)
     return rows
 
 
 def _neighbours_of_removed(
-    db: Session, repository: Repository, removed_ids: set[int], gone_ids: set[int]
+    db: Session, repository: Repository, removed_ids: set[int]
 ) -> set[int]:
     """The surviving archive right before and right after each removed one in
-    its series: the rows whose deduplicated_size a removal changes. `gone_ids`
-    is every row the listing reports removed, lingering ones included.
+    its series: the rows whose deduplicated_size a removal changes.
 
     Staling every survivor instead re-measured the whole repository after
     each prune, and the next prune undid it before the pass finished (#1137).
@@ -362,7 +351,7 @@ def _neighbours_of_removed(
         survivors = db.query(Archive.id).filter(
             Archive.repository_id == repository.id,
             Archive.series == series,
-            Archive.id.notin_(gone_ids),
+            Archive.id.notin_(removed_ids),
         )
         # (start, id) is a total order: an equal start must not hide a row
         before = or_(
@@ -677,54 +666,46 @@ async def run_archive_sync(ctx) -> Outcome:
         if not ok:
             # An empty list from a failed borg call is not an empty
             # repository. Writing it would zero archive_count, clear
-            # last_backup, and report every archive as removed - which
-            # history_merge would then act on.
+            # last_backup, and report every archive as removed, which the
+            # fold below would then delete.
             return Outcome(status="failed", error_message="listing archives failed")
         new_rows, removed_ids = apply_listing(
             db, repository, entries, timezone_name=timezone_name
         )
-        # Capture identities while this sync still owns the metadata lane.
-        # A delayed merge must not delete a new archive that reuses an ID
-        # after another chain has already removed the original archive.
-        removed_id_set = set(removed_ids)
-        removed_rows = [
-            row
-            for row in db.query(
-                Archive.id, Archive.borg_id, Archive.last_seen_at, Archive.generation_id
-            )
-            .filter(Archive.repository_id == repository.id)
-            .all()
-            if row.id in removed_id_set
-        ]
-        removed_borg_ids = {str(row.id): row.borg_id for row in removed_rows}
-        removed_generations = {str(row.id): row.generation_id for row in removed_rows}
-        removed_last_seen_at = {
-            str(row.id): row.last_seen_at.isoformat() for row in removed_rows
-        }
-        # Rows reported removed stay in the table until history_merge deletes
-        # them (never, in the `archives` mode), so a lingering row is
-        # reported on every listing; only a removal the newest listing on
-        # record did not report is news.
-        from app.services.operations.repository_status import pending_removed_ids
-
-        newly_removed = removed_id_set - pending_removed_ids(db, repository.id)
-        if newly_removed and (repository.borg_version or 1) != 2:
+        if removed_ids and (repository.borg_version or 1) != 2:
             # deduplicated_size is relative to the archives that exist (spec
             # 4.1), so a removal stales the survivors it shared chunks with.
             # Clearing the date hands them to archives_needing_info below,
             # under the same per-run cap as a first fill. Borg 2 reports no
             # deduplicated_size, so there is nothing to re-measure (#1137).
-            stale_ids = _neighbours_of_removed(
-                db, repository, newly_removed, removed_id_set
-            )
+            # Before the fold: the neighbours are found from the removed rows.
+            stale_ids = _neighbours_of_removed(db, repository, set(removed_ids))
             if stale_ids:
                 db.query(Archive).filter(Archive.id.in_(stale_ids)).update(
                     {Archive.stats_measured_at: None}, synchronize_session=False
                 )
                 db.commit()
-        if is_agent_executor(repository) and not agent_supports_job(
+        history_unreachable = is_agent_executor(repository) and not agent_supports_job(
             db, repository, AGENT_DIFF_JOB_KIND
-        ):
+        )
+        # The listing that finds a removal deletes the row, in every index
+        # mode, folding its history into its successor first (spec 8.4). One
+        # transaction per archive: a run that dies halfway leaves rows the
+        # next listing reports again (#1141).
+        from app.services.operations.executors.history import merge_removed_archive
+
+        folds = {"folded": 0, "reset": 0, "dropped": 0}
+        for archive_id in removed_ids:
+            removed = db.get(Archive, archive_id)
+            if removed is None:
+                continue
+            # A successor that loses its base waits for a history run, or
+            # takes the state the listing writes below where none will come.
+            outcome = merge_removed_archive(
+                db, removed, reset_state="skipped" if history_unreachable else "pending"
+            )
+            folds[outcome] += 1
+        if history_unreachable:
             # No history run reaches an agent's repository whose agent cannot
             # produce the change listing, so the listing records the state the
             # history run used to write: `skipped`, not a `pending` that would
@@ -773,15 +754,15 @@ async def run_archive_sync(ctx) -> Outcome:
                 repository,
                 limit=settings.index_archive_info_per_run,
                 include_missing_end=True,
-                exclude_ids=removed_id_set,
             ),
             env,
             limit=settings.index_archive_info_per_run,
         )
-        write_repository_archive_columns(db, repository, exclude_ids=removed_ids)
+        write_repository_archive_columns(db, repository)
         _publish_mqtt_state(db, "operations archive sync")
         ctx.log(
-            f"listed {len(entries)} archives, {len(new_rows)} new, {filled} info fetched"
+            f"listed {len(entries)} archives, {len(new_rows)} new, "
+            f"{len(removed_ids)} removed, {filled} info fetched"
         )
         await ctx.progress(
             current=len(entries),
@@ -794,9 +775,7 @@ async def run_archive_sync(ctx) -> Outcome:
                 "new": len(new_rows),
                 "info_filled": filled,
                 "removed_archive_ids": removed_ids,
-                "removed_archive_borg_ids": removed_borg_ids,
-                "removed_archive_last_seen_at": removed_last_seen_at,
-                "removed_archive_generations": removed_generations,
+                **folds,
             }
         )
     finally:
