@@ -64,6 +64,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
         ('redis://c:6379?password="a&b?c"&db=0', 'redis://c:6379?password="***"&db=0'),
         ("redis://c:6379?password=ab?cd&db=0", "redis://c:6379?password=***&db=0"),
         ('redis://c?password=ab"cd&db=0', "redis://c?password=***&db=0"),
+        ("redis://c:6379?password= hunter2&db=0", "redis://c:6379?password=***&db=0"),
+        (
+            '"PUT /api?password=abc HTTP/1.1" 200',
+            '"PUT /api?password=***" 200',
+        ),
         ('password=ab"cd and more', "password=*** and more"),
         ('{"url": "redis://c?password=x"}', '{"url": "redis://c?password=***"}'),
         ('{"event": "x password=ab", "k": 1}', '{"event": "x password=***", "k": 1}'),

@@ -62,9 +62,10 @@ _SECRET_NAME = re.compile(rf"(?i){_SECRET_KEY}")
 _QUERY_KEY = re.compile(r"""[?&]([^?=&\s"'#]+)=""")
 # A secret's value: quoted up to its closing quote (escaped quotes, `&`
 # and `?` inside it included), an unterminated quote up to the next `&`, `#` or line end, or
-# a bare value up to the next `&` (a literal `?` is part of the value).
+# a bare value up to the next `&`, `#` or line end (a literal `?` and
+# spaces are part of it: redis-py does not trim `password= x`).
 _QUERY_VALUE = re.compile(
-    rf"""{_DOUBLE_QUOTED}"|{_SINGLE_QUOTED}'|["'][^&#\n]*|(?:[^&\s"'#]|{_INNER_QUOTE})*"""
+    rf"""{_DOUBLE_QUOTED}"|{_SINGLE_QUOTED}'|["'][^&#\n]*|(?:[^&"'#\n]|{_INNER_QUOTE})*"""
 )
 
 
