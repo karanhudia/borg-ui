@@ -2295,6 +2295,7 @@ class TestPruneComparison:
             "computed_at": None,
             "archive_count_at": None,
             "stale": True,
+            "auto": True,
             "candidates": [],
         }
 
@@ -2321,6 +2322,7 @@ class TestPruneComparison:
             f"/api/repositories/{repo.id}/prune/comparison", headers=admin_headers
         ).json()
         assert body["stale"] is False
+        assert body["auto"] is True
         # Naive UTC in the column; the browser reads an offset-less value as
         # local time, so the route must say which zone it is.
         assert body["computed_at"] is not None
@@ -2346,6 +2348,39 @@ class TestPruneComparison:
             headers=admin_headers,
         )
         assert again.status_code == 409
+
+    def test_automatic_refresh_is_refused_when_automatic_previews_are_off(
+        self, test_client, admin_headers, test_db, monkeypatch
+    ):
+        from app.database.models import Operation, SystemSettings
+
+        monkeypatch.setattr("app.services.operations.enqueue.wake_runner", lambda: None)
+        repo = _repo(test_db)
+        settings = test_db.query(SystemSettings).first()
+        if settings is None:
+            settings = SystemSettings()
+            test_db.add(settings)
+        settings.auto_prune_preview = False
+        test_db.commit()
+
+        body = test_client.get(
+            f"/api/repositories/{repo.id}/prune/comparison", headers=admin_headers
+        ).json()
+        assert body["auto"] is False
+
+        auto = test_client.post(
+            f"/api/repositories/{repo.id}/prune/comparison/refresh?auto=true",
+            headers=admin_headers,
+        )
+        assert auto.status_code == 409
+        assert auto.json()["detail"]["key"] == "backend.errors.prune.autoPreviewOff"
+        assert test_db.query(Operation).count() == 0
+
+        manual = test_client.post(
+            f"/api/repositories/{repo.id}/prune/comparison/refresh",
+            headers=admin_headers,
+        )
+        assert manual.status_code == 200
 
 
 class TestPruneRetentionDefaults:

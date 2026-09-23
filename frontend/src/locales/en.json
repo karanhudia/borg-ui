@@ -3614,7 +3614,9 @@
     "failedToSaveTimeoutSettings": "Failed to save timeout settings",
     "statsRefreshStarted": "Stats refresh started",
     "statsRefreshCompleted": "Stats refresh completed",
-    "failedToStartStatsRefresh": "Failed to start stats refresh"
+    "failedToStartStatsRefresh": "Failed to start stats refresh",
+    "autoPrunePreviewLabel": "Automatic prune previews",
+    "autoPrunePreviewHelper": "Compare retention policies on their own after the archive list changes, and when the Prune Preview page opens. When off, a comparison runs only when you press Compare now."
   },
   "monitoringReports": {
     "title": "Monitoring & Reports",
@@ -3803,7 +3805,8 @@
         "paused": "Paused",
         "pauseStage": "Pause {{stage}}",
         "resumeStage": "Resume {{stage}}",
-        "label": "Background stages"
+        "label": "Background stages",
+        "off": "Off"
       },
       "pauseAll": "Pause all",
       "resumeAll": "Resume all",
@@ -6200,7 +6203,8 @@
         "noKeepRule": "Set at least one keep rule before previewing or running a prune.",
         "dryRunFailed": "Borg's dry run failed.",
         "comparisonRunning": "A retention comparison is already running for this repository.",
-        "candidateNotStored": "This policy has not been compared yet. Run a comparison to see it."
+        "candidateNotStored": "This policy has not been compared yet. Run a comparison to see it.",
+        "autoPreviewOff": "Automatic prune previews are turned off."
       },
       "operations": {
         "unknownStage": "Unknown background stage."
@@ -6546,7 +6550,9 @@
         "wide": "Wide"
       },
       "partial": "Some sizes are stored values, not re-measured.",
-      "refreshFailed": "Could not start the comparison."
+      "refreshFailed": "Could not start the comparison.",
+      "autoOff": "Automatic prune previews are off, so this comparison is out of date and is not shown. Press Compare now to run it.",
+      "autoOffAction": "Turn on in Settings"
     }
   }
 }

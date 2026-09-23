@@ -548,8 +548,13 @@ async def prune_comparison_refresh(
     stale, as against the reader pressing Compare now: the same work, but the
     timeline should not call it manual."""
     from app.services.operations.enqueue import enqueue
+    from app.services.prune_compare import auto_enabled
 
     repository = _repo(db, current_user, repo_id, role="operator")
+    if auto and not auto_enabled(db):
+        raise HTTPException(
+            status_code=409, detail={"key": "backend.errors.prune.autoPreviewOff"}
+        )
     pending = (
         db.query(Operation.id)
         .filter(

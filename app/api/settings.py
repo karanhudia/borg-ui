@@ -263,6 +263,7 @@ class SystemSettingsUpdate(BaseModel):
     stats_refresh_interval_minutes: Optional[int] = (
         None  # How often to refresh repository stats (0 = disabled)
     )
+    auto_prune_preview: Optional[bool] = None
     dashboard_backup_warning_days: Optional[int] = None
     dashboard_backup_critical_days: Optional[int] = None
     dashboard_check_warning_days: Optional[int] = None
@@ -448,6 +449,7 @@ async def get_system_settings(
                 if settings.stats_refresh_interval_minutes is not None
                 else 60,
                 "last_stats_refresh": serialize_datetime(settings.last_stats_refresh),
+                "auto_prune_preview": settings.auto_prune_preview is not False,
                 **{
                     field_name: get_effective_dashboard_health_threshold(
                         settings, field_name
@@ -861,6 +863,8 @@ async def update_system_settings(
             settings.stats_refresh_interval_minutes = (
                 settings_update.stats_refresh_interval_minutes
             )
+        if settings_update.auto_prune_preview is not None:
+            settings.auto_prune_preview = settings_update.auto_prune_preview
         for field_name, value in dashboard_threshold_updates.items():
             if value is not None:
                 setattr(settings, field_name, value)

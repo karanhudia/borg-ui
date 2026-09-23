@@ -266,6 +266,7 @@ class TestOperationsQueue:
         assert body["limits"]["index_running"] == 1
         assert body["paused"] is False
         assert body["paused_stages"] == []
+        assert body["auto_prune_preview"] is True
 
 
 @pytest.mark.unit
@@ -337,6 +338,15 @@ class TestPauseAndLimits:
         ).json() == {"paused": False}
         test_db.expire_all()
         assert test_db.query(SystemSettings).first().paused_stages == []
+
+    def test_queue_reports_automatic_prune_previews_off(
+        self, test_client, test_db, admin_headers
+    ):
+        test_client.get("/api/operations/queue", headers=admin_headers)
+        test_db.query(SystemSettings).first().auto_prune_preview = False
+        test_db.commit()
+        queue = test_client.get("/api/operations/queue", headers=admin_headers).json()
+        assert queue["auto_prune_preview"] is False
 
     def test_pause_one_stage(self, test_client, admin_headers):
         r = test_client.post(

@@ -261,6 +261,7 @@ export const busyQueue: QueueResponse = {
   },
   paused: false,
   paused_stages: [],
+  auto_prune_preview: true,
 }
 
 export const emptyQueue: QueueResponse = {
@@ -274,6 +275,7 @@ export const emptyQueue: QueueResponse = {
   },
   paused: false,
   paused_stages: [],
+  auto_prune_preview: true,
 }
 
 // The same queue with a prune holding the lane instead of a backup: the

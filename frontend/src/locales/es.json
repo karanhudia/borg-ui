@@ -3614,7 +3614,9 @@
     "failedToSaveTimeoutSettings": "Error al guardar la configuración de tiempos de espera",
     "statsRefreshStarted": "Actualización de estadísticas iniciada",
     "statsRefreshCompleted": "Actualización de estadísticas completada",
-    "failedToStartStatsRefresh": "Error al iniciar la actualización de estadísticas"
+    "failedToStartStatsRefresh": "Error al iniciar la actualización de estadísticas",
+    "autoPrunePreviewLabel": "Vistas previas de poda automáticas",
+    "autoPrunePreviewHelper": "Compara las políticas de retención por sí solo cuando cambia la lista de archivos y al abrir la página de vista previa de poda. Si está desactivado, la comparación solo se ejecuta al pulsar Comparar ahora."
   },
   "monitoringReports": {
     "title": "Monitorización e informes",
@@ -3803,7 +3805,8 @@
         "paused": "En pausa",
         "pauseStage": "Pausar {{stage}}",
         "resumeStage": "Reanudar {{stage}}",
-        "label": "Etapas en segundo plano"
+        "label": "Etapas en segundo plano",
+        "off": "Desactivado"
       },
       "pauseAll": "Pausar todo",
       "resumeAll": "Reanudar todo",
@@ -6200,7 +6203,8 @@
         "noKeepRule": "Defina al menos una regla de retención antes de previsualizar o ejecutar un prune.",
         "dryRunFailed": "La ejecución de prueba de Borg falló.",
         "comparisonRunning": "Ya se está ejecutando una comparación de retención para este repositorio.",
-        "candidateNotStored": "Esta política aún no se ha comparado. Ejecuta una comparación para verla."
+        "candidateNotStored": "Esta política aún no se ha comparado. Ejecuta una comparación para verla.",
+        "autoPreviewOff": "Las vistas previas de poda automáticas están desactivadas."
       },
       "operations": {
         "unknownStage": "Etapa en segundo plano desconocida."
@@ -6546,7 +6550,9 @@
         "wide": "Amplia"
       },
       "partial": "Algunos tamaños son valores almacenados, no vueltos a medir.",
-      "refreshFailed": "No se pudo iniciar la comparación."
+      "refreshFailed": "No se pudo iniciar la comparación.",
+      "autoOff": "Las vistas previas de poda automáticas están desactivadas, así que esta comparación está desactualizada y no se muestra. Pulsa Comparar ahora para ejecutarla.",
+      "autoOffAction": "Activar en Configuración"
     }
   }
 }

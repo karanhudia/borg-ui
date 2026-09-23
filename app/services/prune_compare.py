@@ -209,6 +209,14 @@ def _row_payload(row: PruneComparison) -> dict:
     }
 
 
+def auto_enabled(db: Session) -> bool:
+    """The `auto_prune_preview` system setting; on when no row exists yet."""
+    from app.database.models import SystemSettings
+
+    settings = db.query(SystemSettings).first()
+    return settings is None or settings.auto_prune_preview is not False
+
+
 def stored(db: Session, repository: Repository) -> dict:
     rows = (
         db.query(PruneComparison)
@@ -221,6 +229,7 @@ def stored(db: Session, repository: Repository) -> dict:
             "computed_at": None,
             "archive_count_at": None,
             "stale": True,
+            "auto": auto_enabled(db),
             "candidates": [],
         }
     count_at = rows[0].archive_count_at
@@ -245,6 +254,7 @@ def stored(db: Session, repository: Repository) -> dict:
         "computed_at": serialize_datetime(computed_at),
         "archive_count_at": count_at,
         "stale": stale,
+        "auto": auto_enabled(db),
         "candidates": [_row_payload(r) for r in rows],
     }
 

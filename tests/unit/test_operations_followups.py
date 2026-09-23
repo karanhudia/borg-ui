@@ -98,6 +98,24 @@ def test_prune_compare_follows_a_listing_that_removed_archives(db, repo, monkeyp
 
 
 @pytest.mark.unit
+def test_prune_compare_does_not_follow_when_automatic_previews_are_off(
+    db, repo, monkeypatch
+):
+    from app.services.operations.followups import enqueue_followups
+
+    monkeypatch.setattr("app.services.operations.enqueue.wake_runner", lambda: None)
+    db.query(SystemSettings).first().auto_prune_preview = False
+    sync = enqueue(db, "archive_sync", repository_id=repo.id, trigger="reconcile")
+    sync.status = "completed"
+    sync.result = {"listed": 4, "new": 1, "removed_archive_ids": [7]}
+    db.commit()
+    assert (
+        enqueue_followups(db, sync, depends_on_id=sync.id, available={"prune_compare"})
+        == []
+    )
+
+
+@pytest.mark.unit
 def test_chain_for_filters_to_available_executors():
     assert chain_for("import_connect") == ["stats", "archive_sync", "history_index"]
     assert chain_for("import_connect", available={"stats", "archive_sync"}) == [

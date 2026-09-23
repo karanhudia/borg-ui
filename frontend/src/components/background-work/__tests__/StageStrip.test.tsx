@@ -80,4 +80,13 @@ describe('StageStrip', () => {
     expect(screen.queryByRole('button', { name: /^(Pause|Resume) / })).toBeNull()
     expect(screen.getByText('Paused')).toBeInTheDocument()
   })
+
+  it('shows the retention stage as off, with no pause control, when automatic previews are off', () => {
+    renderStrip({ retentionOff: true })
+    expect(screen.getByRole('button', { name: 'Retention preview' })).toHaveAccessibleDescription(
+      /off/i
+    )
+    expect(screen.queryByRole('button', { name: 'Pause Retention preview' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Pause Stats' })).toBeInTheDocument()
+  })
 })

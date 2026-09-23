@@ -18,6 +18,7 @@ const comparison: PruneComparison = {
   computed_at: '2026-09-18T01:00:00Z',
   archive_count_at: 12,
   stale: false,
+  auto: true,
   candidates: [
     {
       key: 'current',
@@ -102,7 +103,13 @@ describe('PruneComparedPolicies', () => {
     const onRefresh = vi.fn()
     const { rerender } = renderWithProviders(
       <PruneComparedPolicies
-        comparison={{ computed_at: null, archive_count_at: null, stale: true, candidates: [] }}
+        comparison={{
+          computed_at: null,
+          archive_count_at: null,
+          stale: true,
+          auto: true,
+          candidates: [],
+        }}
         editing={null}
         selectedKey={null}
         pending={false}
@@ -127,5 +134,46 @@ describe('PruneComparedPolicies', () => {
     )
     expect(screen.getByText('Comparing, this runs one dry run per policy.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Compare now' })).toBeDisabled()
+  })
+
+  it('hides a stale comparison when automatic previews are off and links to the switch', () => {
+    const onRefresh = vi.fn()
+    renderWithProviders(
+      <PruneComparedPolicies
+        comparison={{ ...comparison, stale: true, auto: false }}
+        editing={null}
+        selectedKey={null}
+        pending={false}
+        refreshDisabled={false}
+        canManageSettings
+        onSelect={() => {}}
+        onRefresh={onRefresh}
+      />
+    )
+    expect(screen.queryByText('Standard')).toBeNull()
+    expect(screen.getByText(/Automatic prune previews are off/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Turn on in Settings' })).toHaveAttribute(
+      'href',
+      '/settings/system?section=monitoring'
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Compare now' }))
+    expect(onRefresh).toHaveBeenCalled()
+  })
+
+  it('keeps a fresh comparison when automatic previews are off, and no link for viewers', () => {
+    renderWithProviders(
+      <PruneComparedPolicies
+        comparison={{ ...comparison, auto: false }}
+        editing={null}
+        selectedKey={null}
+        pending={false}
+        refreshDisabled={false}
+        onSelect={() => {}}
+        onRefresh={() => {}}
+      />
+    )
+    expect(screen.getByText('Standard')).toBeInTheDocument()
+    expect(screen.queryByText(/Automatic prune previews are off/)).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Turn on in Settings' })).toBeNull()
   })
 })

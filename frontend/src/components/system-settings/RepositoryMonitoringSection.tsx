@@ -4,7 +4,9 @@ import {
   Button,
   CircularProgress,
   Divider,
+  FormControlLabel,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material'
@@ -19,6 +21,7 @@ import {
 
 interface RepositoryMonitoringSectionProps {
   statsRefreshInterval: number
+  autoPrunePreview: boolean
   maxConcurrentScheduledBackups: number
   maxConcurrentScheduledChecks: number
   dashboardBackupWarningDays: number
@@ -34,6 +37,7 @@ interface RepositoryMonitoringSectionProps {
   isRefreshingStats: boolean
   lastStatsRefresh?: string
   setStatsRefreshInterval: (value: number) => void
+  setAutoPrunePreview: (value: boolean) => void
   setMaxConcurrentScheduledBackups: (value: number) => void
   setMaxConcurrentScheduledChecks: (value: number) => void
   setDashboardBackupWarningDays: (value: number) => void
@@ -51,6 +55,7 @@ interface RepositoryMonitoringSectionProps {
 
 const RepositoryMonitoringSection: React.FC<RepositoryMonitoringSectionProps> = ({
   statsRefreshInterval,
+  autoPrunePreview,
   maxConcurrentScheduledBackups,
   maxConcurrentScheduledChecks,
   dashboardBackupWarningDays,
@@ -66,6 +71,7 @@ const RepositoryMonitoringSection: React.FC<RepositoryMonitoringSectionProps> = 
   isRefreshingStats,
   lastStatsRefresh,
   setStatsRefreshInterval,
+  setAutoPrunePreview,
   setMaxConcurrentScheduledBackups,
   setMaxConcurrentScheduledChecks,
   setDashboardBackupWarningDays,
@@ -240,6 +246,26 @@ const RepositoryMonitoringSection: React.FC<RepositoryMonitoringSectionProps> = 
             htmlInput: { min: 0, max: MAX_SCHEDULE_CONCURRENCY, step: 1 },
           }}
         />
+      </Box>
+
+      <Box>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={autoPrunePreview}
+              onChange={(e) => setAutoPrunePreview(e.target.checked)}
+              slotProps={{ input: { 'aria-describedby': 'auto-prune-preview-helper' } }}
+            />
+          }
+          label={t('systemSettings.autoPrunePreviewLabel')}
+        />
+        <Typography
+          id="auto-prune-preview-helper"
+          variant="caption"
+          sx={{ display: 'block', color: 'text.secondary', ml: 6 }}
+        >
+          {t('systemSettings.autoPrunePreviewHelper')}
+        </Typography>
       </Box>
 
       <Divider />

@@ -128,6 +128,32 @@ describe('SystemSettingsTab', () => {
     expect(screen.getByLabelText('Restore Check Critical Age (days)')).toBeInTheDocument()
   })
 
+  it('opens Repository Monitoring from the section link', async () => {
+    renderWithProviders(<SystemSettingsTab />, {
+      initialRoute: '/settings/system?section=monitoring',
+    })
+
+    expect(await screen.findByLabelText('Automatic prune previews')).toBeInTheDocument()
+  })
+
+  it('saves the automatic prune previews switch', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<SystemSettingsTab />, {
+      initialRoute: '/settings/system?section=monitoring',
+    })
+
+    const toggle = await screen.findByLabelText('Automatic prune previews')
+    await waitFor(() => expect(toggle).toBeChecked())
+    await user.click(toggle)
+    await user.click(screen.getByRole('button', { name: /Save Settings/i }))
+
+    await waitFor(() => {
+      expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ auto_prune_preview: false })
+      )
+    })
+  })
+
   it('saves scheduler concurrency limits with system settings', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SystemSettingsTab />)

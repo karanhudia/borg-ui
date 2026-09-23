@@ -21,6 +21,9 @@ interface StageStripProps {
   pausedStages: PausableStage[]
   canManage: boolean
   onTogglePause: (stage: PausableStage, paused: boolean) => void
+  // Automatic prune previews are off: nothing queues the retention stage on
+  // its own, so it reads as off and has nothing to pause.
+  retentionOff?: boolean
   // Rendered inside the File history block: the index worker stepper, the
   // one stage with a pool of workers to size.
   historyExtra?: React.ReactNode
@@ -63,6 +66,7 @@ export default function StageStrip({
   pausedStages,
   canManage,
   onTogglePause,
+  retentionOff = false,
   historyExtra,
 }: StageStripProps) {
   const { t } = useTranslation()
@@ -81,7 +85,8 @@ export default function StageStrip({
       {STAGE_ORDER.map((key) => {
         const count = counts[key]
         const label = t(`operations.background.stage.${key}`)
-        const pausable = key !== 'connect'
+        const off = key === 'retention' && retentionOff
+        const pausable = key !== 'connect' && !off
         const paused = pausable && pausedStages.includes(key)
         const isSelected = selected === key
         return (
@@ -147,6 +152,19 @@ export default function StageStrip({
                   >
                     {count.total}
                   </Typography>
+                  {off && (
+                    <Chip
+                      size="small"
+                      label={t('operations.background.strip.off')}
+                      sx={{
+                        height: 20,
+                        fontSize: '0.65rem',
+                        fontWeight: 700,
+                        bgcolor: alpha(theme.palette.text.primary, 0.08),
+                        color: 'text.secondary',
+                      }}
+                    />
+                  )}
                   {paused && (
                     <Chip
                       size="small"
