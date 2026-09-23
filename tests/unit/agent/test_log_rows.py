@@ -1,4 +1,4 @@
-"""Which output lines the agent stores as job log rows (agent 0.1.8).
+"""Which output lines the agent stores as job log rows (agent 0.1.8, 0.1.9).
 
 A line that is reported as progress is not stored as a log line too, and a
 machine-parsed kind logs one summary line instead of its JSON output.
@@ -99,6 +99,20 @@ def _log_message(message, *, name="borg.archiver"):
     )
 
 
+def _step(message=None, *, msgid="cache.begin_transaction", finished=False):
+    """A `progress_message` line: a step Borg announces (#1124)."""
+    line = {
+        "operation": 1,
+        "msgid": msgid,
+        "type": "progress_message",
+        "finished": finished,
+        "time": 1790175256.5,
+    }
+    if message is not None:
+        line["message"] = message
+    return json.dumps(line)
+
+
 def test_progress_lines_of_a_streamed_operation_are_not_log_rows():
     pruned = _log_message(
         "Pruning archive (1/1):                host-2026-01-01 "
@@ -125,6 +139,120 @@ def test_progress_lines_of_a_streamed_operation_are_not_log_rows():
         {"progress_percent": 50.0},
         {"progress_percent": 100.0},
     ]
+
+
+def test_step_lines_of_a_streamed_operation_are_neither_rows_nor_reports():
+    """#1124: Borg's `progress_message` lines (cache steps and the empty
+    line that ends each) were stored as rows; no reader shows them."""
+    pruned = _log_message("Keeping archive (rule: daily #1): host-2026-01-02")
+    client = RecordingClient()
+
+    result = _execute_streaming_repository_operation(
+        7,
+        _payload("repository.prune"),
+        client,
+        _prints(
+            [
+                _step("Initializing cache transaction: Reading config"),
+                _step("Initializing cache transaction: Reading chunks"),
+                _step(finished=True),
+                pruned,
+                _percent(50),
+                _step("Saving files cache", msgid="cache.commit"),
+                _step(msgid="cache.commit", finished=True),
+                "plain line",
+            ]
+        ),
+        dict(os.environ),
+        initial_sequence=1,
+        should_cancel=lambda: False,
+    )
+
+    assert result.status == "completed"
+    assert client.logs == [(1, "stdout", pruned), (2, "stdout", "plain line")]
+    assert client.progress == [{"progress_percent": 50.0}]
+
+
+def test_steps_printed_through_the_progress_logger_are_not_rows():
+    """A step that starts while another progress indicator runs (the cache
+    transaction during a prune) comes as a `log_message` of the progress
+    logger instead, as Borg 1.4.5 printed it here."""
+    pruned = _log_message(
+        "Pruning archive (1/3): a3 Wed, 2026-09-23 [abc]", name="borg.output.list"
+    )
+    steps = [
+        _log_message(
+            "Initializing cache transaction: Reading config",
+            name="borg.output.progress",
+        ),
+        _log_message("", name="borg.output.progress"),
+        _log_message("Saving chunks cache", name="borg.output.progress"),
+    ]
+    show_rc = _log_message(
+        "terminating with success status, rc 0", name="borg.output.show-rc"
+    )
+    client = RecordingClient()
+
+    _execute_streaming_repository_operation(
+        7,
+        _payload("repository.prune"),
+        client,
+        _prints([_percent(0, 3), *steps[:2], pruned, steps[2], show_rc]),
+        dict(os.environ),
+        initial_sequence=1,
+        should_cancel=lambda: False,
+    )
+
+    assert client.messages() == [pruned, show_rc]
+    assert client.sequences() == [1, 2]
+    assert client.progress == [{"progress_percent": 0.0}]
+
+
+def test_step_lines_of_a_backup_and_a_restore_are_not_rows(monkeypatch, tmp_path):
+    steps = [
+        _step("Saving chunks cache", msgid="cache.commit"),
+        _step(msgid="cache.commit", finished=True),
+    ]
+    summary = _log_message("Archive name: archive")
+    monkeypatch.setattr(
+        backup.BackupCreatePayload,
+        "build_command",
+        lambda self: _prints([*steps, summary], stream="stderr"),
+    )
+    backed_up = RecordingClient()
+    execute_backup_create_job(
+        {
+            "id": 11,
+            "payload": {
+                "job_kind": "backup.create",
+                "repository_path": "/repo",
+                "archive_name": "archive",
+                "source_paths": ["/src"],
+            },
+        },
+        backed_up,
+    )
+    assert backed_up.messages()[1:] == [summary]
+    assert backed_up.progress == []
+
+    restored = RecordingClient()
+    _execute_restore_operation(
+        7,
+        _payload(
+            "repository.restore",
+            operation={
+                "archive": "a",
+                "target": {"type": "path", "path": str(tmp_path)},
+            },
+        ),
+        restored,
+        _prints([*steps, _percent(4, 4)]),
+        dict(os.environ),
+        initial_sequence=1,
+        should_cancel=lambda: False,
+    )
+    assert restored.logs == []
+    assert restored.progress == [{"progress_percent": 100.0}]
 
 
 def test_compact_statistics_are_parsed_with_progress_lines_in_between():

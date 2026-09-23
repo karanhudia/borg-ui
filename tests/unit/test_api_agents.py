@@ -823,6 +823,126 @@ class TestAgentJobTransport:
         )
         assert repeated.status_code == 200
 
+    def _running_backup(self, test_client, test_db, admin_headers):
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        job = _create_agent_job(test_db, agent, status="running")
+        backup_job = seed_job_operation(
+            test_db, "backup", repository="/repo", status="running"
+        )
+        test_db.commit()
+        job.operation_id = backup_job.id
+        test_db.commit()
+        headers = _agent_headers(registered["agent_token"])
+        # the last progress report before the completion: Borg reports at
+        # most once a second, so its counters lag the archive's
+        progress = test_client.post(
+            f"/api/agents/jobs/{job.id}/progress",
+            json={
+                "original_size": 1024,
+                "compressed_size": 512,
+                "deduplicated_size": 128,
+                "nfiles": 3,
+            },
+            headers=headers,
+        )
+        assert progress.status_code == 200
+        return job, backup_job.id, headers
+
+    def test_backup_final_counters_come_with_the_completion(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        """#1125: progress and completion travel on different paths and
+        progress is refused once the job is final, so the counters the
+        completion carries are the ones the backup keeps."""
+        job, backup_job_id, headers = self._running_backup(
+            test_client, test_db, admin_headers
+        )
+
+        complete = test_client.post(
+            f"/api/agents/jobs/{job.id}/complete",
+            json={
+                "result": {
+                    "archive_name": "a1",
+                    "return_code": 0,
+                    "archive_stats": {
+                        "original_size": 600000,
+                        "compressed_size": 600009,
+                        "deduplicated_size": 4096,
+                        "nfiles": 30,
+                    },
+                }
+            },
+            headers=headers,
+        )
+        assert complete.status_code == 200
+        late = test_client.post(
+            f"/api/agents/jobs/{job.id}/progress",
+            json={"original_size": 2048, "nfiles": 5},
+            headers=headers,
+        )
+        assert late.status_code == 409
+
+        test_db.refresh(job)
+        backup_job = resolve_backup_job(test_db, backup_job_id)
+        for row in (job, backup_job):
+            assert row.original_size == 600000
+            assert row.compressed_size == 600009
+            assert row.deduplicated_size == 4096
+            assert row.nfiles == 30
+        assert backup_job.status == "completed"
+
+    @pytest.mark.parametrize(
+        ("archive_stats", "expected"),
+        [
+            # an agent before 0.1.9 reports none: the last progress stands
+            (None, (1024, 512, 128, 3)),
+            # Borg 2 has no compressed or deduplicated size in `archive.stats`
+            ({"original_size": 600000, "nfiles": 30}, (600000, 512, 128, 30)),
+            # a field in another shape is not taken
+            (
+                {
+                    "original_size": -1,
+                    "compressed_size": "600009",
+                    "deduplicated_size": True,
+                    "nfiles": 2**31,
+                },
+                (1024, 512, 128, 3),
+            ),
+            ("600000", (1024, 512, 128, 3)),
+        ],
+    )
+    def test_backup_counters_the_completion_does_not_carry_stay(
+        self, test_client: TestClient, test_db, admin_headers, archive_stats, expected
+    ):
+        job, backup_job_id, headers = self._running_backup(
+            test_client, test_db, admin_headers
+        )
+        result = {"archive_name": "a1", "return_code": 1}
+        if archive_stats is not None:
+            result["archive_stats"] = archive_stats
+
+        complete = test_client.post(
+            f"/api/agents/jobs/{job.id}/complete",
+            json={"result": result},
+            headers=headers,
+        )
+        assert complete.status_code == 200
+        assert complete.json()["status"] == "completed_with_warnings"
+
+        test_db.refresh(job)
+        backup_job = resolve_backup_job(test_db, backup_job_id)
+        for row in (job, backup_job):
+            assert (
+                row.original_size,
+                row.compressed_size,
+                row.deduplicated_size,
+                row.nfiles,
+            ) == expected
+
     def test_completed_backup_job_enqueues_index_followups(
         self, test_client: TestClient, test_db, admin_headers
     ):
