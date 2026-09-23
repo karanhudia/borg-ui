@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import {
   getActiveBackendTarget,
   subscribeRemoteBackendStorage,
@@ -28,6 +29,14 @@ let source: EventSource | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let openTargetId: string | null = null
 let unsubscribeTargetChanges: (() => void) | null = null
+// Set once the stream has failed, cleared when it opens again. The stream has
+// no replay, so every event sent in between is lost. It survives an idle
+// close: cached queries outlive the consumers (staleTime), so the next
+// consumer to mount still has a gap to catch up on.
+let connectionLost = false
+// The app's one query client, taken from the first consumer. Every page
+// that reads from this stream refreshes its queries from the same client.
+let queryClient: QueryClient | null = null
 
 const RECONNECT_DELAY_MS = 5000
 
@@ -52,6 +61,9 @@ function handleMessage(event: MessageEvent): void {
  * updates come back once the backend or the token does.
  */
 function handleError(): void {
+  // Both paths count: a dropped stream the browser retries (CONNECTING) and a
+  // non-200 response this module retries below (CLOSED).
+  connectionLost = true
   if (!source || source.readyState !== 2 /* CLOSED */) return
   source.close()
   source = null
@@ -60,6 +72,18 @@ function handleError(): void {
     reconnectTimer = null
     openSource()
   }, RECONNECT_DELAY_MS)
+}
+
+/**
+ * Nothing says which events the gap swallowed, so every query starts over:
+ * the ones on screen refetch now, the cached ones when they are shown
+ * again. That also covers a page the user left during the gap and comes
+ * back to within its cache's freshness window.
+ */
+function handleOpen(): void {
+  if (!connectionLost) return
+  connectionLost = false
+  void queryClient?.invalidateQueries()
 }
 
 function openSource(): void {
@@ -71,6 +95,7 @@ function openSource(): void {
   const url = buildApiUrl('/events/stream', getBackendTargetTokenParams(target.id))
   openTargetId = target.id
   source = new EventSource(url)
+  source.onopen = handleOpen
   source.onmessage = handleMessage
   source.onerror = handleError
 }
@@ -87,6 +112,9 @@ function handleTargetChange(): void {
     clearTimeout(reconnectTimer)
     reconnectTimer = null
   }
+  // A new target starts from an empty query cache, so there is nothing to
+  // catch up on.
+  connectionLost = false
   source?.close()
   source = null
   openSource()
@@ -111,12 +139,17 @@ function closeSourceIfIdle(): void {
  * `operation.updated` / `operation.progress` events to the caller. Mounting
  * this in several components is safe: they all read from one connection,
  * which closes when the last consumer unmounts.
+ *
+ * When the stream opens again after it was lost (not on the first open),
+ * every query of the app's client is invalidated, since the events sent
+ * during the gap are not replayed.
  */
 export function useOperationEvents(
   onUpdated: (op: OperationItem) => void,
   onProgress: (progress: OperationProgressEvent['data']) => void
 ): void {
   const handlers = useRef<Handlers>({ onUpdated, onProgress })
+  const client = useQueryClient()
 
   useEffect(() => {
     handlers.current = { onUpdated, onProgress }
@@ -125,6 +158,7 @@ export function useOperationEvents(
   useEffect(() => {
     const entry = handlers
     subscribers.add(entry)
+    queryClient = client
     unsubscribeTargetChanges ??= subscribeRemoteBackendStorage((reason) => {
       if (reason === 'target') handleTargetChange()
     })
@@ -133,5 +167,5 @@ export function useOperationEvents(
       subscribers.delete(entry)
       closeSourceIfIdle()
     }
-  }, [])
+  }, [client])
 }

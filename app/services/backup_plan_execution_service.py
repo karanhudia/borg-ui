@@ -68,6 +68,7 @@ from app.services.operations.backup_facade import (
     wait_for_backup_operation,
 )
 from app.services.operations.enqueue import wake_runner
+from app.services.operations.events import broadcast_operation_updated
 from app.services.operations.runner import operation_runner
 from app.services.operations.vocab import TERMINAL_STATUSES
 from app.utils.archive_names import build_archive_name
@@ -2505,13 +2506,31 @@ class BackupPlanExecutionService:
         recorded: list[tuple[int, str]],
         error_message: str,
     ) -> None:
-        """Send the backup-failure notification for operations that
-        `_fail_repositories` created."""
+        """Announce the operations `_fail_repositories` created: an
+        `operation.updated` event, since the runner never saw them and so
+        never broadcast them, and the backup-failure notification."""
         if not recorded:
             return
         db = SessionLocal()
         try:
             for operation_id, repository_path in recorded:
+                try:
+                    operation = db.get(Operation, operation_id)
+                    if operation is not None:
+                        await broadcast_operation_updated(operation, db)
+                except Exception as exc:
+                    # the event is a courtesy to open pages; the notification
+                    # below must still go out, and the run keeps its reason
+                    logger.warning(
+                        "Failed to broadcast plan failure operation",
+                        run_id=run_id,
+                        operation_id=operation_id,
+                        error=str(exc),
+                    )
+                # The broadcast only reads, but a failed read it swallowed
+                # itself leaves the transaction aborted; start the
+                # notification from a clean one.
+                db.rollback()
                 try:
                     await notification_service.send_backup_failure(
                         db,
