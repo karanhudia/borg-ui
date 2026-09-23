@@ -74,7 +74,7 @@ from app.services.maintenance_state import apply_compact_stats
 from app.services.operations.followups import (
     enqueue_backup_followups,
 )
-from app.utils.datetime_utils import serialize_datetime
+from app.utils.datetime_utils import serialize_datetime, utc_now
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/agents", tags=["agents"])
@@ -117,6 +117,16 @@ FINAL_AGENT_JOB_STATUSES = {
 # activity is newer than the cutoff, so a genuinely running operation is
 # never requeued however long it takes.
 STALE_AGENT_JOB_REQUEUE_AFTER = timedelta(minutes=2)
+# A queued job this old on an agent's heartbeat missed its immediate dispatch:
+# the creator pushes a job the instant it commits, so one still queued after
+# the grace was created where no session for the agent existed (a server
+# process in its shutdown window, whose sessions were already closed while
+# it still ran the operations runner). Only the session start re-dispatched
+# until now, so such a job waited for the next reconnect and held the
+# repository through admission meanwhile. The grace keeps the heartbeat off a
+# job whose creator is dispatching it right now; the conditional claim in the
+# dispatcher rules out a double send either way.
+UNDELIVERED_AGENT_JOB_REDISPATCH_AFTER = timedelta(seconds=10)
 # The maintenance kinds an agent can run. These live in the `operations`
 # table, and `resolve_agent_maintenance_job` hands back the operation-backed
 # facade the callbacks below drive.
@@ -1222,24 +1232,27 @@ def _cancel_agent_job(
     )
 
 
-async def _dispatch_queued_agent_jobs(db: Session, agent_machine_id: int) -> None:
-    jobs = (
-        db.query(AgentJob)
-        .filter(
-            AgentJob.agent_machine_id == agent_machine_id,
-            AgentJob.status == "queued",
-        )
-        .order_by(AgentJob.created_at.asc(), AgentJob.id.asc())
-        .all()
+async def _dispatch_queued_agent_jobs(
+    db: Session,
+    agent_machine_id: int,
+    *,
+    source: str = "session_reconnect",
+    older_than: Optional[timedelta] = None,
+) -> None:
+    """Send the agent every queued job of its own over its session, oldest
+    first; with `older_than`, only the jobs queued for at least that long."""
+    query = db.query(AgentJob).filter(
+        AgentJob.agent_machine_id == agent_machine_id,
+        AgentJob.status == "queued",
     )
+    if older_than is not None:
+        # Naive UTC, the form the column stores (see `utc_now`).
+        query = query.filter(AgentJob.created_at <= utc_now() - older_than)
+    jobs = query.order_by(AgentJob.created_at.asc(), AgentJob.id.asc()).all()
     for job in jobs:
         if live_agent_job_kind(job) == "filesystem.browse":
             continue
-        await dispatch_agent_job_best_effort(
-            db,
-            job,
-            source="session_reconnect",
-        )
+        await dispatch_agent_job_best_effort(db, job, source=source)
 
 
 def _load_session_job(
@@ -1282,6 +1295,18 @@ async def _handle_agent_session_message(
             {"last_seen_at": now, "status": "online", "updated_at": now},
             synchronize_session=False,
         )
+        db.commit()
+        # The agent is idle and listening: a job left queued past the grace
+        # has no other sender in this process before the next reconnect.
+        await _dispatch_queued_agent_jobs(
+            db,
+            agent_machine_id,
+            source="session_heartbeat",
+            older_than=UNDELIVERED_AGENT_JOB_REDISPATCH_AFTER,
+        )
+        # The pass reads even when nothing is queued; end that transaction
+        # here, or the session holds a pooled connection until the next
+        # message, once per idle agent.
         db.commit()
         return
 
