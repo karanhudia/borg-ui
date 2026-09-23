@@ -676,7 +676,7 @@ async def test_run_keeps_the_runner_start_where_no_service_claims(
     op = _runner_claimed(db, repo)
     runner_started_at = op.started_at
 
-    async def fake_compact(self, job_id):
+    async def fake_compact(self, job_id, *, raise_busy=False):
         other = _other_session(db)
         try:
             assert other.get(Operation, job_id).started_at == runner_started_at
@@ -725,7 +725,7 @@ async def test_run_leaves_a_row_a_cancel_made_terminal_alone(tmp_path, monkeypat
     request_db.commit()
     request_db.close()
 
-    async def fake_compact(self, job_id):
+    async def fake_compact(self, job_id, *, raise_busy=False):
         return None
 
     monkeypatch.setattr(
@@ -755,7 +755,7 @@ async def test_run_leaves_the_row_startless_when_the_service_never_claimed(
 
     op = _runner_claimed(db, borg2_repository)
 
-    async def fake_compact(self, job_id):
+    async def fake_compact(self, job_id, *, raise_busy=False):
         other = _other_session(db)
         try:
             assert other.get(Operation, job_id).started_at is None
@@ -789,7 +789,7 @@ async def test_run_leaves_the_row_startless_when_the_service_raises(
 
     op = _runner_claimed(db, borg2_repository)
 
-    async def fake_compact(self, job_id):
+    async def fake_compact(self, job_id, *, raise_busy=False):
         other = _other_session(db)
         try:
             assert other.get(Operation, job_id).started_at is None
@@ -821,7 +821,7 @@ async def test_run_leaves_the_row_startless_when_the_service_gave_no_verdict(
 
     op = _runner_claimed(db, borg2_repository)
 
-    async def fake_compact(self, job_id):
+    async def fake_compact(self, job_id, *, raise_busy=False):
         return None
 
     monkeypatch.setattr(
@@ -862,7 +862,7 @@ async def test_run_does_not_clear_a_start_another_claim_wrote(tmp_path, monkeypa
     other.commit()
     other.close()
 
-    async def fake_compact(self, job_id):
+    async def fake_compact(self, job_id, *, raise_busy=False):
         service = factory()
         try:
             assert service.get(Operation, job_id).started_at == other_start
@@ -899,7 +899,7 @@ async def test_run_does_not_touch_a_row_dispatched_without_a_start(
     assert op.started_at is None
     seen = {}
 
-    async def fake_compact(self, job_id):
+    async def fake_compact(self, job_id, *, raise_busy=False):
         other = _other_session(db)
         try:
             seen["started_at"] = utc_now()
@@ -942,7 +942,7 @@ async def test_hand_over_commit_failure_propagates_before_the_service_runs(
 
     monkeypatch.setattr(maintenance, "commit_with_retry", failing_commit)
 
-    async def fake_compact(self, job_id):
+    async def fake_compact(self, job_id, *, raise_busy=False):
         called.append(job_id)
 
     monkeypatch.setattr(
@@ -997,7 +997,7 @@ async def test_compact_stamps_last_compact_on_success(db, repository, monkeypatc
     op = _operation(db, repository, kind="compact")
     ctx = FakeContext(db, op)
 
-    async def fake_compact(self, job_id):
+    async def fake_compact(self, job_id, *, raise_busy=False):
         job = MaintenanceJobFacade(db, db.get(Operation, job_id))
         job.status = "completed"
         db.commit()
@@ -1026,7 +1026,7 @@ async def test_compact_returns_the_statistics_the_service_filed(
     ctx = FakeContext(db, op)
     stats = {"repository_size": 502_000, "size_precision": "exact"}
 
-    async def fake_compact(self, job_id):
+    async def fake_compact(self, job_id, *, raise_busy=False):
         job = MaintenanceJobFacade(db, db.get(Operation, job_id))
         job.stats = stats
         job.status = "completed"
@@ -1059,7 +1059,7 @@ async def test_compact_reads_statistics_another_session_committed(
     ctx = FakeContext(db, op)
     stats = {"repository_size": 502_000, "size_precision": "exact"}
 
-    async def fake_compact(self, job_id):
+    async def fake_compact(self, job_id, *, raise_busy=False):
         # the runner's session already holds the row (FakeContext loaded it)
         other = sessionmaker(bind=db.get_bind())()
         try:
@@ -1093,7 +1093,7 @@ async def test_delete_archive_passes_the_archive_name(db, repository, monkeypatc
     ctx = FakeContext(db, op)
     seen = {}
 
-    async def fake_delete(self, job_id, archive_name):
+    async def fake_delete(self, job_id, archive_name, *, raise_busy=False):
         seen["archive"] = archive_name
         job = MaintenanceJobFacade(db, db.get(Operation, job_id))
         job.status = "completed"

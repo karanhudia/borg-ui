@@ -153,7 +153,9 @@ class TestArchivesResourceValidation:
         routed_repo = mock_router.call_args.args[0]
         assert routed_repo.id == repo.id
         assert routed_repo.borg_version == repo.borg_version
-        fake_router.delete_archive.assert_awaited_once_with(op.id, "archive-1")
+        fake_router.delete_archive.assert_awaited_once_with(
+            op.id, "archive-1", raise_busy=True
+        )
         assert await_result is not None
 
     def test_delete_archive_borg2_addresses_series_by_aid_selector(
@@ -208,7 +210,9 @@ class TestArchivesResourceValidation:
         ):
             asyncio.run(maintenance.run_delete_archive(ctx))
 
-        fake_router.delete_archive.assert_awaited_once_with(job_id, f"aid:{hex_id}")
+        fake_router.delete_archive.assert_awaited_once_with(
+            job_id, f"aid:{hex_id}", raise_busy=True
+        )
 
     def test_delete_job_status_applies_log_save_policy(
         self, test_client: TestClient, admin_headers, test_db, tmp_path

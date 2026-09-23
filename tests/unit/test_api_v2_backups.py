@@ -248,7 +248,9 @@ class TestV2BackupRoutes:
             await maintenance.run_prune(ctx)
 
         assert response.status_code == 200
-        fake_router.prune.assert_awaited_once_with(op.id, 1, 3, 2, 1, 0, 0, False)
+        fake_router.prune.assert_awaited_once_with(
+            op.id, 1, 3, 2, 1, 0, 0, False, raise_busy=True
+        )
 
     def test_backup_prune_dry_run_returns_legacy_modal_shape(
         self, test_client: TestClient, admin_headers, test_db
@@ -335,7 +337,7 @@ class TestV2BackupRoutes:
             await maintenance.run_compact(ctx)
 
         assert response.status_code == 200
-        fake_router.compact.assert_awaited_once_with(op.id)
+        fake_router.compact.assert_awaited_once_with(op.id, raise_busy=True)
 
     def test_backup_compact_rejects_duplicate_running_job(
         self, test_client: TestClient, admin_headers, test_db
@@ -460,7 +462,7 @@ class TestV2BackupRoutes:
             await maintenance.run_check(ctx)
 
         assert response.status_code == 200
-        fake_router.check.assert_awaited_once_with(op.id)
+        fake_router.check.assert_awaited_once_with(op.id, raise_busy=True)
 
     def test_backup_check_rejects_duplicate_running_job(
         self, test_client: TestClient, admin_headers, test_db

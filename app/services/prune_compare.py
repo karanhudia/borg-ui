@@ -115,7 +115,11 @@ async def run_comparison(
     """Run every candidate, then replace the repository's rows wholesale. A
     candidate whose dry run failed is left out; the others still land. When
     none did, the previous rows stay: an outage should not erase a good
-    comparison."""
+    comparison. A dry run the admission refuses (another job holds the
+    repository) ends the comparison with that refusal, which the runner
+    defers; the next attempt runs every candidate again."""
+    from app.services.operations.runner import repository_busy
+
     count, max_id, seen_at = archive_set(db, repository)
     computed_at = utc_now()
     rows: list[PruneComparison] = []
@@ -150,10 +154,13 @@ async def run_comparison(
                 run_id=run_id,
                 depends_on_id=depends_on_id,
                 remeasure=False,
+                raise_busy=True,
             )
         except DryRunFailed:
             continue
-        except Exception:
+        except Exception as exc:
+            if repository_busy(exc):
+                raise
             # run_prune_dry_run already failed the candidate's inline row.
             logger.exception("prune_compare: %s dry run raised", key)
             continue

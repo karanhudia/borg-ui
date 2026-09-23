@@ -2046,7 +2046,14 @@ def _fake_dry_run(status="completed", log="borg said"):
     from app.services.operations.vocab import category_for
 
     async def run(
-        db, repository, retention, *, user_id, run_id=None, depends_on_id=None
+        db,
+        repository,
+        retention,
+        *,
+        user_id,
+        run_id=None,
+        depends_on_id=None,
+        raise_busy=False,
     ):
         op = Operation(
             kind="prune",

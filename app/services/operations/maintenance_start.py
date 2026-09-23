@@ -180,10 +180,16 @@ def failure_text(error: BaseException) -> str:
 
 
 async def fail_inline_maintenance(
-    db: Session, operation: Operation, error: BaseException
+    db: Session,
+    operation: Operation,
+    error: BaseException,
+    *,
+    skip_reason: Optional[str] = None,
 ) -> bool:
     """Close an inline operation whose caller raised instead of writing the
-    terminal status, and say whether it did.
+    terminal status, and say whether it did. With `skip_reason` the row is
+    closed `skipped` for that reason instead of `failed`: the work never
+    started and the caller asks for it again later.
 
     A row that already reached a terminal status (the agent path fails it
     itself when its job is refused) is kept as written. So is a row a live
@@ -216,21 +222,21 @@ async def fail_inline_maintenance(
         # every retry (a rollback discards attribute writes), and a report
         # that reached the row first keeps its own verdict.
         nonlocal closed
+        values = {
+            Operation.status: "skipped" if skip_reason else "failed",
+            # a diagnostic the service recorded before raising is
+            # more specific than the exception that wrapped it
+            Operation.error_message: func.coalesce(
+                Operation.error_message, failure_text(error)
+            ),
+            Operation.completed_at: utc_now(),
+        }
+        if skip_reason:
+            values[Operation.skip_reason] = skip_reason
         closed = (
             db.query(Operation)
             .filter(Operation.id == operation_id, Operation.status == "running")
-            .update(
-                {
-                    Operation.status: "failed",
-                    # a diagnostic the service recorded before raising is
-                    # more specific than the exception that wrapped it
-                    Operation.error_message: func.coalesce(
-                        Operation.error_message, failure_text(error)
-                    ),
-                    Operation.completed_at: utc_now(),
-                },
-                synchronize_session=False,
-            )
+            .update(values, synchronize_session=False)
         )
 
     try:

@@ -415,6 +415,32 @@ def validate_agent_repository_operation(
     return agent
 
 
+def _require_repository_lane(
+    db: Session, repository: Repository, maintenance_job_id: Optional[int]
+) -> None:
+    """Refuse to leave queued operations out of admission unless the caller's
+    maintenance row holds the repository lane: a running operation of an
+    exclusive kind on this repository. While it runs, no queued exclusive
+    operation of the repository can start (`lanes.lane_free`), and any other
+    queued operation that starts goes through admission itself. From
+    anywhere else a queued prune would simply stop being counted, so this
+    is a programming error and fails loudly."""
+    from app.database.models import Operation
+    from app.services.operations.vocab import is_exclusive
+
+    row = db.get(Operation, maintenance_job_id) if maintenance_job_id else None
+    if (
+        row is None
+        or row.repository_id != repository.id
+        or row.status != "running"
+        or not is_exclusive(row.kind)
+    ):
+        raise RuntimeError(
+            "ignore_queued_operations is only valid for a running exclusive "
+            "operation of the repository (the runner's repository lane)"
+        )
+
+
 def queue_agent_repository_operation_job(
     db: Session,
     repository: Repository,
@@ -423,7 +449,13 @@ def queue_agent_repository_operation_job(
     operation: Optional[dict[str, Any]] = None,
     maintenance_job_kind: Optional[str] = None,
     maintenance_job_id: Optional[int] = None,
+    ignore_queued_operations: bool = False,
 ) -> AgentJob:
+    """`ignore_queued_operations` (see `list_active_repository_work`) is only
+    valid from the runner's repository lane, and is refused anywhere else:
+    see `_require_repository_lane`."""
+    if ignore_queued_operations:
+        _require_repository_lane(db, repository, maintenance_job_id)
     agent = validate_agent_repository_operation(db, repository, job_kind=job_kind)
     operation_payload = operation
     admission_operation = operation_for_agent_job_kind(job_kind)
@@ -438,6 +470,7 @@ def queue_agent_repository_operation_job(
             "operations" if maintenance_job_kind else None,
             maintenance_job_id,
         ),
+        ignore_queued_operations=ignore_queued_operations,
     )
     now = datetime.utcnow()
     agent_job = AgentJob(

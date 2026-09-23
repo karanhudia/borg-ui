@@ -562,6 +562,7 @@ class BorgRouter:
         is_cancelled: Optional[Callable[[], bool]] = None,
         wait_for_read_work: bool = False,
         retry_pause_seconds: float = 1.0,
+        raise_busy: bool = False,
     ) -> None:
         """Delegate a maintenance op to the managed agent and wait for it.
 
@@ -571,6 +572,16 @@ class BorgRouter:
         The agent updates the linked maintenance job (``maintenance_job_id``)
         when it reports completion, so the caller can refresh + read its status
         exactly as with the server-side path.
+
+        `raise_busy` is for a caller the operations runner started through
+        the repository lane. The admission's refusal of the agent job
+        (another job holds the repository) is raised as it is and the
+        maintenance job is left for the caller to close: the runner defers
+        the operation on that refusal and runs it again later. Other queued
+        operations of the repository do not refuse it: they hold no lock and
+        wait for the lane this caller holds, and counting them would let two
+        queued maintenance operations refuse each other. Every other error
+        takes the path every caller gets.
         """
         from fastapi import HTTPException
 
@@ -578,6 +589,7 @@ class BorgRouter:
         from app.database.database import SessionLocal
         from app.database.models import Repository, SystemSettings
         from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+        from app.services.operations.runner import repository_busy
         from app.services.repository_executor import (
             wait_for_agent_repository_operation_job,
         )
@@ -607,6 +619,7 @@ class BorgRouter:
                     is_cancelled=is_cancelled,
                     wait_for_read_work=wait_for_read_work,
                     retry_pause_seconds=retry_pause_seconds,
+                    ignore_queued_operations=raise_busy,
                 )
             except _MaintenanceWaitCancelled:
                 # The run was cancelled while the job waited for read work:
@@ -621,6 +634,9 @@ class BorgRouter:
                 )
                 return
             except BaseException as exc:
+                if raise_busy and repository_busy(exc):
+                    # The caller closes the row itself and asks again later.
+                    raise
                 # The maintenance job row was created by the caller before this
                 # runs. If we cannot even queue the agent job (a refused
                 # admission, a locked database), no agent job will ever update
@@ -640,6 +656,9 @@ class BorgRouter:
                 db, agent_job.id, timeout_seconds=timeout_seconds
             )
         except HTTPException as exc:
+            if raise_busy and repository_busy(exc):
+                # Kept an HTTPException: that is how the runner recognises it.
+                raise
             # queue_/wait_for_ raise HTTPException, but this runs in scheduler and
             # post-backup flows that have no HTTP context. Translate to a plain
             # error so background maintenance doesn't surface an HTTP-specific
@@ -665,6 +684,7 @@ class BorgRouter:
         wait_for_read_work: bool = False,
         retry_pause_seconds: float = 1.0,
         cancel_check_interval_seconds: float = 5.0,
+        ignore_queued_operations: bool = False,
     ):
         """Queue the agent job for a maintenance operation; with
         `wait_for_read_work`, wait out transient read work instead of
@@ -711,6 +731,7 @@ class BorgRouter:
                 operation=operation,
                 maintenance_job_kind=maintenance_kind,
                 maintenance_job_id=maintenance_job_id,
+                ignore_queued_operations=ignore_queued_operations,
             )
 
         if not wait_for_read_work:
@@ -853,18 +874,21 @@ class BorgRouter:
         finally:
             db.close()
 
-    async def check(self, job_id: int) -> None:
+    async def check(self, job_id: int, *, raise_busy: bool = False) -> None:
         """Run a repository integrity check.
 
         agent: delegates to the managed agent (repository.check).
         v2: delegates to the Borg 2 check service.
         v1: delegates to the existing check service.
+
+        `raise_busy`: see `_run_agent_maintenance`.
         """
         if self._is_agent():
             await self._run_agent_maintenance(
                 job_kind="repository.check",
                 maintenance_kind="check",
                 maintenance_job_id=job_id,
+                raise_busy=raise_busy,
             )
             return
         if self.is_v2:
@@ -882,6 +906,7 @@ class BorgRouter:
         *,
         is_cancelled: Optional[Callable[[], bool]] = None,
         wait_for_read_work: bool = False,
+        raise_busy: bool = False,
     ) -> None:
         """Run repository compaction through the version-aware service layer.
 
@@ -889,7 +914,8 @@ class BorgRouter:
         is refusing it (a plan's post-backup step, see
         `_queue_agent_maintenance_job`); `is_cancelled` ends that wait when
         the caller's run has been cancelled meanwhile. Every other caller
-        keeps the immediate refusal.
+        keeps the immediate refusal. `raise_busy`: see
+        `_run_agent_maintenance`.
         """
         if self._is_agent():
             await self._run_agent_maintenance(
@@ -898,6 +924,7 @@ class BorgRouter:
                 maintenance_job_id=job_id,
                 is_cancelled=is_cancelled,
                 wait_for_read_work=wait_for_read_work,
+                raise_busy=raise_busy,
             )
             return
         if self.is_v2:
@@ -923,6 +950,7 @@ class BorgRouter:
         *,
         is_cancelled: Optional[Callable[[], bool]] = None,
         wait_for_read_work: bool = False,
+        raise_busy: bool = False,
     ) -> None:
         """Run repository pruning through the version-aware service layer.
 
@@ -930,7 +958,8 @@ class BorgRouter:
         refusing it (a plan's post-backup step, see
         `_queue_agent_maintenance_job`); `is_cancelled` ends that wait when
         the caller's run has been cancelled meanwhile. Every other caller
-        keeps the immediate refusal.
+        keeps the immediate refusal. `raise_busy`: see
+        `_run_agent_maintenance`.
         """
         if self._is_agent():
             await self._run_agent_maintenance(
@@ -939,6 +968,7 @@ class BorgRouter:
                 maintenance_job_id=job_id,
                 is_cancelled=is_cancelled,
                 wait_for_read_work=wait_for_read_work,
+                raise_busy=raise_busy,
                 operation={
                     "keep_hourly": keep_hourly,
                     "keep_daily": keep_daily,
@@ -975,13 +1005,16 @@ class BorgRouter:
 
             await prune_service.execute_prune(**kwargs)
 
-    async def delete_archive(self, job_id: int, archive_name: str) -> None:
+    async def delete_archive(
+        self, job_id: int, archive_name: str, *, raise_busy: bool = False
+    ) -> None:
         """Delete an archive through the version-aware service layer.
 
         agent: delegates to the managed agent (repository.delete_archive). The
         caller has already resolved ``archive_name`` to the exact selector
         (``aid:<hex>`` for a Borg 2 series, a unique name for Borg 1), so the
-        agent removes only the intended archive.
+        agent removes only the intended archive. `raise_busy`: see
+        `_run_agent_maintenance`.
         """
         if self._is_agent():
             await self._run_agent_maintenance(
@@ -989,6 +1022,7 @@ class BorgRouter:
                 maintenance_kind="delete_archive",
                 maintenance_job_id=job_id,
                 operation={"archive": archive_name},
+                raise_busy=raise_busy,
             )
             return
         if self.is_v2:
