@@ -268,9 +268,13 @@ jobs:
           mkdir -p data
           mkdir -p logs
 
+      # The container runs as root, which can create any path and so hides
+      # permission failures. Run as the image's non-root borg user, the way the
+      # app runs in production and the way the job ran on the plain runner.
       - name: Run backend integration suite
         run: |
-          pytest tests/integration -v
+          chown -R borg:borg . /tmp/borg-ui-tests
+          gosu borg pytest tests/integration -v
         env:
           REDIS_HOST: redis
           REDIS_PORT: 6379

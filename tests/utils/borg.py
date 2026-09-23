@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, Iterable, Optional
 
 import pytest
 
+from app.core.borg2 import BORG2_ENCRYPTION_FLAGS
+
 if TYPE_CHECKING:
     from app.database.models import Repository
 
@@ -78,7 +80,12 @@ def init_borg_repo(
     if borg_name.startswith("borg2"):
         run_borg(
             borg_binary,
-            ["-r", str(repo_path), "repo-create", "--encryption", encryption],
+            [
+                "-r",
+                str(repo_path),
+                "repo-create",
+                *BORG2_ENCRYPTION_FLAGS.get(encryption, ["--encryption", encryption]),
+            ],
             env=env,
         )
     else:

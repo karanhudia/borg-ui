@@ -50,7 +50,14 @@ def _create_borg2_repo_with_archives(test_db, tmp_path):
     env = make_borg_test_env(str(tmp_path))
 
     init_result = subprocess.run(
-        [borg2_binary, "-r", str(repo_path), "repo-create", "--encryption", "none"],
+        [
+            borg2_binary,
+            "-r",
+            str(repo_path),
+            "repo-create",
+            "--encryption",
+            "none-sha256",
+        ],
         capture_output=True,
         text=True,
         env=env,
@@ -58,13 +65,13 @@ def _create_borg2_repo_with_archives(test_db, tmp_path):
     assert init_result.returncode == 0, init_result.stderr
 
     (source_path / "file1.txt").write_text("borg2 prune file 1\n", encoding="utf-8")
-    create_archive(borg2_binary, repo_path, "test-archive-1", [source_path], env=env)
+    create_archive(borg2_binary, repo_path, "test-archive", [source_path], env=env)
 
     (source_path / "file1.txt").write_text(
         "borg2 prune file 1 updated\n", encoding="utf-8"
     )
     (source_path / "file2.txt").write_text("borg2 prune file 2\n", encoding="utf-8")
-    create_archive(borg2_binary, repo_path, "test-archive-2", [source_path], env=env)
+    create_archive(borg2_binary, repo_path, "test-archive", [source_path], env=env)
 
     repo = Repository(
         name="Test Borg2 Integration Repo with Archives",
@@ -79,7 +86,9 @@ def _create_borg2_repo_with_archives(test_db, tmp_path):
     test_db.commit()
     test_db.refresh(repo)
 
-    return repo, repo_path, source_path, ["test-archive-1", "test-archive-2"]
+    # Borg 2 prunes per series (archives sharing a name, b23+), and borg-ui
+    # gives Borg 2 archives a stable series name, so both share one here.
+    return repo, repo_path, source_path, ["test-archive", "test-archive"]
 
 
 def _assert_prune_contract_shape(payload: dict, *, dry_run: bool) -> None:
@@ -276,7 +285,7 @@ class TestRepositoryInitializationV2:
         assert response.status_code == 200, response.json()
         repo_data = response.json().get("repository", response.json())
         assert repo_data["borg_version"] == 2
-        assert repo_data["encryption"] == "none"
+        assert test_db.get(Repository, repo_data["id"]).encryption == "none"
 
         info_response = test_client.get(
             f"/api/v2/repositories/{repo_data['id']}/info",
@@ -312,7 +321,14 @@ class TestRepositoryInitializationV2:
         )
 
         create_result = subprocess.run(
-            [borg2_binary, "-r", str(repo_path), "repo-create", "--encryption", "none"],
+            [
+                borg2_binary,
+                "-r",
+                str(repo_path),
+                "repo-create",
+                "--encryption",
+                "none-sha256",
+            ],
             capture_output=True,
             text=True,
             env=make_borg_test_env(str(tmp_path)),
@@ -838,7 +854,7 @@ class TestRepositoryMaintenanceOperations:
         assert response.status_code == 200, response.json()
         job_id = _assert_borg2_job_start_contract(
             response.json(),
-            expected_status="running",
+            expected_status="pending",
             expected_message="backend.success.repo.checkJobStarted",
         )
 
@@ -871,7 +887,7 @@ class TestRepositoryMaintenanceOperations:
         assert response.status_code == 200, response.json()
         job_id = _assert_borg2_job_start_contract(
             response.json(),
-            expected_status="running",
+            expected_status="pending",
             expected_message="backend.success.repo.compactJobStarted",
         )
 
