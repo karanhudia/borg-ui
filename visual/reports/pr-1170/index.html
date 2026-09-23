@@ -1,0 +1,1894 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PR #1170 visual report</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f8fa;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #637083;
+      --border: #d8dee8;
+      --accent: #1769aa;
+      --changed: #b42318;
+      --added: #067647;
+      --removed: #7f56d9;
+      --shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 28px min(5vw, 56px);
+    }
+
+    main {
+      display: grid;
+      gap: 24px;
+      padding: 24px min(5vw, 56px) 48px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      font-size: clamp(1.6rem, 2.2vw, 2.4rem);
+      letter-spacing: 0;
+      line-height: 1.15;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-top: 22px;
+      max-width: 980px;
+    }
+
+    .metric {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 14px 16px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 1.6rem;
+      line-height: 1.1;
+    }
+
+    .metric span {
+      color: var(--muted);
+      display: block;
+      font-size: 0.88rem;
+      margin-top: 4px;
+    }
+
+    .meta {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .pill {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      display: inline-flex;
+      font-size: 0.84rem;
+      padding: 4px 10px;
+    }
+
+    .pill-ok { color: var(--added); border-color: #abefc6; background: #ecfdf3; }
+    .pill-changed { color: var(--changed); border-color: #fecdca; background: #fef3f2; }
+    .pill-info { color: var(--accent); border-color: #b9d6f2; background: #eff8ff; }
+
+    .section {
+      display: grid;
+      gap: 14px;
+    }
+
+    .section-title {
+      align-items: center;
+      display: flex;
+      gap: 10px;
+    }
+
+    .section-title h2 {
+      font-size: 1.08rem;
+      letter-spacing: 0;
+    }
+
+    .section-title span {
+      background: #e9eef5;
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      padding: 2px 9px;
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 12px 0;
+    }
+
+    .shot {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .shot-header {
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      justify-content: space-between;
+      padding: 14px 16px;
+    }
+
+    .shot-header h3 {
+      font-size: 0.96rem;
+      overflow-wrap: anywhere;
+    }
+
+    .shot-header p {
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .image-grid {
+      display: grid;
+      gap: 1px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      background: var(--border);
+    }
+
+    .image-grid.single {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    figure {
+      background: #f8fafc;
+      margin: 0;
+      min-width: 0;
+      padding: 12px;
+    }
+
+    figcaption {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    img {
+      background: white;
+      border: 1px solid #e5e7eb;
+      display: block;
+      height: auto;
+      max-width: 100%;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover { text-decoration: underline; }
+
+    @media (max-width: 820px) {
+      header { padding: 22px 18px; }
+      main { padding: 18px; }
+      .image-grid { grid-template-columns: minmax(0, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>PR #1170 visual report</h1>
+    <p class="subtitle">Generated Sep 23, 2026, 11:06 AM UTC</p>
+    <div class="meta">
+      <span class="pill pill-changed">Visual changes found</span>
+      
+      <span class="pill pill-info">Commit 1abd0ad2d8af</span>
+      <a class="pill pill-info" href="https://github.com/karanhudia/borg-ui/actions/runs/35852523160">Workflow run</a>
+    </div>
+    <div class="summary">
+      <div class="metric"><strong>55</strong><span>Changed</span></div>
+      <div class="metric"><strong>18</strong><span>Added</span></div>
+      <div class="metric"><strong>2</strong><span>Removed</span></div>
+      <div class="metric"><strong>929</strong><span>Unchanged</span></div>
+      <div class="metric"><strong>1002</strong><span>Current screenshots</span></div>
+      <div class="metric"><strong>986</strong><span>Baseline screenshots</span></div>
+    </div>
+  </header>
+  <main>
+    
+    <section class="section">
+      <div class="section-title">
+        <h2>Changed</h2>
+        <span>55</span>
+      </div>
+      
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-hubtoolbar--attention-view--mobile.png</h3>
+        <p>399 px changed · 0.12%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-hubtoolbar--attention-view--mobile.png"><img src="images/baseline/backgroundwork-hubtoolbar--attention-view--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-hubtoolbar--attention-view--mobile.png"><img src="images/actual/backgroundwork-hubtoolbar--attention-view--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-hubtoolbar--attention-view--mobile.png"><img src="images/diff/backgroundwork-hubtoolbar--attention-view--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-pipelineboard--busy--mobile.png</h3>
+        <p>54,183 px changed · 16.46%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-pipelineboard--busy--mobile.png"><img src="images/baseline/backgroundwork-pipelineboard--busy--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-pipelineboard--busy--mobile.png"><img src="images/actual/backgroundwork-pipelineboard--busy--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-pipelineboard--busy--mobile.png"><img src="images/diff/backgroundwork-pipelineboard--busy--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-pipelineboard--busy.png</h3>
+        <p>421,327 px changed · 41.15%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-pipelineboard--busy.png"><img src="images/baseline/backgroundwork-pipelineboard--busy.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-pipelineboard--busy.png"><img src="images/actual/backgroundwork-pipelineboard--busy.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-pipelineboard--busy.png"><img src="images/diff/backgroundwork-pipelineboard--busy.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-pipelineboard--community--mobile.png</h3>
+        <p>59,878 px changed · 18.19%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-pipelineboard--community--mobile.png"><img src="images/baseline/backgroundwork-pipelineboard--community--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-pipelineboard--community--mobile.png"><img src="images/actual/backgroundwork-pipelineboard--community--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-pipelineboard--community--mobile.png"><img src="images/diff/backgroundwork-pipelineboard--community--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-pipelineboard--community.png</h3>
+        <p>312,573 px changed · 30.52%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-pipelineboard--community.png"><img src="images/baseline/backgroundwork-pipelineboard--community.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-pipelineboard--community.png"><img src="images/actual/backgroundwork-pipelineboard--community.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-pipelineboard--community.png"><img src="images/diff/backgroundwork-pipelineboard--community.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-pipelineboard--idle--mobile.png</h3>
+        <p>60,081 px changed · 18.25%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-pipelineboard--idle--mobile.png"><img src="images/baseline/backgroundwork-pipelineboard--idle--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-pipelineboard--idle--mobile.png"><img src="images/actual/backgroundwork-pipelineboard--idle--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-pipelineboard--idle--mobile.png"><img src="images/diff/backgroundwork-pipelineboard--idle--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-pipelineboard--idle.png</h3>
+        <p>302,651 px changed · 29.56%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-pipelineboard--idle.png"><img src="images/baseline/backgroundwork-pipelineboard--idle.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-pipelineboard--idle.png"><img src="images/actual/backgroundwork-pipelineboard--idle.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-pipelineboard--idle.png"><img src="images/diff/backgroundwork-pipelineboard--idle.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-pipelineboard--lane-holder-missing--mobile.png</h3>
+        <p>54,192 px changed · 16.46%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-pipelineboard--lane-holder-missing--mobile.png"><img src="images/baseline/backgroundwork-pipelineboard--lane-holder-missing--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-pipelineboard--lane-holder-missing--mobile.png"><img src="images/actual/backgroundwork-pipelineboard--lane-holder-missing--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-pipelineboard--lane-holder-missing--mobile.png"><img src="images/diff/backgroundwork-pipelineboard--lane-holder-missing--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-pipelineboard--lane-holder-missing.png</h3>
+        <p>421,382 px changed · 41.15%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-pipelineboard--lane-holder-missing.png"><img src="images/baseline/backgroundwork-pipelineboard--lane-holder-missing.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-pipelineboard--lane-holder-missing.png"><img src="images/actual/backgroundwork-pipelineboard--lane-holder-missing.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-pipelineboard--lane-holder-missing.png"><img src="images/diff/backgroundwork-pipelineboard--lane-holder-missing.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-pipelineboard--maintenance-holds-the-lane--mobile.png</h3>
+        <p>54,179 px changed · 16.46%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-pipelineboard--maintenance-holds-the-lane--mobile.png"><img src="images/baseline/backgroundwork-pipelineboard--maintenance-holds-the-lane--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-pipelineboard--maintenance-holds-the-lane--mobile.png"><img src="images/actual/backgroundwork-pipelineboard--maintenance-holds-the-lane--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-pipelineboard--maintenance-holds-the-lane--mobile.png"><img src="images/diff/backgroundwork-pipelineboard--maintenance-holds-the-lane--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-pipelineboard--maintenance-holds-the-lane.png</h3>
+        <p>421,940 px changed · 41.21%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-pipelineboard--maintenance-holds-the-lane.png"><img src="images/baseline/backgroundwork-pipelineboard--maintenance-holds-the-lane.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-pipelineboard--maintenance-holds-the-lane.png"><img src="images/actual/backgroundwork-pipelineboard--maintenance-holds-the-lane.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-pipelineboard--maintenance-holds-the-lane.png"><img src="images/diff/backgroundwork-pipelineboard--maintenance-holds-the-lane.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-pipelineboard--read-only--mobile.png</h3>
+        <p>53,769 px changed · 16.34%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-pipelineboard--read-only--mobile.png"><img src="images/baseline/backgroundwork-pipelineboard--read-only--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-pipelineboard--read-only--mobile.png"><img src="images/actual/backgroundwork-pipelineboard--read-only--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-pipelineboard--read-only--mobile.png"><img src="images/diff/backgroundwork-pipelineboard--read-only--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-pipelineboard--read-only.png</h3>
+        <p>419,317 px changed · 40.95%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-pipelineboard--read-only.png"><img src="images/baseline/backgroundwork-pipelineboard--read-only.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-pipelineboard--read-only.png"><img src="images/actual/backgroundwork-pipelineboard--read-only.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-pipelineboard--read-only.png"><img src="images/diff/backgroundwork-pipelineboard--read-only.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--agent-repository--mobile.png</h3>
+        <p>8,115 px changed · 2.47%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--agent-repository--mobile.png"><img src="images/baseline/backgroundwork-repositoryhubrow--agent-repository--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--agent-repository--mobile.png"><img src="images/actual/backgroundwork-repositoryhubrow--agent-repository--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--agent-repository--mobile.png"><img src="images/diff/backgroundwork-repositoryhubrow--agent-repository--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--agent-repository.png</h3>
+        <p>7,990 px changed · 0.78%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--agent-repository.png"><img src="images/baseline/backgroundwork-repositoryhubrow--agent-repository.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--agent-repository.png"><img src="images/actual/backgroundwork-repositoryhubrow--agent-repository.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--agent-repository.png"><img src="images/diff/backgroundwork-repositoryhubrow--agent-repository.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--archives-only--mobile.png</h3>
+        <p>7,674 px changed · 2.33%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--archives-only--mobile.png"><img src="images/baseline/backgroundwork-repositoryhubrow--archives-only--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--archives-only--mobile.png"><img src="images/actual/backgroundwork-repositoryhubrow--archives-only--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--archives-only--mobile.png"><img src="images/diff/backgroundwork-repositoryhubrow--archives-only--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--archives-only.png</h3>
+        <p>7,552 px changed · 0.74%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--archives-only.png"><img src="images/baseline/backgroundwork-repositoryhubrow--archives-only.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--archives-only.png"><img src="images/actual/backgroundwork-repositoryhubrow--archives-only.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--archives-only.png"><img src="images/diff/backgroundwork-repositoryhubrow--archives-only.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--at-rest--mobile.png</h3>
+        <p>9,073 px changed · 2.76%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--at-rest--mobile.png"><img src="images/baseline/backgroundwork-repositoryhubrow--at-rest--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--at-rest--mobile.png"><img src="images/actual/backgroundwork-repositoryhubrow--at-rest--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--at-rest--mobile.png"><img src="images/diff/backgroundwork-repositoryhubrow--at-rest--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--at-rest.png</h3>
+        <p>8,883 px changed · 0.87%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--at-rest.png"><img src="images/baseline/backgroundwork-repositoryhubrow--at-rest.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--at-rest.png"><img src="images/actual/backgroundwork-repositoryhubrow--at-rest.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--at-rest.png"><img src="images/diff/backgroundwork-repositoryhubrow--at-rest.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--backup-holds-the-lane--mobile.png</h3>
+        <p>40,549 px changed · 12.32%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--backup-holds-the-lane--mobile.png"><img src="images/baseline/backgroundwork-repositoryhubrow--backup-holds-the-lane--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--backup-holds-the-lane--mobile.png"><img src="images/actual/backgroundwork-repositoryhubrow--backup-holds-the-lane--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--backup-holds-the-lane--mobile.png"><img src="images/diff/backgroundwork-repositoryhubrow--backup-holds-the-lane--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--backup-holds-the-lane.png</h3>
+        <p>77,230 px changed · 7.54%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--backup-holds-the-lane.png"><img src="images/baseline/backgroundwork-repositoryhubrow--backup-holds-the-lane.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--backup-holds-the-lane.png"><img src="images/actual/backgroundwork-repositoryhubrow--backup-holds-the-lane.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--backup-holds-the-lane.png"><img src="images/diff/backgroundwork-repositoryhubrow--backup-holds-the-lane.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--failed-stage--mobile.png</h3>
+        <p>67,847 px changed · 20.61%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--failed-stage--mobile.png"><img src="images/baseline/backgroundwork-repositoryhubrow--failed-stage--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--failed-stage--mobile.png"><img src="images/actual/backgroundwork-repositoryhubrow--failed-stage--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--failed-stage--mobile.png"><img src="images/diff/backgroundwork-repositoryhubrow--failed-stage--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--failed-stage.png</h3>
+        <p>76,284 px changed · 7.45%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--failed-stage.png"><img src="images/baseline/backgroundwork-repositoryhubrow--failed-stage.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--failed-stage.png"><img src="images/actual/backgroundwork-repositoryhubrow--failed-stage.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--failed-stage.png"><img src="images/diff/backgroundwork-repositoryhubrow--failed-stage.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--index-work-holds-the-repository--mobile.png</h3>
+        <p>40,508 px changed · 12.31%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--index-work-holds-the-repository--mobile.png"><img src="images/baseline/backgroundwork-repositoryhubrow--index-work-holds-the-repository--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--index-work-holds-the-repository--mobile.png"><img src="images/actual/backgroundwork-repositoryhubrow--index-work-holds-the-repository--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--index-work-holds-the-repository--mobile.png"><img src="images/diff/backgroundwork-repositoryhubrow--index-work-holds-the-repository--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--index-work-holds-the-repository.png</h3>
+        <p>73,484 px changed · 7.18%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--index-work-holds-the-repository.png"><img src="images/baseline/backgroundwork-repositoryhubrow--index-work-holds-the-repository.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--index-work-holds-the-repository.png"><img src="images/actual/backgroundwork-repositoryhubrow--index-work-holds-the-repository.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--index-work-holds-the-repository.png"><img src="images/diff/backgroundwork-repositoryhubrow--index-work-holds-the-repository.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--never-built--mobile.png</h3>
+        <p>8,390 px changed · 2.55%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--never-built--mobile.png"><img src="images/baseline/backgroundwork-repositoryhubrow--never-built--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--never-built--mobile.png"><img src="images/actual/backgroundwork-repositoryhubrow--never-built--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--never-built--mobile.png"><img src="images/diff/backgroundwork-repositoryhubrow--never-built--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--never-built.png</h3>
+        <p>8,923 px changed · 0.87%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--never-built.png"><img src="images/baseline/backgroundwork-repositoryhubrow--never-built.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--never-built.png"><img src="images/actual/backgroundwork-repositoryhubrow--never-built.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--never-built.png"><img src="images/diff/backgroundwork-repositoryhubrow--never-built.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--not-indexed--mobile.png</h3>
+        <p>5,993 px changed · 1.82%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--not-indexed--mobile.png"><img src="images/baseline/backgroundwork-repositoryhubrow--not-indexed--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--not-indexed--mobile.png"><img src="images/actual/backgroundwork-repositoryhubrow--not-indexed--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--not-indexed--mobile.png"><img src="images/diff/backgroundwork-repositoryhubrow--not-indexed--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--not-indexed.png</h3>
+        <p>6,014 px changed · 0.59%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--not-indexed.png"><img src="images/baseline/backgroundwork-repositoryhubrow--not-indexed.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--not-indexed.png"><img src="images/actual/backgroundwork-repositoryhubrow--not-indexed.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--not-indexed.png"><img src="images/diff/backgroundwork-repositoryhubrow--not-indexed.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--running--mobile.png</h3>
+        <p>39,886 px changed · 12.12%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--running--mobile.png"><img src="images/baseline/backgroundwork-repositoryhubrow--running--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--running--mobile.png"><img src="images/actual/backgroundwork-repositoryhubrow--running--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--running--mobile.png"><img src="images/diff/backgroundwork-repositoryhubrow--running--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--running.png</h3>
+        <p>73,128 px changed · 7.14%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--running.png"><img src="images/baseline/backgroundwork-repositoryhubrow--running.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--running.png"><img src="images/actual/backgroundwork-repositoryhubrow--running.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--running.png"><img src="images/diff/backgroundwork-repositoryhubrow--running.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--sibling-branches-wait-within-one-run--mobile.png</h3>
+        <p>40,508 px changed · 12.31%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--sibling-branches-wait-within-one-run--mobile.png"><img src="images/baseline/backgroundwork-repositoryhubrow--sibling-branches-wait-within-one-run--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--sibling-branches-wait-within-one-run--mobile.png"><img src="images/actual/backgroundwork-repositoryhubrow--sibling-branches-wait-within-one-run--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--sibling-branches-wait-within-one-run--mobile.png"><img src="images/diff/backgroundwork-repositoryhubrow--sibling-branches-wait-within-one-run--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--sibling-branches-wait-within-one-run.png</h3>
+        <p>73,484 px changed · 7.18%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--sibling-branches-wait-within-one-run.png"><img src="images/baseline/backgroundwork-repositoryhubrow--sibling-branches-wait-within-one-run.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--sibling-branches-wait-within-one-run.png"><img src="images/actual/backgroundwork-repositoryhubrow--sibling-branches-wait-within-one-run.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--sibling-branches-wait-within-one-run.png"><img src="images/diff/backgroundwork-repositoryhubrow--sibling-branches-wait-within-one-run.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--system-lane--mobile.png</h3>
+        <p>198 px changed · 0.06%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--system-lane--mobile.png"><img src="images/baseline/backgroundwork-repositoryhubrow--system-lane--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--system-lane--mobile.png"><img src="images/actual/backgroundwork-repositoryhubrow--system-lane--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--system-lane--mobile.png"><img src="images/diff/backgroundwork-repositoryhubrow--system-lane--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--system-lane.png</h3>
+        <p>181 px changed · 0.02%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--system-lane.png"><img src="images/baseline/backgroundwork-repositoryhubrow--system-lane.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--system-lane.png"><img src="images/actual/backgroundwork-repositoryhubrow--system-lane.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--system-lane.png"><img src="images/diff/backgroundwork-repositoryhubrow--system-lane.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--with-problems--mobile.png</h3>
+        <p>12,391 px changed · 3.76%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--with-problems--mobile.png"><img src="images/baseline/backgroundwork-repositoryhubrow--with-problems--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--with-problems--mobile.png"><img src="images/actual/backgroundwork-repositoryhubrow--with-problems--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--with-problems--mobile.png"><img src="images/diff/backgroundwork-repositoryhubrow--with-problems--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--with-problems.png</h3>
+        <p>12,447 px changed · 1.22%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--with-problems.png"><img src="images/baseline/backgroundwork-repositoryhubrow--with-problems.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--with-problems.png"><img src="images/actual/backgroundwork-repositoryhubrow--with-problems.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositoryhubrow--with-problems.png"><img src="images/diff/backgroundwork-repositoryhubrow--with-problems.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositorytrackdialog--agent-repository--mobile.png</h3>
+        <p>174,004 px changed · 52.86%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositorytrackdialog--agent-repository--mobile.png"><img src="images/baseline/backgroundwork-repositorytrackdialog--agent-repository--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositorytrackdialog--agent-repository--mobile.png"><img src="images/actual/backgroundwork-repositorytrackdialog--agent-repository--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositorytrackdialog--agent-repository--mobile.png"><img src="images/diff/backgroundwork-repositorytrackdialog--agent-repository--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositorytrackdialog--agent-repository.png</h3>
+        <p>224,408 px changed · 21.91%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositorytrackdialog--agent-repository.png"><img src="images/baseline/backgroundwork-repositorytrackdialog--agent-repository.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositorytrackdialog--agent-repository.png"><img src="images/actual/backgroundwork-repositorytrackdialog--agent-repository.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositorytrackdialog--agent-repository.png"><img src="images/diff/backgroundwork-repositorytrackdialog--agent-repository.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositorytrackdialog--all-indexed--mobile.png</h3>
+        <p>173,384 px changed · 52.67%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositorytrackdialog--all-indexed--mobile.png"><img src="images/baseline/backgroundwork-repositorytrackdialog--all-indexed--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositorytrackdialog--all-indexed--mobile.png"><img src="images/actual/backgroundwork-repositorytrackdialog--all-indexed--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositorytrackdialog--all-indexed--mobile.png"><img src="images/diff/backgroundwork-repositorytrackdialog--all-indexed--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositorytrackdialog--all-indexed.png</h3>
+        <p>324,515 px changed · 31.69%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositorytrackdialog--all-indexed.png"><img src="images/baseline/backgroundwork-repositorytrackdialog--all-indexed.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositorytrackdialog--all-indexed.png"><img src="images/actual/backgroundwork-repositorytrackdialog--all-indexed.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositorytrackdialog--all-indexed.png"><img src="images/diff/backgroundwork-repositorytrackdialog--all-indexed.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositorytrackdialog--archives-only-mode--mobile.png</h3>
+        <p>160,269 px changed · 48.69%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositorytrackdialog--archives-only-mode--mobile.png"><img src="images/baseline/backgroundwork-repositorytrackdialog--archives-only-mode--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositorytrackdialog--archives-only-mode--mobile.png"><img src="images/actual/backgroundwork-repositorytrackdialog--archives-only-mode--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositorytrackdialog--archives-only-mode--mobile.png"><img src="images/diff/backgroundwork-repositorytrackdialog--archives-only-mode--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositorytrackdialog--archives-only-mode.png</h3>
+        <p>298,987 px changed · 29.20%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositorytrackdialog--archives-only-mode.png"><img src="images/baseline/backgroundwork-repositorytrackdialog--archives-only-mode.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositorytrackdialog--archives-only-mode.png"><img src="images/actual/backgroundwork-repositorytrackdialog--archives-only-mode.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositorytrackdialog--archives-only-mode.png"><img src="images/diff/backgroundwork-repositorytrackdialog--archives-only-mode.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositorytrackdialog--history-partial--mobile.png</h3>
+        <p>168,732 px changed · 51.26%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositorytrackdialog--history-partial--mobile.png"><img src="images/baseline/backgroundwork-repositorytrackdialog--history-partial--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositorytrackdialog--history-partial--mobile.png"><img src="images/actual/backgroundwork-repositorytrackdialog--history-partial--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositorytrackdialog--history-partial--mobile.png"><img src="images/diff/backgroundwork-repositorytrackdialog--history-partial--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositorytrackdialog--history-partial.png</h3>
+        <p>324,488 px changed · 31.69%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositorytrackdialog--history-partial.png"><img src="images/baseline/backgroundwork-repositorytrackdialog--history-partial.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositorytrackdialog--history-partial.png"><img src="images/actual/backgroundwork-repositorytrackdialog--history-partial.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositorytrackdialog--history-partial.png"><img src="images/diff/backgroundwork-repositorytrackdialog--history-partial.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositorytrackdialog--with-problems--mobile.png</h3>
+        <p>154,796 px changed · 47.03%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositorytrackdialog--with-problems--mobile.png"><img src="images/baseline/backgroundwork-repositorytrackdialog--with-problems--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositorytrackdialog--with-problems--mobile.png"><img src="images/actual/backgroundwork-repositorytrackdialog--with-problems--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositorytrackdialog--with-problems--mobile.png"><img src="images/diff/backgroundwork-repositorytrackdialog--with-problems--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositorytrackdialog--with-problems.png</h3>
+        <p>205,996 px changed · 20.12%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositorytrackdialog--with-problems.png"><img src="images/baseline/backgroundwork-repositorytrackdialog--with-problems.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositorytrackdialog--with-problems.png"><img src="images/actual/backgroundwork-repositorytrackdialog--with-problems.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/backgroundwork-repositorytrackdialog--with-problems.png"><img src="images/diff/backgroundwork-repositorytrackdialog--with-problems.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>settings-backgroundworktab--busy--mobile.png</h3>
+        <p>31,521 px changed · 9.58%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/settings-backgroundworktab--busy--mobile.png"><img src="images/baseline/settings-backgroundworktab--busy--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/settings-backgroundworktab--busy--mobile.png"><img src="images/actual/settings-backgroundworktab--busy--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/settings-backgroundworktab--busy--mobile.png"><img src="images/diff/settings-backgroundworktab--busy--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>settings-backgroundworktab--busy.png</h3>
+        <p>394,673 px changed · 38.54%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/settings-backgroundworktab--busy.png"><img src="images/baseline/settings-backgroundworktab--busy.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/settings-backgroundworktab--busy.png"><img src="images/actual/settings-backgroundworktab--busy.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/settings-backgroundworktab--busy.png"><img src="images/diff/settings-backgroundworktab--busy.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>settings-backgroundworktab--idle--mobile.png</h3>
+        <p>36,344 px changed · 11.04%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/settings-backgroundworktab--idle--mobile.png"><img src="images/baseline/settings-backgroundworktab--idle--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/settings-backgroundworktab--idle--mobile.png"><img src="images/actual/settings-backgroundworktab--idle--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/settings-backgroundworktab--idle--mobile.png"><img src="images/diff/settings-backgroundworktab--idle--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>settings-backgroundworktab--idle.png</h3>
+        <p>290,796 px changed · 28.40%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/settings-backgroundworktab--idle.png"><img src="images/baseline/settings-backgroundworktab--idle.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/settings-backgroundworktab--idle.png"><img src="images/actual/settings-backgroundworktab--idle.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/settings-backgroundworktab--idle.png"><img src="images/diff/settings-backgroundworktab--idle.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>settings-backgroundworktab--paused--mobile.png</h3>
+        <p>19,974 px changed · 6.07%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/settings-backgroundworktab--paused--mobile.png"><img src="images/baseline/settings-backgroundworktab--paused--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/settings-backgroundworktab--paused--mobile.png"><img src="images/actual/settings-backgroundworktab--paused--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/settings-backgroundworktab--paused--mobile.png"><img src="images/diff/settings-backgroundworktab--paused--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>settings-backgroundworktab--paused-as-operator--mobile.png</h3>
+        <p>28,642 px changed · 8.70%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/settings-backgroundworktab--paused-as-operator--mobile.png"><img src="images/baseline/settings-backgroundworktab--paused-as-operator--mobile.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/settings-backgroundworktab--paused-as-operator--mobile.png"><img src="images/actual/settings-backgroundworktab--paused-as-operator--mobile.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/settings-backgroundworktab--paused-as-operator--mobile.png"><img src="images/diff/settings-backgroundworktab--paused-as-operator--mobile.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>settings-backgroundworktab--paused-as-operator.png</h3>
+        <p>276,013 px changed · 26.95%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/settings-backgroundworktab--paused-as-operator.png"><img src="images/baseline/settings-backgroundworktab--paused-as-operator.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/settings-backgroundworktab--paused-as-operator.png"><img src="images/actual/settings-backgroundworktab--paused-as-operator.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/settings-backgroundworktab--paused-as-operator.png"><img src="images/diff/settings-backgroundworktab--paused-as-operator.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>settings-backgroundworktab--paused.png</h3>
+        <p>281,175 px changed · 27.46%</p>
+      </div>
+      <div class="image-grid ">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/settings-backgroundworktab--paused.png"><img src="images/baseline/settings-backgroundworktab--paused.png" alt="Before"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/settings-backgroundworktab--paused.png"><img src="images/actual/settings-backgroundworktab--paused.png" alt="After"></a>
+    </figure>
+        
+    <figure>
+      <figcaption>Diff</figcaption>
+      <a href="images/diff/settings-backgroundworktab--paused.png"><img src="images/diff/settings-backgroundworktab--paused.png" alt="Diff"></a>
+    </figure>
+      </div>
+    </article>
+    </section>
+    
+    <section class="section">
+      <div class="section-title">
+        <h2>Added</h2>
+        <span>18</span>
+      </div>
+      
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-pipelineboard--stage-paused--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-pipelineboard--stage-paused--mobile.png"><img src="images/actual/backgroundwork-pipelineboard--stage-paused--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-pipelineboard--stage-paused.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-pipelineboard--stage-paused.png"><img src="images/actual/backgroundwork-pipelineboard--stage-paused.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--retention-preview-running--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--retention-preview-running--mobile.png"><img src="images/actual/backgroundwork-repositoryhubrow--retention-preview-running--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--retention-preview-running.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--retention-preview-running.png"><img src="images/actual/backgroundwork-repositoryhubrow--retention-preview-running.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--waiting-on-a-paused-stage--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--waiting-on-a-paused-stage--mobile.png"><img src="images/actual/backgroundwork-repositoryhubrow--waiting-on-a-paused-stage--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--waiting-on-a-paused-stage.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-repositoryhubrow--waiting-on-a-paused-stage.png"><img src="images/actual/backgroundwork-repositoryhubrow--waiting-on-a-paused-stage.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-stagestrip--all-idle--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-stagestrip--all-idle--mobile.png"><img src="images/actual/backgroundwork-stagestrip--all-idle--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-stagestrip--all-idle.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-stagestrip--all-idle.png"><img src="images/actual/backgroundwork-stagestrip--all-idle.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-stagestrip--all-paused--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-stagestrip--all-paused--mobile.png"><img src="images/actual/backgroundwork-stagestrip--all-paused--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-stagestrip--all-paused.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-stagestrip--all-paused.png"><img src="images/actual/backgroundwork-stagestrip--all-paused.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-stagestrip--backup-wave--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-stagestrip--backup-wave--mobile.png"><img src="images/actual/backgroundwork-stagestrip--backup-wave--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-stagestrip--backup-wave.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-stagestrip--backup-wave.png"><img src="images/actual/backgroundwork-stagestrip--backup-wave.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-stagestrip--one-stage-paused--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-stagestrip--one-stage-paused--mobile.png"><img src="images/actual/backgroundwork-stagestrip--one-stage-paused--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-stagestrip--one-stage-paused.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-stagestrip--one-stage-paused.png"><img src="images/actual/backgroundwork-stagestrip--one-stage-paused.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-stagestrip--read-only--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-stagestrip--read-only--mobile.png"><img src="images/actual/backgroundwork-stagestrip--read-only--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-stagestrip--read-only.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-stagestrip--read-only.png"><img src="images/actual/backgroundwork-stagestrip--read-only.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-stagestrip--selected--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-stagestrip--selected--mobile.png"><img src="images/actual/backgroundwork-stagestrip--selected--mobile.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-stagestrip--selected.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+        
+    <figure>
+      <figcaption>After</figcaption>
+      <a href="images/actual/backgroundwork-stagestrip--selected.png"><img src="images/actual/backgroundwork-stagestrip--selected.png" alt="After"></a>
+    </figure>
+        
+      </div>
+    </article>
+    </section>
+    
+    <section class="section">
+      <div class="section-title">
+        <h2>Removed</h2>
+        <span>2</span>
+      </div>
+      
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--community--mobile.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--community--mobile.png"><img src="images/baseline/backgroundwork-repositoryhubrow--community--mobile.png" alt="Before"></a>
+    </figure>
+        
+        
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="shot-header">
+        <h3>backgroundwork-repositoryhubrow--community.png</h3>
+        
+      </div>
+      <div class="image-grid single">
+        
+    <figure>
+      <figcaption>Before</figcaption>
+      <a href="images/baseline/backgroundwork-repositoryhubrow--community.png"><img src="images/baseline/backgroundwork-repositoryhubrow--community.png" alt="Before"></a>
+    </figure>
+        
+        
+      </div>
+    </article>
+    </section>
+  </main>
+</body>
+</html>
