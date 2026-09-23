@@ -162,7 +162,7 @@ def write_repository_archive_columns(
 ) -> None:
     """Derive archive_count and last_backup from the archives table (spec
     6.4). `exclude_ids` are rows a listing reported removed and left in
-    place (the info dialog's listing; archive_sync deletes its own)."""
+    place: the info dialog's listing, and archive_sync's failed folds."""
     excluded = set(exclude_ids)
     rows = [
         a
@@ -290,9 +290,13 @@ def archives_needing_info(
     *,
     limit: int,
     include_missing_end: bool = False,
+    exclude_ids: Iterable[int] = (),
 ) -> list[Archive]:
     """Archives whose `borg info` stats are missing or stale: rows without
     sizes first, then stale rows, each oldest first.
+
+    `exclude_ids` are rows whose fold failed: Borg no longer has them, so a
+    `borg info` would fail and take a slot on every listing until one folds.
 
     Not just the rows this run created: a repository imported with more
     archives than `INDEX_ARCHIVE_INFO_PER_RUN` fills the oldest few now and
@@ -320,13 +324,14 @@ def archives_needing_info(
     # more stale survivors than the cap holds it would never be reached
     # while every listing reports a removal.
     unmeasured = Archive.stats_measured_at.is_(None)
-    rows = _select(and_(unmeasured, Archive.original_size.is_(None)), set(), limit)
+    skip = set(exclude_ids)
+    rows = _select(and_(unmeasured, Archive.original_size.is_(None)), skip, limit)
     spare = limit - len(rows)
     if spare > 0:
-        rows += _select(unmeasured, {a.id for a in rows}, spare)
+        rows += _select(unmeasured, skip | {a.id for a in rows}, spare)
     spare = limit - len(rows)
     if include_missing_end and spare > 0:
-        rows += _select(Archive.end.is_(None), {a.id for a in rows}, spare)
+        rows += _select(Archive.end.is_(None), skip | {a.id for a in rows}, spare)
     return rows
 
 
@@ -770,6 +775,7 @@ async def run_archive_sync(ctx) -> Outcome:
                 repository,
                 limit=settings.index_archive_info_per_run,
                 include_missing_end=True,
+                exclude_ids=fold_failed,
             ),
             env,
             limit=settings.index_archive_info_per_run,

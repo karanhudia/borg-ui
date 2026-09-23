@@ -396,6 +396,10 @@ async def test_a_failed_fold_does_not_fail_the_listing(db, repo, monkeypatch):
     assert out.result["fold_failed"] == [stuck_id]
     assert db.get(Archive, gone_id) is None
     assert db.get(Archive, stuck_id) is not None
+    # Borg no longer has it, so a `borg info` on it would fail and take a
+    # slot on every listing (it has no sizes, so it would be picked first)
+    measured = index_exec.fill_archive_info.await_args.args[2]
+    assert stuck_id not in {a.id for a in measured}
     db.refresh(repo)
     assert repo.archive_count == 1
     assert repo.last_backup == keep.start
