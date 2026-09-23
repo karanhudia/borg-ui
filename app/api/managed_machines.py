@@ -1112,15 +1112,29 @@ async def request_agent_job_cancel(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"key": "backend.errors.agents.jobNotFound"},
         )
-    if job.status in ("completed", "failed", "canceled"):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"key": "backend.errors.agents.jobAlreadyFinished"},
-        )
+    already_finished = HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={"key": "backend.errors.agents.jobAlreadyFinished"},
+    )
+    if job.status in FINAL_AGENT_JOB_STATUSES:
+        raise already_finished
 
-    job.status = "cancel_requested"
-    job.updated_at = _now_utc()
+    # A verdict the agent commits after the check above must stand: the
+    # request only applies while the job is still unfinished.
+    requested = (
+        db.query(AgentJob)
+        .filter(
+            AgentJob.id == job.id,
+            AgentJob.status.notin_(FINAL_AGENT_JOB_STATUSES),
+        )
+        .update(
+            {AgentJob.status: "cancel_requested", AgentJob.updated_at: _now_utc()},
+            synchronize_session=False,
+        )
+    )
     db.commit()
+    if not requested:
+        raise already_finished
     db.refresh(job)
     await dispatch_agent_cancel_if_connected(job)
     logger.info(

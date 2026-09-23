@@ -473,17 +473,28 @@ def _claim_transition_from_read_status(
 
 
 def _cancel_if_requested_meanwhile(
-    job: AgentJob, db: Session, *, completed_at: datetime
+    job: AgentJob,
+    db: Session,
+    *,
+    completed_at: datetime,
+    stale_cutoff: datetime,
+    ignore_age: bool,
 ) -> None:
-    """Settle a cancel request that won against the requeue.
+    """Settle a cancel request that won against the requeue, by the rule the
+    loop applies to a job read as cancel_requested.
 
-    The agent has just shown it does not run the job, so the cancel is done,
-    as for a job read as cancel_requested. Left alone, the row would hold the
-    repository until the reaper: the cancel's own dispatch can miss a session
-    that is only being set up, and session heartbeats never come back here.
+    Left alone, the row would hold the repository until the reaper: the
+    cancel's own dispatch can miss a session that is only being set up, and
+    session heartbeats never come back here. On /heartbeat the age check
+    still applies to the refreshed row: a polling agent may have started the
+    job after its report was taken, and closing it here would take the
+    cancel away from a job that is running.
     """
-    if job.status == "cancel_requested":
-        _cancel_agent_job(job, db, completed_at=completed_at)
+    if job.status != "cancel_requested":
+        return
+    if not ignore_age and _job_activity_at(job) > stale_cutoff:
+        return
+    _cancel_agent_job(job, db, completed_at=completed_at)
 
 
 def _requeue_stale_agent_jobs(
@@ -543,7 +554,13 @@ def _requeue_stale_agent_jobs(
                     ),
                 },
             ):
-                _cancel_if_requested_meanwhile(job, db, completed_at=now)
+                _cancel_if_requested_meanwhile(
+                    job,
+                    db,
+                    completed_at=now,
+                    stale_cutoff=stale_cutoff,
+                    ignore_age=ignore_age_for_undelivered,
+                )
             continue
 
         if not _claim_transition_from_read_status(
@@ -556,7 +573,13 @@ def _requeue_stale_agent_jobs(
                 AgentJob.updated_at: now,
             },
         ):
-            _cancel_if_requested_meanwhile(job, db, completed_at=now)
+            _cancel_if_requested_meanwhile(
+                job,
+                db,
+                completed_at=now,
+                stale_cutoff=stale_cutoff,
+                ignore_age=ignore_age_for_undelivered,
+            )
             continue
 
         backup_job = _get_linked_backup_job(job, db)

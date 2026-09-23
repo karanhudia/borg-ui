@@ -1152,6 +1152,32 @@ describe('ManagedAgents', () => {
     expect(buttons[3]).toBeDisabled()
   })
 
+  it('does not offer to cancel a job that completed with warnings', () => {
+    const job = {
+      id: 12,
+      agent_machine_id: 3,
+      job_type: 'backup',
+      status: 'completed_with_warnings',
+      progress_percent: 100,
+      created_at: '2026-05-18T10:20:00.000Z',
+      updated_at: '2026-05-18T10:25:00.000Z',
+      payload: {},
+    } as AgentJobResponse
+
+    renderWithProviders(
+      <JobsTable
+        jobs={[job]}
+        agentsById={new Map()}
+        onCancel={vi.fn()}
+        onViewLogs={vi.fn()}
+        isCanceling={false}
+      />
+    )
+
+    const [, cancelButton] = screen.getAllByRole('button')
+    expect(cancelButton).toBeDisabled()
+  })
+
   it('renders token statuses and only revokes active tokens', async () => {
     const user = userEvent.setup()
     const onRevoke = vi.fn()

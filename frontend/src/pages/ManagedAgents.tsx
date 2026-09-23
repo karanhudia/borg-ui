@@ -100,7 +100,7 @@ import { useFeatureAnalytics } from '../hooks/useFeatureAnalytics'
 
 type PageTab = 'agents' | 'jobs' | 'tokens'
 
-const FINAL_JOB_STATUSES = new Set(['completed', 'failed', 'canceled'])
+const FINAL_JOB_STATUSES = new Set(['completed', 'completed_with_warnings', 'failed', 'canceled'])
 const MANAGED_AGENTS_ANALYTICS_SECTION = 'managed_agents'
 const EMPTY_AGENTS: AgentMachineResponse[] = []
 const EMPTY_TOKENS: AgentEnrollmentTokenSummary[] = []
