@@ -866,10 +866,11 @@ def backup_run_counts(db: Session, now: datetime) -> list:
     )
 
 
-def activity_rows(db: Session, since: datetime) -> list:
-    """One row per operation of a feed kind started at or after `since`, the
-    columns the timeline and the failure list read and nothing else; the
-    error text only where a failure shows it."""
+def activity_rows(db: Session, since: datetime, until: datetime) -> list:
+    """One row per operation of a feed kind started between `since` and
+    `until`, the columns the timeline and the failure list read and nothing
+    else; the error text only where a failure shows it. A run dated after
+    `until` (a skewed clock) is in neither panel."""
     return (
         db.query(
             Operation.id,
@@ -882,12 +883,16 @@ def activity_rows(db: Session, since: datetime) -> list:
                 (Operation.status == "failed", Operation.error_message), else_=None
             ).label("error_message"),
         )
-        .filter(Operation.kind.in_(ACTIVITY_KINDS), Operation.started_at >= since)
+        .filter(
+            Operation.kind.in_(ACTIVITY_KINDS),
+            Operation.started_at >= since,
+            Operation.started_at <= until,
+        )
         .all()
     )
 
 
-def orphan_params(db: Session, since: datetime) -> dict:
+def orphan_params(db: Session, since: datetime, until: datetime) -> dict:
     """`operations.params` by id for the window's rows whose repository the
     repository table does not know (no id, or a repository since deleted),
     limited to the statuses the failure list compares. One statement
@@ -902,6 +907,7 @@ def orphan_params(db: Session, since: datetime) -> dict:
         .filter(
             Operation.kind.in_(ACTIVITY_KINDS),
             Operation.started_at >= since,
+            Operation.started_at <= until,
             Operation.status.in_(("failed", *RESOLVING_STATUSES)),
             unknown_repository,
         )
@@ -1346,11 +1352,11 @@ def get_dashboard_overview(
         # Activity of the last 14 days: the timeline counts per day and kind,
         # and the failures nothing has resolved since. The rows stay here.
         fourteen_days_ago = now - timedelta(days=TIMELINE_DAYS)
-        recent_rows = activity_rows(db, fourteen_days_ago)
+        recent_rows = activity_rows(db, fourteen_days_ago, now)
         timeline = activity_timeline(recent_rows, now, zone)
         failures = current_failures(
             recent_rows,
-            orphan_params(db, fourteen_days_ago),
+            orphan_params(db, fourteen_days_ago, now),
             repo_id_map,
             repo_name_map,
             repo_path_map,

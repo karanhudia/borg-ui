@@ -4291,7 +4291,9 @@ class TestBackupPlanRoutes:
             for cell in data["activity_timeline"]
         ] == [("backup", 1, 1)]
 
-        later = datetime.utcnow() + timedelta(seconds=1)
+        # after the failure, but not after the server's now: the window
+        # ends there
+        later = datetime.utcnow()
         seed_job_operation(
             test_db,
             "backup",

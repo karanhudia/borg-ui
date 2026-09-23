@@ -1582,6 +1582,70 @@ class TestDashboardOverviewAggregates:
         assert sum(total for _, total, _ in backups) == 3
         assert sum(failed for _, _, failed in backups) == 2
 
+    def test_a_run_dated_after_now_is_in_neither_panel(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """The window ends now: a run whose start lies ahead of the server
+        clock (a skewed clock) is neither listed as a failure, nor counted
+        in the timeline, nor taken as the run that resolves one (#1088). The
+        server clock stands at noon, so a run an hour ahead falls on the
+        same calendar day."""
+        now = datetime.utcnow().replace(hour=12, minute=0, second=0, microsecond=0)
+
+        class ServerClock(datetime):
+            @classmethod
+            def utcnow(cls):
+                return now
+
+        alpha = _repository(test_db, "Alpha")
+        beta = _repository(test_db, "Beta")
+
+        def seed(repository, status, hours, error=None):
+            started = now + timedelta(hours=hours)
+            seed_job_operation(
+                test_db,
+                "backup",
+                repository_id=repository.id,
+                repository_path=repository.path,
+                status=status,
+                started_at=started,
+                completed_at=started + timedelta(minutes=5),
+                error_message=error,
+            )
+
+        seed(alpha, "failed", -3, "disk full")
+        seed(alpha, "completed", 1)
+        seed(beta, "failed", 1, "clock ahead")
+        future = now + timedelta(hours=48)
+        test_db.add(
+            Operation(
+                repository_id=None,
+                kind="check",
+                category="maintenance",
+                status="failed",
+                trigger="manual",
+                priority=0,
+                run_id="run-orphan-future",
+                params={"repository_path": "/gone/future"},
+                created_at=future,
+                started_at=future,
+                completed_at=future + timedelta(minutes=1),
+                error_message="clock ahead",
+            )
+        )
+        test_db.commit()
+
+        with patch("app.api.dashboard.datetime", ServerClock):
+            data = _overview(test_client, admin_headers)
+
+        assert [
+            (item["type"], item["repository"], item["error"])
+            for item in data["current_failures"]
+        ] == [("backup", "Alpha", "disk full")]
+        assert [
+            (cell["total"], cell["failed"]) for cell in data["activity_timeline"]
+        ] == [(1, 1)]
+
     def test_timeline_days_follow_the_viewer_time_zone(
         self, test_client: TestClient, admin_headers, test_db
     ):
