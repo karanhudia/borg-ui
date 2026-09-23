@@ -71,6 +71,21 @@ INDEX_KINDS: frozenset[str] = frozenset(
     {"stats", "archive_sync", "history_index", "history_merge"}
 )
 
+# The Background work board's pausable stages (spec 2026-09-23 section 1),
+# in run order. Every kind a follow-up or reconcile can queue belongs to one,
+# so pausing them all holds exactly the work the old global pause held.
+# history_merge left every chain with #1168; its legacy rows still pause with
+# the listing that replaced it.
+STAGES: dict[str, tuple[str, ...]] = {
+    "archives": ("archive_sync", "history_merge"),
+    "retention": ("prune_compare",),
+    "history": ("history_index",),
+    "stats": ("stats",),
+}
+STAGE_FOR_KIND: dict[str, str] = {
+    kind: stage for stage, kinds in STAGES.items() for kind in kinds
+}
+
 PRIORITY_MANUAL = 0
 PRIORITY_SCHEDULE = 5
 PRIORITY_FOLLOWUP = 10

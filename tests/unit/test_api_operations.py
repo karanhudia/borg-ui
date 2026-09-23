@@ -11,6 +11,7 @@ from app.database.models import (
     utc_now,
 )
 from app.services.operations.enqueue import enqueue
+from app.services.operations.vocab import STAGES
 
 
 def _repo(test_db, name="r"):
@@ -264,6 +265,7 @@ class TestOperationsQueue:
         assert body["limits"]["index_workers"] == 3
         assert body["limits"]["index_running"] == 1
         assert body["paused"] is False
+        assert body["paused_stages"] == []
 
 
 @pytest.mark.unit
@@ -325,14 +327,50 @@ class TestOperationsDetailAndCancel:
 
 @pytest.mark.unit
 class TestPauseAndLimits:
-    def test_pause_resume(self, test_client, test_db, admin_headers):
+    def test_pause_resume_all(self, test_client, test_db, admin_headers):
         assert test_client.post(
             "/api/operations/pause", headers=admin_headers
         ).json() == {"paused": True}
-        assert test_db.query(SystemSettings).first().background_paused is True
+        assert test_db.query(SystemSettings).first().paused_stages == list(STAGES)
         assert test_client.post(
             "/api/operations/resume", headers=admin_headers
         ).json() == {"paused": False}
+        test_db.expire_all()
+        assert test_db.query(SystemSettings).first().paused_stages == []
+
+    def test_pause_one_stage(self, test_client, admin_headers):
+        r = test_client.post(
+            "/api/operations/stages/history/pause", headers=admin_headers
+        )
+        assert r.json() == {"paused_stages": ["history"]}
+        queue = test_client.get("/api/operations/queue", headers=admin_headers).json()
+        assert queue["paused_stages"] == ["history"]
+        assert queue["paused"] is False
+        r = test_client.post(
+            "/api/operations/stages/history/resume", headers=admin_headers
+        )
+        assert r.json() == {"paused_stages": []}
+
+    def test_pausing_every_stage_reads_as_paused(self, test_client, admin_headers):
+        for stage in reversed(list(STAGES)):
+            test_client.post(
+                f"/api/operations/stages/{stage}/pause", headers=admin_headers
+            )
+        queue = test_client.get("/api/operations/queue", headers=admin_headers).json()
+        assert queue["paused"] is True
+        # Answered in run order, whatever order they were paused in.
+        assert queue["paused_stages"] == list(STAGES)
+
+    def test_unknown_stage_is_404(self, test_client, admin_headers):
+        for stage in ("connect", "nope"):
+            r = test_client.post(
+                f"/api/operations/stages/{stage}/pause", headers=admin_headers
+            )
+            assert r.status_code == 404
+
+    def test_stage_pause_requires_admin(self, test_client, auth_headers):
+        r = test_client.post("/api/operations/stages/stats/pause", headers=auth_headers)
+        assert r.status_code == 403
 
     def test_limits_validation_and_update(self, test_client, test_db, admin_headers):
         r = test_client.put(

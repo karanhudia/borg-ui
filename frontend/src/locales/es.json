@@ -6213,6 +6213,9 @@
         "dryRunFailed": "La ejecución de prueba de Borg falló.",
         "comparisonRunning": "Ya se está ejecutando una comparación de retención para este repositorio.",
         "candidateNotStored": "Esta política aún no se ha comparado. Ejecuta una comparación para verla."
+      },
+      "operations": {
+        "unknownStage": "Etapa en segundo plano desconocida."
       }
     },
     "success": {

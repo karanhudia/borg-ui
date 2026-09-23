@@ -10,7 +10,12 @@ from app.database.models import (
     Repository,
     SystemSettings,
 )
-from app.services.operations.vocab import INDEX_KINDS, KINDS, is_exclusive
+from app.services.operations.vocab import (
+    INDEX_KINDS,
+    KINDS,
+    STAGE_FOR_KIND,
+    is_exclusive,
+)
 
 _EXCLUSIVE_KINDS = tuple(k for k, spec in KINDS.items() if spec.exclusive)
 # The index kinds that share the repository lane: listing, merge and stats.
@@ -25,7 +30,7 @@ _DEFAULTS = {
     "max_concurrent_scheduled_backups": 2,
     "max_concurrent_scheduled_checks": 4,
     "index_workers": 2,
-    "background_paused": False,
+    "paused_stages": [],
     "bypass_lock_on_list": False,
 }
 
@@ -163,7 +168,8 @@ def global_slot_available(
 
 
 def can_start(db: Session, op: Operation, settings: Optional[SystemSettings]) -> bool:
-    if _setting(settings, "background_paused") and op.trigger in (
+    paused = _setting(settings, "paused_stages") or []
+    if STAGE_FOR_KIND.get(op.kind) in paused and op.trigger in (
         "followup",
         "reconcile",
     ):

@@ -45,7 +45,12 @@ from app.services.operations.reconcile import (
     enqueue_reconcile_runs,
 )
 from app.services.operations.runner import operation_runner
-from app.services.operations.vocab import INDEX_KINDS, KINDS, SUCCESS_STATUSES
+from app.services.operations.vocab import (
+    INDEX_KINDS,
+    KINDS,
+    STAGES,
+    SUCCESS_STATUSES,
+)
 
 router = APIRouter()
 
@@ -143,7 +148,9 @@ class QueueRepository(BaseModel):
 class QueueResponse(BaseModel):
     repositories: list[QueueRepository]
     limits: QueueLimits
+    # Every stage paused: what the tab's banner and "Resume all" read.
     paused: bool
+    paused_stages: list[str]
 
 
 class LimitsUpdate(BaseModel):
@@ -544,10 +551,12 @@ async def get_queue(
             )
         )
     settings = _settings_row(db)
+    paused_stages = _paused_stages(settings)
     return QueueResponse(
         repositories=repositories,
         limits=_limits(db, settings),
-        paused=bool(settings.background_paused),
+        paused=len(paused_stages) == len(STAGES),
+        paused_stages=paused_stages,
     )
 
 
@@ -697,13 +706,19 @@ async def reconcile_now(
     return {"repositories": count}
 
 
+def _paused_stages(settings) -> list[str]:
+    """The paused stages in run order, whatever order they were paused in."""
+    stored = set(settings.paused_stages or [])
+    return [stage for stage in STAGES if stage in stored]
+
+
 @router.post("/pause")
 async def pause_background(
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     settings = _settings_row(db)
-    settings.background_paused = True
+    settings.paused_stages = list(STAGES)
     db.commit()
     return {"paused": True}
 
@@ -714,10 +729,46 @@ async def resume_background(
     db: Session = Depends(get_db),
 ):
     settings = _settings_row(db)
-    settings.background_paused = False
+    settings.paused_stages = []
     db.commit()
     operation_runner.wake()
     return {"paused": False}
+
+
+def _set_stage_paused(db: Session, stage: str, paused: bool) -> dict:
+    # `connect` is a board stage too, but a synchronous request with nothing
+    # ever queued, so it has nothing to pause.
+    if stage not in STAGES:
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.operations.unknownStage"}
+        )
+    settings = _settings_row(db)
+    stored = set(settings.paused_stages or [])
+    stored = stored | {stage} if paused else stored - {stage}
+    # A new list, so the JSON column registers the change.
+    settings.paused_stages = [s for s in STAGES if s in stored]
+    db.commit()
+    if not paused:
+        operation_runner.wake()
+    return {"paused_stages": settings.paused_stages}
+
+
+@router.post("/stages/{stage}/pause")
+async def pause_stage(
+    stage: str,
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    return _set_stage_paused(db, stage, True)
+
+
+@router.post("/stages/{stage}/resume")
+async def resume_stage(
+    stage: str,
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    return _set_stage_paused(db, stage, False)
 
 
 @router.put("/limits", response_model=QueueLimits)

@@ -6213,6 +6213,9 @@
         "dryRunFailed": "Borg's dry run failed.",
         "comparisonRunning": "A retention comparison is already running for this repository.",
         "candidateNotStored": "This policy has not been compared yet. Run a comparison to see it."
+      },
+      "operations": {
+        "unknownStage": "Unknown background stage."
       }
     },
     "success": {

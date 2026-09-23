@@ -6213,6 +6213,9 @@
         "dryRunFailed": "Der Testlauf von Borg ist fehlgeschlagen.",
         "comparisonRunning": "Für dieses Repository läuft bereits ein Vergleich der Aufbewahrungsregeln.",
         "candidateNotStored": "Diese Richtlinie wurde noch nicht verglichen. Starten Sie einen Vergleich, um sie zu sehen."
+      },
+      "operations": {
+        "unknownStage": "Unbekannte Hintergrundphase."
       }
     },
     "success": {

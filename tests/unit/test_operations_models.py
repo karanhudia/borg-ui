@@ -133,7 +133,7 @@ def test_system_settings_new_columns(db):
     db.commit()
     db.refresh(s)
     assert s.index_workers == 2
-    assert s.background_paused is False
+    assert s.paused_stages == []
 
 
 @pytest.mark.unit

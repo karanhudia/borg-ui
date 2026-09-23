@@ -6213,6 +6213,9 @@
         "dryRunFailed": "L'esecuzione di prova di Borg è fallita.",
         "comparisonRunning": "È già in corso un confronto delle regole di conservazione per questo repository.",
         "candidateNotStored": "Questo criterio non è ancora stato confrontato. Esegui un confronto per vederlo."
+      },
+      "operations": {
+        "unknownStage": "Fase in background sconosciuta."
       }
     },
     "success": {
