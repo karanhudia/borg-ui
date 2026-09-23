@@ -22,7 +22,7 @@ from redis.connection import ConnectionPool
 from redis.exceptions import ConnectionError, RedisError, TimeoutError
 
 from app.config import settings
-from app.utils.url_redaction import safe_url
+from app.utils.redaction import redact_secrets
 
 logger = logging.getLogger(__name__)
 
@@ -516,7 +516,7 @@ class ArchiveCacheService:
                 client.ping()
                 self._current_backend = self._redis_backend
                 logger.info(
-                    f"Archive cache initialized with external Redis backend (URL: {safe_url(settings.redis_url)})"
+                    f"Archive cache initialized with external Redis backend (URL: {settings.redis_url})"
                 )
             except Exception as e:
                 logger.warning(
@@ -765,7 +765,7 @@ class ArchiveCacheService:
             if isinstance(self._current_backend, RedisBackend):
                 if self._redis_backend and self._redis_backend.url:
                     stats["connection_type"] = "external_url"
-                    stats["connection_info"] = safe_url(self._redis_backend.url)
+                    stats["connection_info"] = redact_secrets(self._redis_backend.url)
                 else:
                     stats["connection_type"] = "local"
                     stats["connection_info"] = (
@@ -841,15 +841,14 @@ class ArchiveCacheService:
                     client = self._redis_backend._get_client()
                     client.ping()
                     self._current_backend = self._redis_backend
-                    redacted_url = safe_url(redis_url)
                     logger.info(
-                        f"Reconfigured to external Redis backend (URL: {redacted_url})"
+                        f"Reconfigured to external Redis backend (URL: {redis_url})"
                     )
                     return {
                         "success": True,
                         "backend": "redis",
                         "connection_type": "external_url",
-                        "connection_info": redacted_url,
+                        "connection_info": redact_secrets(redis_url),
                         "message": f"Successfully connected to external Redis",
                     }
                 except Exception as e:

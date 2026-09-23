@@ -29,7 +29,6 @@ from app.core.permissions import (
 from app.config import get_runtime_app_version, settings as app_settings
 from app.services.cache_service import archive_cache
 from app.utils.datetime_utils import serialize_datetime
-from app.utils.url_redaction import safe_url
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
     InvalidScheduleTimezone,
@@ -2327,10 +2326,7 @@ async def update_cache_settings(
             old_url = settings.redis_url
             settings.redis_url = redis_url if redis_url.strip() else None
             if old_url != settings.redis_url:
-                changes["redis_url"] = {
-                    "old": safe_url(old_url),
-                    "new": safe_url(settings.redis_url),
-                }
+                changes["redis_url"] = {"old": old_url, "new": settings.redis_url}
 
             # Reconfigure cache service with new Redis URL
             try:
@@ -2342,13 +2338,13 @@ async def update_cache_settings(
                 if not reconfigure_result["success"]:
                     logger.warning(
                         "Redis reconfiguration failed, using fallback",
-                        redis_url=safe_url(settings.redis_url),
+                        redis_url=settings.redis_url,
                         backend=reconfigure_result["backend"],
                     )
             except Exception as reconfig_error:
                 logger.error(
                     "Failed to reconfigure cache service",
-                    redis_url=safe_url(settings.redis_url),
+                    redis_url=settings.redis_url,
                     error=str(reconfig_error),
                 )
                 raise HTTPException(

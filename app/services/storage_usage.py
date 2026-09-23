@@ -39,7 +39,6 @@ from datetime import datetime
 from typing import Optional
 from urllib.parse import unquote, urlsplit
 
-from app.utils.url_redaction import safe_url
 
 import structlog
 
@@ -309,9 +308,7 @@ async def borg2_index_size(
         )
         stdout, stderr = await _communicate(process, timeout)
     except asyncio.TimeoutError:
-        logger.warning(
-            "borg2 index size timed out", repository=safe_url(repository_url)
-        )
+        logger.warning("borg2 index size timed out", repository=repository_url)
         return None
     except OSError as exc:
         logger.warning("borg2 index size failed to start", error=str(exc))
@@ -319,7 +316,7 @@ async def borg2_index_size(
     if process.returncode != 0:
         logger.warning(
             "borg2 index size failed",
-            repository=safe_url(repository_url),
+            repository=repository_url,
             stderr=stderr.decode(errors="replace")[-300:],
         )
         return None
@@ -399,12 +396,12 @@ async def rclone_storage_used(
         )
         stdout, stderr = await _communicate(process, timeout)
     except (asyncio.TimeoutError, OSError) as exc:
-        logger.warning("rclone size failed", repository=safe_url(url), error=str(exc))
+        logger.warning("rclone size failed", repository=url, error=str(exc))
         return None
     if process.returncode != 0:
         logger.warning(
             "rclone size failed",
-            repository=safe_url(url),
+            repository=url,
             stderr=stderr.decode(errors="replace")[-300:],
         )
         return None
@@ -496,9 +493,7 @@ async def http_storage_used(
     try:
         value = await asyncio.to_thread(_http_walk, url, timeout, budget)
     except Exception as exc:
-        logger.warning(
-            "REST store walk failed", repository=safe_url(url), error=str(exc)
-        )
+        logger.warning("REST store walk failed", repository=url, error=str(exc))
         return None
     return value if value and value > 0 else None
 
@@ -554,9 +549,7 @@ async def storage_used(
     file only (ssh reads no Borg variables) and the REST walk needs neither.
     A URL with an impossible port is unknown, not measured elsewhere."""
     if not valid_target(repository_path):
-        logger.warning(
-            "repository URL has an invalid port", repository=safe_url(repository_path)
-        )
+        logger.warning("repository URL has an invalid port", repository=repository_path)
         return None
     tool, target = store_target(repository_path)
     if tool == "http":

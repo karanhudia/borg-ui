@@ -19,7 +19,7 @@ from app.services.storage_usage import (
     rclone_remote_for,
     store_target,
 )
-from app.utils.url_redaction import safe_url
+from app.utils.redaction import redact_secrets
 
 
 class FakeProcess:
@@ -380,16 +380,19 @@ async def test_measure_borg2_distinguishes_failed_measurements_from_an_empty_ind
 
 
 @pytest.mark.unit
-def test_safe_url_redacts_credentials():
-    assert safe_url("http://u:s3cr%40t@srv:8000/store") == "http://u:***@srv:8000/store"
-    assert safe_url("sftp://u:s3cr%40t@box:23/./r") == "sftp://u:***@box:23/./r"
-    assert safe_url("/backups/repo") == "/backups/repo"
-    assert safe_url("sftp://box:23/./r") == "sftp://box:23/./r"
+def test_redact_secrets_masks_url_credentials():
+    assert (
+        redact_secrets("http://u:s3cr%40t@srv:8000/store")
+        == "http://u:***@srv:8000/store"
+    )
+    assert redact_secrets("sftp://u:s3cr%40t@box:23/./r") == "sftp://u:***@box:23/./r"
+    assert redact_secrets("/backups/repo") == "/backups/repo"
+    assert redact_secrets("sftp://box:23/./r") == "sftp://box:23/./r"
     # a userinfo without a password is the whole credential (Basic auth
     # sends it as the user name), so nothing of it survives
-    assert safe_url("http://token@srv/store") == "http://***@srv/store"
-    assert safe_url("sftp://u@box:23/./r") == "sftp://***@box:23/./r"
-    assert "token" not in safe_url("HTTPS://token@srv/store")
+    assert redact_secrets("http://token@srv/store") == "http://***@srv/store"
+    assert redact_secrets("sftp://u@box:23/./r") == "sftp://***@box:23/./r"
+    assert "token" not in redact_secrets("HTTPS://token@srv/store")
 
 
 @pytest.mark.unit
@@ -617,7 +620,7 @@ async def test_http_walk_keeps_ipv6_brackets():
         assert await storage_usage.http_storage_used("http://h:0/store") == 5
     assert seen[-1] == "http://h:0/store/"
     assert (
-        safe_url("http://u:p@[2001:db8::1]:8000/store")
+        redact_secrets("http://u:p@[2001:db8::1]:8000/store")
         == "http://u:***@[2001:db8::1]:8000/store"
     )
 
@@ -681,7 +684,7 @@ async def test_storage_used_passes_the_environment_to_rclone_only(monkeypatch):
 async def test_invalid_port_is_unknown_not_an_exception(monkeypatch, port, scheme):
     """`urlsplit(...).port` raises for a port outside 0..65535 or a
     non-numeric one; that used to escape from the fallback (and again from
-    safe_url while logging it). Such a URL is unmeasurable, and nothing is
+    the log redaction). Such a URL is unmeasurable, and nothing is
     spawned against another endpoint."""
     spawn = AsyncMock()
     monkeypatch.setattr(storage_usage.asyncio, "create_subprocess_exec", spawn)
@@ -696,7 +699,7 @@ async def test_invalid_port_is_unknown_not_an_exception(monkeypatch, port, schem
     spawn.assert_not_awaited()
     assert rclone_remote_for(url) is None
     # logging the failure must not raise either, and must still redact
-    assert safe_url(url) == f"{scheme}://review-user:***@localhost:{port}/store"
+    assert redact_secrets(url) == f"{scheme}://review-user:***@localhost:{port}/store"
     with patch("requests.get") as get:
         assert await storage_usage.http_storage_used(url) is None
         get.assert_not_called()
@@ -718,7 +721,7 @@ async def test_redaction_never_leaks_or_raises_on_odd_urls(monkeypatch, url):
     the redacted text, no exception from the redaction, and an unparseable
     URL is unknown rather than measured."""
     monkeypatch.setattr(storage_usage.asyncio, "create_subprocess_exec", AsyncMock())
-    redacted = safe_url(url)
+    redacted = redact_secrets(url)
     for fragment in ("review-secret", "alpha", "private-tail"):
         assert fragment not in redacted
     assert not storage_usage.valid_target(url)

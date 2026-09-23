@@ -661,16 +661,14 @@ class TestCacheSettingsContracts:
         assert settings.redis_url == "disabled"
 
     def test_update_cache_settings_reads_json_body_and_redacts_log(
-        self, test_client: TestClient, admin_headers, test_db
+        self, test_client: TestClient, admin_headers, test_db, caplog
     ):
         url = "redis://:hunter2@cache.internal:6379/0"
-        with (
-            patch(
-                "app.api.settings.archive_cache.reconfigure",
-                return_value={"success": True, "backend": "redis"},
-            ) as mock_reconfigure,
-            patch("app.api.settings.logger") as mock_logger,
-        ):
+        caplog.set_level("INFO")
+        with patch(
+            "app.api.settings.archive_cache.reconfigure",
+            return_value={"success": True, "backend": "redis"},
+        ) as mock_reconfigure:
             response = test_client.put(
                 "/api/settings/cache/settings",
                 json={"cache_max_size_mb": 256, "redis_url": url},
@@ -680,7 +678,8 @@ class TestCacheSettingsContracts:
         assert response.status_code == 200
         mock_reconfigure.assert_called_once_with(redis_url=url, cache_max_size_mb=256)
         assert test_db.query(SystemSettings).first().redis_url == url
-        assert "hunter2" not in str(mock_logger.mock_calls)
+        assert "Cache settings updated" in caplog.text
+        assert "hunter2" not in caplog.text
 
     def test_get_log_storage_stats_reports_usage_percent(
         self, test_client: TestClient, admin_headers, test_db
