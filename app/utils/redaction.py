@@ -13,10 +13,17 @@ from urllib.parse import unquote_plus
 # scheme://userinfo@host, plain or percent-encoded (a URL inside a query
 # string). The netloc runs up to the first path, query, quote or whitespace;
 # userinfo is cut at the last `@` because a password may contain `@`.
+#
+# Every pattern here starts only where a token (scheme, key) starts, never
+# mid-token: a `\b` start rescans the rest of a long `a-b-c-...` run from
+# each boundary, which is quadratic and stalls logging on big output.
+# The whole scheme-character run from its start, so `-https://` or
+# `+ssh://` still reach the netloc check.
+_SCHEME_START = r"(?<![a-z0-9+.\-])[a-z0-9+.\-]+"
 _URL_PATTERNS = [
-    (re.compile(r"(?i)\b([a-z][a-z0-9+.\-]*://)([^\s/?#\"'<>\\]+)"), "@", ":"),
+    (re.compile(rf"(?i)({_SCHEME_START}://)([^\s/?#\"'<>\\]+)"), "@", ":"),
     (
-        re.compile(r"(?i)\b([a-z][a-z0-9+.\-]*%3A%2F%2F)([^\s/?#&\"'<>\\]+)"),
+        re.compile(rf"(?i)({_SCHEME_START}%3A%2F%2F)([^\s/?#&\"'<>\\]+)"),
         "%40",
         "%3A",
     ),
@@ -26,37 +33,45 @@ _SECRET_WORDS = (
     r"(?:pass(?:word|phrase)|secret|(?:api|access|private)[_-]?key"
     r"|(?:access|refresh|auth)[_-]?token)"
 )
-_SECRET_KEY = rf"[\w-]*{_SECRET_WORDS}[\w-]*"  # AWS_SECRET_ACCESS_KEY, db_password
+# A whole key token containing a secret word: AWS_SECRET_ACCESS_KEY, db_password.
+_SECRET_KEY = rf"(?=[\w-]*{_SECRET_WORDS})[\w-]+"
+# A quoted value is masked whole: spaces, backslash escapes (Python's repr
+# writes 'it\'s') and shell-escaped quotes ('"'"') included.
+_QUOTED = r""""(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.|'"'"')*'"""
 # key=value (structlog console, env assignments, query strings, including a
-# percent-encoded `%3D` inside an encoded URL), "key": "value" (JSON) and
-# `--flag value` (CLI arguments). A quoted value is masked whole, spaces and
-# shell-escaped quotes ('"'"') included. Booleans and nulls are flags, not
+# percent-encoded `%3D` inside an encoded URL), "key": "value" (JSON),
+# 'key': 'value' (a Python dict formatted into the message) and
+# `--flag value` (CLI arguments). Booleans and nulls are flags, not
 # secrets, and an existing `***` is left alone so redacting twice is a no-op.
 _KEY_VALUE = re.compile(
-    rf"""(?i)(\b{_SECRET_KEY}["']?\s*(?:=|%3D)\s*|"{_SECRET_KEY}"\s*:\s*"""
+    rf"""(?i)((?<![\w-]){_SECRET_KEY}["']?\s*(?:=|%3D)\s*|(["']){_SECRET_KEY}\2\s*:\s*"""
     rf"""|(?<![\w-])--{_SECRET_KEY}\s+)"""
-    r"""("(?:[^"\\]|\\.)*"|'(?:[^']|'"'"')*'"""
-    r"""|(?!(?:true|false|null|none)\b|\*\*\*)[^\s"'&,;}]+)"""
+    rf"""({_QUOTED}|(?!(?:true|false|null|none)\b|\*\*\*)[^\s"'&,;}}]+)"""
 )
 
 _SECRET_NAME = re.compile(rf"(?i){_SECRET_KEY}")
 # ?key=value / &key=value. The key is decoded before the name check because
 # URL parsers (redis-py included) decode it too: `pass%77ord` is `password`.
 # Neither side runs past `?`, so a nested URL's own query is checked too.
-_QUERY_PAIR = re.compile(r"""([?&])([^?=&\s"'#]+)=([^?&\s"'#]*)""")
+_QUERY_PAIR = re.compile(rf"""([?&])([^?=&\s"'#]+)=({_QUOTED}|[^?&\s"'#]*)""")
+
+
+def _mask(value: str) -> str:
+    """`***`, keeping the value's surrounding quotes."""
+    quote = value[0] if value[:1] in ('"', "'") else ""
+    return f"{quote}***{quote}"
 
 
 def _redact_query_pair(match: re.Match) -> str:
-    separator, key = match.group(1), match.group(2)
+    separator, key, value = match.group(1), match.group(2), match.group(3)
     if _SECRET_NAME.fullmatch(unquote_plus(key)):
-        return f"{separator}{key}=***"
-    return match.group(0)
+        return f"{separator}{key}={_mask(value)}"
+    # A quoted value can hold a whole URL; check that URL's own query too.
+    return f"{separator}{key}={_QUERY_PAIR.sub(_redact_query_pair, value)}"
 
 
 def _redact_value(match: re.Match) -> str:
-    key, value = match.group(1), match.group(2)
-    quote = value[0] if value[0] in "\"'" else ""
-    return f"{key}{quote}***{quote}"
+    return f"{match.group(1)}{_mask(match.group(3))}"
 
 
 def _redact_netloc(match: re.Match, at: str, colon: str) -> str:
@@ -68,7 +83,7 @@ def _redact_netloc(match: re.Match, at: str, colon: str) -> str:
     cut = userinfo.lower().find(colon.lower())
     if cut >= 0:
         userinfo = f"{userinfo[:cut]}{colon}***"
-    elif scheme.lower().startswith("ssh"):
+    elif scheme.lower().lstrip("0123456789+.-").startswith("ssh"):
         return match.group(0)  # an SSH user name is not a secret, keys are
     else:
         userinfo = "***"  # a bare userinfo is the credential (Basic auth token)

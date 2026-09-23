@@ -1,6 +1,7 @@
 import logging
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -56,6 +57,21 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
             "rclone lsd --s3-secret-access-key *** --s3-region eu",
         ),
         ("password=*** already", "password=*** already"),
+        ("-https://u:pw@host/x", "-https://u:***@host/x"),
+        ("+ssh://borg@host/repo", "+ssh://borg@host/repo"),
+        ("{'password': 'hunter2', 'user': 'a'}", "{'password': '***', 'user': 'a'}"),
+        (
+            'redis://c:6379?password="hunter 2"&db=0',
+            'redis://c:6379?password="***"&db=0',
+        ),
+        (
+            """{'password': 'it\\'s "x"', 'user': 'a'}""",
+            """{'password': '***', 'user': 'a'}""",
+        ),
+        (
+            '/login?next="redis://c:6379?pass%77ord=hunter2"&x=1',
+            '/login?next="redis://c:6379?pass%77ord=***"&x=1',
+        ),
         (
             "redis://cache:6379/0?pass%77ord=hunter2&db=0",
             "redis://cache:6379/0?pass%77ord=***&db=0",
@@ -74,6 +90,29 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 def test_redact_secrets(text, expected):
     assert redact_secrets(text) == expected
     assert redact_secrets(expected) == expected  # idempotent
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "text",
+    [
+        "y-" * 50_000,
+        "a" * 100_000,
+        "a." * 50_000,
+        "http" * 25_000,
+        "password" * 12_500,
+        "?a" * 50_000,
+        "'" * 100_000,
+        "x" * 50_000 + " password=abc " + "y-" * 25_000,
+    ],
+    ids=["dashed-run", "word", "dotted", "schemes", "keys", "query", "quotes", "mixed"],
+)
+def test_redaction_stays_linear_on_large_lines(text):
+    """Every log line goes through this; a backtracking pattern turns one big
+    line of borg output into seconds of stalled logging."""
+    start = time.perf_counter()
+    redact_secrets(text)
+    assert time.perf_counter() - start < 0.5
 
 
 @pytest.mark.unit
