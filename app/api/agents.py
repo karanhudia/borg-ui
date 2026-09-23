@@ -451,6 +451,41 @@ def _is_request_scoped_repository_job(job: AgentJob) -> bool:
     return payload.get("job_kind") in REQUEST_SCOPED_REPOSITORY_JOB_KINDS
 
 
+def _claim_transition_from_read_status(
+    job: AgentJob, db: Session, values: dict[Any, Any]
+) -> bool:
+    """Apply `values` only while the job still has the status it was read with.
+
+    A cancel request or a verdict committed after the read is newer than the
+    decision made from it; the WHERE guard lets it stand instead of writing
+    over it. On success the ORM object is refreshed with the values written.
+    """
+    moved = (
+        db.query(AgentJob)
+        .filter(AgentJob.id == job.id, AgentJob.status == job.status)
+        .update(values, synchronize_session=False)
+    )
+    if not moved:
+        db.expire(job)
+        return False
+    db.refresh(job)
+    return True
+
+
+def _cancel_if_requested_meanwhile(
+    job: AgentJob, db: Session, *, completed_at: datetime
+) -> None:
+    """Settle a cancel request that won against the requeue.
+
+    The agent has just shown it does not run the job, so the cancel is done,
+    as for a job read as cancel_requested. Left alone, the row would hold the
+    repository until the reaper: the cancel's own dispatch can miss a session
+    that is only being set up, and session heartbeats never come back here.
+    """
+    if job.status == "cancel_requested":
+        _cancel_agent_job(job, db, completed_at=completed_at)
+
+
 def _requeue_stale_agent_jobs(
     db: Session,
     current_agent: AgentMachine,
@@ -494,19 +529,35 @@ def _requeue_stale_agent_jobs(
         if _is_request_scoped_repository_job(job):
             # No client is waiting for the result any more — fail terminally
             # instead of restarting a job whose receiver is gone.
-            job.status = "failed"
-            job.completed_at = now
-            job.updated_at = now
-            job.error_message = (
-                "Agent session lost before delivery; request-scoped repository "
-                "operation failed (no client is waiting for the result)."
-            )
+            if not _claim_transition_from_read_status(
+                job,
+                db,
+                {
+                    AgentJob.status: "failed",
+                    AgentJob.completed_at: now,
+                    AgentJob.updated_at: now,
+                    AgentJob.error_message: (
+                        "Agent session lost before delivery; request-scoped "
+                        "repository operation failed (no client is waiting "
+                        "for the result)."
+                    ),
+                },
+            ):
+                _cancel_if_requested_meanwhile(job, db, completed_at=now)
             continue
 
-        job.status = "queued"
-        job.claimed_at = None
-        job.started_at = None
-        job.updated_at = now
+        if not _claim_transition_from_read_status(
+            job,
+            db,
+            {
+                AgentJob.status: "queued",
+                AgentJob.claimed_at: None,
+                AgentJob.started_at: None,
+                AgentJob.updated_at: now,
+            },
+        ):
+            _cancel_if_requested_meanwhile(job, db, completed_at=now)
+            continue
 
         backup_job = _get_linked_backup_job(job, db)
         if backup_job and not _is_terminal_backup_status(backup_job.status):
