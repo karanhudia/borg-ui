@@ -114,7 +114,9 @@ export default function PlanInfoDrawer({
   const [selectedPlan, setSelectedPlan] = useState<Plan>(
     getDefaultSelectedPlan(normalizedPlan, initialSelectedPlan)
   )
+  // A per-feature trial only exists on Community; a paid plan is never a preview.
   const isFeatureTrial =
+    normalizedPlan === 'community' &&
     !(entitlement?.is_full_access && entitlement.status === 'active') &&
     entitlement?.status === 'active' &&
     (entitlement.trial_features ?? []).length > 0

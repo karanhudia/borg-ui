@@ -14,8 +14,12 @@ interface PlanBadgeProps {
 export default function PlanBadge({ plan, entitlement, onClick }: PlanBadgeProps) {
   const { t } = useTranslation()
   const isFullAccess = entitlement?.is_full_access && entitlement.status === 'active'
+  // A per-feature trial only exists on Community; a paid plan keeps its name
+  // even if its entitlement carries overrides.
   const onFeatureTrial =
-    entitlement?.status === 'active' && (entitlement.trial_features ?? []).length > 0
+    plan === 'community' &&
+    entitlement?.status === 'active' &&
+    (entitlement.trial_features ?? []).length > 0
   const color = isFullAccess
     ? PLAN_COLOR.enterprise
     : onFeatureTrial
