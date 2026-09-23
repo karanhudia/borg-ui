@@ -323,7 +323,7 @@ def archives_needing_info(
         return q.order_by(Archive.start.asc()).limit(n).all()
 
     # NULL is "never measured" and "stale" alike (spec 4.1): a listing that
-    # saw archives removed cleared it on every survivor, and the same
+    # saw archives removed cleared it on their neighbours, and the same
     # bounded loop re-measures them, oldest first.
     # Rows without sizes first: a new archive is the newest row, and behind
     # more stale survivors than the cap holds it would never be reached
@@ -338,6 +338,43 @@ def archives_needing_info(
     if include_missing_end and spare > 0:
         rows += _select(Archive.end.is_(None), removed | {a.id for a in rows}, spare)
     return rows
+
+
+def _neighbours_of_removed(
+    db: Session, repository: Repository, removed_ids: set[int], gone_ids: set[int]
+) -> set[int]:
+    """The surviving archive right before and right after each removed one in
+    its series: the rows whose deduplicated_size a removal changes. `gone_ids`
+    is every row the listing reports removed, lingering ones included.
+
+    Staling every survivor instead re-measured the whole repository after
+    each prune, and the next prune undid it before the pass finished (#1137).
+    ponytail: chunks shared only with a non-adjacent archive are missed; the
+    prune preview re-measures its candidates itself, so that figure stays exact.
+    """
+    removed = (
+        db.query(Archive.series, Archive.start)
+        .filter(Archive.repository_id == repository.id, Archive.id.in_(removed_ids))
+        .all()
+    )
+    stale: set[int] = set()
+    for series, start in removed:
+        survivors = db.query(Archive.id).filter(
+            Archive.repository_id == repository.id,
+            Archive.series == series,
+            Archive.id.notin_(gone_ids),
+        )
+        for row in (
+            survivors.filter(Archive.start < start)
+            .order_by(Archive.start.desc())
+            .first(),
+            survivors.filter(Archive.start > start)
+            .order_by(Archive.start.asc())
+            .first(),
+        ):
+            if row is not None:
+                stale.add(row.id)
+    return stale
 
 
 class AgentUnavailable(RuntimeError):
@@ -663,18 +700,21 @@ async def run_archive_sync(ctx) -> Outcome:
         # record did not report is news.
         from app.services.operations.repository_status import pending_removed_ids
 
-        if removed_id_set - pending_removed_ids(db, repository.id):
+        newly_removed = removed_id_set - pending_removed_ids(db, repository.id)
+        if newly_removed and (repository.borg_version or 1) != 2:
             # deduplicated_size is relative to the archives that exist (spec
-            # 4.1): the survivors' figures are now stale, whoever removed the
-            # archives. Clearing the date hands them to archives_needing_info
-            # below, under the same per-run cap as a first fill.
-            # Survivors only: a removed row lingers until the merge deletes
-            # it, and with no date it would take an info slot every run.
-            db.query(Archive).filter(
-                Archive.repository_id == repository.id,
-                Archive.id.notin_(removed_id_set),
-            ).update({Archive.stats_measured_at: None}, synchronize_session=False)
-            db.commit()
+            # 4.1), so a removal stales the survivors it shared chunks with.
+            # Clearing the date hands them to archives_needing_info below,
+            # under the same per-run cap as a first fill. Borg 2 reports no
+            # deduplicated_size, so there is nothing to re-measure (#1137).
+            stale_ids = _neighbours_of_removed(
+                db, repository, newly_removed, removed_id_set
+            )
+            if stale_ids:
+                db.query(Archive).filter(Archive.id.in_(stale_ids)).update(
+                    {Archive.stats_measured_at: None}, synchronize_session=False
+                )
+                db.commit()
         if is_agent_executor(repository) and not agent_supports_job(
             db, repository, AGENT_DIFF_JOB_KIND
         ):
