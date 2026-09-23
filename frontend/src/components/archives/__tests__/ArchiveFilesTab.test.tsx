@@ -228,7 +228,9 @@ describe('ArchiveFilesTab', () => {
       fireEvent.keyDown(root, { key: 'ArrowDown' })
       fireEvent.keyDown(root, { key: 'Enter' })
       expect(screen.getAllByText(/9\.18 KB/).length).toBeGreaterThanOrEqual(2)
-      expect(screen.getByText('1 selected (9.18 KB)')).toBeInTheDocument()
+      const bar = screen.getByRole('toolbar', { name: 'Selection' })
+      expect(within(bar).getByText('1 selected')).toBeInTheDocument()
+      expect(within(bar).getByText('9.18 KB')).toBeInTheDocument()
     })
 
     it('opens restore from the footer for the whole selection', () => {

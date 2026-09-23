@@ -1,8 +1,15 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Box, Button, IconButton, Stack, Typography } from '@mui/material'
+import { Box, Button, IconButton, Typography, useTheme } from '@mui/material'
 import { CheckSquare, RotateCcw, X } from 'lucide-react'
 import { RestoreProgressPanelView, type RestoreStatus } from './RestoreProgressPanel'
-import { cornerPanelSx, cornerStackSx } from './cornerStack'
+import {
+  cornerPanelFooterSx,
+  cornerPanelHeaderSx,
+  cornerPanelIconButtonSx,
+  cornerPanelIconSx,
+  cornerPanelSx,
+  cornerStackSx,
+} from './cornerStack'
 
 const meta: Meta<typeof RestoreProgressPanelView> = {
   title: 'Archives/RestoreProgressPanel',
@@ -65,6 +72,40 @@ export const Failed: Story = {
 
 export const StatusUnavailable: Story = { args: { job: undefined, statusUnavailable: true } }
 
+function SelectionBarMock() {
+  const theme = useTheme()
+  return (
+    <Box role="toolbar" sx={cornerPanelSx}>
+      <Box sx={cornerPanelHeaderSx}>
+        <Box sx={cornerPanelIconSx(theme, 'primary')}>
+          <CheckSquare size={17} />
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
+            2 selected
+          </Typography>
+          <Typography variant="caption" component="div" sx={{ color: 'text.secondary' }}>
+            61.2 KB
+          </Typography>
+        </Box>
+        <IconButton size="small" sx={cornerPanelIconButtonSx}>
+          <X size={16} />
+        </IconButton>
+      </Box>
+      <Box sx={cornerPanelFooterSx}>
+        <Button
+          size="small"
+          variant="contained"
+          disableElevation
+          startIcon={<RotateCcw size={14} />}
+        >
+          Restore selection
+        </Button>
+      </Box>
+    </Box>
+  )
+}
+
 /** Two restores in flight plus a fresh selection: the column stacks them,
  *  selection bar nearest the corner, so nothing covers the Restore button. */
 export const StackedWithSelection: Story = {
@@ -80,27 +121,7 @@ export const StackedWithSelection: Story = {
         onDismiss={() => {}}
         job={Running.args!.job as RestoreStatus}
       />
-      <Box role="toolbar" sx={cornerPanelSx}>
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', pl: 2, pr: 1, py: 1 }}>
-          <CheckSquare size={16} />
-          <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>
-            2 selected (61.2 KB)
-          </Typography>
-          <IconButton size="small" sx={{ color: 'inherit' }}>
-            <X size={16} />
-          </IconButton>
-        </Stack>
-        <Box sx={{ px: 1.5, pb: 1.5, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button
-            size="small"
-            variant="contained"
-            disableElevation
-            startIcon={<RotateCcw size={14} />}
-          >
-            Restore selection
-          </Button>
-        </Box>
-      </Box>
+      <SelectionBarMock />
     </>
   ),
 }

@@ -1192,6 +1192,7 @@
       "notPresent_one": "No presente en {{count}} archivo anterior",
       "notPresent_other": "No presente en {{count}} archivos anteriores",
       "selected": "{{count}} seleccionados ({{size}})",
+      "selectedCount": "{{count}} seleccionados",
       "restoreSelection": "Restaurar selección",
       "selectionBar": "Selección",
       "clearSelection": "Borrar selección",

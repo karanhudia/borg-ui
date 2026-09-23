@@ -31,7 +31,9 @@ export default function ChangeRowLine({ row }: ChangeRowLineProps) {
         display: 'grid',
         gridTemplateColumns: { xs: '20px minmax(0, 1fr)', sm: '20px minmax(0, 1fr) auto' },
         columnGap: 1.5,
-        alignItems: 'center',
+        // On a phone the sizes drop under the path; the badge stays on the
+        // path's line rather than floating between the two.
+        alignItems: { xs: 'start', sm: 'center' },
         py: 1,
         px: 1.5,
         // Square and flush: the list around the rows owns the frame, so a
@@ -83,9 +85,11 @@ export default function ChangeRowLine({ row }: ChangeRowLineProps) {
             display: 'flex',
             alignItems: 'baseline',
             gap: 1,
-            justifyContent: 'flex-end',
+            justifyContent: { xs: 'flex-start', sm: 'flex-end' },
             gridColumn: { xs: '2', sm: 'auto' },
             fontVariantNumeric: 'tabular-nums',
+            mt: { xs: 0.25, sm: 0 },
+            '& .MuiTypography-root': { fontSize: { xs: '0.75rem', sm: '0.875rem' } },
           }}
         >
           {row.change === 'modified' ? (

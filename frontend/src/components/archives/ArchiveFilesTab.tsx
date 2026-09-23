@@ -8,11 +8,10 @@ import {
   Stack,
   Tooltip,
   Typography,
-  alpha,
   useMediaQuery,
   useTheme,
 } from '@mui/material'
-import { CheckSquare, ChevronDown, ChevronUp, File, Folder, RotateCcw, X } from 'lucide-react'
+import { CheckSquare, ChevronDown, ChevronUp, RotateCcw, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import ArchivePathSelector, {
   type ArchiveBrowseState,
@@ -26,7 +25,15 @@ import { formatBytes } from '../../utils/dateUtils'
 import { getBorgVersion } from '../../utils/repoCapabilities'
 import type { ArchiveDetailResponse } from '../../types/archives'
 import type { RestorePathMetadata } from '../../utils/restorePaths'
-import { cornerPanelSx, cornerStackSx } from './cornerStack'
+import {
+  cornerPanelFooterSx,
+  cornerPanelHeaderSx,
+  cornerPanelIconButtonSx,
+  cornerPanelIconSx,
+  cornerPanelSx,
+  cornerStackSx,
+} from './cornerStack'
+import FileTypeIcon from '../FileTypeIcon'
 import type { Repository } from '@/types'
 
 interface ArchiveFilesTabProps {
@@ -47,8 +54,9 @@ interface ArchiveFilesTabProps {
   selectionResetToken?: number
 }
 
+// Without a column from the page, the tab floats its own.
 const renderInCorner = (stack: HTMLElement | null | undefined, node: ReactElement) =>
-  stack ? createPortal(node, stack) : node
+  stack ? createPortal(node, stack) : <Box sx={cornerStackSx}>{node}</Box>
 
 export default function ArchiveFilesTab({
   repositoryId,
@@ -264,30 +272,28 @@ export default function ArchiveFilesTab({
         // folder scrolls. Expanding it lists every path that will be restored.
         renderInCorner(
           cornerStack,
-          <Box
-            role="toolbar"
-            aria-label={t('archives.files.selectionBar')}
-            sx={cornerStack ? cornerPanelSx : { ...cornerStackSx, ...cornerPanelSx }}
-          >
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', pl: 2, pr: 1, py: 1 }}>
-              <CheckSquare size={16} aria-hidden />
-              <Typography
-                variant="body2"
-                sx={{
-                  fontWeight: 600,
-                  flex: 1,
-                  minWidth: 0,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {t('archives.files.selected', {
-                  count: selectedCount,
-                  size: formatBytes(selectedSize),
-                })}
-              </Typography>
+          <Box role="toolbar" aria-label={t('archives.files.selectionBar')} sx={cornerPanelSx}>
+            <Box sx={cornerPanelHeaderSx}>
+              <Box sx={cornerPanelIconSx(theme, 'primary')} aria-hidden>
+                <CheckSquare size={17} />
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography
+                  variant="body2"
+                  noWrap
+                  sx={{ fontWeight: 600, lineHeight: 1.3, fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {t('archives.files.selectedCount', { count: selectedCount })}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  noWrap
+                  component="div"
+                  sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {formatBytes(selectedSize)}
+                </Typography>
+              </Box>
               <Tooltip
                 title={
                   selectionOpen
@@ -304,7 +310,7 @@ export default function ArchiveFilesTab({
                   }
                   aria-expanded={selectionOpen}
                   onClick={() => setSelectionOpen((open) => !open)}
-                  sx={{ color: 'inherit', opacity: 0.8, '&:hover': { opacity: 1 } }}
+                  sx={cornerPanelIconButtonSx}
                 >
                   {selectionOpen ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
                 </IconButton>
@@ -314,12 +320,12 @@ export default function ArchiveFilesTab({
                   size="small"
                   aria-label={t('archives.files.clearSelection')}
                   onClick={clearSelection}
-                  sx={{ color: 'inherit', opacity: 0.8, '&:hover': { opacity: 1 } }}
+                  sx={cornerPanelIconButtonSx}
                 >
                   <X size={16} />
                 </IconButton>
               </Tooltip>
-            </Stack>
+            </Box>
             {selectionOpen && (
               <Box
                 component="ul"
@@ -329,13 +335,11 @@ export default function ArchiveFilesTab({
                   p: 0,
                   maxHeight: 260,
                   overflowY: 'auto',
-                  borderTop: (theme) => `1px solid ${alpha(theme.palette.common.white, 0.1)}`,
                 }}
               >
                 {selection.selectedPaths.map((path) => {
                   const entry = selectedEntries.get(path)
                   const name = entry?.name ?? path.split('/').filter(Boolean).pop() ?? path
-                  const Icon = entry?.type === 'directory' ? Folder : File
                   return (
                     <Stack
                       component="li"
@@ -344,37 +348,22 @@ export default function ArchiveFilesTab({
                       spacing={1.25}
                       sx={{
                         alignItems: 'center',
-                        pl: 2,
+                        pl: 1.5,
                         pr: 0.75,
                         py: 0.75,
-                        '&:hover': { bgcolor: (theme) => alpha(theme.palette.common.white, 0.06) },
+                        '&:hover': { bgcolor: 'action.hover' },
                       }}
                     >
-                      <Box sx={{ opacity: 0.7, display: 'flex' }}>
-                        <Icon size={14} />
-                      </Box>
+                      <FileTypeIcon name={name} type={entry?.type ?? 'file'} size={28} />
                       <Box sx={{ minWidth: 0, flex: 1 }}>
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            fontWeight: 500,
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
+                        <Typography variant="body2" noWrap sx={{ fontWeight: 500 }}>
                           {name}
                         </Typography>
                         <Typography
                           variant="caption"
-                          sx={{
-                            display: 'block',
-                            opacity: 0.65,
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            fontFamily: 'monospace',
-                          }}
+                          noWrap
+                          component="div"
+                          sx={{ color: 'text.secondary', fontFamily: 'monospace' }}
                         >
                           {path}
                         </Typography>
@@ -383,7 +372,7 @@ export default function ArchiveFilesTab({
                         <Typography
                           variant="caption"
                           sx={{
-                            opacity: 0.75,
+                            color: 'text.secondary',
                             whiteSpace: 'nowrap',
                             fontVariantNumeric: 'tabular-nums',
                           }}
@@ -395,7 +384,7 @@ export default function ArchiveFilesTab({
                         size="small"
                         aria-label={t('archives.files.removeFromSelection', { name })}
                         onClick={() => removeFromSelection(path)}
-                        sx={{ color: 'inherit', opacity: 0.7, '&:hover': { opacity: 1 } }}
+                        sx={cornerPanelIconButtonSx}
                       >
                         <X size={14} />
                       </IconButton>
@@ -404,15 +393,7 @@ export default function ArchiveFilesTab({
                 })}
               </Box>
             )}
-            <Box
-              sx={{
-                px: 1.5,
-                py: 1,
-                borderTop: (theme) => `1px solid ${alpha(theme.palette.common.white, 0.1)}`,
-                display: 'flex',
-                justifyContent: 'flex-end',
-              }}
-            >
+            <Box sx={cornerPanelFooterSx}>
               <Button
                 size="small"
                 variant="contained"

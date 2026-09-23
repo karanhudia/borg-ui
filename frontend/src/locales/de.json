@@ -1192,6 +1192,7 @@
       "notPresent_one": "Nicht vorhanden in {{count}} älteren Archiv",
       "notPresent_other": "Nicht vorhanden in {{count}} älteren Archiven",
       "selected": "{{count}} ausgewählt ({{size}})",
+      "selectedCount": "{{count}} ausgewählt",
       "restoreSelection": "Auswahl wiederherstellen",
       "selectionBar": "Auswahl",
       "clearSelection": "Auswahl aufheben",

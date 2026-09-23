@@ -6,15 +6,20 @@ import {
   Button,
   IconButton,
   LinearProgress,
-  Stack,
   Tooltip,
   Typography,
-  alpha,
+  useTheme,
 } from '@mui/material'
 import { AlertTriangle, CheckCircle2, Loader2, RotateCcw, X } from 'lucide-react'
 import { restoreAPI } from '../../services/api'
 import { translateBackendKey } from '../../utils/translateBackendKey'
-import { cornerPanelSx } from './cornerStack'
+import {
+  cornerPanelFooterSx,
+  cornerPanelHeaderSx,
+  cornerPanelIconButtonSx,
+  cornerPanelIconSx,
+  cornerPanelSx,
+} from './cornerStack'
 
 export interface RestoreStatus {
   id: number
@@ -78,6 +83,7 @@ export function RestoreProgressPanelView({
   onDismiss,
 }: RestoreProgressPanelViewProps) {
   const { t } = useTranslation()
+  const theme = useTheme()
   const settled = job != null && TERMINAL.has(job.status)
   const status = statusUnavailable && !settled ? 'unavailable' : (job?.status ?? 'pending')
   const done = TERMINAL.has(status) || status === 'unavailable'
@@ -100,17 +106,20 @@ export function RestoreProgressPanelView({
         '@keyframes restore-panel-spin': { to: { transform: 'rotate(360deg)' } },
       }}
     >
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', pl: 2, pr: 1, py: 1 }}>
+      <Box sx={cornerPanelHeaderSx}>
         <Box
-          component={Icon}
-          size={16}
+          sx={cornerPanelIconSx(theme, failed ? 'error' : done ? 'success' : 'primary')}
           aria-hidden
-          sx={{
-            flexShrink: 0,
-            color: failed ? 'error.light' : done ? 'success.light' : 'inherit',
-            animation: done ? undefined : 'restore-panel-spin 1s linear infinite',
-          }}
-        />
+        >
+          <Box
+            component={Icon}
+            size={17}
+            sx={{
+              display: 'block',
+              animation: done ? undefined : 'restore-panel-spin 1s linear infinite',
+            }}
+          />
+        </Box>
         <Typography variant="body2" sx={{ fontWeight: 600, flex: 1, minWidth: 0 }} noWrap>
           {title}
         </Typography>
@@ -119,25 +128,25 @@ export function RestoreProgressPanelView({
             size="small"
             aria-label={t('archives.restorePanel.dismiss')}
             onClick={onDismiss}
-            sx={{ color: 'inherit', opacity: 0.8, '&:hover': { opacity: 1 } }}
+            sx={cornerPanelIconButtonSx}
           >
             <X size={16} />
           </IconButton>
         </Tooltip>
-      </Stack>
+      </Box>
 
       {!done && (
         <LinearProgress
           variant={percent > 0 ? 'determinate' : 'indeterminate'}
           value={percent}
           color="primary"
-          sx={{ height: 3, bgcolor: (theme) => alpha(theme.palette.common.white, 0.12) }}
+          sx={{ height: 3, bgcolor: 'action.hover' }}
         />
       )}
 
       <Box sx={{ px: 2, pt: 1.5, pb: 1.5 }}>
         {failed ? (
-          <Typography variant="body2" sx={{ opacity: 0.85, whiteSpace: 'pre-wrap' }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary', whiteSpace: 'pre-wrap' }}>
             {status === 'unavailable'
               ? t('archives.restorePanel.unavailableHint')
               : job?.error_message
@@ -151,7 +160,7 @@ export function RestoreProgressPanelView({
           <>
             <Typography
               variant="body2"
-              sx={{ opacity: 0.85, fontVariantNumeric: 'tabular-nums' }}
+              sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}
               noWrap
             >
               {!job
@@ -168,27 +177,27 @@ export function RestoreProgressPanelView({
                 variant="caption"
                 component="div"
                 noWrap
-                sx={{ opacity: 0.6, fontFamily: 'monospace', mt: 0.5, direction: 'rtl' }}
+                sx={{ color: 'text.secondary', fontFamily: 'monospace', mt: 0.5, direction: 'rtl' }}
               >
                 {job.progress_details.current_file}
               </Typography>
             )}
           </>
         )}
-        {done && (
-          <Stack direction="row" spacing={1} sx={{ mt: 1.5, justifyContent: 'flex-end' }}>
-            <Button
-              size="small"
-              component={RouterLink}
-              to={`/activity?repository_id=${repositoryId}`}
-              startIcon={<RotateCcw size={14} />}
-              sx={{ color: 'inherit', opacity: 0.85, '&:hover': { opacity: 1 } }}
-            >
-              {t('archives.restorePanel.viewActivity')}
-            </Button>
-          </Stack>
-        )}
       </Box>
+      {done && (
+        <Box sx={cornerPanelFooterSx}>
+          <Button
+            size="small"
+            component={RouterLink}
+            to={`/activity?repository_id=${repositoryId}`}
+            startIcon={<RotateCcw size={14} />}
+            sx={{ whiteSpace: 'nowrap' }}
+          >
+            {t('archives.restorePanel.viewActivity')}
+          </Button>
+        </Box>
+      )}
     </Box>
   )
 }
