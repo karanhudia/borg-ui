@@ -37,6 +37,23 @@
       "availability": "included"
     },
     {
+      "id": "restore_checks",
+      "plan": "community",
+      "label": "Scheduled restore checks",
+      "label_localized": {
+        "es": "Comprobaciones de restauración programadas",
+        "de": "Geplante Restore-Checks",
+        "it": "Verifiche di ripristino pianificate"
+      },
+      "description": "Prove your backups restore, on a schedule: a managed canary file, probe paths you pick from the latest archive, or a full archive drill, with alerts when one fails.",
+      "description_localized": {
+        "es": "Demuestra que tus copias se restauran, de forma programada: un archivo canario gestionado, rutas de prueba elegidas del último archivo o un simulacro de archivo completo, con alertas si algo falla.",
+        "de": "Beweisen Sie planmäßig, dass Ihre Backups wiederherstellbar sind: eine verwaltete Kanarienvogel-Datei, selbst gewählte Prüfpfade aus dem neuesten Archiv oder eine vollständige Archivübung, mit Alarm bei Fehlschlag.",
+        "it": "Dimostra che i tuoi backup si ripristinano, in modo pianificato: un file canary gestito, percorsi di prova scelti dall'ultimo archivio o un'esercitazione su un archivio completo, con avvisi in caso di errore."
+      },
+      "availability": "included"
+    },
+    {
       "id": "community_users",
       "plan": "community",
       "label": "Up to 5 users",
