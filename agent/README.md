@@ -219,7 +219,13 @@ The first implementation supports:
   and stored, being the listing that was asked for; `repository.info`,
   `repository.rinfo`, `repository.archive_info` and
   `repository.list_archives` log a one-line summary instead of their JSON
-  output (a failed run keeps the output)
+  output (a failed run keeps the output); from 0.1.9 the steps Borg's
+  progress indicators print (such as the cache transaction, as
+  `progress_message` or as a `log_message` of `borg.output.progress`)
+  are neither stored nor reported, and a backup's completion carries the
+  archive's final counters (`archive_stats`, from `archive.stats` of
+  `borg create --json`), which the server keeps over the last progress
+  report
 - cancellation through heartbeat; from 0.1.7 (`jobs.cancel`) a running
   backup, check, prune, compact, restore or archive delete stops as well,
   even while Borg prints nothing

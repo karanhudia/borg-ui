@@ -609,6 +609,35 @@ def _reported_compact_stats(value) -> Optional[dict]:
     return stats
 
 
+# The final counters of a backup's archive (`archive.stats` of
+# `borg create --json`) as an agent from release 0.1.9 reports them with the
+# completion, with the column each one lands in.
+_ARCHIVE_STATS_COLUMNS = {
+    "original_size": AgentJob.original_size,
+    "compressed_size": AgentJob.compressed_size,
+    "deduplicated_size": AgentJob.deduplicated_size,
+    "nfiles": AgentJob.nfiles,
+}
+# `nfiles` is a 32-bit column
+_MAX_NFILES = 2**31
+
+
+def _reported_archive_stats(result) -> dict:
+    """The final archive counters a completion report carries, by column;
+    empty when it carries none (an older agent) and without a field Borg
+    did not report (Borg 2 has no compressed or deduplicated size here), so
+    the last progress report's figure stands for those."""
+    value = result.get("archive_stats") if isinstance(result, dict) else None
+    if not isinstance(value, dict):
+        return {}
+    return {
+        column: value[name]
+        for name, column in _ARCHIVE_STATS_COLUMNS.items()
+        if _is_count(value.get(name))
+        and (name != "nfiles" or value[name] < _MAX_NFILES)
+    }
+
+
 def _is_count(value) -> bool:
     return (
         isinstance(value, int)
@@ -1105,6 +1134,9 @@ def _complete_agent_job(
             AgentJob.result: result,
             AgentJob.error_message: warning_message,
             AgentJob.updated_at: _now_utc(),
+            # Progress travels apart from the outcome and is refused once
+            # the job is final, so the outcome's counters are the final ones.
+            **_reported_archive_stats(result),
         },
     ):
         return False

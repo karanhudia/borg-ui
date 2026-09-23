@@ -228,7 +228,24 @@ def build_borg_env(overrides: Optional[dict[str, str]] = None) -> dict[str, str]
     return env
 
 
+# The counters `archive_progress` reports while `borg create` runs
+ARCHIVE_STATS_FIELDS = (
+    "original_size",
+    "compressed_size",
+    "deduplicated_size",
+    "nfiles",
+)
+
+
+# The logger Borg's progress indicators print through
+PROGRESS_LOGGER = "borg.output.progress"
+
+
 def parse_borg_progress(line: str) -> Optional[dict[str, Any]]:
+    """The progress report a Borg `--log-json` line makes: None for a line
+    that is not a progress line, an empty report for one that has nothing
+    to report (a step such as the cache transaction, which no reader
+    shows)."""
     stripped = line.strip()
     if not stripped.startswith("{"):
         return None
@@ -240,19 +257,14 @@ def parse_borg_progress(line: str) -> Optional[dict[str, Any]]:
     msg_type = payload.get("type")
     if msg_type == "archive_progress":
         progress: dict[str, Any] = {}
-        for key in (
-            "original_size",
-            "compressed_size",
-            "deduplicated_size",
-            "nfiles",
-        ):
+        for key in ARCHIVE_STATS_FIELDS:
             if key in payload:
                 progress[key] = payload[key]
         if "path" in payload:
             progress["current_file"] = payload["path"]
         if payload.get("finished"):
             progress["progress_percent"] = 100.0
-        return progress or None
+        return progress
 
     if msg_type == "progress_percent":
         if payload.get("finished"):
@@ -274,6 +286,15 @@ def parse_borg_progress(line: str) -> Optional[dict[str, Any]]:
     if msg_type == "file_status" and payload.get("path"):
         return {"current_file": payload["path"]}
 
+    # A progress indicator prints JSON only when it is the only one
+    # running; one that starts while another runs (the cache transaction
+    # during a prune) prints through the progress logger as a
+    # `log_message` instead.
+    if msg_type == "progress_message" or (
+        msg_type == "log_message" and payload.get("name") == PROGRESS_LOGGER
+    ):
+        return {}
+
     return None
 
 
@@ -282,7 +303,7 @@ def progress_replaces_log_line(progress: Optional[dict[str, Any]]) -> bool:
     so the line is not stored as a log line too. A `file_status` line
     (`create --list`) is both: it names the current file, and it is the
     listing the operator asked for."""
-    return bool(progress) and set(progress) != {"current_file"}
+    return progress is not None and set(progress) != {"current_file"}
 
 
 def _parse_created_archive_name(stdout: str) -> Optional[str]:
@@ -307,6 +328,33 @@ def _parse_created_archive_name(stdout: str) -> Optional[str]:
         if isinstance(name, str) and name.strip():
             return name.strip()
     return None
+
+
+def _parse_created_archive_stats(stdout: str) -> Optional[dict[str, int]]:
+    """The final counters of the archive ``borg create --json`` made
+    (``archive.stats``), or None when there are none.
+
+    Borg reports ``archive_progress`` at most once a second, and its last
+    one (``finished``) carries no counters, so the progress reports never
+    hold the final figures. Borg 2 reports no ``compressed_size`` or
+    ``deduplicated_size`` here; only the fields present are returned.
+    """
+    if not stdout or not stdout.strip():
+        return None
+    try:
+        data = json.loads(stdout)
+    except json.JSONDecodeError:
+        return None
+    archive = data.get("archive") if isinstance(data, dict) else None
+    stats = archive.get("stats") if isinstance(archive, dict) else None
+    if not isinstance(stats, dict):
+        return None
+    counters = {
+        key: stats[key]
+        for key in ARCHIVE_STATS_FIELDS
+        if isinstance(stats.get(key), int) and not isinstance(stats[key], bool)
+    }
+    return counters or None
 
 
 def execute_backup_create_job(
@@ -432,17 +480,18 @@ def execute_backup_create_job(
         # Warnings (rc 1 / 100-127) still produced an archive: complete the
         # job and let the server record completed_with_warnings from the
         # return code, matching how server-side backups are classified.
-        resolved_archive_name = (
-            _parse_created_archive_name("".join(stdout_chunks)) or payload.archive_name
-        )
-        client.complete_job(
-            job_id,
-            result={
-                "archive_name": resolved_archive_name,
-                "return_code": return_code,
-                "command": cmd,
-            },
-        )
+        stdout = "".join(stdout_chunks)
+        result: dict[str, Any] = {
+            "archive_name": _parse_created_archive_name(stdout) or payload.archive_name,
+            "return_code": return_code,
+            "command": cmd,
+        }
+        # The final counters travel with the outcome: the progress reports
+        # go another way and may arrive after it, or never hold them.
+        archive_stats = _parse_created_archive_stats(stdout)
+        if archive_stats:
+            result["archive_stats"] = archive_stats
+        client.complete_job(job_id, result=result)
         return BackupExecutionResult(
             job_id=job_id,
             status="completed" if return_code == 0 else "completed_with_warnings",
