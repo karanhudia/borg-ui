@@ -619,6 +619,22 @@ def mark_jobs_of_pruned_archives(
     return marked
 
 
+def _in_id_batches(query, id_column):
+    """The query's rows, read CHUNK_SIZE at a time in id order."""
+    last_id = 0
+    while True:
+        batch = (
+            query.filter(id_column > last_id)
+            .order_by(id_column)
+            .limit(CHUNK_SIZE)
+            .all()
+        )
+        if not batch:
+            return
+        yield from batch
+        last_id = batch[-1].id
+
+
 # A finished agent job's late log lines reach its log file as they arrive
 # (app/api/agents.py), and each one moves the job's updated_at. The log
 # repair below leaves a job touched less than this long ago to that path, so
@@ -627,9 +643,11 @@ LATE_LOG_SETTLE = timedelta(seconds=60)
 
 
 def sweep_pruned_archive_records(
-    db: Session, lookback: timedelta = timedelta(days=2)
+    db: Session,
+    lookback: timedelta = timedelta(days=2),
+    repair_lookback: Optional[timedelta] = None,
 ) -> int:
-    """Repair recent agent maintenance logs and mark any pruned archives' jobs.
+    """Repair agent maintenance logs and mark any pruned archives' jobs.
 
     The completion hook in the agents API often runs before the agent's log
     lines have all been ingested (log streaming races the command result), so
@@ -638,30 +656,50 @@ def sweep_pruned_archive_records(
     retention pass runs the lines are all there: bring the linked
     operation's log file in line with them, whatever the kind and outcome,
     then for a completed prune parse again and mark idempotently.
+
+    `lookback` bounds the marking and `repair_lookback` (default: the same)
+    the repair; the daily pass repairs for as long as the lines are kept.
     """
     from app.api.agents import FINAL_AGENT_JOB_STATUSES
 
     now = utc_now()
-    since = now - lookback
-    candidates = (
-        db.query(AgentJob, AgentJob.updated_at <= now - LATE_LOG_SETTLE)
-        .filter(
-            AgentJob.job_type == "repository",
-            AgentJob.status.in_(FINAL_AGENT_JOB_STATUSES),
-            AgentJob.completed_at >= since,
-        )
-        .all()
+    mark_since = now - lookback
+    repair_since = now - (lookback if repair_lookback is None else repair_lookback)
+    # Only the columns the loop reads, only jobs whose payload names an
+    # operation (most repository jobs in the window are reads that link to
+    # none), and in batches: the repair window spans the log retention.
+    marker = AgentJob.payload[("operation", "maintenance_job", "table")].as_string()
+    candidates = db.query(
+        AgentJob.id,
+        AgentJob.payload,
+        AgentJob.status,
+        AgentJob.claimed_at,
+        AgentJob.completed_at,
+        (AgentJob.updated_at <= now - LATE_LOG_SETTLE).label("settled"),
+        (AgentJob.completed_at >= mark_since).label("in_mark_window"),
+        (AgentJob.completed_at >= repair_since).label("in_repair_window"),
+    ).filter(
+        AgentJob.job_type == "repository",
+        AgentJob.status.in_(FINAL_AGENT_JOB_STATUSES),
+        AgentJob.completed_at >= min(mark_since, repair_since),
+        marker == Operation.__tablename__,
     )
     marked = 0
-    for agent_job, settled in candidates:
+    for agent_job in _in_id_batches(candidates, AgentJob.id):
         payload = agent_job.payload if isinstance(agent_job.payload, dict) else {}
         operation_job = _agent_maintenance_job_for(db, payload)
         if operation_job is None:
             continue
         is_completed_prune = (
-            operation_job.kind == "prune" and agent_job.status == "completed"
+            operation_job.kind == "prune"
+            and agent_job.status == "completed"
+            and agent_job.in_mark_window
         )
-        repairable = settled and bool(operation_job.log_file_path)
+        repairable = (
+            agent_job.settled
+            and agent_job.in_repair_window
+            and bool(operation_job.log_file_path)
+        )
         if not is_completed_prune and not repairable:
             continue
 
@@ -726,10 +764,14 @@ def run_retention(db: Session, settings: Optional[SystemSettings] = None) -> Dic
 
     now = utc_now()
     log_cutoff = now - timedelta(days=log_days)
-    # First: the sweep reads recent agent prune logs, and the save policy
+    # First: the sweep reads the agent maintenance logs, and the save policy
     # below drops the logs of completed jobs regardless of age (the default
     # policy keeps failures and warnings only). Read before deleting.
-    results = {"pruned_archive_records_marked": sweep_pruned_archive_records(db)}
+    results = {
+        "pruned_archive_records_marked": sweep_pruned_archive_records(
+            db, repair_lookback=timedelta(days=log_days)
+        )
+    }
     results |= {
         "agent_log_rows_deleted": purge_agent_job_logs(
             db, _older_than(AgentJob, log_cutoff)
