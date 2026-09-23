@@ -33,6 +33,7 @@ def _build_document(
     expires_offset_days: int = 30,
     refresh_offset_days: int = 7,
     feature_overrides: list | None = None,
+    license_plan: str | None = None,
 ) -> dict:
     now = utc_now()
     payload = {
@@ -52,6 +53,8 @@ def _build_document(
         "metadata": {"edition": "official", "channel": "trial" if is_trial else "paid"},
         "signature_version": "v1",
     }
+    if license_plan is not None:
+        payload["license_plan"] = license_plan
     signature = base64.b64encode(
         private_key.sign(licensing_service._canonical_payload(payload))
     ).decode("utf-8")
@@ -545,3 +548,30 @@ async def test_seat_management_uses_the_stored_license_key(db_session, activatio
 
     with pytest.raises(RuntimeError, match="No license key is stored"):
         await licensing_service.list_license_seats(db_session)
+
+
+def test_summary_names_the_tier_the_license_was_sold_as(db_session, activation_keys):
+    state = licensing_service.get_or_create_licensing_state(db_session)
+    document = _build_document(
+        activation_keys,
+        instance_id=state.instance_id,
+        plan="pro",
+        is_trial=False,
+        license_plan="lite",
+    )
+    licensing_service._apply_entitlement(
+        db_session,
+        state,
+        document["payload"],
+        document["signature"],
+        key_id="key_2026_01",
+    )
+    db_session.commit()
+
+    summary = get_entitlement_summary(db_session)
+    assert summary["access_level"] == "pro"
+    assert summary["license_plan"] == "lite"
+
+
+def test_summary_license_plan_is_none_without_an_entitlement(db_session):
+    assert get_entitlement_summary(db_session)["license_plan"] is None

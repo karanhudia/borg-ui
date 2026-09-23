@@ -20,6 +20,37 @@ function fullAccess(daysLeft: number): EntitlementInfo {
   }
 }
 
+const proLite: EntitlementInfo = {
+  status: 'active',
+  access_level: 'pro',
+  is_full_access: false,
+  full_access_consumed: true,
+  expires_at: null,
+  starts_at: null,
+  instance_id: 'inst_story',
+  license_plan: 'lite',
+  ui_state: 'paid_active',
+  last_refresh_at: null,
+  last_refresh_error: null,
+}
+
+function proPreview(daysLeft: number): EntitlementInfo {
+  const expires = new Date(Date.now() + daysLeft * DAY_MS).toISOString()
+  return {
+    status: 'active',
+    access_level: 'community',
+    is_full_access: false,
+    full_access_consumed: true,
+    expires_at: expires,
+    starts_at: null,
+    instance_id: 'inst_story',
+    ui_state: 'community',
+    trial_features: [{ feature: 'archive_history', expires_at: expires }],
+    last_refresh_at: null,
+    last_refresh_error: null,
+  }
+}
+
 const meta = {
   title: 'Components/PlanBadge',
   component: PlanBadge,
@@ -38,6 +69,16 @@ export const Pro: Story = {
   args: { plan: 'pro' },
 }
 
+/** A Lite license is gated as Pro; the badge names what was bought. */
+export const ProLite: Story = {
+  args: { plan: 'pro', entitlement: proLite },
+}
+
+/** A per-feature trial on Community: the badge names the preview and counts down. */
+export const ProPreview: Story = {
+  args: { plan: 'community', entitlement: proPreview(9) },
+}
+
 /** More than 14 days left: the badge only says Full Access. */
 export const FullAccessEarly: Story = {
   args: { plan: 'community', entitlement: fullAccess(40) },
@@ -54,7 +95,9 @@ export const AllStates: Story = {
     <Stack spacing={1.5} sx={{ p: 3, alignItems: 'flex-start' }}>
       <PlanBadge plan="community" onClick={() => {}} />
       <PlanBadge plan="pro" onClick={() => {}} />
+      <PlanBadge plan="pro" entitlement={proLite} onClick={() => {}} />
       <PlanBadge plan="enterprise" onClick={() => {}} />
+      <PlanBadge plan="community" entitlement={proPreview(9)} onClick={() => {}} />
       <PlanBadge plan="community" entitlement={fullAccess(40)} onClick={() => {}} />
       <PlanBadge plan="community" entitlement={fullAccess(5)} onClick={() => {}} />
     </Stack>

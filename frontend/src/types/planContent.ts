@@ -10,6 +10,9 @@ export interface PlanContentFeature {
   label_localized?: PlanContentLocalizedText
   description: string
   description_localized?: PlanContentLocalizedText
+  /** The feature key that unlocks this entry when it is not the entry's own id,
+   *  so one gate can be shown as several rows. */
+  gate?: string
   availability?: PlanContentAvailability
   available_in?: string
 }

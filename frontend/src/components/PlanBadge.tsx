@@ -17,8 +17,12 @@ export default function PlanBadge({ plan, entitlement, onClick }: PlanBadgeProps
   const { t } = useTranslation()
   const theme = useTheme()
   const isFullAccess = entitlement?.is_full_access && entitlement.status === 'active'
+  // A per-feature trial only exists on Community; a paid plan keeps its name
+  // even if its entitlement carries overrides.
   const onFeatureTrial =
-    entitlement?.status === 'active' && (entitlement.trial_features ?? []).length > 0
+    plan === 'community' &&
+    entitlement?.status === 'active' &&
+    (entitlement.trial_features ?? []).length > 0
   const color = getPlanAccent(isFullAccess ? 'enterprise' : onFeatureTrial ? 'pro' : plan, theme)
   const daysLeft = fullAccessDaysLeft(isFullAccess ? entitlement?.expires_at : null)
   // A per-feature trial runs on the plan the install already has, so it does
@@ -27,13 +31,17 @@ export default function PlanBadge({ plan, entitlement, onClick }: PlanBadgeProps
   const featureTrial =
     !isFullAccess && onFeatureTrial ? entitlement?.trial_features?.[0] : undefined
   const featureTrialDaysLeft = fullAccessDaysLeft(featureTrial?.expires_at)
+  // Lite is gated as Pro; the badge names what the reader bought.
+  const isLite = plan === 'pro' && entitlement?.license_plan === 'lite'
   const label = isFullAccess
     ? daysLeft !== null && daysLeft < FULL_ACCESS_COUNTDOWN_THRESHOLD_DAYS
       ? `${t('plan.fullAccessLabel')} · ${t('plan.daysShort', { count: daysLeft })}`
       : t('plan.fullAccessLabel')
     : featureTrial && featureTrialDaysLeft !== null
       ? `${t('plan.featureTrialLabel')} · ${t('plan.daysShort', { count: featureTrialDaysLeft })}`
-      : PLAN_LABEL[plan]
+      : isLite
+        ? t('plan.liteLabel')
+        : PLAN_LABEL[plan]
 
   return (
     <Box

@@ -6378,7 +6378,13 @@
     "viewUpgradeOptions": "Upgrade-Optionen anzeigen",
     "expiredUpgradeCta": "Pro-Funktionen wiederherstellen",
     "daysShort_one": "noch {{count}} Tag",
-    "daysShort_other": "noch {{count}} Tage"
+    "daysShort_other": "noch {{count}} Tage",
+    "liteLabel": "Pro Lite",
+    "liteDescription": "Alle Pro-Funktionen auf einer Installation",
+    "featureTrialCountdown_one": "Noch {{count}} Tag Pro-Vorschau",
+    "featureTrialCountdown_other": "Noch {{count}} Tage Pro-Vorschau",
+    "featureTrialEndsNotice": "Am {{date}} werden diese Funktionen wieder gesperrt. Mit einem Upgrade auf Pro bleiben sie erhalten.",
+    "featureTrialOpens": "Während der Vorschau freigeschaltet"
   },
   "licensing": {
     "title": "Lizenzierung",
