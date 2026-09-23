@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-09-23T12:28:50.045Z",
+  "generatedAt": "2026-09-23T12:44:43.928Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1173 visual report",
     "commitSha": "b4c881bab9f3",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35860504048"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/35862260456"
   },
   "totals": {
     "baseline": 986,
@@ -975,9 +975,9 @@
       "baselinePath": "images/baseline/settings-backgroundworktab--busy.png",
       "actualPath": "images/actual/settings-backgroundworktab--busy.png",
       "diffPath": "images/diff/settings-backgroundworktab--busy.png",
-      "diffPixels": 394700,
+      "diffPixels": 394673,
       "totalPixels": 1024000,
-      "diffRatio": 0.38544921875,
+      "diffRatio": 0.3854228515625,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -1011,9 +1011,9 @@
       "baselinePath": "images/baseline/settings-backgroundworktab--idle.png",
       "actualPath": "images/actual/settings-backgroundworktab--idle.png",
       "diffPath": "images/diff/settings-backgroundworktab--idle.png",
-      "diffPixels": 290770,
+      "diffPixels": 290796,
       "totalPixels": 1024000,
-      "diffRatio": 0.283955078125,
+      "diffRatio": 0.28398046875,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
