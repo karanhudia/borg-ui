@@ -173,6 +173,74 @@
       "availability": "included"
     },
     {
+      "id": "storage_insights",
+      "plan": "community",
+      "label": "Storage insights and prune preview",
+      "label_localized": {
+        "es": "Información de almacenamiento y vista previa de poda",
+        "de": "Speichereinblicke und Prune-Vorschau",
+        "it": "Analisi dello spazio e anteprima della potatura"
+      },
+      "description": "Repository growth over time, per-archive stats, and a preview of what any retention policy keeps and drops before you prune.",
+      "description_localized": {
+        "es": "Crecimiento del repositorio a lo largo del tiempo, estadísticas por archivo y una vista previa de lo que cualquier política de retención conserva y elimina antes de podar.",
+        "de": "Wachstum des Repositories über die Zeit, Statistiken pro Archiv und eine Vorschau darauf, was eine Aufbewahrungsregel behält und entfernt, bevor Sie prunen.",
+        "it": "Crescita del repository nel tempo, statistiche per archivio e un'anteprima di ciò che qualsiasi politica di conservazione mantiene ed elimina prima di potare."
+      },
+      "available_in": "2.3.0"
+    },
+    {
+      "id": "activity_timeline",
+      "plan": "community",
+      "label": "Activity timeline",
+      "label_localized": {
+        "es": "Línea de tiempo de actividad",
+        "de": "Aktivitätsverlauf",
+        "it": "Cronologia delle attività"
+      },
+      "description": "Every backup, prune, check, and restore for a repository on one timeline, with running work pinned at the top.",
+      "description_localized": {
+        "es": "Cada copia, poda, verificación y restauración de un repositorio en una sola línea de tiempo, con el trabajo en curso fijado arriba.",
+        "de": "Jedes Backup, Prune, Check und Restore eines Repositories auf einer Zeitleiste, laufende Arbeit oben angeheftet.",
+        "it": "Ogni backup, potatura, verifica e ripristino di un repository su un'unica cronologia, con il lavoro in corso fissato in alto."
+      },
+      "available_in": "2.3.0"
+    },
+    {
+      "id": "backup_change_summary",
+      "plan": "community",
+      "label": "Backup change summary",
+      "label_localized": {
+        "es": "Resumen de cambios por copia",
+        "de": "Änderungsübersicht pro Backup",
+        "it": "Riepilogo delle modifiche per backup"
+      },
+      "description": "How many files each backup added, modified, or removed, and how many archives a file search matches.",
+      "description_localized": {
+        "es": "Cuántos archivos añadió, modificó o eliminó cada copia, y con cuántos archivos coincide una búsqueda de ficheros.",
+        "de": "Wie viele Dateien jedes Backup hinzugefügt, geändert oder entfernt hat, und wie viele Archive eine Dateisuche trifft.",
+        "it": "Quanti file ogni backup ha aggiunto, modificato o rimosso, e quanti archivi corrispondono a una ricerca di file."
+      },
+      "available_in": "2.3.0"
+    },
+    {
+      "id": "availability_backups",
+      "plan": "community",
+      "label": "Availability-triggered backups",
+      "label_localized": {
+        "es": "Copias activadas por disponibilidad",
+        "de": "Verfügbarkeitsgesteuerte Backups",
+        "it": "Backup attivati dalla disponibilità"
+      },
+      "description": "Run a backup when a laptop or remote machine comes online instead of waiting for a fixed time.",
+      "description_localized": {
+        "es": "Ejecuta una copia cuando un portátil o una máquina remota se conecta, en lugar de esperar a una hora fija.",
+        "de": "Ein Backup starten, sobald ein Laptop oder ein entfernter Rechner online ist, statt auf eine feste Uhrzeit zu warten.",
+        "it": "Esegui un backup quando un portatile o una macchina remota torna online, invece di attendere un orario fisso."
+      },
+      "available_in": "2.3.0"
+    },
+    {
       "id": "borg_v2",
       "plan": "pro",
       "label": "Borg v2 beta testing",
@@ -379,17 +447,53 @@
     {
       "id": "archive_history",
       "plan": "pro",
-      "label": "Archive history and change tracking",
+      "label": "Archive history",
       "label_localized": {
-        "es": "Historial de archivos y seguimiento de cambios",
-        "de": "Archivverlauf und Änderungsverfolgung",
-        "it": "Cronologia degli archivi e tracciamento delle modifiche"
+        "es": "Historial de archivos",
+        "de": "Archivverlauf",
+        "it": "Cronologia degli archivi"
       },
-      "description": "See what each backup added, removed, or modified, follow a file across archives, and search for files that only exist in old backups.",
+      "description": "Follow a file across archives with every version it had, and find files that only exist in old backups.",
       "description_localized": {
-        "es": "Consulta qué añadió, eliminó o modificó cada copia, sigue un archivo a través de los archivos y busca archivos que solo existen en copias antiguas.",
-        "de": "Sehen Sie, was jedes Backup hinzugefügt, entfernt oder geändert hat, verfolgen Sie eine Datei über Archive hinweg und suchen Sie nach Dateien, die nur in alten Backups existieren.",
-        "it": "Scopri cosa ha aggiunto, rimosso o modificato ogni backup, segui un file attraverso gli archivi e cerca file che esistono solo nei backup precedenti."
+        "es": "Sigue un archivo a través de los archivos con todas sus versiones y encuentra archivos que solo existen en copias antiguas.",
+        "de": "Verfolgen Sie eine Datei über Archive hinweg mit jeder Version und finden Sie Dateien, die nur in alten Backups existieren.",
+        "it": "Segui un file attraverso gli archivi con ogni sua versione e trova file che esistono solo nei backup precedenti."
+      },
+      "availability": "included"
+    },
+    {
+      "id": "archive_change_tracking",
+      "plan": "pro",
+      "gate": "archive_history",
+      "label": "Change tracking",
+      "label_localized": {
+        "es": "Seguimiento de cambios",
+        "de": "Änderungsverfolgung",
+        "it": "Tracciamento delle modifiche"
+      },
+      "description": "See which files each backup added, removed, or modified, and compare against any older archive.",
+      "description_localized": {
+        "es": "Consulta qué archivos añadió, eliminó o modificó cada copia y compara con cualquier archivo anterior.",
+        "de": "Sehen Sie, welche Dateien jedes Backup hinzugefügt, entfernt oder geändert hat, und vergleichen Sie mit jedem älteren Archiv.",
+        "it": "Scopri quali file ogni backup ha aggiunto, rimosso o modificato e confronta con qualsiasi archivio precedente."
+      },
+      "availability": "included"
+    },
+    {
+      "id": "prune_lost_files",
+      "plan": "pro",
+      "gate": "archive_history",
+      "label": "Prune preview, lost files",
+      "label_localized": {
+        "es": "Vista previa de poda, archivos perdidos",
+        "de": "Prune-Vorschau, verlorene Dateien",
+        "it": "Anteprima della potatura, file persi"
+      },
+      "description": "Before you prune, see which files would lose their last copy, largest first, and the archive that still holds each one.",
+      "description_localized": {
+        "es": "Antes de podar, mira qué archivos perderían su última copia, de mayor a menor, y el archivo que aún conserva cada uno.",
+        "de": "Sehen Sie vor dem Prune, welche Dateien ihre letzte Kopie verlieren würden, die größten zuerst, und welches Archiv sie noch enthält.",
+        "it": "Prima di potare, vedi quali file perderebbero la loro ultima copia, dal più grande, e l'archivio che li contiene ancora."
       },
       "availability": "included"
     },
@@ -460,57 +564,6 @@
         "it": "Monitora, controlla ed esegui backup su più istanze Borg UI da un'unica interfaccia web senza archiviare le passphrase dei repository sui server di backup."
       },
       "availability": "included"
-    },
-    {
-      "id": "audit_exports",
-      "plan": "enterprise",
-      "label": "Audit log with immutable export",
-      "label_localized": {
-        "es": "Registro de auditoría con exportación inmutable",
-        "de": "Audit-Log mit unveränderbarem Export",
-        "it": "Log di audit con esportazione immutabile"
-      },
-      "description": "Export login, restore, repository, retention, permission, and secret-change events to SIEM, syslog, or webhooks.",
-      "description_localized": {
-        "es": "Exporta eventos de inicio de sesión, restauración, repositorio, retención, permisos y cambios de secretos a SIEM, syslog o webhooks.",
-        "de": "Exportieren Sie Anmelde-, Wiederherstellungs-, Repository-, Aufbewahrungs-, Berechtigungs- und Geheimnisänderungsereignisse an SIEM, Syslog oder Webhooks.",
-        "it": "Esporta eventi di accesso, ripristino, repository, conservazione, permessi e modifica dei segreti verso SIEM, syslog o webhook."
-      },
-      "availability": "coming_soon"
-    },
-    {
-      "id": "approval_workflows",
-      "plan": "enterprise",
-      "label": "Approval workflows for sensitive actions",
-      "label_localized": {
-        "es": "Flujos de aprobación para acciones sensibles",
-        "de": "Freigabe-Workflows für sensible Aktionen",
-        "it": "Flussi di approvazione per azioni sensibili"
-      },
-      "description": "Require approval for restore, archive deletion, retention changes, schedule disablement, or adding destinations.",
-      "description_localized": {
-        "es": "Requiere aprobación para restauraciones, eliminación de archivos, cambios de retención, desactivación de programaciones o añadir destinos.",
-        "de": "Erfordert Freigaben für Wiederherstellungen, Archivlöschungen, Änderungen der Aufbewahrung, das Deaktivieren von Zeitplänen oder das Hinzufügen von Zielen.",
-        "it": "Richiede approvazione per ripristini, eliminazione di archivi, modifiche alla conservazione, disattivazione delle pianificazioni o aggiunta di destinazioni."
-      },
-      "availability": "coming_soon"
-    },
-    {
-      "id": "enterprise_feature_requests",
-      "plan": "enterprise",
-      "label": "Enterprise feature requests",
-      "label_localized": {
-        "es": "Solicitudes de funciones Enterprise",
-        "de": "Enterprise-Feature-Anfragen",
-        "it": "Richieste di funzionalità Enterprise"
-      },
-      "description": "Reach out to support@borgui.com for enterprise-specific roadmap requests.",
-      "description_localized": {
-        "es": "Contacta con support@borgui.com para solicitudes específicas de la hoja de ruta Enterprise.",
-        "de": "Wenden Sie sich an support@borgui.com für Enterprise-spezifische Roadmap-Anfragen.",
-        "it": "Contatta support@borgui.com per richieste specifiche della roadmap Enterprise."
-      },
-      "availability": "coming_soon"
     }
   ]
 }

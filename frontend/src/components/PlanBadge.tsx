@@ -28,13 +28,17 @@ export default function PlanBadge({ plan, entitlement, onClick }: PlanBadgeProps
   const featureTrial =
     !isFullAccess && onFeatureTrial ? entitlement?.trial_features?.[0] : undefined
   const featureTrialDaysLeft = fullAccessDaysLeft(featureTrial?.expires_at)
+  // Lite is gated as Pro; the badge names what the reader bought.
+  const isLite = plan === 'pro' && entitlement?.license_plan === 'lite'
   const label = isFullAccess
     ? daysLeft !== null && daysLeft < FULL_ACCESS_COUNTDOWN_THRESHOLD_DAYS
       ? `${t('plan.fullAccessLabel')} · ${t('plan.daysShort', { count: daysLeft })}`
       : t('plan.fullAccessLabel')
     : featureTrial && featureTrialDaysLeft !== null
       ? `${t('plan.featureTrialLabel')} · ${t('plan.daysShort', { count: featureTrialDaysLeft })}`
-      : PLAN_LABEL[plan]
+      : isLite
+        ? t('plan.liteLabel')
+        : PLAN_LABEL[plan]
 
   return (
     <Box

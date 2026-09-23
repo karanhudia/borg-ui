@@ -6378,7 +6378,13 @@
     "viewUpgradeOptions": "View upgrade options",
     "expiredUpgradeCta": "Restore Pro features",
     "daysShort_one": "{{count}} day left",
-    "daysShort_other": "{{count}} days left"
+    "daysShort_other": "{{count}} days left",
+    "liteLabel": "Pro Lite",
+    "liteDescription": "Every Pro feature on one installation",
+    "featureTrialCountdown_one": "{{count}} day of Pro preview left",
+    "featureTrialCountdown_other": "{{count}} days of Pro preview left",
+    "featureTrialEndsNotice": "On {{date}} these lock again. Upgrade to Pro to keep them.",
+    "featureTrialOpens": "Open during the preview"
   },
   "licensing": {
     "title": "Licensing",

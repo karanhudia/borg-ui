@@ -145,6 +145,7 @@ class TestSystemEndpoints:
                 "entitlement_id": None,
                 "license_id": None,
                 "customer_id": None,
+                "license_plan": None,
                 "ui_state": "community",
                 "last_refresh_at": None,
                 "last_refresh_error": None,

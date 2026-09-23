@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { renderWithProviders, screen, userEvent } from '../../test/test-utils'
+import { fireEvent, renderWithProviders, screen, userEvent } from '../../test/test-utils'
 import { darkTheme, theme } from '../../theme'
 import PlanInfoDrawer from '../PlanInfoDrawer'
 import { getPlanDrawerContrastPairs } from '../planDrawerColors'
@@ -123,6 +123,14 @@ const { usePlanContentMock } = vi.hoisted(() => ({
         label: 'Rclone support',
         description: 'Use Rclone-backed destinations as backup targets.',
         availability: 'coming_soon',
+      },
+      {
+        id: 'borg_v2_transfer',
+        plan: 'pro',
+        gate: 'borg_v2',
+        label: 'Borg v2 transfer',
+        description: 'Move Borg 1 archives into a Borg 2 repository.',
+        availability: 'included',
       },
       {
         id: 'passkeys',
@@ -293,7 +301,9 @@ describe('PlanInfoDrawer', () => {
 
     expect(screen.getByText('Free Forever')).toBeInTheDocument()
     expect(screen.getByText('Passkeys')).toBeInTheDocument()
-    expect(screen.queryByText('Available in 2.0.3')).not.toBeInTheDocument()
+    // A Community feature from a newer release is listed as upcoming, not hidden.
+    expect(screen.getByText('Two-factor authentication (TOTP)')).toBeInTheDocument()
+    expect(screen.getByText('Available in 2.0.3')).toBeInTheDocument()
   })
 
   it('does not show passkeys in the Pro upgrade list', () => {
@@ -444,5 +454,128 @@ describe('PlanInfoDrawer', () => {
     )
 
     expect(screen.queryByRole('link', { name: /upgrade to/i })).not.toBeInTheDocument()
+  })
+
+  it('names a Lite license Pro Lite and says what that means', () => {
+    renderWithProviders(
+      <PlanInfoDrawer
+        open={true}
+        onClose={vi.fn()}
+        plan="pro"
+        features={featureMap}
+        entitlement={
+          {
+            status: 'active',
+            access_level: 'pro',
+            is_full_access: false,
+            full_access_consumed: true,
+            ui_state: 'paid_active',
+            expires_at: null,
+            license_plan: 'lite',
+          } as never
+        }
+      />
+    )
+
+    expect(screen.getByRole('heading', { name: 'Pro Lite' })).toBeInTheDocument()
+    expect(screen.getByText('Every Pro feature on one installation')).toBeInTheDocument()
+  })
+
+  it('shows what a Pro preview opened and when it ends', () => {
+    const expires = new Date(Date.now() + 9 * 24 * 60 * 60 * 1000).toISOString()
+    renderWithProviders(
+      <PlanInfoDrawer
+        open={true}
+        onClose={vi.fn()}
+        plan="community"
+        features={featureMap}
+        entitlement={
+          {
+            status: 'active',
+            access_level: 'community',
+            is_full_access: false,
+            full_access_consumed: true,
+            ui_state: 'community',
+            expires_at: expires,
+            trial_features: [
+              { feature: 'borg_v2', expires_at: expires },
+              { feature: 'not_in_manifest', expires_at: expires },
+            ],
+          } as never
+        }
+      />
+    )
+
+    expect(screen.getByRole('heading', { name: 'Pro preview' })).toBeInTheDocument()
+    expect(screen.getByText('9 days of Pro preview left')).toBeInTheDocument()
+    expect(screen.getByText(new RegExp(new Date(expires).toLocaleDateString()))).toBeInTheDocument()
+    // The preview lists what it opened, by name when the manifest knows it,
+    // including every entry the same gate key unlocks.
+    expect(screen.getByText('Borg v2 beta testing')).toBeInTheDocument()
+    expect(screen.getByText('Borg v2 transfer')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Early access to Borg v2 while it is still in beta/)
+    ).toBeInTheDocument()
+    expect(screen.getByText('not_in_manifest')).toBeInTheDocument()
+  })
+
+  it('tells an older install which release brings a new Community feature', () => {
+    usePlanContentMock.mockReturnValue({
+      features: [
+        {
+          id: 'activity_timeline',
+          plan: 'community',
+          label: 'Activity timeline',
+          description: 'Every run on one timeline.',
+          available_in: '2.3.0',
+        },
+      ],
+      isLoading: false,
+    })
+    renderWithProviders(
+      <PlanInfoDrawer
+        open={true}
+        onClose={vi.fn()}
+        plan="community"
+        appVersion="2.2.0"
+        features={featureMap}
+        initialSelectedPlan="community"
+      />
+    )
+    fireEvent.click(screen.getAllByText('Your Plan').slice(-1)[0])
+
+    expect(screen.getByText('Included in upcoming releases for Community')).toBeInTheDocument()
+    expect(screen.getByText('Activity timeline')).toBeInTheDocument()
+    expect(screen.getByText('Available in 2.3.0')).toBeInTheDocument()
+    usePlanContentMock.mockRestore()
+  })
+
+  it('lists a versioned Community feature as included once the install has it', () => {
+    usePlanContentMock.mockReturnValue({
+      features: [
+        {
+          id: 'activity_timeline',
+          plan: 'community',
+          label: 'Activity timeline',
+          description: 'Every run on one timeline.',
+          available_in: '2.3.0',
+        },
+      ],
+      isLoading: false,
+    })
+    renderWithProviders(
+      <PlanInfoDrawer
+        open={true}
+        onClose={vi.fn()}
+        plan="community"
+        appVersion="2.3.0"
+        features={featureMap}
+      />
+    )
+    fireEvent.click(screen.getAllByText('Your Plan').slice(-1)[0])
+
+    expect(screen.getByText('Activity timeline')).toBeInTheDocument()
+    expect(screen.queryByText('Available in 2.3.0')).not.toBeInTheDocument()
+    usePlanContentMock.mockRestore()
   })
 })

@@ -82,3 +82,28 @@ describe('PlanBadge feature trial countdown', () => {
     expect(screen.getByText(/Pro preview · 9 days left/)).toBeInTheDocument()
   })
 })
+
+describe('PlanBadge Lite', () => {
+  it('names the tier the license was sold as', () => {
+    // Lite is gated as Pro; the badge shows what the reader bought.
+    renderWithProviders(
+      <PlanBadge
+        plan="pro"
+        onClick={vi.fn()}
+        entitlement={{
+          status: 'active',
+          access_level: 'pro',
+          is_full_access: false,
+          full_access_consumed: true,
+          expires_at: null,
+          starts_at: null,
+          instance_id: null,
+          license_plan: 'lite',
+          last_refresh_at: null,
+          last_refresh_error: null,
+        }}
+      />
+    )
+    expect(screen.getByText('Pro Lite')).toBeInTheDocument()
+  })
+})

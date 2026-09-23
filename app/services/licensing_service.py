@@ -161,6 +161,11 @@ def get_entitlement_summary(db: Session) -> dict[str, Any]:
         "key_id": state.key_id,
         "license_id": state.license_id,
         "customer_id": state.customer_id,
+        # The tier as sold. Lite is gated as Pro, so access_level says "pro";
+        # this is the name the reader paid for and expects to see.
+        "license_plan": payload.get("license_plan")
+        if state.status == "active"
+        else None,
         "ui_state": _ui_state(state),
         # The features a per-feature trial is currently granting, and the
         # ones whose trial has run out, so the UI can count down and then
