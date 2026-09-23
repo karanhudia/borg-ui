@@ -162,11 +162,16 @@ def _run_prune_contract_assertions(
     assert list_after.status_code == 200
     archives_after = parse_archives_payload(list_after.json())
     archive_names_after = [archive["name"] for archive in archives_after]
+    # Borg 2 archives share a series name, so only the id tells which survived.
+    ids_before = [archive["id"] for archive in archives_before]
+    ids_after = [archive["id"] for archive in archives_after]
 
     if dry_run:
         assert archive_names_after == archive_names
+        assert ids_after == ids_before
     else:
         assert archive_names_after == [archive_names[-1]]
+        assert ids_after == [ids_before[-1]]
 
 
 def _assert_borg2_job_start_contract(
