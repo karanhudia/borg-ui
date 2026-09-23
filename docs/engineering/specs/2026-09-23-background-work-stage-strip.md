@@ -2,8 +2,9 @@
 
 **Date:** 2026-09-23
 **Status:** Design agreed with Karan 2026-09-23, not started
-**Depends on:** the PR that folds `history_merge` into `archive_sync`. This
-spec assumes it has merged; the stage map below has no `history_merge`.
+**Related:** #1168 folds `history_merge` into `archive_sync`. The kind stays
+in the vocabulary for old rows, so this spec maps it to the `archives` stage
+and does not depend on #1168 merging first.
 
 **Why:** The Background work board shows three stage columns (Archives,
 History, Stats), but the runner has more steps than that. Connect has no
@@ -25,7 +26,7 @@ always shows the stages in this order regardless.
 | Stage key | Label | Kinds | Runs when | Pausable |
 | --- | --- | --- | --- | --- |
 | `connect` | Connect | `import_connect` | Import only | No: a synchronous request, nothing is ever queued |
-| `archives` | Archive list | `archive_sync` | After backup, prune, delete, wipe; import; reconcile | Yes |
+| `archives` | Archive list | `archive_sync` (and legacy `history_merge`) | After backup, prune, delete, wipe; import; reconcile | Yes |
 | `retention` | Retention preview | `prune_compare` | After a listing that changed the archive set; the prune preview page (Compare now, or on open when missing or stale) | Yes |
 | `history` | File history | `history_index` | After backup; import; reconcile. Absent for repositories that cannot build history | Yes |
 | `stats` | Stats | `stats` | End of most chains; first on import; reconcile | Yes |
@@ -49,7 +50,7 @@ sync progress. The stage is a mapping of kinds, not a category.
 
 ```python
 STAGES: dict[str, tuple[str, ...]] = {
-    "archives": ("archive_sync",),
+    "archives": ("archive_sync", "history_merge"),
     "retention": ("prune_compare",),
     "history": ("history_index",),
     "stats": ("stats",),
@@ -102,7 +103,10 @@ reader keep working.
 ### 3.1 Stage model (`repositoryTrack.ts`)
 
 - `StageKey` becomes `'connect' | 'archives' | 'retention' | 'history' | 'stats'`;
-  `STAGE_FOR_KIND` adds `prune_compare: 'retention'` and loses `history_merge`.
+  `STAGE_FOR_KIND` adds `prune_compare: 'retention'` and moves
+  `history_merge` from `history` to `archives`. The history stage then only
+  holds `history_index`, so the retry special case that re-ran the listing
+  chain for repositories without history (`resyncMutation`) goes away.
 - The foreground check skips kinds that have a stage, so a running comparison
   fills the Retention preview block and is not also shown as foreground. A
   real prune or check still is.
