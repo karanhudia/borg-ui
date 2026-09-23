@@ -313,7 +313,7 @@ export default function Login() {
         >
           {t('login.submit')}
         </h2>
-        <p style={{ margin: 0, fontSize: 14, color: '#64748b' }}>{t('login.subtitle')}</p>
+        <p style={{ margin: 0, fontSize: 14, color: '#8391a5' }}>{t('login.subtitle')}</p>
       </div>
 
       {/* Form */}
@@ -352,7 +352,7 @@ export default function Login() {
                       style={{
                         margin: '-4px 0 0',
                         fontSize: 12,
-                        color: '#64748b',
+                        color: '#8391a5',
                         textAlign: 'center',
                       }}
                     >
@@ -431,7 +431,7 @@ export default function Login() {
                           background: 'none',
                           border: 'none',
                           cursor: 'pointer',
-                          color: '#64748b',
+                          color: '#8391a5',
                           display: 'flex',
                           alignItems: 'center',
                           padding: 4,
@@ -439,7 +439,7 @@ export default function Login() {
                           transition: 'color 0.15s ease',
                         }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = '#94a3b8')}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = '#64748b')}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = '#8391a5')}
                       >
                         {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
@@ -491,7 +491,7 @@ export default function Login() {
                   value={totpCode}
                   onChange={(event) => setTotpCode(event.target.value)}
                 />
-                <p style={{ margin: '5px 0 0', fontSize: 12, color: '#64748b' }}>
+                <p style={{ margin: '5px 0 0', fontSize: 12, color: '#8391a5' }}>
                   {t('login.totpHint')}
                 </p>
               </div>

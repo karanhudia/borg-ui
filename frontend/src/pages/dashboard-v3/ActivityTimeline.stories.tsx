@@ -1,11 +1,13 @@
 import { Box } from '@mui/material'
+import { useTheme } from '@mui/material/styles'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { format, subDays } from 'date-fns'
 import { ActivityTimeline } from './ActivityTimeline'
 import { makeT, TokenContext } from './tokens'
 import type { DashboardOverview } from './types'
 
-const T = makeT(true)
+// Follows the Storybook theme toolbar, so each story renders both modes.
+const useStoryT = () => makeT(useTheme().palette.mode === 'dark')
 type Timeline = NonNullable<DashboardOverview['activity_timeline']>
 
 function daysAgo(days: number) {
@@ -43,18 +45,17 @@ const meta = {
   component: ActivityTimeline,
   parameters: {
     layout: 'padded',
-    backgrounds: {
-      default: 'Dashboard dark',
-      values: [{ name: 'Dashboard dark', value: '#111827' }],
-    },
   },
-  render: (args) => (
-    <TokenContext.Provider value={T}>
-      <Box sx={{ width: 680, maxWidth: '100%', color: T.textPrimary }}>
-        <ActivityTimeline {...args} />
-      </Box>
-    </TokenContext.Provider>
-  ),
+  render: function Render(args) {
+    const T = useStoryT()
+    return (
+      <TokenContext.Provider value={T}>
+        <Box sx={{ width: 680, maxWidth: '100%', color: T.textPrimary }}>
+          <ActivityTimeline {...args} />
+        </Box>
+      </TokenContext.Provider>
+    )
+  },
 } satisfies Meta<typeof ActivityTimeline>
 
 export default meta

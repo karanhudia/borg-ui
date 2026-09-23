@@ -14,13 +14,13 @@ describe('VersionChip', () => {
     renderWithProviders(<VersionChip label="B1" version="1.4.0" />)
     const label = screen.getByText('B1')
     // default label color is text.disabled, not indigo
-    expect(label).not.toHaveStyle({ color: 'rgb(99,102,241)' })
+    expect(label).not.toHaveStyle({ color: '#4338ca' })
   })
 
   it('renders accent label color when accent=true', () => {
     renderWithProviders(<VersionChip label="B2" version="2.0.0" accent />)
     const label = screen.getByText('B2')
-    expect(label).toHaveStyle({ color: 'rgb(99,102,241)' })
+    expect(label).toHaveStyle({ color: '#4338ca' })
   })
 
   it('renders version in monospace', () => {

@@ -76,9 +76,18 @@ def init_borg_repo(
     repo_path.mkdir(parents=True, exist_ok=True)
     borg_name = Path(borg_binary).name
     if borg_name.startswith("borg2"):
+        # Imported here: the smoke scripts load this module without the app's
+        # environment, and importing app.config creates /data.
+        from app.core.borg2 import BORG2_ENCRYPTION_FLAGS
+
         run_borg(
             borg_binary,
-            ["-r", str(repo_path), "repo-create", "--encryption", encryption],
+            [
+                "-r",
+                str(repo_path),
+                "repo-create",
+                *BORG2_ENCRYPTION_FLAGS.get(encryption, ["--encryption", encryption]),
+            ],
             env=env,
         )
     else:

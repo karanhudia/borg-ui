@@ -289,7 +289,7 @@ export default function ScheduleJobCard({
             }
           : undefined
       }
-      accentColor="#059669"
+      accentColor="#047857"
     />
   )
 }

@@ -10,6 +10,7 @@ import {
   ListItemIcon,
   ListItemText,
   Tooltip,
+  useTheme,
 } from '@mui/material'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 
@@ -42,6 +43,9 @@ export default function NavGroup({
   navLabel,
 }: NavGroupProps) {
   const { t } = useTranslation()
+  // Emerald 400 on the dark sidebar, emerald 700 on the white one: both
+  // clear 3:1 for icons against the selected row's tint.
+  const activeIconColor = useTheme().palette.mode === 'dark' ? '#34d399' : '#047857'
   const isAnySubItemActive = subItems.some((sub) => sub.href && currentPath.startsWith(sub.href))
 
   return (
@@ -59,12 +63,12 @@ export default function NavGroup({
             borderLeftColor: isAnySubItemActive ? '#059669' : 'transparent',
             backgroundColor: isAnySubItemActive ? 'rgba(5,150,105,0.06)' : 'transparent',
             transition: 'background-color 150ms ease, border-color 150ms ease',
-            '&:hover': { backgroundColor: 'rgba(255,255,255,0.04)' },
+            '&:hover': { backgroundColor: 'action.hover' },
           }}
         >
           <ListItemIcon
             sx={{
-              color: isAnySubItemActive ? '#34d399' : 'text.secondary',
+              color: isAnySubItemActive ? activeIconColor : 'text.secondary',
               minWidth: 32,
             }}
           >
@@ -128,12 +132,14 @@ export default function NavGroup({
                     backgroundColor: 'rgba(5,150,105,0.08)',
                     borderLeftColor: '#059669',
                     '&:hover': { backgroundColor: 'rgba(5,150,105,0.12)' },
-                    '& .MuiListItemIcon-root': { color: '#34d399' },
+                    '& .MuiListItemIcon-root': { color: activeIconColor },
                   },
-                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.04)' },
+                  '&:hover': { backgroundColor: 'action.hover' },
                 }}
               >
-                <ListItemIcon sx={{ color: isActive ? '#34d399' : 'text.secondary', minWidth: 28 }}>
+                <ListItemIcon
+                  sx={{ color: isActive ? activeIconColor : 'text.secondary', minWidth: 28 }}
+                >
                   <SubIcon size={15} />
                 </ListItemIcon>
                 <ListItemText

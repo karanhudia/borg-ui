@@ -598,7 +598,7 @@ export default function RepositoryCard({
     const color = (theme.palette[colorKey] as { main: string }).main
     return {
       ...iconBtnSx,
-      color: alpha(color, isDark ? 0.65 : 0.55),
+      color: alpha(color, 0.75),
       '&:hover': {
         bgcolor: alpha(color, isDark ? 0.12 : 0.09),
         color: color,
@@ -902,7 +902,7 @@ export default function RepositoryCard({
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.35 }}>
                     <Box
                       sx={{
-                        color: alpha(statColor, 0.7),
+                        color: alpha(statColor, 0.75),
                         display: 'flex',
                         alignItems: 'center',
                       }}
@@ -915,7 +915,7 @@ export default function RepositoryCard({
                         fontWeight: 700,
                         textTransform: 'uppercase',
                         letterSpacing: '0.07em',
-                        color: alpha(statColor, 0.7),
+                        color: statColor,
                         lineHeight: 1,
                       }}
                     >
@@ -1269,7 +1269,7 @@ export default function RepositoryCard({
                         disabled={isMaintenanceRunning}
                         sx={{
                           ...iconBtnSx,
-                          color: alpha(theme.palette.error.main, 0.56),
+                          color: alpha(theme.palette.error.main, 0.75),
                           '&:hover': {
                             color: theme.palette.error.main,
                             bgcolor: alpha(theme.palette.error.main, 0.09),
@@ -1286,7 +1286,7 @@ export default function RepositoryCard({
                         aria-label={t('repositoryCard.buttons.delete')}
                         sx={{
                           ...iconBtnSx,
-                          color: alpha(theme.palette.error.main, 0.6),
+                          color: alpha(theme.palette.error.main, 0.75),
                           '&:hover': {
                             color: theme.palette.error.main,
                             bgcolor: alpha(theme.palette.error.main, 0.1),
@@ -1305,7 +1305,7 @@ export default function RepositoryCard({
                           disabled={isMaintenanceRunning}
                           sx={{
                             ...iconBtnSx,
-                            color: alpha(theme.palette.error.main, 0.72),
+                            color: alpha(theme.palette.error.main, 0.75),
                             '&:hover': {
                               color: theme.palette.error.dark,
                               bgcolor: alpha(theme.palette.error.main, 0.13),

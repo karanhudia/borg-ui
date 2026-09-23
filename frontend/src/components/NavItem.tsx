@@ -1,6 +1,14 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
-import { Box, ListItem, ListItemButton, ListItemIcon, ListItemText, Tooltip } from '@mui/material'
+import {
+  Box,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Tooltip,
+  useTheme,
+} from '@mui/material'
 import { Lock } from 'lucide-react'
 
 interface NavItemProps {
@@ -27,6 +35,9 @@ export default function NavItem({
   navLabel,
   badge,
 }: NavItemProps) {
+  // Emerald 400 on the dark sidebar, emerald 700 on the white one: both
+  // clear 3:1 for icons against the selected row's tint.
+  const activeIconColor = useTheme().palette.mode === 'dark' ? '#34d399' : '#047857'
   const button = (
     <ListItemButton
       component={isEnabled ? Link : 'div'}
@@ -46,13 +57,13 @@ export default function NavItem({
           backgroundColor: 'rgba(5,150,105,0.08)',
           borderLeftColor: '#059669',
           '&:hover': { backgroundColor: 'rgba(5,150,105,0.12)' },
-          '& .MuiListItemIcon-root': { color: '#34d399' },
+          '& .MuiListItemIcon-root': { color: activeIconColor },
         },
-        '&:hover': { backgroundColor: 'rgba(255,255,255,0.04)' },
+        '&:hover': { backgroundColor: 'action.hover' },
         '&.Mui-disabled': { opacity: 0.5, cursor: 'not-allowed' },
       }}
     >
-      <ListItemIcon sx={{ color: isActive ? '#34d399' : 'text.secondary', minWidth: 32 }}>
+      <ListItemIcon sx={{ color: isActive ? activeIconColor : 'text.secondary', minWidth: 32 }}>
         {isEnabled ? <Icon size={18} /> : <Lock size={18} />}
       </ListItemIcon>
       <ListItemText

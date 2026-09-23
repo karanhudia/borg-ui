@@ -159,8 +159,10 @@ export default function EntityCard({
             const isRightColXs = i % 2 === 1
             const isLastSm = i === stats.length - 1
             const isFirstRowXs = i < 2
+            // Full strength: the label is text, and a faded palette colour
+            // drops under 4.5:1.
             const statColor = stat.color
-              ? alpha((theme.palette[stat.color] as { main: string }).main, 0.7)
+              ? (theme.palette[stat.color] as { main: string }).main
               : undefined
             return (
               <Tooltip
@@ -304,7 +306,7 @@ export default function EntityCard({
                 const resolvedSx = actionColor
                   ? {
                       ...iconBtnSx,
-                      color: alpha(actionColor, 0.6),
+                      color: alpha(actionColor, 0.75),
                       '&:hover': {
                         color: actionColor,
                         bgcolor: alpha(actionColor, 0.1),

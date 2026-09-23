@@ -16,7 +16,8 @@ import CategoryToken from '../CategoryToken'
 import SyncStateChip from '../archives/SyncStateChip'
 import StageTrack from './StageTrack'
 import { elapsedSince, useNow } from './elapsed'
-import { PLAN_COLOR, PLAN_LABEL } from '../../core/features'
+import { PLAN_LABEL } from '../../core/features'
+import { getPlanAccent } from '../planDrawerColors'
 import { parseBackendDate } from '../../utils/dateUtils'
 import { HUB_GRID_COLUMNS, type RepositoryTrack, type StageState } from './repositoryTrack'
 import type { HubRepository } from '../../types/operations'
@@ -150,8 +151,8 @@ function HistoryCell({
               height: 20,
               fontSize: '0.65rem',
               fontWeight: 700,
-              bgcolor: alpha(PLAN_COLOR.pro, 0.15),
-              color: PLAN_COLOR.pro,
+              bgcolor: alpha(getPlanAccent('pro', theme), 0.15),
+              color: getPlanAccent('pro', theme),
             }}
           />
         }

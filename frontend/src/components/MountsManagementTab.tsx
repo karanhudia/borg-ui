@@ -103,7 +103,7 @@ function MountCard({
     width: 28,
     height: 28,
     borderRadius: 1.5,
-    color: alpha(color, isDark ? 0.6 : 0.5),
+    color: alpha(color, 0.75),
     '&:hover': {
       bgcolor: alpha(color, isDark ? 0.12 : 0.09),
       color: color,

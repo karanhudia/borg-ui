@@ -78,7 +78,7 @@ export default function AnnouncementModal({
   const panelBackground = isDark ? '#18181b' : '#ffffff'
   const foreground = isDark ? '#ffffff' : '#1f2937'
   const mutedText = isDark ? alpha('#ffffff', 0.76) : alpha('#1f2937', 0.82)
-  const secondaryText = isDark ? alpha('#ffffff', 0.58) : alpha('#1f2937', 0.5)
+  const secondaryText = isDark ? alpha('#ffffff', 0.62) : alpha('#1f2937', 0.72)
   const borderAlpha = isDark ? alpha('#ffffff', 0.08) : alpha('#000000', 0.1)
   const subtleBg = isDark ? alpha('#ffffff', 0.12) : alpha('#000000', 0.06)
   const subtleBorder = isDark ? alpha('#ffffff', 0.12) : alpha('#000000', 0.08)
@@ -278,7 +278,7 @@ export default function AnnouncementModal({
                 fontWeight: 700,
                 color: accentColor,
                 '&:hover': {
-                  color: alpha(accentColor, 0.82),
+                  textDecoration: 'underline',
                 },
               }}
             >

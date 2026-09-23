@@ -1429,9 +1429,10 @@ class Archive(Base):
     compressed_size = Column(BigInteger, nullable=True)
     deduplicated_size = Column(BigInteger, nullable=True)
     # When fill_archive_info last wrote the four Borg figures above. NULL is
-    # "never measured" or "stale": a listing that observed removed archives
-    # clears it on every survivor, because deduplicated_size is relative to
-    # the archives that exist (spec 4.1). Values stay in place while stale.
+    # "never measured" or "stale": a listing that observed a removed archive
+    # clears it on that archive's neighbours in its series, because
+    # deduplicated_size is relative to the archives that exist (spec 4.1).
+    # Values stay in place while stale.
     stats_measured_at = Column(DateTime, nullable=True)
     hostname = Column(String, nullable=True)
     username = Column(String, nullable=True)

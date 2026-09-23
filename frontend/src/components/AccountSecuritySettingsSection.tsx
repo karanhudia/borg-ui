@@ -95,7 +95,7 @@ export default function AccountSecuritySettingsSection({
                   fontWeight: 700,
                   textTransform: 'uppercase',
                   letterSpacing: '0.08em',
-                  color: 'info.light',
+                  color: 'info.main',
                   mb: 0.35,
                 }}
               >
