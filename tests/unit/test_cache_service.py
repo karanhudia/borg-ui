@@ -8,7 +8,6 @@ from app.services.cache_service import (
     MARKER_COMPRESSED,
     MARKER_RAW,
     RedisBackend,
-    redact_redis_url,
 )
 
 
@@ -154,19 +153,3 @@ def test_archive_cache_service_reconfigure_falls_back_to_memory_when_redis_unava
     assert result["success"] is True
     assert result["backend"] == "in-memory"
     assert service.get_backend_type() == "in-memory"
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize(
-    "url, expected",
-    [
-        ("redis://:secret@cache:6379/0", "redis://:***@cache:6379/0"),
-        ("rediss://user:secret@cache:6379/0", "rediss://user:***@cache:6379/0"),
-        ("redis://:p@ss:w@cache:6379/0", "redis://:***@cache:6379/0"),
-        ("redis://user@cache:6379/0", "redis://user@cache:6379/0"),
-        ("redis://cache:6379/0", "redis://cache:6379/0"),
-        (None, None),
-    ],
-)
-def test_redact_redis_url(url, expected):
-    assert redact_redis_url(url) == expected

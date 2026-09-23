@@ -17,9 +17,9 @@ from app.services.storage_usage import (
     borg2_interpreter,
     measure_repository_size,
     rclone_remote_for,
-    safe_url,
     store_target,
 )
+from app.utils.url_redaction import safe_url
 
 
 class FakeProcess:

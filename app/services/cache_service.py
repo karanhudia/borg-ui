@@ -22,6 +22,7 @@ from redis.connection import ConnectionPool
 from redis.exceptions import ConnectionError, RedisError, TimeoutError
 
 from app.config import settings
+from app.utils.url_redaction import safe_url
 
 logger = logging.getLogger(__name__)
 
@@ -30,18 +31,6 @@ COMPRESSION_THRESHOLD_BYTES = 100 * 1024  # 100KB
 COMPRESSION_LEVEL = 6  # zlib compression level (balanced)
 MARKER_RAW = b"\x00"
 MARKER_COMPRESSED = b"\x01"
-
-
-def redact_redis_url(url: Optional[str]) -> Optional[str]:
-    """Hide the password in a Redis URL: redis://user:pass@host -> redis://user:***@host."""
-    if not url or "@" not in url:
-        return url
-    credentials, host = url.rsplit("@", 1)
-    scheme, _, userinfo = credentials.rpartition("://")
-    user, has_password, _ = userinfo.partition(":")
-    if not has_password:
-        return url
-    return f"{scheme}://{user}:***@{host}" if scheme else f"{user}:***@{host}"
 
 
 class CacheBackend(ABC):
@@ -527,7 +516,7 @@ class ArchiveCacheService:
                 client.ping()
                 self._current_backend = self._redis_backend
                 logger.info(
-                    f"Archive cache initialized with external Redis backend (URL: {redact_redis_url(settings.redis_url)})"
+                    f"Archive cache initialized with external Redis backend (URL: {safe_url(settings.redis_url)})"
                 )
             except Exception as e:
                 logger.warning(
@@ -776,7 +765,7 @@ class ArchiveCacheService:
             if isinstance(self._current_backend, RedisBackend):
                 if self._redis_backend and self._redis_backend.url:
                     stats["connection_type"] = "external_url"
-                    stats["connection_info"] = redact_redis_url(self._redis_backend.url)
+                    stats["connection_info"] = safe_url(self._redis_backend.url)
                 else:
                     stats["connection_type"] = "local"
                     stats["connection_info"] = (
@@ -852,15 +841,15 @@ class ArchiveCacheService:
                     client = self._redis_backend._get_client()
                     client.ping()
                     self._current_backend = self._redis_backend
-                    safe_url = redact_redis_url(redis_url)
+                    redacted_url = safe_url(redis_url)
                     logger.info(
-                        f"Reconfigured to external Redis backend (URL: {safe_url})"
+                        f"Reconfigured to external Redis backend (URL: {redacted_url})"
                     )
                     return {
                         "success": True,
                         "backend": "redis",
                         "connection_type": "external_url",
-                        "connection_info": safe_url,
+                        "connection_info": redacted_url,
                         "message": f"Successfully connected to external Redis",
                     }
                 except Exception as e:
