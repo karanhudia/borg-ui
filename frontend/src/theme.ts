@@ -232,6 +232,9 @@ export const darkTheme = createTheme({
     text: {
       primary: '#fafafa', // Zinc 50
       secondary: '#adadb5', // Zinc 400, lifted for 4.5:1 on chip fills
+      // Opaque on purpose: MUI's default is white at 50%, which composites
+      // to about 4:1 on chip fills.
+      disabled: '#a9a9b1',
     },
   },
 })

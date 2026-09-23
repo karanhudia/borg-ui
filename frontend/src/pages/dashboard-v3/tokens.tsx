@@ -52,12 +52,11 @@ export type Tokens = ReturnType<typeof makeT>
 export const TokenContext = React.createContext<Tokens>(makeT(true))
 export const useT = () => React.useContext(TokenContext)
 
-export const STATUS = {
-  healthy: { color: '#22c55e', dim: 'rgba(34,197,94,0.10)' },
-  warning: { color: '#f59e0b', dim: 'rgba(245,158,11,0.13)' },
-  critical: { color: '#ef4444', dim: 'rgba(239,68,68,0.15)' },
-  unknown: { color: '#64748b', dim: 'rgba(100,116,139,0.05)' },
-}
+// Status dots, borders and labels. Resolved from the theme tokens so each
+// clears 3:1 as a graphic and 4.5:1 as text in both modes.
+export type HealthStatus = 'healthy' | 'warning' | 'critical' | 'unknown'
+export const statusColor = (status: string, T: Tokens): string =>
+  ({ healthy: T.green, warning: T.amber, critical: T.red })[status] ?? T.textMuted
 
 /**
  * Surface vocabulary on the dashboard is INTENTIONALLY two-tone:

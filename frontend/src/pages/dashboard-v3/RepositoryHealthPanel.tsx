@@ -7,7 +7,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { formatDateTimeFull } from '../../utils/dateUtils'
 import { translateBackendKey } from '../../utils/translateBackendKey'
 import { DimStatusGrid, PulseDot, ScheduleBadge } from './health'
-import { STATUS, typeColor, type Tokens } from './tokens'
+import { statusColor, typeColor, type HealthStatus, type Tokens } from './tokens'
 import type { DashboardOverview } from './types'
 
 type RepositoryHealth = DashboardOverview['repository_health']
@@ -307,13 +307,13 @@ export function RepositoryHealthPanel({
         {repos.map((repo) => {
           // Card color follows the backend's aggregate repository health.
           // Failed restore verification can make the card critical because recovery is at risk.
-          const cardStatus: keyof typeof STATUS =
+          const cardStatus: HealthStatus =
             repo.health_status === 'critical'
               ? 'critical'
               : repo.health_status === 'warning'
                 ? 'warning'
                 : 'healthy'
-          const cs = STATUS[cardStatus]
+          const cs = { color: statusColor(cardStatus, T) }
 
           // Compact one-liner card for healthy repos. The dimension footer on a
           // healthy card is just "everything's fine" four times; collapse to a
