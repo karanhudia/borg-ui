@@ -74,7 +74,7 @@ export default function StageStrip({
       aria-label={t('operations.background.strip.label')}
       sx={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(132px, 1fr))',
         gap: 1.5,
       }}
     >
@@ -120,7 +120,6 @@ export default function StageStrip({
             >
               <Typography
                 variant="caption"
-                noWrap
                 sx={{
                   display: 'block',
                   color: 'text.secondary',
