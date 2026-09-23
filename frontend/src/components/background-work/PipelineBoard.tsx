@@ -437,9 +437,7 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
           >
             {columnHeader(t('operations.background.repositoryColumn'))}
             {columnHeader(t('operations.background.currentStageColumn'))}
-            {columnHeader(t('operations.background.stage.archives'))}
-            {columnHeader(t('operations.background.stage.history'))}
-            {columnHeader(t('operations.background.stage.stats'))}
+            {columnHeader(t('operations.background.lastUpdatedColumn'))}
             <span />
           </Box>
           {visible.map((row) => (
@@ -447,8 +445,6 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
               key={row.key}
               repository={row.repository}
               track={row.track}
-              historyAvailable={historyAvailable}
-              totalHistoryRows={hub.data.totals.history_rows}
               onOpen={() => {
                 const id = row.repository?.repository_id ?? row.track?.repositoryId ?? null
                 const name = row.repository?.repository_name ?? row.track?.repositoryName ?? ''
@@ -480,6 +476,9 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
           onClose={() => setTrackRepository(null)}
           repositoryId={trackRepository.id}
           repositoryName={trackRepository.name}
+          repository={trackHubRepository}
+          historyAvailable={historyAvailable}
+          totalHistoryRows={hub.data.totals.history_rows}
           historyCapability={trackHubRepository?.history_capability}
           indexMode={trackHubRepository?.index_mode}
           history={trackHubRepository?.history}

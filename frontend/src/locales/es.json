@@ -3772,7 +3772,7 @@
         "sortBy": "Ordenar por",
         "sortName": "Nombre",
         "sortRows": "Filas de historial",
-        "sortSynced": "Última sincronización",
+        "sortSynced": "Última actualización",
         "showMore_one": "Mostrar {{count}} más",
         "showMore_other": "Mostrar {{count}} más",
         "shownOf": "Mostrando {{shown}} de {{total}}",
@@ -3810,7 +3810,9 @@
         "detailHint": "Reconstruye desde Historial de ficheros para indexar estos archivos de nuevo.",
         "viewIndexRuns": "Ver ejecuciones de índice",
         "openRepository": "Abrir repositorio",
-        "historyAgentUnsupported": "Necesita un agente capaz"
+        "historyAgentUnsupported": "Necesita un agente capaz",
+        "updatedAgo": "Actualizado {{ago}}",
+        "updatedNever": "Aún no actualizado"
       },
       "rebuildMenuHint": "Cada etapa posterior a la elegida también se reconstruye. Las anteriores se conservan. Las estadísticas siempre van al final, porque suman lo que produjeron las demás etapas.",
       "rebuildTitle": "Reconstruir datos derivados",
@@ -3835,7 +3837,8 @@
       },
       "pauseAll": "Pausar todo",
       "resumeAll": "Reanudar todo",
-      "currentStageColumn": "Etapa actual"
+      "currentStageColumn": "Etapa actual",
+      "lastUpdatedColumn": "Última actualización"
     },
     "status": {
       "queued": "En cola",

@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Button } from '@mui/material'
 import RepositoryTrackDialog from './RepositoryTrackDialog'
 import api from '../../services/api'
-import { hubDetail, op } from './storyFixtures'
+import { hubDetail, hubRepositories, op } from './storyFixtures'
 import type { HubHistorySummary, HubRepositoryDetail, IndexMode } from '../../types/operations'
 import type { HistoryCapability } from '../../types/archives'
 
@@ -43,6 +43,14 @@ function Wrapper({
         historyCapability={historyCapability}
         history={history}
         indexMode={indexMode}
+        repository={{
+          ...hubRepositories[3],
+          history: history ?? hubRepositories[3].history,
+          index_mode: indexMode ?? hubRepositories[3].index_mode,
+          history_capability: historyCapability ?? hubRepositories[3].history_capability,
+        }}
+        historyAvailable
+        totalHistoryRows={27393}
         operations={[
           op({ kind: 'stats', status: 'completed' }),
           op({ id: 2, kind: 'archive_sync', status: 'running' }),

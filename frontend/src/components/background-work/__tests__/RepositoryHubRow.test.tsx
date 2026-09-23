@@ -58,31 +58,31 @@ function renderRow(props: Partial<React.ComponentProps<typeof RepositoryHubRow>>
   const handlers = { onOpen: vi.fn(), onRetry: vi.fn() }
   render(
     <MemoryRouter>
-      <RepositoryHubRow
-        repository={repository()}
-        track={null}
-        historyAvailable
-        totalHistoryRows={32438}
-        {...handlers}
-        {...props}
-      />
+      <RepositoryHubRow repository={repository()} track={null} {...handlers} {...props} />
     </MemoryRouter>
   )
   return handlers
 }
 
 describe('RepositoryHubRow', () => {
-  it('shows the derived data at rest for a repository with nothing running', () => {
+  it('shows when the derived data last changed, not a column per stage', () => {
     renderRow()
     const row = screen.getByTestId('repository-row')
     expect(within(row).getByText('nas')).toBeInTheDocument()
-    expect(within(row).getByText(/synced 12 minutes ago/i)).toBeInTheDocument()
-    expect(within(row).getByText(/18 archives/i)).toBeInTheDocument()
-    expect(within(row).getByText(/16 of 18 indexed/i)).toBeInTheDocument()
-    expect(within(row).getByText(/16,219 rows/i)).toBeInTheDocument()
-    expect(within(row).getByText(/50% of all history rows/i)).toBeInTheDocument()
-    expect(within(row).getByText(/refreshed 11 minutes ago/i)).toBeInTheDocument()
+    // The newest of synced (12 minutes) and refreshed (11 minutes).
+    expect(within(row).getByText(/updated 11 minutes ago/i)).toBeInTheDocument()
+    expect(within(row).queryByText(/16 of 18 indexed/i)).not.toBeInTheDocument()
     expect(within(row).queryByTestId('stage-stats')).not.toBeInTheDocument()
+  })
+
+  it('shows the archive count when nothing needs a look', () => {
+    renderRow({
+      repository: repository({
+        history: { indexed: 18, pending: 0, failed: 0, skipped: 0, truncated: 0, rows: 16219 },
+      }),
+    })
+    expect(screen.getByText(/18 archives/i)).toBeInTheDocument()
+    expect(screen.queryByText(/synced/i)).not.toBeInTheDocument()
   })
 
   it('flags failed and truncated history so the problem is not colour alone', () => {
@@ -101,44 +101,9 @@ describe('RepositoryHubRow', () => {
         history: { indexed: 0, pending: 0, failed: 0, skipped: 0, truncated: 0, rows: 0 },
       }),
     })
+    expect(screen.getByText(/not updated yet/i)).toBeInTheDocument()
     expect(screen.getByText(/not indexed yet/i)).toBeInTheDocument()
-    expect(screen.getByText(/no file history yet/i)).toBeInTheDocument()
-    expect(screen.getByText(/not refreshed yet/i)).toBeInTheDocument()
-    expect(screen.queryByText(/of all history rows/i)).not.toBeInTheDocument()
   })
-
-  it('marks file history as a Pro feature on Community instead of showing counts', () => {
-    renderRow({ historyAvailable: false })
-    expect(screen.getByText('Pro')).toBeInTheDocument()
-    expect(screen.queryByText(/of 18 indexed/i)).not.toBeInTheDocument()
-  })
-
-  it('names the agent reason ahead of the Pro chip, since an upgrade would not help', () => {
-    renderRow({
-      historyAvailable: false,
-      repository: {
-        ...repository(),
-        history_capability: 'agent_unsupported',
-        history: { indexed: 0, pending: 0, failed: 0, skipped: 18, truncated: 0, rows: 0 },
-      },
-    })
-    expect(screen.getByText(/needs a capable agent/i)).toBeInTheDocument()
-    expect(screen.queryByText('Pro')).not.toBeInTheDocument()
-  })
-
-  it('names the agent reason over the Pro chip even when an older index survives', () => {
-    renderRow({
-      historyAvailable: false,
-      repository: {
-        ...repository(),
-        history_capability: 'agent_unsupported',
-        history: { indexed: 12, pending: 0, failed: 0, skipped: 6, truncated: 0, rows: 4000 },
-      },
-    })
-    expect(screen.getByText(/needs a capable agent/i)).toBeInTheDocument()
-    expect(screen.queryByText('Pro')).not.toBeInTheDocument()
-  })
-
   it('shows the one stage the repository is in', () => {
     renderRow({
       track: track({
@@ -204,7 +169,6 @@ describe('RepositoryHubRow', () => {
     })
     expect(screen.getByTestId('stage-history')).toHaveAttribute('data-status', 'waiting')
     expect(screen.getByText(/waiting on a paused stage/i)).toBeInTheDocument()
-    expect(screen.getByText(/16 of 18 indexed/i)).toBeInTheDocument()
   })
 
   it('says the repository is idle at rest', () => {
@@ -270,18 +234,12 @@ describe('RepositoryHubRow', () => {
 })
 
 describe('index mode (spec 6.8)', () => {
-  it('reads "Archives only" in place of the history cell', () => {
-    renderRow({ repository: repository({ index_mode: 'archives' }) })
-    expect(screen.getByText(/archives only/i)).toBeInTheDocument()
-    expect(screen.queryByText(/16 of 18 indexed/i)).not.toBeInTheDocument()
-  })
-
   it('does not warn that an off repository is out of date', () => {
     // Spec 6.8: an opted-out repository never reads as a problem, and an
     // amber warning on the row is the same claim the summary counts drop.
     renderRow({ repository: repository({ index_mode: 'off', sync_state: 'stale' }) })
     expect(screen.queryByText(/out of date/i)).not.toBeInTheDocument()
-    expect(screen.getByText(/not refreshed/i)).toBeInTheDocument()
+    expect(screen.getByText(/not indexed/i)).toBeInTheDocument()
   })
 
   it('still warns an archives-mode repository whose listing is stale', () => {

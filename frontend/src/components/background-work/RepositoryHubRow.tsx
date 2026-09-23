@@ -1,6 +1,5 @@
 import {
   Box,
-  Chip,
   IconButton,
   Link as MuiLink,
   Tooltip,
@@ -16,8 +15,6 @@ import CategoryToken from '../CategoryToken'
 import SyncStateChip from '../archives/SyncStateChip'
 import CurrentStage from './CurrentStage'
 import { elapsedSince, useNow } from './elapsed'
-import { PLAN_LABEL } from '../../core/features'
-import { getPlanAccent } from '../planDrawerColors'
 import { parseBackendDate } from '../../utils/dateUtils'
 import {
   HUB_GRID_COLUMNS,
@@ -26,15 +23,12 @@ import {
   type StageState,
 } from './repositoryTrack'
 import type { HubRepository } from '../../types/operations'
-import type { HistoryCapability } from '../../types/archives'
 
 interface RepositoryHubRowProps {
   // Null for the system lane (package installs and other work with no
   // repository), which has a track but no derived data.
   repository: HubRepository | null
   track: RepositoryTrack | null
-  historyAvailable: boolean
-  totalHistoryRows: number
   onOpen: () => void
   onRetry: (stage: StageState) => void
 }
@@ -104,112 +98,64 @@ function Flag({
   )
 }
 
-function HistoryCell({
-  repository,
-  historyAvailable,
-  totalHistoryRows,
-}: {
-  repository: HubRepository
-  historyAvailable: boolean
-  totalHistoryRows: number
-}) {
+// When any of the repository's derived data last changed, and the one
+// thing about it that needs a look, if any. Which stage kept what lives in
+// the repository's dialog (RepositoryDataTiles), so a new stage never adds
+// a column here.
+function LastUpdatedCell({ repository }: { repository: HubRepository }) {
   const { t } = useTranslation()
-  const theme = useTheme()
-  const { history, archives } = repository
   const mode = repository.index_mode ?? 'full'
-  // The repository's own reason for having no history stage (an agent
-  // executes it), next to the plan-wide `historyAvailable`.
-  const historyCapability: HistoryCapability = repository.history_capability ?? 'available'
-
-  // Mode before plan (spec 6.8): an upgrade would not start indexing this
-  // repository, so the Pro chip below would be a false promise.
-  if (mode !== 'full') {
-    return (
-      <Cell
-        muted
-        primary={t(
-          mode === 'archives'
-            ? 'operations.background.hub.modeArchives'
-            : 'operations.background.hub.modeOff'
-        )}
-      />
-    )
+  if (mode === 'off') {
+    return <Cell muted primary={t('operations.background.hub.modeOff')} />
   }
-  // An index built before the repository moved to an agent is still real
-  // data (the Changes tab serves it); only a repository with none says so.
-  // Ahead of the plan chip either way: an upgrade would not unlock the
-  // stage here, so without the plan the reason is the whole answer.
-  if (
-    historyCapability === 'agent_unsupported' &&
-    (!historyAvailable || (history.indexed === 0 && history.rows === 0))
-  ) {
-    return <Cell muted primary={t('operations.background.hub.historyAgentUnsupported')} />
-  }
-  if (!historyAvailable) {
-    return (
-      <Cell
-        primary={
-          <Chip
-            size="small"
-            label={PLAN_LABEL.pro}
-            sx={{
-              height: 20,
-              fontSize: '0.65rem',
-              fontWeight: 700,
-              bgcolor: alpha(getPlanAccent('pro', theme), 0.15),
-              color: getPlanAccent('pro', theme),
-            }}
-          />
-        }
-      />
-    )
-  }
-  if (history.rows === 0 && history.indexed === 0) {
-    return <Cell muted primary={t('operations.background.hub.historyNone')} />
-  }
-  const share = totalHistoryRows > 0 ? Math.round((history.rows / totalHistoryRows) * 100) : null
+  const newest = [repository.last_synced_at, repository.last_history_at, repository.last_stats_at]
+    .filter((value): value is string => value != null)
+    .sort((x, y) => parseBackendDate(y).getTime() - parseBackendDate(x).getTime())[0]
+  const { history } = repository
+  const flags = (
+    <>
+      {repository.sync_state !== 'fresh' && (
+        <SyncStateChip
+          state={repository.sync_state}
+          lastSyncedAt={repository.last_synced_at}
+          showRebuild={false}
+        />
+      )}
+      {mode === 'full' && history.failed > 0 && (
+        <Flag
+          icon={<AlertTriangle size={12} />}
+          color="error.main"
+          label={t('operations.background.hub.historyFailed', { count: history.failed })}
+        />
+      )}
+      {mode === 'full' && history.truncated > 0 && (
+        <Flag
+          icon={<Scissors size={12} />}
+          color="warning.main"
+          label={t('operations.background.hub.historyTruncated', { count: history.truncated })}
+        />
+      )}
+    </>
+  )
+  const needsLook =
+    repository.sync_state !== 'fresh' ||
+    (mode === 'full' && (history.failed > 0 || history.truncated > 0))
   return (
     <Cell
-      primary={t('operations.background.hub.historyCoverage', {
-        indexed: history.indexed.toLocaleString(),
-        total: archives.toLocaleString(),
-      })}
+      muted={newest == null}
+      primary={
+        newest
+          ? t('operations.background.hub.updatedAgo', { ago: ago(newest) })
+          : t('operations.background.hub.updatedNever')
+      }
       secondary={
-        <>
-          <Typography component="span" variant="caption">
-            {t('operations.background.hub.historyRows', { count: history.rows })}
-            {share != null && share > 0 && (
-              <Typography
-                component="span"
-                variant="caption"
-                sx={{ color: theme.palette.text.disabled, ml: 0.5 }}
-              >
-                ({t('operations.background.hub.historyShare', { percent: share })})
-              </Typography>
-            )}
+        needsLook ? (
+          flags
+        ) : (
+          <Typography variant="caption">
+            {t('operations.background.hub.rowArchives', { count: repository.archives })}
           </Typography>
-          {history.failed > 0 && (
-            <Flag
-              icon={<AlertTriangle size={12} />}
-              color="error.main"
-              label={t('operations.background.hub.historyFailed', { count: history.failed })}
-            />
-          )}
-          {history.truncated > 0 && (
-            <Flag
-              icon={<Scissors size={12} />}
-              color="warning.main"
-              label={t('operations.background.hub.historyTruncated', {
-                count: history.truncated,
-              })}
-            />
-          )}
-          {history.pending > 0 && (
-            <Typography component="span" variant="caption">
-              {t('operations.background.hub.historyPending', { count: history.pending })}
-            </Typography>
-          )}
-        </>
+        )
       }
     />
   )
@@ -218,8 +164,6 @@ function HistoryCell({
 export default function RepositoryHubRow({
   repository,
   track,
-  historyAvailable,
-  totalHistoryRows,
   onOpen,
   onRetry,
 }: RepositoryHubRowProps) {
@@ -332,52 +276,9 @@ export default function RepositoryHubRow({
         />
 
         {repository ? (
-          <>
-            <Box sx={{ minWidth: 0, gridColumn: { xs: '1 / -1', md: 'auto' } }}>
-              {/* An amber "out of date" chip on a repository nobody indexes
-                  is the same false alarm the summary counts drop (spec 6.8),
-                  so the state is stated plainly instead. */}
-              {(repository.index_mode ?? 'full') === 'off' ? (
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  {t('operations.background.hub.syncOff')}
-                </Typography>
-              ) : (
-                <SyncStateChip
-                  state={repository.sync_state}
-                  lastSyncedAt={repository.last_synced_at}
-                  showRebuild={false}
-                />
-              )}
-              <Typography
-                variant="caption"
-                sx={{
-                  display: 'block',
-                  mt: 0.5,
-                  color: 'text.secondary',
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {t('operations.background.hub.rowArchives', { count: repository.archives })}
-              </Typography>
-            </Box>
-            <HistoryCell
-              repository={repository}
-              historyAvailable={historyAvailable}
-              totalHistoryRows={totalHistoryRows}
-            />
-            <Cell
-              muted={repository.last_stats_at == null}
-              primary={
-                repository.last_stats_at
-                  ? t('operations.background.hub.statsRefreshed', {
-                      ago: ago(repository.last_stats_at),
-                    })
-                  : t('operations.background.hub.statsNever')
-              }
-            />
-          </>
+          <LastUpdatedCell repository={repository} />
         ) : (
-          <Box sx={{ display: { xs: 'none', md: 'block' }, gridColumn: { md: 'span 3' } }} />
+          <Box sx={{ display: { xs: 'none', md: 'block' } }} />
         )}
 
         <Box

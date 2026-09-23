@@ -129,16 +129,21 @@ function matchesAttention(row: HubRow, attention: AttentionFilter): boolean {
   return reasons.includes(attention)
 }
 
-function syncedAt(row: HubRow): number {
-  const value = row.repository?.last_synced_at
-  return value ? Date.parse(value) : Number.NEGATIVE_INFINITY
+// When any of the row's derived data last changed: what the Last updated
+// column shows and the `synced` sort orders by.
+function updatedAt(row: HubRow): number {
+  const repository = row.repository
+  const times = [repository?.last_synced_at, repository?.last_history_at, repository?.last_stats_at]
+    .filter((value): value is string => value != null)
+    .map((value) => Date.parse(value))
+  return times.length ? Math.max(...times) : Number.NEGATIVE_INFINITY
 }
 
 const COMPARE: Record<HubSort, (a: HubRow, b: HubRow) => number> = {
   name: (a, b) =>
     (a.repository?.repository_name ?? '').localeCompare(b.repository?.repository_name ?? ''),
   rows: (a, b) => (b.repository?.history.rows ?? 0) - (a.repository?.history.rows ?? 0),
-  synced: (a, b) => syncedAt(b) - syncedAt(a),
+  synced: (a, b) => updatedAt(b) - updatedAt(a),
 }
 
 // The rows the table shows for a toolbar state. A row keeps its place when

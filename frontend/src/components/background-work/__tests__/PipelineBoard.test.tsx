@@ -164,7 +164,7 @@ describe('PipelineBoard', () => {
     await waitFor(() => expect(screen.getAllByTestId('repository-row')).toHaveLength(2))
     expect(screen.getByText(/2 repositories/i)).toBeInTheDocument()
     expect(screen.getByText(/21 archives indexed/i)).toBeInTheDocument()
-    expect(screen.getAllByText(/18 of 18 indexed/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/updated 4 minutes ago/i).length).toBeGreaterThan(0)
     expect(screen.getByText(/reconcile runs every 60 minutes/i)).toBeInTheDocument()
     expect(screen.queryByTestId('stage-stats')).not.toBeInTheDocument()
   })
@@ -378,9 +378,16 @@ describe('PipelineBoard', () => {
         history_capability: 'agent_unsupported',
       }),
     ])
+    ;(operationsAPI.getRepositoryDetail as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { repository_id: 1, failed_archives: [], truncated_archives: [] },
+    })
     renderBoard()
-    expect(await screen.findByText(/needs a capable agent/i)).toBeInTheDocument()
-    expect(screen.queryByText(/no file history yet/i)).not.toBeInTheDocument()
+    // The row shows when the data last changed; what each stage keeps is in
+    // the repository's dialog.
+    fireEvent.click((await screen.findAllByRole('button', { name: /k8s-node/i }))[0])
+    const tile = await screen.findByTestId('repository-data-history')
+    expect(tile).toHaveTextContent(/needs a capable agent/i)
+    expect(tile).not.toHaveTextContent(/no file history yet/i)
   })
 
   it('changes the index worker count from the file history block', async () => {

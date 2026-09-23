@@ -3772,7 +3772,7 @@
         "sortBy": "Sortieren nach",
         "sortName": "Name",
         "sortRows": "Historienzeilen",
-        "sortSynced": "Zuletzt synchronisiert",
+        "sortSynced": "Zuletzt aktualisiert",
         "showMore_one": "{{count}} weiteres anzeigen",
         "showMore_other": "{{count}} weitere anzeigen",
         "shownOf": "{{shown}} von {{total}} angezeigt",
@@ -3810,7 +3810,9 @@
         "detailHint": "Baue ab Dateiverlauf neu auf, um diese Archive erneut zu indizieren.",
         "viewIndexRuns": "Indexläufe anzeigen",
         "openRepository": "Repository öffnen",
-        "historyAgentUnsupported": "Braucht einen fähigen Agent"
+        "historyAgentUnsupported": "Braucht einen fähigen Agent",
+        "updatedAgo": "Aktualisiert {{ago}}",
+        "updatedNever": "Noch nicht aktualisiert"
       },
       "rebuildMenuHint": "Jede Stufe nach der gewählten wird ebenfalls neu aufgebaut. Frühere Stufen bleiben erhalten. Statistiken laufen immer zuletzt, weil sie zusammenzählen, was die anderen Stufen erzeugt haben.",
       "rebuildTitle": "Abgeleitete Daten neu aufbauen",
@@ -3835,7 +3837,8 @@
       },
       "pauseAll": "Alle pausieren",
       "resumeAll": "Alle fortsetzen",
-      "currentStageColumn": "Aktuelle Phase"
+      "currentStageColumn": "Aktuelle Phase",
+      "lastUpdatedColumn": "Zuletzt aktualisiert"
     },
     "status": {
       "queued": "In Warteschlange",

@@ -3772,7 +3772,7 @@
         "sortBy": "Sort by",
         "sortName": "Name",
         "sortRows": "History rows",
-        "sortSynced": "Last synced",
+        "sortSynced": "Last updated",
         "showMore_one": "Show {{count}} more",
         "showMore_other": "Show {{count}} more",
         "shownOf": "Showing {{shown}} of {{total}}",
@@ -3810,7 +3810,9 @@
         "detailHint": "Rebuild from File history to index these archives again.",
         "viewIndexRuns": "View index runs",
         "openRepository": "Open repository",
-        "historyAgentUnsupported": "Needs a capable agent"
+        "historyAgentUnsupported": "Needs a capable agent",
+        "updatedAgo": "Updated {{ago}}",
+        "updatedNever": "Not updated yet"
       },
       "rebuildMenuHint": "Every stage after the one you pick is rebuilt too. Earlier stages are kept. Stats always run last, because they total up what the other stages produced.",
       "rebuildTitle": "Rebuild derived data",
@@ -3835,7 +3837,8 @@
       },
       "pauseAll": "Pause all",
       "resumeAll": "Resume all",
-      "currentStageColumn": "Current stage"
+      "currentStageColumn": "Current stage",
+      "lastUpdatedColumn": "Last updated"
     },
     "status": {
       "queued": "Queued",

@@ -23,8 +23,6 @@ const meta = {
   args: {
     repository: hubRepository(),
     track: null,
-    historyAvailable: true,
-    totalHistoryRows: 27393,
     onOpen: () => {},
     onRetry: () => {},
   },
@@ -42,10 +40,6 @@ export const WithProblems: Story = {
 
 export const NeverBuilt: Story = {
   args: { repository: hubRepositories[0] },
-}
-
-export const Community: Story = {
-  args: { historyAvailable: false },
 }
 
 // Spec 6.8: an opted-out repository reads as a choice, not a problem.

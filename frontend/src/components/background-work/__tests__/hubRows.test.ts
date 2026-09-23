@@ -161,8 +161,12 @@ describe('applyToolbar', () => {
     expect(names(result)).toEqual(['bravo', 'delta', 'alpha', 'echo', 'charlie'])
   })
 
-  it('sorts by last synced, most recent first, never synced last', () => {
-    const result = applyToolbar(rows, { query: '', attention: 'all', sort: 'synced' })
+  it('sorts by last updated, most recent first, never updated last', () => {
+    // Only the listing times differ here; stats and history are unset.
+    const synced = rows.map((r) =>
+      r.repository ? { ...r, repository: { ...r.repository, last_stats_at: null } } : r
+    )
+    const result = applyToolbar(synced, { query: '', attention: 'all', sort: 'synced' })
     expect(names(result)).toEqual(['alpha', 'echo', 'delta', 'bravo', 'charlie'])
   })
 
@@ -277,5 +281,29 @@ describe('stage filter and counts', () => {
     expect(counts.history).toEqual({ total: 1, running: 0, waiting: 0, failed: 1 })
     expect(counts.stats.total).toBe(0)
     expect(counts.connect.total).toBe(0)
+  })
+})
+
+describe('last updated sort', () => {
+  it('orders by the newest of listing, history and stats', () => {
+    const older = repo({
+      repository_id: 1,
+      repository_name: 'alpha',
+      last_synced_at: '2026-09-01T10:00:00',
+      last_stats_at: '2026-09-02T10:00:00',
+    })
+    const newer = repo({
+      repository_id: 2,
+      repository_name: 'bravo',
+      last_synced_at: '2026-09-01T09:00:00',
+      last_stats_at: null,
+      last_history_at: '2026-09-03T10:00:00',
+    })
+    const result = applyToolbar([row(older), row(newer)], {
+      query: '',
+      attention: 'all',
+      sort: 'synced',
+    })
+    expect(result.map((r) => r.repository?.repository_name)).toEqual(['bravo', 'alpha'])
   })
 })

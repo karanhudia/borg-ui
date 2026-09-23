@@ -44,14 +44,14 @@ export const REBUILD_STAGE_FOR: Partial<Record<StageKey, RebuildStage>> = {
 }
 
 // One grid shared by the hub header and every repository row: name, the
-// stage the repository is in, then the derived data at rest (archive list,
-// file history, stats), then the row menu. Stages live in the strip above
-// the table, so a new stage adds a block there, not a column here. On small
-// screens the name and the row menu share the first line and every data
-// cell spans the full width beneath them.
+// stage the repository is in, when its derived data last changed, then the
+// row menu. Stages live in the strip above the table and what each one keeps
+// in the repository's dialog, so a new stage adds neither a column nor a
+// cell here. On small screens the name and the row menu share the first
+// line and every data cell spans the full width beneath them.
 export const HUB_GRID_COLUMNS = {
   xs: 'minmax(0, 1fr) auto',
-  md: 'minmax(160px, 1.3fr) minmax(170px, 1.3fr) minmax(150px, 1fr) minmax(170px, 1.2fr) minmax(120px, 0.9fr) 40px',
+  md: 'minmax(200px, 1.4fr) minmax(220px, 1.4fr) minmax(200px, 1.2fr) 40px',
 }
 
 export type StageStatus = 'idle' | 'done' | 'running' | 'waiting' | 'failed' | 'skipped'

@@ -141,18 +141,27 @@ Placed between `HubSummary` and `HubToolbar`.
 - Layout: `repeat(auto-fit, minmax(128px, 1fr))`, so blocks wrap on narrow
   screens instead of scrolling sideways.
 
-### 3.3 Table
+### 3.3 Table and repository dialog
 
-- New "Current stage" column right after the repository name. Running: stage
-  label, progress bar, elapsed and `current/total` when known. Waiting: stage
-  label and a pill with the wait reason. Failed: "Failed" and the retry
-  action (the existing `handleRetry`). At rest: empty.
-- The Archives, History and Stats columns stay as at-rest data only (sync
-  state and archive count, history coverage, stats refreshed). Their headers
-  no longer carry stage controls. A new stage adds a block, not a column.
+The table has no column per stage, neither for work in flight nor for data
+at rest: Repository, Current stage, Last updated, row menu. A new stage adds
+a block to the strip and a tile to the dialog, never a column.
+
+- Current stage: the same two lines as the cell beside it, so a row keeps its
+  height. Running: stage label and elapsed time, then the product's thin
+  progress bar. Waiting: stage label, then the wait reason. Failed: stage
+  label, then "Failed" and the retry action (the existing `handleRetry`). At
+  rest: "Idle", or "Background work is off" for an `off` repository.
+- Last updated: the newest of `last_synced_at`, `last_history_at`,
+  `last_stats_at`. Under it, the one thing that needs a look (listing out of
+  date or never built, history failed or truncated), else the archive count.
+  The `synced` sort orders by the same time.
 - The shaded `StageTrack` band under active rows is removed, and
-  `StageTrack.tsx` with it (the row is its only user). Per-stage detail stays
-  in `RepositoryTrackDialog`.
+  `StageTrack.tsx` with it.
+- Clicking a repository opens `RepositoryTrackDialog`, which now starts with
+  one `TintedTile` per stage's data (`RepositoryDataTiles`): archive list
+  (count, sync state), file history (coverage, rows, share, failed, truncated,
+  pending, or the mode, agent or plan reason), stats (refreshed).
 
 ### 3.4 Tab header
 

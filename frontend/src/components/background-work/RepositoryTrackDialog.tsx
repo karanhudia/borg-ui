@@ -18,6 +18,7 @@ import { format } from 'date-fns'
 import ResponsiveDialog from '../shared/ResponsiveDialog'
 import CategoryToken from '../CategoryToken'
 import RebuildStagePicker from './RebuildStagePicker'
+import RepositoryDataTiles from './RepositoryDataTiles'
 import { REBUILD_STAGES } from './repositoryTrack'
 import { archivesAPI, operationsAPI } from '../../services/api'
 import { usePlan } from '../../hooks/usePlan'
@@ -26,6 +27,7 @@ import { getApiErrorDetail } from '../../utils/apiErrors'
 import { translateBackendKey } from '../../utils/translateBackendKey'
 import type {
   HubArchive,
+  HubRepository,
   HubHistorySummary,
   IndexMode,
   OperationItem,
@@ -39,6 +41,11 @@ interface RepositoryTrackDialogProps {
   repositoryId: number
   repositoryName: string
   operations: OperationItem[]
+  // The hub row, for the tiles of what each stage keeps; absent while the
+  // hub is still loading.
+  repository?: HubRepository
+  historyAvailable?: boolean
+  totalHistoryRows?: number
   // From the hub row; the history stage is not offered when the
   // repository cannot have one (an agent executes it), and its summary
   // says whether an index built before that is still there.
@@ -107,7 +114,8 @@ function ArchiveList({
   )
 }
 
-// One repository's derived data up close: the run in progress, the
+// One repository's derived data up close: what each stage keeps, the run
+// in progress, the
 // archives whose file history needs attention, and the rebuild choice as
 // the three stage cards. A bottom sheet under the md breakpoint, a wide
 // dialog above it.
@@ -120,6 +128,9 @@ export default function RepositoryTrackDialog({
   historyCapability = 'available',
   history,
   indexMode = 'full',
+  repository,
+  historyAvailable = true,
+  totalHistoryRows = 0,
 }: RepositoryTrackDialogProps) {
   const { t } = useTranslation()
   const theme = useTheme()
@@ -239,6 +250,13 @@ export default function RepositoryTrackDialog({
         </Stack>
 
         <Stack spacing={3}>
+          {repository && (
+            <RepositoryDataTiles
+              repository={repository}
+              historyAvailable={historyAvailable}
+              totalHistoryRows={totalHistoryRows}
+            />
+          )}
           {operations.length > 0 && (
             <Box>
               <SectionTitle>{t('operations.background.currentRun')}</SectionTitle>
