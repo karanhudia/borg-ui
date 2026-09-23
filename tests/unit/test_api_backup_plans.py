@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app.config import settings
 from app.database.models import (
@@ -4003,6 +4004,21 @@ class TestBackupPlanRoutes:
         assert run.status == "completed_with_warnings"
         assert run.error_message == "optional prepare skipped backup"
 
+    @staticmethod
+    def _record_broadcasts():
+        """Patch the operation.updated broadcast of the plan service and
+        return the patcher and the (id, kind, status) of each broadcast."""
+        broadcast = []
+
+        async def record(operation, db=None):
+            broadcast.append((operation.id, operation.kind, operation.status))
+
+        patcher = patch(
+            "app.services.backup_plan_execution_service.broadcast_operation_updated",
+            new=record,
+        )
+        return patcher, broadcast
+
     async def _run_with_failing_pre_script(self, test_db, run, error, **patches):
         """Execute `run` with a plan pre-backup script that fails with `error`
         and return the backup-failure notification mock."""
@@ -4035,9 +4051,11 @@ class TestBackupPlanRoutes:
             test_db, [repo_a, repo_b], pre_backup_script_id=script.id
         )
 
-        notify = await self._run_with_failing_pre_script(
-            test_db, run, "dump exited with 2"
-        )
+        patcher, broadcast = self._record_broadcasts()
+        with patcher:
+            notify = await self._run_with_failing_pre_script(
+                test_db, run, "dump exited with 2"
+            )
 
         run = test_db.query(BackupPlanRun).filter_by(id=run.id).one()
         assert run.status == "failed"
@@ -4062,6 +4080,73 @@ class TestBackupPlanRoutes:
             (repo_a.path, "dump exited with 2", operations[0].id, "Plan execution"),
             (repo_b.path, "dump exited with 2", operations[1].id, "Plan execution"),
         ]
+        # the runner never saw these rows, so the plan announces them itself
+        assert broadcast == [
+            (operations[0].id, "backup", "failed"),
+            (operations[1].id, "backup", "failed"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_failed_broadcast_still_sends_every_notification(self, test_db):
+        repo_a = _create_repo(test_db, "Primary", "/repos/primary")
+        repo_b = _create_repo(test_db, "Secondary", "/repos/secondary")
+        script = _create_script(test_db, "Dump Database")
+        _plan, run = _create_execution_plan(
+            test_db, [repo_a, repo_b], pre_backup_script_id=script.id
+        )
+
+        async def broken_broadcast(operation, db=None):
+            raise RuntimeError("event manager gone")
+
+        with patch(
+            "app.services.backup_plan_execution_service.broadcast_operation_updated",
+            new=broken_broadcast,
+        ):
+            notify = await self._run_with_failing_pre_script(
+                test_db, run, "dump exited with 2"
+            )
+
+        run = test_db.query(BackupPlanRun).filter_by(id=run.id).one()
+        assert (run.status, run.error_message) == ("failed", "dump exited with 2")
+        assert [call.args[1] for call in notify.await_args_list] == [
+            repo_a.path,
+            repo_b.path,
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_broadcast_that_aborts_the_session_still_sends_every_notification(
+        self, test_db
+    ):
+        repo_a = _create_repo(test_db, "Primary", "/repos/primary")
+        repo_b = _create_repo(test_db, "Secondary", "/repos/secondary")
+        script = _create_script(test_db, "Dump Database")
+        _plan, run = _create_execution_plan(
+            test_db, [repo_a, repo_b], pre_backup_script_id=script.id
+        )
+        delivered = []
+
+        async def aborting_broadcast(operation, db=None):
+            # the broadcaster swallows its own failures, so the session it
+            # was handed comes back with the failed flush still pending
+            assert db is not None
+            with pytest.raises(IntegrityError):
+                db.add(Operation())
+                db.flush()
+
+        async def notify(db, repository_path, *args):
+            delivered.append(
+                db.query(Repository).filter_by(path=repository_path).one().id
+            )
+
+        with patch(
+            "app.services.backup_plan_execution_service.broadcast_operation_updated",
+            new=aborting_broadcast,
+        ):
+            await self._run_with_failing_pre_script(
+                test_db, run, "dump exited with 2", notify=notify
+            )
+
+        assert delivered == [repo_a.id, repo_b.id]
 
     @pytest.mark.asyncio
     async def test_source_pre_script_failure_leaves_a_failed_backup_operation(
@@ -4168,6 +4253,7 @@ class TestBackupPlanRoutes:
 
     @pytest.mark.asyncio
     async def test_refused_admission_leaves_a_failed_backup_operation(self, test_db):
+        broadcast_patcher, broadcast = self._record_broadcasts()
         repo_a = _create_repo(test_db, "Primary", "/repos/primary")
         repo_b = _create_repo(test_db, "Secondary", "/repos/secondary")
         _plan, run = _create_execution_plan(test_db, [repo_a, repo_b])
@@ -4195,6 +4281,7 @@ class TestBackupPlanRoutes:
             patch.object(
                 notification_service, "send_backup_failure", new=AsyncMock()
             ) as notify,
+            broadcast_patcher,
         ):
             await backup_plan_execution_service.execute_run(run.id)
 
@@ -4220,6 +4307,7 @@ class TestBackupPlanRoutes:
         assert [call.args[1:4] for call in notify.await_args_list] == [
             (repo_a.path, "check is active on the repository", refused.id)
         ]
+        assert broadcast == [(refused.id, "backup", "failed")]
 
     @pytest.mark.asyncio
     async def test_failure_after_the_backup_was_created_adds_no_second_operation(
