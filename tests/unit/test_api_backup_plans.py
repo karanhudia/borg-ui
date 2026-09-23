@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.config import settings
 from app.database.models import (
@@ -38,6 +38,11 @@ from app.services.operations.backup_facade import (
     BackupJobFacade,
     resolve_backup_job,
 )
+
+
+def _locked_database() -> OperationalError:
+    """The error SQLAlchemy raises for a locked SQLite database."""
+    return OperationalError("SELECT operations.id", {}, Exception("database is locked"))
 
 
 def _plan_backup_seam(fake_execute_backup):
@@ -4316,13 +4321,20 @@ class TestBackupPlanRoutes:
         repo = _create_repo(test_db, "Primary", "/repos/primary")
         _plan, run = _create_execution_plan(test_db, [repo])
 
-        async def broken_wait(db, operation_id, **kwargs):
-            raise RuntimeError("lost the runner")
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            job = resolve_backup_job(db, job_id)
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
 
         with (
             patch(
                 "app.services.backup_plan_execution_service.wait_for_backup_operation",
-                new=broken_wait,
+                new=_plan_backup_seam(fake_execute_backup),
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.refresh_backup_job",
+                side_effect=RuntimeError("lost the runner"),
             ),
             patch.object(
                 notification_service, "send_backup_failure", new=AsyncMock()
@@ -4335,6 +4347,148 @@ class TestBackupPlanRoutes:
         child = test_db.query(BackupPlanRunRepository).one()
         assert (child.status, child.backup_operation_id) == ("failed", operation.id)
         notify.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_wait_that_fails_waits_again_for_the_backup(self, test_db):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        _plan, run = _create_execution_plan(test_db, [repo])
+        waits = []
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            job = resolve_backup_job(db, job_id)
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        completing_wait = _plan_backup_seam(fake_execute_backup)
+
+        sessions = []
+
+        async def flaky_wait(db, operation_id, **kwargs):
+            # The callback of each wait reads the run's current state.
+            waits.append(kwargs["is_cancelled"]())
+            sessions.append(db)
+            if len(waits) < 3:
+                raise _locked_database()
+            return await completing_wait(db, operation_id, **kwargs)
+
+        with (
+            patch(
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=flaky_wait,
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.asyncio.sleep",
+                new=AsyncMock(),
+            ) as sleep,
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.expire_all()
+        operation = test_db.query(Operation).filter_by(kind="backup").one()
+        child = test_db.query(BackupPlanRunRepository).one()
+        test_db.refresh(run)
+        # Every wait still honours a cancelled run, and each one polls on a
+        # session of its own, so a failed read taints none of the others.
+        assert waits == [False, False, False]
+        assert len({id(session) for session in sessions}) == 3
+        # Each one was closed when its wait ended.
+        assert all(not session.in_transaction() for session in sessions)
+        assert all(len(session.identity_map) == 0 for session in sessions)
+        assert [call.args for call in sleep.await_args_list] == [(2.0,), (4.0,)]
+        assert (child.status, child.backup_operation_id) == (
+            "completed",
+            operation.id,
+        )
+        assert (run.status, operation.status) == ("completed", "completed")
+
+    @pytest.mark.asyncio
+    async def test_a_failed_wait_leaves_the_repository_to_its_backup_outcome(
+        self, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        _plan, run = _create_execution_plan(test_db, [repo])
+        waits = []
+
+        async def wait(db, operation_id, **kwargs):
+            waits.append(operation_id)
+            if len(waits) < 7:
+                raise _locked_database()
+            operation = db.get(Operation, operation_id)
+            operation.status = "failed"
+            operation.error_message = "borg exited with 2"
+            operation.completed_at = datetime.utcnow()
+            db.commit()
+            return "failed"
+
+        with (
+            patch(
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=wait,
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.asyncio.sleep",
+                new=AsyncMock(),
+            ) as sleep,
+            patch.object(
+                notification_service, "send_backup_failure", new=AsyncMock()
+            ) as notify,
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.expire_all()
+        operation = test_db.query(Operation).filter_by(kind="backup").one()
+        child = test_db.query(BackupPlanRunRepository).one()
+        test_db.refresh(run)
+        # The backoff doubles up to its cap.
+        assert [call.args[0] for call in sleep.await_args_list] == [
+            2.0,
+            4.0,
+            8.0,
+            16.0,
+            30.0,
+            30.0,
+        ]
+        # The repository fails with its backup's reason, not the read error;
+        # the backup's own failure path reports it.
+        assert (child.status, child.error_message) == ("failed", "borg exited with 2")
+        assert (run.status, operation.status) == ("failed", "failed")
+        notify.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_an_error_that_is_not_the_database_fails_the_repository_at_once(
+        self, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        _plan, run = _create_execution_plan(test_db, [repo])
+        waits = []
+
+        async def broken_wait(db, operation_id, **kwargs):
+            waits.append(operation_id)
+            raise TypeError("is_cancelled() takes 0 positional arguments")
+
+        with (
+            patch(
+                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                new=broken_wait,
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.asyncio.sleep",
+                new=AsyncMock(),
+            ) as sleep,
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.expire_all()
+        child = test_db.query(BackupPlanRunRepository).one()
+        test_db.refresh(run)
+        # Waiting cannot cure a programming error; retrying it would keep
+        # the run active and every later run of the plan skipped.
+        assert len(waits) == 1
+        sleep.assert_not_awaited()
+        assert child.status == "failed"
+        assert "is_cancelled() takes 0 positional arguments" in child.error_message
+        assert run.status == "failed"
 
     @pytest.mark.asyncio
     async def test_pre_script_failure_shows_on_the_dashboard_until_a_backup_completes(
