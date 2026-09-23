@@ -481,11 +481,11 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
               const repoDoneWithWarnings = repoRun.status === 'completed_with_warnings'
               const repoFailed = repoRun.status === 'failed' || repoRun.status === 'cancelled'
 
-              // Done uses brand emerald LIVE_DOT (a stronger, on-brand green
-              // than MUI's default success teal). Done-with-warnings borrows
-              // amber so the warning hint is unmistakable while the repo still
-              // reads as "this finished, no action needed urgently".
-              const successColor = LIVE_DOT
+              // Done is read as text, so it takes the theme's success green,
+              // which clears 4.5:1 in both modes (LIVE_DOT does not). Done
+              // with warnings borrows amber so the warning hint is
+              // unmistakable while the repo still reads as finished.
+              const successColor = theme.palette.success.main
               const warningColor = theme.palette.warning.main
               const errorColor = theme.palette.error.main
               // Running repo is communicated by a pulsing emerald LIVE_DOT (the

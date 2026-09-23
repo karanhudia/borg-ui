@@ -1,10 +1,11 @@
 import { Fragment, useState } from 'react'
 import { Box, Typography, Chip, Button, Stack } from '@mui/material'
-import { alpha } from '@mui/material/styles'
+import { alpha, useTheme } from '@mui/material/styles'
 import { Lock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Feature, Plan, PLAN_LABEL, PLAN_COLOR } from '../core/features'
+import { Feature, Plan, PLAN_LABEL } from '../core/features'
+import { getPlanAccent } from './planDrawerColors'
 import { BUY_URL } from '../utils/externalLinks'
 import PlanInfoDrawer from './PlanInfoDrawer'
 import { usePlan } from '../hooks/usePlan'
@@ -29,7 +30,8 @@ export default function UpgradePrompt({
   feature,
 }: UpgradePromptProps) {
   const { t } = useTranslation()
-  const color = PLAN_COLOR[requiredPlan]
+  const theme = useTheme()
+  const color = getPlanAccent(requiredPlan, theme)
   const planLabel = PLAN_LABEL[requiredPlan]
   const [drawerOpen, setDrawerOpen] = useState(false)
   const { plan, features, entitlement } = usePlan()

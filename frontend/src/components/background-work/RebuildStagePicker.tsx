@@ -1,7 +1,8 @@
 import { Box, Chip, Stack, Typography, alpha, useTheme } from '@mui/material'
 import { BarChart3, ChevronRight, History, Layers } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { PLAN_COLOR, PLAN_LABEL } from '../../core/features'
+import { PLAN_LABEL } from '../../core/features'
+import { getPlanAccent } from '../planDrawerColors'
 import { REBUILD_STAGES } from './repositoryTrack'
 import type { RebuildStage } from '../../types/operations'
 
@@ -126,8 +127,8 @@ export default function RebuildStagePicker({
                     sx={{
                       height: 20,
                       fontSize: '0.65rem',
-                      bgcolor: alpha(PLAN_COLOR.pro, 0.15),
-                      color: PLAN_COLOR.pro,
+                      bgcolor: alpha(getPlanAccent('pro', theme), 0.15),
+                      color: getPlanAccent('pro', theme),
                     }}
                   />
                 ) : (

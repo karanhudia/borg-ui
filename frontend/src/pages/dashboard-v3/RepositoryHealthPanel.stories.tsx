@@ -1,21 +1,24 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Box } from '@mui/material'
+import { useTheme } from '@mui/material/styles'
 import { RepositoryHealthPanel } from './RepositoryHealthPanel'
-import { makeT, TokenContext } from './tokens'
+import { makeT, TokenContext, type Tokens } from './tokens'
 import type { DashboardOverview } from './types'
 
 type RepositoryHealth = DashboardOverview['repository_health']
 
-const T = makeT(true)
+// Follows the Storybook theme toolbar, so each story renders both modes.
+const useStoryT = () => makeT(useTheme().palette.mode === 'dark')
 const nowMs = Date.parse('2026-06-04T09:00:00.000Z')
 
-const surface = {
-  bgcolor: T.bgCard,
-  border: `1px solid ${T.border}`,
-  borderRadius: T.radius,
-  transition: 'border-color 0.2s',
-  '&:hover': { borderColor: T.borderHover },
-} as const
+const surface = (T: Tokens) =>
+  ({
+    bgcolor: T.bgCard,
+    border: `1px solid ${T.border}`,
+    borderRadius: T.radius,
+    transition: 'border-color 0.2s',
+    '&:hover': { borderColor: T.borderHover },
+  }) as const
 
 const mixedRepositories: RepositoryHealth = [
   {
@@ -121,10 +124,6 @@ const meta = {
   component: RepositoryHealthPanel,
   parameters: {
     layout: 'fullscreen',
-    backgrounds: {
-      default: 'Dashboard dark',
-      values: [{ name: 'Dashboard dark', value: '#111827' }],
-    },
   },
 } satisfies Meta<typeof RepositoryHealthPanel>
 
@@ -134,8 +133,10 @@ type Story = StoryObj<typeof meta>
 
 export const MixedWarningAndHealthy: Story = {
   args: {
-    T,
-    surface,
+    // Placeholders for the required props: render swaps in the tokens for
+    // the active theme.
+    T: makeT(false),
+    surface: surface(makeT(false)),
     repos: mixedRepositories,
     criticalCount: 0,
     warningCount: 1,
@@ -144,20 +145,22 @@ export const MixedWarningAndHealthy: Story = {
     currentFailures: [],
     onOpenRepositories: () => {},
   },
-  render: (args) => (
-    <TokenContext.Provider value={T}>
-      <Box
-        sx={{
-          minHeight: '100vh',
-          bgcolor: '#111827',
-          p: 3,
-          color: T.textPrimary,
-        }}
-      >
-        <Box sx={{ width: '100%', maxWidth: 1280, mx: 'auto' }}>
-          <RepositoryHealthPanel {...args} />
+  render: function Render(args) {
+    const T = useStoryT()
+    return (
+      <TokenContext.Provider value={T}>
+        <Box
+          sx={{
+            minHeight: '100vh',
+            p: 3,
+            color: T.textPrimary,
+          }}
+        >
+          <Box sx={{ width: '100%', maxWidth: 1280, mx: 'auto' }}>
+            <RepositoryHealthPanel {...args} T={T} surface={surface(T)} />
+          </Box>
         </Box>
-      </Box>
-    </TokenContext.Provider>
-  ),
+      </TokenContext.Provider>
+    )
+  },
 }

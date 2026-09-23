@@ -2,13 +2,14 @@ import { useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'react-hot-toast'
-import { Box, Button, CircularProgress, Stack, Typography } from '@mui/material'
+import { Box, Button, CircularProgress, Stack, Typography, alpha, useTheme } from '@mui/material'
 import { Fingerprint, ShieldCheck, Zap, KeyRound } from 'lucide-react'
 import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAuth } from '../hooks/useAuth'
 import { useAnalytics } from '../hooks/useAnalytics'
 import ResponsiveDialog from './shared/ResponsiveDialog'
+import { toneColor } from './shared/tones'
 
 interface PasskeyEnrollmentPromptProps {
   open: boolean
@@ -25,25 +26,19 @@ const BENEFITS = [
     icon: Zap,
     titleKey: 'settings.account.security.passkeyBenefitFastTitle',
     descKey: 'settings.account.security.passkeyBenefitFastDesc',
-    color: '#fbbf24',
-    bg: 'rgba(251, 191, 36, 0.08)',
-    border: 'rgba(251, 191, 36, 0.2)',
+    tone: 'warning',
   },
   {
     icon: ShieldCheck,
     titleKey: 'settings.account.security.passkeyBenefitSecureTitle',
     descKey: 'settings.account.security.passkeyBenefitSecureDesc',
-    color: '#4ade80',
-    bg: 'rgba(74, 222, 128, 0.08)',
-    border: 'rgba(74, 222, 128, 0.2)',
+    tone: 'success',
   },
   {
     icon: KeyRound,
     titleKey: 'settings.account.security.passkeyBenefitNoPasswordTitle',
     descKey: 'settings.account.security.passkeyBenefitNoPasswordDesc',
-    color: '#60a5fa',
-    bg: 'rgba(96, 165, 250, 0.08)',
-    border: 'rgba(96, 165, 250, 0.2)',
+    tone: 'primary',
   },
 ] as const
 
@@ -54,6 +49,8 @@ export default function PasskeyEnrollmentPrompt({
   onSuccess,
 }: PasskeyEnrollmentPromptProps) {
   const { t } = useTranslation()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
   const { enrollPasskeyFromRecentLogin } = useAuth()
   const { trackAuth, EventAction } = useAnalytics()
 
@@ -210,7 +207,13 @@ export default function PasskeyEnrollmentPrompt({
               zIndex: 1,
             }}
           >
-            <Fingerprint size={28} color={BORG_GREEN} strokeWidth={1.5} />
+            {/* Brand green reads on dark paper; on light paper it is 1.9:1, so the
+                icon takes the theme's success green there. */}
+            <Fingerprint
+              size={28}
+              color={isDark ? BORG_GREEN : theme.palette.success.main}
+              strokeWidth={1.5}
+            />
           </Box>
         </Box>
 
@@ -251,62 +254,65 @@ export default function PasskeyEnrollmentPrompt({
           pb: 2,
         }}
       >
-        {BENEFITS.map(({ icon: Icon, titleKey, descKey, color, bg, border }) => (
-          <Box
-            key={titleKey}
-            sx={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: 1.5,
-              p: 1.5,
-              borderRadius: 2,
-              background: bg,
-              border: '1px solid',
-              borderColor: border,
-              transition: 'background 0.15s ease',
-            }}
-          >
+        {BENEFITS.map(({ icon: Icon, titleKey, descKey, tone }) => {
+          const color = toneColor(theme, tone)
+          return (
             <Box
+              key={titleKey}
               sx={{
-                flexShrink: 0,
-                width: 34,
-                height: 34,
-                borderRadius: 1.5,
-                bgcolor: 'rgba(255,255,255,0.05)',
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                alignItems: 'flex-start',
+                gap: 1.5,
+                p: 1.5,
+                borderRadius: 2,
+                background: alpha(color, 0.08),
+                border: '1px solid',
+                borderColor: alpha(color, 0.2),
+                transition: 'background 0.15s ease',
               }}
             >
-              <Icon size={16} color={color} strokeWidth={2} />
-            </Box>
-            <Box sx={{ minWidth: 0 }}>
-              <Typography
-                variant="body2"
+              <Box
                 sx={{
-                  fontWeight: 600,
-                  fontSize: '0.8125rem',
-                  color: 'text.primary',
-                  lineHeight: 1.3,
-                  mb: 0.25,
+                  flexShrink: 0,
+                  width: 34,
+                  height: 34,
+                  borderRadius: 1.5,
+                  bgcolor: 'action.hover',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
               >
-                {t(titleKey)}
-              </Typography>
-              <Typography
-                variant="caption"
-                sx={{
-                  color: 'text.secondary',
-                  fontSize: '0.75rem',
-                  lineHeight: 1.5,
-                  display: 'block',
-                }}
-              >
-                {t(descKey)}
-              </Typography>
+                <Icon size={16} color={color} strokeWidth={2} />
+              </Box>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: 600,
+                    fontSize: '0.8125rem',
+                    color: 'text.primary',
+                    lineHeight: 1.3,
+                    mb: 0.25,
+                  }}
+                >
+                  {t(titleKey)}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                    fontSize: '0.75rem',
+                    lineHeight: 1.5,
+                    display: 'block',
+                  }}
+                >
+                  {t(descKey)}
+                </Typography>
+              </Box>
             </Box>
-          </Box>
-        ))}
+          )
+        })}
       </Stack>
 
       {/* Actions */}
@@ -361,12 +367,12 @@ export default function PasskeyEnrollmentPrompt({
             sx={{
               minHeight: 40,
               borderRadius: 2,
-              borderColor: 'rgba(255,255,255,0.1)',
+              borderColor: 'divider',
               color: 'text.secondary',
               fontSize: '0.8125rem',
               '&:hover': {
-                borderColor: 'rgba(255,255,255,0.2)',
-                bgcolor: 'rgba(255,255,255,0.04)',
+                borderColor: 'text.disabled',
+                bgcolor: 'action.hover',
               },
             }}
           >
@@ -384,7 +390,7 @@ export default function PasskeyEnrollmentPrompt({
               color: 'text.disabled',
               fontSize: '0.8125rem',
               '&:hover': {
-                bgcolor: 'rgba(255,255,255,0.03)',
+                bgcolor: 'action.hover',
                 color: 'text.secondary',
               },
             }}

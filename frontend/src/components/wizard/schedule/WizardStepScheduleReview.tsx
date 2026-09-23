@@ -33,11 +33,6 @@ interface WizardStepScheduleReviewProps {
   scripts: Script[]
 }
 
-const BLUE = '#3b82f6'
-const VIOLET = '#8b5cf6'
-const EMERALD = '#10b981'
-const AMBER = '#f59e0b'
-
 function IconBadge({ icon, accentColor }: { icon: React.ReactNode; accentColor: string }) {
   const theme = useTheme()
   return (
@@ -173,6 +168,7 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
   scripts,
 }) => {
   const { t } = useTranslation()
+  const theme = useTheme()
 
   const selectedRepos = repositories.filter((r) => data.repositoryIds.includes(r.id))
   const preScript = scripts.find((s) => s.id === data.preBackupScriptId)
@@ -218,11 +214,11 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
               height: 20,
               fontSize: '0.65rem',
               fontWeight: 600,
-              bgcolor: alpha(EMERALD, 0.1),
-              color: EMERALD,
-              border: `1px solid ${alpha(EMERALD, 0.25)}`,
+              bgcolor: alpha(theme.palette.success.main, 0.1),
+              color: theme.palette.success.main,
+              border: `1px solid ${alpha(theme.palette.success.main, 0.25)}`,
               cursor: 'help',
-              '& .MuiChip-icon': { color: EMERALD, ml: '6px' },
+              '& .MuiChip-icon': { color: theme.palette.success.main, ml: '6px' },
               '& .MuiChip-label': { px: '8px' },
             }}
           />
@@ -257,7 +253,7 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
         <SectionCard
           icon={<Calendar size={14} />}
           label={t('wizard.scheduleWizard.review.jobSummary')}
-          accentColor={BLUE}
+          accentColor={theme.palette.primary.main}
         >
           <AttrRow label={t('wizard.scheduleWizard.review.name')}>
             <Typography
@@ -323,7 +319,7 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
         <SectionCard
           icon={<Database size={14} />}
           label={t('wizard.scheduleWizard.review.repositories', { count: selectedRepos.length })}
-          accentColor={AMBER}
+          accentColor={theme.palette.warning.main}
         >
           {selectedRepos.length === 0 ? (
             <Typography
@@ -353,7 +349,7 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
         <SectionCard
           icon={<Code size={14} />}
           label={t('wizard.scheduleWizard.review.scriptsConfiguration')}
-          accentColor={VIOLET}
+          accentColor={theme.palette.secondary.main}
         >
           <AttrRow label={t('wizard.scheduleWizard.review.preBackupScript')}>
             {preScript ? (
@@ -419,7 +415,7 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
         <SectionCard
           icon={<Wrench size={14} />}
           label={t('wizard.scheduleWizard.review.maintenanceSettings')}
-          accentColor={EMERALD}
+          accentColor={theme.palette.success.main}
         >
           <AttrRow label={t('wizard.scheduleWizard.review.pruneAfterBackup')}>
             <Chip

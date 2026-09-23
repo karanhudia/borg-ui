@@ -63,6 +63,12 @@ export function getPlanDrawerColors(muiTheme: Theme): PlanDrawerColors {
   }
 }
 
+// The plan's colour for text and icons anywhere in the app: the same
+// AA-checked accent the plan drawer uses, so it reads in both themes.
+export function getPlanAccent(plan: Plan, muiTheme: Theme): string {
+  return getPlanDrawerColors(muiTheme).plans[plan].accent
+}
+
 export function getPlanDrawerContrastPairs(muiTheme: Theme): PlanDrawerContrastPair[] {
   const colors = getPlanDrawerColors(muiTheme)
   const planPairs = Object.entries(colors.plans).flatMap(([plan, planColors]) => [

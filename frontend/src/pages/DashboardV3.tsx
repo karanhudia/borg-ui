@@ -28,7 +28,7 @@ import { SpaceSavingsPanel } from './dashboard-v3/SpaceSavingsPanel'
 import { CapabilityLaunchpad } from './dashboard-v3/CapabilityLaunchpad'
 import { RepositoryHealthPanel } from './dashboard-v3/RepositoryHealthPanel'
 import { ResourceGaugeGrid } from './dashboard-v3/ResourceGaugeGrid'
-import { makeT, STATUS, TokenContext } from './dashboard-v3/tokens'
+import { makeT, statusColor, TokenContext } from './dashboard-v3/tokens'
 import type { ActivityEntry, DashboardOverview } from './dashboard-v3/types'
 import { gaugeColor, toCompactGB } from './dashboard-v3/utils'
 
@@ -153,7 +153,7 @@ export default function DashboardV3() {
   const warningCount = repos.filter((r) => r.health_status === 'warning').length
   const healthyCount = repos.filter((r) => r.health_status === 'healthy').length
   const sysStatus = criticalCount > 0 ? 'critical' : warningCount > 0 ? 'warning' : 'healthy'
-  const sc = STATUS[sysStatus]
+  const sc = { color: statusColor(sysStatus, T) }
   const activeAutomationCount =
     summary.active_automations ?? summary.active_schedules + (summary.active_backup_plans ?? 0)
   const totalAutomationCount =

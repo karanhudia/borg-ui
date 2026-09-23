@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Box } from '@mui/material'
+import { useTheme } from '@mui/material/styles'
 import type { ComponentProps } from 'react'
 import { fn } from 'storybook/test'
 import { CapabilityLaunchpad } from './CapabilityLaunchpad'
@@ -10,7 +11,8 @@ type Summary = DashboardOverview['summary']
 type Repositories = DashboardOverview['repository_health']
 type LaunchpadArgs = ComponentProps<typeof CapabilityLaunchpad>
 
-const T = makeT(true)
+// Follows the Storybook theme toolbar, so each story renders both modes.
+const useStoryT = () => makeT(useTheme().palette.mode === 'dark')
 const handlers = {
   onNavigate: fn(),
 }
@@ -132,10 +134,6 @@ const meta = {
   component: CapabilityLaunchpad,
   parameters: {
     layout: 'centered',
-    backgrounds: {
-      default: 'Dashboard dark',
-      values: [{ name: 'Dashboard dark', value: '#111827' }],
-    },
   },
 } satisfies Meta<typeof CapabilityLaunchpad>
 
@@ -143,7 +141,8 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-function renderLaunchpad(args: LaunchpadArgs) {
+function Launchpad(args: LaunchpadArgs) {
+  const T = useStoryT()
   return (
     <TokenContext.Provider value={T}>
       <Box sx={{ width: 232, maxWidth: 'calc(100vw - 32px)', color: T.textPrimary }}>
@@ -161,7 +160,7 @@ export const MixedAdoption: Story = {
     remoteClientCount: 1,
     ...handlers,
   },
-  render: renderLaunchpad,
+  render: (args) => <Launchpad {...args} />,
 }
 
 export const EmptyStart: Story = {
@@ -183,5 +182,5 @@ export const EmptyStart: Story = {
     remoteClientCount: 0,
     ...handlers,
   },
-  render: renderLaunchpad,
+  render: (args) => <Launchpad {...args} />,
 }

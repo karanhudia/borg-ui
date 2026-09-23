@@ -31,7 +31,9 @@ export default function VersionChip({ label, version, accent = false }: VersionC
         sx={{
           fontSize: '0.6rem',
           fontWeight: 700,
-          color: accent ? 'rgb(99,102,241)' : 'text.disabled',
+          color: accent
+            ? (theme) => (theme.palette.mode === 'dark' ? '#a5b4fc' : '#4338ca')
+            : 'text.disabled',
           letterSpacing: '0.04em',
           lineHeight: 1,
         }}

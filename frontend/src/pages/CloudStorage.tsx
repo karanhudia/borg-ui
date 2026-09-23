@@ -264,7 +264,7 @@ function CloudStorageRemoteCard({
     const color = (theme.palette[colorKey] as { main: string }).main
     return {
       ...iconBtnSx,
-      color: alpha(color, isDark ? 0.65 : 0.55),
+      color: alpha(color, 0.75),
       '&:hover': {
         bgcolor: alpha(color, isDark ? 0.12 : 0.09),
         color,
@@ -457,7 +457,7 @@ function CloudStorageRemoteCard({
                       fontWeight: 700,
                       textTransform: 'uppercase',
                       letterSpacing: '0.06em',
-                      color: alpha(col.color, 0.75),
+                      color: col.color,
                       lineHeight: 1,
                       mb: 0.5,
                     }}
@@ -580,14 +580,14 @@ function CloudStorageRemoteCard({
                 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.35 }}>
-                  <Box sx={{ color: alpha(statColor, 0.7), display: 'flex' }}>{stat.icon}</Box>
+                  <Box sx={{ color: alpha(statColor, 0.75), display: 'flex' }}>{stat.icon}</Box>
                   <Typography
                     sx={{
                       fontSize: '0.58rem',
                       fontWeight: 700,
                       textTransform: 'uppercase',
                       letterSpacing: '0.07em',
-                      color: alpha(statColor, 0.7),
+                      color: statColor,
                       lineHeight: 1,
                     }}
                   >
@@ -711,7 +711,7 @@ function CloudStorageRemoteCard({
                 disabled={deleteDisabled}
                 sx={{
                   ...iconBtnSx,
-                  color: alpha(theme.palette.error.main, 0.6),
+                  color: alpha(theme.palette.error.main, 0.75),
                   '&:hover': {
                     color: theme.palette.error.main,
                     bgcolor: alpha(theme.palette.error.main, 0.1),

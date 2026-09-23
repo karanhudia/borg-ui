@@ -193,7 +193,7 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
                     borderStyle: skipped ? 'dashed' : 'solid',
                     borderRadius: 1,
                     bgcolor: 'background.paper',
-                    opacity: skipped ? 0.6 : 1,
+                    opacity: skipped ? 0.88 : 1,
                     transition: 'opacity 150ms ease',
                     '&:hover': {
                       bgcolor: 'action.hover',

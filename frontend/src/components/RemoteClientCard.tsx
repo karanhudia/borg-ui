@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Box, IconButton, Tooltip, Typography, useTheme, alpha } from '@mui/material'
+import { toneColor, type Tone } from './shared/tones'
 import {
   CheckCircle2,
   CircleAlert,
@@ -15,16 +16,18 @@ import type { RemoteBackendClient } from '../services/remoteBackends/types'
 
 interface ClientStatus {
   label: string
-  accent: string
+  accent: Tone | 'neutral'
   icon: ReturnType<typeof getStatusIconNode>
 }
 
+// Palette tones, not hex: the accent is also the status label's text
+// colour, and the theme's shades are the ones that stay readable.
 const STATUS_ACCENT = {
-  online: '#059669',
-  offline: '#ef4444',
-  incompatible: '#d97706',
-  checking: '#0891b2',
-  unknown: '#6b7280',
+  online: 'success',
+  offline: 'error',
+  incompatible: 'warning',
+  checking: 'info',
+  unknown: 'neutral',
 } as const
 
 type StatusKey = keyof typeof STATUS_ACCENT
@@ -121,7 +124,8 @@ export default function RemoteClientCard({
   const { t } = useTranslation()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
-  const status = resolveStatus(client, t, checking)
+  const resolvedStatus = resolveStatus(client, t, checking)
+  const status = { ...resolvedStatus, accent: toneColor(theme, resolvedStatus.accent) }
   const canUse = client.health.compatibility !== 'incompatible'
   const primary = theme.palette.primary.main
 
@@ -141,7 +145,7 @@ export default function RemoteClientCard({
     const color = theme.palette[colorKey].main
     return {
       ...iconBtnSx,
-      color: alpha(color, isDark ? 0.65 : 0.55),
+      color: alpha(color, 0.75),
       '&:hover': {
         bgcolor: alpha(color, isDark ? 0.12 : 0.09),
         color,
@@ -204,7 +208,7 @@ export default function RemoteClientCard({
                   fontWeight: 700,
                   textTransform: 'uppercase',
                   letterSpacing: '0.08em',
-                  color: alpha(status.accent, 0.9),
+                  color: status.accent,
                   lineHeight: 1,
                 }}
               >
@@ -453,7 +457,7 @@ export default function RemoteClientCard({
                 onClick={() => onDelete(client)}
                 sx={{
                   ...iconBtnSx,
-                  color: alpha(theme.palette.error.main, 0.6),
+                  color: alpha(theme.palette.error.main, 0.75),
                   '&:hover': {
                     color: theme.palette.error.main,
                     bgcolor: alpha(theme.palette.error.main, isDark ? 0.15 : 0.1),

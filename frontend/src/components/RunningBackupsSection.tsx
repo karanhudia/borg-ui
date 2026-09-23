@@ -499,7 +499,7 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
                             >
                               <Box
                                 sx={{
-                                  color: alpha(statColor, 0.7),
+                                  color: alpha(statColor, 0.75),
                                   display: 'flex',
                                   alignItems: 'center',
                                 }}
@@ -512,7 +512,7 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
                                   fontWeight: 700,
                                   textTransform: 'uppercase',
                                   letterSpacing: '0.07em',
-                                  color: alpha(statColor, 0.7),
+                                  color: statColor,
                                   lineHeight: 1,
                                 }}
                               >
@@ -555,7 +555,7 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
                     >
                       <Box
                         sx={{
-                          color: alpha(ACCENT_BACKUP, 0.65),
+                          color: alpha(ACCENT_BACKUP, 0.75),
                           display: 'flex',
                           flexShrink: 0,
                         }}

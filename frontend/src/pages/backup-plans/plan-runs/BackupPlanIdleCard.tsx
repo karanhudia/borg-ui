@@ -107,7 +107,7 @@ export function BackupPlanIdleCard({
     const color = (theme.palette[colorKey] as { main: string }).main
     return {
       ...iconBtnSx,
-      color: alpha(color, isDark ? 0.65 : 0.55),
+      color: alpha(color, 0.75),
       '&:hover': {
         bgcolor: alpha(color, isDark ? 0.12 : 0.09),
         color,
@@ -421,7 +421,7 @@ export function BackupPlanIdleCard({
                         fontWeight: 700,
                         textTransform: 'uppercase',
                         letterSpacing: '0.07em',
-                        color: alpha(statColor, 0.7),
+                        color: statColor,
                         lineHeight: 1,
                       }}
                     >
@@ -661,7 +661,7 @@ export function BackupPlanIdleCard({
                 aria-label={t('backupPlans.actions.delete')}
                 sx={{
                   ...iconBtnSx,
-                  color: alpha(theme.palette.error.main, 0.6),
+                  color: alpha(theme.palette.error.main, 0.75),
                   '&:hover': {
                     color: theme.palette.error.main,
                     bgcolor: alpha(theme.palette.error.main, 0.1),
