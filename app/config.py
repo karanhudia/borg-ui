@@ -4,6 +4,12 @@ from typing import Any, List, Union, Optional, Mapping
 from pathlib import Path
 from urllib.parse import quote_plus
 from pydantic_settings import BaseSettings
+from app.utils.redaction import install_log_redaction
+
+# Every entry point (the app, db-upgrade, the admin scripts) imports this
+# module before anything can log, including import-time work such as the
+# archive cache connecting to Redis. Installing here covers all of them.
+install_log_redaction()
 
 
 def _packaged_version() -> str:

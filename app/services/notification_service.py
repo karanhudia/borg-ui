@@ -71,7 +71,8 @@ def _sanitize_ssh_url(url: str) -> str:
 
     Example: ssh://user@host:23/path -> ssh://host:23/path
     """
-    return re.sub(r"://([^@]+)@", r"://", url)
+    # Up to the last `@` of the netloc: a password may contain `@`
+    return re.sub(r"://[^\s/?#]*@", "://", url)
 
 
 def _get_repository(db: Session, name_or_path: str) -> Optional[Repository]:

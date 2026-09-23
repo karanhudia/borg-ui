@@ -39,6 +39,7 @@ from datetime import datetime
 from typing import Optional
 from urllib.parse import unquote, urlsplit
 
+
 import structlog
 
 from app.utils.datetime_utils import parse_borg_archive_time, utc_now
@@ -188,32 +189,6 @@ def _host_port(parts) -> str:
     return f"{host}:{port}" if port is not None else host
 
 
-def safe_url(url: str) -> str:
-    """A repository URL for logs: the credentials replaced by `***`.
-
-    `user:secret@host` becomes `user:***@host`. A userinfo without a
-    password is masked whole (`token@host` becomes `***@host`): a REST
-    store takes it as the Basic-auth credential, so it is the secret.
-
-    Never raises and never keeps a credential fragment: this runs while a
-    failure is being logged. The userinfo is cut at the last `@` (a
-    password may contain `@`), the host:port text is kept as written
-    without validating the port, and a URL that does not even parse
-    becomes a fixed placeholder rather than its own text."""
-    try:
-        parts = urlsplit(url)
-        if parts.username is None and not parts.password:
-            return url
-        userinfo, _, hostport = parts.netloc.rpartition("@")
-        if parts.password:
-            redacted = f"{userinfo.split(':', 1)[0]}:***"
-        else:
-            redacted = "***"
-        return parts._replace(netloc=f"{redacted}@{hostport}").geturl()
-    except ValueError:
-        return "<unparseable repository url>"
-
-
 # Sums Repository.list() storage sizes; lock=False reads while another borg
 # holds the exclusive lock (like --bypass-lock). Needs no key: the index is
 # not encrypted. Prints one JSON object. The URL arrives in the environment
@@ -333,9 +308,7 @@ async def borg2_index_size(
         )
         stdout, stderr = await _communicate(process, timeout)
     except asyncio.TimeoutError:
-        logger.warning(
-            "borg2 index size timed out", repository=safe_url(repository_url)
-        )
+        logger.warning("borg2 index size timed out", repository=repository_url)
         return None
     except OSError as exc:
         logger.warning("borg2 index size failed to start", error=str(exc))
@@ -343,7 +316,7 @@ async def borg2_index_size(
     if process.returncode != 0:
         logger.warning(
             "borg2 index size failed",
-            repository=safe_url(repository_url),
+            repository=repository_url,
             stderr=stderr.decode(errors="replace")[-300:],
         )
         return None
@@ -423,12 +396,12 @@ async def rclone_storage_used(
         )
         stdout, stderr = await _communicate(process, timeout)
     except (asyncio.TimeoutError, OSError) as exc:
-        logger.warning("rclone size failed", repository=safe_url(url), error=str(exc))
+        logger.warning("rclone size failed", repository=url, error=str(exc))
         return None
     if process.returncode != 0:
         logger.warning(
             "rclone size failed",
-            repository=safe_url(url),
+            repository=url,
             stderr=stderr.decode(errors="replace")[-300:],
         )
         return None
@@ -520,9 +493,7 @@ async def http_storage_used(
     try:
         value = await asyncio.to_thread(_http_walk, url, timeout, budget)
     except Exception as exc:
-        logger.warning(
-            "REST store walk failed", repository=safe_url(url), error=str(exc)
-        )
+        logger.warning("REST store walk failed", repository=url, error=str(exc))
         return None
     return value if value and value > 0 else None
 
@@ -578,9 +549,7 @@ async def storage_used(
     file only (ssh reads no Borg variables) and the REST walk needs neither.
     A URL with an impossible port is unknown, not measured elsewhere."""
     if not valid_target(repository_path):
-        logger.warning(
-            "repository URL has an invalid port", repository=safe_url(repository_path)
-        )
+        logger.warning("repository URL has an invalid port", repository=repository_path)
         return None
     tool, target = store_target(repository_path)
     if tool == "http":

@@ -22,6 +22,7 @@ from redis.connection import ConnectionPool
 from redis.exceptions import ConnectionError, RedisError, TimeoutError
 
 from app.config import settings
+from app.utils.redaction import redact_secrets
 
 logger = logging.getLogger(__name__)
 
@@ -764,19 +765,7 @@ class ArchiveCacheService:
             if isinstance(self._current_backend, RedisBackend):
                 if self._redis_backend and self._redis_backend.url:
                     stats["connection_type"] = "external_url"
-                    # Redact password from URL for security
-                    safe_url = self._redis_backend.url
-                    if "@" in safe_url:
-                        # URL format: redis://:password@host:port/db
-                        # Redact password: redis://:***@host:port/db
-                        parts = safe_url.split("@", 1)
-                        if ":" in parts[0]:
-                            protocol = parts[0].split("://", 1)[0]
-                            stats["connection_info"] = f"{protocol}://:***@{parts[1]}"
-                        else:
-                            stats["connection_info"] = safe_url
-                    else:
-                        stats["connection_info"] = safe_url
+                    stats["connection_info"] = redact_secrets(self._redis_backend.url)
                 else:
                     stats["connection_type"] = "local"
                     stats["connection_info"] = (
@@ -838,7 +827,6 @@ class ArchiveCacheService:
                 )
 
             # Reconfigure Redis connection
-            old_backend_type = self.get_backend_type()
 
             # Reset to in-memory first
             self._current_backend = self._memory_backend
@@ -852,14 +840,6 @@ class ArchiveCacheService:
                     client = self._redis_backend._get_client()
                     client.ping()
                     self._current_backend = self._redis_backend
-                    # Get connection info for display
-                    safe_url = redis_url
-                    if "@" in safe_url:
-                        parts = safe_url.split("@", 1)
-                        if ":" in parts[0]:
-                            protocol = parts[0].split("://", 1)[0]
-                            safe_url = f"{protocol}://:***@{parts[1]}"
-
                     logger.info(
                         f"Reconfigured to external Redis backend (URL: {redis_url})"
                     )
@@ -867,7 +847,7 @@ class ArchiveCacheService:
                         "success": True,
                         "backend": "redis",
                         "connection_type": "external_url",
-                        "connection_info": safe_url,
+                        "connection_info": redact_secrets(redis_url),
                         "message": f"Successfully connected to external Redis",
                     }
                 except Exception as e:
