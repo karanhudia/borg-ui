@@ -12,6 +12,8 @@ vi.mock('../../../services/api', () => ({
     getQueue: vi.fn(),
     pause: vi.fn().mockResolvedValue({ data: { paused: true } }),
     resume: vi.fn(),
+    pauseStage: vi.fn().mockResolvedValue({ data: {} }),
+    resumeStage: vi.fn().mockResolvedValue({ data: {} }),
     getRepositories: vi.fn(),
     getRepositoryDetail: vi.fn(),
     reconcileNow: vi.fn(),
@@ -108,7 +110,12 @@ const limits = {
 
 const mockQueue = (repositories: unknown[], paused = false, overrides = {}) =>
   (operationsAPI.getQueue as ReturnType<typeof vi.fn>).mockResolvedValue({
-    data: { repositories, limits: { ...limits, ...overrides }, paused },
+    data: {
+      repositories,
+      limits: { ...limits, ...overrides },
+      paused,
+      paused_stages: paused ? ['archives', 'retention', 'history', 'stats'] : [],
+    },
   })
 
 const hubRepository = (overrides: Partial<HubRepository> = {}): HubRepository => ({
@@ -157,9 +164,9 @@ describe('PipelineBoard', () => {
     await waitFor(() => expect(screen.getAllByTestId('repository-row')).toHaveLength(2))
     expect(screen.getByText(/2 repositories/i)).toBeInTheDocument()
     expect(screen.getByText(/21 archives indexed/i)).toBeInTheDocument()
-    expect(screen.getAllByText(/18 of 18 indexed/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/updated 4 minutes ago/i).length).toBeGreaterThan(0)
     expect(screen.getByText(/reconcile runs every 60 minutes/i)).toBeInTheDocument()
-    expect(screen.queryByTestId('stage-track')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('stage-stats')).not.toBeInTheDocument()
   })
 
   it('keeps a repository with work in progress in its place and shows its track', async () => {
@@ -176,7 +183,7 @@ describe('PipelineBoard', () => {
     await waitFor(() => expect(screen.getAllByTestId('repository-row')).toHaveLength(2))
     const rows = screen.getAllByTestId('repository-row')
     expect(within(rows[0]).getByText('nas')).toBeInTheDocument()
-    expect(within(rows[0]).queryByTestId('stage-track')).not.toBeInTheDocument()
+    expect(within(rows[0]).getByTestId('current-stage')).toHaveTextContent('Idle')
     expect(within(rows[1]).getByText('photos')).toBeInTheDocument()
     expect(within(rows[1]).getByTestId('stage-stats')).toHaveAttribute('data-status', 'running')
   })
@@ -371,17 +378,77 @@ describe('PipelineBoard', () => {
         history_capability: 'agent_unsupported',
       }),
     ])
+    ;(operationsAPI.getRepositoryDetail as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { repository_id: 1, failed_archives: [], truncated_archives: [] },
+    })
     renderBoard()
-    expect(await screen.findByText(/needs a capable agent/i)).toBeInTheDocument()
-    expect(screen.queryByText(/no file history yet/i)).not.toBeInTheDocument()
+    // The row shows when the data last changed; what each stage keeps is in
+    // the repository's dialog.
+    fireEvent.click((await screen.findAllByRole('button', { name: /k8s-node/i }))[0])
+    const tile = await screen.findByTestId('repository-data-history')
+    expect(tile).toHaveTextContent(/needs a capable agent/i)
+    expect(tile).not.toHaveTextContent(/no file history yet/i)
   })
 
-  it('changes the index worker count from the file history column header', async () => {
+  it('changes the index worker count from the file history block', async () => {
     mockQueue([])
     ;(operationsAPI.updateLimits as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {} })
     renderBoard()
-    fireEvent.click(await screen.findByRole('button', { name: /more index workers/i }))
+    const block = await screen.findByTestId('stage-block-history')
+    fireEvent.click(within(block).getByRole('button', { name: /more index workers/i }))
     await waitFor(() => expect(operationsAPI.updateLimits).toHaveBeenCalledWith(3))
+  })
+
+  it('counts repositories per stage and filters the table by a block', async () => {
+    mockHub([
+      hubRepository(),
+      hubRepository({ repository_id: 2, repository_name: 'photos' }),
+      hubRepository({ repository_id: 3, repository_name: 'mail' }),
+    ])
+    mockQueue([
+      {
+        repository_id: 1,
+        repository_name: 'nas',
+        lane_busy: false,
+        index_holder_ids: [],
+        operations: [queueOp({ id: 1, kind: 'archive_sync', status: 'running' })],
+      },
+      {
+        repository_id: 2,
+        repository_name: 'photos',
+        lane_busy: false,
+        index_holder_ids: [],
+        operations: [queueOp({ id: 2, repository_id: 2, repository: 'photos', status: 'queued' })],
+      },
+    ])
+    renderBoard()
+    await waitFor(() => expect(screen.getAllByTestId('repository-row')).toHaveLength(3))
+    const strip = screen.getByRole('group', { name: 'Background stages' })
+    expect(within(strip).getByRole('button', { name: 'Archive list' })).toHaveTextContent(
+      '1 running'
+    )
+    fireEvent.click(within(strip).getByRole('button', { name: 'Stats' }))
+    const rows = screen.getAllByTestId('repository-row')
+    expect(rows).toHaveLength(1)
+    expect(within(rows[0]).getByText('photos')).toBeInTheDocument()
+    fireEvent.click(within(strip).getByRole('button', { name: 'Stats' }))
+    expect(screen.getAllByTestId('repository-row')).toHaveLength(3)
+  })
+
+  it('pauses and resumes a single stage', async () => {
+    mockQueue([])
+    renderBoard()
+    fireEvent.click(await screen.findByRole('button', { name: 'Pause File history' }))
+    await waitFor(() => expect(operationsAPI.pauseStage).toHaveBeenCalledWith('history'))
+  })
+
+  it('offers to resume a stage the queue reports paused', async () => {
+    ;(operationsAPI.getQueue as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { repositories: [], limits, paused: false, paused_stages: ['stats'] },
+    })
+    renderBoard()
+    fireEvent.click(await screen.findByRole('button', { name: 'Resume Stats' }))
+    await waitFor(() => expect(operationsAPI.resumeStage).toHaveBeenCalledWith('stats'))
   })
 
   it('hides the worker control for people who cannot manage the queue', async () => {
@@ -390,107 +457,6 @@ describe('PipelineBoard', () => {
     await screen.findAllByTestId('repository-row')
     expect(screen.queryByRole('button', { name: /more index workers/i })).not.toBeInTheDocument()
     expect(screen.getByText(/2 workers/i)).toBeInTheDocument()
-  })
-
-  it('retries a failed history segment of an agent repository through a resync', async () => {
-    // the segment is the merge (an agent repository has no index stage); a
-    // rebuild from the history stage would be refused, and one from the
-    // listing would wipe every archive's stored info; the resync runs the
-    // listing chain, merge included, and invalidates nothing
-    mockQueue([
-      {
-        repository_id: 1,
-        repository_name: 'nas',
-        lane_busy: false,
-        index_holder_ids: [],
-        operations: [queueOp({ id: 9, repository_id: 1, kind: 'history_merge', status: 'failed' })],
-      },
-    ])
-    mockHub([hubRepository({ history_capability: 'agent_unsupported' })])
-    ;(archivesAPI.resync as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { run_id: 'r9', operations: [10, 11] },
-    })
-    renderBoard()
-    fireEvent.click(await screen.findByRole('button', { name: /retry/i }))
-    await waitFor(() => expect(archivesAPI.resync).toHaveBeenCalledWith(1))
-    expect(archivesAPI.rebuild).not.toHaveBeenCalled()
-    expect(screen.queryByText(/already queued or running/i)).not.toBeInTheDocument()
-  })
-
-  it('says so when the resync yields to index work already in flight', async () => {
-    mockQueue([
-      {
-        repository_id: 1,
-        repository_name: 'nas',
-        lane_busy: false,
-        index_holder_ids: [],
-        operations: [queueOp({ id: 9, repository_id: 1, kind: 'history_merge', status: 'failed' })],
-      },
-    ])
-    mockHub([hubRepository({ history_capability: 'agent_unsupported' })])
-    ;(archivesAPI.resync as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { run_id: null, operations: [] },
-    })
-    renderBoard()
-    fireEvent.click(await screen.findByRole('button', { name: /retry/i }))
-    expect(await screen.findByText(/already queued or running/i)).toBeInTheDocument()
-  })
-
-  it('retries a failed history segment on a plan-locked repository through a resync too', async () => {
-    // Community: the segment is the merge as well, and a rebuild from the
-    // history stage is refused by the plan gate; the resync re-runs it
-    mockQueue([
-      {
-        repository_id: 1,
-        repository_name: 'nas',
-        lane_busy: false,
-        index_holder_ids: [],
-        operations: [queueOp({ id: 9, repository_id: 1, kind: 'history_merge', status: 'failed' })],
-      },
-    ])
-    mockHub([hubRepository({ history_capability: 'plan_locked' })], { history_available: false })
-    ;(archivesAPI.resync as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { run_id: 'r9', operations: [10, 11] },
-    })
-    renderBoard()
-    fireEvent.click(await screen.findByRole('button', { name: /retry/i }))
-    await waitFor(() => expect(archivesAPI.resync).toHaveBeenCalledWith(1))
-    expect(archivesAPI.rebuild).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    { kind: 'stats', category: 'index', caption: /other index work to finish/i },
-    { kind: 'prune', category: 'maintenance', caption: /prune still running/i },
-  ])('refreshes queue ownership when SSE starts $kind', async ({ kind, category, caption }) => {
-    const starting = queueOp({ id: 9, kind, category, status: 'queued', run_id: 'r1' })
-    const waiting = queueOp({ id: 10, kind: 'archive_sync', status: 'queued', run_id: 'r2' })
-    const repository = {
-      repository_id: 1,
-      repository_name: 'nas',
-      lane_busy: false,
-      lane_holder: null,
-      index_holder_ids: [],
-      operations: [starting, waiting],
-    }
-    mockQueue([repository])
-    renderBoard()
-    expect(await screen.findByText(/next in line/i)).toBeInTheDocument()
-
-    const running = { ...starting, status: 'running' }
-    mockQueue([
-      {
-        ...repository,
-        lane_busy: kind === 'prune',
-        lane_holder: kind === 'prune' ? { id: 9, kind } : null,
-        index_holder_ids: kind === 'stats' ? [9] : [],
-        operations: [running, waiting],
-      },
-    ])
-    const calls = vi.mocked(useOperationEvents).mock.calls
-    const onUpdated = calls[calls.length - 1]?.[0]
-    act(() => onUpdated?.(running as never))
-
-    expect(await screen.findByText(caption)).toBeInTheDocument()
   })
 
   it('keeps an SSE completion when an older running queue response arrives later', async () => {
@@ -505,13 +471,14 @@ describe('PipelineBoard', () => {
     }
     mockQueue([repository])
     renderBoard()
-    expect(await screen.findByTestId('stage-stats')).toHaveAttribute('data-status', 'waiting')
+    expect(await screen.findByTestId('stage-archives')).toHaveAttribute('data-status', 'waiting')
     const running = { ...starting, status: 'running' }
     const staleResponse = {
       data: {
         repositories: [{ ...repository, index_holder_ids: [9], operations: [running, waiting] }],
         limits,
         paused: false,
+        paused_stages: [],
       },
     }
     let finishRequest!: (value: typeof staleResponse) => void
@@ -531,9 +498,8 @@ describe('PipelineBoard', () => {
       finishRequest(staleResponse)
     })
     await waitFor(() => expect(screen.getByText(/next in line/i)).toBeInTheDocument())
-    await waitFor(() =>
-      expect(screen.getByTestId('stage-stats')).toHaveAttribute('data-status', 'done')
-    )
+    // Had the stale response won, the running stats would be the current stage.
+    expect(screen.queryByTestId('stage-stats')).not.toBeInTheDocument()
     expect(screen.queryByText(/other index work to finish/i)).not.toBeInTheDocument()
   })
 
@@ -550,7 +516,9 @@ describe('PipelineBoard', () => {
     mockQueue([repository])
     renderBoard({}, true)
     expect(await screen.findByText(/other index work to finish/i)).toBeInTheDocument()
-    const staleResponse = { data: { repositories: [repository], limits, paused: false } }
+    const staleResponse = {
+      data: { repositories: [repository], limits, paused: false, paused_stages: [] },
+    }
     let finishRequest!: (value: typeof staleResponse) => void
     vi.mocked(operationsAPI.getQueue).mockImplementationOnce(
       () =>
@@ -558,7 +526,7 @@ describe('PipelineBoard', () => {
           finishRequest = resolve as typeof finishRequest
         }) as never
     )
-    fireEvent.click(screen.getByRole('button', { name: /^pause$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^pause all$/i }))
     await waitFor(() => expect(finishRequest).toBeDefined())
     mockQueue([
       {
@@ -594,6 +562,7 @@ describe('PipelineBoard', () => {
         repositories: [{ ...repository, operations: [{ ...starting, status: 'completed' }] }],
         limits,
         paused: false,
+        paused_stages: [],
       },
     }
     let finishRequest!: (value: typeof completedResponse) => void
@@ -613,9 +582,8 @@ describe('PipelineBoard', () => {
     await act(async () => {
       finishRequest(completedResponse)
     })
-    await waitFor(() =>
-      expect(screen.getByTestId('stage-stats')).toHaveAttribute('data-status', 'done')
-    )
+    // Done is at rest: the repository leaves the Current stage column.
+    await waitFor(() => expect(screen.queryByTestId('stage-stats')).not.toBeInTheDocument())
   })
 
   it('lets a slow initial queue fetch finish during a burst of progress events', async () => {
@@ -627,7 +595,9 @@ describe('PipelineBoard', () => {
       index_holder_ids: [9],
       operations: [running],
     }
-    const response = { data: { repositories: [repository], limits, paused: false } }
+    const response = {
+      data: { repositories: [repository], limits, paused: false, paused_stages: [] },
+    }
     let finishRequest!: (value: typeof response) => void
     vi.mocked(operationsAPI.getQueue)
       .mockImplementationOnce(
@@ -675,6 +645,7 @@ describe('PipelineBoard', () => {
         ],
         limits,
         paused: false,
+        paused_stages: [],
       },
     }
     let finishInitial!: (value: typeof response) => void

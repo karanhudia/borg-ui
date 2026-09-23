@@ -18,6 +18,7 @@ vi.mock('../../services/api', () => ({
           max_concurrent_scheduled_checks: 4,
         },
         paused: false,
+        paused_stages: [],
       },
     }),
     getRepositories: vi.fn().mockResolvedValue({
@@ -82,17 +83,22 @@ function renderTab() {
 describe('BackgroundWorkTab', () => {
   it('pauses background work from the header control', async () => {
     renderTab()
-    fireEvent.click(await screen.findByRole('button', { name: /pause/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^pause all$/i }))
     await waitFor(() => expect(operationsAPI.pause).toHaveBeenCalled())
   })
 
   it('shows a paused banner with a resume action when the queue is paused', async () => {
     ;(operationsAPI.getQueue as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      data: { repositories: [], limits: { index_workers: 2, index_running: 0 }, paused: true },
+      data: {
+        repositories: [],
+        limits: { index_workers: 2, index_running: 0 },
+        paused: true,
+        paused_stages: ['archives', 'retention', 'history', 'stats'],
+      },
     })
     renderTab()
     expect(await screen.findByRole('alert')).toHaveTextContent(/background work is paused/i)
-    fireEvent.click(screen.getByRole('button', { name: /resume/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^resume all$/i }))
     await waitFor(() => expect(operationsAPI.resume).toHaveBeenCalled())
   })
 

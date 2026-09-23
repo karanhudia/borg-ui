@@ -1534,7 +1534,8 @@ class SystemSettings(Base):
     )  # Last time stats were refreshed
     # Operations runner (spec section 7.3)
     index_workers = Column(Integer, default=2, nullable=False)
-    background_paused = Column(Boolean, default=False, nullable=False)
+    # Stage keys from vocab.STAGES whose follow-up and reconcile work waits.
+    paused_stages = Column(JSON, default=list, nullable=False)
     # Set once the first post-phase-2 startup has enqueued a reconcile run
     # for every repository (spec 14)
     history_bootstrap_at = Column(DateTime, nullable=True)

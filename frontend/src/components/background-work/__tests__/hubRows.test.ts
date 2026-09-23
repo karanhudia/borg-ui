@@ -3,11 +3,13 @@ import {
   ATTENTION_FILTERS,
   attentionCounts,
   applyToolbar,
+  DEFAULT_TOOLBAR,
   mergeRows,
+  stageCounts,
   trackIsActive,
   type HubRow,
 } from '../hubRows'
-import type { RepositoryTrack } from '../repositoryTrack'
+import type { RepositoryTrack, StageKey, StageStatus } from '../repositoryTrack'
 import type { HubRepository } from '../../../types/operations'
 
 const repo = (overrides: Partial<HubRepository> = {}): HubRepository => ({
@@ -159,8 +161,12 @@ describe('applyToolbar', () => {
     expect(names(result)).toEqual(['bravo', 'delta', 'alpha', 'echo', 'charlie'])
   })
 
-  it('sorts by last synced, most recent first, never synced last', () => {
-    const result = applyToolbar(rows, { query: '', attention: 'all', sort: 'synced' })
+  it('sorts by last updated, most recent first, never updated last', () => {
+    // Only the listing times differ here; stats and history are unset.
+    const synced = rows.map((r) =>
+      r.repository ? { ...r, repository: { ...r.repository, last_stats_at: null } } : r
+    )
+    const result = applyToolbar(synced, { query: '', attention: 'all', sort: 'synced' })
     expect(names(result)).toEqual(['alpha', 'echo', 'delta', 'bravo', 'charlie'])
   })
 
@@ -228,5 +234,76 @@ describe('index mode (spec 6.8)', () => {
     // A manual one-off run is exactly the case (spec 6.8).
     const rows = [row(repo({ index_mode: 'off' }), runningTrack(1, 'nas'))]
     expect(attentionCounts(rows).running).toBe(1)
+  })
+})
+
+const trackIn = (repositoryId: number, key: StageKey, status: StageStatus): RepositoryTrack => ({
+  repositoryId,
+  repositoryName: `repo-${repositoryId}`,
+  foreground: null,
+  stages: [{ key, status, operation: null, reason: null }],
+})
+
+const rowIn = (id: number, key: StageKey, status: StageStatus): HubRow =>
+  row(repo({ repository_id: id, repository_name: `repo-${id}` }), trackIn(id, key, status))
+
+const systemRow = (key: StageKey): HubRow => ({
+  key: 'system-System',
+  repository: null,
+  track: { ...trackIn(0, key, 'running'), repositoryId: null, repositoryName: 'System' },
+})
+
+describe('stage filter and counts', () => {
+  it('filters rows to the stage they are in', () => {
+    const rows = [
+      rowIn(1, 'archives', 'running'),
+      rowIn(2, 'stats', 'waiting'),
+      row(fixtures.fresh),
+    ]
+    const shown = applyToolbar(rows, { ...DEFAULT_TOOLBAR, stage: 'stats' })
+    expect(shown.map((r) => r.repository?.repository_id)).toEqual([2])
+  })
+
+  it('hides the system lane while a stage is selected', () => {
+    const rows = [rowIn(1, 'stats', 'running'), systemRow('stats')]
+    expect(applyToolbar(rows, { ...DEFAULT_TOOLBAR, stage: 'stats' })).toHaveLength(1)
+  })
+
+  it('counts each repository once, in its current stage, without the system lane', () => {
+    const counts = stageCounts([
+      rowIn(1, 'archives', 'running'),
+      rowIn(2, 'archives', 'waiting'),
+      rowIn(3, 'history', 'failed'),
+      rowIn(4, 'stats', 'done'),
+      systemRow('stats'),
+    ])
+    expect(counts.archives).toEqual({ total: 2, running: 1, waiting: 1, failed: 0 })
+    expect(counts.history).toEqual({ total: 1, running: 0, waiting: 0, failed: 1 })
+    expect(counts.stats.total).toBe(0)
+    expect(counts.connect.total).toBe(0)
+  })
+})
+
+describe('last updated sort', () => {
+  it('orders by the newest of listing, history and stats', () => {
+    const older = repo({
+      repository_id: 1,
+      repository_name: 'alpha',
+      last_synced_at: '2026-09-01T10:00:00',
+      last_stats_at: '2026-09-02T10:00:00',
+    })
+    const newer = repo({
+      repository_id: 2,
+      repository_name: 'bravo',
+      last_synced_at: '2026-09-01T09:00:00',
+      last_stats_at: null,
+      last_history_at: '2026-09-03T10:00:00',
+    })
+    const result = applyToolbar([row(older), row(newer)], {
+      query: '',
+      attention: 'all',
+      sort: 'synced',
+    })
+    expect(result.map((r) => r.repository?.repository_name)).toEqual(['bravo', 'alpha'])
   })
 })

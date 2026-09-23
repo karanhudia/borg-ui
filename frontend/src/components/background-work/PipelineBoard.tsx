@@ -8,18 +8,19 @@ import RepositoryTrackDialog from './RepositoryTrackDialog'
 import EmptyStateCard from '../EmptyStateCard'
 import HubSummary from './HubSummary'
 import HubToolbar from './HubToolbar'
+import StageStrip from './StageStrip'
 import {
   DEFAULT_TOOLBAR,
   applyToolbar,
   attentionCounts,
   mergeRows,
+  stageCounts,
   type HubToolbarState,
 } from './hubRows'
 import { usePlan } from '../../hooks/usePlan'
 import {
   HUB_GRID_COLUMNS,
   deriveTrack,
-  REBUILD_STAGES,
   REBUILD_STAGE_FOR,
   type StageState,
 } from './repositoryTrack'
@@ -30,6 +31,7 @@ import { useOperationEvents } from '../../hooks/useOperationEvents'
 import type {
   OperationItem,
   OperationProgressEvent,
+  PausableStage,
   QueueResponse,
   RebuildStage,
 } from '../../types/operations'
@@ -111,7 +113,6 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
   const { can } = usePlan()
   const [trackRepository, setTrackRepository] = useState<{ id: number; name: string } | null>(null)
   const [rebuildFailed, setRebuildFailed] = useState<string | null>(null)
-  const [resyncDeferred, setResyncDeferred] = useState(false)
   const [reconcileResult, setReconcileResult] = useState<number | null>(null)
   const [toolbar, setToolbarState] = useState<HubToolbarState>(DEFAULT_TOOLBAR)
   const [windowSize, setWindowSize] = useState(WINDOW_SIZE)
@@ -239,12 +240,13 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
       queue.data
         ? queue.data.repositories
             .filter((repo) => repo.operations.length > 0)
-            .map((repo) => deriveTrack(repo, queue.data.limits, queue.data.paused))
+            .map((repo) => deriveTrack(repo, queue.data.limits, queue.data.paused_stages))
         : [],
     [queue.data]
   )
   const rows = useMemo(() => mergeRows(hub.data?.repositories ?? [], tracks), [hub.data, tracks])
   const attention = useMemo(() => attentionCounts(rows), [rows])
+  const counts = useMemo(() => stageCounts(rows), [rows])
   const matched = useMemo(() => applyToolbar(rows, toolbar), [rows, toolbar])
   const visible = matched.slice(0, windowSize)
 
@@ -256,10 +258,7 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
   const rebuildMutation = useMutation({
     mutationFn: ({ repositoryId, stage }: { repositoryId: number; stage: RebuildStage }) =>
       archivesAPI.rebuild(repositoryId, stage),
-    onMutate: () => {
-      setRebuildFailed(null)
-      setResyncDeferred(false)
-    },
+    onMutate: () => setRebuildFailed(null),
     // A rebuild refused while the repository's history is still being built
     // says which run holds it (#1079); anything else keeps the generic line.
     onError: (error) =>
@@ -269,25 +268,10 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
     onSettled: invalidateBoard,
   })
 
-  // The listing chain (archive_sync, history_merge, stats) without
-  // invalidating anything: what a retry of the history segment needs on a
-  // repository that has no history stage, where its segment is the merge
-  // alone and a rebuild from the history stage is refused.
-  // The resync yields to index work already queued or running for the
-  // repository (it answers with no operations then); said so rather than
-  // left as a retry that visibly did nothing.
-  const resyncMutation = useMutation({
-    mutationFn: (repositoryId: number) => archivesAPI.resync(repositoryId),
-    onMutate: () => {
-      setRebuildFailed(null)
-      setResyncDeferred(false)
-    },
-    onSuccess: (res) => setResyncDeferred(res.data.operations.length === 0),
-    onError: (error) =>
-      setRebuildFailed(
-        translateBackendKey(getApiErrorDetail(error), 'operations.background.rebuildFailed')
-      ),
-    onSettled: invalidateBoard,
+  const stageMutation = useMutation({
+    mutationFn: ({ stage, paused }: { stage: PausableStage; paused: boolean }) =>
+      paused ? operationsAPI.pauseStage(stage) : operationsAPI.resumeStage(stage),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: QUEUE_KEY }),
   })
 
   const limitsMutation = useMutation({
@@ -302,32 +286,17 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
     onSettled: invalidateBoard,
   })
 
-  const hubRepositories = hub.data?.repositories
   const trackHubRepository =
     trackRepository == null
       ? undefined
-      : hubRepositories?.find((repo) => repo.repository_id === trackRepository.id)
+      : hub.data?.repositories.find((repo) => repo.repository_id === trackRepository.id)
   const handleRetry = useCallback(
     (repositoryId: number | null, stage: StageState) => {
       const rebuildStage = REBUILD_STAGE_FOR[stage.key]
       if (!rebuildStage || repositoryId == null) return
-      // A repository without the history stage (the plan lacks it, or an
-      // agent executes it) has its history segment from `history_merge`
-      // alone, and a rebuild from the history stage is refused for it. The
-      // retry re-runs the listing chain instead, which includes the merge
-      // and invalidates nothing.
-      // A row without the field (an older hub payload) takes the plan-wide
-      // answer: with the feature absent the stage is locked for everyone.
-      const capability =
-        hubRepositories?.find((repo) => repo.repository_id === repositoryId)?.history_capability ??
-        (hub.data?.history_available ? 'available' : 'plan_locked')
-      if (rebuildStage === 'history' && capability !== 'available') {
-        resyncMutation.mutate(repositoryId)
-        return
-      }
       rebuildMutation.mutate({ repositoryId, stage: rebuildStage })
     },
-    [rebuildMutation, resyncMutation, hubRepositories, hub.data?.history_available]
+    [rebuildMutation]
   )
 
   if (queue.isError) {
@@ -348,10 +317,8 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
           {rebuildFailed}
         </Alert>
       )}
-      {resyncDeferred && (
-        <Alert severity="info" onClose={() => setResyncDeferred(false)}>
-          {t('operations.background.retryDeferred')}
-        </Alert>
+      {stageMutation.isError && (
+        <Alert severity="error">{t('operations.background.pauseFailed')}</Alert>
       )}
       {limitsMutation.isError && (
         <Alert severity="error">{t('operations.background.workersFailed')}</Alert>
@@ -387,23 +354,20 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
 
   // Header cells match DataTable's, so the hub reads as one of the
   // product's tables rather than a page of its own.
-  const columnHeader = (label: string, extra?: React.ReactNode, key?: string) => (
-    <Box key={key} sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-      <Typography
-        component="span"
-        sx={{
-          color: 'text.disabled',
-          fontWeight: 700,
-          fontSize: '0.7rem',
-          textTransform: 'uppercase',
-          letterSpacing: '0.05em',
-          lineHeight: 1.6,
-        }}
-      >
-        {label}
-      </Typography>
-      {extra}
-    </Box>
+  const columnHeader = (label: string) => (
+    <Typography
+      component="span"
+      sx={{
+        color: 'text.disabled',
+        fontWeight: 700,
+        fontSize: '0.7rem',
+        textTransform: 'uppercase',
+        letterSpacing: '0.05em',
+        lineHeight: 1.6,
+      }}
+    >
+      {label}
+    </Typography>
   )
 
   return (
@@ -417,6 +381,21 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
         canManage={canManage}
         reconciling={reconcileMutation.isPending}
         onReconcile={() => reconcileMutation.mutate()}
+      />
+      <StageStrip
+        counts={counts}
+        selected={toolbar.stage ?? null}
+        onSelect={(stage) => setToolbar({ ...toolbar, stage })}
+        pausedStages={queue.data.paused_stages}
+        canManage={canManage}
+        onTogglePause={(stage, paused) => stageMutation.mutate({ stage, paused })}
+        historyExtra={
+          <WorkerStepper
+            count={queue.data.limits.index_workers}
+            canManage={canManage}
+            onChange={(next) => limitsMutation.mutate(next)}
+          />
+        }
       />
       {messages}
       <HubToolbar
@@ -457,20 +436,8 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
             }}
           >
             {columnHeader(t('operations.background.repositoryColumn'))}
-            {REBUILD_STAGES.map((stage) =>
-              columnHeader(
-                t(`operations.background.stage.${stage}`),
-                // History is the only stage with a pool of workers to size.
-                stage === 'history' ? (
-                  <WorkerStepper
-                    count={queue.data.limits.index_workers}
-                    canManage={canManage}
-                    onChange={(next) => limitsMutation.mutate(next)}
-                  />
-                ) : undefined,
-                stage
-              )
-            )}
+            {columnHeader(t('operations.background.currentStageColumn'))}
+            {columnHeader(t('operations.background.lastUpdatedColumn'))}
             <span />
           </Box>
           {visible.map((row) => (
@@ -478,8 +445,6 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
               key={row.key}
               repository={row.repository}
               track={row.track}
-              historyAvailable={historyAvailable}
-              totalHistoryRows={hub.data.totals.history_rows}
               onOpen={() => {
                 const id = row.repository?.repository_id ?? row.track?.repositoryId ?? null
                 const name = row.repository?.repository_name ?? row.track?.repositoryName ?? ''
@@ -511,6 +476,9 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
           onClose={() => setTrackRepository(null)}
           repositoryId={trackRepository.id}
           repositoryName={trackRepository.name}
+          repository={trackHubRepository}
+          historyAvailable={historyAvailable}
+          totalHistoryRows={hub.data.totals.history_rows}
           historyCapability={trackHubRepository?.history_capability}
           indexMode={trackHubRepository?.index_mode}
           history={trackHubRepository?.history}

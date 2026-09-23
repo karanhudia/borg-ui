@@ -4,9 +4,7 @@ import SyncStateChip from './SyncStateChip'
 const meta = {
   title: 'Components/Archives/SyncStateChip',
   component: SyncStateChip,
-  args: {
-    onRebuild: () => {},
-  },
+  args: {},
 } satisfies Meta<typeof SyncStateChip>
 
 export default meta

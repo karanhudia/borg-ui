@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { deriveTrack } from '../repositoryTrack'
+import { currentStage, deriveTrack, type StageKey } from '../repositoryTrack'
+import { PAUSABLE_STAGES } from '../../../types/operations'
 import type { OperationItem, QueueLimits, QueueRepository } from '../../../types/operations'
 
 const op = (overrides: Partial<OperationItem>): OperationItem =>
@@ -80,6 +81,12 @@ const held = (
   return repo([...queued, holder], true, { kind, id: holder.id })
 }
 
+const stageOf = (track: ReturnType<typeof deriveTrack>, key: StageKey) => {
+  const stage = track.stages.find((s) => s.key === key)
+  if (!stage) throw new Error(`no ${key} stage`)
+  return stage
+}
+
 describe('deriveTrack', () => {
   it('maps each stage to its latest operation status', () => {
     const track = deriveTrack(
@@ -89,46 +96,39 @@ describe('deriveTrack', () => {
         op({ id: 3, kind: 'history_index', status: 'queued' }),
       ]),
       limits,
-      false
+      []
     )
     expect(track.stages.map((s) => [s.key, s.status])).toEqual([
       ['connect', 'idle'],
       ['archives', 'running'],
+      ['retention', 'idle'],
       ['history', 'waiting'],
       ['stats', 'done'],
     ])
-    expect(track.stages[2].reason).toBe('queued')
+    expect(track.stages[3].reason).toBe('queued')
   })
 
   it('explains a queued stage with the paused state first', () => {
     const track = deriveTrack(
       held('backup', [op({ kind: 'stats', status: 'queued' })]),
       limits,
-      true
+      PAUSABLE_STAGES
     )
-    expect(track.stages[3].reason).toBe('paused')
+    expect(track.stages[4].reason).toBe('paused')
   })
 
   it('explains a queued stage with the busy lane', () => {
-    const track = deriveTrack(
-      held('backup', [op({ kind: 'stats', status: 'queued' })]),
-      limits,
-      false
-    )
-    expect(track.stages[3].reason).toBe('lane_busy')
-    expect(track.stages[3].reasonKind).toBe('backup')
+    const track = deriveTrack(held('backup', [op({ kind: 'stats', status: 'queued' })]), limits, [])
+    expect(track.stages[4].reason).toBe('lane_busy')
+    expect(track.stages[4].reasonKind).toBe('backup')
   })
 
   it('names whichever exclusive operation holds the lane', () => {
     // a prune, a compact or a check hold it as much as a backup does
     for (const kind of ['prune', 'compact', 'check'] as const) {
-      const track = deriveTrack(
-        held(kind, [op({ kind: 'stats', status: 'queued' })]),
-        limits,
-        false
-      )
-      expect(track.stages[3].reason).toBe('lane_busy')
-      expect(track.stages[3].reasonKind).toBe(kind)
+      const track = deriveTrack(held(kind, [op({ kind: 'stats', status: 'queued' })]), limits, [])
+      expect(track.stages[4].reason).toBe('lane_busy')
+      expect(track.stages[4].reasonKind).toBe(kind)
     }
   })
 
@@ -144,10 +144,10 @@ describe('deriveTrack', () => {
         null
       ),
       limits,
-      false
+      []
     )
-    expect(track.stages[3].reason).toBe('queued')
-    expect(track.stages[3].reasonKind).toBeNull()
+    expect(track.stages[4].reason).toBe('queued')
+    expect(track.stages[4].reasonKind).toBeNull()
   })
 
   it('stops naming a holder the same payload shows as finished', () => {
@@ -164,10 +164,10 @@ describe('deriveTrack', () => {
         { kind: 'prune', id: 99 }
       ),
       limits,
-      false
+      []
     )
-    expect(track.stages[3].reason).toBe('queued')
-    expect(track.stages[3].reasonKind).toBeNull()
+    expect(track.stages[4].reason).toBe('queued')
+    expect(track.stages[4].reasonKind).toBeNull()
   })
 
   it('leaves the worker limit to explain a stage once the holder is gone', () => {
@@ -183,10 +183,10 @@ describe('deriveTrack', () => {
         { kind: 'prune', id: 99 }
       ),
       { ...limits, index_running: 2 },
-      false
+      []
     )
-    expect(track.stages[2].reason).toBe('workers')
-    expect(track.stages[2].reasonKind).toBeNull()
+    expect(track.stages[3].reason).toBe('workers')
+    expect(track.stages[3].reasonKind).toBeNull()
   })
 
   it('does not let a kind it cannot place keep the lane busy', () => {
@@ -209,10 +209,10 @@ describe('deriveTrack', () => {
         { kind: 'prune', id: 99 }
       ),
       { ...limits, index_running: 2 },
-      false
+      []
     )
-    expect(track.stages[2].reason).toBe('workers')
-    expect(track.stages[2].reasonKind).toBeNull()
+    expect(track.stages[3].reason).toBe('workers')
+    expect(track.stages[3].reasonKind).toBeNull()
   })
 
   it('does not claim a busy lane while the payload shows nothing running', () => {
@@ -229,29 +229,19 @@ describe('deriveTrack', () => {
         { kind: 'prune', id: 99 }
       ),
       limits,
-      false
+      []
     )
-    expect(track.stages[3].reason).toBe('queued')
-    expect(track.stages[3].reasonKind).toBeNull()
+    expect(track.stages[4].reason).toBe('queued')
+    expect(track.stages[4].reasonKind).toBeNull()
   })
 
   it('explains a queued history stage with the worker limit', () => {
     const track = deriveTrack(
       repo([op({ kind: 'history_index', status: 'queued' })]),
       { ...limits, index_running: 2 },
-      false
+      []
     )
-    expect(track.stages[2].reason).toBe('workers')
-  })
-
-  it('treats history_merge as the history stage and failed as retryable', () => {
-    const track = deriveTrack(
-      repo([op({ id: 4, kind: 'history_merge', status: 'failed' })]),
-      limits,
-      false
-    )
-    expect(track.stages[2].status).toBe('failed')
-    expect(track.stages[2].operation?.id).toBe(4)
+    expect(track.stages[3].reason).toBe('workers')
   })
 
   it('prefers the newest operation when a stage ran twice', () => {
@@ -261,9 +251,9 @@ describe('deriveTrack', () => {
         op({ id: 9, kind: 'stats', status: 'completed' }),
       ]),
       limits,
-      false
+      []
     )
-    expect(track.stages[3].status).toBe('done')
+    expect(track.stages[4].status).toBe('done')
   })
 
   it('describes only the newest run when an older one is still in the queue window', () => {
@@ -275,11 +265,12 @@ describe('deriveTrack', () => {
         op({ id: 4, kind: 'stats', status: 'queued', run_id: 'rebuild', trigger: 'manual' }),
       ]),
       limits,
-      false
+      []
     )
     expect(track.stages.map((s) => [s.key, s.status])).toEqual([
       ['connect', 'idle'],
       ['archives', 'idle'],
+      ['retention', 'idle'],
       ['history', 'idle'],
       ['stats', 'waiting'],
     ])
@@ -293,11 +284,12 @@ describe('deriveTrack', () => {
         op({ id: 5, kind: 'stats', status: 'completed', run_id: 'rebuild', trigger: 'manual' }),
       ]),
       limits,
-      false
+      []
     )
     expect(track.stages.map((s) => [s.key, s.status])).toEqual([
       ['connect', 'idle'],
       ['archives', 'done'],
+      ['retention', 'idle'],
       ['history', 'running'],
       ['stats', 'idle'],
     ])
@@ -310,17 +302,17 @@ describe('deriveTrack', () => {
         op({ id: 2, kind: 'history_index', status: 'skipped', skip_reason: 'dependency_failed' }),
       ]),
       limits,
-      false
+      []
     )
     expect(track.stages[1].status).toBe('failed')
-    expect(track.stages[2].status).toBe('skipped')
+    expect(track.stages[3].status).toBe('skipped')
   })
 
   it('surfaces a running foreground operation separately from the stages', () => {
     const track = deriveTrack(
       repo([op({ id: 7, kind: 'backup', category: 'backup', status: 'running' })], true),
       limits,
-      false
+      []
     )
     expect(track.foreground?.id).toBe(7)
     expect(track.stages.every((s) => s.status === 'idle')).toBe(true)
@@ -335,7 +327,7 @@ describe('deriveTrack', () => {
         { index_holder_ids: [1] }
       ),
       limits,
-      false
+      []
     )
     expect(track.stages[1].reason).toBe('index_busy')
   })
@@ -350,9 +342,9 @@ describe('deriveTrack', () => {
         { index_holder_ids: [1] }
       ),
       limits,
-      false
+      []
     )
-    expect(track.stages[3].reason).toBe('queued')
+    expect(track.stages[4].reason).toBe('queued')
   })
 
   it('names the busy lane before the running index work', () => {
@@ -365,9 +357,9 @@ describe('deriveTrack', () => {
         index_holder_ids: [1],
       },
       limits,
-      false
+      []
     )
-    expect(track.stages[3].reason).toBe('lane_busy')
+    expect(track.stages[4].reason).toBe('lane_busy')
   })
 
   it('drops a named index holder that the rows at hand show as finished', () => {
@@ -382,7 +374,7 @@ describe('deriveTrack', () => {
         { index_holder_ids: [1] }
       ),
       limits,
-      false
+      []
     )
     expect(track.stages[1].reason).toBe('queued')
   })
@@ -399,10 +391,10 @@ describe('deriveTrack', () => {
         { id: 99, kind }
       ),
       limits,
-      false
+      []
     )
-    expect(track.stages[3].reason).toBe('lane_busy')
-    expect(track.stages[3].reasonKind).toBe(kind)
+    expect(track.stages[4].reason).toBe('lane_busy')
+    expect(track.stages[4].reasonKind).toBe(kind)
   })
 
   it('reveals foreign index work once the named lane holder has finished', () => {
@@ -416,7 +408,7 @@ describe('deriveTrack', () => {
         { lane_busy: true, index_holder_ids: [1], lane_holder: { id: 99, kind: 'prune' } }
       ),
       limits,
-      false
+      []
     )
     expect(track.stages[1].reason).toBe('index_busy')
     expect(track.stages[1].reasonKind).toBeNull()
@@ -431,10 +423,10 @@ describe('deriveTrack', () => {
         { index_holder_ids: [1] }
       ),
       limits,
-      false
+      []
     )
-    expect(track.stages[3].operation?.id).toBe(2)
-    expect(track.stages[3].reason).toBe('index_busy')
+    expect(track.stages[4].operation?.id).toBe(2)
+    expect(track.stages[4].reason).toBe('index_busy')
   })
 
   it('keeps a queued descendant next in line behind its running ancestor', () => {
@@ -442,15 +434,101 @@ describe('deriveTrack', () => {
       repo(
         [
           op({ id: 1, kind: 'archive_sync', status: 'running' }),
-          op({ id: 2, kind: 'history_merge', status: 'queued', depends_on_id: 1 }),
+          op({ id: 2, kind: 'history_index', status: 'queued', depends_on_id: 1 }),
           op({ id: 3, kind: 'stats', status: 'queued', depends_on_id: 2 }),
         ],
         { index_holder_ids: [1] }
       ),
       limits,
-      false
+      []
     )
-    expect(track.stages[2].reason).toBe('queued')
     expect(track.stages[3].reason).toBe('queued')
+    expect(track.stages[4].reason).toBe('queued')
+  })
+
+  it('places prune_compare in the retention stage, not the foreground', () => {
+    const track = deriveTrack(
+      repo([op({ kind: 'prune_compare', category: 'maintenance', status: 'running' })]),
+      limits,
+      []
+    )
+    expect(track.foreground).toBeNull()
+    expect(stageOf(track, 'retention').status).toBe('running')
+  })
+
+  it('still reports a real prune as foreground', () => {
+    const track = deriveTrack(
+      repo([op({ kind: 'prune', category: 'maintenance', status: 'running' })]),
+      limits,
+      []
+    )
+    expect(track.foreground?.kind).toBe('prune')
+  })
+
+  it('counts a legacy history_merge as part of the archive list', () => {
+    const track = deriveTrack(
+      repo([op({ id: 4, kind: 'history_merge', status: 'failed' })]),
+      limits,
+      []
+    )
+    expect(stageOf(track, 'archives').status).toBe('failed')
+    expect(stageOf(track, 'archives').operation?.id).toBe(4)
+    expect(stageOf(track, 'history').status).toBe('idle')
+  })
+
+  it('says paused only for a stage that is paused', () => {
+    const track = deriveTrack(repo([op({ kind: 'stats', status: 'queued' })]), limits, ['history'])
+    expect(stageOf(track, 'stats').reason).toBe('queued')
+  })
+
+  it('says a stage waits on a paused one it depends on', () => {
+    const track = deriveTrack(
+      repo([
+        op({ id: 1, kind: 'archive_sync', status: 'queued' }),
+        op({ id: 2, kind: 'stats', status: 'queued', depends_on_id: 1 }),
+      ]),
+      limits,
+      ['archives']
+    )
+    expect(stageOf(track, 'archives').reason).toBe('paused')
+    expect(stageOf(track, 'stats').reason).toBe('upstream_paused')
+  })
+})
+
+describe('currentStage', () => {
+  it('prefers the running stage', () => {
+    const track = deriveTrack(
+      repo([
+        op({ id: 1, kind: 'archive_sync', status: 'completed' }),
+        op({ id: 2, kind: 'history_index', status: 'running', depends_on_id: 1 }),
+        op({ id: 3, kind: 'stats', status: 'queued', depends_on_id: 2 }),
+      ]),
+      limits,
+      []
+    )
+    expect(currentStage(track)?.key).toBe('history')
+  })
+
+  it('takes a waiting stage over a failed one', () => {
+    const track = deriveTrack(
+      repo([
+        op({ id: 1, kind: 'archive_sync', status: 'failed' }),
+        op({ id: 2, kind: 'stats', status: 'queued' }),
+      ]),
+      limits,
+      []
+    )
+    expect(currentStage(track)?.key).toBe('stats')
+  })
+
+  it('falls back to a failed stage', () => {
+    const track = deriveTrack(repo([op({ kind: 'archive_sync', status: 'failed' })]), limits, [])
+    expect(currentStage(track)?.key).toBe('archives')
+  })
+
+  it('is null at rest', () => {
+    expect(currentStage(null)).toBeNull()
+    const done = deriveTrack(repo([op({ kind: 'stats', status: 'completed' })]), limits, [])
+    expect(currentStage(done)).toBeNull()
   })
 })

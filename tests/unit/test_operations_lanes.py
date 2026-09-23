@@ -154,8 +154,8 @@ def test_index_workers_limit(db, repo, settings):
 
 
 @pytest.mark.unit
-def test_pause_only_affects_followup_and_reconcile(db, repo, settings):
-    settings.background_paused = True
+def test_a_paused_stage_holds_its_followup_and_reconcile_work(db, repo, settings):
+    settings.paused_stages = ["stats"]
     db.commit()
     followup = enqueue(db, "stats", repository_id=repo.id, trigger="followup")
     reconcile = enqueue(db, "stats", repository_id=repo.id, trigger="reconcile")
@@ -163,6 +163,31 @@ def test_pause_only_affects_followup_and_reconcile(db, repo, settings):
     assert lanes.can_start(db, followup, settings) is False
     assert lanes.can_start(db, reconcile, settings) is False
     assert lanes.can_start(db, manual, settings) is True
+
+
+@pytest.mark.unit
+def test_pausing_one_stage_leaves_the_others_running(db, repo, settings):
+    settings.paused_stages = ["history"]
+    db.commit()
+    stats = enqueue(db, "stats", repository_id=repo.id, trigger="followup")
+    assert lanes.can_start(db, stats, settings) is True
+
+
+@pytest.mark.unit
+def test_history_merge_pauses_with_the_archive_list(db, repo, settings):
+    settings.paused_stages = ["archives"]
+    db.commit()
+    merge = enqueue(db, "history_merge", repository_id=repo.id, trigger="followup")
+    assert lanes.can_start(db, merge, settings) is False
+
+
+@pytest.mark.unit
+def test_every_followup_kind_has_a_stage():
+    from app.services.operations.followups import FOLLOWUPS
+    from app.services.operations.vocab import STAGE_FOR_KIND
+
+    queued_by_chains = {k for chain in FOLLOWUPS.values() for k in chain}
+    assert queued_by_chains <= set(STAGE_FOR_KIND)
 
 
 @pytest.mark.unit

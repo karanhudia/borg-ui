@@ -1066,8 +1066,7 @@
       "fresh": "Sincronizzato {{ago}}",
       "syncing": "Sincronizzazione in corso",
       "stale": "La sincronizzazione non è aggiornata",
-      "never": "Non ancora indicizzato",
-      "rebuild": "Ricostruisci indice"
+      "never": "Non ancora indicizzato"
     },
     "view": {
       "heatmap": "Mappa di calore",
@@ -3679,17 +3678,14 @@
         "connect": "Connetti",
         "stats": "Statistiche",
         "archives": "Elenco archivi",
-        "history": "Cronologia file"
+        "history": "Cronologia file",
+        "retention": "Anteprima conservazione"
       },
       "workers_one": "{{count}} worker",
       "workers_other": "{{count}} worker",
       "title": "Lavoro in background",
-      "pause": "Pausa",
-      "resume": "Riprendi",
       "pauseFailed": "Impossibile modificare lo stato della coda in background.",
-      "openTrack": "Apri la traccia di esecuzione di {{repository}}",
       "rebuildFailed": "Non è stato possibile avviare la ricostruzione.",
-      "retryDeferred": "Per questo repository c'è già lavoro di indice in coda o in corso, quindi non è stato accodato altro.",
       "queueFailed": "Impossibile caricare la coda in background.",
       "pauseAdminOnly": "Solo gli amministratori possono mettere in pausa il lavoro in background.",
       "reason": {
@@ -3697,42 +3693,20 @@
         "lane_busy": "{{kind}} ancora in esecuzione",
         "index_busy": "In attesa che termini l'altro lavoro di indice di questo repository",
         "workers": "In attesa di un worker di indicizzazione",
-        "queued": "Prossimo in coda"
+        "queued": "Prossimo in coda",
+        "upstream_paused": "In attesa di una fase in pausa"
       },
       "foregroundRunning": "{{kind}} in esecuzione da {{elapsed}}",
       "viewRuns": "Vedi esecuzioni",
-      "stageDone": "Fatto",
       "stageFailed": "Fallito",
-      "stageSkipped": "Saltato",
       "repositoryColumn": "Repository",
-      "workersLabel": "Worker di indicizzazione",
       "workersDecrease": "Meno worker di indicizzazione",
       "workersIncrease": "Più worker di indicizzazione",
       "workersFailed": "Impossibile cambiare il numero di worker.",
       "pausedBanner": "Il lavoro in background è in pausa. I passaggi in coda non partiranno finché non riprendi.",
       "subtitle": "Cosa sta facendo Borg UI sui tuoi repository e cosa conserva per ciascuno di essi.",
       "rebuildRow": "Ricostruisci {{repository}}",
-      "proOnly": "Pro",
-      "stages": {
-        "stats": {
-          "title": "Statistiche",
-          "what": "Dimensione del repository e numero di archivi nella scheda del repository e nella dashboard. Aggiornate alla fine di ogni esecuzione.",
-          "cost": "Richiede secondi."
-        },
-        "archives": {
-          "title": "Elenco archivi",
-          "what": "L'elenco degli archivi dietro la pagina Archivi, la heatmap e il browser degli archivi.",
-          "cost": "Meno di un minuto per la maggior parte dei repository."
-        },
-        "history": {
-          "title": "Cronologia file",
-          "what": "Cosa è cambiato tra gli archivi, per la scheda Modifiche, la cronologia dei file e la ricerca.",
-          "cost": "Il passaggio più lento. Indicizza un archivio alla volta in background."
-        }
-      },
-      "rebuildSummary": "Ricostruisci {{stages}} per {{repository}}. Navigazione e backup continuano a funzionare nel frattempo; i nuovi dati sostituiscono i vecchi al termine di ogni passaggio.",
       "rebuildSummaryAll": "Ricostruisci tutto per {{repository}}. Navigazione e backup continuano a funzionare nel frattempo; i nuovi dati sostituiscono i vecchi al termine di ogni passaggio.",
-      "stageJoin": " e ",
       "hub": {
         "repositories_one": "{{count}} repository",
         "repositories_other": "{{count}} repository",
@@ -3773,7 +3747,7 @@
         "sortBy": "Ordina per",
         "sortName": "Nome",
         "sortRows": "Righe di cronologia",
-        "sortSynced": "Ultima sincronizzazione",
+        "sortSynced": "Ultimo aggiornamento",
         "showMore_one": "Mostra {{count}} in più",
         "showMore_other": "Mostra {{count}} in più",
         "shownOf": "Mostrati {{shown}} di {{total}}",
@@ -3792,7 +3766,6 @@
         "historyPending_other": "{{count}} in attesa",
         "historyNone": "Ancora nessuna cronologia dei file",
         "historyShare": "{{percent}}% di tutte le righe di cronologia",
-        "statsRefreshed": "Aggiornato {{ago}}",
         "syncOff": "Non aggiornato",
         "modeArchives": "Solo archivi",
         "modeOff": "Non indicizzato",
@@ -3808,19 +3781,34 @@
         "detailAttempts_other": "{{count}} tentativi",
         "detailPartial": "La cronologia dei file copre {{indexed}} di {{total}} archivi.",
         "detailAllIndexed": "Ogni archivio ha la sua cronologia dei file.",
-        "detailHint": "Ricostruisci da Cronologia dei file per indicizzare di nuovo questi archivi.",
+        "detailHint": "Ricostruisci per indicizzare di nuovo questi archivi.",
         "viewIndexRuns": "Vedi esecuzioni di indicizzazione",
         "openRepository": "Apri repository",
-        "historyAgentUnsupported": "Richiede un agente in grado di farlo"
+        "historyAgentUnsupported": "Richiede un agente in grado di farlo",
+        "updatedAgo": "Aggiornato {{ago}}",
+        "updatedNever": "Non ancora aggiornato",
+        "statsLastRefreshed": "Ultimo aggiornamento"
       },
-      "rebuildMenuHint": "Ogni fase successiva a quella scelta viene ricostruita a sua volta. Le fasi precedenti restano. Le statistiche vengono sempre per ultime, perché sommano ciò che le altre fasi hanno prodotto.",
       "rebuildTitle": "Ricostruisci i dati derivati",
       "rebuildAction": "Ricostruisci",
-      "stageWillRebuild": "Verrà ricostruito",
-      "stageKept": "Conservato",
-      "stageStart": "Inizia qui",
       "currentRun": "Esecuzione corrente",
-      "stageAgentUnsupported": "Non disponibile per i repository il cui agente non può generare la cronologia delle modifiche: nessuno è assegnato o utilizzabile, oppure è precedente alla funzione"
+      "strip": {
+        "idle": "Inattiva",
+        "running_one": "{{count}} in corso",
+        "running_other": "{{count}} in corso",
+        "waiting_one": "{{count}} in attesa",
+        "waiting_other": "{{count}} in attesa",
+        "failed_one": "{{count}} non riuscita",
+        "failed_other": "{{count}} non riuscite",
+        "paused": "In pausa",
+        "pauseStage": "Metti in pausa {{stage}}",
+        "resumeStage": "Riprendi {{stage}}",
+        "label": "Fasi in background"
+      },
+      "pauseAll": "Metti tutto in pausa",
+      "resumeAll": "Riprendi tutto",
+      "currentStageColumn": "Fase attuale",
+      "lastUpdatedColumn": "Ultimo aggiornamento"
     },
     "status": {
       "queued": "In coda",
@@ -6213,6 +6201,9 @@
         "dryRunFailed": "L'esecuzione di prova di Borg è fallita.",
         "comparisonRunning": "È già in corso un confronto delle regole di conservazione per questo repository.",
         "candidateNotStored": "Questo criterio non è ancora stato confrontato. Esegui un confronto per vederlo."
+      },
+      "operations": {
+        "unknownStage": "Fase in background sconosciuta."
       }
     },
     "success": {

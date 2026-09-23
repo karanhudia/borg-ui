@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   Alert,
   Box,
@@ -17,19 +17,17 @@ import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import ResponsiveDialog from '../shared/ResponsiveDialog'
 import CategoryToken from '../CategoryToken'
-import RebuildStagePicker from './RebuildStagePicker'
-import { REBUILD_STAGES } from './repositoryTrack'
+import RepositoryDataTiles from './RepositoryDataTiles'
 import { archivesAPI, operationsAPI } from '../../services/api'
-import { usePlan } from '../../hooks/usePlan'
 import { parseBackendDate } from '../../utils/dateUtils'
 import { getApiErrorDetail } from '../../utils/apiErrors'
 import { translateBackendKey } from '../../utils/translateBackendKey'
 import type {
   HubArchive,
+  HubRepository,
   HubHistorySummary,
   IndexMode,
   OperationItem,
-  RebuildStage,
 } from '../../types/operations'
 import type { HistoryCapability } from '../../types/archives'
 
@@ -39,6 +37,11 @@ interface RepositoryTrackDialogProps {
   repositoryId: number
   repositoryName: string
   operations: OperationItem[]
+  // The hub row, for the tiles of what each stage keeps; absent while the
+  // hub is still loading.
+  repository?: HubRepository
+  historyAvailable?: boolean
+  totalHistoryRows?: number
   // From the hub row; the history stage is not offered when the
   // repository cannot have one (an agent executes it), and its summary
   // says whether an index built before that is still there.
@@ -107,9 +110,9 @@ function ArchiveList({
   )
 }
 
-// One repository's derived data up close: the run in progress, the
-// archives whose file history needs attention, and the rebuild choice as
-// the three stage cards. A bottom sheet under the md breakpoint, a wide
+// One repository's derived data up close: what each stage keeps, the run
+// in progress, the
+// archives whose file history needs attention, and one rebuild of it all. A bottom sheet under the md breakpoint, a wide
 // dialog above it.
 export default function RepositoryTrackDialog({
   open,
@@ -120,16 +123,14 @@ export default function RepositoryTrackDialog({
   historyCapability = 'available',
   history,
   indexMode = 'full',
+  repository,
+  historyAvailable = true,
+  totalHistoryRows = 0,
 }: RepositoryTrackDialogProps) {
   const { t } = useTranslation()
   const theme = useTheme()
-  const [stage, setStage] = useState<RebuildStage>('archives')
   const [submitting, setSubmitting] = useState(false)
   const [failed, setFailed] = useState<string | null>(null)
-  const { can } = usePlan()
-  // The agent restriction names itself even when the plan lacks the feature
-  // too: a plan upgrade would not unlock the stage for such a repository.
-  const historyLocked = !can('archive_history') || historyCapability !== 'available'
   // An index built before the repository moved to an agent (or before the
   // plan lapsed) is still real data (the hub row and the Changes tab show
   // it); a repository with none is told why there is none instead of
@@ -147,12 +148,6 @@ export default function RepositoryTrackDialog({
   // Mode before everything below (as in the hub row): under `archives` or
   // `off` the pending archives are the choice made, not work still coming.
   const historyByMode = indexMode !== 'full'
-  // A picked history stage that becomes locked while the dialog is open
-  // (the row's capability changed under it) would still be sent and
-  // refused; fall back to the stage before it.
-  useEffect(() => {
-    if (historyLocked && stage === 'history') setStage('archives')
-  }, [historyLocked, stage])
 
   const { data: detail } = useQuery({
     queryKey: ['operations-repository-detail', repositoryId],
@@ -164,7 +159,11 @@ export default function RepositoryTrackDialog({
     setSubmitting(true)
     setFailed(null)
     try {
-      await archivesAPI.rebuild(repositoryId, stage)
+      // Everything, from the archive list on: the listing takes a minute
+      // and the file history the time it takes either way, so picking a
+      // later stage saved nothing worth a choice (a failed stage has its own
+      // Retry on the hub row).
+      await archivesAPI.rebuild(repositoryId, 'archives')
       onClose()
     } catch (error) {
       // A rebuild can be refused (repository permissions, the
@@ -181,22 +180,6 @@ export default function RepositoryTrackDialog({
 
   const problems =
     detail != null && (detail.failed_archives.length > 0 || detail.truncated_archives.length > 0)
-
-  const startIndex = REBUILD_STAGES.indexOf(stage)
-  const rebuilt = REBUILD_STAGES.slice(startIndex).filter(
-    (s) => !(s === 'history' && historyLocked)
-  )
-  // "Everything" only when every stage really runs; on Community the
-  // history stage is locked, so the list is spelled out instead.
-  const summary =
-    rebuilt.length === REBUILD_STAGES.length
-      ? t('operations.background.rebuildSummaryAll', { repository: repositoryName })
-      : t('operations.background.rebuildSummary', {
-          repository: repositoryName,
-          stages: rebuilt
-            .map((s) => t(`operations.background.stages.${s}.title`).toLowerCase())
-            .join(t('operations.background.stageJoin')),
-        })
 
   const footer = (
     <DialogActions sx={{ px: 3, py: 2 }}>
@@ -239,6 +222,13 @@ export default function RepositoryTrackDialog({
         </Stack>
 
         <Stack spacing={3}>
+          {repository && (
+            <RepositoryDataTiles
+              repository={repository}
+              historyAvailable={historyAvailable}
+              totalHistoryRows={totalHistoryRows}
+            />
+          )}
           {operations.length > 0 && (
             <Box>
               <SectionTitle>{t('operations.background.currentRun')}</SectionTitle>
@@ -351,17 +341,8 @@ export default function RepositoryTrackDialog({
 
           <Box>
             <SectionTitle>{t('operations.background.rebuildTitle')}</SectionTitle>
-            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }}>
-              {t('operations.background.rebuildMenuHint')}
-            </Typography>
-            <RebuildStagePicker
-              value={stage}
-              onChange={setStage}
-              historyLocked={historyLocked}
-              historyLockedReason={historyCapability === 'agent_unsupported' ? 'agent' : 'plan'}
-            />
-            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1.5 }}>
-              {summary}
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              {t('operations.background.rebuildSummaryAll', { repository: repositoryName })}
             </Typography>
             {failed && (
               <Alert severity="error" sx={{ mt: 1.5 }}>

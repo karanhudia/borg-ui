@@ -1066,8 +1066,7 @@
       "fresh": "Synchronisiert {{ago}}",
       "syncing": "Wird synchronisiert",
       "stale": "Synchronisierung ist veraltet",
-      "never": "Noch nicht indiziert",
-      "rebuild": "Index neu aufbauen"
+      "never": "Noch nicht indiziert"
     },
     "view": {
       "heatmap": "Heatmap",
@@ -3679,17 +3678,14 @@
         "connect": "Verbinden",
         "stats": "Statistik",
         "archives": "Archivliste",
-        "history": "Dateiverlauf"
+        "history": "Dateiverlauf",
+        "retention": "Aufbewahrungsvorschau"
       },
       "workers_one": "{{count}} Worker",
       "workers_other": "{{count}} Worker",
       "title": "Hintergrundarbeit",
-      "pause": "Pausieren",
-      "resume": "Fortsetzen",
       "pauseFailed": "Der Zustand der Hintergrundwarteschlange konnte nicht geändert werden.",
-      "openTrack": "Ablaufverfolgung für {{repository}} öffnen",
       "rebuildFailed": "Der Neuaufbau konnte nicht gestartet werden.",
-      "retryDeferred": "Für dieses Repository ist bereits Index-Arbeit eingereiht oder aktiv, daher wurde nichts weiter eingereiht.",
       "queueFailed": "Die Hintergrundwarteschlange konnte nicht geladen werden.",
       "pauseAdminOnly": "Nur Administratoren können Hintergrundarbeiten pausieren.",
       "reason": {
@@ -3697,42 +3693,20 @@
         "lane_busy": "{{kind}} läuft noch",
         "index_busy": "Wartet, bis die andere Index-Arbeit dieses Repositorys fertig ist",
         "workers": "Wartet auf einen Index-Worker",
-        "queued": "Als Nächstes dran"
+        "queued": "Als Nächstes dran",
+        "upstream_paused": "Wartet auf eine pausierte Phase"
       },
       "foregroundRunning": "{{kind}} läuft seit {{elapsed}}",
       "viewRuns": "Läufe anzeigen",
-      "stageDone": "Fertig",
       "stageFailed": "Fehlgeschlagen",
-      "stageSkipped": "Übersprungen",
       "repositoryColumn": "Repository",
-      "workersLabel": "Index-Worker",
       "workersDecrease": "Weniger Index-Worker",
       "workersIncrease": "Mehr Index-Worker",
       "workersFailed": "Die Anzahl der Worker konnte nicht geändert werden.",
       "pausedBanner": "Hintergrundarbeit ist pausiert. Wartende Schritte starten erst nach dem Fortsetzen.",
       "subtitle": "Was Borg UI mit deinen Repositorys macht und was es für jedes davon vorhält.",
       "rebuildRow": "{{repository}} neu aufbauen",
-      "proOnly": "Pro",
-      "stages": {
-        "stats": {
-          "title": "Statistiken",
-          "what": "Repository-Größe und Archivanzahl auf der Repository-Karte und dem Dashboard. Wird am Ende jedes Laufs aktualisiert.",
-          "cost": "Dauert Sekunden."
-        },
-        "archives": {
-          "title": "Archivliste",
-          "what": "Die Archivliste hinter der Archivseite, der Heatmap und dem Archiv-Browser.",
-          "cost": "Unter einer Minute für die meisten Repositorys."
-        },
-        "history": {
-          "title": "Dateiverlauf",
-          "what": "Was sich zwischen Archiven geändert hat, für den Änderungen-Tab, den Dateiverlauf und die Suche.",
-          "cost": "Der langsamste Schritt. Indiziert im Hintergrund ein Archiv nach dem anderen."
-        }
-      },
-      "rebuildSummary": "{{stages}} für {{repository}} neu aufbauen. Durchsuchen und Backups laufen währenddessen weiter; die neuen Daten ersetzen die alten, sobald ein Schritt fertig ist.",
       "rebuildSummaryAll": "Alles für {{repository}} neu aufbauen. Durchsuchen und Backups laufen währenddessen weiter; die neuen Daten ersetzen die alten, sobald ein Schritt fertig ist.",
-      "stageJoin": " und ",
       "hub": {
         "repositories_one": "{{count}} Repository",
         "repositories_other": "{{count}} Repositorys",
@@ -3773,7 +3747,7 @@
         "sortBy": "Sortieren nach",
         "sortName": "Name",
         "sortRows": "Historienzeilen",
-        "sortSynced": "Zuletzt synchronisiert",
+        "sortSynced": "Zuletzt aktualisiert",
         "showMore_one": "{{count}} weiteres anzeigen",
         "showMore_other": "{{count}} weitere anzeigen",
         "shownOf": "{{shown}} von {{total}} angezeigt",
@@ -3792,7 +3766,6 @@
         "historyPending_other": "{{count}} warten",
         "historyNone": "Noch kein Dateiverlauf",
         "historyShare": "{{percent}}% aller Verlaufszeilen",
-        "statsRefreshed": "Aktualisiert {{ago}}",
         "syncOff": "Nicht aktualisiert",
         "modeArchives": "Nur Archive",
         "modeOff": "Nicht indiziert",
@@ -3808,19 +3781,34 @@
         "detailAttempts_other": "{{count}} Versuche",
         "detailPartial": "Der Dateiverlauf deckt {{indexed}} von {{total}} Archiven ab.",
         "detailAllIndexed": "Jedes Archiv hat seinen Dateiverlauf.",
-        "detailHint": "Baue ab Dateiverlauf neu auf, um diese Archive erneut zu indizieren.",
+        "detailHint": "Baue neu auf, um diese Archive erneut zu indizieren.",
         "viewIndexRuns": "Indexläufe anzeigen",
         "openRepository": "Repository öffnen",
-        "historyAgentUnsupported": "Braucht einen fähigen Agent"
+        "historyAgentUnsupported": "Braucht einen fähigen Agent",
+        "updatedAgo": "Aktualisiert {{ago}}",
+        "updatedNever": "Noch nicht aktualisiert",
+        "statsLastRefreshed": "Zuletzt aktualisiert"
       },
-      "rebuildMenuHint": "Jede Stufe nach der gewählten wird ebenfalls neu aufgebaut. Frühere Stufen bleiben erhalten. Statistiken laufen immer zuletzt, weil sie zusammenzählen, was die anderen Stufen erzeugt haben.",
       "rebuildTitle": "Abgeleitete Daten neu aufbauen",
       "rebuildAction": "Neu aufbauen",
-      "stageWillRebuild": "Wird neu aufgebaut",
-      "stageKept": "Bleibt erhalten",
-      "stageStart": "Hier beginnen",
       "currentRun": "Aktueller Lauf",
-      "stageAgentUnsupported": "Für Repositories, deren Agent die Änderungshistorie nicht erstellen kann, nicht verfügbar: Es ist keiner zugewiesen oder nutzbar, oder er ist älter als die Funktion"
+      "strip": {
+        "idle": "Leerlauf",
+        "running_one": "{{count}} läuft",
+        "running_other": "{{count}} laufen",
+        "waiting_one": "{{count}} wartet",
+        "waiting_other": "{{count}} warten",
+        "failed_one": "{{count}} fehlgeschlagen",
+        "failed_other": "{{count}} fehlgeschlagen",
+        "paused": "Pausiert",
+        "pauseStage": "{{stage}} pausieren",
+        "resumeStage": "{{stage}} fortsetzen",
+        "label": "Hintergrundphasen"
+      },
+      "pauseAll": "Alle pausieren",
+      "resumeAll": "Alle fortsetzen",
+      "currentStageColumn": "Aktuelle Phase",
+      "lastUpdatedColumn": "Zuletzt aktualisiert"
     },
     "status": {
       "queued": "In Warteschlange",
@@ -6213,6 +6201,9 @@
         "dryRunFailed": "Der Testlauf von Borg ist fehlgeschlagen.",
         "comparisonRunning": "Für dieses Repository läuft bereits ein Vergleich der Aufbewahrungsregeln.",
         "candidateNotStored": "Diese Richtlinie wurde noch nicht verglichen. Starten Sie einen Vergleich, um sie zu sehen."
+      },
+      "operations": {
+        "unknownStage": "Unbekannte Hintergrundphase."
       }
     },
     "success": {

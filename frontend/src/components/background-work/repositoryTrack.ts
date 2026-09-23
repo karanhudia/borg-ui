@@ -1,67 +1,64 @@
 import type {
   OperationItem,
   OperationKind,
+  PausableStage,
   QueueLimits,
   QueueRepository,
   RebuildStage,
 } from '../../types/operations'
 
-// The four derivation stages a repository moves through (spec 10.1), in
-// the order the runner executes them: the archive list, then the file
-// history built from it, then stats, which totals up whatever the other
-// stages produced. An import is the one run that starts with stats,
-// because there it doubles as the connection check. Every stage maps to
-// one or two operation kinds; the board never shows kinds directly.
-export type StageKey = 'connect' | 'archives' | 'history' | 'stats'
+// The stages a repository moves through (spec 2026-09-23 section 1), in run
+// order: the import's connection check, the archive list, the retention
+// comparison when the list changed, the file history built from it, then
+// stats, which totals up whatever the other stages produced. An import is
+// the one run that starts with stats, because there it doubles as the
+// connection check. Every stage maps to one or two operation kinds; the board
+// never shows kinds directly.
+export type StageKey = 'connect' | PausableStage
 
-export const STAGE_ORDER: StageKey[] = ['connect', 'archives', 'history', 'stats']
+export const STAGE_ORDER: StageKey[] = ['connect', 'archives', 'retention', 'history', 'stats']
 
-const STAGE_FOR_KIND: Partial<Record<OperationItem['kind'], StageKey>> = {
+// Mirrors STAGES in app/services/operations/vocab.py, plus the import's
+// connect step, which is a synchronous request and never queues.
+const STAGE_FOR_KIND: Partial<Record<OperationKind, StageKey>> = {
   import_connect: 'connect',
-  stats: 'stats',
   archive_sync: 'archives',
+  // Left every chain with #1168; legacy rows still belong to the listing.
+  history_merge: 'archives',
+  prune_compare: 'retention',
   history_index: 'history',
-  history_merge: 'history',
+  stats: 'stats',
 }
 
-// The stages a rebuild can start from, in run order: starting at one
-// rebuilds it and every stage after it, so the archive list means
-// everything and stats means the totals alone.
-export const REBUILD_STAGES: RebuildStage[] = ['archives', 'history', 'stats']
-
-// `connect` is the synchronous import request and has no rebuild stage.
+// The stage a failed stage's Retry rebuilds from: that stage and the ones
+// after it. `connect` is the synchronous import request and `retention` is
+// refreshed by the listing or the prune preview page, so neither has one.
 export const REBUILD_STAGE_FOR: Partial<Record<StageKey, RebuildStage>> = {
   archives: 'archives',
   history: 'history',
   stats: 'stats',
 }
 
-// Width of each stage's column in the hub table. The rebuild stages are
-// the columns; `connect` is a one-off import step with nothing at rest to
-// show, so it has no column. Adding a stage means adding a width here and
-// a cell in the row; the header and grid follow from this table.
-const HUB_STAGE_COLUMN_WIDTH: Record<RebuildStage, string> = {
-  archives: 'minmax(170px, 1.2fr)',
-  history: 'minmax(190px, 1.4fr)',
-  stats: 'minmax(130px, 1fr)',
-}
-
-// One grid shared by the hub header and every repository row: name, then
-// one column per stage in the order the runner builds them, then the row
-// menu. On small screens the name and the row menu share the first line
-// and every data cell spans the full width beneath them.
+// One grid shared by the hub header and every repository row: name, the
+// stage the repository is in, when its derived data last changed, then the
+// row menu. Stages live in the strip above the table and what each one keeps
+// in the repository's dialog, so a new stage adds neither a column nor a
+// cell here. On small screens the name and the row menu share the first
+// line and every data cell spans the full width beneath them.
 export const HUB_GRID_COLUMNS = {
   xs: 'minmax(0, 1fr) auto',
-  md: `minmax(180px, 1.4fr) ${REBUILD_STAGES.map((s) => HUB_STAGE_COLUMN_WIDTH[s]).join(' ')} 40px`,
+  md: 'minmax(200px, 1.4fr) minmax(220px, 1.4fr) minmax(200px, 1.2fr) 40px',
 }
 
 export type StageStatus = 'idle' | 'done' | 'running' | 'waiting' | 'failed' | 'skipped'
 
 // Why a queued stage has not started, in the order a person would want to
-// hear it: the whole queue is paused, a foreground job owns this
-// repository, every index worker is busy, or it is simply next in line.
-// `lane_busy` names the server-reported holder while it is still running.
-export type WaitReason = 'paused' | 'lane_busy' | 'index_busy' | 'workers' | 'queued'
+// hear it: its stage is paused, a stage it waits on is paused, a foreground
+// job owns this repository, every index worker is busy, or it is simply
+// next in line. `lane_busy` names the server-reported holder while it is
+// still running.
+export type WaitReason =
+  'paused' | 'upstream_paused' | 'lane_busy' | 'index_busy' | 'workers' | 'queued'
 
 export interface StageState {
   key: StageKey
@@ -107,7 +104,7 @@ function stageStatus(status: OperationItem['status']): StageStatus {
 export function deriveTrack(
   repository: QueueRepository,
   limits: QueueLimits,
-  paused: boolean
+  pausedStages: PausableStage[]
 ): RepositoryTrack {
   // The queue keeps every operation from the last minute, so a repository
   // can carry a finished reconcile next to the rebuild that was just
@@ -133,9 +130,14 @@ export function deriveTrack(
     if (!current || operation.id > current.id) latest.set(stage, operation)
   }
 
+  // A kind with a stage is shown there, not as foreground: the retention
+  // comparison is a maintenance kind but a step of the background chain.
   const foreground =
     repository.operations.find(
-      (operation) => FOREGROUND_CATEGORIES.has(operation.category) && operation.status === 'running'
+      (operation) =>
+        FOREGROUND_CATEGORIES.has(operation.category) &&
+        !STAGE_FOR_KIND[operation.kind] &&
+        operation.status === 'running'
     ) ?? null
 
   // The server chooses the holder. SSE may finish it before the next fetch;
@@ -172,7 +174,14 @@ export function deriveTrack(
       const otherIndexRunning = (repository.index_holder_ids ?? []).some(
         (id) => !predecessors.has(id) && operationsById.get(id)?.status === 'running'
       )
-      if (paused) reason = 'paused'
+      const isPaused = (stage: StageKey | undefined) =>
+        stage != null && stage !== 'connect' && pausedStages.includes(stage)
+      const upstreamPaused = [...predecessors].some((id) => {
+        const dependency = operationsById.get(id)
+        return dependency?.status === 'queued' && isPaused(STAGE_FOR_KIND[dependency.kind])
+      })
+      if (isPaused(key)) reason = 'paused'
+      else if (upstreamPaused) reason = 'upstream_paused'
       else if (holderRunning) {
         reasonKind = holder.kind
         reason = 'lane_busy'
@@ -189,4 +198,17 @@ export function deriveTrack(
     foreground,
     stages,
   }
+}
+
+// The one stage a repository is "in", for the strip and the row: the running
+// one, else the first waiting one in run order, else a failed one from the
+// run, else none (at rest).
+export function currentStage(track: RepositoryTrack | null): StageState | null {
+  if (!track) return null
+  return (
+    track.stages.find((s) => s.status === 'running') ??
+    track.stages.find((s) => s.status === 'waiting') ??
+    track.stages.find((s) => s.status === 'failed') ??
+    null
+  )
 }

@@ -1,4 +1,4 @@
-import type { RepositoryTrack } from './repositoryTrack'
+import { STAGE_ORDER, currentStage, type RepositoryTrack, type StageKey } from './repositoryTrack'
 import type { HubRepository } from '../../types/operations'
 
 // One table row: a repository from the hub merged with its queue track when
@@ -31,9 +31,52 @@ export interface HubToolbarState {
   query: string
   attention: AttentionFilter
   sort: HubSort
+  // The stage block selected in the strip, or null for every row.
+  stage?: StageKey | null
 }
 
-export const DEFAULT_TOOLBAR: HubToolbarState = { query: '', attention: 'all', sort: 'name' }
+export const DEFAULT_TOOLBAR: HubToolbarState = {
+  query: '',
+  attention: 'all',
+  sort: 'name',
+  stage: null,
+}
+
+export interface StageCount {
+  total: number
+  running: number
+  waiting: number
+  failed: number
+}
+export type StageCounts = Record<StageKey, StageCount>
+
+export function emptyCounts(): StageCounts {
+  return Object.fromEntries(
+    STAGE_ORDER.map((key) => [key, { total: 0, running: 0, waiting: 0, failed: 0 }])
+  ) as StageCounts
+}
+
+// How many repositories are in each stage, each counted once, in the stage
+// `currentStage` puts it in. The system lane has no repository and no stage
+// block, so it is left out.
+export function stageCounts(rows: HubRow[]): StageCounts {
+  const counts = emptyCounts()
+  for (const row of rows) {
+    if (!row.repository) continue
+    const stage = currentStage(row.track)
+    if (!stage) continue
+    const count = counts[stage.key]
+    count.total += 1
+    if (stage.status === 'running') count.running += 1
+    else if (stage.status === 'waiting') count.waiting += 1
+    else if (stage.status === 'failed') count.failed += 1
+  }
+  return counts
+}
+
+function matchesStage(row: HubRow, stage: StageKey | null | undefined): boolean {
+  return stage == null || currentStage(row.track)?.key === stage
+}
 
 export type AttentionCounts = Record<AttentionReason, number> & { total: number }
 
@@ -86,23 +129,28 @@ function matchesAttention(row: HubRow, attention: AttentionFilter): boolean {
   return reasons.includes(attention)
 }
 
-function syncedAt(row: HubRow): number {
-  const value = row.repository?.last_synced_at
-  return value ? Date.parse(value) : Number.NEGATIVE_INFINITY
+// When any of the row's derived data last changed: what the Last updated
+// column shows and the `synced` sort orders by.
+function updatedAt(row: HubRow): number {
+  const repository = row.repository
+  const times = [repository?.last_synced_at, repository?.last_history_at, repository?.last_stats_at]
+    .filter((value): value is string => value != null)
+    .map((value) => Date.parse(value))
+  return times.length ? Math.max(...times) : Number.NEGATIVE_INFINITY
 }
 
 const COMPARE: Record<HubSort, (a: HubRow, b: HubRow) => number> = {
   name: (a, b) =>
     (a.repository?.repository_name ?? '').localeCompare(b.repository?.repository_name ?? ''),
   rows: (a, b) => (b.repository?.history.rows ?? 0) - (a.repository?.history.rows ?? 0),
-  synced: (a, b) => syncedAt(b) - syncedAt(a),
+  synced: (a, b) => updatedAt(b) - updatedAt(a),
 }
 
 // The rows the table shows for a toolbar state. A row keeps its place when
 // work starts on it: moving it to the top made a rebuild look like the list
 // had reshuffled. The track under the row and the running count in the
 // summary say what is live. The system lane comes last and only when
-// nothing is filtered by name, since it has no name to match.
+// nothing is filtered by name or stage, since it has neither.
 export function applyToolbar(rows: HubRow[], state: HubToolbarState): HubRow[] {
   const query = state.query.trim().toLowerCase()
   const compare = COMPARE[state.sort]
@@ -111,11 +159,12 @@ export function applyToolbar(rows: HubRow[], state: HubToolbarState): HubRow[] {
     (row) =>
       row.repository != null &&
       (query === '' || row.repository.repository_name.toLowerCase().includes(query)) &&
-      matchesAttention(row, state.attention)
+      matchesAttention(row, state.attention) &&
+      matchesStage(row, state.stage)
   )
   repositories.sort(tie)
   const system =
-    query === ''
+    query === '' && state.stage == null
       ? rows.filter((row) => row.repository == null && matchesAttention(row, state.attention))
       : []
   return [...repositories, ...system]
