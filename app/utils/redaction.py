@@ -8,6 +8,7 @@ Call sites never need to redact before logging.
 import logging
 import re
 from typing import Optional
+from urllib.parse import unquote_plus
 
 # scheme://userinfo@host, plain or percent-encoded (a URL inside a query
 # string). The netloc runs up to the first path, query, quote or whitespace;
@@ -38,6 +39,19 @@ _KEY_VALUE = re.compile(
     r"""|(?!(?:true|false|null|none)\b|\*\*\*)[^\s"'&,;}]+)"""
 )
 
+_SECRET_NAME = re.compile(rf"(?i){_SECRET_KEY}")
+# ?key=value / &key=value. The key is decoded before the name check because
+# URL parsers (redis-py included) decode it too: `pass%77ord` is `password`.
+# Neither side runs past `?`, so a nested URL's own query is checked too.
+_QUERY_PAIR = re.compile(r"""([?&])([^?=&\s"'#]+)=([^?&\s"'#]*)""")
+
+
+def _redact_query_pair(match: re.Match) -> str:
+    separator, key = match.group(1), match.group(2)
+    if _SECRET_NAME.fullmatch(unquote_plus(key)):
+        return f"{separator}{key}=***"
+    return match.group(0)
+
 
 def _redact_value(match: re.Match) -> str:
     key, value = match.group(1), match.group(2)
@@ -67,6 +81,7 @@ def redact_secrets(text: Optional[str]) -> Optional[str]:
         return text
     for pattern, at, colon in _URL_PATTERNS:
         text = pattern.sub(lambda m: _redact_netloc(m, at, colon), text)
+    text = _QUERY_PAIR.sub(_redact_query_pair, text)
     return _KEY_VALUE.sub(_redact_value, text)
 
 

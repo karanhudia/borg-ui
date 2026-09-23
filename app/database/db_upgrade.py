@@ -770,9 +770,6 @@ if __name__ == "__main__":
     # pod is silent for the whole migration.
     import sys
 
-    from app.utils.redaction import install_log_redaction
-
-    install_log_redaction()
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [db-upgrade] %(message)s",

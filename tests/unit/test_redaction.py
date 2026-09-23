@@ -1,10 +1,15 @@
 import logging
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 import structlog
 
 import app.main  # noqa: F401  installs the log redaction like production does
 from app.utils.redaction import install_log_redaction, redact_secrets
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.mark.unit
@@ -51,6 +56,14 @@ from app.utils.redaction import install_log_redaction, redact_secrets
             "rclone lsd --s3-secret-access-key *** --s3-region eu",
         ),
         ("password=*** already", "password=*** already"),
+        (
+            "redis://cache:6379/0?pass%77ord=hunter2&db=0",
+            "redis://cache:6379/0?pass%77ord=***&db=0",
+        ),
+        (
+            "/login?next=redis://c:6379?pass%77ord=hunter2&x=1",
+            "/login?next=redis://c:6379?pass%77ord=***&x=1",
+        ),
         ('{"db_password": "hunter2"}', '{"db_password": "***"}'),
         ('{"has_password": true}', '{"has_password": true}'),
         ("api_key=abc123&x=1", "api_key=***&x=1"),
@@ -61,6 +74,18 @@ from app.utils.redaction import install_log_redaction, redact_secrets
 def test_redact_secrets(text, expected):
     assert redact_secrets(text) == expected
     assert redact_secrets(expected) == expected  # idempotent
+
+
+@pytest.mark.unit
+def test_config_import_installs_log_redaction():
+    """app.config is the first app module every entry point imports, so the
+    hook is in place before import-time work (the archive cache) can log.
+    A fresh interpreter, so nothing else has installed it first."""
+    check = (
+        "import logging, app.config; "
+        "assert logging.getLogRecordFactory().redacts_secrets"
+    )
+    subprocess.run([sys.executable, "-c", check], check=True, cwd=REPO_ROOT)
 
 
 @pytest.mark.unit

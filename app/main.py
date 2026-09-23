@@ -135,11 +135,8 @@ def _log_insecure_no_auth_warning() -> None:
 # Configure structured logging
 import logging
 
-from app.utils.redaction import install_log_redaction
-
 # Set log level based on environment
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-install_log_redaction()
 logging.basicConfig(level=getattr(logging, log_level, logging.INFO))
 
 structlog.configure(
