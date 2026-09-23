@@ -1,8 +1,10 @@
 """Phase 8: an `operations` row wearing the legacy backup-job surface."""
 
 from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, patch
 
 import pytest
+from sqlalchemy.exc import OperationalError
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
@@ -23,6 +25,7 @@ from app.services.operations.backup_facade import (
     newest_backup_job,
     resolve_backup_job,
     wait_for_backup_operation,
+    wait_out_backup_operation,
 )
 
 
@@ -190,6 +193,28 @@ def test_create_backup_operation_without_a_repository_keeps_the_path(db):
 
 
 @pytest.mark.asyncio
+async def test_wait_for_backup_operation_holds_no_transaction_while_it_sleeps(
+    db, repository
+):
+    """A poll ends its read transaction before the sleep, so a waiter pins no
+    connection for the length of a backup."""
+    op = _backup_operation(db, repository, status="running")
+    sleeps = []
+
+    async def sleep_then_finish(seconds):
+        sleeps.append(db.in_transaction())
+        op.status = "completed"
+        db.commit()
+
+    with patch(
+        "app.services.operations.backup_facade.asyncio.sleep", new=sleep_then_finish
+    ):
+        assert await wait_for_backup_operation(db, op.id) == "completed"
+
+    assert sleeps == [False]
+
+
+@pytest.mark.asyncio
 async def test_wait_for_backup_operation_returns_the_legacy_word(db, repository):
     op = _backup_operation(db, repository, status="running")
 
@@ -206,6 +231,85 @@ async def test_wait_for_backup_operation_returns_the_legacy_word(db, repository)
         await wait_for_backup_operation(db, op.id, poll_interval_seconds=0.01)
         == "completed_with_warnings"
     )
+
+
+def _locked_database() -> OperationalError:
+    """The error SQLAlchemy raises for a locked SQLite database."""
+    return OperationalError("SELECT operations.id", {}, Exception("database is locked"))
+
+
+@pytest.mark.asyncio
+async def test_wait_out_backup_operation_waits_again_after_a_failed_read(db):
+    """A database error is waited out with a doubling, capped sleep; each
+    wait polls on a session of its own, closed when it ends, and each one
+    still gets the caller's cancel callback."""
+    sessions = []
+    callbacks = []
+    is_cancelled = lambda: False  # noqa: E731
+
+    async def flaky_wait(session, operation_id, **kwargs):
+        sessions.append(session)
+        callbacks.append(kwargs["is_cancelled"])
+        # A real poll begins a transaction; the helper must end it.
+        session.get(Operation, operation_id)
+        assert session.in_transaction()
+        if len(sessions) < 7:
+            raise _locked_database()
+        return "completed"
+
+    with (
+        patch("app.database.database.SessionLocal", sessionmaker(bind=db.get_bind())),
+        patch(
+            "app.services.operations.backup_facade.wait_for_backup_operation",
+            new=flaky_wait,
+        ),
+        patch(
+            "app.services.operations.backup_facade.asyncio.sleep", new=AsyncMock()
+        ) as sleep,
+    ):
+        assert (
+            await wait_out_backup_operation(7, is_cancelled=is_cancelled) == "completed"
+        )
+
+    assert [call.args for call in sleep.await_args_list] == [
+        (2.0,),
+        (4.0,),
+        (8.0,),
+        (16.0,),
+        (30.0,),
+        (30.0,),
+    ]
+    assert len({id(session) for session in sessions}) == 7
+    assert all(not session.in_transaction() for session in sessions)
+    assert callbacks == [is_cancelled] * 7
+
+
+@pytest.mark.asyncio
+async def test_wait_out_backup_operation_lets_any_other_error_through(db):
+    """Waiting cures no programming error; it reaches the caller at once."""
+
+    sessions = []
+
+    async def broken_wait(session, operation_id, **kwargs):
+        sessions.append(session)
+        session.get(Operation, operation_id)
+        raise RuntimeError("lost the runner")
+
+    with (
+        patch("app.database.database.SessionLocal", sessionmaker(bind=db.get_bind())),
+        patch(
+            "app.services.operations.backup_facade.wait_for_backup_operation",
+            new=broken_wait,
+        ),
+        patch(
+            "app.services.operations.backup_facade.asyncio.sleep", new=AsyncMock()
+        ) as sleep,
+        pytest.raises(RuntimeError, match="lost the runner"),
+    ):
+        await wait_out_backup_operation(7)
+
+    sleep.assert_not_awaited()
+    assert not sessions[0].in_transaction()
 
 
 def test_list_backup_jobs_newest_first(db, repository):
