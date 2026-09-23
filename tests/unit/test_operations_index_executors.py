@@ -325,6 +325,31 @@ async def test_run_archive_sync_stales_only_the_removed_archives_neighbours(
 
 
 @pytest.mark.unit
+def test_neighbours_of_removed_uses_a_total_order(db, repo):
+    """Two archives of a series with the same start: the survivor is still a
+    neighbour, on whichever side its id puts it."""
+    start = datetime(2026, 9, 3)
+    rows = [
+        Archive(
+            repository_id=repo.id,
+            borg_id=borg_id,
+            name=borg_id,
+            series="nas",
+            start=start,
+        )
+        for borg_id in ("twin", "gone", "later")
+    ]
+    rows[2].start = start + timedelta(days=1)
+    db.add_all(rows)
+    db.commit()
+    gone = {rows[1].id}
+    assert index_exec._neighbours_of_removed(db, repo, gone, gone) == {
+        rows[0].id,
+        rows[2].id,
+    }
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "agent, capable, plan_has_history, expected_state",

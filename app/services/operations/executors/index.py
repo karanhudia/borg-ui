@@ -10,7 +10,7 @@ from uuid import uuid4
 
 import structlog
 from fastapi import HTTPException, status
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from app.api.repositories import (
@@ -353,23 +353,30 @@ def _neighbours_of_removed(
     prune preview re-measures its candidates itself, so that figure stays exact.
     """
     removed = (
-        db.query(Archive.series, Archive.start)
+        db.query(Archive.id, Archive.series, Archive.start)
         .filter(Archive.repository_id == repository.id, Archive.id.in_(removed_ids))
         .all()
     )
     stale: set[int] = set()
-    for series, start in removed:
+    for removed_id, series, start in removed:
         survivors = db.query(Archive.id).filter(
             Archive.repository_id == repository.id,
             Archive.series == series,
             Archive.id.notin_(gone_ids),
         )
+        # (start, id) is a total order: an equal start must not hide a row
+        before = or_(
+            Archive.start < start, and_(Archive.start == start, Archive.id < removed_id)
+        )
+        after = or_(
+            Archive.start > start, and_(Archive.start == start, Archive.id > removed_id)
+        )
         for row in (
-            survivors.filter(Archive.start < start)
-            .order_by(Archive.start.desc())
+            survivors.filter(before)
+            .order_by(Archive.start.desc(), Archive.id.desc())
             .first(),
-            survivors.filter(Archive.start > start)
-            .order_by(Archive.start.asc())
+            survivors.filter(after)
+            .order_by(Archive.start.asc(), Archive.id.asc())
             .first(),
         ):
             if row is not None:
