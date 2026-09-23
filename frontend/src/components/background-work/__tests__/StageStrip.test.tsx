@@ -38,6 +38,8 @@ describe('StageStrip', () => {
     const block = screen.getByRole('button', { name: 'Archive list' })
     expect(block).toHaveTextContent('4')
     expect(block).toHaveTextContent('2 running · 1 waiting · 1 failed')
+    // The name stays short; the figures reach screen readers as its description.
+    expect(block).toHaveAccessibleDescription('4 2 running · 1 waiting · 1 failed')
   })
 
   it('selects a block, and a second click clears it', () => {
@@ -63,6 +65,9 @@ describe('StageStrip', () => {
   it('pauses and resumes a stage, never connect', () => {
     const { onTogglePause } = renderStrip({ pausedStages: ['history'] })
     expect(screen.queryByRole('button', { name: 'Pause Connect' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'File history' })).toHaveAccessibleDescription(
+      /paused/i
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Resume File history' }))
     expect(onTogglePause).toHaveBeenCalledWith('history', false)
     fireEvent.click(screen.getByRole('button', { name: 'Pause Stats' }))

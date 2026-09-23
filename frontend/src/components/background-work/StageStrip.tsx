@@ -103,6 +103,9 @@ export default function StageStrip({
             <ButtonBase
               aria-pressed={isSelected}
               aria-label={label}
+              // The short name keeps the button easy to find; the count, its
+              // breakdown and the paused state are read as its description.
+              aria-describedby={`stage-block-${key}-details`}
               onClick={() => onSelect(isSelected ? null : key)}
               sx={{
                 display: 'block',
@@ -130,34 +133,36 @@ export default function StageStrip({
               >
                 {label}
               </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography
-                  component="div"
-                  sx={{
-                    fontSize: '1.5rem',
-                    fontWeight: 700,
-                    lineHeight: 1.3,
-                    fontVariantNumeric: 'tabular-nums',
-                    color: count.total === 0 ? 'text.disabled' : 'text.primary',
-                  }}
-                >
-                  {count.total}
-                </Typography>
-                {paused && (
-                  <Chip
-                    size="small"
-                    label={t('operations.background.strip.paused')}
+              <Box id={`stage-block-${key}-details`}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography
+                    component="div"
                     sx={{
-                      height: 20,
-                      fontSize: '0.65rem',
+                      fontSize: '1.5rem',
                       fontWeight: 700,
-                      bgcolor: alpha(theme.palette.warning.main, 0.16),
-                      color: theme.palette.mode === 'dark' ? 'warning.light' : 'warning.dark',
+                      lineHeight: 1.3,
+                      fontVariantNumeric: 'tabular-nums',
+                      color: count.total === 0 ? 'text.disabled' : 'text.primary',
                     }}
-                  />
-                )}
+                  >
+                    {count.total}
+                  </Typography>
+                  {paused && (
+                    <Chip
+                      size="small"
+                      label={t('operations.background.strip.paused')}
+                      sx={{
+                        height: 20,
+                        fontSize: '0.65rem',
+                        fontWeight: 700,
+                        bgcolor: alpha(theme.palette.warning.main, 0.16),
+                        color: theme.palette.mode === 'dark' ? 'warning.light' : 'warning.dark',
+                      }}
+                    />
+                  )}
+                </Box>
+                <Breakdown count={count} />
               </Box>
-              <Breakdown count={count} />
             </ButtonBase>
             {key === 'history' && historyExtra && (
               <Box sx={{ px: 1.25, pb: 1 }}>{historyExtra}</Box>
