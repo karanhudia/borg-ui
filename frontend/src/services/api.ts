@@ -890,7 +890,8 @@ export const settingsAPI = {
     if (browseMaxMemoryMb !== undefined) {
       params.browse_max_memory_mb = browseMaxMemoryMb
     }
-    return api.put('/settings/cache/settings', null, { params })
+    // Body, not query params: redis_url can carry a password
+    return api.put('/settings/cache/settings', params)
   },
 }
 

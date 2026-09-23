@@ -27,7 +27,7 @@ from app.core.permissions import (
     normalize_repository_role_for_global_role,
 )
 from app.config import get_runtime_app_version, settings as app_settings
-from app.services.cache_service import archive_cache
+from app.services.cache_service import archive_cache, redact_redis_url
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
@@ -193,7 +193,7 @@ def _validate_report_cron_expression(cron_expression: str) -> None:
 
 
 # Pydantic models for request/response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class UserCreate(BaseModel):
@@ -2229,8 +2229,19 @@ async def clear_cache(
         )
 
 
+class CacheSettingsUpdate(BaseModel):
+    cache_ttl_minutes: Optional[int] = Field(None, ge=1, le=10080)
+    cache_max_size_mb: Optional[int] = Field(None, ge=100, le=10240)
+    redis_url: Optional[str] = None
+    browse_max_items: Optional[int] = Field(None, ge=100_000, le=50_000_000)
+    browse_max_memory_mb: Optional[int] = Field(None, ge=100, le=16384)
+
+
 @router.put("/cache/settings")
 async def update_cache_settings(
+    body: Optional[CacheSettingsUpdate] = None,
+    # Query parameters are kept for older clients. redis_url can carry a
+    # password, so new clients send everything in the JSON body instead.
     cache_ttl_minutes: Optional[int] = Query(
         None, ge=1, le=10080, description="Cache TTL in minutes (1-10080)"
     ),
@@ -2238,7 +2249,9 @@ async def update_cache_settings(
         None, ge=100, le=10240, description="Max cache size in MB (100-10240)"
     ),
     redis_url: Optional[str] = Query(
-        None, description="External Redis URL (e.g., redis://host:6379/0)"
+        None,
+        deprecated=True,
+        description="Deprecated: send redis_url in the JSON body, the URL may carry a password",
     ),
     browse_max_items: Optional[int] = Query(
         None,
@@ -2258,6 +2271,9 @@ async def update_cache_settings(
     """
     Update cache settings.
 
+    Settings are read from the JSON body; query parameters are a deprecated
+    fallback. A value in the body wins over the same query parameter.
+
     Parameters:
     - cache_ttl_minutes: Cache time-to-live in minutes (1 minute to 7 days)
     - cache_max_size_mb: Maximum cache size in megabytes (100MB to 10GB)
@@ -2274,6 +2290,14 @@ async def update_cache_settings(
     - Updated settings
     - Redis connection result if redis_url was changed
     """
+    if body is not None:
+        cache_ttl_minutes = body.cache_ttl_minutes or cache_ttl_minutes
+        cache_max_size_mb = body.cache_max_size_mb or cache_max_size_mb
+        if body.redis_url is not None:
+            redis_url = body.redis_url
+        browse_max_items = body.browse_max_items or browse_max_items
+        browse_max_memory_mb = body.browse_max_memory_mb or browse_max_memory_mb
+
     if (
         cache_ttl_minutes is None
         and cache_max_size_mb is None
@@ -2301,7 +2325,11 @@ async def update_cache_settings(
         if redis_url is not None:
             old_url = settings.redis_url
             settings.redis_url = redis_url if redis_url.strip() else None
-            changes["redis_url"] = {"old": old_url, "new": settings.redis_url}
+            if old_url != settings.redis_url:
+                changes["redis_url"] = {
+                    "old": redact_redis_url(old_url),
+                    "new": redact_redis_url(settings.redis_url),
+                }
 
             # Reconfigure cache service with new Redis URL
             try:
@@ -2313,13 +2341,13 @@ async def update_cache_settings(
                 if not reconfigure_result["success"]:
                     logger.warning(
                         "Redis reconfiguration failed, using fallback",
-                        redis_url=settings.redis_url,
+                        redis_url=redact_redis_url(settings.redis_url),
                         backend=reconfigure_result["backend"],
                     )
             except Exception as reconfig_error:
                 logger.error(
                     "Failed to reconfigure cache service",
-                    redis_url=settings.redis_url,
+                    redis_url=redact_redis_url(settings.redis_url),
                     error=str(reconfig_error),
                 )
                 raise HTTPException(
