@@ -4,7 +4,8 @@ from datetime import datetime
 
 import pytest
 from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.repositories import AgentStatsRefresh
@@ -577,6 +578,770 @@ async def test_the_sweep_leaves_running_rows_of_other_kinds_alone(db, repo, runn
     assert await runner.requeue_abandoned_index_rows(db) == 0
     db.expire_all()
     assert {o.status for o in db.query(Operation)} == {"running"}
+
+
+def _failing_commits(monkeypatch) -> dict:
+    """Make the next `failing["commits"]` commits of any session raise, the
+    way a locked database does, or with `failing["error"]` when set."""
+    real_commit = Session.commit
+    failing = {"commits": 0, "error": None}
+
+    def flaky_commit(self):
+        if failing["commits"] > 0:
+            failing["commits"] -= 1
+            raise failing["error"] or OperationalError(
+                "UPDATE operations", {}, Exception("locked")
+            )
+        return real_commit(self)
+
+    monkeypatch.setattr(Session, "commit", flaky_commit)
+    return failing
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_backup_whose_terminal_commit_fails_does_not_stay_running(
+    db, repo, runner, registry, monkeypatch
+):
+    """The runner's terminal write can fail (a locked database) after the
+    backup finished. The row must not stay `running` with no task behind it
+    until the next restart: it holds the repository's exclusive lane, and
+    `wait_for_backup_operation` has no timeout, so every waiter would poll
+    forever."""
+    from app.services.operations.backup_facade import wait_for_backup_operation
+
+    failing = _failing_commits(monkeypatch)
+
+    async def backup(ctx):
+        # the next commit is the runner's terminal write
+        failing["commits"] = 1
+        return Outcome()
+
+    pruned = []
+
+    async def prune(ctx):
+        pruned.append(ctx.operation_id)
+        return Outcome()
+
+    registry["backup"] = backup
+    registry["prune"] = prune
+    op = enqueue(db, "backup", repository_id=repo.id)
+    await _drain(runner, rounds=1)
+    assert not runner.running_tasks
+    # an exclusive operation queued behind it on the same repository
+    waiting = enqueue(db, "prune", repository_id=repo.id)
+    await _drain(runner, rounds=5)
+
+    db.expire_all()
+    assert db.get(Operation, op.id).status == "completed"
+    assert pruned == [waiting.id]
+    assert not runner.unrecorded_outcomes
+    assert (
+        await asyncio.wait_for(
+            wait_for_backup_operation(db, op.id, poll_interval_seconds=0.01), 1
+        )
+        == "completed"
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_an_unrecorded_outcome_keeps_its_result_and_enqueues_the_followups(
+    db, repo, runner, registry, monkeypatch
+):
+    """The tick writes what the task reached, not a failure it invents, and
+    a success hangs the index chain off the row as the terminal write does."""
+    failing = _failing_commits(monkeypatch)
+
+    async def backup(ctx):
+        failing["commits"] = 1
+        return Outcome(result={"archive_name": "a1"})
+
+    async def ok(ctx):
+        return Outcome()
+
+    registry["backup"] = backup
+    registry["stats"] = ok
+    registry["archive_sync"] = ok
+    op = enqueue(db, "backup", repository_id=repo.id)
+    await _drain(runner)
+    db.expire_all()
+    rows = db.query(Operation).order_by(Operation.id).all()
+    assert [r.kind for r in rows] == ["backup", "archive_sync", "stats"]
+    backup_row = rows[0]
+    assert backup_row.status == "completed"
+    assert backup_row.result == {"archive_name": "a1"}
+    assert backup_row.started_at is not None
+    assert backup_row.completed_at is not None
+    assert rows[1].depends_on_id == op.id
+    assert {r.status for r in rows[1:]} == {"completed"}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_an_unrecorded_outcome_waits_for_the_database(
+    db, repo, runner, registry, monkeypatch
+):
+    """A database that is still unavailable at the next tick costs the
+    outcome nothing: it stays with the runner and is written once a commit
+    goes through."""
+    from sqlalchemy.exc import OperationalError
+
+    failing = _failing_commits(monkeypatch)
+    gate = asyncio.Event()
+
+    async def backup(ctx):
+        await gate.wait()
+        failing["commits"] = 1
+        return Outcome(status="completed_with_warnings")
+
+    registry["backup"] = backup
+    op = enqueue(db, "backup", repository_id=repo.id)
+    assert await runner.tick() == 1
+    gate.set()
+    # the failed commit propagates out of the task, as it did before
+    errors = await asyncio.gather(
+        *runner.running_tasks.values(), return_exceptions=True
+    )
+    assert len(errors) == 1 and isinstance(errors[0], OperationalError)
+    db.expire_all()
+    assert db.get(Operation, op.id).status == "running"
+    assert op.id in runner.unrecorded_outcomes
+
+    failing["commits"] = 1  # the next tick's write fails too
+    await runner.tick()
+    db.expire_all()
+    assert db.get(Operation, op.id).status == "running"
+    assert op.id in runner.unrecorded_outcomes
+
+    await runner.tick()
+    db.expire_all()
+    assert db.get(Operation, op.id).status == "completed_with_warnings"
+    assert not runner.unrecorded_outcomes
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_an_outcome_whose_write_itself_fails_is_recorded_without_its_result(
+    db, repo, runner, registry, monkeypatch
+):
+    """An error that is not the database's does not go away by waiting: the
+    entry loses its result and gets one more try, which closes the row."""
+    failing = _failing_commits(monkeypatch)
+
+    async def backup(ctx):
+        failing["commits"] = 1
+        return Outcome(result={"archive_name": "a1"})
+
+    registry["backup"] = backup
+    op = enqueue(db, "backup", repository_id=repo.id)
+    assert await runner.tick() == 1
+    await asyncio.gather(*runner.running_tasks.values(), return_exceptions=True)
+
+    failing["commits"], failing["error"] = 1, TypeError("not serializable")
+    assert await runner.record_unrecorded_outcomes(db) == 0
+    assert op.id in runner.unrecorded_outcomes
+    assert runner.unrecorded_outcomes[op.id].result is None
+    db.expire_all()
+    assert db.get(Operation, op.id).status == "running"
+
+    assert await runner.record_unrecorded_outcomes(db) == 1
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert (row.status, row.result) == ("completed", None)
+    assert not runner.unrecorded_outcomes
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_result_the_row_took_survives_a_failed_followup_step(
+    db, repo, runner, registry, monkeypatch
+):
+    """An error of the follow-up step after the record's commit is not the
+    record's: the retry writes the same result again, not nothing."""
+    failing = _failing_commits(monkeypatch)
+
+    async def ok(ctx):
+        return Outcome()
+
+    async def backup(ctx):
+        failing["commits"] = 1
+        return Outcome(result={"archive_name": "a1"})
+
+    registry["backup"] = backup
+    registry["stats"] = ok
+    registry["archive_sync"] = ok
+    op = enqueue(db, "backup", repository_id=repo.id)
+    assert await runner.tick() == 1
+    await asyncio.gather(*runner.running_tasks.values(), return_exceptions=True)
+
+    import app.services.operations.runner as runner_module
+
+    real_enqueue = runner_module.enqueue_followups
+    calls = []
+
+    def enqueue_or_raise(db_, operation, **kwargs):
+        calls.append(operation.id)
+        if len(calls) == 1:
+            raise ValueError("no chain for this repository")
+        return real_enqueue(db_, operation, **kwargs)
+
+    monkeypatch.setattr(runner_module, "enqueue_followups", enqueue_or_raise)
+    assert await runner.record_unrecorded_outcomes(db) == 0
+    assert runner.unrecorded_outcomes[op.id].result == {"archive_name": "a1"}
+    db.expire_all()
+    assert db.get(Operation, op.id).result == {"archive_name": "a1"}
+
+    await _drain(runner)
+    db.expire_all()
+    rows = db.query(Operation).order_by(Operation.id).all()
+    assert [r.kind for r in rows] == ["backup", "archive_sync", "stats"]
+    assert rows[0].result == {"archive_name": "a1"}
+    assert {r.status for r in rows} == {"completed"}
+    assert not runner.unrecorded_outcomes
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_an_outcome_that_cannot_be_written_at_all_is_dropped(
+    db, repo, runner, registry, monkeypatch
+):
+    """After its one more try the entry goes rather than retrying a write
+    that will not succeed every tick; the row keeps its status."""
+    failing = _failing_commits(monkeypatch)
+
+    async def backup(ctx):
+        failing["commits"] = 1
+        return Outcome()
+
+    registry["backup"] = backup
+    op = enqueue(db, "backup", repository_id=repo.id)
+    assert await runner.tick() == 1
+    await asyncio.gather(*runner.running_tasks.values(), return_exceptions=True)
+
+    failing["commits"], failing["error"] = 2, TypeError("not serializable")
+    assert await runner.record_unrecorded_outcomes(db) == 0
+    assert op.id in runner.unrecorded_outcomes
+    assert await runner.record_unrecorded_outcomes(db) == 0
+    assert not runner.unrecorded_outcomes
+    db.expire_all()
+    assert db.get(Operation, op.id).status == "running"
+    assert await runner.tick() == 0  # nothing left to retry
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_an_accepted_cancel_is_recorded_after_a_failed_terminal_commit(
+    db, repo, runner, registry, monkeypatch
+):
+    failing = _failing_commits(monkeypatch)
+    started = asyncio.Event()
+    finish = asyncio.Event()
+
+    async def backup(ctx):
+        started.set()
+        await finish.wait()
+        failing["commits"] = 1
+        return Outcome()
+
+    registry["backup"] = backup
+    op = enqueue(db, "backup", repository_id=repo.id)
+    assert await runner.tick() == 1
+    await started.wait()
+    assert await runner.request_cancel(op.id) is True
+    finish.set()
+    await asyncio.gather(*runner.running_tasks.values(), return_exceptions=True)
+    assert op.id in runner.cancel_requested
+
+    await runner.tick()
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert row.status == "cancelled"
+    assert row.completed_at is not None
+    assert op.id not in runner.cancel_requested
+    assert not runner.unrecorded_outcomes
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_row_the_service_closed_itself_still_gets_its_followups(
+    db, repo, runner, registry, monkeypatch, session_factory
+):
+    """A server backup's service writes the verdict in its own session
+    before the runner's terminal write; when only the latter fails, the row
+    is already closed and keeps its verdict, but the chain the terminal
+    write would have enqueued is still owed."""
+    failing = _failing_commits(monkeypatch)
+
+    async def ok(ctx):
+        return Outcome()
+
+    async def backup(ctx):
+        aside = session_factory()
+        row = aside.get(Operation, ctx.operation_id)
+        row.status = "completed"
+        row.completed_at = utc_now()
+        aside.commit()
+        aside.close()
+        failing["commits"] = 1
+        return Outcome(status="completed", result={"archive_name": "a1"})
+
+    registry["backup"] = backup
+    registry["stats"] = ok
+    registry["archive_sync"] = ok
+    op = enqueue(db, "backup", repository_id=repo.id)
+    await _drain(runner)
+    db.expire_all()
+    rows = db.query(Operation).order_by(Operation.id).all()
+    assert [r.kind for r in rows] == ["backup", "archive_sync", "stats"]
+    assert rows[1].depends_on_id == op.id
+    assert {r.status for r in rows} == {"completed"}
+    assert rows[0].result == {"archive_name": "a1"}
+    assert not runner.unrecorded_outcomes
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_an_outcome_stays_until_its_followups_are_in(
+    db, repo, runner, registry, monkeypatch
+):
+    """The record commit going through while the follow-ups' commit fails
+    keeps the entry: the next tick finds the row closed with the same
+    verdict and enqueues the chain the success still owes."""
+    failing = _failing_commits(monkeypatch)
+
+    async def ok(ctx):
+        return Outcome()
+
+    async def backup(ctx):
+        failing["commits"] = 1
+        return Outcome()
+
+    registry["backup"] = backup
+    registry["stats"] = ok
+    registry["archive_sync"] = ok
+    op = enqueue(db, "backup", repository_id=repo.id)
+    assert await runner.tick() == 1
+    await asyncio.gather(*runner.running_tasks.values(), return_exceptions=True)
+    assert op.id in runner.unrecorded_outcomes
+
+    import app.services.operations.runner as runner_module
+
+    real_enqueue = runner_module.enqueue_followups
+    calls = []
+
+    def enqueue_then_lock(db_, operation, **kwargs):
+        calls.append(operation.id)
+        if len(calls) == 1:
+            raise OperationalError("INSERT operations", {}, Exception("locked"))
+        return real_enqueue(db_, operation, **kwargs)
+
+    monkeypatch.setattr(runner_module, "enqueue_followups", enqueue_then_lock)
+    await runner.tick()
+    db.expire_all()
+    assert db.get(Operation, op.id).status == "completed"
+    assert op.id in runner.unrecorded_outcomes  # the chain is still owed
+    assert db.query(Operation).count() == 1
+
+    await _drain(runner)
+    db.expire_all()
+    rows = db.query(Operation).order_by(Operation.id).all()
+    assert [r.kind for r in rows] == ["backup", "archive_sync", "stats"]
+    assert {r.status for r in rows} == {"completed"}
+    assert not runner.unrecorded_outcomes
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_retried_record_does_not_enqueue_the_chain_twice(
+    db, repo, runner, registry, monkeypatch
+):
+    """The follow-ups' commit can go through and something after it still
+    raise; the retry finds the chain hanging off the row and leaves it."""
+    failing = _failing_commits(monkeypatch)
+
+    async def ok(ctx):
+        return Outcome()
+
+    async def backup(ctx):
+        failing["commits"] = 1
+        return Outcome()
+
+    registry["backup"] = backup
+    registry["stats"] = ok
+    registry["archive_sync"] = ok
+    op = enqueue(db, "backup", repository_id=repo.id)
+    assert await runner.tick() == 1
+    await asyncio.gather(*runner.running_tasks.values(), return_exceptions=True)
+
+    import app.services.operations.runner as runner_module
+
+    real_enqueue = runner_module.enqueue_followups
+    calls = []
+
+    def enqueue_then_raise(db_, operation, **kwargs):
+        calls.append(operation.id)
+        created = real_enqueue(db_, operation, **kwargs)
+        if len(calls) == 1:  # after the chain's commit
+            raise OperationalError("SELECT operations", {}, Exception("locked"))
+        return created
+
+    monkeypatch.setattr(runner_module, "enqueue_followups", enqueue_then_raise)
+    await runner.record_unrecorded_outcomes(db)
+    assert op.id in runner.unrecorded_outcomes
+    await _drain(runner)
+    db.expire_all()
+    rows = db.query(Operation).order_by(Operation.id).all()
+    assert [r.kind for r in rows] == ["backup", "archive_sync", "stats"]
+    assert {r.status for r in rows} == {"completed"}
+    # the children's own terminal writes go through the patch too
+    assert calls.count(op.id) == 1
+    assert not runner.unrecorded_outcomes
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_cancel_the_task_observed_wins_over_the_service_verdict(
+    db, repo, runner, registry, monkeypatch, session_factory
+):
+    """A maintenance service can commit `completed` in its own session
+    after the cancel was requested; the terminal write puts `cancelled`
+    over that, and so does the record when the terminal write failed. No
+    chain follows a cancelled row."""
+    failing = _failing_commits(monkeypatch)
+    started = asyncio.Event()
+    finish = asyncio.Event()
+
+    async def ok(ctx):
+        return Outcome()
+
+    async def compact(ctx):
+        started.set()
+        await finish.wait()
+        aside = session_factory()
+        row = aside.get(Operation, ctx.operation_id)
+        row.status = "completed"
+        row.completed_at = utc_now()
+        aside.commit()
+        aside.close()
+        failing["commits"] = 1
+        return Outcome()
+
+    registry["compact"] = compact
+    registry["stats"] = ok
+    registry["archive_sync"] = ok
+    op = enqueue(db, "compact", repository_id=repo.id)
+    assert await runner.tick() == 1
+    await started.wait()
+    assert await runner.request_cancel(op.id) is True
+    finish.set()
+    await asyncio.gather(*runner.running_tasks.values(), return_exceptions=True)
+    assert op.id in runner.cancel_requested
+
+    await _drain(runner)
+    db.expire_all()
+    rows = db.query(Operation).all()
+    assert [(r.kind, r.status) for r in rows] == [("compact", "cancelled")]
+    assert op.id not in runner.cancel_requested
+    assert not runner.unrecorded_outcomes
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_cancel_written_after_the_task_ended_keeps(
+    db, repo, runner, registry, monkeypatch, session_factory
+):
+    """The backup cancel route writes `cancelled` on a row it finds
+    `running`; done after the task ended, it is the newer word and the
+    stored failure does not replace it."""
+    failing = _failing_commits(monkeypatch)
+
+    async def backup(ctx):
+        failing["commits"] = 1
+        raise RuntimeError("borg create failed")
+
+    registry["backup"] = backup
+    op = enqueue(db, "backup", repository_id=repo.id)
+    assert await runner.tick() == 1
+    await asyncio.gather(*runner.running_tasks.values(), return_exceptions=True)
+    aside = session_factory()
+    row = aside.get(Operation, op.id)
+    row.status = "cancelled"
+    row.error_message = "cancelled by user"
+    row.completed_at = utc_now()
+    aside.commit()
+    aside.close()
+
+    await runner.tick()
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert (row.status, row.error_message) == ("cancelled", "cancelled by user")
+    assert not runner.unrecorded_outcomes
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_plan_step_hanging_off_the_row_is_not_its_followup_chain(
+    db, repo, runner, registry, monkeypatch
+):
+    """A plan enqueues its maintenance with `depends_on_id` of the backup
+    before the backup ends; that child must not pass for the chain."""
+    failing = _failing_commits(monkeypatch)
+
+    async def ok(ctx):
+        return Outcome()
+
+    async def backup(ctx):
+        failing["commits"] = 1
+        return Outcome()
+
+    registry["backup"] = backup
+    registry["check"] = ok
+    registry["stats"] = ok
+    registry["archive_sync"] = ok
+    op = enqueue(db, "backup", repository_id=repo.id, trigger="plan")
+    check = enqueue(
+        db,
+        "check",
+        repository_id=repo.id,
+        trigger="plan",
+        depends_on_id=op.id,
+        run_id=op.run_id,
+    )
+    await _drain(runner)
+    db.expire_all()
+    rows = db.query(Operation).order_by(Operation.id).all()
+    assert [r.kind for r in rows] == ["backup", "check", "archive_sync", "stats"]
+    assert rows[2].depends_on_id == op.id and rows[2].trigger == "followup"
+    assert {r.status for r in rows} == {"completed"}
+    assert db.get(Operation, check.id).status == "completed"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("verdict", ["completed", "failed"])
+async def test_a_row_another_process_failed_keeps_that(
+    db, repo, runner, registry, monkeypatch, session_factory, verdict
+):
+    """`recover_on_startup` of a new process fails a row it found running;
+    a stale entry of the old process does not put its verdict over that,
+    a failure of its own included."""
+    failing = _failing_commits(monkeypatch)
+
+    async def backup(ctx):
+        failing["commits"] = 1
+        if verdict == "failed":
+            raise RuntimeError("borg create failed")
+        return Outcome()
+
+    registry["backup"] = backup
+    op = enqueue(db, "backup", repository_id=repo.id)
+    assert await runner.tick() == 1
+    await asyncio.gather(*runner.running_tasks.values(), return_exceptions=True)
+    aside = session_factory()
+    OperationRunner(
+        session_factory=session_factory, registry=registry
+    ).recover_on_startup(aside)
+    aside.close()
+
+    await runner.tick()
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert (row.status, row.error_message) == ("failed", "interrupted by restart")
+    assert not runner.unrecorded_outcomes
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("same_kind_and_repository", [False, True])
+async def test_a_stored_outcome_does_not_overwrite_a_row_that_reused_the_id(
+    db, repo, runner, registry, monkeypatch, session_factory, same_kind_and_repository
+):
+    """SQLite hands the id of a deleted last row out again; a row under that
+    id is not the one the outcome is for, not even a row of the same kind
+    on the same repository (an inline prune preview started after the
+    prune was deleted)."""
+    failing = _failing_commits(monkeypatch)
+
+    async def backup(ctx):
+        failing["commits"] = 1
+        return Outcome(result={"archive_name": "a1"})
+
+    registry["backup"] = backup
+    op = enqueue(db, "backup", repository_id=repo.id)
+    assert await runner.tick() == 1
+    await asyncio.gather(*runner.running_tasks.values(), return_exceptions=True)
+    assert op.id in runner.unrecorded_outcomes
+
+    aside = session_factory()
+    aside.delete(aside.get(Operation, op.id))
+    aside.commit()
+    if same_kind_and_repository:
+        reused_kind, reused_repo, reused_status = "backup", repo, "running"
+    else:
+        reused_repo = Repository(
+            name="o", path="/tmp/o", encryption="none", compression="lz4"
+        )
+        aside.add(reused_repo)
+        aside.commit()
+        reused_kind, reused_status = "import_connect", "completed"
+    assert aside.query(Operation).count() == 0
+    reused = enqueue(aside, reused_kind, repository_id=reused_repo.id, commit=False)
+    reused.id = op.id  # what SQLite hands out again for an empty table
+    reused.status = reused_status
+    aside.commit()
+    aside.close()
+
+    assert await runner.record_unrecorded_outcomes(db) == 0
+    assert not runner.unrecorded_outcomes
+    db.expire_all()
+    rows = db.query(Operation).all()
+    assert [(r.kind, r.status, r.result) for r in rows] == [
+        (reused_kind, reused_status, None)
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_made_up_failure_only_closes_a_row_still_running(
+    db, repo, runner, registry, session_factory
+):
+    """The failure the runner makes up for a task that ended before any
+    outcome never replaces a verdict the service wrote; that verdict keeps
+    its follow-ups."""
+    from app.services.operations.runner import _UnrecordedOutcome
+
+    async def ok(ctx):
+        return Outcome()
+
+    registry["stats"] = ok
+    registry["archive_sync"] = ok
+    op = enqueue(db, "backup", repository_id=repo.id)
+    op.status = "completed"
+    op.completed_at = utc_now()
+    db.commit()
+    runner.unrecorded_outcomes[op.id] = _UnrecordedOutcome(
+        kind="backup",
+        repository_id=repo.id,
+        run_id=op.run_id,
+        status="failed",
+        result=None,
+        skip_reason=None,
+        error_message="the operation ended without a recorded result",
+        started_at=None,
+        completed_at=utc_now(),
+        fallback=True,
+    )
+    await _drain(runner)
+    db.expire_all()
+    rows = db.query(Operation).order_by(Operation.id).all()
+    assert [r.kind for r in rows] == ["backup", "archive_sync", "stats"]
+    assert {r.status for r in rows} == {"completed"}
+    assert not runner.unrecorded_outcomes
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_task_whose_first_read_fails_does_not_leave_its_row_running(
+    db, repo, runner, registry, monkeypatch
+):
+    """The claim is committed before the task's own session reads the row;
+    a database locked at that read must not strand the row either."""
+    from unittest.mock import patch
+
+    async def backup(ctx):
+        raise AssertionError("never reached")
+
+    registry["backup"] = backup
+    op = enqueue(db, "backup", repository_id=repo.id)
+    real_get = Session.get
+
+    def failing_get(self, entity, ident, *args, **kwargs):
+        if entity is Operation and ident == op.id and failing_get.armed:
+            failing_get.armed = False
+            raise OperationalError("SELECT operations", {}, Exception("locked"))
+        return real_get(self, entity, ident, *args, **kwargs)
+
+    failing_get.armed = False
+    with patch.object(Session, "get", failing_get):
+        assert await runner.tick() == 1
+        failing_get.armed = True
+        errors = await asyncio.gather(
+            *runner.running_tasks.values(), return_exceptions=True
+        )
+    assert len(errors) == 1 and isinstance(errors[0], OperationalError)
+    db.expire_all()
+    assert db.get(Operation, op.id).status == "running"
+    assert op.id in runner.unrecorded_outcomes
+
+    await runner.tick()
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert row.status == "failed"
+    assert row.started_at is not None and row.completed_at is not None
+    assert "without a recorded result" in row.error_message
+    assert not runner.unrecorded_outcomes
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_stored_outcome_never_overwrites_a_row_a_new_task_claimed(
+    db, repo, runner, registry
+):
+    """A row dispatched again (a deferral whose broadcast failed after the
+    requeue commit) belongs to its new task; the stale entry is dropped."""
+    from app.services.operations.runner import _UnrecordedOutcome
+
+    gate = asyncio.Event()
+
+    async def backup(ctx):
+        await gate.wait()
+        return Outcome()
+
+    registry["backup"] = backup
+    op = enqueue(db, "backup", repository_id=repo.id)
+    assert await runner.tick() == 1
+    runner.unrecorded_outcomes[op.id] = _UnrecordedOutcome(
+        kind="backup",
+        repository_id=repo.id,
+        run_id=op.run_id,
+        status="failed",
+        result=None,
+        skip_reason=None,
+        error_message="stale",
+        started_at=None,
+        completed_at=utc_now(),
+    )
+    assert await runner.record_unrecorded_outcomes(db) == 0
+    assert not runner.unrecorded_outcomes
+    db.expire_all()
+    assert db.get(Operation, op.id).status == "running"
+    gate.set()
+    await asyncio.gather(*runner.running_tasks.values())
+    db.expire_all()
+    assert db.get(Operation, op.id).status == "completed"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_an_index_row_whose_terminal_commit_fails_keeps_the_index_sweep(
+    db, repo, runner, registry, monkeypatch
+):
+    """Index kinds keep their own recovery: the sweep requeues them."""
+    failing = _failing_commits(monkeypatch)
+
+    async def listing(ctx):
+        failing["commits"] = 1
+        return Outcome()
+
+    registry["archive_sync"] = listing
+    op = enqueue(db, "archive_sync", repository_id=repo.id)
+    assert await runner.tick() == 1
+    await asyncio.gather(*runner.running_tasks.values(), return_exceptions=True)
+    assert not runner.unrecorded_outcomes
+    assert await runner.requeue_abandoned_index_rows(db) == 1
+    db.expire_all()
+    assert db.get(Operation, op.id).params["requeues"] == 1
 
 
 @pytest.mark.unit
