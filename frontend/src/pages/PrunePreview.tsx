@@ -32,6 +32,7 @@ import {
 import { Scissors } from 'lucide-react'
 import { formatRelativeTime } from '../utils/dateUtils'
 import { operationsAPI, repositoriesAPI } from '../services/api'
+import { useAuth } from '../hooks/useAuth'
 import ArchiveSeriesHeatmap from '../components/archives/ArchiveSeriesHeatmap'
 import PruneRetentionFields from '../components/prune/PruneRetentionFields'
 import { DEFAULT_RETENTION } from '../components/prune/defaultRetention'
@@ -53,6 +54,7 @@ interface LocationState {
 
 export default function PrunePreview() {
   const { t } = useTranslation()
+  const { hasGlobalPermission } = useAuth()
   const theme = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
@@ -113,6 +115,8 @@ export default function PrunePreview() {
     enabled: Number.isFinite(repositoryId),
   })
   const comparison = comparisonQuery.data ?? null
+  // automatic prune previews are off and nothing will refresh this one
+  const autoOff = comparison?.auto === false && comparison.stale
   const pendingOpQuery = useQuery({
     queryKey: ['operation', pendingOpId],
     queryFn: () => operationsAPI.get(pendingOpId as number).then((res) => res.data),
@@ -306,7 +310,11 @@ export default function PrunePreview() {
     // stored verdicts beats running Borg again just to open the page. When
     // it has not run it yet but is about to, wait for it rather than racing
     // it with a dry run of the same policy.
-    const match = comparison?.candidates.find((c) => sameRetention(c.retention, initial))
+    // A stale comparison nothing will refresh (automatic previews off) is
+    // not one to read the page's numbers from: run the policy itself.
+    const match = autoOff
+      ? undefined
+      : comparison?.candidates.find((c) => sameRetention(c.retention, initial))
     const seq = nextSeq()
     if (match?.readable) storedMutation.mutate({ row: match, seq, repo: repositoryId })
     else if (match) {
@@ -340,7 +348,7 @@ export default function PrunePreview() {
     if (!Number.isFinite(repositoryId)) return
     if (!comparison || comparisonQuery.isFetching) return
     if (pendingOpId !== null) return
-    if (!comparison.stale) return
+    if (!comparison.stale || autoOff) return
     askedForRepoRef.current = repositoryId
     refreshMutation.mutate({ id: repositoryId, auto: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -359,14 +367,15 @@ export default function PrunePreview() {
       return
     }
     // Nothing more is coming: the comparison is not running, and either it
-    // does not call itself stale or the server refused to run it (no rights,
-    // or one already running we are not watching). Run the policy's own dry
+    // does not call itself stale, the server refused to run it (no rights,
+    // or one already running we are not watching), or automatic previews
+    // are off and nothing will. Run the policy's own dry
     // run rather than leave the page on skeletons for good.
     if (
       pendingOpId === null &&
       !comparisonQuery.isFetching &&
       !refreshMutation.isPending &&
-      (!comparison.stale || refreshMutation.isError)
+      (!comparison.stale || refreshMutation.isError || autoOff)
     ) {
       setWantedKey(null)
       previewMutation.mutate({ form: retention, seq: nextSeq(), repo: repositoryId })
@@ -379,6 +388,7 @@ export default function PrunePreview() {
     comparisonQuery.isFetching,
     refreshMutation.isPending,
     refreshMutation.isError,
+    autoOff,
   ])
 
   // A finished comparison replaced every row: re-read the one on screen so
@@ -558,6 +568,7 @@ export default function PrunePreview() {
             selectedKey={selectedKey}
             pending={pendingOpId !== null}
             refreshDisabled={!ready || previewMutation.isPending || refreshMutation.isPending}
+            canManageSettings={hasGlobalPermission('settings.system.manage')}
             onSelect={showCandidate}
             onRefresh={() => refreshMutation.mutate({ id: repositoryId, auto: false })}
           />

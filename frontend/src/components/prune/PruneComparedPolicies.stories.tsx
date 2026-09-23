@@ -16,6 +16,7 @@ const comparison: PruneComparison = {
   computed_at: '2026-09-18T01:00:00Z',
   archive_count_at: 12,
   stale: false,
+  auto: true,
   candidates: [
     {
       key: 'current',
@@ -96,11 +97,32 @@ export const WithEditingRowStale: Story = {
 
 export const Empty: Story = {
   args: {
-    comparison: { computed_at: null, archive_count_at: null, stale: true, candidates: [] },
+    comparison: {
+      computed_at: null,
+      archive_count_at: null,
+      stale: true,
+      auto: true,
+      candidates: [],
+    },
     editing: null,
     selectedKey: null,
     pending: false,
     refreshDisabled: false,
+    onSelect: () => {},
+    onRefresh: () => {},
+  },
+}
+
+// Automatic prune previews are off and the stored comparison is stale: its
+// numbers are hidden, with the way back to the switch.
+export const AutomaticPreviewsOff: Story = {
+  args: {
+    comparison: { ...comparison, stale: true, auto: false },
+    editing: null,
+    selectedKey: null,
+    pending: false,
+    refreshDisabled: false,
+    canManageSettings: true,
     onSelect: () => {},
     onRefresh: () => {},
   },

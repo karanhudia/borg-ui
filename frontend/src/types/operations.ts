@@ -117,6 +117,7 @@ export interface QueueResponse {
   // Every stage paused.
   paused: boolean
   paused_stages: PausableStage[]
+  auto_prune_preview: boolean
 }
 
 // GET /operations/repositories: derived data at rest, one row per repository.

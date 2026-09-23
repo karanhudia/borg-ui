@@ -1536,6 +1536,10 @@ class SystemSettings(Base):
     index_workers = Column(Integer, default=2, nullable=False)
     # Stage keys from vocab.STAGES whose follow-up and reconcile work waits.
     paused_stages = Column(JSON, default=list, nullable=False)
+    # Whether Borg UI runs the retention comparison on its own: after a
+    # listing that changed the archive set, and when the preview page opens
+    # on a stale one. A manual Compare now runs either way.
+    auto_prune_preview = Column(Boolean, default=True, nullable=False)
     # Set once the first post-phase-2 startup has enqueued a reconcile run
     # for every repository (spec 14)
     history_bootstrap_at = Column(DateTime, nullable=True)

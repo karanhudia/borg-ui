@@ -148,6 +148,23 @@ class TestSystemSettingsContracts:
         assert readback.status_code == 200
         assert readback.json()["settings"]["lock_breaking_enabled"] is False
 
+    def test_update_system_settings_persists_auto_prune_preview(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        before = test_client.get("/api/settings/system", headers=admin_headers)
+        assert before.json()["settings"]["auto_prune_preview"] is True
+
+        response = test_client.put(
+            "/api/settings/system",
+            json={"auto_prune_preview": False},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        assert test_db.query(SystemSettings).first().auto_prune_preview is False
+        readback = test_client.get("/api/settings/system", headers=admin_headers)
+        assert readback.json()["settings"]["auto_prune_preview"] is False
+
     def test_update_system_settings_rejects_too_small_log_limit(
         self, test_client: TestClient, admin_headers
     ):

@@ -360,6 +360,7 @@ def test_stored_reports_stale_when_the_archive_count_or_the_day_moved(
         "computed_at": None,
         "archive_count_at": None,
         "stale": True,
+        "auto": True,
         "candidates": [],
     }
     rows = _archives(db, repo, 2)

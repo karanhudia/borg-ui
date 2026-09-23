@@ -35,12 +35,16 @@ FOLLOWUPS: dict[str, tuple[str, ...]] = {
 PLAN_GATED_KINDS: frozenset[str] = frozenset({"history_index"})
 
 
-def followup_wanted(kind: str, operation) -> bool:
+def followup_wanted(db, kind: str, operation) -> bool:
     """Spec 4.5: a retention comparison is worth four dry runs only when the
-    listing that finished changed the archive set. Every other follow-up is
-    unconditional."""
+    listing that finished changed the archive set, and only while automatic
+    prune previews are on. Every other follow-up is unconditional."""
     if kind != "prune_compare":
         return True
+    from app.services.prune_compare import auto_enabled
+
+    if not auto_enabled(db):
+        return False
     result = operation.result or {}
     return bool(result.get("new")) or bool(result.get("removed_archive_ids"))
 
@@ -193,7 +197,7 @@ def enqueue_followups(
     kinds = chain_for_repository(
         db, operation.kind, operation.repository_id, available=available
     )
-    kinds = [k for k in kinds if followup_wanted(k, operation)]
+    kinds = [k for k in kinds if followup_wanted(db, k, operation)]
     if not kinds:
         return []
     covering = queued_chain_covering(db, operation.repository_id, kinds)

@@ -68,3 +68,9 @@ export const AllPaused: Story = {
 export const ReadOnly: Story = {
   args: { canManage: false, pausedStages: ['history'] },
 }
+
+// Automatic prune previews are off in System settings: nothing queues the
+// retention stage on its own, so it reads as off and has no pause control.
+export const RetentionOff: Story = {
+  args: { retentionOff: true },
+}

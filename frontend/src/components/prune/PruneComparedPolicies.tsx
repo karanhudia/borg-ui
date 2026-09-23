@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { Link as RouterLink } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -37,6 +38,8 @@ interface Props {
   selectedKey: string | null
   pending: boolean
   refreshDisabled: boolean
+  /** Can open System settings, where the automatic previews switch lives. */
+  canManageSettings?: boolean
   onSelect: (row: PruneComparisonRow) => void
   onRefresh: () => void
 }
@@ -47,6 +50,7 @@ export function PruneComparedPolicies({
   selectedKey,
   pending,
   refreshDisabled,
+  canManageSettings = false,
   onSelect,
   onRefresh,
 }: Props) {
@@ -66,7 +70,11 @@ export function PruneComparedPolicies({
     row.freed_at_least > 0 ? { color: 'success.main', fontWeight: 600 } : undefined
   const lostSx = (row: { lost_size: number | null }) =>
     (row.lost_size ?? 0) > 0 ? { color: 'warning.main', fontWeight: 600 } : undefined
-  const rows = comparison?.candidates ?? []
+  // With automatic previews off nothing will refresh a stale comparison, so
+  // its numbers are not shown as if they still held: the reader gets why,
+  // and the way back.
+  const autoOff = comparison?.auto === false && comparison.stale && !pending
+  const rows = autoOff ? [] : (comparison?.candidates ?? [])
   const label = (row: PruneComparisonRow) =>
     row.key === 'current'
       ? row.retention
@@ -101,6 +109,26 @@ export function PruneComparedPolicies({
           {t('prunePreview.compare.compareNow')}
         </Button>
       </Stack>
+      {autoOff && (
+        <Alert
+          severity="info"
+          sx={{ mb: 1 }}
+          action={
+            canManageSettings ? (
+              <Button
+                component={RouterLink}
+                to="/settings/system?section=monitoring"
+                size="small"
+                color="inherit"
+              >
+                {t('prunePreview.compare.autoOffAction')}
+              </Button>
+            ) : undefined
+          }
+        >
+          {t('prunePreview.compare.autoOff')}
+        </Alert>
+      )}
       {comparison?.stale && rows.length > 0 && !pending && (
         <Alert severity="info" sx={{ mb: 1 }}>
           {t('prunePreview.compare.stale')}
@@ -185,9 +213,11 @@ export function PruneComparedPolicies({
           {t('prunePreview.compare.partial')}
         </Typography>
       )}
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-        {t('prunePreview.compare.intro')}
-      </Typography>
+      {!autoOff && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+          {t('prunePreview.compare.intro')}
+        </Typography>
+      )}
     </Paper>
   )
 }

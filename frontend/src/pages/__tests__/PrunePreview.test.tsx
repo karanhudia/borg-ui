@@ -17,6 +17,10 @@ vi.mock('react-router-dom', async (importOriginal) => {
   }
 })
 
+vi.mock('../../hooks/useAuth', () => ({
+  useAuth: () => ({ hasGlobalPermission: () => true }),
+}))
+
 vi.mock('../../services/api', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../../services/api')>()
   return {
@@ -435,6 +439,34 @@ describe('PrunePreview page', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByText('Standard').length).toBeGreaterThan(0))
     expect(repositoriesAPI.pruneComparisonRefresh).not.toHaveBeenCalled()
+  })
+
+  it('runs its own dry run and asks for no comparison when automatic previews are off', async () => {
+    // the prefill matches a stored row, but a stale one nothing will refresh:
+    // the page must neither read it nor start the comparison
+    vi.mocked(repositoriesAPI.pruneComparison).mockResolvedValue({
+      data: {
+        ...storedComparison,
+        stale: true,
+        auto: false,
+        candidates: storedComparison.candidates.map((c) =>
+          c.key === 'standard' ? { ...c, retention: { ...c.retention, keep_daily: 3 } } : c
+        ),
+      },
+    } as never)
+    renderPage()
+    expect(await screen.findByText(/Automatic prune previews are off/)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(repositoriesAPI.prunePreview).toHaveBeenCalledWith(
+        7,
+        expect.objectContaining({ keep_daily: 3 }),
+        expect.any(String)
+      )
+    )
+    expect(repositoriesAPI.pruneCandidatePreview).not.toHaveBeenCalled()
+    expect(repositoriesAPI.pruneComparisonRefresh).not.toHaveBeenCalled()
+    expect(screen.queryByText('Standard')).toBeNull()
+    expect(screen.getByRole('link', { name: 'Turn on in Settings' })).toBeInTheDocument()
   })
 
   it('waits for the comparison rather than running the same policy twice', async () => {

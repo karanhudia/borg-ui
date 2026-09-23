@@ -3614,7 +3614,9 @@
     "failedToSaveTimeoutSettings": "Timeout-Einstellungen konnten nicht gespeichert werden",
     "statsRefreshStarted": "Statistikaktualisierung gestartet",
     "statsRefreshCompleted": "Statistikaktualisierung abgeschlossen",
-    "failedToStartStatsRefresh": "Statistikaktualisierung konnte nicht gestartet werden"
+    "failedToStartStatsRefresh": "Statistikaktualisierung konnte nicht gestartet werden",
+    "autoPrunePreviewLabel": "Automatische Prune-Vorschau",
+    "autoPrunePreviewHelper": "Vergleicht Aufbewahrungsregeln automatisch, wenn sich die Archivliste ändert und wenn die Prune-Vorschau geöffnet wird. Ist sie aus, läuft ein Vergleich nur, wenn du auf Jetzt vergleichen klickst."
   },
   "monitoringReports": {
     "title": "Monitoring & Berichte",
@@ -3803,7 +3805,8 @@
         "paused": "Pausiert",
         "pauseStage": "{{stage}} pausieren",
         "resumeStage": "{{stage}} fortsetzen",
-        "label": "Hintergrundphasen"
+        "label": "Hintergrundphasen",
+        "off": "Aus"
       },
       "pauseAll": "Alle pausieren",
       "resumeAll": "Alle fortsetzen",
@@ -6200,7 +6203,8 @@
         "noKeepRule": "Vor einer Vorschau oder Ausführung eines Prunes mindestens eine Aufbewahrungsregel festlegen.",
         "dryRunFailed": "Der Testlauf von Borg ist fehlgeschlagen.",
         "comparisonRunning": "Für dieses Repository läuft bereits ein Vergleich der Aufbewahrungsregeln.",
-        "candidateNotStored": "Diese Richtlinie wurde noch nicht verglichen. Starten Sie einen Vergleich, um sie zu sehen."
+        "candidateNotStored": "Diese Richtlinie wurde noch nicht verglichen. Starten Sie einen Vergleich, um sie zu sehen.",
+        "autoPreviewOff": "Die automatische Prune-Vorschau ist ausgeschaltet."
       },
       "operations": {
         "unknownStage": "Unbekannte Hintergrundphase."
@@ -6546,7 +6550,9 @@
         "wide": "Weit"
       },
       "partial": "Einige Größen sind gespeicherte Werte, nicht neu gemessen.",
-      "refreshFailed": "Der Vergleich konnte nicht gestartet werden."
+      "refreshFailed": "Der Vergleich konnte nicht gestartet werden.",
+      "autoOff": "Die automatische Prune-Vorschau ist aus, daher ist dieser Vergleich veraltet und wird nicht angezeigt. Klicke auf Jetzt vergleichen, um ihn auszuführen.",
+      "autoOffAction": "In den Einstellungen einschalten"
     }
   }
 }

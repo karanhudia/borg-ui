@@ -317,5 +317,8 @@ export interface PruneComparison {
   computed_at: string | null
   archive_count_at: number | null
   stale: boolean
+  /** The `auto_prune_preview` setting: off, nothing refreshes a stale
+   * comparison on its own. */
+  auto: boolean
   candidates: PruneComparisonRow[]
 }

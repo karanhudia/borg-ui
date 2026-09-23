@@ -151,6 +151,8 @@ class QueueResponse(BaseModel):
     # Every stage paused: what the tab's banner and "Resume all" read.
     paused: bool
     paused_stages: list[str]
+    # Off: nothing queues the retention stage on its own
+    auto_prune_preview: bool
 
 
 class LimitsUpdate(BaseModel):
@@ -557,6 +559,7 @@ async def get_queue(
         limits=_limits(db, settings),
         paused=len(paused_stages) == len(STAGES),
         paused_stages=paused_stages,
+        auto_prune_preview=settings.auto_prune_preview is not False,
     )
 
 

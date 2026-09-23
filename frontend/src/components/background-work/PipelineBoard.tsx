@@ -387,6 +387,7 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
         selected={toolbar.stage ?? null}
         onSelect={(stage) => setToolbar({ ...toolbar, stage })}
         pausedStages={queue.data.paused_stages}
+        retentionOff={queue.data.auto_prune_preview === false}
         canManage={canManage}
         onTogglePause={(stage, paused) => stageMutation.mutate({ stage, paused })}
         historyExtra={

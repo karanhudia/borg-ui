@@ -4,6 +4,7 @@ import { Save } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 
 import { authAPI, authAPIAdmin, settingsAPI } from '../services/api'
 import type { SystemSettings } from '../services/api'
@@ -46,6 +47,7 @@ const SystemSettingsTab: React.FC = () => {
   const [maxConcurrentScheduledBackups, setMaxConcurrentScheduledBackups] = useState(2)
   const [maxConcurrentScheduledChecks, setMaxConcurrentScheduledChecks] = useState(4)
   const [statsRefreshInterval, setStatsRefreshInterval] = useState(60)
+  const [autoPrunePreview, setAutoPrunePreview] = useState(true)
   const [dashboardBackupWarningDays, setDashboardBackupWarningDays] = useState(3)
   const [dashboardBackupCriticalDays, setDashboardBackupCriticalDays] = useState(7)
   const [dashboardCheckWarningDays, setDashboardCheckWarningDays] = useState(7)
@@ -89,7 +91,12 @@ const SystemSettingsTab: React.FC = () => {
   const [hasChanges, setHasChanges] = useState(false)
   const [browseChanged, setBrowseChanged] = useState(false)
   const [systemChanged, setSystemChanged] = useState(false)
-  const [activeSection, setActiveSection] = useState(0)
+  // `?section=monitoring` opens Repository Monitoring, the prune preview
+  // page's shortcut to its switch
+  const [searchParams] = useSearchParams()
+  const [activeSection, setActiveSection] = useState(() =>
+    searchParams.get('section') === 'monitoring' ? 1 : 0
+  )
   const [authEventFilter, setAuthEventFilter] = useState<AuthEventFilter>('all')
 
   const { data: cacheData, isLoading: cacheLoading } = useQuery({
@@ -153,6 +160,7 @@ const SystemSettingsTab: React.FC = () => {
       setMaxConcurrentScheduledBackups(systemSettings.max_concurrent_scheduled_backups ?? 2)
       setMaxConcurrentScheduledChecks(systemSettings.max_concurrent_scheduled_checks ?? 4)
       setStatsRefreshInterval(systemSettings.stats_refresh_interval_minutes ?? 60)
+      setAutoPrunePreview(systemSettings.auto_prune_preview ?? true)
       setDashboardBackupWarningDays(systemSettings.dashboard_backup_warning_days ?? 3)
       setDashboardBackupCriticalDays(systemSettings.dashboard_backup_critical_days ?? 7)
       setDashboardCheckWarningDays(systemSettings.dashboard_check_warning_days ?? 7)
@@ -215,7 +223,8 @@ const SystemSettingsTab: React.FC = () => {
         maxConcurrentScheduledBackups !== (systemSettings.max_concurrent_scheduled_backups ?? 2) ||
         maxConcurrentScheduledChecks !== (systemSettings.max_concurrent_scheduled_checks ?? 4)
       const statsRefreshDirty =
-        statsRefreshInterval !== (systemSettings.stats_refresh_interval_minutes ?? 60)
+        statsRefreshInterval !== (systemSettings.stats_refresh_interval_minutes ?? 60) ||
+        autoPrunePreview !== (systemSettings.auto_prune_preview ?? true)
       const dashboardThresholdDirty =
         dashboardBackupWarningDays !== (systemSettings.dashboard_backup_warning_days ?? 3) ||
         dashboardBackupCriticalDays !== (systemSettings.dashboard_backup_critical_days ?? 7) ||
@@ -286,6 +295,7 @@ const SystemSettingsTab: React.FC = () => {
     maxConcurrentScheduledBackups,
     maxConcurrentScheduledChecks,
     statsRefreshInterval,
+    autoPrunePreview,
     dashboardBackupWarningDays,
     dashboardBackupCriticalDays,
     dashboardCheckWarningDays,
@@ -373,6 +383,7 @@ const SystemSettingsTab: React.FC = () => {
     max_concurrent_scheduled_backups: maxConcurrentScheduledBackups,
     max_concurrent_scheduled_checks: maxConcurrentScheduledChecks,
     stats_refresh_interval_minutes: statsRefreshInterval,
+    auto_prune_preview: autoPrunePreview,
     dashboard_backup_warning_days: dashboardBackupWarningDays,
     dashboard_backup_critical_days: dashboardBackupCriticalDays,
     dashboard_check_warning_days: dashboardCheckWarningDays,
@@ -535,6 +546,7 @@ const SystemSettingsTab: React.FC = () => {
         max_concurrent_scheduled_backups: maxConcurrentScheduledBackups,
         max_concurrent_scheduled_checks: maxConcurrentScheduledChecks,
         stats_refresh_interval_minutes: statsRefreshInterval,
+        auto_prune_preview: autoPrunePreview,
         dashboard_backup_warning_days: dashboardBackupWarningDays,
         dashboard_backup_critical_days: dashboardBackupCriticalDays,
         dashboard_check_warning_days: dashboardCheckWarningDays,
@@ -723,6 +735,7 @@ const SystemSettingsTab: React.FC = () => {
           {activeSection === 1 && (
             <RepositoryMonitoringSection
               statsRefreshInterval={statsRefreshInterval}
+              autoPrunePreview={autoPrunePreview}
               maxConcurrentScheduledBackups={maxConcurrentScheduledBackups}
               maxConcurrentScheduledChecks={maxConcurrentScheduledChecks}
               dashboardBackupWarningDays={dashboardBackupWarningDays}
@@ -738,6 +751,7 @@ const SystemSettingsTab: React.FC = () => {
               isRefreshingStats={isRefreshingStats}
               lastStatsRefresh={systemSettings?.last_stats_refresh}
               setStatsRefreshInterval={setStatsRefreshInterval}
+              setAutoPrunePreview={setAutoPrunePreview}
               setMaxConcurrentScheduledBackups={setMaxConcurrentScheduledBackups}
               setMaxConcurrentScheduledChecks={setMaxConcurrentScheduledChecks}
               setDashboardBackupWarningDays={setDashboardBackupWarningDays}
