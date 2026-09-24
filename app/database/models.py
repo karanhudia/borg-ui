@@ -1245,6 +1245,13 @@ class Operation(Base):
         Index("ix_operations_category_created", "category", "created_at"),
         # the dashboard's activity window: every row of a kind since a date
         Index("ix_operations_kind_started_at", "kind", "started_at"),
+        # the Activity window: newest first by when the row ran, else when
+        # it was queued (app/api/activity.py orders and pages on this)
+        Index(
+            "ix_operations_activity_window",
+            func.coalesce(started_at, created_at).desc(),
+            id.desc(),
+        ),
     )
 
 
