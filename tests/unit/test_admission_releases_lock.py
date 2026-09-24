@@ -12,8 +12,6 @@ The shared test engine is one in-memory connection, where no lock can ever
 be contended, so these tests build a file database with real connections.
 """
 
-import time
-
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import create_engine, event, text
@@ -88,15 +86,14 @@ def test_refused_admission_does_not_block_another_session(file_sessions, running
         assert exc.value.detail["params"]["repository_id"] == repo_id
 
         # The plan's failure bookkeeping: a write from a different session
-        # while the refused one is still open.
-        started = time.monotonic()
+        # while the refused one is still open. A held lock makes it raise
+        # "database is locked" once the busy timeout runs out.
         with file_sessions() as other:
             other.execute(
                 text("UPDATE repositories SET name = 'still writable' WHERE id = :id"),
                 {"id": repo_id},
             )
             other.commit()
-        assert time.monotonic() - started < BUSY_TIMEOUT_MS / 1000
 
         # The refused session stays usable for the caller's own bookkeeping.
         refused.get(Repository, repo_id).name = "written by the refused session"
