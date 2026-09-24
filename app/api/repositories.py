@@ -3347,6 +3347,7 @@ def get_repositories(
                 ),
                 "exclude_patterns": _decode_json_list_field(repo.exclude_patterns),
                 "repository_type": repo.repository_type,
+                "connection_id": repo.connection_id,
                 "execution_target": repo.execution_target or "local",
                 "executor_type": repository_executor_type(repo),
                 "agent_machine_id": repo.agent_machine_id,
