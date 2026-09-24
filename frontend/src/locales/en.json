@@ -3308,6 +3308,7 @@
       "edit": "Edit",
       "duplicate": "Duplicate",
       "delete": "Delete",
+      "deleting": "Deleting...",
       "viewLogs": "View Logs",
       "viewArchive": "View Archive",
       "viewArchivePruned": "Archive pruned",

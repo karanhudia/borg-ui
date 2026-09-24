@@ -629,6 +629,98 @@ describe('BackupJobsTable action internals', () => {
     expect(queryClient.getQueryData(['activity'])).toEqual(initialActivityData)
   })
 
+  it('keeps a row from being deleted twice while its delete is out', async () => {
+    const user = userEvent.setup()
+    let failDelete: (error: Error) => void = () => {}
+    deleteJobMock.mockReturnValueOnce(
+      new Promise((_, reject) => {
+        failDelete = reject
+      })
+    )
+    const jobs = [
+      {
+        id: 40,
+        repository: '/backup/repo40',
+        repository_path: '/backup/repo40',
+        type: 'backup',
+        status: 'completed',
+        started_at: '2026-04-01T10:00:00Z',
+      },
+      {
+        id: 40,
+        repository: '/backup/repo40',
+        repository_path: '/backup/repo40',
+        type: 'check',
+        status: 'completed',
+        started_at: '2026-04-01T10:05:00Z',
+      },
+    ]
+
+    renderWithProviders(
+      <BackupJobsTable jobs={jobs} canDeleteJobs={true} actions={{ delete: true }} />
+    )
+
+    const [backupDelete, checkDelete] = screen.getAllByRole('button', { name: /^delete$/i })
+    await user.click(backupDelete)
+    await user.click(screen.getByRole('button', { name: /confirm delete/i }))
+
+    // The row is still listed (a poll can bring it back while the request
+    // is out); its Delete waits, another type's row with the same id does not.
+    await waitFor(() => expect(backupDelete).toBeDisabled())
+    expect(backupDelete).toHaveAttribute('title', 'Deleting...')
+    expect(checkDelete).toBeEnabled()
+    await user.click(backupDelete)
+    expect(screen.queryByRole('button', { name: /confirm delete/i })).not.toBeInTheDocument()
+    expect(deleteJobMock).toHaveBeenCalledTimes(1)
+
+    failDelete(new Error('Delete failed from API'))
+    await waitFor(() => expect(backupDelete).toBeEnabled())
+    expect(backupDelete).toHaveAttribute('title', 'Delete')
+  })
+
+  it('shares a pending delete with every table on the same query client', async () => {
+    // Two pages in turn, or a page left and opened again while the delete is
+    // out: each mounts its own table, all of them share one cache.
+    const user = userEvent.setup()
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
+    let failDelete: (error: Error) => void = () => {}
+    deleteJobMock.mockReturnValueOnce(
+      new Promise((_, reject) => {
+        failDelete = reject
+      })
+    )
+    const job = {
+      id: 40,
+      repository: '/backup/repo40',
+      repository_path: '/backup/repo40',
+      type: 'backup',
+      status: 'completed',
+      started_at: '2026-04-01T10:00:00Z',
+    }
+
+    renderWithProviders(
+      <>
+        <BackupJobsTable jobs={[job]} canDeleteJobs={true} actions={{ delete: true }} />
+        <BackupJobsTable jobs={[job]} canDeleteJobs={true} actions={{ delete: true }} />
+      </>,
+      { queryClient }
+    )
+
+    const [first, second] = screen.getAllByRole('button', { name: /^delete$/i })
+    await user.click(first)
+    await user.click(screen.getByRole('button', { name: /confirm delete/i }))
+
+    await waitFor(() => expect(second).toBeDisabled())
+    expect(first).toBeDisabled()
+    expect(deleteJobMock).toHaveBeenCalledTimes(1)
+
+    failDelete(new Error('Delete failed from API'))
+    await waitFor(() => expect(second).toBeEnabled())
+    expect(first).toBeEnabled()
+  })
+
   it('resolves break-lock repository details from the fetched repository list', async () => {
     const user = userEvent.setup()
 

@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
+import {
+  fireEvent,
+  renderWithProviders,
+  screen,
+  userEvent,
+  waitFor,
+  within,
+} from '../../test/test-utils'
 import Activity from '../Activity'
 import { activityAPI, repositoriesAPI } from '../../services/api'
 
@@ -214,5 +221,213 @@ describe('Activity page', () => {
     expect(screen.getAllByTestId('run-entry')).toHaveLength(2)
     await userEvent.click(screen.getAllByRole('button', { name: /view logs/i })[0])
     expect(await screen.findByText('Log Viewer')).toBeInTheDocument()
+  })
+
+  describe('deleting a row', () => {
+    // A full first page, so the feed offers a second one and stops polling
+    // once it is loaded.
+    const firstPage = Array.from({ length: 50 }, (_, index) => ({
+      ...backup,
+      id: 100 + index,
+      trigger: 'manual',
+      backup_plan_name: null,
+      repository: `repo-${100 + index}`,
+      sort_at: new Date(Date.UTC(2026, 8, 20, 12, 0, 50 - index)).toISOString(),
+    }))
+    const doomed = {
+      ...firstPage[0],
+      id: 7,
+      repository: 'doomed-repo',
+      sort_at: '2026-09-19T12:00:00+00:00',
+    }
+    const keeper = {
+      ...firstPage[0],
+      id: 8,
+      repository: 'kept-repo',
+      sort_at: '2026-09-19T11:00:00+00:00',
+    }
+
+    // Only a refetch serves this row: once it shows, the refetch has landed.
+    const fresh = {
+      ...firstPage[0],
+      id: 9,
+      repository: 'fresh-repo',
+      sort_at: '2026-09-19T10:00:00+00:00',
+    }
+
+    const serveFeed = (secondPage: unknown[]) =>
+      (activityAPI.list as ReturnType<typeof vi.fn>).mockImplementation(
+        async (params: { before?: string }) => ({
+          data: params.before ? secondPage : firstPage,
+        })
+      )
+
+    const listMock = () => activityAPI.list as ReturnType<typeof vi.fn>
+
+    // Resolves or rejects only when the test says so.
+    const deferred = <T,>() => {
+      let resolve: (value: T) => void = () => {}
+      let reject: (error: Error) => void = () => {}
+      const promise = new Promise<T>((res, rej) => {
+        resolve = res
+        reject = rej
+      })
+      return { promise, resolve, reject }
+    }
+
+    const loadSecondPage = async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<Activity />)
+      await screen.findByText('repo-100')
+      await user.click(screen.getByRole('button', { name: /^load more$/i }))
+      await screen.findByText('doomed-repo')
+      return user
+    }
+
+    const confirmDelete = async (
+      user: ReturnType<typeof userEvent.setup>,
+      repository = 'doomed-repo'
+    ) => {
+      const entry = screen
+        .getAllByTestId('run-entry')
+        .find((row) => row.textContent?.includes(repository))!
+      await user.click(within(entry).getByRole('button', { name: /^delete$/i }))
+      await user.click(await screen.findByRole('button', { name: /^delete permanently$/i }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    }
+
+    it('drops the row from a later page at once and refetches the feed', async () => {
+      serveFeed([doomed, keeper])
+      const request = deferred<unknown>()
+      vi.spyOn(activityAPI, 'deleteJob').mockReturnValue(request.promise as never)
+
+      await confirmDelete(await loadSecondPage())
+
+      expect(activityAPI.deleteJob).toHaveBeenCalledWith('backup', 7)
+      // Gone while the request is still out, from the page's own query.
+      await waitFor(() => expect(screen.queryByText('doomed-repo')).not.toBeInTheDocument())
+      expect(screen.getByText('kept-repo')).toBeInTheDocument()
+      expect(screen.getByText('repo-100')).toBeInTheDocument()
+
+      // Once the server confirms, the feed is fetched again: polling is off
+      // with two pages loaded, so nothing else would.
+      serveFeed([keeper, fresh])
+      request.resolve({ data: {} })
+      expect(await screen.findByText('fresh-repo')).toBeInTheDocument()
+      expect(screen.queryByText('doomed-repo')).not.toBeInTheDocument()
+      expect(screen.getByText('kept-repo')).toBeInTheDocument()
+    })
+
+    it('refetches only once the last of several deletes has settled', async () => {
+      serveFeed([doomed, keeper])
+      const first = deferred<unknown>()
+      const second = deferred<unknown>()
+      vi.spyOn(activityAPI, 'deleteJob')
+        .mockReturnValueOnce(first.promise as never)
+        .mockReturnValueOnce(second.promise as never)
+
+      const user = await loadSecondPage()
+      await confirmDelete(user, 'doomed-repo')
+      await waitFor(() => expect(screen.queryByText('doomed-repo')).not.toBeInTheDocument())
+      await confirmDelete(user, 'kept-repo')
+      await waitFor(() => expect(screen.queryByText('kept-repo')).not.toBeInTheDocument())
+
+      // The server has dropped the first row only; a refetch now would put
+      // the second one back while its delete is still out.
+      serveFeed([keeper])
+      const calls = listMock().mock.calls.length
+      first.resolve({ data: {} })
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      expect(listMock().mock.calls.length).toBe(calls)
+      expect(screen.queryByText('kept-repo')).not.toBeInTheDocument()
+
+      serveFeed([fresh])
+      second.resolve({ data: {} })
+      expect(await screen.findByText('fresh-repo')).toBeInTheDocument()
+      expect(screen.queryByText('doomed-repo')).not.toBeInTheDocument()
+      expect(screen.queryByText('kept-repo')).not.toBeInTheDocument()
+    })
+
+    it('does not let a refresh already under way bring the row back', async () => {
+      serveFeed([doomed, keeper])
+      vi.spyOn(activityAPI, 'deleteJob').mockReturnValue(new Promise(() => {}) as never)
+      const user = await loadSecondPage()
+
+      // A refresh that left before the delete answers with the row still in it.
+      const stale = deferred<void>()
+      const staleAnswered = deferred<void>()
+      listMock().mockImplementation(async (params: { before?: string }) => {
+        await stale.promise
+        staleAnswered.resolve()
+        return { data: params.before ? [doomed, keeper] : firstPage }
+      })
+      const calls = listMock().mock.calls.length
+      await user.click(screen.getByRole('button', { name: /^refresh activity$/i }))
+      await waitFor(() => expect(listMock().mock.calls.length).toBeGreaterThan(calls))
+      await confirmDelete(user)
+      await waitFor(() => expect(screen.queryByText('doomed-repo')).not.toBeInTheDocument())
+
+      // The cancelled refresh has no result to wait for: give the answer
+      // time to be applied, which it would be had it not been cancelled.
+      stale.resolve()
+      await staleAnswered.promise
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(screen.queryByText('doomed-repo')).not.toBeInTheDocument()
+    })
+
+    // Two deletes out at once, the refetch that follows them held back, so
+    // what the page shows is the rollback alone.
+    const deleteBoth = async () => {
+      serveFeed([doomed, keeper])
+      const first = deferred<unknown>()
+      const second = deferred<unknown>()
+      vi.spyOn(activityAPI, 'deleteJob')
+        .mockReturnValueOnce(first.promise as never)
+        .mockReturnValueOnce(second.promise as never)
+      const user = await loadSecondPage()
+      await confirmDelete(user, 'doomed-repo')
+      await confirmDelete(user, 'kept-repo')
+      await waitFor(() => expect(screen.queryByText('kept-repo')).not.toBeInTheDocument())
+      expect(screen.queryByText('doomed-repo')).not.toBeInTheDocument()
+      listMock().mockReturnValue(new Promise(() => {}))
+      return { first, second }
+    }
+
+    it('puts back only the failed row while another delete is out', async () => {
+      const { first, second } = await deleteBoth()
+
+      first.reject(new Error('job not found'))
+      expect(await screen.findByText('doomed-repo')).toBeInTheDocument()
+      expect(screen.queryByText('kept-repo')).not.toBeInTheDocument()
+
+      second.reject(new Error('job not found'))
+      expect(await screen.findByText('kept-repo')).toBeInTheDocument()
+      expect(screen.getByText('doomed-repo')).toBeInTheDocument()
+    })
+
+    it('keeps a row deleted meanwhile out when an earlier delete fails', async () => {
+      const { first, second } = await deleteBoth()
+
+      second.resolve({ data: {} })
+      await waitFor(() => expect(activityAPI.deleteJob).toHaveBeenCalledTimes(2))
+      first.reject(new Error('job not found'))
+      expect(await screen.findByText('doomed-repo')).toBeInTheDocument()
+      expect(screen.queryByText('kept-repo')).not.toBeInTheDocument()
+    })
+
+    it('puts the row back when the delete fails', async () => {
+      serveFeed([doomed, keeper])
+      const request = deferred<unknown>()
+      vi.spyOn(activityAPI, 'deleteJob').mockReturnValue(request.promise as never)
+
+      await confirmDelete(await loadSecondPage())
+      await waitFor(() => expect(screen.queryByText('doomed-repo')).not.toBeInTheDocument())
+
+      // Hold the refetch that follows, so only the rollback can restore it.
+      listMock().mockReturnValue(new Promise(() => {}))
+      request.reject(new Error('job not found'))
+      expect(await screen.findByText('doomed-repo')).toBeInTheDocument()
+      expect(screen.getByText('kept-repo')).toBeInTheDocument()
+    })
   })
 })
