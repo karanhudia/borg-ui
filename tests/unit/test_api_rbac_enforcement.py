@@ -363,3 +363,109 @@ class TestScheduleProtection:
             headers=headers,
         )
         assert response.status_code == 403
+
+
+@pytest.mark.unit
+class TestBrowseProtection:
+    """GET /api/browse/{repository_id}/{archive_name} must be repo-scoped.
+
+    Regression: the endpoint loaded the repo by id but never called
+    check_repo_access, so a user with no grant could enumerate an archive's
+    file tree and per-file metadata (name/size/mtime).
+    """
+
+    def test_no_permission_cannot_browse_archive(self, test_client, test_db):
+        from app.core.security import create_access_token
+
+        user = _make_user(test_db, "brw-np1", role="viewer")
+        repo = _make_repo(test_db, "brw-repo1")
+        token = create_access_token(data={"sub": user.username})
+        headers = {"Authorization": f"Bearer {token}"}
+        response = test_client.get(
+            f"/api/browse/{repo.id}/archive1",
+            headers=headers,
+        )
+        assert response.status_code == 403
+
+    def test_viewer_with_permission_passes_authz(self, test_client, test_db):
+        from app.core.security import create_access_token
+        from unittest.mock import patch
+
+        user = _make_user(test_db, "brw-vwr1", role="viewer")
+        repo = _make_repo(test_db, "brw-repo2")
+        _grant(test_db, user, repo, "viewer")
+        token = create_access_token(data={"sub": user.username})
+        headers = {"Authorization": f"Bearer {token}"}
+        # Cache hit path returns immediately without touching borg, so the only
+        # gate we exercise is the authorization check.
+        with patch(
+            "app.api.browse.archive_cache.get", return_value=[]
+        ):
+            response = test_client.get(
+                f"/api/browse/{repo.id}/archive1",
+                headers=headers,
+            )
+        assert response.status_code != 403
+
+
+@pytest.mark.unit
+class TestScriptLibraryProtection:
+    """The script library runs arbitrary shell on the server. Regression: any
+    authenticated user (viewer included) could create and test-execute a script,
+    and attach pre/post-backup hooks to any repository.
+    """
+
+    def test_viewer_cannot_create_script(self, test_client, test_db):
+        from app.core.security import create_access_token
+
+        user = _make_user(test_db, "scr-vwr1", role="viewer")
+        token = create_access_token(data={"sub": user.username})
+        headers = {"Authorization": f"Bearer {token}"}
+        response = test_client.post(
+            "/api/scripts",
+            json={"name": "evil", "content": "#!/bin/bash\nid"},
+            headers=headers,
+        )
+        assert response.status_code == 403
+
+    def test_operator_cannot_test_script(self, test_client, test_db):
+        """Even a global operator must not run library scripts; admin only."""
+        from app.core.security import create_access_token
+
+        user = _make_user(test_db, "scr-op1", role="operator")
+        token = create_access_token(data={"sub": user.username})
+        headers = {"Authorization": f"Bearer {token}"}
+        response = test_client.post(
+            "/api/scripts/1/test",
+            json={},
+            headers=headers,
+        )
+        assert response.status_code == 403
+
+    def test_viewer_cannot_assign_hook_to_repo(self, test_client, test_db):
+        from app.core.security import create_access_token
+
+        user = _make_user(test_db, "scr-vwr2", role="viewer")
+        repo = _make_repo(test_db, "scr-repo1")
+        _grant(test_db, user, repo, "viewer")
+        token = create_access_token(data={"sub": user.username})
+        headers = {"Authorization": f"Bearer {token}"}
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/scripts",
+            json={"script_id": 1, "hook_type": "pre-backup"},
+            headers=headers,
+        )
+        assert response.status_code == 403
+
+    def test_no_permission_cannot_list_repo_scripts(self, test_client, test_db):
+        from app.core.security import create_access_token
+
+        user = _make_user(test_db, "scr-np1", role="viewer")
+        repo = _make_repo(test_db, "scr-repo2")
+        token = create_access_token(data={"sub": user.username})
+        headers = {"Authorization": f"Bearer {token}"}
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/scripts",
+            headers=headers,
+        )
+        assert response.status_code == 403

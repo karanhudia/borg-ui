@@ -27,7 +27,12 @@ from app.database.models import (
     BackupPlanScript,
     User,
 )
-from app.core.security import get_current_user, encrypt_secret
+from app.core.security import (
+    get_current_user,
+    get_current_admin_user,
+    check_repo_access,
+    encrypt_secret,
+)
 from app.config import settings
 from app.services.script_executor import execute_script
 from app.utils.script_params import (
@@ -390,7 +395,7 @@ async def get_script(
 async def create_script(
     script_data: ScriptCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
 ):
     """Create a new script"""
     # Check if name already exists
@@ -501,7 +506,7 @@ async def update_script(
     script_id: int,
     script_data: ScriptUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
 ):
     """Update an existing script"""
     script = db.query(Script).filter(Script.id == script_id).first()
@@ -626,7 +631,7 @@ async def update_script(
 async def delete_script(
     script_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
 ):
     """Delete a script"""
     script = db.query(Script).filter(Script.id == script_id).first()
@@ -784,7 +789,7 @@ async def test_script(
     script_id: int,
     test_data: ScriptTestRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
 ):
     """Test execute a script (doesn't save execution to history)"""
     script = db.query(Script).filter(Script.id == script_id).first()
@@ -924,6 +929,7 @@ async def get_repository_scripts(
         raise HTTPException(
             status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"}
         )
+    check_repo_access(db, current_user, repository, "viewer")
 
     # Get pre-backup scripts
     pre_scripts = (
@@ -997,6 +1003,8 @@ async def assign_script_to_repository(
         raise HTTPException(
             status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"}
         )
+    # Attaching a hook runs it on this repo's next backup: operator-gated.
+    check_repo_access(db, current_user, repository, "operator")
 
     # Validate script exists
     script = db.query(Script).filter(Script.id == assignment.script_id).first()
@@ -1133,6 +1141,13 @@ async def update_repository_script_assignment(
     current_user: User = Depends(get_current_user),
 ):
     """Update script assignment settings"""
+    repository = db.query(Repository).filter(Repository.id == repository_id).first()
+    if not repository:
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"}
+        )
+    check_repo_access(db, current_user, repository, "operator")
+
     repo_script = (
         db.query(RepositoryScript)
         .filter(
@@ -1243,6 +1258,13 @@ async def remove_script_from_repository(
     current_user: User = Depends(get_current_user),
 ):
     """Remove a script assignment from a repository"""
+    repository = db.query(Repository).filter(Repository.id == repository_id).first()
+    if not repository:
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"}
+        )
+    check_repo_access(db, current_user, repository, "operator")
+
     repo_script = (
         db.query(RepositoryScript)
         .filter(
