@@ -30,6 +30,7 @@ async def test_check_delegates_to_agent_when_managed():
         job_kind="repository.check",
         maintenance_kind="check",
         maintenance_job_id=7,
+        raise_busy=False,
     )
     mock_v2.assert_not_awaited()
 
@@ -181,6 +182,7 @@ async def test_compact_delegates_to_agent_when_managed():
         maintenance_job_id=7,
         is_cancelled=None,
         wait_for_read_work=False,
+        raise_busy=False,
     )
     mock_v2.assert_not_awaited()
 
@@ -209,6 +211,7 @@ async def test_prune_delegates_to_agent_when_managed():
         maintenance_job_id=7,
         is_cancelled=None,
         wait_for_read_work=False,
+        raise_busy=False,
         operation={
             "keep_hourly": 1,
             "keep_daily": 2,
@@ -1049,6 +1052,7 @@ async def test_delete_archive_delegates_to_agent_when_managed():
         maintenance_kind="delete_archive",
         maintenance_job_id=7,
         operation={"archive": "aid:deadbeef"},
+        raise_busy=False,
     )
     mock_v2.assert_not_awaited()
 

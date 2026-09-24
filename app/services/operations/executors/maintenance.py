@@ -400,6 +400,9 @@ async def _run(
         await _hand_over_to_service(ctx, ctx.operation.started_at)
     watcher = asyncio.create_task(cancel_watcher(ctx, canceller))
     try:
+        # The kinds below pass `raise_busy`: an agent job the admission
+        # refuses leaves this row as it is and raises the refusal, which the
+        # runner defers, running the operation again on this row later.
         await call(BorgRouter(repository), ctx.operation_id)
     except Exception:
         # A cancelled agent job ends the router's wait with an error; the
@@ -492,7 +495,7 @@ async def run_check(ctx) -> Outcome:
 
     return await _run(
         ctx,
-        lambda router, job_id: router.check(job_id),
+        lambda router, job_id: router.check(job_id, raise_busy=True),
         canceller=getattr(check_service, "cancel_check", None),
         borg2_canceller=getattr(check_v2_service, "cancel_check", None),
     )
@@ -523,7 +526,7 @@ async def run_prune(ctx) -> Outcome:
     kwargs = {"keep_within": keep_within} if keep_within is not None else {}
 
     async def call(router, job_id):
-        await router.prune(job_id, *retention, False, **kwargs)
+        await router.prune(job_id, *retention, False, raise_busy=True, **kwargs)
 
     return await _run(
         ctx,
@@ -542,7 +545,7 @@ async def run_compact(ctx) -> Outcome:
 
     return await _run(
         ctx,
-        lambda router, job_id: router.compact(job_id),
+        lambda router, job_id: router.compact(job_id, raise_busy=True),
         canceller=getattr(compact_service, "cancel_compact", None),
         borg2_canceller=getattr(compact_v2_service, "cancel_compact", None),
     )
@@ -566,7 +569,9 @@ async def run_delete_archive(ctx) -> Outcome:
 
     return await _run(
         ctx,
-        lambda router, job_id: router.delete_archive(job_id, archive_name),
+        lambda router, job_id: router.delete_archive(
+            job_id, archive_name, raise_busy=True
+        ),
         canceller=cancel,
         borg2_canceller=getattr(delete_archive_v2_service, "cancel_delete", None),
     )

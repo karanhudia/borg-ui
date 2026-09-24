@@ -71,7 +71,7 @@ class TestRepositoryApiDispatch:
         routed_repo = mock_router.call_args.args[0]
         assert routed_repo.id == repo.id
         assert routed_repo.borg_version == repo.borg_version
-        fake_router.check.assert_awaited_once_with(op.id)
+        fake_router.check.assert_awaited_once_with(op.id, raise_busy=True)
 
     def test_check_route_accepts_guided_recovery_diagnosis_payload(
         self, test_client: TestClient, admin_headers, test_db
@@ -159,7 +159,7 @@ class TestRepositoryApiDispatch:
         routed_repo = mock_router.call_args.args[0]
         assert routed_repo.id == repo.id
         assert routed_repo.borg_version == repo.borg_version
-        fake_router.compact.assert_awaited_once_with(op.id)
+        fake_router.compact.assert_awaited_once_with(op.id, raise_busy=True)
 
     def test_prune_route_dispatches_through_borg_router(
         self, test_client: TestClient, admin_headers, test_db
@@ -300,7 +300,9 @@ class TestRepositoryApiDispatch:
         routed_repo = mock_router.call_args.args[0]
         assert routed_repo.id == repo.id
         assert routed_repo.borg_version == repo.borg_version
-        fake_router.prune.assert_awaited_once_with(op.id, 1, 3, 2, 1, 0, 0, False)
+        fake_router.prune.assert_awaited_once_with(
+            op.id, 1, 3, 2, 1, 0, 0, False, raise_busy=True
+        )
 
     def test_break_lock_route_dispatches_through_borg_router(
         self, test_client: TestClient, admin_headers, test_db

@@ -249,9 +249,18 @@ def list_active_repository_work(
     repository: Repository,
     *,
     ignore: Optional[IgnoreActiveJob] = None,
+    ignore_queued_operations: bool = False,
 ) -> list[ActiveRepositoryWork]:
-    """Return persisted active work for a repository grouped by operation class."""
+    """Return persisted active work for a repository grouped by operation class.
+
+    `ignore_queued_operations` leaves out `operations` rows that are still
+    queued. Such a row holds no lock, and it starts only through the
+    runner's repository lane, which the operation asking here already holds.
+    """
     active: list[ActiveRepositoryWork] = []
+    operation_statuses = (
+        ("running",) if ignore_queued_operations else ACTIVE_OPERATION_STATUSES
+    )
 
     # Every kind lives in `operations`. Admission must see them, or break_lock
     # and wipe would run alongside a check or a prune that is holding the borg
@@ -263,7 +272,7 @@ def list_active_repository_work(
         .filter(
             Operation.repository_id == repository.id,
             Operation.kind.in_(tuple(MIGRATED_OPERATION_KINDS)),
-            Operation.status.in_(ACTIVE_OPERATION_STATUSES),
+            Operation.status.in_(operation_statuses),
         )
         .all()
     ):
@@ -335,11 +344,17 @@ def ensure_repository_admission(
     *,
     duplicate_error_key: Optional[str] = None,
     ignore: Optional[IgnoreActiveJob] = None,
+    ignore_queued_operations: bool = False,
 ) -> None:
     """Reject duplicate or conflicting active work before a job is queued."""
     _lock_repository_scope(db, repository)
     requested_class = operation_class_for(operation)
-    active_work = list_active_repository_work(db, repository, ignore=ignore)
+    active_work = list_active_repository_work(
+        db,
+        repository,
+        ignore=ignore,
+        ignore_queued_operations=ignore_queued_operations,
+    )
 
     for active in active_work:
         if active.operation == operation:

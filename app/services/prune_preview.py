@@ -97,10 +97,15 @@ async def run_prune_dry_run(
     user_id: Optional[int],
     run_id: Optional[str] = None,
     depends_on_id: Optional[int] = None,
+    raise_busy: bool = False,
 ) -> tuple[Operation, str]:
     """Borg's own dry run, inline, on an operation row created `running`
     and closed here (the path the prune route has always taken). Returns
-    the finished row and its log text."""
+    the finished row and its log text.
+
+    With `raise_busy` the admission's refusal of the agent job is raised
+    for the caller to defer, and the row is closed `skipped`
+    (`repository_busy`) rather than failed: the dry run never started."""
     from app.services.operations.job_facade import MaintenanceJobFacade
     from app.api.maintenance_jobs import read_job_logs
     from app.core.borg_router import BorgRouter
@@ -109,6 +114,7 @@ async def run_prune_dry_run(
         finish_inline_maintenance,
         start_inline_maintenance,
     )
+    from app.services.operations.runner import repository_busy
 
     operation = start_inline_maintenance(
         db,
@@ -136,11 +142,15 @@ async def run_prune_dry_run(
             retention.keep_quarterly,
             retention.keep_yearly,
             True,
+            raise_busy=raise_busy,
             **prune_kwargs,
         )
     except Exception as exc:
         # The row was created `running`; a step that raised never closed it.
-        await fail_inline_maintenance(db, operation, exc)
+        refused = raise_busy and repository_busy(exc)
+        await fail_inline_maintenance(
+            db, operation, exc, skip_reason="repository_busy" if refused else None
+        )
         raise
     db.refresh(operation)
     # A dry run changed nothing, so it gets no follow-up chain.
@@ -610,13 +620,14 @@ async def run_candidate(
     run_id: Optional[str] = None,
     depends_on_id: Optional[int] = None,
     remeasure: bool = True,
+    raise_busy: bool = False,
 ) -> CandidateResult:
     """Spec 4.4 steps 1 to 4: dry run, verdict join, candidate re-measure,
     freed lower bound. Shared by the preview page and the comparison
     (spec 4.5), which passes `remeasure=False`: it runs after a backup,
     and nothing is re-measured after a backup (Appendix B); a candidate
     never measured then counts as partial. Raises DryRunFailed when Borg's
-    dry run did not complete."""
+    dry run did not complete. `raise_busy`: see `run_prune_dry_run`."""
     operation, log = await run_prune_dry_run(
         db,
         repository,
@@ -624,6 +635,7 @@ async def run_candidate(
         user_id=user_id,
         run_id=run_id,
         depends_on_id=depends_on_id,
+        raise_busy=raise_busy,
     )
     if operation.status not in ("completed", "completed_with_warnings"):
         raise DryRunFailed(log)

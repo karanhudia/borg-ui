@@ -276,6 +276,7 @@ async def test_run_comparison_stores_one_row_per_candidate(db, repo, monkeypatch
         "run_id": "run",
         "depends_on_id": 5,
         "remeasure": False,
+        "raise_busy": True,
     }
 
 
