@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
+import structlog
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -3299,7 +3300,7 @@ class TestBackupPlanRoutes:
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            "app.services.operations.backup_facade.wait_for_backup_operation",
             new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -3333,7 +3334,7 @@ class TestBackupPlanRoutes:
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            "app.services.operations.backup_facade.wait_for_backup_operation",
             new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -3393,7 +3394,7 @@ class TestBackupPlanRoutes:
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            "app.services.operations.backup_facade.wait_for_backup_operation",
             new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -3455,7 +3456,7 @@ class TestBackupPlanRoutes:
 
         with (
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new_callable=AsyncMock,
             ) as wait_for_backup,
             patch.object(
@@ -3520,7 +3521,7 @@ class TestBackupPlanRoutes:
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            "app.services.operations.backup_facade.wait_for_backup_operation",
             new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -3583,7 +3584,7 @@ class TestBackupPlanRoutes:
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            "app.services.operations.backup_facade.wait_for_backup_operation",
             new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -3664,7 +3665,7 @@ class TestBackupPlanRoutes:
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            "app.services.operations.backup_facade.wait_for_backup_operation",
             new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -3717,7 +3718,7 @@ class TestBackupPlanRoutes:
                 side_effect=fake_plan_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
@@ -3803,7 +3804,7 @@ class TestBackupPlanRoutes:
                 side_effect=fake_plan_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
@@ -3864,7 +3865,7 @@ class TestBackupPlanRoutes:
                 side_effect=fake_plan_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
@@ -3934,7 +3935,7 @@ class TestBackupPlanRoutes:
                 side_effect=fake_plan_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
@@ -3995,7 +3996,7 @@ class TestBackupPlanRoutes:
                 side_effect=fake_plan_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
@@ -4280,7 +4281,7 @@ class TestBackupPlanRoutes:
                 side_effect=refuse_primary,
             ),
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=_plan_backup_seam(fake_execute_backup),
             ),
             patch.object(
@@ -4329,7 +4330,7 @@ class TestBackupPlanRoutes:
 
         with (
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=_plan_backup_seam(fake_execute_backup),
             ),
             patch(
@@ -4363,22 +4364,24 @@ class TestBackupPlanRoutes:
         completing_wait = _plan_backup_seam(fake_execute_backup)
 
         sessions = []
+        log_run_ids = []
 
         async def flaky_wait(db, operation_id, **kwargs):
             # The callback of each wait reads the run's current state.
             waits.append(kwargs["is_cancelled"]())
             sessions.append(db)
+            log_run_ids.append(structlog.contextvars.get_contextvars().get("run_id"))
             if len(waits) < 3:
                 raise _locked_database()
             return await completing_wait(db, operation_id, **kwargs)
 
         with (
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=flaky_wait,
             ),
             patch(
-                "app.services.backup_plan_execution_service.asyncio.sleep",
+                "app.services.operations.backup_facade.asyncio.sleep",
                 new=AsyncMock(),
             ) as sleep,
         ):
@@ -4391,6 +4394,9 @@ class TestBackupPlanRoutes:
         # Every wait still honours a cancelled run, and each one polls on a
         # session of its own, so a failed read taints none of the others.
         assert waits == [False, False, False]
+        # Every line logged while waiting names the run.
+        assert log_run_ids == [run.id, run.id, run.id]
+        assert "run_id" not in structlog.contextvars.get_contextvars()
         assert len({id(session) for session in sessions}) == 3
         # Each one was closed when its wait ended.
         assert all(not session.in_transaction() for session in sessions)
@@ -4423,11 +4429,11 @@ class TestBackupPlanRoutes:
 
         with (
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=wait,
             ),
             patch(
-                "app.services.backup_plan_execution_service.asyncio.sleep",
+                "app.services.operations.backup_facade.asyncio.sleep",
                 new=AsyncMock(),
             ) as sleep,
             patch.object(
@@ -4469,11 +4475,11 @@ class TestBackupPlanRoutes:
 
         with (
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=broken_wait,
             ),
             patch(
-                "app.services.backup_plan_execution_service.asyncio.sleep",
+                "app.services.operations.backup_facade.asyncio.sleep",
                 new=AsyncMock(),
             ) as sleep,
         ):
@@ -4588,7 +4594,7 @@ class TestBackupPlanRoutes:
                 side_effect=fake_execute_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
@@ -4686,7 +4692,7 @@ class TestBackupPlanRoutes:
                 side_effect=fake_execute_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
@@ -4842,7 +4848,7 @@ class TestBackupPlanRoutes:
                 side_effect=fake_execute_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
@@ -4997,7 +5003,7 @@ class TestBackupPlanRoutes:
                 side_effect=fake_execute_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
@@ -5129,7 +5135,7 @@ class TestBackupPlanRoutes:
                 create=True,
             ),
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
@@ -5165,7 +5171,7 @@ class TestBackupPlanRoutes:
                 side_effect=fake_plan_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 backup_mock,
             ),
         ):
@@ -5211,7 +5217,7 @@ class TestBackupPlanRoutes:
                 side_effect=fake_plan_script,
             ),
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
@@ -5246,7 +5252,7 @@ class TestBackupPlanRoutes:
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            "app.services.operations.backup_facade.wait_for_backup_operation",
             new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -5284,7 +5290,7 @@ class TestBackupPlanRoutes:
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            "app.services.operations.backup_facade.wait_for_backup_operation",
             new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -5327,7 +5333,7 @@ class TestBackupPlanRoutes:
             active_count -= 1
 
         with patch(
-            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            "app.services.operations.backup_facade.wait_for_backup_operation",
             new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -5388,7 +5394,7 @@ class TestBackupPlanRoutes:
 
         with (
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=_plan_backup_seam(fake_execute_backup),
             ),
             patch.object(BorgRouter, "prune", new=step("prune")),
@@ -5450,7 +5456,7 @@ class TestBackupPlanRoutes:
 
         with (
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=_plan_backup_seam(fake_execute_backup),
             ),
             patch.object(
@@ -5509,7 +5515,7 @@ class TestBackupPlanRoutes:
 
         with (
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=_plan_backup_seam(fake_execute_backup),
             ),
             patch.object(
@@ -5595,7 +5601,7 @@ class TestBackupPlanRoutes:
 
         with (
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=_plan_backup_seam(fake_execute_backup),
             ),
             patch(
@@ -5672,7 +5678,7 @@ class TestBackupPlanRoutes:
         maintenance_mock = AsyncMock(return_value="completed")
         with (
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=_plan_backup_seam(fake_execute_backup),
             ),
             patch.object(
@@ -5773,7 +5779,7 @@ class TestBackupPlanRoutes:
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            "app.services.operations.backup_facade.wait_for_backup_operation",
             new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -5805,7 +5811,7 @@ class TestBackupPlanRoutes:
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            "app.services.operations.backup_facade.wait_for_backup_operation",
             new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -5837,7 +5843,7 @@ class TestBackupPlanRoutes:
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            "app.services.operations.backup_facade.wait_for_backup_operation",
             new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -5876,7 +5882,7 @@ class TestBackupPlanRoutes:
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            "app.services.operations.backup_facade.wait_for_backup_operation",
             new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
@@ -5943,7 +5949,7 @@ class TestBackupPlanRoutes:
                 FixedDateTime,
             ),
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
@@ -6004,7 +6010,7 @@ class TestBackupPlanRoutes:
                 FixedDateTime,
             ),
             patch(
-                "app.services.backup_plan_execution_service.wait_for_backup_operation",
+                "app.services.operations.backup_facade.wait_for_backup_operation",
                 new=_plan_backup_seam(fake_execute_backup),
             ),
         ):
@@ -6069,7 +6075,7 @@ class TestBackupPlanRoutes:
             db.commit()
 
         with patch(
-            "app.services.backup_plan_execution_service.wait_for_backup_operation",
+            "app.services.operations.backup_facade.wait_for_backup_operation",
             new=_plan_backup_seam(fake_execute_backup),
         ):
             await backup_plan_execution_service.execute_run(run.id)
