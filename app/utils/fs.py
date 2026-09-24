@@ -83,7 +83,13 @@ def remove_tree_without_crossing_mounts(path: str) -> bool:
         logger.error("Refusing to delete unreadable directory", path=root, error=str(e))
         return False
     if not os.path.isdir(root) or os.path.islink(root):
-        os.unlink(root)
+        try:
+            os.unlink(root)
+        except OSError as e:
+            logger.warning(
+                "Could not delete path during cleanup", path=root, error=str(e)
+            )
+            return False
         return True
     return _remove_same_device_tree(root, root_stat.st_dev)
 

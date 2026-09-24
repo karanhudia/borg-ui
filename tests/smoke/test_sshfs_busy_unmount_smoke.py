@@ -130,6 +130,8 @@ def main() -> int:
         mount_point = wait_for_sshfs_mount(remote_source.name)
         # The reporter's shell: a process whose cwd pins the mount busy.
         busy_holder = subprocess.Popen(["sleep", "600"], cwd=mount_point)
+        if mount_point not in sshfs_mount_points(remote_source.name):
+            raise SmokeFailure("SSHFS mount detached before it could be pinned busy")
         client.log(f"Pinned SSHFS mount busy at {mount_point}")
 
         client.wait_for_job(
@@ -155,6 +157,11 @@ def main() -> int:
                     "Busy SSHFS mount was never detached after the backup"
                 )
             time.sleep(0.5)
+        missing = missing_sentinels(remote_source)
+        if missing:
+            raise SmokeFailure(
+                f"Remote source files were deleted through the busy SSHFS mount: {missing}"
+            )
 
         archive_name = client.list_archives(repo_path)[0]["name"]
         items = client.restore_contents(
