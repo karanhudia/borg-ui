@@ -12,6 +12,7 @@ import structlog
 from sqlalchemy.orm import Session
 
 import app.config as app_config
+from app.core.borg_errors import LOCK_CONTENTION_DETAIL_KEY
 from app.database.models import Operation, Repository, SystemSettings, utc_now
 from app.services.operations import executors as executor_registry
 from app.services.operations.events import (
@@ -96,11 +97,18 @@ def requeue_count(op: Operation) -> int:
 
 
 def repository_busy(exc: BaseException) -> bool:
-    """True for the admission's 409 (repositoryOperationActive)."""
-    if getattr(exc, "status_code", None) != 409:
-        return False
+    """True when the repository is taken for now: the admission's 409
+    (repositoryOperationActive), or the waiter's 502 for an agent job whose
+    Borg run ended on a lock another process holds (marked
+    `lock_contention`, see `wait_for_agent_repository_operation_job`). Both
+    are deferred the same way."""
     detail = getattr(exc, "detail", None)
-    return isinstance(detail, dict) and detail.get("key") == REPOSITORY_BUSY_KEY
+    if not isinstance(detail, dict):
+        return False
+    status_code = getattr(exc, "status_code", None)
+    if status_code == 409:
+        return detail.get("key") == REPOSITORY_BUSY_KEY
+    return status_code == 502 and detail.get(LOCK_CONTENTION_DETAIL_KEY) is True
 
 
 @dataclass

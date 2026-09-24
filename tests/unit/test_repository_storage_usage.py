@@ -63,7 +63,7 @@ class _NullClient:
     def complete_job(self, job_id, *, result):
         pass
 
-    def fail_job(self, job_id, *, error_message, return_code=None):
+    def fail_job(self, job_id, *, error_message, return_code=None, **report):
         pass
 
 
@@ -252,7 +252,7 @@ class FakeClient:
     def complete_job(self, job_id, *, result):
         self.completed = (job_id, result)
 
-    def fail_job(self, job_id, *, error_message, return_code=None):
+    def fail_job(self, job_id, *, error_message, return_code=None, **report):
         self.failed = (job_id, error_message)
 
     def cancel_job(self, job_id):

@@ -76,14 +76,16 @@ class RecordingHttpClient:
     def __init__(self):
         self.completed = []
         self.failed = []
+        self.reports = []
         self.canceled = []
 
     def complete_job(self, job_id, *, result):
         self.completed.append((job_id, result))
         return {"id": job_id, "status": "completed"}
 
-    def fail_job(self, job_id, *, error_message, return_code=None):
+    def fail_job(self, job_id, *, error_message, return_code=None, **report):
         self.failed.append((job_id, error_message, return_code))
+        self.reports.append(report)
         return {"id": job_id, "status": "failed"}
 
     def cancel_job(self, job_id):
@@ -378,7 +380,7 @@ class FakeRuntimeClient:
         self.calls.append(("complete_job", job_id, result))
         return {"id": job_id, "status": "completed"}
 
-    def fail_job(self, job_id, *, error_message, return_code=None):
+    def fail_job(self, job_id, *, error_message, return_code=None, **report):
         self.calls.append(("fail_job", job_id, error_message, return_code))
         return {"id": job_id, "status": "failed"}
 
@@ -576,7 +578,7 @@ def test_repository_init_disables_the_store_cache(monkeypatch):
         def complete_job(self, job_id, *, result):
             pass
 
-        def fail_job(self, job_id, *, error_message, return_code=None):
+        def fail_job(self, job_id, *, error_message, return_code=None, **report):
             pass
 
     job = {
@@ -649,7 +651,7 @@ def test_borg2_compact_reports_its_statistics_in_the_completion(monkeypatch):
         def complete_job(self, job_id, *, result):
             captured["result"] = result
 
-        def fail_job(self, job_id, *, error_message, return_code=None):
+        def fail_job(self, job_id, *, error_message, return_code=None, **report):
             raise AssertionError(error_message)
 
     job = {
@@ -709,7 +711,7 @@ def test_borg2_compact_without_the_flag_on_an_old_beta(monkeypatch):
         def complete_job(self, job_id, *, result):
             captured["result"] = result
 
-        def fail_job(self, job_id, *, error_message, return_code=None):
+        def fail_job(self, job_id, *, error_message, return_code=None, **report):
             raise AssertionError(error_message)
 
     job = {
@@ -800,7 +802,7 @@ def test_borg_warning_exit_completes_a_streamed_operation_with_warnings(monkeypa
         def complete_job(self, job_id, *, result):
             captured["result"] = result
 
-        def fail_job(self, job_id, *, error_message, return_code=None):
+        def fail_job(self, job_id, *, error_message, return_code=None, **report):
             raise AssertionError(error_message)
 
     job = {
@@ -879,7 +881,7 @@ def test_compact_completion_carries_no_stats_key_without_them(
         def complete_job(self, job_id, *, result):
             captured["result"] = result
 
-        def fail_job(self, job_id, *, error_message, return_code=None):
+        def fail_job(self, job_id, *, error_message, return_code=None, **report):
             raise AssertionError(error_message)
 
     job = {
@@ -1534,6 +1536,35 @@ def test_session_command_client_delivers_error_over_rest():
     assert all(
         json.loads(frame).get("type") != "command_error" for frame in _drain(outbox)
     )
+
+
+@pytest.mark.unit
+def test_session_command_client_delivers_the_failure_report_over_rest():
+    """The stderr tail and the failure kind ride with the REST report (and
+    are left out when the caller has none, for a server before them)."""
+    from agent.borg_ui_agent.session import SessionCommandClient
+
+    http = RecordingHttpClient()
+    client = SessionCommandClient(
+        command_id="cmd-1", job_id=7, outbox=queue.Queue(), http_client=http
+    )
+
+    client.fail_job(7, error_message="boom", return_code=73)
+    client.fail_job(
+        7,
+        error_message="boom",
+        return_code=73,
+        stderr_tail="Failed to create/acquire the lock",
+        failure_kind="lock_contention",
+    )
+
+    assert http.reports == [
+        {"stderr_tail": None, "failure_kind": None},
+        {
+            "stderr_tail": "Failed to create/acquire the lock",
+            "failure_kind": "lock_contention",
+        },
+    ]
 
 
 @pytest.mark.unit
@@ -3013,7 +3044,7 @@ class BackupClient:
         self.calls.append(("complete_job", job_id, result))
         return {"id": job_id, "status": "completed"}
 
-    def fail_job(self, job_id, *, error_message, return_code=None):
+    def fail_job(self, job_id, *, error_message, return_code=None, **report):
         self.calls.append(("fail_job", job_id, error_message, return_code))
         return {"id": job_id, "status": "failed"}
 

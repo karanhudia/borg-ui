@@ -28,6 +28,7 @@ from app.services.repository_executor import (
     TERMINAL_AGENT_STATUSES,
     _agent_job_failure_message,
     abandon_agent_repository_operation_job,
+    agent_failure_is_lock_contention,
     queue_agent_repository_operation_job,
 )
 
@@ -117,6 +118,9 @@ class AgentChangeStream:
         self._queued_at: Optional[float] = None
         self.return_code: Optional[int] = None
         self.stderr: str = ""
+        # The job ended on a lock another process holds: the reader's
+        # operation is deferred, not the archive's index attempt spent.
+        self.lock_contention = False
         self.job_id: Optional[int] = None
         self._relay_stream = None
         self._drain_task: Optional[asyncio.Task] = None
@@ -307,11 +311,12 @@ class AgentChangeStream:
         # complete listing, whatever exit code borg had (a warning exit whose
         # upload was refused fails the job with rc 1).
         self.return_code = -1
+        failed = SimpleNamespace(
+            id=self.job_id, error_message=row.error_message, result=row.result
+        )
+        self.lock_contention = agent_failure_is_lock_contention(failed, self._db)
         self.stderr = (
-            _agent_job_failure_message(
-                self._db,
-                SimpleNamespace(id=self.job_id, error_message=row.error_message),
-            )
+            _agent_job_failure_message(self._db, failed)
             or f"the change listing job ended {row.status}"
         )
 
@@ -350,6 +355,7 @@ class AgentChangeStream:
                 AgentJob.status,
                 AgentJob.error_message,
                 AgentJob.started_at,
+                AgentJob.result,
             )
             .filter(AgentJob.id == self.job_id)
             .one_or_none()

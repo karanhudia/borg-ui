@@ -17,6 +17,7 @@ from agent.borg_ui_agent.cancel import (
     start_keepalive,
 )
 from agent.borg_ui_agent.client import AgentClient
+from agent.borg_ui_agent.failure_report import FailureTail, failure_report
 
 
 @dataclass(frozen=True)
@@ -434,10 +435,13 @@ def execute_backup_create_job(
     # poller reaches a borg that is silent (a lock wait, a stalled store).
     cancelled = start_cancel_poller(process, should_cancel, done, _terminate_process)
     start_keepalive(process, client, job_id, done)
+    # The last plain lines borg wrote, for the failure report.
+    failure_tail = FailureTail()
     try:
         if process.stderr is not None:
             for line in process.stderr:
                 message = line.rstrip("\n")
+                failure_tail.append(message)
                 progress = parse_borg_progress(message)
                 if progress:
                     client.send_progress(job_id, progress)
@@ -500,7 +504,12 @@ def execute_backup_create_job(
         )
 
     error_message = f"borg create exited with code {return_code}"
-    client.fail_job(job_id, error_message=error_message, return_code=return_code)
+    client.fail_job(
+        job_id,
+        error_message=error_message,
+        return_code=return_code,
+        **failure_report(return_code, failure_tail.lines()),
+    )
     return BackupExecutionResult(
         job_id=job_id,
         status="failed",

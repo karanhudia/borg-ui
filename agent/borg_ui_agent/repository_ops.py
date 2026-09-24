@@ -41,6 +41,7 @@ from agent.borg_ui_agent.compact_stats import (
     parse_borg_version,
     parse_compact_stats,
 )
+from agent.borg_ui_agent.failure_report import FailureTail, failure_report
 
 
 REPOSITORY_JOB_KINDS = {
@@ -963,7 +964,13 @@ def _execute_short_repository_operation(
         )
 
     error_message = f"{payload.job_kind} exited with code {process.returncode}"
-    client.fail_job(job_id, error_message=error_message, return_code=process.returncode)
+    client.fail_job(
+        job_id,
+        error_message=error_message,
+        return_code=process.returncode,
+        # borg prints an argument error on stdout
+        **failure_report(process.returncode, process.stderr or process.stdout or ""),
+    )
     return RepositoryOperationResult(
         job_id=job_id,
         status="failed",
@@ -1117,7 +1124,12 @@ def _execute_limited_output_repository_operation(
     if stderr:
         client.send_log(job_id, sequence=1, stream="stderr", message=stderr.rstrip())
     error_message = f"{payload.job_kind} exited with code {return_code}"
-    client.fail_job(job_id, error_message=error_message, return_code=return_code)
+    client.fail_job(
+        job_id,
+        error_message=error_message,
+        return_code=return_code,
+        **failure_report(return_code, stderr),
+    )
     return RepositoryOperationResult(
         job_id=job_id,
         status="failed",
@@ -1421,7 +1433,12 @@ def _execute_streaming_artifact_operation(
                 job_id, sequence=1, stream="stderr", message=stderr.rstrip()
             )
         error_message = f"{payload.job_kind} stopped by the watchdog: {reason}"
-        client.fail_job(job_id, error_message=error_message, return_code=return_code)
+        client.fail_job(
+            job_id,
+            error_message=error_message,
+            return_code=return_code,
+            **failure_report(return_code, stderr),
+        )
         return RepositoryOperationResult(
             job_id=job_id,
             status="failed",
@@ -1431,7 +1448,12 @@ def _execute_streaming_artifact_operation(
 
     if upload_error is not None:
         error_message = f"{payload.job_kind} artifact upload failed: {upload_error}"
-        client.fail_job(job_id, error_message=error_message, return_code=return_code)
+        client.fail_job(
+            job_id,
+            error_message=error_message,
+            return_code=return_code,
+            **failure_report(return_code, stderr),
+        )
         return RepositoryOperationResult(
             job_id=job_id,
             status="failed",
@@ -1455,7 +1477,12 @@ def _execute_streaming_artifact_operation(
             f"{payload.job_kind} artifact not delivered: the server did not "
             f"confirm a consumer for it (borg exited with code {return_code})"
         )
-        client.fail_job(job_id, error_message=error_message, return_code=return_code)
+        client.fail_job(
+            job_id,
+            error_message=error_message,
+            return_code=return_code,
+            **failure_report(return_code, stderr),
+        )
         return RepositoryOperationResult(
             job_id=job_id,
             status="failed",
@@ -1482,7 +1509,12 @@ def _execute_streaming_artifact_operation(
     if stderr:
         client.send_log(job_id, sequence=1, stream="stderr", message=stderr.rstrip())
     error_message = f"{payload.job_kind} exited with code {return_code}"
-    client.fail_job(job_id, error_message=error_message, return_code=return_code)
+    client.fail_job(
+        job_id,
+        error_message=error_message,
+        return_code=return_code,
+        **failure_report(return_code, stderr),
+    )
     return RepositoryOperationResult(
         job_id=job_id,
         status="failed",
@@ -1614,7 +1646,10 @@ def _execute_streaming_repository_operation(
         )
 
     sequence = initial_sequence
+    # The last lines as Borg wrote them, for the compact statistics; and
+    # the last plain lines, for a failure's report.
     tail: deque[str] = deque(maxlen=TAIL_LINES)
+    failure_tail = FailureTail()
     done = threading.Event()
     # The per-line check below answers at once while output flows; the
     # poller reaches a Borg that prints nothing (a lock wait, a compact).
@@ -1626,6 +1661,7 @@ def _execute_streaming_repository_operation(
                 message = line.rstrip("\n")
                 if compact_stats:
                     tail.append(message)
+                failure_tail.append(message)
                 progress = parse_borg_progress(message)
                 if progress:
                     client.send_progress(job_id, progress)
@@ -1681,7 +1717,12 @@ def _execute_streaming_repository_operation(
         )
 
     error_message = f"{payload.job_kind} exited with code {return_code}"
-    client.fail_job(job_id, error_message=error_message, return_code=return_code)
+    client.fail_job(
+        job_id,
+        error_message=error_message,
+        return_code=return_code,
+        **failure_report(return_code, failure_tail.lines()),
+    )
     return RepositoryOperationResult(
         job_id=job_id,
         status="failed",
@@ -1836,6 +1877,7 @@ def _execute_restore_operation(
             )
 
         sequence = initial_sequence
+        failure_tail = FailureTail()
         done = threading.Event()
         # As in the streaming path: the poller reaches a silent extract.
         cancelled = _start_cancel_poller(process, should_cancel, done)
@@ -1844,6 +1886,7 @@ def _execute_restore_operation(
             if process.stdout is not None:
                 for line in process.stdout:
                     message = line.rstrip("\n")
+                    failure_tail.append(message)
                     progress = parse_borg_progress(message)
                     if progress:
                         client.send_progress(job_id, progress)
@@ -1884,7 +1927,10 @@ def _execute_restore_operation(
         if return_code != 0 and not warning:
             error_message = f"{payload.job_kind} exited with code {return_code}"
             client.fail_job(
-                job_id, error_message=error_message, return_code=return_code
+                job_id,
+                error_message=error_message,
+                return_code=return_code,
+                **failure_report(return_code, failure_tail.lines()),
             )
             return RepositoryOperationResult(
                 job_id=job_id,

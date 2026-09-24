@@ -226,6 +226,13 @@ The first implementation supports:
   archive's final counters (`archive_stats`, from `archive.stats` of
   `borg create --json`), which the server keeps over the last progress
   report
+- from 0.1.10 a failure report carries the last lines Borg wrote
+  (`stderr_tail`, at most 40 lines / 4 KiB) and a `failure_kind`
+  (`lock_contention` when Borg gave up on a lock another process holds -
+  exit codes 70, 71 and 73, or the `(timeout)` lock line of a Borg 1 on
+  legacy exit codes; not 72, a lock file Borg could not create -
+  else `other`), so the server does not depend on the log lines, which
+  can land after the report
 - cancellation through heartbeat; from 0.1.7 (`jobs.cancel`) a running
   backup, check, prune, compact, restore or archive delete stops as well,
   even while Borg prints nothing
