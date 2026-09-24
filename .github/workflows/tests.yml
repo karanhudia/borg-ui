@@ -713,6 +713,11 @@ jobs:
           printf 'Match User borgsftp\n  ForceCommand internal-sftp\n' | sudo tee -a /etc/ssh/sshd_config
           # Sources the smoke writes inside the SSH user's home
           sudo install -d -m 0777 /home/borgsmoke/smoke-src
+          # Runner images export XDG_* paths into the runner's home through
+          # /etc/environment, which PAM applies to every SSH login. Borg run
+          # over SSH as borgsmoke would then write its config there.
+          grep '^XDG_' /etc/environment || true
+          sudo sed -i '/^XDG_/d' /etc/environment
           sudo mkdir -p /run/sshd
           sudo /usr/sbin/sshd -p 2222
 
