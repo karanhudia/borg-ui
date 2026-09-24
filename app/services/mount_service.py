@@ -7,6 +7,7 @@ Provides unified mount management for:
 """
 
 import asyncio
+import functools
 import os
 import subprocess
 import tempfile
@@ -131,8 +132,21 @@ def _sshfs_symlink_options(preserve_symlinks: bool) -> list[str]:
     choice for interactive browsing, not a fidelity path — via ``preserve_symlinks=False``.
     """
     if preserve_symlinks:
-        return ["-o", "no_contain_symlinks"]
+        # sshfs builds without the contain_symlinks patch (Ubuntu 24.04's 3.7.3)
+        # have no sandbox to disable and reject the unknown option outright.
+        return ["-o", "no_contain_symlinks"] if _sshfs_has_contain_symlinks() else []
     return ["-o", "follow_symlinks"]
+
+
+@functools.lru_cache(maxsize=1)
+def _sshfs_has_contain_symlinks() -> bool:
+    try:
+        result = subprocess.run(
+            ["sshfs", "-h"], capture_output=True, text=True, timeout=5
+        )
+    except (OSError, subprocess.SubprocessError):
+        return True
+    return "no_contain_symlinks" in result.stdout + result.stderr
 
 
 def _sshfs_missing_remote_path(error_message: str) -> bool:

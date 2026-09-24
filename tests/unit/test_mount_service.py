@@ -40,11 +40,34 @@ class TestMountService:
 
     def test_sshfs_symlink_options_preserve_is_faithful(self):
         """Backup sources disable the contain_symlinks sandbox and do not follow."""
-        from app.services.mount_service import _sshfs_symlink_options
+        from app.services import mount_service as ms
 
-        opts = _sshfs_symlink_options(True)
+        ms._sshfs_has_contain_symlinks.cache_clear()
+        try:
+            with patch(
+                "app.services.mount_service.subprocess.run",
+                return_value=Mock(stdout="    -o no_contain_symlinks\n", stderr=""),
+            ):
+                opts = ms._sshfs_symlink_options(True)
+        finally:
+            ms._sshfs_has_contain_symlinks.cache_clear()
         assert "no_contain_symlinks" in opts
         assert "follow_symlinks" not in opts
+
+    def test_sshfs_symlink_options_skip_option_sshfs_does_not_know(self):
+        # Ubuntu 24.04's sshfs 3.7.3 lacks the contain_symlinks patch and
+        # fails the whole mount on the unknown option.
+        from app.services import mount_service as ms
+
+        ms._sshfs_has_contain_symlinks.cache_clear()
+        try:
+            with patch(
+                "app.services.mount_service.subprocess.run",
+                return_value=Mock(stdout="    -o follow_symlinks\n", stderr=""),
+            ):
+                assert ms._sshfs_symlink_options(True) == []
+        finally:
+            ms._sshfs_has_contain_symlinks.cache_clear()
 
     def test_sshfs_symlink_options_default_follows(self):
         """Browse/restore/cloud-mirror keep the historical follow_symlinks."""
