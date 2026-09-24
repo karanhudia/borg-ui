@@ -186,3 +186,24 @@ async def test_a_check_that_times_out_ends_its_child():
         await ms._communicate_or_kill(process, timeout=0.2, input=b"")
     # Reaped, not left running behind the check.
     assert process.returncode is not None
+
+
+@pytest.mark.unit
+async def test_a_check_that_is_cancelled_ends_its_child():
+    import asyncio
+
+    process = await asyncio.create_subprocess_exec(
+        "sleep", "30", stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE
+    )
+    task = asyncio.create_task(ms._communicate_or_kill(process, timeout=30, input=b""))
+    await asyncio.sleep(0.2)
+    task.cancel()
+    try:
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        # Reaped, not left running behind the cancelled check.
+        assert process.returncode is not None
+    finally:
+        if process.returncode is None:
+            process.kill()
+            await process.wait()

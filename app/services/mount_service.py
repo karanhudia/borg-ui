@@ -182,14 +182,17 @@ async def _communicate_or_kill(
     """`communicate` with a deadline that also ends the child.
 
     `wait_for` only cancels the wait: a hung ssh or sftp would otherwise
-    outlive the check that started it.
+    outlive the check that started it, on a timeout as on a cancellation.
     """
     try:
         return await asyncio.wait_for(process.communicate(input=input), timeout)
-    except asyncio.TimeoutError:
+    except (asyncio.TimeoutError, asyncio.CancelledError):
         if process.returncode is None:
-            process.kill()
-            await process.wait()
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+            await asyncio.shield(process.wait())
         raise
 
 
