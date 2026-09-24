@@ -90,14 +90,7 @@ def main() -> int:
     try:
         client.authenticate()
 
-        key_response = client.request_ok(
-            "POST",
-            "/api/ssh-keys/generate",
-            headers=client._headers(json_body=True),
-            json={"name": "SSH Smoke Key", "key_type": "ed25519"},
-            expected=(200,),
-        )
-        key_payload = key_response.json()["ssh_key"]
+        key_payload = client.generate_ssh_key(name="SSH Smoke Key")
         key_id = key_payload["id"]
         public_key = key_payload["public_key"].strip()
         if not public_key.startswith("ssh-"):

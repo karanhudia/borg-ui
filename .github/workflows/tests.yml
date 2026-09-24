@@ -688,7 +688,9 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y borgbackup openssh-server
+          sudo apt-get install -y borgbackup openssh-server sshfs
+          # Borg UI mounts SSH sources with -o allow_other
+          echo 'user_allow_other' | sudo tee -a /etc/fuse.conf
 
       - name: Configure localhost SSH target
         run: |
@@ -704,6 +706,13 @@ jobs:
           echo 'PasswordAuthentication no' | sudo tee -a /etc/ssh/sshd_config
           echo 'PubkeyAuthentication yes' | sudo tee -a /etc/ssh/sshd_config
           echo 'PermitRootLogin no' | sudo tee -a /etc/ssh/sshd_config
+          # An account that can only use SFTP, like a Hetzner Storage Box
+          sudo useradd -m -s /bin/bash borgsftp || true
+          sudo install -d -o borgsftp -g borgsftp -m 700 /home/borgsftp/.ssh
+          sudo install -o borgsftp -g borgsftp -m 600 /dev/null /home/borgsftp/.ssh/authorized_keys
+          printf 'Match User borgsftp\n  ForceCommand internal-sftp\n' | sudo tee -a /etc/ssh/sshd_config
+          # Sources the smoke writes inside the SSH user's home
+          sudo install -d -m 0777 /home/borgsmoke/smoke-src
           sudo mkdir -p /run/sshd
           sudo /usr/sbin/sshd -p 2222
 
@@ -762,6 +771,21 @@ jobs:
           SSH_SMOKE_USER: borgsmoke
           SSH_SMOKE_AUTH_KEYS: /home/borgsmoke/.ssh/authorized_keys
           SSH_SMOKE_REMOTE_REPO: /home/borgsmoke/remote-repo
+
+      - name: Run remote source plan routes smoke
+        run: |
+          python3 tests/smoke/test_remote_source_plan_routes_smoke.py --url ${{ env.SMOKE_URL }}
+        env:
+          BORG_UI_CONTAINER: false
+          SSH_SMOKE_HOST: 127.0.0.1
+          SSH_SMOKE_ALT_HOST: localhost
+          SSH_SMOKE_PORT: 2222
+          SSH_SMOKE_USER: borgsmoke
+          SSH_SMOKE_AUTH_KEYS: /home/borgsmoke/.ssh/authorized_keys
+          SSH_SMOKE_LOGIN_HOME: /home/borgsmoke
+          SSH_SMOKE_SOURCE_ROOT: /home/borgsmoke/smoke-src
+          SSH_SMOKE_SFTP_USER: borgsftp
+          SSH_SMOKE_SFTP_AUTH_KEYS: /home/borgsftp/.ssh/authorized_keys
 
       - name: Stop Borg UI
         if: always()
