@@ -1,4 +1,5 @@
 import asyncio
+import signal
 import time
 from datetime import datetime
 
@@ -2398,3 +2399,364 @@ async def test_accepted_cancel_survives_failed_terminal_and_recovery_commits(
     assert attempts == [first.id]
     assert dependants_run == []
     assert (child.status, child.skip_reason) == ("skipped", "dependency_failed")
+
+
+# -- stop claiming on the shutdown signal (#1166) ------------------------------
+
+
+class _FakeServer:
+    """The shape of `uvicorn.server.Server.handle_exit`: the handler the
+    server installs for its shutdown signals."""
+
+    def __init__(self):
+        self.should_exit = False
+
+    def handle_exit(self, sig, frame):
+        self.should_exit = True
+
+
+@pytest.fixture()
+def sigterm_server():
+    """A fake server handling SIGTERM for the duration of the test."""
+    server = _FakeServer()
+    previous = signal.signal(signal.SIGTERM, server.handle_exit)
+    try:
+        yield server
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_the_shutdown_signal_stops_the_runner_claiming(
+    db, repo, runner, registry, sigterm_server
+):
+    """uvicorn keeps serving open connections after the shutdown signal and
+    sends the lifespan shutdown only once they are gone; a stream that never
+    ends keeps the runner alive until the worker is killed. The signal, not
+    the lifespan, is what stops the claims: a backup queued in that window
+    stays queued for the replacement process."""
+    registry["backup"] = lambda ctx: Outcome()
+    op = enqueue(db, "backup", repository_id=repo.id, trigger="schedule")
+
+    assert runner.stop_on_shutdown_signal((signal.SIGTERM,)) == (signal.SIGTERM,)
+    signal.raise_signal(signal.SIGTERM)
+
+    # the server's own handler still ran
+    assert sigterm_server.should_exit is True
+    assert await runner.tick() == 0
+    assert runner.running_tasks == {}
+    db.expire_all()
+    assert db.get(Operation, op.id).status == "queued"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_the_signal_ends_the_loop_with_its_claims_and_its_sweep(
+    db, repo, runner, registry, sigterm_server
+):
+    """The whole loop stops, not only the claims: the sweep of abandoned
+    index rows would otherwise requeue, from the exiting process, rows a
+    replacement process is running."""
+    registry["backup"] = lambda ctx: Outcome()
+    registry["stats"] = lambda ctx: Outcome()
+    runner.stop_on_shutdown_signal((signal.SIGTERM,))
+    loop = asyncio.create_task(runner.start())
+    await asyncio.sleep(0.02)  # idle: the first tick found nothing
+    assert not loop.done()
+
+    signal.raise_signal(signal.SIGTERM)
+    queued = enqueue(db, "backup", repository_id=repo.id, trigger="schedule")
+    # a running index row without a task of this runner: the replacement's
+    theirs = enqueue(db, "stats", repository_id=repo.id)
+    theirs.status = "running"
+    theirs.started_at = utc_now()
+    db.commit()
+    runner.wake()
+    await asyncio.wait_for(loop, timeout=1.0)
+    db.expire_all()
+    assert db.get(Operation, theirs.id).status == "running"
+    assert db.get(Operation, queued.id).status == "queued"
+    assert runner.running_tasks == {}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_stop_while_outcomes_are_recorded_skips_the_sweep_of_that_tick(
+    db, repo, runner, registry, monkeypatch
+):
+    """`record_unrecorded_outcomes` awaits a broadcast before the sweep; a
+    stop that lands there must not let the same tick requeue a running
+    index row without a task of this runner (the replacement's)."""
+    from app.services.operations.runner import _UnrecordedOutcome
+
+    registry["stats"] = lambda ctx: Outcome()
+    registry["backup"] = lambda ctx: Outcome()
+    ended = enqueue(db, "backup", repository_id=repo.id)
+    ended.status = "running"
+    ended.started_at = utc_now()
+    theirs = enqueue(db, "stats", repository_id=repo.id)
+    theirs.status = "running"
+    theirs.started_at = utc_now()
+    db.commit()
+    runner.unrecorded_outcomes[ended.id] = _UnrecordedOutcome(
+        kind="backup",
+        repository_id=repo.id,
+        run_id=ended.run_id,
+        status="failed",
+        result=None,
+        skip_reason=None,
+        error_message="stale",
+        started_at=ended.started_at,
+        completed_at=utc_now(),
+    )
+
+    import app.services.operations.runner as runner_module
+
+    async def stop_during_broadcast(*args, **kwargs):
+        runner.stop()
+
+    monkeypatch.setattr(
+        runner_module, "broadcast_operation_updated", stop_during_broadcast
+    )
+    assert await runner.tick() == 0
+    db.expire_all()
+    assert db.get(Operation, ended.id).status == "failed"
+    assert db.get(Operation, theirs.id).status == "running"
+    assert runner.running_tasks == {}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_signal_during_startup_is_not_undone_by_start(
+    db, repo, runner, registry, sigterm_server
+):
+    """The hook is installed before the startup awaits anything, and the
+    loop's task runs only later: a signal in between must not be reset by
+    `start()`; the loop ends without a tick."""
+    registry["stats"] = lambda ctx: Outcome()
+    op = enqueue(db, "stats", repository_id=repo.id)
+    ticks = []
+    real_tick = runner.tick
+
+    async def counted_tick():
+        ticks.append(await real_tick())
+
+    runner.tick = counted_tick
+    runner.stop_on_shutdown_signal((signal.SIGTERM,))
+    signal.raise_signal(signal.SIGTERM)
+
+    await asyncio.wait_for(runner.start(), timeout=1.0)
+    assert ticks == []
+    db.expire_all()
+    assert db.get(Operation, op.id).status == "queued"
+    assert runner.running_tasks == {}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_stop_during_the_checks_ends_the_claims_of_that_tick(
+    db, repo, runner, registry, monkeypatch
+):
+    """The tick walks every queued row and reads the database before each
+    claim; a stop that lands during those reads is seen before the claim,
+    and the rest of the queue stays as it is."""
+    registry["stats"] = lambda ctx: Outcome()
+    other = Repository(name="o", path="/tmp/o", encryption="none", compression="lz4")
+    db.add(other)
+    db.commit()
+    first = enqueue(db, "stats", repository_id=repo.id, priority=0)
+    second = enqueue(db, "stats", repository_id=other.id, priority=5)
+
+    import app.services.operations.runner as runner_module
+
+    real_can_start = runner_module.can_start
+
+    def stop_during_first(db_, op, settings):
+        if op.id == first.id:
+            runner.stop()
+        return real_can_start(db_, op, settings)
+
+    monkeypatch.setattr(runner_module, "can_start", stop_during_first)
+    assert await runner.tick() == 0
+    assert runner.running_tasks == {}
+    db.expire_all()
+    assert db.get(Operation, first.id).status == "queued"
+    assert db.get(Operation, second.id).status == "queued"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_claim_written_after_the_stop_is_handed_back(
+    db, repo, runner, registry, monkeypatch
+):
+    """A signal handler runs between any two bytecodes: it can land after
+    the check and before the claim's commit. The row goes back to queued
+    and nothing runs it."""
+    ran = []
+
+    async def record(ctx: OperationContext):
+        ran.append(ctx.operation_id)
+        return Outcome()
+
+    registry["stats"] = record
+    op = enqueue(db, "stats", repository_id=repo.id)
+
+    import app.services.operations.runner as runner_module
+
+    real_utc_now = runner_module.utc_now
+
+    def stop_while_claiming():
+        # called for the claim's `started_at`, after the check, before the commit
+        runner.stop()
+        return real_utc_now()
+
+    monkeypatch.setattr(runner_module, "utc_now", stop_while_claiming)
+    assert await runner.tick() == 0
+    assert runner.running_tasks == {}
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert (row.status, row.started_at) == ("queued", None)
+    assert ran == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_hand_back_undoes_only_its_own_claim(
+    db, repo, runner, registry, monkeypatch, session_factory
+):
+    """Another process can have requeued and claimed the row again while
+    this tick awaited the broadcast (its sweep sees a `running` index row
+    without a task of its own). That claim is left as it is, and the row
+    is not this runner's to run."""
+    ran = []
+
+    async def record(ctx: OperationContext):
+        ran.append(ctx.operation_id)
+        return Outcome()
+
+    registry["stats"] = record
+    op = enqueue(db, "stats", repository_id=repo.id)
+
+    import app.services.operations.runner as runner_module
+
+    real_utc_now = runner_module.utc_now
+    theirs = datetime(2030, 1, 1, 12, 0, 0)
+
+    def stop_while_claiming():
+        runner.stop()
+        return real_utc_now()
+
+    async def other_process_reclaims(*args, **kwargs):
+        other = session_factory()
+        try:
+            other.query(Operation).filter(Operation.id == op.id).update(
+                {"status": "running", "started_at": theirs},
+                synchronize_session=False,
+            )
+            other.commit()
+        finally:
+            other.close()
+
+    monkeypatch.setattr(runner_module, "utc_now", stop_while_claiming)
+    monkeypatch.setattr(
+        runner_module, "broadcast_operation_updated", other_process_reclaims
+    )
+    assert await runner.tick() == 0
+    assert runner.running_tasks == {}
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert (row.status, row.started_at) == ("running", theirs)
+    assert ran == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_hand_back_that_cannot_be_written_leaves_the_claim_standing(
+    db, repo, runner, registry, monkeypatch, session_factory
+):
+    """The claim is committed; if the write that hands it back fails, the
+    row must not stay `running` with nothing owning it: the task runs (and
+    is drained or finishes like any other). The database that failed the
+    write may still be gone afterwards: nothing of the claim is read from
+    it again."""
+    ran = []
+
+    async def record(ctx: OperationContext):
+        ran.append(ctx.operation_id)
+        return Outcome()
+
+    registry["stats"] = record
+    op = enqueue(db, "stats", repository_id=repo.id)
+
+    import app.services.operations.runner as runner_module
+
+    real_utc_now = runner_module.utc_now
+
+    def stop_while_claiming():
+        runner.stop()
+        return real_utc_now()
+
+    monkeypatch.setattr(runner_module, "utc_now", stop_while_claiming)
+
+    # the tick's session: the first commit is the claim, the second the
+    # hand-back (nothing else in this tick writes)
+    def failing_second_commit():
+        session = session_factory()
+        real_commit = session.commit
+        commits = []
+
+        def commit():
+            commits.append(1)
+            if len(commits) == 2:
+                raise OperationalError("UPDATE operations", {}, Exception("locked"))
+            real_commit()
+
+        real_rollback = session.rollback
+
+        def rollback():
+            # the rollback after the failed write, with the database still
+            # gone: every expired attribute would reload and fail
+            real_rollback()
+            session.close()
+
+        session.commit = commit
+        session.rollback = rollback
+        return session
+
+    runner._session_factory = failing_second_commit
+    assert await runner.tick() == 1
+    assert list(runner.running_tasks) == [op.id]
+    await asyncio.gather(*runner.running_tasks.values())
+    db.expire_all()
+    assert ran == [op.id]
+    assert db.get(Operation, op.id).status == "completed"
+
+
+@pytest.mark.unit
+def test_the_hook_leaves_default_signal_handlers_alone(runner):
+    """No server handler to chain onto (a test client, a script): the
+    default action stays, and so does Python's own SIGINT handler."""
+    previous_term = signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    previous_int = signal.signal(signal.SIGINT, signal.default_int_handler)
+    try:
+        assert runner.stop_on_shutdown_signal((signal.SIGTERM, signal.SIGINT)) == ()
+        assert signal.getsignal(signal.SIGTERM) is signal.SIG_DFL
+        assert signal.getsignal(signal.SIGINT) is signal.default_int_handler
+    finally:
+        signal.signal(signal.SIGTERM, previous_term)
+        signal.signal(signal.SIGINT, previous_int)
+
+
+@pytest.mark.unit
+def test_the_hook_is_main_thread_only(runner, sigterm_server):
+    import threading
+
+    result = []
+    worker = threading.Thread(
+        target=lambda: result.append(runner.stop_on_shutdown_signal((signal.SIGTERM,)))
+    )
+    worker.start()
+    worker.join()
+    assert result == [()]
+    assert signal.getsignal(signal.SIGTERM) == sigterm_server.handle_exit

@@ -3,6 +3,8 @@ cancellation, and crash recovery. One instance per process."""
 
 import asyncio
 import math
+import signal
+import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -66,6 +68,20 @@ REPOSITORY_BUSY_KEY = "backend.errors.jobs.repositoryOperationActive"
 # an outcome whose write fails with one of these is written again on a later
 # tick, for as long as it takes. Anything else does not go away by waiting.
 TRANSIENT_DATABASE_ERRORS = (OperationalError, InterfaceError, PoolTimeoutError)
+# The signals that tell the server process to exit: uvicorn handles SIGINT
+# and SIGTERM itself, gunicorn's quick stop sends its workers SIGQUIT.
+SHUTDOWN_SIGNALS = tuple(
+    sig
+    for sig in (
+        getattr(signal, "SIGINT", None),
+        getattr(signal, "SIGTERM", None),
+        getattr(signal, "SIGQUIT", None),
+    )
+    if sig is not None
+)
+# Python's own handlers. Chaining onto one of these would not be chaining
+# onto a server's shutdown; the default action stays.
+_DEFAULT_HANDLERS = (signal.SIG_DFL, signal.SIG_IGN, signal.default_int_handler)
 
 
 def deferred_until(op: Operation) -> Optional[float]:
@@ -234,6 +250,11 @@ class OperationRunner:
         self._deferral_delay = deferral_delay
         self._wake: Optional[asyncio.Event] = None
         self._stopped = False
+        # Set by the shutdown signal and never cleared: the process is on
+        # its way out, and a `start()` that runs after the signal (the
+        # startup event schedules the loop's task before it runs) must not
+        # undo the stop.
+        self._exiting = False
         self.running_tasks: dict[int, asyncio.Task] = {}
         self.cancel_requested: set[int] = set()
         # Outcomes of this runner's own tasks whose terminal commit failed,
@@ -281,6 +302,58 @@ class OperationRunner:
     def stop(self) -> None:
         self._stopped = True
 
+    def stop_on_shutdown_signal(
+        self, signals: tuple[signal.Signals, ...] = SHUTDOWN_SIGNALS
+    ) -> tuple[signal.Signals, ...]:
+        """Stop the loop the moment the process is told to exit, not when
+        the lifespan ends.
+
+        uvicorn takes the signal as the request to shut down, then waits for
+        every open connection and task to finish before it sends the
+        lifespan shutdown that calls `stop()`. A response that never ends (an
+        event stream) keeps that wait going until gunicorn's graceful timeout
+        kills the worker. For that whole window this loop kept claiming: the
+        agent sessions it would need were closed with the first signal, and
+        a replacement process may already be running the same rows (#1166).
+        A backup claimed then stays `running` until the next restart.
+
+        Chains onto the handler the server installed for each signal: ours
+        stops the loop, then calls the server's, so the shutdown itself is
+        what it was. With the loop the claims stop and so does the sweep of
+        abandoned index rows, which in an exiting process would requeue
+        rows a replacement process is running. Running operations are not
+        touched; the lifespan's `drain()` cancels them as before. What the
+        loop no longer does either is record the outcome of a task whose
+        terminal commit fails in those last seconds
+        (`record_unrecorded_outcomes`); such a row is left `running` and
+        `recover_on_startup` of the next process takes it (index kinds
+        requeued, the rest failed, an exclusive kind with its lock
+        recovered). Signals are handled on the main thread only, and only a
+        handler something installed is chained onto; Python's defaults are
+        left alone, so a process without a server (a test client, a
+        script) keeps its default action. Returns the signals hooked."""
+        if threading.current_thread() is not threading.main_thread():
+            return ()
+        hooked = []
+        for sig in signals:
+            previous = signal.getsignal(sig)
+            if previous in _DEFAULT_HANDLERS or not callable(previous):
+                continue
+
+            def _stop_then_chain(signum, frame, previous=previous):
+                self._exiting = True
+                self.stop()
+                previous(signum, frame)
+
+            signal.signal(sig, _stop_then_chain)
+            hooked.append(sig)
+        if hooked:
+            logger.info(
+                "Operations runner stops on shutdown signal",
+                signals=[sig.name for sig in hooked],
+            )
+        return tuple(hooked)
+
     async def drain(self, timeout: float = 30.0) -> None:
         """Request cooperative cancellation for every running task and wait
         for them to finish, so shutdown goes through
@@ -310,7 +383,7 @@ class OperationRunner:
             )
 
     async def start(self) -> None:
-        self._stopped = False
+        self._stopped = self._exiting
         # A fresh `asyncio.Event` every time: the one from a previous call
         # is bound to that call's event loop (asyncio.Event binds to the
         # loop of its first `wait()`/`clear()`), and reusing it here after
@@ -591,6 +664,11 @@ class OperationRunner:
                 # housekeeping like the sweep below
                 db.rollback()
                 logger.warning("Recording unrecorded outcomes failed", error=str(exc))
+            if self._stopped:
+                # Stopped while the outcomes were recorded (the shutdown
+                # signal can land during that await): neither the sweep
+                # nor a claim from a process on its way out.
+                return 0
             try:
                 await self.requeue_abandoned_index_rows(db)
             except Exception as exc:
@@ -637,6 +715,11 @@ class OperationRunner:
                     continue
                 if not can_start(db, op, system_settings):
                     continue
+                if self._stopped:
+                    # Stopped during this tick (the shutdown signal lands
+                    # between two candidates, or during the checks above):
+                    # the rest of the queue stays as it is.
+                    break
                 # Conditional claim: the candidates were loaded before the
                 # awaits above, and a cancel can commit during one of them.
                 # Only a row still queued is taken; otherwise it is left as
@@ -654,20 +737,65 @@ class OperationRunner:
                     db.expire(op)
                     continue
                 db.refresh(op)
+                # Read while the row is loaded: a failed hand-back below
+                # rolls the session back and expires it, and reloading
+                # from a database that just failed would fail again.
+                operation_id = op.id
+                claim = dict(
+                    kind=op.kind,
+                    repository_id=op.repository_id,
+                    run_id=op.run_id,
+                    claimed_at=op.started_at,
+                )
                 await broadcast_operation_updated(op, db)
-                self.running_tasks[op.id] = asyncio.create_task(
-                    self.run_operation(
-                        op.id,
-                        kind=op.kind,
-                        repository_id=op.repository_id,
-                        run_id=op.run_id,
-                        claimed_at=op.started_at,
-                    )
+                if self._stopped and self._hand_back(
+                    db, operation_id, claim["claimed_at"]
+                ):
+                    # The signal handler runs between any two bytecodes, so
+                    # it can land after the check and before the commit, or
+                    # during the broadcast. The row goes back to the queue
+                    # before anything runs it; if that write fails, the
+                    # claim stands and the task runs and is cancelled or
+                    # finishes as any other, rather than leaving a `running`
+                    # row nothing owns.
+                    db.expire(op)
+                    await broadcast_operation_updated(op, db)
+                    break
+                self.running_tasks[operation_id] = asyncio.create_task(
+                    self.run_operation(operation_id, **claim)
                 )
                 dispatched += 1
         finally:
             db.close()
         return dispatched
+
+    def _hand_back(
+        self, db: Session, operation_id: int, claimed_at: Optional[datetime]
+    ) -> bool:
+        """Put a row this tick just claimed back to `queued`. Only this
+        claim is undone (`started_at` is the one it wrote): a row another
+        process has meanwhile requeued and claimed again is left as it is,
+        and is not this runner's to run either. False when the write
+        failed; the row is then still `running` and the claim stands."""
+        try:
+            db.query(Operation).filter(
+                Operation.id == operation_id,
+                Operation.status == "running",
+                Operation.started_at == claimed_at,
+            ).update(
+                {"status": "queued", "started_at": None},
+                synchronize_session=False,
+            )
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            logger.warning(
+                "Could not hand a claimed operation back on shutdown",
+                operation_id=operation_id,
+                error=str(exc),
+            )
+            return False
+        return True
 
     async def _skip(self, db: Session, op: Operation, reason: str) -> None:
         op.status = "skipped"

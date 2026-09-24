@@ -251,6 +251,14 @@ async def startup_event():
     _log_insecure_no_auth_warning()
     _log_proxy_auth_security_warnings()
 
+    # First, before the startup awaits anything: the server keeps serving
+    # open connections after the shutdown signal, and the shutdown event
+    # below runs only once they are gone; the operations runner must not
+    # claim or sweep in between, whenever the signal lands.
+    from app.services.operations.runner import operation_runner
+
+    operation_runner.stop_on_shutdown_signal()
+
     # Before anything touches the database. The container entrypoint also
     # prepares the schema, but the app is not always started through it —
     # `uvicorn app.main:app` has to work too, and without this it comes up
