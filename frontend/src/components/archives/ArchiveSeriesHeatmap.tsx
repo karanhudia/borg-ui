@@ -1,25 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import {
-  Box,
-  ListItemText,
-  Menu,
-  MenuItem,
-  Stack,
-  Tooltip,
-  Typography,
-  alpha,
-  useTheme,
-} from '@mui/material'
+import { Box, Stack, Tooltip, Typography, alpha, useTheme } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { addDays, addWeeks, format, max, min, parseISO, startOfWeek, subWeeks } from 'date-fns'
 import HeatmapHeader from './HeatmapHeader'
 import HeatmapLegend from './HeatmapLegend'
-import {
-  formatBytes,
-  formatCalendarDay,
-  formatDurationSeconds,
-  parseBackendDate,
-} from '../../utils/dateUtils'
+import ArchivePickerMenu from './ArchivePickerMenu'
+import { formatBytes, formatCalendarDay, formatDurationSeconds } from '../../utils/dateUtils'
 import type { HeatmapBand, HeatmapDay, HeatmapResponse } from '../../types/archives'
 
 export interface HeatmapArchiveSummary {
@@ -426,44 +412,19 @@ export default function ArchiveSeriesHeatmap({
           />
         </Stack>
       </Box>
-      <Menu open={chooser != null} anchorEl={chooser?.anchor} onClose={() => setChooser(null)}>
-        {chooser && (
-          <Typography variant="caption" sx={{ px: 2, py: 0.5, color: 'text.secondary' }}>
-            {t('archives.heatmap.pickArchive', {
-              count: chooser.day.archive_ids.length,
-              date: chooser.day.date,
-            })}
-          </Typography>
-        )}
-        {chooser?.day.archive_ids.map((id) => {
-          const summary = archiveLookup?.(id)
-          const time = summary
-            ? parseBackendDate(summary.start).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })
-            : String(id)
-          return (
-            <MenuItem
-              key={id}
-              onClick={() => {
-                setChooser(null)
-                if (onSelectArchive) onSelectArchive(id)
-                else onSelectDay({ ...chooser.day, archive_ids: [id] })
-              }}
-            >
-              <ListItemText
-                primary={time}
-                secondary={
-                  summary
-                    ? `${summary.name}${summary.size != null ? ` · ${formatBytes(summary.size)}` : ''}`
-                    : undefined
-                }
-              />
-            </MenuItem>
-          )
-        })}
-      </Menu>
+      {chooser && (
+        <ArchivePickerMenu
+          anchorEl={chooser.anchor}
+          date={chooser.day.date}
+          archives={chooser.day.archive_ids.map((id) => ({ id, ...archiveLookup?.(id) }))}
+          onClose={() => setChooser(null)}
+          onPick={(id) => {
+            setChooser(null)
+            if (onSelectArchive) onSelectArchive(id)
+            else onSelectDay({ ...chooser.day, archive_ids: [id] })
+          }}
+        />
+      )}
       <HeatmapLegend
         showFlags={showFlagLegend}
         missedTotal={missedTotal}

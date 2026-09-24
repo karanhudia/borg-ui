@@ -2133,6 +2133,21 @@ class BackupPlanExecutionService:
             db.commit()
             return final_status
         except Exception as exc:
+            # The failure is written through a session of its own. Whatever
+            # this one still holds (a flushed operation, a write lock) would
+            # make that write wait on this very task, so let it go first.
+            try:
+                db.rollback()
+            except Exception as rollback_error:
+                # A dead connection cannot roll back; dropping it releases
+                # the lock all the same, and the failure still gets recorded.
+                logger.warning(
+                    "Could not roll back the failed repository's session",
+                    run_id=run_id,
+                    repository_id=repository_context.repository_id,
+                    error=str(rollback_error),
+                )
+                db.invalidate()
             logger.error(
                 "Backup plan repository execution failed",
                 run_id=run_id,

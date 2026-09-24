@@ -45,6 +45,7 @@ def main() -> int:
         ("tests/smoke/test_remote_ssh_v1_ops_smoke.py", "--url", args.url),
         ("tests/smoke/test_remote_ssh_v2_smoke.py", "--url", args.url),
         ("tests/smoke/test_remote_source_to_ssh_repo_smoke.py", "--url", args.url),
+        ("tests/smoke/test_remote_source_plan_routes_smoke.py", "--url", args.url),
         ("tests/smoke/test_restore_to_ssh_destination_smoke.py", "--url", args.url),
         ("tests/manual/test_multiple_source_dirs.py", "--url", args.url),
         (

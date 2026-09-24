@@ -124,7 +124,7 @@ export function buildRoutePreviews(
       return unsupported(repository, executor, 'backupPlans.routePreview.agentSourceToServerRepo')
     }
 
-    if (firstLocation?.source_type === 'remote') {
+    if (locations.some((location) => location.source_type === 'remote')) {
       if (!repository.connection_id) {
         return {
           repository,
@@ -136,7 +136,12 @@ export function buildRoutePreviews(
           messageParams: {},
         }
       }
-      const sameRemote = repository.connection_id === firstLocation.source_ssh_connection_id
+      // Mirrors backup_route_planner: direct only when every source is on the repo's host.
+      const sameRemote = locations.every(
+        (location) =>
+          location.source_type === 'remote' &&
+          location.source_ssh_connection_id === repository.connection_id
+      )
       return {
         repository,
         supported: true,

@@ -1,19 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import {
-  Box,
-  ListItemText,
-  Menu,
-  MenuItem,
-  Stack,
-  Tooltip,
-  Typography,
-  alpha,
-  useTheme,
-} from '@mui/material'
+import { Box, Stack, Tooltip, Typography, alpha, useTheme } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { addDays, format, startOfDay, subDays } from 'date-fns'
-import { formatBytes, parseBackendDate } from '../../utils/dateUtils'
+import { parseBackendDate } from '../../utils/dateUtils'
 import HeatmapHeader from './HeatmapHeader'
+import ArchivePickerMenu from './ArchivePickerMenu'
 import { HOURLY_WEEKS } from './heatmapScale'
 import type { ArchiveRow } from '../../types/archives'
 
@@ -118,6 +109,7 @@ export default function ArchiveHourlyHeatmap({
   }
 
   const activate = (target: HTMLElement, hour: HourCell) => {
+    if (hour.archives.length === 0) return
     if (hour.archives.length === 1) onSelectArchive(hour.archives[0].id)
     else setChooser({ anchor: target, cell: hour })
   }
@@ -287,25 +279,25 @@ export default function ArchiveHourlyHeatmap({
           </Box>
         </Box>
       </Box>
-      <Menu open={chooser != null} anchorEl={chooser?.anchor} onClose={() => setChooser(null)}>
-        {chooser?.cell.archives.map((archive) => (
-          <MenuItem
-            key={archive.id}
-            onClick={() => {
-              setChooser(null)
-              onSelectArchive(archive.id)
-            }}
-          >
-            <ListItemText
-              primary={parseBackendDate(archive.start).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-              secondary={`${archive.name}${archive.deduplicated_size != null ? ` · ${formatBytes(archive.deduplicated_size)}` : ''}`}
-            />
-          </MenuItem>
-        ))}
-      </Menu>
+      {chooser && (
+        <ArchivePickerMenu
+          anchorEl={chooser.anchor}
+          // Cells group by local time, so the header names the local day, not
+          // the UTC one the timestamp starts with.
+          date={format(parseBackendDate(chooser.cell.archives[0].start), 'yyyy-MM-dd')}
+          archives={chooser.cell.archives.map((archive) => ({
+            id: archive.id,
+            name: archive.name,
+            start: archive.start,
+            size: archive.deduplicated_size,
+          }))}
+          onClose={() => setChooser(null)}
+          onPick={(id) => {
+            setChooser(null)
+            onSelectArchive(id)
+          }}
+        />
+      )}
     </Stack>
   )
 }
