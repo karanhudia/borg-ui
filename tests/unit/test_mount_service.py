@@ -113,7 +113,11 @@ class TestMountService:
     async def test_execute_sshfs_mount_backup_source_preserves_symlinks(
         self, mount_service
     ):
-        argv = await self._capture_sshfs_argv(mount_service, preserve_symlinks=True)
+        with patch(
+            "app.services.mount_service._sshfs_has_contain_symlinks",
+            return_value=True,
+        ):
+            argv = await self._capture_sshfs_argv(mount_service, preserve_symlinks=True)
         assert "no_contain_symlinks" in argv
         assert "follow_symlinks" not in argv
 
