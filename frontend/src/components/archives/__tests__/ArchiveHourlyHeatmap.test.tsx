@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { format } from 'date-fns'
 import ArchiveHourlyHeatmap from '../ArchiveHourlyHeatmap'
 import { suggestScale } from '../heatmapScale'
+import { formatCalendarDay } from '../../../utils/dateUtils'
 import type { ArchiveRow } from '../../../types/archives'
 
 const row = (id: number, start: string, overrides: Partial<ArchiveRow> = {}): ArchiveRow =>
@@ -68,6 +69,19 @@ describe('ArchiveHourlyHeatmap', () => {
     expect(onSelectArchive).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('menuitem', { name: /hourly-2/ }))
     expect(onSelectArchive).toHaveBeenCalledWith(2)
+  })
+
+  it('names the local day in the chooser, not the UTC one', () => {
+    // Just after local midnight the UTC timestamp still carries yesterday's
+    // date east of Greenwich; the cell and its chooser belong to today.
+    render(
+      <ArchiveHourlyHeatmap
+        archives={[row(1, at(0, 10)), row(2, at(0, 40))]}
+        onSelectArchive={vi.fn()}
+      />
+    )
+    fireEvent.click(screen.getByTestId(`hourly-cell-repository-${today}-0`))
+    expect(screen.getByText(`2 archives on ${formatCalendarDay(today)}`)).toBeInTheDocument()
   })
 
   it('says so when nothing ran in the window', () => {
