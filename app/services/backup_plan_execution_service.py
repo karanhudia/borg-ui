@@ -2133,6 +2133,10 @@ class BackupPlanExecutionService:
             db.commit()
             return final_status
         except Exception as exc:
+            # The failure is written through a session of its own. Whatever
+            # this one still holds (a flushed operation, a write lock) would
+            # make that write wait on this very task, so let it go first.
+            db.rollback()
             logger.error(
                 "Backup plan repository execution failed",
                 run_id=run_id,

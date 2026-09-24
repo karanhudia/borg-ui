@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import Any, Callable, NoReturn, Optional
 
 import structlog
 from fastapi import HTTPException, status
@@ -337,6 +337,13 @@ def _conflict_detail(
     }
 
 
+def _refuse(db: Session, detail: dict) -> NoReturn:
+    """Release the admission's scope lock, then refuse with 409."""
+    # The detail is built before the rollback expires the instances it reads.
+    db.rollback()
+    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+
+
 def ensure_repository_admission(
     db: Session,
     repository: Repository,
@@ -346,7 +353,15 @@ def ensure_repository_admission(
     ignore: Optional[IgnoreActiveJob] = None,
     ignore_queued_operations: bool = False,
 ) -> None:
-    """Reject duplicate or conflicting active work before a job is queued."""
+    """Reject duplicate or conflicting active work before a job is queued.
+
+    A refusal rolls the caller's transaction back before raising. The scope
+    lock taken below is a write lock, on SQLite the whole database's, and a
+    caller that records the refusal through another session (a plan marking
+    its repository failed) or carries on with this one (the scheduler moving
+    to its next due job) would otherwise wait on, or hold, that lock for as
+    long as the refused session lives.
+    """
     _lock_repository_scope(db, repository)
     requested_class = operation_class_for(operation)
     active_work = list_active_repository_work(
@@ -358,9 +373,9 @@ def ensure_repository_admission(
 
     for active in active_work:
         if active.operation == operation:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=_conflict_detail(
+            _refuse(
+                db,
+                _conflict_detail(
                     duplicate_error_key or REPOSITORY_OPERATION_ACTIVE_KEY,
                     repository,
                     operation,
@@ -382,9 +397,9 @@ def ensure_repository_admission(
             and active.operation_class == OPERATION_CLASS_REPOSITORY_WRITE
         )
         if conflicts:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=_conflict_detail(
+            _refuse(
+                db,
+                _conflict_detail(
                     REPOSITORY_OPERATION_ACTIVE_KEY,
                     repository,
                     operation,
