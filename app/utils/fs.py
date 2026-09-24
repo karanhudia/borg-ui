@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
+import subprocess
 import structlog
 from typing import Optional
 
@@ -11,6 +13,121 @@ from app.utils.ssh_host_keys import host_key_ssh_opts_for_path
 from app.utils.ssh_utils import public_key_only_ssh_args, ssh_key_auth_args
 
 logger = structlog.get_logger()
+
+
+def active_mount_points() -> Optional[set[str]]:
+    """Mount points visible to this process, or None when they cannot be read."""
+    try:
+        with open("/proc/self/mounts", encoding="utf-8") as handle:
+            lines = handle.read().splitlines()
+        # /proc escapes whitespace in paths as octal (\040 for a space).
+        return {
+            re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), parts[1])
+            for parts in (line.split() for line in lines)
+            if len(parts) >= 2
+        }
+    except OSError:
+        pass
+
+    # No /proc (macOS dev hosts): parse `mount`, "<source> on <point> (...)".
+    try:
+        result = subprocess.run(["mount"], capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    points = set()
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if "on" in parts and parts.index("on") + 1 < len(parts):
+            points.add(parts[parts.index("on") + 1])
+    return points
+
+
+def remove_tree_without_crossing_mounts(path: str) -> bool:
+    """Delete a directory tree, never deleting through a mounted filesystem.
+
+    shutil.rmtree follows directories into whatever is mounted on them, so an
+    SSHFS/NFS/bind mount left under a temp root turns cleanup into deletion of
+    the remote or host files behind it. This refuses the whole tree when the
+    mount table shows anything mounted at or under ``path`` (or cannot be read),
+    and while walking skips any directory on a different device than ``path``.
+    Returns True when the tree is gone.
+    """
+    root = os.path.abspath(path)
+    if not os.path.lexists(root):
+        return True
+
+    mount_points = active_mount_points()
+    if mount_points is None:
+        logger.error("Refusing to delete directory: mount table unavailable", path=root)
+        return False
+    candidates = {root, os.path.realpath(root)}
+    mounted_inside = sorted(
+        point
+        for point in mount_points
+        for candidate in candidates
+        if point == candidate or point.startswith(candidate.rstrip("/") + "/")
+    )
+    if mounted_inside:
+        logger.error(
+            "Refusing to delete directory with a filesystem still mounted inside it",
+            path=root,
+            mount_points=mounted_inside,
+        )
+        return False
+
+    try:
+        root_stat = os.lstat(root)
+    except OSError as e:
+        logger.error("Refusing to delete unreadable directory", path=root, error=str(e))
+        return False
+    if not os.path.isdir(root) or os.path.islink(root):
+        os.unlink(root)
+        return True
+    return _remove_same_device_tree(root, root_stat.st_dev)
+
+
+def _remove_same_device_tree(directory: str, device: int) -> bool:
+    # ponytail: recursive, fine for temp/staging roots; make it iterative if it
+    # ever cleans trees deeper than Python's recursion limit.
+    removed_all = True
+    try:
+        entries = list(os.scandir(directory))
+    except OSError as e:
+        logger.warning(
+            "Could not list directory for cleanup", path=directory, error=str(e)
+        )
+        return False
+    for entry in entries:
+        try:
+            if entry.is_dir(follow_symlinks=False):
+                if entry.stat(follow_symlinks=False).st_dev != device:
+                    logger.error(
+                        "Refusing to delete through a mounted filesystem",
+                        path=entry.path,
+                    )
+                    removed_all = False
+                elif not _remove_same_device_tree(entry.path, device):
+                    removed_all = False
+            else:
+                os.unlink(entry.path)
+        except OSError as e:
+            logger.warning(
+                "Could not delete path during cleanup", path=entry.path, error=str(e)
+            )
+            removed_all = False
+    if removed_all:
+        try:
+            os.rmdir(directory)
+        except OSError as e:
+            logger.warning(
+                "Could not delete directory during cleanup",
+                path=directory,
+                error=str(e),
+            )
+            return False
+    return removed_all
 
 
 async def calculate_path_size_bytes(

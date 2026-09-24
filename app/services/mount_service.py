@@ -10,7 +10,6 @@ import asyncio
 import os
 import subprocess
 import tempfile
-import shutil
 import uuid
 import platform
 import json
@@ -27,6 +26,7 @@ from cryptography.fernet import Fernet
 from app.config import settings
 from app.core.borg_router import BorgRouter
 from app.utils.borg_env import effective_repository_remote_path, get_standard_ssh_opts
+from app.utils.fs import active_mount_points, remove_tree_without_crossing_mounts
 from app.core.security import decrypt_secret
 from app.database.database import SessionLocal
 from app.database.models import SSHConnection, SSHKey, Repository, SystemSettings
@@ -281,59 +281,17 @@ class MountService:
                 if mount_info.temp_root:
                     tracked_temp_roots.add(mount_info.temp_root)
 
-            active_mount_points = self._get_active_mount_points()
-
-            def is_stable_cache_root(temp_dir: str) -> bool:
-                temp_path = Path(temp_dir)
-                return (
-                    temp_path.parent in stable_cache_parents
-                    and temp_path.name.startswith("repository-")
-                )
-
-            def has_active_mount_inside(temp_dir: str) -> bool:
-                if active_mount_points is None:
-                    return False
-                temp_path = Path(temp_dir).resolve()
-                for mount_point in active_mount_points:
-                    try:
-                        mount_path = Path(mount_point).resolve()
-                    except OSError:
-                        mount_path = Path(mount_point)
-                    if mount_path == temp_path or mount_path.is_relative_to(temp_path):
-                        return True
-                return False
-
-            # Remove orphaned directories
+            # Remove orphaned directories. The guard refuses any root that still
+            # has something mounted inside it.
             orphaned_count = 0
             for temp_dir in temp_dirs:
-                if temp_dir not in tracked_temp_roots:
-                    if is_stable_cache_root(temp_dir) and active_mount_points is None:
-                        logger.debug(
-                            "Skipping stable SSHFS cache root cleanup without mount table",
-                            temp_dir=temp_dir,
-                        )
-                        continue
-                    if is_stable_cache_root(temp_dir) and has_active_mount_inside(
-                        temp_dir
-                    ):
-                        logger.debug(
-                            "Skipping mounted stable SSHFS cache root cleanup",
-                            temp_dir=temp_dir,
-                        )
-                        continue
-                    try:
-                        # Check if directory is empty or can be safely removed
-                        shutil.rmtree(temp_dir, ignore_errors=True)
-                        orphaned_count += 1
-                        logger.debug(
-                            "Cleaned up orphaned temp directory", temp_dir=temp_dir
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            "Failed to cleanup orphaned temp directory",
-                            temp_dir=temp_dir,
-                            error=str(e),
-                        )
+                if temp_dir in tracked_temp_roots:
+                    continue
+                if remove_tree_without_crossing_mounts(temp_dir):
+                    orphaned_count += 1
+                    logger.debug(
+                        "Cleaned up orphaned temp directory", temp_dir=temp_dir
+                    )
 
             if orphaned_count > 0:
                 logger.info(
@@ -384,24 +342,7 @@ class MountService:
 
     def _get_active_mount_points(self) -> Optional[set[str]]:
         """Return active system mount points, or None if they cannot be listed."""
-        result = subprocess.run(["mount"], capture_output=True, text=True, timeout=5)
-
-        if result.returncode != 0:
-            logger.warning("Failed to list system mounts for cleanup")
-            return None
-
-        active_mount_points = set()
-        for line in result.stdout.split("\n"):
-            parts = line.split()
-            if len(parts) >= 3 and "on" in parts:
-                try:
-                    on_index = parts.index("on")
-                    if on_index + 1 < len(parts):
-                        active_mount_points.add(parts[on_index + 1])
-                except Exception:
-                    continue
-
-        return active_mount_points
+        return active_mount_points()
 
     def _is_mount_point_occupied(self, mount_point: str) -> bool:
         """Return whether a mount target is active in the system or service state."""
@@ -1929,6 +1870,11 @@ class MountService:
                 if attempt < 2:
                     await asyncio.sleep(2)
 
+        if not force:
+            # Busy (a shell or process inside it): detach lazily so nothing is
+            # left mounted under the temp root that cleanup is about to delete.
+            logger.warning("FUSE mount busy, detaching lazily", mount_point=mount_point)
+            return await self._unmount_fuse(mount_point, force=True)
         return False
 
     async def _unmount_borg(
@@ -1995,14 +1941,8 @@ class MountService:
     ):
         """Cleanup temporary directories and key files"""
         # Cleanup temp root directory
-        if temp_root and os.path.exists(temp_root):
-            try:
-                shutil.rmtree(temp_root, ignore_errors=True)
-                logger.debug("Cleaned up temp root", temp_root=temp_root)
-            except Exception as e:
-                logger.warning(
-                    "Failed to cleanup temp root", temp_root=temp_root, error=str(e)
-                )
+        if temp_root and remove_tree_without_crossing_mounts(temp_root):
+            logger.debug("Cleaned up temp root", temp_root=temp_root)
 
         # Cleanup temp key file
         if temp_key_file and os.path.exists(temp_key_file):

@@ -688,7 +688,9 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y borgbackup openssh-server
+          sudo apt-get install -y borgbackup openssh-server sshfs
+          # SSHFS source mounts use allow_other.
+          echo user_allow_other | sudo tee -a /etc/fuse.conf
 
       - name: Configure localhost SSH target
         run: |
@@ -762,6 +764,16 @@ jobs:
           SSH_SMOKE_USER: borgsmoke
           SSH_SMOKE_AUTH_KEYS: /home/borgsmoke/.ssh/authorized_keys
           SSH_SMOKE_REMOTE_REPO: /home/borgsmoke/remote-repo
+
+      - name: Run SSHFS busy-unmount smoke
+        run: |
+          python3 tests/smoke/test_sshfs_busy_unmount_smoke.py --url ${{ env.SMOKE_URL }}
+        env:
+          BORG_UI_CONTAINER: false
+          SSH_SMOKE_HOST: 127.0.0.1
+          SSH_SMOKE_PORT: 2222
+          SSH_SMOKE_USER: borgsmoke
+          SSH_SMOKE_AUTH_KEYS: /home/borgsmoke/.ssh/authorized_keys
 
       - name: Stop Borg UI
         if: always()
