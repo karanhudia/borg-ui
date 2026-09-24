@@ -5,8 +5,10 @@ request or a verdict that commits between that read and the requeue's own
 commit is newer than the decision, so the requeue (and the request-scoped
 failure next to it) applies only while the row still has the status it was
 decided from, and leaves the linked backup operation alone when it did not.
-A cancel request that won is settled on the spot: the agent has just shown it
-does not run the job, exactly as for a job read as cancel_requested.
+A cancel request that won is then handled by the rule the function applies to
+a job read as cancel_requested: settled at once at hello, where the agent's
+report is authoritative, and left to the age window on /heartbeat, where a
+polling agent may have started the job after its report was taken.
 """
 
 from datetime import timedelta
@@ -54,7 +56,7 @@ def _stale_job(db, agent, *, status, payload, operation_id=None):
 
 
 def _requeue_while_another_session_commits(
-    db, agent, job_id, concurrent_status, **requeue_kwargs
+    db, agent, job_id, concurrent_status, concurrent_values=None, **requeue_kwargs
 ):
     """Run the requeue; between its read and its write, a second session
     commits `concurrent_status` for the job. The hook sits on the job-kind
@@ -67,7 +69,7 @@ def _requeue_while_another_session_commits(
             other = sessionmaker(bind=db.get_bind())()
             try:
                 other.query(AgentJob).filter(AgentJob.id == job_id).update(
-                    {AgentJob.status: concurrent_status},
+                    {AgentJob.status: concurrent_status, **(concurrent_values or {})},
                     synchronize_session=False,
                 )
                 other.commit()
@@ -91,7 +93,7 @@ def _requeue_while_another_session_commits(
 @pytest.mark.parametrize(
     ("concurrent_status", "expected"),
     [
-        ("cancel_requested", "canceled"),
+        ("cancel_requested", "cancel_requested"),
         ("completed", "completed"),
         ("failed", "failed"),
         ("canceled", "canceled"),
@@ -116,7 +118,7 @@ def test_requeue_keeps_a_status_committed_after_its_read(
 @pytest.mark.unit
 @pytest.mark.parametrize(
     ("concurrent_status", "expected"),
-    [("cancel_requested", "canceled"), ("completed", "completed")],
+    [("cancel_requested", "cancel_requested"), ("completed", "completed")],
 )
 def test_request_scoped_failure_keeps_a_status_committed_after_its_read(
     test_db, concurrent_status, expected
@@ -137,7 +139,13 @@ def test_request_scoped_failure_keeps_a_status_committed_after_its_read(
 
 
 @pytest.mark.unit
-def test_a_cancel_that_wins_against_the_requeue_cancels_the_backup(test_db):
+@pytest.mark.parametrize(
+    ("at_hello", "job_status", "backup_status"),
+    [(True, "canceled", "cancelled"), (False, "cancel_requested", "running")],
+)
+def test_a_cancel_that_wins_against_the_requeue_keeps_the_backup_off_the_queue(
+    test_db, at_hello, job_status, backup_status
+):
     agent = _agent(test_db)
     backup = seed_job_operation(test_db, "backup", repository="/repo", status="running")
     test_db.commit()
@@ -145,10 +153,16 @@ def test_a_cancel_that_wins_against_the_requeue_cancels_the_backup(test_db):
         test_db, agent, status="running", payload={}, operation_id=backup.id
     )
 
-    _requeue_while_another_session_commits(test_db, agent, job.id, "cancel_requested")
+    _requeue_while_another_session_commits(
+        test_db,
+        agent,
+        job.id,
+        "cancel_requested",
+        ignore_age_for_undelivered=at_hello,
+    )
 
-    assert test_db.get(AgentJob, job.id).status == "canceled"
-    assert test_db.get(Operation, backup.id).status == "cancelled"
+    assert test_db.get(AgentJob, job.id).status == job_status
+    assert test_db.get(Operation, backup.id).status == backup_status
 
 
 @pytest.mark.unit
@@ -184,6 +198,30 @@ def test_a_cancel_request_wins_on_the_hello_path_too(test_db):
     )
 
     assert test_db.get(AgentJob, job.id).status == "canceled"
+
+
+@pytest.mark.unit
+def test_a_job_started_and_then_cancelled_meanwhile_keeps_its_cancel_request(
+    test_db,
+):
+    # On /heartbeat a polling agent can start the job after its report was
+    # taken, and an admin can ask to cancel it: closing the row here would
+    # drop the cancel request the next heartbeat hands to the running agent.
+    agent = _agent(test_db)
+    job = _stale_job(
+        test_db, agent, status="claimed", payload={"job_kind": "repository.prune"}
+    )
+    started = agents._now_utc()
+
+    _requeue_while_another_session_commits(
+        test_db,
+        agent,
+        job.id,
+        "cancel_requested",
+        {AgentJob.started_at: started, AgentJob.updated_at: started},
+    )
+
+    assert test_db.get(AgentJob, job.id).status == "cancel_requested"
 
 
 @pytest.mark.unit
