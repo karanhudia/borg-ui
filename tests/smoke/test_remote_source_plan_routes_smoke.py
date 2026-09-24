@@ -58,9 +58,9 @@ TERMINAL_RUN_STATUSES = {
 REFUSAL_DEADLINE_SECONDS = 20
 # Any single request slower than this means the event loop was blocked.
 RESPONSIVE_REQUEST_SECONDS = 5
-# Big enough, at the rate limit below, to keep the first backup running
-# while the second plan is refused.
-BLOCKER_SIZE_MB = 3
+# About 48s of upload at the rate limit below: over twice the refusal
+# deadline, so the first backup is still running when the check looks.
+BLOCKER_SIZE_MB = 6
 BLOCKER_RATELIMIT_KIB = 128
 
 
