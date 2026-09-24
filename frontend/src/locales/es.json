@@ -6076,6 +6076,7 @@
       "activity": {
         "adminOnlyDelete": "Solo los administradores pueden eliminar entradas de trabajo",
         "cannotDeleteRunningJob": "No se puede eliminar un trabajo en ejecución. Cancélelo primero o espere a que finalice.",
+        "planRunHasFailedOperation": "Esta ejecución del plan tiene una operación fallida. Elimine esa operación en su lugar.",
         "cannotCancelWhileRunning": "Los trabajos {{jobType}} no se pueden cancelar mientras se ejecutan",
         "invalidJobType": "Tipo de trabajo no válido: {{jobType}}",
         "jobNotFound": "Trabajo de {{jobType}} no encontrado",

@@ -6076,6 +6076,7 @@
       "activity": {
         "adminOnlyDelete": "Nur Administratoren können Auftragseinträge löschen",
         "cannotDeleteRunningJob": "Ein laufender Auftrag kann nicht gelöscht werden. Brechen Sie ihn zuerst ab oder warten Sie auf den Abschluss.",
+        "planRunHasFailedOperation": "Dieser Backup-Plan-Lauf hat einen fehlgeschlagenen Vorgang. Löschen Sie stattdessen diesen Vorgang.",
         "cannotCancelWhileRunning": "{{jobType}}-Jobs lassen sich nicht abbrechen, während sie laufen",
         "invalidJobType": "Ungültiger Auftragstyp: {{jobType}}",
         "jobNotFound": "{{jobType}}-Auftrag nicht gefunden",
