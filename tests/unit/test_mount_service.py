@@ -40,11 +40,34 @@ class TestMountService:
 
     def test_sshfs_symlink_options_preserve_is_faithful(self):
         """Backup sources disable the contain_symlinks sandbox and do not follow."""
-        from app.services.mount_service import _sshfs_symlink_options
+        from app.services import mount_service as ms
 
-        opts = _sshfs_symlink_options(True)
+        ms._sshfs_has_contain_symlinks.cache_clear()
+        try:
+            with patch(
+                "app.services.mount_service.subprocess.run",
+                return_value=Mock(stdout="    -o no_contain_symlinks\n", stderr=""),
+            ):
+                opts = ms._sshfs_symlink_options(True)
+        finally:
+            ms._sshfs_has_contain_symlinks.cache_clear()
         assert "no_contain_symlinks" in opts
         assert "follow_symlinks" not in opts
+
+    def test_sshfs_symlink_options_skip_option_sshfs_does_not_know(self):
+        # Ubuntu 24.04's sshfs 3.7.3 lacks the contain_symlinks patch and
+        # fails the whole mount on the unknown option.
+        from app.services import mount_service as ms
+
+        ms._sshfs_has_contain_symlinks.cache_clear()
+        try:
+            with patch(
+                "app.services.mount_service.subprocess.run",
+                return_value=Mock(stdout="    -o follow_symlinks\n", stderr=""),
+            ):
+                assert ms._sshfs_symlink_options(True) == []
+        finally:
+            ms._sshfs_has_contain_symlinks.cache_clear()
 
     def test_sshfs_symlink_options_default_follows(self):
         """Browse/restore/cloud-mirror keep the historical follow_symlinks."""
@@ -90,7 +113,11 @@ class TestMountService:
     async def test_execute_sshfs_mount_backup_source_preserves_symlinks(
         self, mount_service
     ):
-        argv = await self._capture_sshfs_argv(mount_service, preserve_symlinks=True)
+        with patch(
+            "app.services.mount_service._sshfs_has_contain_symlinks",
+            return_value=True,
+        ):
+            argv = await self._capture_sshfs_argv(mount_service, preserve_symlinks=True)
         assert "no_contain_symlinks" in argv
         assert "follow_symlinks" not in argv
 
@@ -324,15 +351,89 @@ class TestMountService:
 
         with (
             patch("glob.glob", side_effect=glob_side_effect),
-            patch.object(
-                mount_service,
-                "_get_active_mount_points",
+            patch(
+                "app.utils.fs.active_mount_points",
                 return_value={str(mounted_path)},
             ),
         ):
             mount_service._cleanup_orphaned_temp_dirs()
 
         assert mounted_root.exists()
+
+    def test_cleanup_orphaned_temp_dirs_preserves_mounted_legacy_temp_root(
+        self, mount_service, tmp_path
+    ):
+        legacy_root = tmp_path / "sshfs_mount_7_abc"
+        mounted_path = legacy_root / "srv"
+        (mounted_path / "data").mkdir(parents=True)
+
+        def glob_side_effect(pattern):
+            return [str(legacy_root)] if pattern == "/tmp/sshfs_mount_*" else []
+
+        with (
+            patch("glob.glob", side_effect=glob_side_effect),
+            patch(
+                "app.utils.fs.active_mount_points",
+                return_value={str(mounted_path)},
+            ),
+        ):
+            mount_service._cleanup_orphaned_temp_dirs()
+
+        assert (mounted_path / "data").exists()
+
+    @pytest.mark.asyncio
+    async def test_failed_unmount_never_deletes_through_the_live_mount(
+        self, mount_service, tmp_path
+    ):
+        # Discord report: a shell inside the SSHFS source kept the mount busy,
+        # the unmount failed, and cleanup rmtree'd the remote machine through it.
+        temp_root = tmp_path / "repository-1"
+        mount_point = temp_root / "srv" / "data"
+        mount_point.mkdir(parents=True)
+        (mount_point / "remote-file").write_text("remote data")
+        mount_service.active_mounts["m1"] = MountInfo(
+            mount_id="m1",
+            mount_type=MountType.SSHFS,
+            mount_point=str(mount_point),
+            source="ssh://root@host/srv/data",
+            created_at=datetime.now(timezone.utc),
+            temp_root=str(temp_root),
+        )
+
+        with (
+            patch.object(mount_service, "_unmount_fuse", AsyncMock(return_value=False)),
+            patch(
+                "app.utils.fs.active_mount_points",
+                return_value={str(mount_point)},
+            ),
+        ):
+            assert await mount_service.unmount("m1") is False
+
+        assert (mount_point / "remote-file").read_text() == "remote data"
+
+    @pytest.mark.asyncio
+    async def test_busy_fuse_unmount_falls_back_to_lazy_detach(self, mount_service):
+        busy = Mock(returncode=1)
+        busy.communicate = AsyncMock(return_value=(b"", b"Device or resource busy"))
+        detached = Mock(returncode=0)
+        detached.communicate = AsyncMock(return_value=(b"", b""))
+        commands = []
+
+        async def fake_exec(*cmd, **kwargs):
+            commands.append(cmd)
+            return detached if "-uz" in cmd or "-f" in cmd else busy
+
+        with (
+            patch("app.services.mount_service.platform.system", return_value="Linux"),
+            patch("asyncio.create_subprocess_exec", side_effect=fake_exec),
+            patch("asyncio.sleep", AsyncMock()),
+        ):
+            assert await mount_service._unmount_fuse("/tmp/x") is True
+
+        assert commands[-1] == ("fusermount", "-uz", "/tmp/x")
+        assert [c for c in commands if "-u" in c] == [
+            ("fusermount", "-u", "/tmp/x")
+        ] * 3
 
     def test_list_mounts(self, mount_service):
         """Test listing active mounts"""
