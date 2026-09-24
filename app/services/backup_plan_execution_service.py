@@ -12,8 +12,7 @@ from typing import Any, Awaitable, Callable, Optional
 
 import structlog
 from fastapi import HTTPException
-from sqlalchemy.exc import InterfaceError, OperationalError
-from sqlalchemy.exc import TimeoutError as PoolTimeoutError
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
@@ -66,7 +65,7 @@ from app.services.operations.backup_facade import (
     create_backup_operation,
     refresh_backup_job,
     resolve_backup_job,
-    wait_for_backup_operation,
+    wait_out_backup_operation,
 )
 from app.services.operations.enqueue import wake_runner
 from app.services.operations.events import broadcast_operation_updated
@@ -101,14 +100,6 @@ TERMINAL_PLAN_RUN_REPOSITORY_STATUSES = {
 SUCCESS_BACKUP_STATUSES = {"completed", "completed_with_warnings"}
 WARNING_BACKUP_STATUSES = {"completed_with_warnings", "skipped"}
 CANCELLED_MESSAGE = '{"key": "backend.errors.backup.cancelledByUser"}'
-# A plan waits for its backup operation by reading it from the database. A
-# read that fails is not a failed backup, so the plan waits again, sleeping
-# BACKOFF, 2*BACKOFF, ... seconds, at most MAX_BACKOFF, between attempts.
-PLAN_BACKUP_WAIT_BACKOFF_SECONDS = 2.0
-PLAN_BACKUP_WAIT_MAX_BACKOFF_SECONDS = 30.0
-# The errors a database that is locked, gone or out of connections raises;
-# anything else does not go away by waiting.
-TRANSIENT_DATABASE_ERRORS = (OperationalError, InterfaceError, PoolTimeoutError)
 
 
 @dataclass(frozen=True)
@@ -2104,7 +2095,14 @@ class BackupPlanExecutionService:
             db.commit()
             wake_runner()
 
-            final_status = await self._wait_for_backup(operation_id, run_id)
+            # A failed read of the operation is waited out, not taken for a
+            # failed backup; the run id names the plan in every line logged
+            # while waiting.
+            with structlog.contextvars.bound_contextvars(run_id=run_id):
+                final_status = await wait_out_backup_operation(
+                    operation_id,
+                    is_cancelled=lambda: self._is_run_cancelled(run_id),
+                )
             refresh_backup_job(db, backup_job)
 
             if final_status in SUCCESS_BACKUP_STATUSES:
@@ -2178,48 +2176,6 @@ class BackupPlanExecutionService:
             return "failed"
         finally:
             db.close()
-
-    async def _wait_for_backup(self, operation_id: int, run_id: int) -> str:
-        """Wait for a plan repository's backup operation to finish.
-
-        The runner owns the operation, so a failed read while waiting stops
-        neither the backup nor the wait: the repository takes the outcome of
-        its backup, not of the plan's reads, and the plan's post-backup
-        scripts never run under a live backup. Only a database error is
-        waited out; any other error fails the repository as before.
-
-        Each wait polls on a session of its own, closed when it ends, so a
-        failed read never leaves the caller's session, whose rows record
-        the outcome, in a state that needs a rollback first.
-        """
-        failed_waits = 0
-        delay = PLAN_BACKUP_WAIT_BACKOFF_SECONDS
-        while True:
-            db = SessionLocal()
-            try:
-                return await wait_for_backup_operation(
-                    db,
-                    operation_id,
-                    is_cancelled=lambda: self._is_run_cancelled(run_id),
-                )
-            except TRANSIENT_DATABASE_ERRORS as exc:
-                failed_waits += 1
-                logger.warning(
-                    "Waiting for the plan backup failed, waiting again",
-                    run_id=run_id,
-                    operation_id=operation_id,
-                    attempt=failed_waits,
-                    error=str(exc),
-                )
-            finally:
-                try:
-                    db.close()
-                except Exception:
-                    # A connection too broken to roll back is dropped
-                    # instead of returned to the pool.
-                    db.invalidate()
-            await asyncio.sleep(delay)
-            delay = min(delay * 2, PLAN_BACKUP_WAIT_MAX_BACKOFF_SECONDS)
 
     async def _run_inline_maintenance(
         self,

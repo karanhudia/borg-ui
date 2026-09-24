@@ -286,7 +286,7 @@ async def test_a_cancel_during_the_wait_is_not_overwritten_by_the_backup(db_engi
         patch.object(plan_module, "SessionLocal", testing_session_local),
         patch.object(plan_module, "create_backup_operation", cancel_then_create),
         patch.object(plan_module, "wake_runner", lambda: woke.append(True)),
-        patch.object(plan_module, "wait_for_backup_operation", _never_reached),
+        patch.object(plan_module, "wait_out_backup_operation", _never_reached),
     ):
         status = await backup_plan_execution_service._execute_repository(
             run_id,
