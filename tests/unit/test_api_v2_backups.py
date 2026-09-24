@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import OperationalError
 
 from app.database.models import (
     LicensingState,
@@ -79,7 +80,8 @@ class TestV2BackupRoutes:
             return "completed"
 
         with patch(
-            "app.api.v2.backups.wait_for_backup_operation", new=mark_backup_complete
+            "app.services.operations.backup_facade.wait_for_backup_operation",
+            new=mark_backup_complete,
         ):
             response = test_client.post(
                 "/api/v2/backup/run",
@@ -107,7 +109,8 @@ class TestV2BackupRoutes:
         repo = _create_v2_repo(test_db)
 
         with patch(
-            "app.api.v2.backups.wait_for_backup_operation", new=AsyncMock()
+            "app.services.operations.backup_facade.wait_for_backup_operation",
+            new=AsyncMock(),
         ) as mock_create:
             response = test_client.post(
                 "/api/v2/backup/run",
@@ -137,7 +140,8 @@ class TestV2BackupRoutes:
             return "failed"
 
         with patch(
-            "app.api.v2.backups.wait_for_backup_operation", new=mark_backup_failed
+            "app.services.operations.backup_facade.wait_for_backup_operation",
+            new=mark_backup_failed,
         ):
             response = test_client.post(
                 "/api/v2/backup/run",
@@ -147,6 +151,49 @@ class TestV2BackupRoutes:
 
         assert response.status_code == 500
         assert response.json()["detail"]["key"] == "backend.errors.backup.failed"
+
+    def test_backup_run_waits_out_a_failed_read_of_its_backup(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """A read of the backup that fails is not a failed backup: the route
+        waits again and answers with the backup's own outcome."""
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, source_directories=["/data/source-a"])
+        sessions = []
+
+        async def flaky_wait(db, operation_id, **kwargs):
+            sessions.append(db)
+            # The request's session holds no connection while the backup runs.
+            assert db is not test_db
+            assert not test_db.in_transaction()
+            if len(sessions) == 1:
+                raise OperationalError(
+                    "SELECT operations.id", {}, Exception("database is locked")
+                )
+            operation = db.get(Operation, operation_id)
+            BackupJobFacade(db, operation).status = "completed"
+            db.commit()
+            return "completed"
+
+        with (
+            patch(
+                "app.services.operations.backup_facade.wait_for_backup_operation",
+                new=flaky_wait,
+            ),
+            patch(
+                "app.services.operations.backup_facade.asyncio.sleep",
+                new=AsyncMock(),
+            ),
+        ):
+            response = test_client.post(
+                "/api/v2/backup/run",
+                json={"repository_id": repo.id, "archive_name": "manual-archive"},
+                headers=admin_headers,
+            )
+
+        assert len(sessions) == 2
+        assert response.status_code == 200
+        assert response.json()["status"] == "completed"
 
     def test_backup_run_rejects_missing_repository(
         self, test_client: TestClient, admin_headers, test_db

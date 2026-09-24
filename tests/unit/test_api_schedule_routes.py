@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import OperationalError
 
 import app.api.schedule as schedule_api
 from app.database.models import (
@@ -53,6 +54,39 @@ def _create_schedule(
     test_db.commit()
     test_db.refresh(schedule)
     return schedule
+
+
+def _locked_database() -> OperationalError:
+    """The error SQLAlchemy raises for a locked SQLite database."""
+    return OperationalError("SELECT operations.id", {}, Exception("database is locked"))
+
+
+def _wait_that_fails_once(monkeypatch, caller_session=None):
+    """Stand in for the runner: the first read of the backup raises, the
+    next one finds it completed. Returns the list of sessions polled on.
+    With `caller_session`, checks that the caller holds no connection
+    while the backup runs."""
+    sessions = []
+
+    async def flaky_wait(db, operation_id, **kwargs):
+        sessions.append(db)
+        if caller_session is not None:
+            assert db is not caller_session
+            assert not caller_session.in_transaction()
+        if len(sessions) == 1:
+            raise _locked_database()
+        operation = db.get(Operation, operation_id)
+        operation.status = "completed"
+        db.commit()
+        return "completed"
+
+    monkeypatch.setattr(
+        "app.services.operations.backup_facade.wait_for_backup_operation", flaky_wait
+    )
+    monkeypatch.setattr(
+        "app.services.operations.backup_facade.asyncio.sleep", AsyncMock()
+    )
+    return sessions
 
 
 @pytest.mark.unit
@@ -502,7 +536,9 @@ class TestScheduleRouteContracts:
             db.commit()
             return "completed"
 
-        monkeypatch.setattr("app.api.schedule.wait_for_backup_operation", _complete)
+        monkeypatch.setattr(
+            "app.services.operations.backup_facade.wait_for_backup_operation", _complete
+        )
 
         await schedule_api.execute_multi_repo_schedule(schedule, test_db)
 
@@ -545,7 +581,9 @@ class TestScheduleRouteContracts:
             db.commit()
             return "completed"
 
-        monkeypatch.setattr("app.api.schedule.wait_for_backup_operation", _complete)
+        monkeypatch.setattr(
+            "app.services.operations.backup_facade.wait_for_backup_operation", _complete
+        )
         monkeypatch.setattr(
             "app.api.schedule.BorgRouter.prune",
             AsyncMock(side_effect=RuntimeError("agent prune failed: refused")),
@@ -609,7 +647,9 @@ class TestScheduleRouteContracts:
                 "agent prune failed: backend.errors.agents.repositoryOperationTimeout"
             )
 
-        monkeypatch.setattr("app.api.schedule.wait_for_backup_operation", _complete)
+        monkeypatch.setattr(
+            "app.services.operations.backup_facade.wait_for_backup_operation", _complete
+        )
         monkeypatch.setattr("app.api.schedule.BorgRouter.prune", _timeout)
 
         await schedule_api.execute_multi_repo_schedule(schedule, test_db)
@@ -642,7 +682,9 @@ class TestScheduleRouteContracts:
             db.commit()
             return "completed"
 
-        monkeypatch.setattr("app.api.schedule.wait_for_backup_operation", _complete)
+        monkeypatch.setattr(
+            "app.services.operations.backup_facade.wait_for_backup_operation", _complete
+        )
         monkeypatch.setattr(
             "app.api.schedule.BorgRouter.compact",
             AsyncMock(side_effect=RuntimeError("agent compact failed: refused")),
@@ -684,7 +726,10 @@ class TestScheduleRouteContracts:
         async def _completed(db, operation_id, **kwargs):
             return "completed"
 
-        monkeypatch.setattr("app.api.schedule.wait_for_backup_operation", _completed)
+        monkeypatch.setattr(
+            "app.services.operations.backup_facade.wait_for_backup_operation",
+            _completed,
+        )
         monkeypatch.setattr(
             "app.api.schedule.BorgRouter.prune",
             AsyncMock(side_effect=RuntimeError("agent prune failed: refused")),
@@ -701,6 +746,67 @@ class TestScheduleRouteContracts:
         assert prune.completed_at is not None
         backup = test_db.get(Operation, backup_job.id)
         assert BackupJobFacade(test_db, backup).maintenance_status == "prune_failed"
+
+    @pytest.mark.asyncio
+    async def test_multi_repo_schedule_waits_out_a_failed_read_of_its_backup(
+        self, test_db, monkeypatch
+    ):
+        """A read of the backup that fails is not a failed backup: the
+        schedule waits again and runs the repository's follow-up work once
+        the backup has completed."""
+        repo = _create_repo(test_db, "Flaky Read Repo", "/repos/flaky-read")
+        schedule = _create_schedule(
+            test_db, "Flaky Read", run_prune_after=True, prune_keep_daily=7
+        )
+        test_db.add(
+            ScheduledJobRepository(
+                scheduled_job_id=schedule.id,
+                repository_id=repo.id,
+                execution_order=0,
+            )
+        )
+        test_db.commit()
+        sessions = _wait_that_fails_once(monkeypatch, test_db)
+        prune = AsyncMock()
+        monkeypatch.setattr("app.api.schedule.BorgRouter.prune", prune)
+
+        await schedule_api.execute_multi_repo_schedule(schedule, test_db)
+
+        assert len(sessions) == 2
+        prune.assert_awaited_once()
+        test_db.expire_all()
+        backup = test_db.query(Operation).filter(Operation.kind == "backup").one()
+        assert backup.status == "completed"
+
+    @pytest.mark.asyncio
+    async def test_single_repo_schedule_waits_out_a_failed_read_of_its_backup(
+        self, test_db, monkeypatch
+    ):
+        from app.services.operations.backup_facade import create_backup_operation
+
+        repo = _create_repo(test_db, "Single Flaky Repo", "/repos/single-flaky")
+        schedule = _create_schedule(
+            test_db, "Single Flaky Read", run_prune_after=True, prune_keep_daily=7
+        )
+        backup_job = create_backup_operation(
+            test_db,
+            repo,
+            trigger="schedule",
+            executor="server",
+            params={},
+            scheduled_job_id=schedule.id,
+        )
+        # The task opens a session of its own, so none is held here.
+        sessions = _wait_that_fails_once(monkeypatch)
+        prune = AsyncMock()
+        monkeypatch.setattr("app.api.schedule.BorgRouter.prune", prune)
+
+        await schedule_api.execute_scheduled_backup_with_maintenance(
+            backup_job.id, repo.path, schedule.id
+        )
+
+        assert len(sessions) == 2
+        prune.assert_awaited_once()
 
     def test_dispatch_due_multi_repo_schedule_defers_for_active_repository_work(
         self, test_db, monkeypatch
