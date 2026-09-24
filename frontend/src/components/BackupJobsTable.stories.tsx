@@ -1,5 +1,9 @@
+import { useEffect, type ComponentProps } from 'react'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Box } from '@mui/material'
+import MockAdapter from 'axios-mock-adapter'
+import api from '../services/api'
+import i18n from '../i18n'
 import BackupJobsTable from './BackupJobsTable'
 import type { Job } from '../types/jobs'
 
@@ -452,4 +456,55 @@ export const RunWithFollowups: Story = {
       <BackupJobsTable {...args} />
     </Box>
   ),
+}
+
+// The delete request never answers, so the row stays in its waiting state.
+function PendingDeleteTable(props: ComponentProps<typeof BackupJobsTable>) {
+  useEffect(() => {
+    const mock = new MockAdapter(api, { onNoMatch: 'passthrough' })
+    mock.onDelete(/\/activity\/backup\/\d+$/).reply(() => new Promise(() => {}))
+    return () => {
+      mock.restore()
+    }
+  }, [])
+  return (
+    <Box sx={{ p: 3 }}>
+      <BackupJobsTable {...props} />
+    </Box>
+  )
+}
+
+const waitFor = async <T,>(what: string, find: () => T | null | undefined): Promise<T> => {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const found = find()
+    if (found) return found
+    await new Promise((resolve) => window.setTimeout(resolve, 20))
+  }
+  throw new Error(`${what} did not appear`)
+}
+
+/** While a row's delete is out, its Delete is disabled and says it is deleting. */
+export const DeleteInProgress: Story = {
+  args: {
+    jobs: jobs.filter((job) => job.status !== 'running'),
+    showTypeColumn: true,
+    actions: { delete: true },
+    canDeleteJobs: true,
+  },
+  render: (args) => <PendingDeleteTable {...args} />,
+  play: async ({ canvasElement }) => {
+    const remove = await waitFor('Delete button', () =>
+      canvasElement.querySelector<HTMLButtonElement>(
+        `button[aria-label="${i18n.t('backupJobsTable.actions.delete')}"]`
+      )
+    )
+    remove.click()
+    // The confirmation dialog renders in a portal, outside the canvas.
+    const confirm = await waitFor('Delete confirmation', () =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find(
+        (button) => button.textContent === i18n.t('dialogs.deleteJob.confirm')
+      )
+    )
+    confirm.click()
+  },
 }

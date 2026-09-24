@@ -3308,6 +3308,7 @@
       "edit": "Bearbeiten",
       "duplicate": "Duplizieren",
       "delete": "Löschen",
+      "deleting": "Löscht...",
       "viewLogs": "Protokolle anzeigen",
       "viewArchive": "Archiv anzeigen",
       "viewArchivePruned": "Archiv wurde entfernt",

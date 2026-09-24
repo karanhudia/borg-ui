@@ -9,6 +9,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useAnnouncementSurface } from '../hooks/useAnnouncementSurface'
 import { useSystemInfo } from '../hooks/useSystemInfo'
 import PasskeyEnrollmentPrompt from './PasskeyEnrollmentPrompt'
+import { forgetPendingDeletes } from './jobs/jobCache'
 import { useActiveBackendTarget } from '../services/remoteBackends/context'
 import {
   clearPasskeyPromptIgnore,
@@ -68,6 +69,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     }
 
     previousBackendTargetId.current = activeBackendTarget.id
+    forgetPendingDeletes(queryClient)
     queryClient.clear()
   }, [activeBackendTarget.id, queryClient])
 
