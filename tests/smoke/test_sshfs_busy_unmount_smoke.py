@@ -43,14 +43,26 @@ def sshfs_mount_points(marker: str) -> list[str]:
     return points
 
 
-def wait_for_sshfs_mount(marker: str, timeout: float = 60.0) -> str:
+def wait_for_sshfs_mount(
+    client: SmokeClient, job_id: int, marker: str, timeout: float = 60.0
+) -> str:
     deadline = time.monotonic() + timeout
+    next_status_check = 0.0
+    status: dict = {}
     while time.monotonic() < deadline:
         points = sshfs_mount_points(marker)
         if points:
             return points[0]
+        if time.monotonic() >= next_status_check:
+            status = client.request_ok("GET", f"/api/backup/status/{job_id}").json()
+            if status.get("status") not in {"pending", "running"}:
+                break
+            next_status_check = time.monotonic() + 1
         time.sleep(0.05)
-    raise SmokeFailure(f"No SSHFS mount containing {marker!r} appeared")
+    raise SmokeFailure(
+        f"No SSHFS mount containing {marker!r} appeared; backup job: "
+        f"status={status.get('status')} error={status.get('error_message')}"
+    )
 
 
 def missing_sentinels(root: Path) -> list[str]:
@@ -127,7 +139,7 @@ def main() -> int:
         )
 
         job_id = client.start_backup(repo_path)
-        mount_point = wait_for_sshfs_mount(remote_source.name)
+        mount_point = wait_for_sshfs_mount(client, job_id, remote_source.name)
         # The reporter's shell: a process whose cwd pins the mount busy.
         busy_holder = subprocess.Popen(["sleep", "600"], cwd=mount_point)
         if mount_point not in sshfs_mount_points(remote_source.name):

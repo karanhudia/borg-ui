@@ -287,6 +287,12 @@ class MountService:
             for temp_dir in temp_dirs:
                 if temp_dir in tracked_temp_roots:
                     continue
+                # /tmp is shared: never sweep a matching path another user made.
+                try:
+                    if os.lstat(temp_dir).st_uid != os.geteuid():
+                        continue
+                except OSError:
+                    continue
                 if remove_tree_without_crossing_mounts(temp_dir):
                     orphaned_count += 1
                     logger.debug(

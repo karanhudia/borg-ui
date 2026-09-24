@@ -77,12 +77,7 @@ def remove_tree_without_crossing_mounts(path: str) -> bool:
         )
         return False
 
-    try:
-        root_stat = os.lstat(root)
-    except OSError as e:
-        logger.error("Refusing to delete unreadable directory", path=root, error=str(e))
-        return False
-    if not os.path.isdir(root) or os.path.islink(root):
+    if os.path.islink(root) or not os.path.isdir(root):
         try:
             os.unlink(root)
         except OSError as e:
@@ -91,48 +86,72 @@ def remove_tree_without_crossing_mounts(path: str) -> bool:
             )
             return False
         return True
-    return _remove_same_device_tree(root, root_stat.st_dev)
+
+    # Walk through directory fds opened with O_NOFOLLOW, like shutil.rmtree's
+    # safe path, so a directory swapped for a symlink mid-walk is never followed.
+    try:
+        root_fd = os.open(root, _DIR_OPEN_FLAGS)
+    except OSError as e:
+        logger.error("Refusing to delete unreadable directory", path=root, error=str(e))
+        return False
+    try:
+        removed_all = _remove_same_device_tree(root_fd, os.fstat(root_fd).st_dev, root)
+    finally:
+        os.close(root_fd)
+    if not removed_all:
+        return False
+    try:
+        os.rmdir(root)
+    except OSError as e:
+        logger.warning(
+            "Could not delete directory during cleanup", path=root, error=str(e)
+        )
+        return False
+    return True
 
 
-def _remove_same_device_tree(directory: str, device: int) -> bool:
+_DIR_OPEN_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+
+
+def _remove_same_device_tree(dir_fd: int, device: int, display_path: str) -> bool:
+    """Empty the directory open at ``dir_fd``; True when it ends up empty."""
     # ponytail: recursive, fine for temp/staging roots; make it iterative if it
     # ever cleans trees deeper than Python's recursion limit.
     removed_all = True
     try:
-        entries = list(os.scandir(directory))
+        entries = list(os.scandir(dir_fd))
     except OSError as e:
         logger.warning(
-            "Could not list directory for cleanup", path=directory, error=str(e)
+            "Could not list directory for cleanup", path=display_path, error=str(e)
         )
         return False
     for entry in entries:
+        child_path = os.path.join(display_path, entry.name)
         try:
-            if entry.is_dir(follow_symlinks=False):
-                if entry.stat(follow_symlinks=False).st_dev != device:
+            if not entry.is_dir(follow_symlinks=False):
+                os.unlink(entry.name, dir_fd=dir_fd)
+                continue
+            child_fd = os.open(entry.name, _DIR_OPEN_FLAGS, dir_fd=dir_fd)
+            try:
+                if os.fstat(child_fd).st_dev != device:
                     logger.error(
                         "Refusing to delete through a mounted filesystem",
-                        path=entry.path,
+                        path=child_path,
                     )
                     removed_all = False
-                elif not _remove_same_device_tree(entry.path, device):
-                    removed_all = False
+                    continue
+                child_empty = _remove_same_device_tree(child_fd, device, child_path)
+            finally:
+                os.close(child_fd)
+            if child_empty:
+                os.rmdir(entry.name, dir_fd=dir_fd)
             else:
-                os.unlink(entry.path)
+                removed_all = False
         except OSError as e:
             logger.warning(
-                "Could not delete path during cleanup", path=entry.path, error=str(e)
+                "Could not delete path during cleanup", path=child_path, error=str(e)
             )
             removed_all = False
-    if removed_all:
-        try:
-            os.rmdir(directory)
-        except OSError as e:
-            logger.warning(
-                "Could not delete directory during cleanup",
-                path=directory,
-                error=str(e),
-            )
-            return False
     return removed_all
 
 

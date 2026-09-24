@@ -740,7 +740,7 @@ jobs:
       - name: Start Borg UI backend
         run: |
           mkdir -p data logs
-          uvicorn app.main:app --host 0.0.0.0 --port 8082 &
+          uvicorn app.main:app --host 0.0.0.0 --port 8082 > logs/backend.log 2>&1 &
           echo $! > /tmp/borg-ui.pid
         env:
           DATA_DIR: ${{ github.workspace }}/data

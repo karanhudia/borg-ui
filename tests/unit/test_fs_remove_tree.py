@@ -49,10 +49,25 @@ class TestRemoveTreeWithoutCrossingMounts:
         # Stand-in for a mount the table missed: pretend the tree's device
         # differs, so every subdirectory looks like another filesystem.
         root = self._tree(tmp_path)
-        other_device = os.lstat(root).st_dev + 1
-        assert fs._remove_same_device_tree(str(root), other_device) is False
+        fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            other_device = os.fstat(fd).st_dev + 1
+            assert fs._remove_same_device_tree(fd, other_device, str(root)) is False
+        finally:
+            os.close(fd)
         assert (root / "a" / "b" / "f").exists()
         assert not (root / "top").exists()
+
+    def test_symlinked_directory_is_removed_not_followed(self, tmp_path):
+        root = self._tree(tmp_path)
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (outside / "keep").write_text("x")
+        (root / "link").symlink_to(outside, target_is_directory=True)
+        with patch("app.utils.fs.active_mount_points", return_value=set()):
+            assert remove_tree_without_crossing_mounts(str(root)) is True
+        assert (outside / "keep").exists()
+        assert not root.exists()
 
     def test_active_mount_points_includes_root(self):
         points = active_mount_points()
