@@ -610,6 +610,24 @@ def _script_executions_have_logs(
     return answers
 
 
+def _plan_runs_spoken_for(db: Session, run_ids: List[int]) -> set:
+    """The failed plan runs among `run_ids` that get no row of their own.
+
+    A run whose own operations failed already says so, in the same band and
+    with more detail. The row is for the failure they do not show."""
+    if not run_ids:
+        return set()
+    return {
+        run_id
+        for (run_id,) in db.query(Operation.backup_plan_run_id)
+        .filter(
+            Operation.backup_plan_run_id.in_(run_ids),
+            Operation.status == "failed",
+        )
+        .distinct()
+    }
+
+
 def _attach_run_context(db: Session, items: List[dict]) -> None:
     """Name what the rows only point at: the schedule a scheduled run belongs
     to, how a plan run was started, and the plan a backup operation ran for.
@@ -1067,22 +1085,7 @@ def list_recent_activity(
             .limit(limit)
             .all()
         )
-        run_ids = [r.id for r in runs]
-        # A run whose own operations failed already says so, in the same band
-        # and with more detail. The row is for the failure they do not show.
-        spoken_for = (
-            {
-                run_id
-                for (run_id,) in db.query(Operation.backup_plan_run_id)
-                .filter(
-                    Operation.backup_plan_run_id.in_(run_ids),
-                    Operation.status == "failed",
-                )
-                .distinct()
-            }
-            if run_ids
-            else set()
-        )
+        spoken_for = _plan_runs_spoken_for(db, [r.id for r in runs])
         plan_ids = {
             run.backup_plan_id
             for run in runs
@@ -1855,6 +1858,71 @@ async def cancel_job(
     return await cancel_operation(operation_id=op.id, current_user=current_user, db=db)
 
 
+def _delete_failed_plan_run(db: Session, run_id: int) -> None:
+    """Delete a failed plan run the list shows as a row of its own.
+
+    Only that row is deletable here: a run the list does not show is not
+    found, and a run whose failed operation speaks for it is deleted through
+    that operation. The run takes its repository rows and its plan-level
+    hooks with it; its other operations stay, with the hooks they own, and
+    lose only their link to the run."""
+    run = db.get(BackupPlanRun, run_id)
+    if (
+        run is None
+        or run.status != "failed"
+        or run.backup_plan_id is None
+        or db.get(BackupPlan, run.backup_plan_id) is None
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "key": "backend.errors.activity.jobNotFound",
+                "params": {"jobType": "backup_plan_run"},
+            },
+        )
+    if run.id in _plan_runs_spoken_for(db, [run.id]):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.activity.planRunHasFailedOperation"},
+        )
+    unfinished = (
+        db.query(Operation.id)
+        .filter(
+            Operation.backup_plan_run_id == run.id,
+            Operation.status.notin_(op_vocab.TERMINAL_STATUSES),
+        )
+        .first()
+    )
+    # A failed run is finished, so a hook of it still marked running was cut
+    # off by a restart, which leaves hook rows as they were; it does not hold
+    # the run back. An agent's hook is the exception: its job outlives the
+    # restart and still reports to the hook's row.
+    if unfinished is None:
+        from app.api.agents import FINAL_AGENT_JOB_STATUSES
+
+        unfinished = (
+            db.query(ScriptExecution.id)
+            .join(AgentJob, AgentJob.id == ScriptExecution.agent_job_id)
+            .filter(
+                ScriptExecution.backup_plan_run_id == run.id,
+                AgentJob.status.notin_(FINAL_AGENT_JOB_STATUSES),
+            )
+            .first()
+        )
+    if unfinished is not None:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.activity.cannotDeleteRunningJob"},
+        )
+    db.query(ScriptExecution).filter(
+        ScriptExecution.backup_plan_run_id == run.id,
+        ScriptExecution.operation_id.isnot(None),
+    ).update({ScriptExecution.backup_plan_run_id: None}, synchronize_session=False)
+    db.expire(run, ["script_executions"])
+    db.delete(run)
+    db.commit()
+
+
 @router.delete("/{job_type}/{job_id}")
 async def delete_job(
     job_type: str,
@@ -1902,6 +1970,19 @@ async def delete_job(
         db.commit()
         logger.info(
             f"Deleted {job_type} operation {job_id} by admin user",
+            admin_user=current_user.username,
+        )
+        return {
+            "success": True,
+            "message": "backend.success.activity.jobDeleted",
+            "job_id": job_id,
+            "job_type": job_type,
+        }
+
+    if job_type == "backup_plan_run":
+        _delete_failed_plan_run(db, job_id)
+        logger.info(
+            f"Deleted {job_type} {job_id} by admin user",
             admin_user=current_user.username,
         )
         return {

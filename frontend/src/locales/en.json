@@ -6076,6 +6076,7 @@
       "activity": {
         "adminOnlyDelete": "Only administrators can delete job entries",
         "cannotDeleteRunningJob": "Cannot delete running job. Cancel it first or wait for completion.",
+        "planRunHasFailedOperation": "This plan run has a failed operation. Delete that operation instead.",
         "cannotCancelWhileRunning": "{{jobType}} jobs cannot be cancelled while they run",
         "invalidJobType": "Invalid job type: {{jobType}}",
         "jobNotFound": "{{jobType}} job not found",

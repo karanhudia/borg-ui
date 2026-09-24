@@ -6076,6 +6076,7 @@
       "activity": {
         "adminOnlyDelete": "Solo gli amministratori possono eliminare le voci di job",
         "cannotDeleteRunningJob": "Impossibile eliminare un job in esecuzione. Annullalo prima o attendi il completamento.",
+        "planRunHasFailedOperation": "Questa esecuzione del piano ha un'operazione non riuscita. Elimina invece quell'operazione.",
         "cannotCancelWhileRunning": "I job {{jobType}} non possono essere annullati durante l'esecuzione",
         "invalidJobType": "Tipo di job non valido: {{jobType}}",
         "jobNotFound": "Job {{jobType}} non trovato",

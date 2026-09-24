@@ -1074,9 +1074,13 @@ class BackupPlanRun(Base):
         back_populates="backup_plan_run",
         cascade="all, delete-orphan",
     )
+    # The hooks go with their run, as the foreign key says. Without a delete
+    # cascade here the ORM would null their run id before the row is deleted,
+    # and the database cascade would find nothing left to remove.
     script_executions = relationship(
         "ScriptExecution",
         back_populates="backup_plan_run",
+        cascade="all, delete-orphan",
     )
 
 
