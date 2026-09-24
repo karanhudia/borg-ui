@@ -173,3 +173,16 @@ class TestSftpFallback:
             r"cd /we\ ird\*/f\"q.txt" + "\n",
             r"ls -l /we\ ird\*/f\"q.txt" + "\n",
         ]
+
+
+@pytest.mark.unit
+async def test_a_check_that_times_out_ends_its_child():
+    import asyncio
+
+    process = await asyncio.create_subprocess_exec(
+        "sleep", "30", stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE
+    )
+    with pytest.raises(asyncio.TimeoutError):
+        await ms._communicate_or_kill(process, timeout=0.2, input=b"")
+    # Reaped, not left running behind the check.
+    assert process.returncode is not None

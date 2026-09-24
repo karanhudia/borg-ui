@@ -159,6 +159,26 @@ def _sshfs_login_relative_candidate(
     return relative_path or None
 
 
+async def _communicate_or_kill(
+    process: asyncio.subprocess.Process,
+    *,
+    timeout: float,
+    input: Optional[bytes] = None,
+) -> Tuple[bytes, bytes]:
+    """`communicate` with a deadline that also ends the child.
+
+    `wait_for` only cancels the wait: a hung ssh or sftp would otherwise
+    outlive the check that started it.
+    """
+    try:
+        return await asyncio.wait_for(process.communicate(input=input), timeout)
+    except asyncio.TimeoutError:
+        if process.returncode is None:
+            process.kill()
+            await process.wait()
+        raise
+
+
 def _sftp_quote(path: str) -> str:
     """Escape a path for an sftp batch command.
 
@@ -1529,7 +1549,7 @@ class MountService:
                 *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
 
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10)
+            stdout, stderr = await _communicate_or_kill(process, timeout=10)
 
             # A shell that ran the check prints exactly one of the two words.
             # Anything else is an SFTP-only account (or a login banner / forced
@@ -1609,8 +1629,8 @@ class MountService:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        _, stderr = await asyncio.wait_for(
-            process.communicate(input=f"{command}\n".encode()), timeout=15
+        _, stderr = await _communicate_or_kill(
+            process, timeout=15, input=f"{command}\n".encode()
         )
         if process.returncode not in (0, 1):
             # 255 and friends: the connection itself failed, not the command.

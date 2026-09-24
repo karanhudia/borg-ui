@@ -131,3 +131,96 @@ def test_admission_still_holds_the_lock_when_it_admits(file_sessions):
     finally:
         admitted.rollback()
         admitted.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_plan_records_the_failure_when_its_session_cannot_roll_back(
+    file_sessions,
+):
+    """A dead connection cannot roll back. The plan still has to let go of
+    the lock and record why the repository failed, not leave it pending."""
+    from unittest.mock import patch
+
+    from sqlalchemy.orm import Session, sessionmaker
+
+    import app.services.backup_plan_execution_service as plan_module
+    from app.database.models import BackupPlan, BackupPlanRun, BackupPlanRunRepository
+    from app.services.backup_plan_execution_service import (
+        RepositoryRunContext,
+        backup_plan_execution_service,
+    )
+    from tests.unit.test_plan_backup_read_wait import _plan_run_context
+
+    rollbacks = []
+
+    class RollbackFailsOnce(Session):
+        def rollback(self):
+            if not rollbacks:
+                rollbacks.append("failed")
+                raise OperationalError("ROLLBACK", {}, Exception("connection lost"))
+            super().rollback()
+
+    factory = sessionmaker(
+        bind=file_sessions.kw["bind"],
+        class_=RollbackFailsOnce,
+        autocommit=False,
+        autoflush=False,
+    )
+    with factory() as db:
+        repo = Repository(
+            name="flaky",
+            path="/repos/flaky",
+            encryption="none",
+            repository_type="local",
+        )
+        plan = BackupPlan(name="nightly", source_directories='["/data"]')
+        db.add_all([repo, plan])
+        db.commit()
+        run = BackupPlanRun(backup_plan_id=plan.id, trigger="manual", status="running")
+        db.add(run)
+        db.commit()
+        child = BackupPlanRunRepository(
+            backup_plan_run_id=run.id, repository_id=repo.id, status="pending"
+        )
+        db.add(child)
+        db.commit()
+        run_id, repo_id, child_id = run.id, repo.id, child.id
+
+    real_create = plan_module.create_backup_operation
+    queued = []
+
+    def lock_then_fail(db, *args, **kwargs):
+        # The backup's own queueing holds the write lock the way a flushed
+        # operation would, then fails. The failure bookkeeping queues a
+        # failed operation through the same function; that one goes through.
+        queued.append(kwargs.get("trigger"))
+        if len(queued) > 1:
+            return real_create(db, *args, **kwargs)
+        db.execute(text("UPDATE repositories SET id = id"))
+        raise RuntimeError("boom while queueing")
+
+    with (
+        patch.object(plan_module, "SessionLocal", factory),
+        patch.object(plan_module, "create_backup_operation", lock_then_fail),
+    ):
+        status = await backup_plan_execution_service._execute_repository(
+            run_id,
+            _plan_run_context(plan_id=1),
+            RepositoryRunContext(
+                repository_id=repo_id,
+                repository_name="flaky",
+                execution_order=0,
+                compression="lz4",
+                custom_flags=None,
+                upload_ratelimit_kib=None,
+                failure_behavior="continue",
+            ),
+        )
+
+    assert status == "failed"
+    assert rollbacks == ["failed"]
+    with file_sessions() as check:
+        recorded = check.get(BackupPlanRunRepository, child_id)
+        assert recorded.status == "failed"
+        assert "boom while queueing" in (recorded.error_message or "")
