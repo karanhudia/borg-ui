@@ -14,6 +14,7 @@ import shutil
 import uuid
 import platform
 import json
+import shlex
 from datetime import datetime, timezone
 from enum import Enum
 from dataclasses import dataclass, asdict
@@ -156,6 +157,20 @@ def _sshfs_login_relative_candidate(
 
     relative_path = normalized.lstrip("/")
     return relative_path or None
+
+
+def _sftp_quote(path: str) -> str:
+    """Escape a path for an sftp batch command.
+
+    sftp splits its command line itself and `ls` globs. Inside double quotes
+    it keeps a backslash in front of a glob character, so the only literal
+    form is unquoted with every space, quote, backslash and glob character
+    backslash-escaped (checked against OpenSSH's sftp).
+    """
+    return "".join(f"\\{ch}" if ch in _SFTP_SPECIAL else ch for ch in path)
+
+
+_SFTP_SPECIAL = frozenset(" \t\"'\\*?[]")
 
 
 class MountType(Enum):
@@ -1453,6 +1468,24 @@ class MountService:
         except Exception:
             return False
 
+    def _remote_path_candidates(
+        self, connection: SSHConnection, remote_path: str
+    ) -> list[str]:
+        """The paths the SSHFS mount tries for `remote_path`, in order.
+
+        A missing absolute path is retried relative to the login directory
+        (see `_mount_sshfs`), so anything that inspects the path first has to
+        resolve it the same way or it judges a different path than the one
+        that gets mounted.
+        """
+        default_path = getattr(connection, "default_path", None)
+        login_relative_path = _sshfs_login_relative_candidate(
+            remote_path, default_path if isinstance(default_path, str) else None
+        )
+        if login_relative_path and login_relative_path != remote_path:
+            return [remote_path, login_relative_path]
+        return [remote_path]
+
     async def _check_remote_is_file(
         self, connection: SSHConnection, remote_path: str, temp_key_file: str
     ) -> bool:
@@ -1462,6 +1495,9 @@ class MountService:
         Uses SSH shell commands first (fast), falls back to SFTP if shell access denied.
         This ensures compatibility with SFTP-only servers (like Hetzner Storage Boxes).
 
+        The first candidate path that exists decides, exactly as the mount
+        picks the path it mounts.
+
         Args:
             connection: SSH connection
             remote_path: Remote path to check
@@ -1470,6 +1506,11 @@ class MountService:
         Returns:
             True if path is a file, False if directory or doesn't exist
         """
+        candidates = self._remote_path_candidates(connection, remote_path)
+        check = f"test -f {shlex.quote(candidates[-1])}"
+        for candidate in reversed(candidates[:-1]):
+            quoted = shlex.quote(candidate)
+            check = f"if test -e {quoted}; then test -f {quoted}; else {check}; fi"
         try:
             # Method 1: Try SSH shell command first (fast, but requires shell access)
             cmd = [
@@ -1481,7 +1522,7 @@ class MountService:
                 "-p",
                 str(connection.port),
                 f"{connection.username}@{connection.host}",
-                f"test -f '{remote_path}' && echo 'FILE' || echo 'DIR'",
+                f"{check} && echo 'FILE' || echo 'DIR'",
             ]
 
             process = await asyncio.create_subprocess_exec(
@@ -1490,9 +1531,11 @@ class MountService:
 
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10)
 
-            # Check if SSH command succeeded
-            if process.returncode == 0:
-                result = stdout.decode().strip()
+            # A shell that ran the check prints exactly one of the two words.
+            # Anything else is an SFTP-only account (or a login banner / forced
+            # command), not an answer.
+            result = stdout.decode(errors="replace").strip()
+            if process.returncode == 0 and result in ("FILE", "DIR"):
                 is_file = result == "FILE"
                 logger.debug(
                     "Checked remote path type via SSH shell",
@@ -1500,15 +1543,12 @@ class MountService:
                     is_file=is_file,
                 )
                 return is_file
-            else:
-                # Shell command failed (possibly SFTP-only server)
-                stderr_msg = stderr.decode() if stderr else ""
-                logger.info(
-                    "SSH shell check failed (possibly SFTP-only), will use SFTP stat",
-                    remote_path=remote_path,
-                    stderr=stderr_msg,
-                )
-                # Fall through to SFTP method
+            logger.info(
+                "SSH shell check gave no answer (possibly SFTP-only), will use SFTP",
+                remote_path=remote_path,
+                returncode=process.returncode,
+                stderr=(stderr.decode(errors="replace") if stderr else ""),
+            )
 
         except asyncio.TimeoutError:
             logger.warning(
@@ -1521,11 +1561,19 @@ class MountService:
                 error=str(e),
             )
 
-        # Method 2: Use SFTP stat (works on SFTP-only servers)
+        # Method 2: SFTP (works on SFTP-only servers)
         try:
-            return await self._check_remote_is_file_via_sftp(
-                connection, remote_path, temp_key_file
-            )
+            for candidate in candidates:
+                kind = await self._sftp_path_kind(connection, candidate, temp_key_file)
+                if kind is not None:
+                    logger.debug(
+                        "Checked remote path type via SFTP",
+                        remote_path=remote_path,
+                        resolved_path=candidate,
+                        kind=kind,
+                    )
+                    return kind == "file"
+            return False
         except Exception as e:
             logger.warning(
                 "SFTP check also failed, assuming directory",
@@ -1534,24 +1582,19 @@ class MountService:
             )
             return False
 
-    async def _check_remote_is_file_via_sftp(
-        self, connection: SSHConnection, remote_path: str, temp_key_file: str
+    async def _sftp_batch_succeeds(
+        self, connection: SSHConnection, command: str, temp_key_file: str
     ) -> bool:
+        """Run one sftp batch command; True when it succeeded.
+
+        Batch mode (`-b -`) makes sftp exit non-zero when the command fails,
+        which is the only signal OpenSSH's sftp gives: it has no `stat`, and
+        its `ls` output looks the same for a file and a directory's contents.
         """
-        Check if remote path is file using SFTP protocol (works on SFTP-only servers)
-
-        Args:
-            connection: SSH connection
-            remote_path: Remote path to check
-            temp_key_file: Path to temporary SSH key file
-
-        Returns:
-            True if file, False if directory
-        """
-
-        # Use SFTP subsystem via SSH
         cmd = [
             "sftp",
+            "-b",
+            "-",
             *ssh_key_auth_args(temp_key_file),
             *host_key_ssh_opts(connection),
             "-o",
@@ -1560,49 +1603,35 @@ class MountService:
             str(connection.port),
             f"{connection.username}@{connection.host}",
         ]
-
-        # Send stat command via stdin
-        sftp_commands = f"stat '{remote_path}'\nquit\n"
-
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-
-        stdout, _ = await asyncio.wait_for(
-            process.communicate(input=sftp_commands.encode()), timeout=15
+        _, stderr = await asyncio.wait_for(
+            process.communicate(input=f"{command}\n".encode()), timeout=15
         )
+        if process.returncode not in (0, 1):
+            # 255 and friends: the connection itself failed, not the command.
+            raise RuntimeError(
+                f"sftp exited {process.returncode}: "
+                f"{stderr.decode(errors='replace').strip()}"
+            )
+        return process.returncode == 0
 
-        output = stdout.decode()
-
-        # Parse SFTP stat output
-        # Look for "File type:" or mode bits to determine if it's a file
-        # SFTP stat output includes: "Flags: 0x0000000X" where X indicates type
-        # Or "Permissions:" line with mode bits
-
-        # Simple heuristic: if output contains directory indicators
-        is_directory = any(
-            indicator in output.lower()
-            for indicator in [
-                "directory",
-                "type: directory",
-                "d---------",  # Mode bits starting with 'd'
-                "drwx",
-            ]
-        )
-
-        is_file = not is_directory and "cannot" not in output.lower()
-
-        logger.debug(
-            "Checked remote path type via SFTP",
-            remote_path=remote_path,
-            is_file=is_file,
-            is_directory=is_directory,
-        )
-
-        return is_file
+    async def _sftp_path_kind(
+        self, connection: SSHConnection, remote_path: str, temp_key_file: str
+    ) -> Optional[str]:
+        """ "dir", "file", or None when the path does not exist, via SFTP."""
+        quoted = _sftp_quote(remote_path)
+        if await self._sftp_batch_succeeds(connection, f"cd {quoted}", temp_key_file):
+            return "dir"
+        if await self._sftp_batch_succeeds(
+            connection, f"ls -l {quoted}", temp_key_file
+        ):
+            return "file"
+        return None
 
     def _decrypt_and_write_key(self, ssh_key: SSHKey) -> str:
         """
@@ -1758,15 +1787,8 @@ class MountService:
                 sftp_server=sftp_server_path or "/usr/lib/openssh/sftp-server",
             )
 
-        mount_attempts = [remote_path]
-        connection_default_path = getattr(connection, "default_path", None)
-        if not isinstance(connection_default_path, str):
-            connection_default_path = None
-        login_relative_path = _sshfs_login_relative_candidate(
-            remote_path, connection_default_path
-        )
-        if login_relative_path and login_relative_path != remote_path:
-            mount_attempts.append(login_relative_path)
+        mount_attempts = self._remote_path_candidates(connection, remote_path)
+        login_relative_path = mount_attempts[1] if len(mount_attempts) > 1 else None
 
         for attempt_index, path_to_mount in enumerate(mount_attempts):
             cmd = build_sshfs_command(path_to_mount)
