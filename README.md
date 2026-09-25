@@ -2,7 +2,7 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/karanhudia/borg-ui/main/assets/logo-dark.png" />
     <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/karanhudia/borg-ui/main/assets/logo-light.png" />
-    <img alt="Borg UI Logo v2" src="https://raw.githubusercontent.com/karanhudia/borg-ui/main/assets/logo-light.png" width="360" />
+    <img alt="Borg UI Logo v2" src="https://raw.githubusercontent.com/karanhudia/borg-ui/main/assets/logo-light.png" width="270" />
   </picture>
 </div>
 
