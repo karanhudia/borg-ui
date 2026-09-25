@@ -133,6 +133,7 @@ The test verifies Apprise delivery. It does not prove that a real backup or rest
 - Check Borg UI logs.
 - Check whether the event trigger is enabled.
 - Check whether the repository is included in the service scope.
+- For slow endpoints (for example a self-hosted Signal API), the logs show a timeout. Apprise waits 4 seconds by default; add `?rto=60` (read timeout) or `?cto=30` (connect timeout) to the service URL to wait longer.
 
 ### JSON webhook fails
 

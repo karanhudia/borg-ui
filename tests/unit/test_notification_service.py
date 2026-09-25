@@ -1288,3 +1288,72 @@ def test_resolve_report_timezone_invalid_config_falls_back_to_container(test_db)
 
     # Invalid configured value must not short-circuit to UTC
     assert str(tz) == "Asia/Kolkata"
+
+
+@pytest.mark.asyncio
+async def test_slow_delivery_does_not_block_event_loop(
+    test_db, mock_apprise, mock_repository, discord_notification_setting
+):
+    """A slow endpoint must not stall the loop or touch the process socket timeout."""
+    import asyncio
+    import socket
+    import time
+
+    seen_timeouts = []
+
+    def slow_notify(**kwargs):
+        seen_timeouts.append(socket.getdefaulttimeout())
+        time.sleep(0.5)
+        return True
+
+    apprise_instance = mock_apprise.return_value
+    apprise_instance.add.return_value = True
+    apprise_instance.notify.side_effect = slow_notify
+
+    ticks = 0
+
+    async def heartbeat():
+        nonlocal ticks
+        while True:
+            await asyncio.sleep(0.02)
+            ticks += 1
+
+    beat = asyncio.create_task(heartbeat())
+    try:
+        await notification_service.send_backup_failure(
+            test_db, mock_repository.name, "Error", job_id=1
+        )
+    finally:
+        beat.cancel()
+
+    assert ticks >= 10
+    assert seen_timeouts == [None]
+
+
+@pytest.mark.asyncio
+async def test_test_notification_does_not_block_event_loop(mock_apprise):
+    import asyncio
+    import time
+
+    apprise_instance = mock_apprise.return_value
+    apprise_instance.add.return_value = True
+    apprise_instance.notify.side_effect = lambda **kwargs: time.sleep(0.5) or True
+
+    ticks = 0
+
+    async def heartbeat():
+        nonlocal ticks
+        while True:
+            await asyncio.sleep(0.02)
+            ticks += 1
+
+    beat = asyncio.create_task(heartbeat())
+    try:
+        result = await notification_service.test_notification(
+            "discord://webhook_id/token"
+        )
+    finally:
+        beat.cancel()
+
+    assert result["success"] is True
+    assert ticks >= 10

@@ -9,8 +9,8 @@ from typing import Optional, List
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
+import asyncio
 import structlog
-import socket
 import re
 
 from app.services.storage_usage import format_bytes
@@ -1765,17 +1765,13 @@ class NotificationService:
                 service_url_prefix=service_url.split(":")[0],
             )
 
-            # Use longer timeout for slow services like Signal (60 seconds)
-            # Temporarily set socket timeout since Apprise plugins use it for HTTP connections
-            old_timeout = socket.getdefaulttimeout()
-            socket.setdefaulttimeout(60)
-            try:
-                success = apobj.notify(
-                    title="🔔 Borg UI Test Notification",
-                    body="This is a test notification from Borg UI. If you received this, your notification service is configured correctly!",
-                )
-            finally:
-                socket.setdefaulttimeout(old_timeout)
+            # Apprise blocks on network I/O; keep it off the event loop.
+            # Slow endpoints can raise the per-URL read timeout with ?rto=<seconds>.
+            success = await asyncio.to_thread(
+                apobj.notify,
+                title="🔔 Borg UI Test Notification",
+                body="This is a test notification from Borg UI. If you received this, your notification service is configured correctly!",
+            )
 
             if success:
                 logger.info("Test notification sent successfully")
@@ -1823,28 +1819,17 @@ class NotificationService:
             apobj = apprise.Apprise()
             apobj.add(setting.service_url)
 
-            # Choose format based on service type
-            # Use longer timeout (60s) for slow services like Signal
-            # Temporarily set socket timeout since Apprise plugins use it for HTTP connections
-            old_timeout = socket.getdefaulttimeout()
-            socket.setdefaulttimeout(60)
-            try:
-                if _is_email_service(setting.service_url):
-                    # Email service - use HTML format
-                    success = apobj.notify(
-                        title=title,
-                        body=html_body,
-                        body_format=apprise.NotifyFormat.HTML,
-                    )
-                else:
-                    # Chat service - use Markdown format
-                    success = apobj.notify(
-                        title=title,
-                        body=markdown_body,
-                        body_format=apprise.NotifyFormat.MARKDOWN,
-                    )
-            finally:
-                socket.setdefaulttimeout(old_timeout)
+            # Choose format based on service type: HTML for email, Markdown for chat
+            if _is_email_service(setting.service_url):
+                body, body_format = html_body, apprise.NotifyFormat.HTML
+            else:
+                body, body_format = markdown_body, apprise.NotifyFormat.MARKDOWN
+
+            # Apprise blocks on network I/O; keep it off the event loop.
+            # Slow endpoints can raise the per-URL read timeout with ?rto=<seconds>.
+            success = await asyncio.to_thread(
+                apobj.notify, title=title, body=body, body_format=body_format
+            )
 
             if success:
                 # Update last_used_at timestamp
