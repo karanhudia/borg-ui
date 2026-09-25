@@ -11,7 +11,6 @@ import {
   WizardStepScheduleReview,
 } from './wizard/schedule'
 import { getBrowserTimeZone } from '../utils/dateUtils'
-import { useAnalytics } from '../hooks/useAnalytics'
 import { ScriptParameter } from './ScriptParameterInputs'
 import { Repository } from '../types'
 
@@ -157,7 +156,6 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
   scripts,
   onSubmit,
 }) => {
-  const { track, EventCategory, EventAction } = useAnalytics()
   const { t } = useTranslation()
   const [activeStep, setActiveStep] = useState(0)
   const [wizardState, setWizardState] = useState<WizardState>(createInitialState)
@@ -320,13 +318,6 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
       prune_keep_yearly: wizardState.pruneKeepYearly,
       prune_keep_within: wizardState.pruneKeepWithin.trim() || null,
     }
-
-    track(EventCategory.BACKUP, mode === 'create' ? EventAction.CREATE : EventAction.EDIT, {
-      entity: 'schedule',
-      source: 'wizard',
-      mode,
-      repository_count: wizardState.repositoryIds.length,
-    })
 
     onSubmit(data)
     onClose()
