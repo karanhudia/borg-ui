@@ -118,21 +118,28 @@ service at all, block it at your firewall.
 
 ### Usage analytics
 
-The web UI loads [Umami](https://umami.is) to count page views and feature
-usage. It starts on, and a banner on first login asks whether to keep it.
-Declining stops it from that point, and you can change the answer whenever you
-like in Settings > Preferences. Page views from that first session, before you
-answer the banner, are counted.
+The web UI counts page views and feature usage and sends them to Borg UI's own
+analytics service at `t.borgui.com`, which stores them in Google BigQuery in the
+EU. It starts on, and a banner on first login asks whether to keep it. Declining
+stops it from that point, and you can change the answer whenever you like in
+Settings > Preferences. Page views from that first session, before you answer
+the banner, are counted, and so are the answer itself and a later opt-out, each
+as a single event.
 
-Before anything is sent, your real hostname and URL are replaced with
-`app.borgui`, so your private DNS names and IP addresses do not leave the
-browser. The script tag is loaded with `referrerpolicy="no-referrer"` so the
-request that fetches it cannot carry the origin either. The identifier attached
-to a session is a hash of your install id and username, not the username
-itself. The session also carries your app version and your plan name
-(community, pro, or enterprise) so usage can be compared across plans. No
-licence key, customer, or other billing detail is sent. See
-`frontend/src/utils/analytics.ts` and [Analytics](analytics).
+Each event carries the page path (never the hostname, full URL, or query
+string), the event name and its details, your app version, your plan name
+(community, pro, or enterprise), and two hashes: a SHA-256 of this install's
+random instance id and a SHA-256 of that id plus your user id. The raw instance
+id and your username are never sent. Names of repositories, schedules, and other
+things you create are hashed before sending. Requests go without cookies or a
+referrer. Your browser still adds an `Origin` header naming the address you
+reach Borg UI at; the service only compares it for website events and does not
+store it. The service derives a country from your IP address and discards the
+address, and the hosting platform's request logs, which would record it, are
+switched off. When analytics is on, buy links in the app carry the install hash
+so a purchase can be matched to the features that led to it. No licence key,
+customer, or other billing detail is sent. See `frontend/src/utils/analytics.ts`
+and [Analytics](analytics).
 
 Nothing else phones home. No crash reporting, no error telemetry, no update
 beacon.
