@@ -4030,10 +4030,7 @@
     "languageDescription": "Wähle die Sprache der Benutzeroberfläche",
     "languageLabel": "Oberflächensprache",
     "languageSaved": "Sprache erfolgreich aktualisiert",
-    "updateFailed": "Einstellungen konnten nicht aktualisiert werden",
-    "analyticsTransparencyBold": "Volle Transparenz:",
-    "analyticsTransparencyLink": "Unser Analyse-Dashboard öffentlich einsehen",
-    "analyticsTransparencyAfterLink": "um genau zu sehen, was wir erfassen. Anonym und datenschutzorientiert."
+    "updateFailed": "Einstellungen konnten nicht aktualisiert werden"
   },
   "betaFeatures": {
     "title": "Beta-Funktionen",
@@ -4348,8 +4345,6 @@
     "accept": "Akzeptieren",
     "decline": "Ablehnen",
     "learnMore": "Mehr erfahren",
-    "viewDashboard": "Unser öffentliches Analyse-Dashboard ansehen",
-    "viewDashboardSuffix": "um genau zu sehen, was wir erfassen.",
     "enableToggle": "Anonyme Analysen aktivieren",
     "continue": "Weiter",
     "saving": "Speichert...",
@@ -5624,8 +5619,6 @@
     }
   },
   "analyticsBanner": {
-    "viewDashboardLink": "Unser öffentliches Analyse-Dashboard anzeigen",
-    "viewDashboardSuffix": "um genau zu sehen, was wir erfassen.",
     "changeAnytimeNote": "Du kannst dies jederzeit in Einstellungen → Präferenzen ändern"
   },
   "repositoryScripts": {

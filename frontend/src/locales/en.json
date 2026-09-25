@@ -4030,10 +4030,7 @@
     "languageDescription": "Choose the interface language",
     "languageLabel": "Interface Language",
     "languageSaved": "Language updated successfully",
-    "updateFailed": "Failed to update preferences",
-    "analyticsTransparencyBold": "Full Transparency:",
-    "analyticsTransparencyLink": "View our analytics dashboard publicly",
-    "analyticsTransparencyAfterLink": "to see exactly what we collect. Anonymous and privacy-focused."
+    "updateFailed": "Failed to update preferences"
   },
   "betaFeatures": {
     "title": "Beta Features",
@@ -4348,8 +4345,6 @@
     "accept": "Accept",
     "decline": "Decline",
     "learnMore": "Learn more",
-    "viewDashboard": "View our public analytics dashboard",
-    "viewDashboardSuffix": "to see exactly what we collect.",
     "enableToggle": "Enable anonymous analytics",
     "continue": "Continue",
     "saving": "Saving...",
@@ -5624,8 +5619,6 @@
     }
   },
   "analyticsBanner": {
-    "viewDashboardLink": "View our public analytics dashboard",
-    "viewDashboardSuffix": "to see exactly what we collect.",
     "changeAnytimeNote": "You can change this anytime in Settings → Preferences"
   },
   "repositoryScripts": {

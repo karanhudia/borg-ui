@@ -4030,10 +4030,7 @@
     "languageDescription": "Elige el idioma de la interfaz",
     "languageLabel": "Idioma de la interfaz",
     "languageSaved": "Idioma actualizado correctamente",
-    "updateFailed": "Error al actualizar las preferencias",
-    "analyticsTransparencyBold": "Transparencia total:",
-    "analyticsTransparencyLink": "Ver nuestro panel de análisis públicamente",
-    "analyticsTransparencyAfterLink": "para ver exactamente qué recopilamos. Anónimo y centrado en la privacidad."
+    "updateFailed": "Error al actualizar las preferencias"
   },
   "betaFeatures": {
     "title": "Funciones beta",
@@ -4348,8 +4345,6 @@
     "accept": "Aceptar",
     "decline": "Rechazar",
     "learnMore": "Más información",
-    "viewDashboard": "Ver nuestro panel de análisis público",
-    "viewDashboardSuffix": "para ver exactamente lo que recopilamos.",
     "enableToggle": "Habilitar análisis anónimos",
     "continue": "Continuar",
     "saving": "Guardando...",
@@ -5624,8 +5619,6 @@
     }
   },
   "analyticsBanner": {
-    "viewDashboardLink": "Ver nuestro panel de análisis público",
-    "viewDashboardSuffix": "para ver exactamente lo que recopilamos.",
     "changeAnytimeNote": "Puedes cambiar esto en cualquier momento en Configuración → Preferencias"
   },
   "repositoryScripts": {
