@@ -225,14 +225,16 @@ describe('Activity page', () => {
 
   describe('deleting a row', () => {
     // A full first page, so the feed offers a second one and stops polling
-    // once it is loaded.
-    const firstPage = Array.from({ length: 50 }, (_, index) => ({
+    // once it is loaded. One row repeated: the page shows each run once, and
+    // fifty distinct rows made every render slow enough to time out a
+    // findBy on a loaded CI runner.
+    const firstPage = Array.from({ length: 50 }, () => ({
       ...backup,
-      id: 100 + index,
+      id: 100,
       trigger: 'manual',
       backup_plan_name: null,
-      repository: `repo-${100 + index}`,
-      sort_at: new Date(Date.UTC(2026, 8, 20, 12, 0, 50 - index)).toISOString(),
+      repository: 'repo-100',
+      sort_at: '2026-09-20T12:00:00.000Z',
     }))
     const doomed = {
       ...firstPage[0],
