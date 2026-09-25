@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Feature, Plan, PLAN_LABEL } from '../core/features'
 import { getPlanAccent } from './planDrawerColors'
-import { BUY_URL } from '../utils/externalLinks'
+import { buildBuyUrl } from '../utils/externalLinks'
 import PlanInfoDrawer from './PlanInfoDrawer'
 import { usePlan } from '../hooks/usePlan'
 import { licensingAPI } from '../services/api'
@@ -34,6 +34,10 @@ export default function UpgradePrompt({
   const color = getPlanAccent(requiredPlan, theme)
   const planLabel = PLAN_LABEL[requiredPlan]
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const buyUrl = buildBuyUrl({
+    plan: requiredPlan === 'enterprise' ? 'enterprise' : 'pro',
+    src: feature ? `app-gate-${feature}` : 'app-upgrade-prompt',
+  })
   const { plan, features, entitlement } = usePlan()
   const queryClient = useQueryClient()
   const [trialRefusal, setTrialRefusal] = useState<string | null>(null)
@@ -149,7 +153,7 @@ export default function UpgradePrompt({
                 panel. It leads once the trial is no longer on offer. */}
             <Button
               component="a"
-              href={BUY_URL}
+              href={buyUrl}
               target="_blank"
               rel="noreferrer"
               variant={trialButton ? 'outlined' : 'contained'}
@@ -221,7 +225,7 @@ export default function UpgradePrompt({
         {trialButton}
         <Button
           component="a"
-          href={BUY_URL}
+          href={buyUrl}
           target="_blank"
           rel="noreferrer"
           variant={trialButton ? 'outlined' : 'contained'}
