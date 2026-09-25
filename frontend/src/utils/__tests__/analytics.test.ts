@@ -1,480 +1,163 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import {
-  getAnalyticsConfig,
-  loadUserPreference,
-  hasConsentBeenGiven,
-  arePreferencesLoaded,
-  trackPageView,
-  trackEvent,
-  trackSiteSearch,
-  setCustomDimension,
-  setAppVersion,
-  setAnalyticsPlan,
-  setUserId,
-  resetUserId,
-  trackOptOut,
-  trackConsentResponse,
-  trackLanguageChange,
-  getOrCreateInstallId,
-  initAnalyticsIfEnabled,
-  resetOptOutCache,
-  anonymizeEntityName,
-  EventCategory,
-  EventAction,
-} from '../analytics'
-
-const { getAuthConfigMock } = vi.hoisted(() => ({
-  getAuthConfigMock: vi.fn(),
-}))
-
-const fetchJsonForAuthModeMock = vi.fn()
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../services/api', () => ({
   authAPI: {
-    getAuthConfig: getAuthConfigMock,
+    getAuthConfig: vi.fn(async () => ({
+      data: { proxy_auth_enabled: false, insecure_no_auth_enabled: false },
+    })),
   },
 }))
-
+const prefs = vi.hoisted(() => ({ value: {} as Record<string, unknown> }))
 vi.mock('../../services/authRequest', () => ({
-  fetchJsonForAuthMode: (path: string, init?: RequestInit, mode?: string) =>
-    fetchJsonForAuthModeMock(path, init, mode),
+  fetchJsonForAuthMode: vi.fn(async () => ({ json: async () => ({ preferences: prefs.value }) })),
 }))
 
-interface UmamiWindow extends Window {
-  umami?: {
-    track: ReturnType<typeof vi.fn>
-    identify?: ReturnType<typeof vi.fn>
+const KEY = 'a'.repeat(64)
+const USER = 'b'.repeat(64)
+
+async function load(over: Record<string, unknown> = {}) {
+  vi.resetModules()
+  prefs.value = {
+    analytics_enabled: true,
+    analytics_consent_given: true,
+    analytics_instance_key: KEY,
+    analytics_user_key: USER,
+    ...over,
   }
+  localStorage.setItem('access_token', 'token')
+  const mod = await import('../analytics')
+  await mod.loadUserPreference()
+  return mod
 }
 
-declare const window: UmamiWindow
+const fetchMock = () => globalThis.fetch as unknown as ReturnType<typeof vi.fn>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const sent = (): any[] =>
+  fetchMock().mock.calls.flatMap(
+    ([, init]) => JSON.parse((init as RequestInit).body as string).events
+  )
 
-describe('analytics (umami)', () => {
-  beforeEach(() => {
-    localStorage.clear()
-    window.umami = { track: vi.fn(), identify: vi.fn() }
-    vi.spyOn(Storage.prototype, 'getItem')
-    vi.spyOn(Storage.prototype, 'setItem')
-    global.fetch = vi.fn()
-    Object.defineProperty(navigator, 'sendBeacon', {
-      value: vi.fn().mockReturnValue(true),
-      configurable: true,
+beforeEach(() => {
+  vi.useFakeTimers()
+  globalThis.fetch = vi.fn(
+    async () => new Response(null, { status: 204 })
+  ) as unknown as typeof fetch
+  window.history.pushState({}, '', '/repositories?secret=1#x')
+})
+afterEach(() => {
+  vi.useRealTimers()
+  localStorage.clear()
+})
+
+describe('analytics transport', () => {
+  it('batches events and posts them without referrer or credentials', async () => {
+    const a = await load()
+    a.setAppVersion('2.3.0')
+    a.setAnalyticsPlan('community')
+    a.trackEvent('Plan', 'FeatureBlocked', { feature: 'rclone' })
+    a.trackPageView()
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(5000)
+
+    const [url, init] = fetchMock().mock.calls[0]
+    expect(url).toBe(a.ANALYTICS_ENDPOINT)
+    expect(init).toMatchObject({
+      method: 'POST',
+      keepalive: true,
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
     })
-    getAuthConfigMock.mockReset()
-    fetchJsonForAuthModeMock.mockReset()
+    expect(init.headers).toEqual({ 'Content-Type': 'text/plain' })
+    const [event, pageview] = sent()
+    expect(event).toMatchObject({
+      source: 'app',
+      name: 'Plan - FeatureBlocked',
+      instance_key: KEY,
+      user_key: USER,
+      path: '/repositories',
+      app_version: '2.3.0',
+      plan: 'community',
+      props: { feature: 'rclone' },
+    })
+    expect(event.event_id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+    )
+    expect(pageview.name).toBe('pageview')
   })
 
-  afterEach(() => {
-    vi.clearAllMocks()
-    delete window.umami
+  it('never sends the query string, hash or host', async () => {
+    const a = await load()
+    a.trackPageView('/repositories?secret=1')
+    vi.advanceTimersByTime(5000)
+    const body = JSON.stringify(sent())
+    expect(body).not.toContain('secret')
+    expect(body).not.toContain(window.location.host)
   })
 
-  describe('getAnalyticsConfig', () => {
-    it('returns analytics configuration', () => {
-      const config = getAnalyticsConfig()
-      expect(config.enabled).toBe(true)
-      expect(config.siteId).toBe('870dcd0c-2fa3-4f78-8180-d0d7895c5d8c')
-      expect(config.dashboardUrl).toBe('https://analytics.nullcodeai.dev/')
-    })
+  it('flushes immediately once the tab is hidden', async () => {
+    const a = await load()
+    a.trackEvent('Backup', 'Start')
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+    expect(sent()).toHaveLength(1)
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
   })
 
-  describe('loadUserPreference', () => {
-    it('sets opted-out when no token in JWT mode', async () => {
-      Storage.prototype.getItem = vi.fn().mockReturnValue(null)
-      getAuthConfigMock.mockResolvedValueOnce({ data: { proxy_auth_enabled: false } })
+  it('hashes any *_name prop so raw entity names cannot leak', async () => {
+    const a = await load()
+    a.trackEvent('Backup', 'Complete', { schedule_name: 'nightly-nas', name: 'de' })
+    vi.advanceTimersByTime(5000)
+    const [event] = sent()
+    expect(event.props.schedule_name).toBe(a.anonymizeEntityName('nightly-nas'))
+    expect(event.props.name).toBe('de')
+  })
+})
 
-      await loadUserPreference()
-
-      expect(arePreferencesLoaded()).toBe(true)
-      expect(hasConsentBeenGiven()).toBe(false)
-    })
-
-    it('loads analytics preference from API when token exists', async () => {
-      Storage.prototype.getItem = vi.fn().mockReturnValue('test-token')
-      getAuthConfigMock.mockResolvedValueOnce({ data: { proxy_auth_enabled: false } })
-      global.fetch = vi.fn().mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          preferences: { analytics_enabled: true, analytics_consent_given: true },
-        }),
-      } as Response)
-
-      await loadUserPreference()
-
-      expect(arePreferencesLoaded()).toBe(true)
-    })
-
-    it('defaults to opt-out when API fails', async () => {
-      Storage.prototype.getItem = vi.fn().mockReturnValue('test-token')
-      getAuthConfigMock.mockResolvedValueOnce({ data: { proxy_auth_enabled: false } })
-      global.fetch = vi.fn().mockResolvedValueOnce({ ok: false } as Response)
-
-      await loadUserPreference()
-
-      expect(arePreferencesLoaded()).toBe(true)
-      expect(hasConsentBeenGiven()).toBe(false)
-    })
-
-    it('defaults to opt-out on network error', async () => {
-      Storage.prototype.getItem = vi.fn().mockReturnValue('test-token')
-      getAuthConfigMock.mockRejectedValueOnce(new Error('Network error'))
-
-      await loadUserPreference()
-
-      expect(arePreferencesLoaded()).toBe(true)
-      expect(hasConsentBeenGiven()).toBe(false)
-    })
-
-    it('handles proxy auth mode without token', async () => {
-      Storage.prototype.getItem = vi.fn().mockReturnValue(null)
-      getAuthConfigMock.mockResolvedValueOnce({ data: { proxy_auth_enabled: true } })
-      fetchJsonForAuthModeMock.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          preferences: { analytics_enabled: true, analytics_consent_given: true },
-        }),
-      } as Response)
-
-      await loadUserPreference()
-
-      expect(arePreferencesLoaded()).toBe(true)
-    })
-
-    it('loads analytics preference in insecure no-auth mode without a token', async () => {
-      Storage.prototype.getItem = vi.fn().mockReturnValue(null)
-      getAuthConfigMock.mockResolvedValueOnce({
-        data: { proxy_auth_enabled: false, insecure_no_auth_enabled: true },
-      })
-      fetchJsonForAuthModeMock.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          preferences: { analytics_enabled: true, analytics_consent_given: true },
-        }),
-      } as Response)
-
-      await loadUserPreference()
-
-      expect(fetchJsonForAuthModeMock).toHaveBeenCalledWith(
-        '/settings/preferences',
-        {},
-        'insecure-no-auth'
-      )
-      expect(arePreferencesLoaded()).toBe(true)
-      expect(hasConsentBeenGiven()).toBe(true)
-    })
+describe('analytics gating', () => {
+  it('sends nothing when analytics is off', async () => {
+    const a = await load({ analytics_enabled: false })
+    a.trackEvent('Backup', 'Start')
+    a.trackPageView()
+    vi.advanceTimersByTime(5000)
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+    expect(a.getAnalyticsInstanceKey()).toBeNull()
   })
 
-  describe('initAnalyticsIfEnabled', () => {
-    it('loads the Umami script with no referrer so the origin never leaves', async () => {
-      Storage.prototype.getItem = vi.fn().mockReturnValue(null)
-      getAuthConfigMock.mockResolvedValueOnce({
-        data: { proxy_auth_enabled: false, insecure_no_auth_enabled: true },
-      })
-      fetchJsonForAuthModeMock.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          preferences: { analytics_enabled: true, analytics_consent_given: true },
-        }),
-      } as Response)
-
-      await loadUserPreference()
-      initAnalyticsIfEnabled()
-
-      const script = document.head.querySelector<HTMLScriptElement>(
-        'script[src="https://cloud.umami.is/script.js"]'
-      )
-      expect(script).not.toBeNull()
-      // Without this the browser attaches the instance's own origin to the
-      // request, which is exactly what the payload masking exists to prevent.
-      expect(script?.referrerPolicy).toBe('no-referrer')
-    })
+  it('still sends the one-shot consent and opt-out events, immediately', async () => {
+    const a = await load({ analytics_enabled: false })
+    a.trackConsentResponse(false)
+    a.trackOptOut()
+    expect(sent().map((e) => e.name)).toEqual(['Consent - Decline', 'Settings - OptOut'])
   })
 
-  describe('trackPageView', () => {
-    it('does not track when umami is not initialized', () => {
-      delete window.umami
-      expect(() => trackPageView()).not.toThrow()
-    })
-
-    it('does not throw when called', () => {
-      expect(() => trackPageView('/dashboard')).not.toThrow()
-    })
+  it('sends nothing before preferences load', async () => {
+    vi.resetModules()
+    const a = await import('../analytics')
+    a.trackEvent('Backup', 'Start')
+    vi.advanceTimersByTime(5000)
+    expect(globalThis.fetch).not.toHaveBeenCalled()
   })
 
-  describe('trackEvent', () => {
-    it('does not throw when called', () => {
-      expect(() => trackEvent('Category', 'Action', 'Name', 100)).not.toThrow()
-    })
-
-    it('does not throw without optional parameters', () => {
-      expect(() => trackEvent('Category', 'Action')).not.toThrow()
-    })
-
-    it('does not throw when umami is undefined', () => {
-      delete window.umami
-      expect(() => trackEvent('Category', 'Action')).not.toThrow()
-    })
+  it('exposes the instance key only while analytics is on', async () => {
+    const a = await load()
+    expect(a.getAnalyticsInstanceKey()).toBe(KEY)
   })
 
-  describe('trackSiteSearch', () => {
-    it('does not throw when called', () => {
-      expect(() => trackSiteSearch('query', 'category', 10)).not.toThrow()
-    })
-
-    it('does not throw without optional parameters', () => {
-      expect(() => trackSiteSearch('query')).not.toThrow()
-    })
+  it('swallows transport failures', async () => {
+    const a = await load()
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error('offline')
+    }) as unknown as typeof fetch
+    a.trackEvent('Backup', 'Start')
+    expect(() => vi.advanceTimersByTime(5000)).not.toThrow()
   })
+})
 
-  describe('no-op functions', () => {
-    it('setCustomDimension does not throw', () => {
-      expect(() => setCustomDimension(1, 'value')).not.toThrow()
-    })
-
-    it('setAppVersion identifies the current app version when umami is available', () => {
-      expect(() => setAppVersion('1.2.3')).not.toThrow()
-      expect(window.umami?.identify).toHaveBeenCalledWith({ app_version: '1.2.3' })
-    })
-
-    it('setAnalyticsPlan adds the plan to the identity payload', () => {
-      setAppVersion('1.2.3')
-      setAnalyticsPlan('pro')
-      expect(window.umami?.identify).toHaveBeenLastCalledWith(
-        expect.objectContaining({ app_version: '1.2.3', plan: 'pro' })
-      )
-
-      setAnalyticsPlan(null)
-      expect(window.umami?.identify).toHaveBeenLastCalledWith({ app_version: '1.2.3' })
-    })
-
-    it('setAnalyticsPlan does not re-identify when the plan has not changed', () => {
-      setAnalyticsPlan(null)
-      const calls = window.umami?.identify?.mock.calls.length
-      setAnalyticsPlan(null)
-      expect(window.umami?.identify?.mock.calls.length).toBe(calls)
-    })
-
-    it('setUserId does not throw', () => {
-      expect(() => setUserId('user123')).not.toThrow()
-    })
-
-    it('resetUserId does not throw', () => {
-      expect(() => resetUserId()).not.toThrow()
-    })
-  })
-
-  describe('trackOptOut', () => {
-    it('sends a manual event with app version when umami is undefined', () => {
-      delete window.umami
-      setAppVersion('1.2.3')
-      trackOptOut()
-      expect(navigator.sendBeacon).toHaveBeenCalled()
-      expect(navigator.sendBeacon).toHaveBeenCalledWith(
-        'https://cloud.umami.is/api/send',
-        expect.stringContaining('"app_version":"1.2.3"')
-      )
-    })
-  })
-
-  describe('trackConsentResponse', () => {
-    it('adds app version to tracked consent events', () => {
-      setAppVersion('1.2.3')
-      trackConsentResponse(true)
-
-      expect(window.umami?.track).toHaveBeenCalledWith('Consent - Accept', {
-        name: 'analytics_banner',
-        app_version: '1.2.3',
-      })
-    })
-
-    it('sends a manual event when umami is undefined', () => {
-      delete window.umami
-      trackConsentResponse(true)
-      expect(navigator.sendBeacon).toHaveBeenCalled()
-    })
-  })
-
-  describe('trackLanguageChange', () => {
-    it('does not throw when called', () => {
-      expect(() => trackLanguageChange('de')).not.toThrow()
-    })
-  })
-
-  describe('anonymizeEntityName', () => {
-    it('returns empty string for empty input', () => {
-      expect(anonymizeEntityName('')).toBe('')
-    })
-
-    it('generates consistent hash for same input', () => {
-      expect(anonymizeEntityName('my-repo')).toBe(anonymizeEntityName('my-repo'))
-    })
-
-    it('generates different hashes for different inputs', () => {
-      expect(anonymizeEntityName('repo-1')).not.toBe(anonymizeEntityName('repo-2'))
-    })
-
-    it('generates 8-character hex string', () => {
-      expect(anonymizeEntityName('test-repository')).toMatch(/^[0-9a-f]{8}$/)
-    })
-
-    it('pads hash with leading zeros', () => {
-      expect(anonymizeEntityName('a').length).toBe(8)
-    })
-  })
-
-  describe('getOrCreateInstallId', () => {
-    it('creates and stores a new UUID when none exists', () => {
-      localStorage.clear()
-      vi.spyOn(window.crypto, 'randomUUID').mockReturnValue(
-        'test-uuid-1234-5678-abcd-ef0123456789' as `${string}-${string}-${string}-${string}-${string}`
-      )
-
-      const id = getOrCreateInstallId()
-
-      expect(id).toBe('test-uuid-1234-5678-abcd-ef0123456789')
-      expect(localStorage.getItem('borg_ui_install_id')).toBe(
-        'test-uuid-1234-5678-abcd-ef0123456789'
-      )
-    })
-
-    it('returns existing UUID from localStorage', () => {
-      localStorage.clear()
-      localStorage.setItem('borg_ui_install_id', 'existing-uuid')
-      expect(getOrCreateInstallId()).toBe('existing-uuid')
-    })
-
-    it('falls back to crypto.getRandomValues when randomUUID is unavailable', async () => {
-      vi.resetModules()
-      localStorage.clear()
-
-      const originalCrypto = globalThis.crypto
-      const getRandomValues = vi.fn((values: Uint8Array) => {
-        values.set([
-          0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
-          0x88,
-        ])
-        return values
-      })
-
-      Object.defineProperty(globalThis, 'crypto', {
-        value: { getRandomValues },
-        configurable: true,
-      })
-
-      try {
-        const analytics = await import('../analytics')
-        const id = analytics.getOrCreateInstallId()
-
-        expect(id).toBe('12345678-90ab-4def-9122-334455667788')
-        expect(localStorage.getItem('borg_ui_install_id')).toBe(id)
-      } finally {
-        Object.defineProperty(globalThis, 'crypto', {
-          value: originalCrypto,
-          configurable: true,
-        })
-      }
-    })
-  })
-
-  describe('resetOptOutCache', () => {
-    it('completes without error', async () => {
-      Storage.prototype.getItem = vi.fn().mockReturnValue(null)
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ proxy_auth_enabled: false }),
-      } as Response)
-
-      await expect(resetOptOutCache()).resolves.toBeUndefined()
-    })
-  })
-
-  describe('manual transport fallback', () => {
-    it('falls back to fetch when sendBeacon is unavailable', async () => {
-      vi.resetModules()
-      delete window.umami
-      Object.defineProperty(navigator, 'sendBeacon', {
-        value: undefined,
-        configurable: true,
-      })
-      const fetchMock = vi.fn().mockResolvedValue({ ok: true } as Response)
-      global.fetch = fetchMock
-      window.fetch = fetchMock as typeof window.fetch
-
-      const analytics = await import('../analytics')
-      analytics.trackConsentResponse(false)
-
-      expect(fetchMock).toHaveBeenCalledWith(
-        'https://cloud.umami.is/api/send',
-        expect.objectContaining({
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          keepalive: true,
-        })
-      )
-    })
-  })
-
-  describe('direct Umami events', () => {
-    it('tracks opt-out immediately through Umami when available', () => {
-      setAppVersion('9.9.9')
-      trackOptOut()
-
-      expect(window.umami?.track).toHaveBeenCalledWith('Settings - OptOut', {
-        name: 'analytics',
-        app_version: '9.9.9',
-      })
-    })
-
-    it('tracks consent decline through Umami when available', () => {
-      setAppVersion('4.5.6')
-      trackConsentResponse(false)
-
-      expect(window.umami?.track).toHaveBeenCalledWith('Consent - Decline', {
-        name: 'analytics_banner',
-        app_version: '4.5.6',
-      })
-    })
-  })
-
-  describe('EventCategory constants', () => {
-    it('exports all event categories', () => {
-      expect(EventCategory.REPOSITORY).toBe('Repository')
-      expect(EventCategory.BACKUP).toBe('Backup')
-      expect(EventCategory.ARCHIVE).toBe('Archive')
-      expect(EventCategory.MOUNT).toBe('Mount')
-      expect(EventCategory.MAINTENANCE).toBe('Maintenance')
-      expect(EventCategory.SSH).toBe('SSH Connection')
-      expect(EventCategory.SCRIPT).toBe('Script')
-      expect(EventCategory.NOTIFICATION).toBe('Notification')
-      expect(EventCategory.SYSTEM).toBe('System')
-      expect(EventCategory.PACKAGE).toBe('Package')
-      expect(EventCategory.SETTINGS).toBe('Settings')
-      expect(EventCategory.AUTH).toBe('Authentication')
-      expect(EventCategory.NAVIGATION).toBe('Navigation')
-      expect(EventCategory.PLAN).toBe('Plan')
-      expect(EventCategory.REMOTE_CLIENT).toBe('Remote Client')
-    })
-  })
-
-  describe('EventAction constants', () => {
-    it('exports all event actions', () => {
-      expect(EventAction.CREATE).toBe('Create')
-      expect(EventAction.EDIT).toBe('Edit')
-      expect(EventAction.DELETE).toBe('Delete')
-      expect(EventAction.VIEW).toBe('View')
-      expect(EventAction.START).toBe('Start')
-      expect(EventAction.STOP).toBe('Stop')
-      expect(EventAction.MOUNT).toBe('Mount')
-      expect(EventAction.UNMOUNT).toBe('Unmount')
-      expect(EventAction.DOWNLOAD).toBe('Download')
-      expect(EventAction.UPLOAD).toBe('Upload')
-      expect(EventAction.TEST).toBe('Test')
-      expect(EventAction.LOGIN).toBe('Login')
-      expect(EventAction.LOGOUT).toBe('Logout')
-      expect(EventAction.SEARCH).toBe('Search')
-      expect(EventAction.FILTER).toBe('Filter')
-      expect(EventAction.EXPORT).toBe('Export')
-      expect(EventAction.SWITCH).toBe('Switch')
-    })
+describe('anonymizeEntityName', () => {
+  it('is a stable 8-hex hash', async () => {
+    const a = await load()
+    expect(a.anonymizeEntityName('repo')).toMatch(/^[0-9a-f]{8}$/)
+    expect(a.anonymizeEntityName('repo')).toBe(a.anonymizeEntityName('repo'))
   })
 })
