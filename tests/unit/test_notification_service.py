@@ -1299,6 +1299,7 @@ async def test_slow_delivery_does_not_block_event_loop(
     import socket
     import time
 
+    baseline_timeout = socket.getdefaulttimeout()
     seen_timeouts = []
 
     def slow_notify(**kwargs):
@@ -1327,7 +1328,7 @@ async def test_slow_delivery_does_not_block_event_loop(
         beat.cancel()
 
     assert ticks >= 10
-    assert seen_timeouts == [None]
+    assert seen_timeouts == [baseline_timeout]
 
 
 @pytest.mark.asyncio
