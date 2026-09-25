@@ -2501,3 +2501,108 @@ async def test_a_replacement_runner_leaves_the_old_ones_work_alone(
     new.wake()
     await new.drain()
     await asyncio.wait_for(new_task, timeout=2)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_drain_that_times_out_keeps_the_lease(
+    db, repo, session_factory, registry, monkeypatch, tmp_path
+):
+    """Work still running after the drain gives up is this runner's; the
+    lease has to expire rather than hand it to a replacement."""
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+    started = asyncio.Event()
+
+    async def stuck(ctx):
+        started.set()
+        await asyncio.sleep(10)
+        return Outcome()
+
+    registry["archive_sync"] = stuck
+    runner = OperationRunner(
+        session_factory=session_factory, registry=registry, poll_interval=0.01
+    )
+    task = asyncio.create_task(runner.start())
+    enqueue(db, "archive_sync", repository_id=repo.id)
+    await asyncio.wait_for(started.wait(), timeout=2)
+
+    runner.stop()
+    runner.wake()
+    await runner.drain(timeout=0.05)
+    await asyncio.wait_for(task, timeout=2)
+
+    other = OperationRunner(session_factory=session_factory, registry=registry)
+    assert not other.acquire_lease(db)
+    for t in runner.running_tasks.values():
+        t.cancel()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_drain_during_a_tick_keeps_the_lease_until_the_loop_ends(
+    db, repo, session_factory, registry, monkeypatch, tmp_path
+):
+    """`stop()` does not wait for the tick in flight; a drain that finds
+    nothing running yet must not release while that tick can still claim."""
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+    registry["archive_sync"] = lambda ctx: Outcome()
+    runner = OperationRunner(
+        session_factory=session_factory, registry=registry, poll_interval=0.01
+    )
+    in_tick = asyncio.Event()
+    resume = asyncio.Event()
+    real_tick = runner.tick
+
+    async def slow_tick():
+        in_tick.set()
+        await resume.wait()
+        return await real_tick()
+
+    runner.tick = slow_tick
+    enqueue(db, "archive_sync", repository_id=repo.id)
+    task = asyncio.create_task(runner.start())
+    await asyncio.wait_for(in_tick.wait(), timeout=2)
+
+    runner.stop()
+    await runner.drain()
+    other = OperationRunner(session_factory=session_factory, registry=registry)
+    assert not other.acquire_lease(db)
+
+    resume.set()
+    await asyncio.wait_for(task, timeout=2)
+    assert not runner.running_tasks  # the stopped tick claimed nothing
+    assert other.acquire_lease(db)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_startup_sweeps_run_behind_the_lease(session_factory, registry):
+    """The startup sweeps outside the runner (a mirror sync's requeue, the
+    orphaned maintenance and plan-run cleanup) touch rows the old process
+    may still own; they run once this runner holds the lease, before its
+    own recovery."""
+    order: list[str] = []
+    holder = OperationRunner(session_factory=session_factory, registry=registry)
+    db = session_factory()
+    assert holder.acquire_lease(db)
+
+    runner = OperationRunner(
+        session_factory=session_factory, registry=registry, poll_interval=0.01
+    )
+    runner.recover_on_startup = lambda db: order.append("recover")
+    task = asyncio.create_task(
+        runner.start(before_recovery=lambda: order.append("sweeps"))
+    )
+    await asyncio.sleep(0.05)
+    assert order == []
+
+    holder.release_lease(db)
+    db.close()
+    for _ in range(200):
+        if order:
+            break
+        await asyncio.sleep(0.01)
+    assert order == ["sweeps", "recover"]
+    runner.stop()
+    runner.wake()
+    await asyncio.wait_for(task, timeout=2)

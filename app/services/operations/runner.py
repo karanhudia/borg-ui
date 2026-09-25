@@ -8,7 +8,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import structlog
 from sqlalchemy import or_
@@ -251,6 +251,11 @@ class OperationRunner:
         # None until the first attempt, so a runner that starts without the
         # lease says it is waiting
         self._holds_lease: Optional[bool] = None
+        # True once `start()`'s loop has returned: no tick can claim after it
+        self._loop_exited = True
+        # Set by a drain that timed out: its tasks were cancelled, not
+        # finished, and what they started may outlive them
+        self._drain_timed_out = False
         self._wake: Optional[asyncio.Event] = None
         self._stopped = False
         self.running_tasks: dict[int, asyncio.Task] = {}
@@ -315,7 +320,7 @@ class OperationRunner:
         from that point on; filter those out instead of gathering them."""
         tasks = [t for t in self.running_tasks.values() if asyncio.isfuture(t)]
         if not tasks:
-            self._release_lease()
+            self._release_lease_if_idle()
             return
         for operation_id in list(self.running_tasks):
             await self.request_cancel(operation_id)
@@ -328,10 +333,18 @@ class OperationRunner:
                 "Operations runner drain timed out",
                 remaining=len(self.running_tasks),
             )
-        self._release_lease()
+            # the lease stays and expires rather than hand that over
+            self._drain_timed_out = True
+            return
+        self._release_lease_if_idle()
 
-    async def start(self) -> None:
+    async def start(self, before_recovery: Optional[Callable[[], None]] = None) -> None:
+        """`before_recovery` runs once, as this runner's recovery does, when
+        it first holds the lease: the startup sweeps outside the runner touch
+        rows a process being replaced may still own too."""
         self._stopped = False
+        self._loop_exited = False
+        self._drain_timed_out = False
         # A fresh `asyncio.Event` every time: the one from a previous call
         # is bound to that call's event loop (asyncio.Event binds to the
         # loop of its first `wait()`/`clear()`), and reusing it here after
@@ -366,7 +379,7 @@ class OperationRunner:
                 # process overlaps this one (#1166).
                 if self._renew_lease():
                     if not recovered:
-                        self._recover()
+                        self._recover(before_recovery)
                         recovered = True
                     try:
                         await self.tick()
@@ -381,8 +394,8 @@ class OperationRunner:
                 self._event().clear()
         finally:
             # With tasks still running, `drain()` releases it once they end.
-            if not self.running_tasks:
-                self._release_lease()
+            self._loop_exited = True
+            self._release_lease_if_idle()
         logger.info("Operations runner stopped")
 
     # -- lease -----------------------------------------------------------------
@@ -454,7 +467,11 @@ class OperationRunner:
         self._holds_lease = held
         return held
 
-    def _release_lease(self) -> None:
+    def _release_lease_if_idle(self) -> None:
+        """Hand the lease over only when nothing of this runner can still
+        claim or run: the loop has ended and its tasks with it."""
+        if not self._loop_exited or self.running_tasks or self._drain_timed_out:
+            return
         db = self._session()
         try:
             self.release_lease(db)
@@ -467,7 +484,12 @@ class OperationRunner:
             db.close()
         self._holds_lease = None
 
-    def _recover(self) -> None:
+    def _recover(self, before_recovery: Optional[Callable[[], None]]) -> None:
+        if before_recovery is not None:
+            try:
+                before_recovery()
+            except Exception as exc:
+                logger.error("Startup sweeps failed", error=str(exc))
         try:
             db = self._session()
             try:
@@ -739,6 +761,10 @@ class OperationRunner:
             )
             now = time.time()
             for op in queued:
+                if self._stopped:
+                    # a stop during this tick's awaits; the drain after it
+                    # waits only for what is already running
+                    break
                 if op.id in self.running_tasks:
                     continue
                 not_before = deferred_until(op)
