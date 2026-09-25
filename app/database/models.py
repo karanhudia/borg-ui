@@ -1814,6 +1814,22 @@ class MQTTSyncState(Base):
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
 
+class OperationsRunnerLease(Base):
+    """Which server process runs the operations runner (#1166).
+
+    One row. A replacement process can start while the old one is still in
+    its graceful shutdown (a Kubernetes pod replacement); the runner of each
+    only recovers, sweeps and claims while it holds this lease, so the two
+    never run the same operation.
+    """
+
+    __tablename__ = "operations_runner_lease"
+
+    id = Column(Integer, primary_key=True)
+    holder = Column(String, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+
+
 # Association table for repository notification filters
 repository_notifications = Table(
     "repository_notifications",

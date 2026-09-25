@@ -407,8 +407,8 @@ async def startup_event():
     app.state.background_tasks.append(task1)
     logger.info("Scheduled job checker started")
 
-    # Operations runner: recover interrupted rows, register executors, start
-    # the loop, then start the reconcile scheduler that replaces the old
+    # Operations runner: register executors, start the loop (which recovers
+    # interrupted rows), then start the reconcile scheduler that replaces the old
     # stats refresh loop (spec sections 7.1, 7.5, 7.6).
     from app.database.database import SessionLocal
     from app.services.operations.executors import load_default_executors
@@ -416,14 +416,8 @@ async def startup_event():
     from app.services.operations.runner import operation_runner
 
     load_default_executors()
-    try:
-        db = SessionLocal()
-        try:
-            operation_runner.recover_on_startup(db)
-        finally:
-            db.close()
-    except Exception as e:
-        logger.error("Operations recovery failed", error=str(e))
+    # `start()` recovers interrupted rows once it holds the runner lease,
+    # not before: a process being replaced may still be running them.
     task2 = asyncio.create_task(operation_runner.start())
     app.state.background_tasks.append(task2)
     task2b = asyncio.create_task(reconcile_scheduler.start())

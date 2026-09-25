@@ -2398,3 +2398,106 @@ async def test_accepted_cancel_survives_failed_terminal_and_recovery_commits(
     assert attempts == [first.id]
     assert dependants_run == []
     assert (child.status, child.skip_reason) == ("skipped", "dependency_failed")
+
+
+# -- runner lease (#1166) -----------------------------------------------------
+
+
+@pytest.mark.unit
+def test_one_runner_holds_the_lease_until_it_expires(session_factory, registry):
+    """A replacement process starts while the old one is still shutting
+    down; only one of them may run operations. The lease is held until its
+    holder releases it or stops renewing it."""
+    old = OperationRunner(
+        session_factory=session_factory, registry=registry, lease_seconds=0.05
+    )
+    new = OperationRunner(session_factory=session_factory, registry=registry)
+    db = session_factory()
+    try:
+        assert old.acquire_lease(db)
+        assert old.acquire_lease(db)  # renewing is acquiring again
+        assert not new.acquire_lease(db)
+        time.sleep(0.1)  # the old process died without releasing
+        assert new.acquire_lease(db)
+        assert not old.acquire_lease(db)
+    finally:
+        db.close()
+
+
+@pytest.mark.unit
+def test_a_released_lease_is_free_at_once(session_factory, registry):
+    old = OperationRunner(session_factory=session_factory, registry=registry)
+    new = OperationRunner(session_factory=session_factory, registry=registry)
+    db = session_factory()
+    try:
+        assert old.acquire_lease(db)
+        old.release_lease(db)
+        assert new.acquire_lease(db)
+        old.release_lease(db)  # not the holder any more: a no-op
+        assert not old.acquire_lease(db)
+    finally:
+        db.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_replacement_runner_leaves_the_old_ones_work_alone(
+    db, repo, session_factory, registry, monkeypatch, tmp_path
+):
+    """The issue: the new process's startup recovery requeued an index row
+    the old process was still running, and ran it a second time. Until the
+    old runner has drained and released the lease, the new one neither
+    recovers, sweeps nor claims; afterwards it takes over."""
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+    gate = asyncio.Event()
+    calls: list[int] = []
+
+    async def sync(ctx):
+        calls.append(ctx.operation_id)
+        await gate.wait()
+        return Outcome()
+
+    registry["archive_sync"] = sync
+
+    def make():
+        return OperationRunner(
+            session_factory=session_factory, registry=registry, poll_interval=0.01
+        )
+
+    old, new = make(), make()
+    old_task = asyncio.create_task(old.start())
+    op = enqueue(db, "archive_sync", repository_id=repo.id)
+    for _ in range(200):
+        if calls:
+            break
+        await asyncio.sleep(0.01)
+    assert calls == [op.id]
+
+    new_task = asyncio.create_task(new.start())
+    await asyncio.sleep(0.1)
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert row.status == "running"
+    assert (row.params or {}).get("requeues") is None
+    assert calls == [op.id] and not new.running_tasks
+
+    old.stop()
+    old.wake()
+    gate.set()
+    await old.drain()
+    await asyncio.wait_for(old_task, timeout=2)
+
+    second = enqueue(db, "archive_sync", repository_id=repo.id)
+    for _ in range(200):
+        if second.id in calls:
+            break
+        await asyncio.sleep(0.01)
+    assert calls == [op.id, second.id]
+    db.expire_all()
+    # the old runner's drain cancelled it; the new one did not run it again
+    assert db.get(Operation, op.id).status == "cancelled"
+
+    new.stop()
+    new.wake()
+    await new.drain()
+    await asyncio.wait_for(new_task, timeout=2)

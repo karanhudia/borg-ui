@@ -4,19 +4,27 @@ cancellation, and crash recovery. One instance per process."""
 import asyncio
 import math
 import time
+import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
 import structlog
-from sqlalchemy.exc import InterfaceError, OperationalError
+from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError, InterfaceError, OperationalError
 from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 from sqlalchemy.orm import Session
 
 import app.config as app_config
 from app.core.borg_errors import LOCK_CONTENTION_DETAIL_KEY
-from app.database.models import Operation, Repository, SystemSettings, utc_now
+from app.database.models import (
+    Operation,
+    OperationsRunnerLease,
+    Repository,
+    SystemSettings,
+    utc_now,
+)
 from app.services.operations import executors as executor_registry
 from app.services.operations.events import (
     broadcast_operation_progress,
@@ -61,6 +69,11 @@ MAX_REQUEUES = 3
 # repository about 75 minutes to free up.
 DEFERRAL_DELAY_SECONDS = 5.0
 DEFERRAL_MAX_DELAY_SECONDS = 300.0
+# How long the runner lease outlives its last renewal (#1166): a holder that
+# died without releasing it keeps a replacement waiting this long. Renewed
+# every tick, and it has to outlast the tick before `stop()` plus the
+# `drain()` after it, whose end releases it.
+LEASE_SECONDS = 60.0
 REPOSITORY_BUSY_KEY = "backend.errors.jobs.repositoryOperationActive"
 # The errors a database that is locked, gone or out of connections raises:
 # an outcome whose write fails with one of these is written again on a later
@@ -225,6 +238,7 @@ class OperationRunner:
         registry=None,
         poll_interval: float = 5.0,
         deferral_delay: float = DEFERRAL_DELAY_SECONDS,
+        lease_seconds: float = LEASE_SECONDS,
     ):
         self._session_factory = session_factory
         self._registry = (
@@ -232,6 +246,11 @@ class OperationRunner:
         )
         self._poll_interval = poll_interval
         self._deferral_delay = deferral_delay
+        self._lease_seconds = lease_seconds
+        self._lease_holder = uuid.uuid4().hex
+        # None until the first attempt, so a runner that starts without the
+        # lease says it is waiting
+        self._holds_lease: Optional[bool] = None
         self._wake: Optional[asyncio.Event] = None
         self._stopped = False
         self.running_tasks: dict[int, asyncio.Task] = {}
@@ -296,6 +315,7 @@ class OperationRunner:
         from that point on; filter those out instead of gathering them."""
         tasks = [t for t in self.running_tasks.values() if asyncio.isfuture(t)]
         if not tasks:
+            self._release_lease()
             return
         for operation_id in list(self.running_tasks):
             await self.request_cancel(operation_id)
@@ -308,6 +328,7 @@ class OperationRunner:
                 "Operations runner drain timed out",
                 remaining=len(self.running_tasks),
             )
+        self._release_lease()
 
     async def start(self) -> None:
         self._stopped = False
@@ -337,19 +358,124 @@ class OperationRunner:
         # session, and `recover_on_startup` owns rows left running across one.
         self.unrecorded_outcomes = {}
         logger.info("Operations runner started", poll_interval=self._poll_interval)
-        while not self._stopped:
-            try:
-                await self.tick()
-            except Exception as exc:  # keep the loop alive
-                logger.error("Operations runner tick failed", error=str(exc))
-            try:
-                await asyncio.wait_for(
-                    self._event().wait(), timeout=self._poll_interval
-                )
-            except asyncio.TimeoutError:
-                pass
-            self._event().clear()
+        recovered = False
+        try:
+            while not self._stopped:
+                # Recovery, the sweep and the claims all assume this is the
+                # only runner; the lease makes that so while a replacement
+                # process overlaps this one (#1166).
+                if self._renew_lease():
+                    if not recovered:
+                        self._recover()
+                        recovered = True
+                    try:
+                        await self.tick()
+                    except Exception as exc:  # keep the loop alive
+                        logger.error("Operations runner tick failed", error=str(exc))
+                try:
+                    await asyncio.wait_for(
+                        self._event().wait(), timeout=self._poll_interval
+                    )
+                except asyncio.TimeoutError:
+                    pass
+                self._event().clear()
+        finally:
+            # With tasks still running, `drain()` releases it once they end.
+            if not self.running_tasks:
+                self._release_lease()
         logger.info("Operations runner stopped")
+
+    # -- lease -----------------------------------------------------------------
+
+    def acquire_lease(self, db: Session) -> bool:
+        """Take or renew the runner lease; False while another live runner
+        holds it."""
+        now = utc_now()
+        values = {
+            "holder": self._lease_holder,
+            "expires_at": now + timedelta(seconds=self._lease_seconds),
+        }
+        taken = (
+            db.query(OperationsRunnerLease)
+            .filter(
+                OperationsRunnerLease.id == 1,
+                or_(
+                    OperationsRunnerLease.holder == self._lease_holder,
+                    OperationsRunnerLease.holder.is_(None),
+                    OperationsRunnerLease.expires_at < now,
+                ),
+            )
+            .update(values, synchronize_session=False)
+        )
+        if taken:
+            db.commit()
+            return True
+        if db.get(OperationsRunnerLease, 1) is not None:
+            db.rollback()
+            return False
+        db.add(OperationsRunnerLease(id=1, **values))
+        try:
+            db.commit()
+        except IntegrityError:  # another runner inserted it first
+            db.rollback()
+            return False
+        return True
+
+    def release_lease(self, db: Session) -> None:
+        db.query(OperationsRunnerLease).filter(
+            OperationsRunnerLease.id == 1,
+            OperationsRunnerLease.holder == self._lease_holder,
+        ).update({"holder": None, "expires_at": None}, synchronize_session=False)
+        db.commit()
+
+    def _renew_lease(self) -> bool:
+        db = self._session()
+        try:
+            held = self.acquire_lease(db)
+        except Exception as exc:
+            # a locked database: the tick would fail on it too
+            db.rollback()
+            logger.warning(
+                "Could not renew the operations runner lease", error=str(exc)
+            )
+            return False
+        finally:
+            db.close()
+        if held != self._holds_lease:
+            if held:
+                logger.info("Operations runner lease acquired")
+            else:
+                # ponytail: a runner that loses the lease (a loop stalled past
+                # it) keeps the tasks it already started running
+                logger.warning(
+                    "Operations runner is waiting for the lease, another "
+                    "process holds it"
+                )
+        self._holds_lease = held
+        return held
+
+    def _release_lease(self) -> None:
+        db = self._session()
+        try:
+            self.release_lease(db)
+        except Exception as exc:  # it expires on its own
+            db.rollback()
+            logger.warning(
+                "Could not release the operations runner lease", error=str(exc)
+            )
+        finally:
+            db.close()
+        self._holds_lease = None
+
+    def _recover(self) -> None:
+        try:
+            db = self._session()
+            try:
+                self.recover_on_startup(db)
+            finally:
+                db.close()
+        except Exception as exc:
+            logger.error("Operations recovery failed", error=str(exc))
 
     # -- scheduling ------------------------------------------------------------
 
