@@ -3,7 +3,7 @@
   "generated_at": "2026-09-26T00:00:00Z",
   "announcements": [
     {
-      "id": "update-2.3.0-available",
+      "id": "update-available-2.3.0",
       "type": "update_available",
       "priority": 170,
       "title": "Borg UI 2.3.0 is available",
@@ -89,7 +89,7 @@
       "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.3.0",
       "dismissible": true,
       "snooze_days": 7,
-      "starts_at": "2026-09-26T00:00:00Z",
+      "starts_at": "2026-09-25T00:00:00Z",
       "ends_at": "2027-09-26T00:00:00Z",
       "min_app_version": "2.0.0",
       "max_app_version": "2.3.0-rc.999",
@@ -182,7 +182,7 @@
       "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.3.0",
       "dismissible": true,
       "snooze_days": 7,
-      "starts_at": "2026-09-26T00:00:00Z",
+      "starts_at": "2026-09-25T00:00:00Z",
       "ends_at": "2027-09-26T00:00:00Z",
       "min_app_version": "2.3.0",
       "max_app_version": "2.3.0",
