@@ -1,7 +1,193 @@
 {
   "version": 1,
-  "generated_at": "2026-06-07T08:04:30Z",
+  "generated_at": "2026-09-26T00:00:00Z",
   "announcements": [
+    {
+      "id": "update-2.3.0-available",
+      "type": "update_available",
+      "priority": 170,
+      "title": "Borg UI 2.3.0 is available",
+      "title_localized": {
+        "es": "Borg UI 2.3.0 ya está disponible",
+        "de": "Borg UI 2.3.0 ist verfügbar",
+        "it": "Borg UI 2.3.0 è disponibile"
+      },
+      "message": "Update to Borg UI 2.3.0 for a backup calendar heatmap, a repository growth chart, prune preview, a new archive page, a redesigned activity timeline, a Background work tab, managed agent upgrades, new install options, and security hardening.",
+      "message_localized": {
+        "es": "Actualiza a Borg UI 2.3.0 para obtener un mapa de calor del calendario de copias, un gráfico de crecimiento del repositorio, vista previa de poda, una nueva página de archivo, una línea de tiempo de actividad rediseñada, una pestaña de trabajo en segundo plano, actualizaciones de agentes gestionados, nuevas opciones de instalación y mejoras de seguridad.",
+        "de": "Aktualisieren Sie auf Borg UI 2.3.0 für einen Backup-Kalender als Heatmap, ein Wachstumsdiagramm für Repositories, eine Prune-Vorschau, eine neue Archivseite, einen neu gestalteten Aktivitätsverlauf, einen Tab für Hintergrundarbeit, Upgrades für Managed Agents, neue Installationswege und Sicherheitsverbesserungen.",
+        "it": "Aggiorna a Borg UI 2.3.0 per avere una heatmap del calendario dei backup, un grafico di crescita del repository, l'anteprima della potatura, una nuova pagina dell'archivio, una cronologia delle attività ridisegnata, una scheda per il lavoro in background, aggiornamenti degli agent gestiti, nuove opzioni di installazione e rafforzamenti della sicurezza."
+      },
+      "highlights": [
+        "Backup calendar heatmap: every archive by day or by hour, with missed scheduled runs and unusually small or slow backups flagged",
+        "Repository growth chart: the repository's size after each backup next to the source size, and a click on any point opens that archive",
+        "Prune preview: compare retention policies side by side, see what each would keep or delete, and see on the dashboard how much space you could free",
+        "A new archive page: browse files, see what each backup added, changed, or removed, and follow a restore to the end without leaving the page",
+        "A redesigned activity timeline: each run reads as one entry from start to finish, says how it started, pins running work at the top, and filters by repository, category, and trigger",
+        "Background work tab: each repository's indexing, stats, and history in one place, what needs attention, and archives created outside Borg UI picked up automatically",
+        "Availability-triggered backups run when a laptop or remote machine comes online, plus tar downloads for archive folders and a way to skip a repository in a plan without removing it",
+        "New ways to install: natively on Debian and Ubuntu (bare metal, VM, LXC), plus official Unraid and Portainer templates",
+        "Safer by default: SSH host keys are verified, repository passphrases are encrypted at rest, and cleanup never deletes through a live SSHFS mount",
+        "Managed agent upgrades (Pro): see every agent's version, upgrade one machine or the whole fleet at once, and pin the Borg version per machine",
+        "Managed agents (Pro) are easier to run: change an agent's server URL or uninstall it from its card, back up the whole machine from an unprivileged agent, and watch script hook output live",
+        "Managed agent repositories (Pro) now get storage stats, file history, change tracking, cloud mirrors, and notifications, and a failed job says why",
+        "Pro: follow a file across archives and see which files a prune would lose for good"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Mapa de calor del calendario de copias: cada archivo por día o por hora, con ejecuciones programadas perdidas y copias inusualmente pequeñas o lentas señaladas",
+          "Gráfico de crecimiento del repositorio: el tamaño del repositorio tras cada copia junto al tamaño de origen, y un clic en cualquier punto abre ese archivo",
+          "Vista previa de poda: compara políticas de retención lado a lado, mira qué conservaría o eliminaría cada una y consulta en el panel cuánto espacio podrías liberar",
+          "Una nueva página de archivo: explora los ficheros, mira qué añadió, cambió o eliminó cada copia y sigue una restauración hasta el final sin salir de la página",
+          "Una línea de tiempo de actividad rediseñada: cada ejecución se lee como una sola entrada de principio a fin, indica cómo empezó, fija arriba el trabajo en curso y se filtra por repositorio, categoría y disparador",
+          "Pestaña Trabajo en segundo plano: la indexación, las estadísticas y el historial de cada repositorio en un solo lugar, lo que requiere atención y los archivos creados fuera de Borg UI detectados automáticamente",
+          "Copias activadas por disponibilidad que se ejecutan cuando un portátil o una máquina remota se conecta, además de descargas tar de carpetas de archivos y la opción de omitir un repositorio en un plan sin quitarlo",
+          "Nuevas formas de instalar: de forma nativa en Debian y Ubuntu (bare metal, VM, LXC), además de plantillas oficiales para Unraid y Portainer",
+          "Más seguro por defecto: se verifican las claves de host SSH, las frases de contraseña de los repositorios se cifran en reposo y la limpieza nunca borra a través de un montaje SSHFS activo",
+          "Actualizaciones de agentes gestionados (Pro): mira la versión de cada agente, actualiza una máquina o toda la flota a la vez y fija la versión de Borg por máquina",
+          "Los agentes gestionados (Pro) son más fáciles de operar: cambia la URL del servidor de un agente o desinstálalo desde su tarjeta, haz copias de toda la máquina con un agente sin privilegios y sigue en vivo la salida de los scripts de hook",
+          "Los repositorios de agentes gestionados (Pro) ahora tienen estadísticas de almacenamiento, historial de ficheros, seguimiento de cambios, réplicas en la nube y notificaciones, y un trabajo fallido explica por qué",
+          "Pro: sigue un fichero a través de los archivos y mira qué ficheros perdería una poda para siempre"
+        ],
+        "de": [
+          "Backup-Kalender als Heatmap: jedes Archiv nach Tag oder Stunde, mit markierten verpassten geplanten Läufen und ungewöhnlich kleinen oder langsamen Backups",
+          "Wachstumsdiagramm für Repositories: die Größe des Repositorys nach jedem Backup neben der Quellgröße, und ein Klick auf einen Punkt öffnet dieses Archiv",
+          "Prune-Vorschau: Aufbewahrungsrichtlinien nebeneinander vergleichen, sehen, was jede behalten oder löschen würde, und im Dashboard sehen, wie viel Speicher Sie freigeben könnten",
+          "Eine neue Archivseite: Dateien durchsuchen, sehen, was jedes Backup hinzugefügt, geändert oder entfernt hat, und eine Wiederherstellung bis zum Ende verfolgen, ohne die Seite zu verlassen",
+          "Ein neu gestalteter Aktivitätsverlauf: jeder Lauf liest sich als ein Eintrag von Anfang bis Ende, zeigt, wie er gestartet wurde, heftet laufende Arbeit oben an und lässt sich nach Repository, Kategorie und Auslöser filtern",
+          "Tab Hintergrundarbeit: Indexierung, Statistiken und Verlauf jedes Repositorys an einem Ort, was Aufmerksamkeit braucht, und automatisch erkannte Archive, die außerhalb von Borg UI erstellt wurden",
+          "Verfügbarkeitsgesteuerte Backups laufen, sobald ein Laptop oder ein entfernter Rechner online kommt, dazu tar-Downloads für Archivordner und die Möglichkeit, ein Repository in einem Plan zu überspringen, ohne es zu entfernen",
+          "Neue Installationswege: nativ auf Debian und Ubuntu (Bare Metal, VM, LXC) sowie offizielle Vorlagen für Unraid und Portainer",
+          "Standardmäßig sicherer: SSH-Hostschlüssel werden geprüft, Repository-Passphrasen werden verschlüsselt gespeichert, und die Bereinigung löscht nie durch einen aktiven SSHFS-Mount",
+          "Upgrades für Managed Agents (Pro): die Version jedes Agents sehen, einen Rechner oder die ganze Flotte auf einmal aktualisieren und die Borg-Version pro Rechner festlegen",
+          "Managed Agents (Pro) sind einfacher zu betreiben: die Server-URL eines Agents ändern oder ihn direkt auf seiner Karte deinstallieren, den ganzen Rechner mit einem Agent ohne Root-Rechte sichern und die Ausgabe von Hook-Skripten live verfolgen",
+          "Repositories von Managed Agents (Pro) erhalten jetzt Speicherstatistiken, Dateiverlauf, Änderungsverfolgung, Cloud-Spiegel und Benachrichtigungen, und ein fehlgeschlagener Job nennt den Grund",
+          "Pro: eine Datei über Archive hinweg verfolgen und sehen, welche Dateien ein Prune endgültig verlieren würde"
+        ],
+        "it": [
+          "Heatmap del calendario dei backup: ogni archivio per giorno o per ora, con esecuzioni pianificate mancate e backup insolitamente piccoli o lenti evidenziati",
+          "Grafico di crescita del repository: la dimensione del repository dopo ogni backup accanto alla dimensione della sorgente, e un clic su qualsiasi punto apre quell'archivio",
+          "Anteprima della potatura: confronta le politiche di conservazione fianco a fianco, guarda cosa terrebbe o eliminerebbe ciascuna e scopri nella dashboard quanto spazio potresti liberare",
+          "Una nuova pagina dell'archivio: sfoglia i file, guarda cosa ha aggiunto, modificato o rimosso ogni backup e segui un ripristino fino alla fine senza lasciare la pagina",
+          "Una cronologia delle attività ridisegnata: ogni esecuzione si legge come una sola voce dall'inizio alla fine, indica come è partita, fissa in alto il lavoro in corso e si filtra per repository, categoria e attivazione",
+          "Scheda Lavoro in background: indicizzazione, statistiche e cronologia di ogni repository in un unico posto, cosa richiede attenzione e gli archivi creati fuori da Borg UI rilevati automaticamente",
+          "Backup attivati dalla disponibilità che partono quando un portatile o una macchina remota torna online, oltre ai download tar delle cartelle degli archivi e alla possibilità di saltare un repository in un piano senza rimuoverlo",
+          "Nuovi modi di installare: in modo nativo su Debian e Ubuntu (bare metal, VM, LXC), oltre ai template ufficiali per Unraid e Portainer",
+          "Più sicuro per impostazione predefinita: le chiavi host SSH vengono verificate, le passphrase dei repository sono cifrate a riposo e la pulizia non elimina mai attraverso un mount SSHFS attivo",
+          "Aggiornamenti degli agent gestiti (Pro): vedi la versione di ogni agent, aggiorna una macchina o l'intera flotta in una volta e fissa la versione di Borg per macchina",
+          "Gli agent gestiti (Pro) sono più semplici da gestire: cambia l'URL del server di un agent o disinstallalo dalla sua scheda, esegui il backup dell'intera macchina con un agent senza privilegi e segui in diretta l'output degli script di hook",
+          "I repository degli agent gestiti (Pro) ora hanno statistiche di spazio, cronologia dei file, tracciamento delle modifiche, mirror cloud e notifiche, e un job fallito spiega il motivo",
+          "Pro: segui un file attraverso gli archivi e scopri quali file una potatura perderebbe per sempre"
+        ]
+      },
+      "cta_label": "Upgrade details",
+      "cta_label_localized": {
+        "es": "Detalles de la actualización",
+        "de": "Upgrade-Details",
+        "it": "Dettagli dell'aggiornamento"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.3.0",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-09-26T00:00:00Z",
+      "ends_at": "2027-09-26T00:00:00Z",
+      "min_app_version": "2.0.0",
+      "max_app_version": "2.3.0-rc.999",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
+    {
+      "id": "release-2.3.0-whats-new",
+      "type": "release_highlight",
+      "priority": 140,
+      "title": "What's new in 2.3.0",
+      "title_localized": {
+        "es": "Novedades de la versión 2.3.0",
+        "de": "Neu in Version 2.3.0",
+        "it": "Novità della versione 2.3.0"
+      },
+      "message": "Borg UI 2.3.0 adds a backup calendar heatmap, a repository growth chart, prune preview, a new archive page, a redesigned activity timeline, a Background work tab, managed agent upgrades, new install options, and security hardening.",
+      "message_localized": {
+        "es": "Borg UI 2.3.0 agrega un mapa de calor del calendario de copias, un gráfico de crecimiento del repositorio, vista previa de poda, una nueva página de archivo, una línea de tiempo de actividad rediseñada, una pestaña de trabajo en segundo plano, actualizaciones de agentes gestionados, nuevas opciones de instalación y mejoras de seguridad.",
+        "de": "Borg UI 2.3.0 bringt einen Backup-Kalender als Heatmap, ein Wachstumsdiagramm für Repositories, eine Prune-Vorschau, eine neue Archivseite, einen neu gestalteten Aktivitätsverlauf, einen Tab für Hintergrundarbeit, Upgrades für Managed Agents, neue Installationswege und Sicherheitsverbesserungen.",
+        "it": "Borg UI 2.3.0 aggiunge una heatmap del calendario dei backup, un grafico di crescita del repository, l'anteprima della potatura, una nuova pagina dell'archivio, una cronologia delle attività ridisegnata, una scheda per il lavoro in background, aggiornamenti degli agent gestiti, nuove opzioni di installazione e rafforzamenti della sicurezza."
+      },
+      "highlights": [
+        "Backup calendar heatmap: every archive by day or by hour, with missed scheduled runs and unusually small or slow backups flagged",
+        "Repository growth chart: the repository's size after each backup next to the source size, and a click on any point opens that archive",
+        "Prune preview: compare retention policies side by side, see what each would keep or delete, and see on the dashboard how much space you could free",
+        "A new archive page: browse files, see what each backup added, changed, or removed, and follow a restore to the end without leaving the page",
+        "A redesigned activity timeline: each run reads as one entry from start to finish, says how it started, pins running work at the top, and filters by repository, category, and trigger",
+        "Background work tab: each repository's indexing, stats, and history in one place, what needs attention, and archives created outside Borg UI picked up automatically",
+        "Availability-triggered backups run when a laptop or remote machine comes online, plus tar downloads for archive folders and a way to skip a repository in a plan without removing it",
+        "New ways to install: natively on Debian and Ubuntu (bare metal, VM, LXC), plus official Unraid and Portainer templates",
+        "Safer by default: SSH host keys are verified, repository passphrases are encrypted at rest, and cleanup never deletes through a live SSHFS mount",
+        "Managed agent upgrades (Pro): see every agent's version, upgrade one machine or the whole fleet at once, and pin the Borg version per machine",
+        "Managed agents (Pro) are easier to run: change an agent's server URL or uninstall it from its card, back up the whole machine from an unprivileged agent, and watch script hook output live",
+        "Managed agent repositories (Pro) now get storage stats, file history, change tracking, cloud mirrors, and notifications, and a failed job says why",
+        "Pro: follow a file across archives and see which files a prune would lose for good"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Mapa de calor del calendario de copias: cada archivo por día o por hora, con ejecuciones programadas perdidas y copias inusualmente pequeñas o lentas señaladas",
+          "Gráfico de crecimiento del repositorio: el tamaño del repositorio tras cada copia junto al tamaño de origen, y un clic en cualquier punto abre ese archivo",
+          "Vista previa de poda: compara políticas de retención lado a lado, mira qué conservaría o eliminaría cada una y consulta en el panel cuánto espacio podrías liberar",
+          "Una nueva página de archivo: explora los ficheros, mira qué añadió, cambió o eliminó cada copia y sigue una restauración hasta el final sin salir de la página",
+          "Una línea de tiempo de actividad rediseñada: cada ejecución se lee como una sola entrada de principio a fin, indica cómo empezó, fija arriba el trabajo en curso y se filtra por repositorio, categoría y disparador",
+          "Pestaña Trabajo en segundo plano: la indexación, las estadísticas y el historial de cada repositorio en un solo lugar, lo que requiere atención y los archivos creados fuera de Borg UI detectados automáticamente",
+          "Copias activadas por disponibilidad que se ejecutan cuando un portátil o una máquina remota se conecta, además de descargas tar de carpetas de archivos y la opción de omitir un repositorio en un plan sin quitarlo",
+          "Nuevas formas de instalar: de forma nativa en Debian y Ubuntu (bare metal, VM, LXC), además de plantillas oficiales para Unraid y Portainer",
+          "Más seguro por defecto: se verifican las claves de host SSH, las frases de contraseña de los repositorios se cifran en reposo y la limpieza nunca borra a través de un montaje SSHFS activo",
+          "Actualizaciones de agentes gestionados (Pro): mira la versión de cada agente, actualiza una máquina o toda la flota a la vez y fija la versión de Borg por máquina",
+          "Los agentes gestionados (Pro) son más fáciles de operar: cambia la URL del servidor de un agente o desinstálalo desde su tarjeta, haz copias de toda la máquina con un agente sin privilegios y sigue en vivo la salida de los scripts de hook",
+          "Los repositorios de agentes gestionados (Pro) ahora tienen estadísticas de almacenamiento, historial de ficheros, seguimiento de cambios, réplicas en la nube y notificaciones, y un trabajo fallido explica por qué",
+          "Pro: sigue un fichero a través de los archivos y mira qué ficheros perdería una poda para siempre"
+        ],
+        "de": [
+          "Backup-Kalender als Heatmap: jedes Archiv nach Tag oder Stunde, mit markierten verpassten geplanten Läufen und ungewöhnlich kleinen oder langsamen Backups",
+          "Wachstumsdiagramm für Repositories: die Größe des Repositorys nach jedem Backup neben der Quellgröße, und ein Klick auf einen Punkt öffnet dieses Archiv",
+          "Prune-Vorschau: Aufbewahrungsrichtlinien nebeneinander vergleichen, sehen, was jede behalten oder löschen würde, und im Dashboard sehen, wie viel Speicher Sie freigeben könnten",
+          "Eine neue Archivseite: Dateien durchsuchen, sehen, was jedes Backup hinzugefügt, geändert oder entfernt hat, und eine Wiederherstellung bis zum Ende verfolgen, ohne die Seite zu verlassen",
+          "Ein neu gestalteter Aktivitätsverlauf: jeder Lauf liest sich als ein Eintrag von Anfang bis Ende, zeigt, wie er gestartet wurde, heftet laufende Arbeit oben an und lässt sich nach Repository, Kategorie und Auslöser filtern",
+          "Tab Hintergrundarbeit: Indexierung, Statistiken und Verlauf jedes Repositorys an einem Ort, was Aufmerksamkeit braucht, und automatisch erkannte Archive, die außerhalb von Borg UI erstellt wurden",
+          "Verfügbarkeitsgesteuerte Backups laufen, sobald ein Laptop oder ein entfernter Rechner online kommt, dazu tar-Downloads für Archivordner und die Möglichkeit, ein Repository in einem Plan zu überspringen, ohne es zu entfernen",
+          "Neue Installationswege: nativ auf Debian und Ubuntu (Bare Metal, VM, LXC) sowie offizielle Vorlagen für Unraid und Portainer",
+          "Standardmäßig sicherer: SSH-Hostschlüssel werden geprüft, Repository-Passphrasen werden verschlüsselt gespeichert, und die Bereinigung löscht nie durch einen aktiven SSHFS-Mount",
+          "Upgrades für Managed Agents (Pro): die Version jedes Agents sehen, einen Rechner oder die ganze Flotte auf einmal aktualisieren und die Borg-Version pro Rechner festlegen",
+          "Managed Agents (Pro) sind einfacher zu betreiben: die Server-URL eines Agents ändern oder ihn direkt auf seiner Karte deinstallieren, den ganzen Rechner mit einem Agent ohne Root-Rechte sichern und die Ausgabe von Hook-Skripten live verfolgen",
+          "Repositories von Managed Agents (Pro) erhalten jetzt Speicherstatistiken, Dateiverlauf, Änderungsverfolgung, Cloud-Spiegel und Benachrichtigungen, und ein fehlgeschlagener Job nennt den Grund",
+          "Pro: eine Datei über Archive hinweg verfolgen und sehen, welche Dateien ein Prune endgültig verlieren würde"
+        ],
+        "it": [
+          "Heatmap del calendario dei backup: ogni archivio per giorno o per ora, con esecuzioni pianificate mancate e backup insolitamente piccoli o lenti evidenziati",
+          "Grafico di crescita del repository: la dimensione del repository dopo ogni backup accanto alla dimensione della sorgente, e un clic su qualsiasi punto apre quell'archivio",
+          "Anteprima della potatura: confronta le politiche di conservazione fianco a fianco, guarda cosa terrebbe o eliminerebbe ciascuna e scopri nella dashboard quanto spazio potresti liberare",
+          "Una nuova pagina dell'archivio: sfoglia i file, guarda cosa ha aggiunto, modificato o rimosso ogni backup e segui un ripristino fino alla fine senza lasciare la pagina",
+          "Una cronologia delle attività ridisegnata: ogni esecuzione si legge come una sola voce dall'inizio alla fine, indica come è partita, fissa in alto il lavoro in corso e si filtra per repository, categoria e attivazione",
+          "Scheda Lavoro in background: indicizzazione, statistiche e cronologia di ogni repository in un unico posto, cosa richiede attenzione e gli archivi creati fuori da Borg UI rilevati automaticamente",
+          "Backup attivati dalla disponibilità che partono quando un portatile o una macchina remota torna online, oltre ai download tar delle cartelle degli archivi e alla possibilità di saltare un repository in un piano senza rimuoverlo",
+          "Nuovi modi di installare: in modo nativo su Debian e Ubuntu (bare metal, VM, LXC), oltre ai template ufficiali per Unraid e Portainer",
+          "Più sicuro per impostazione predefinita: le chiavi host SSH vengono verificate, le passphrase dei repository sono cifrate a riposo e la pulizia non elimina mai attraverso un mount SSHFS attivo",
+          "Aggiornamenti degli agent gestiti (Pro): vedi la versione di ogni agent, aggiorna una macchina o l'intera flotta in una volta e fissa la versione di Borg per macchina",
+          "Gli agent gestiti (Pro) sono più semplici da gestire: cambia l'URL del server di un agent o disinstallalo dalla sua scheda, esegui il backup dell'intera macchina con un agent senza privilegi e segui in diretta l'output degli script di hook",
+          "I repository degli agent gestiti (Pro) ora hanno statistiche di spazio, cronologia dei file, tracciamento delle modifiche, mirror cloud e notifiche, e un job fallito spiega il motivo",
+          "Pro: segui un file attraverso gli archivi e scopri quali file una potatura perderebbe per sempre"
+        ]
+      },
+      "cta_label": "View release notes",
+      "cta_label_localized": {
+        "es": "Ver notas de la versión",
+        "de": "Release Notes ansehen",
+        "it": "Vedi note di rilascio"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.3.0",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-09-26T00:00:00Z",
+      "ends_at": "2027-09-26T00:00:00Z",
+      "min_app_version": "2.3.0",
+      "max_app_version": "2.3.0",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
     {
       "id": "update-2.2.2-available",
       "type": "update_available",
