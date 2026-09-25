@@ -122,7 +122,9 @@ The web UI loads [Umami](https://umami.is) to count page views and feature
 usage. It starts on, and a banner on first login asks whether to keep it.
 Declining stops it from that point, and you can change the answer whenever you
 like in Settings > Preferences. Page views from that first session, before you
-answer the banner, are counted.
+answer the banner, are counted. Your answer itself is sent once, as a single
+accept or decline event, and so is turning analytics off later in Preferences,
+so we can count how many installs keep it. Nothing is sent after that.
 
 Before anything is sent, your real hostname and URL are replaced with
 `app.borgui`, so your private DNS names and IP addresses do not leave the
