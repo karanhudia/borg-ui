@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render } from '@testing-library/react'
-import { UmamiTracker } from '../UmamiTracker'
+import { PageViewTracker } from '../PageViewTracker'
 
 const { trackPageViewMock, useLocationMock } = vi.hoisted(() => ({
   trackPageViewMock: vi.fn(),
@@ -15,27 +15,27 @@ vi.mock('react-router-dom', () => ({
   useLocation: () => useLocationMock(),
 }))
 
-describe('UmamiTracker', () => {
+describe('PageViewTracker', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('tracks the current route including search params', () => {
+  it('tracks the current path without search params', () => {
     useLocationMock.mockReturnValue({ pathname: '/archives', search: '?repo=1' })
 
-    render(<UmamiTracker />)
+    render(<PageViewTracker />)
 
-    expect(trackPageViewMock).toHaveBeenCalledWith('/archives?repo=1')
+    expect(trackPageViewMock).toHaveBeenCalledWith('/archives')
   })
 
   it('tracks again when the route changes', () => {
     useLocationMock.mockReturnValue({ pathname: '/dashboard', search: '' })
-    const { rerender } = render(<UmamiTracker />)
+    const { rerender } = render(<PageViewTracker />)
 
     useLocationMock.mockReturnValue({ pathname: '/activity', search: '?status=failed' })
-    rerender(<UmamiTracker />)
+    rerender(<PageViewTracker />)
 
     expect(trackPageViewMock).toHaveBeenNthCalledWith(1, '/dashboard')
-    expect(trackPageViewMock).toHaveBeenNthCalledWith(2, '/activity?status=failed')
+    expect(trackPageViewMock).toHaveBeenNthCalledWith(2, '/activity')
   })
 })

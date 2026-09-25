@@ -1,13 +1,9 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Paper, Typography, Switch, Button, FormControlLabel, Link, Stack } from '@mui/material'
+import { Paper, Typography, Switch, Button, FormControlLabel, Stack } from '@mui/material'
 import { BarChart3 } from 'lucide-react'
 import { settingsAPI } from '../services/api'
-import {
-  PUBLIC_ANALYTICS_DASHBOARD_URL,
-  resetOptOutCache,
-  trackConsentResponse,
-} from '../utils/analytics'
+import { resetOptOutCache, trackConsentResponse } from '../utils/analytics'
 
 interface AnalyticsConsentBannerProps {
   onConsentGiven: () => void
@@ -82,23 +78,6 @@ export default function AnalyticsConsentBanner({ onConsentGiven }: AnalyticsCons
           }}
         >
           {t('analyticsConsent.message')}
-        </Typography>
-
-        <Typography
-          variant="body2"
-          sx={{
-            color: 'text.secondary',
-          }}
-        >
-          <Link
-            href={PUBLIC_ANALYTICS_DASHBOARD_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            sx={{ fontWeight: 500 }}
-          >
-            {t('analyticsBanner.viewDashboardLink')}
-          </Link>{' '}
-          {t('analyticsBanner.viewDashboardSuffix')}
         </Typography>
 
         <Stack
