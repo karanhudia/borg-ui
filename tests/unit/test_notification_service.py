@@ -1358,3 +1358,76 @@ async def test_test_notification_does_not_block_event_loop(mock_apprise):
 
     assert result["success"] is True
     assert ticks >= 10
+
+
+def _other_session(test_db):
+    from sqlalchemy.orm import Session as SASession
+
+    return SASession(bind=test_db.get_bind())
+
+
+@pytest.mark.asyncio
+async def test_setting_deleted_mid_send_keeps_caller_changes(
+    test_db, mock_apprise, mock_repository, discord_notification_setting
+):
+    """Deleting the service being delivered must not roll back the caller's work."""
+    setting_id = discord_notification_setting.id
+
+    def notify_then_delete(**kwargs):
+        other = _other_session(test_db)
+        other.query(NotificationSettings).filter_by(id=setting_id).delete()
+        other.commit()
+        other.close()
+        return True
+
+    mock_apprise.return_value.notify.side_effect = notify_then_delete
+
+    # Pending caller change, like restore_service marking a job completed
+    mock_repository.name = "Renamed Repo"
+    await notification_service.send_backup_failure(
+        test_db, mock_repository.name, "Error", job_id=1
+    )
+    test_db.commit()
+
+    other = _other_session(test_db)
+    assert other.get(Repository, mock_repository.id).name == "Renamed Repo"
+    other.close()
+
+
+@pytest.mark.asyncio
+async def test_other_setting_deleted_mid_send_still_reaches_the_rest(
+    test_db, mock_apprise, mock_repository
+):
+    """A service deleted during an earlier delivery is skipped, not fatal."""
+    settings = []
+    for name in ("First", "Second", "Third"):
+        setting = NotificationSettings(
+            name=name,
+            service_url=f"discord://{name.lower()}/token",
+            enabled=True,
+            notify_on_backup_failure=True,
+            monitor_all_repositories=True,
+        )
+        test_db.add(setting)
+        settings.append(setting)
+    test_db.commit()
+    second_id = settings[1].id
+
+    delivered = []
+
+    def notify(**kwargs):
+        if not delivered:
+            other = _other_session(test_db)
+            other.query(NotificationSettings).filter_by(id=second_id).delete()
+            other.commit()
+            other.close()
+        delivered.append(kwargs["title"])
+        return True
+
+    mock_apprise.return_value.notify.side_effect = notify
+
+    await notification_service.send_backup_failure(
+        test_db, mock_repository.name, "Error", job_id=1
+    )
+
+    assert len(delivered) == 2

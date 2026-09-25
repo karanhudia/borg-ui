@@ -2923,6 +2923,19 @@ def _dispatch_due_scheduled_job(
     return run_key
 
 
+async def _send_schedule_failure(
+    job_name: str, repository: Optional[str], error: str
+) -> None:
+    """Fire-and-forget alert on its own session; the caller's closes first."""
+    db = SessionLocal()
+    try:
+        await notification_service.send_schedule_failure(
+            db, job_name, repository, error
+        )
+    finally:
+        db.close()
+
+
 async def dispatch_due_scheduled_backups(
     db: Session, now: Optional[datetime] = None
 ) -> None:
@@ -3057,9 +3070,7 @@ async def dispatch_due_scheduled_backups(
 
             try:
                 asyncio.create_task(
-                    notification_service.send_schedule_failure(
-                        db, job.name, job.repository, str(e)
-                    )
+                    _send_schedule_failure(job.name, job.repository, str(e))
                 )
             except Exception as notif_error:
                 logger.warning(
