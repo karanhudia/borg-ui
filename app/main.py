@@ -360,16 +360,7 @@ async def startup_event():
     except Exception as e:
         logger.warning("Failed to rotate logs", error=str(e))
 
-    # Cleanup orphaned jobs from container restarts
-    from app.utils.process_utils import cleanup_orphaned_jobs, cleanup_orphaned_mounts
-
-    try:
-        db = SessionLocal()
-        cleanup_orphaned_jobs(db)
-        db.close()
-        logger.info("Orphaned job cleanup completed")
-    except Exception as e:
-        logger.error("Failed to cleanup orphaned jobs", error=str(e))
+    from app.utils.process_utils import cleanup_orphaned_mounts
 
     # Cleanup orphaned mounts from container restarts
     try:
@@ -377,21 +368,6 @@ async def startup_event():
         logger.info("Orphaned mount cleanup completed")
     except Exception as e:
         logger.error("Failed to cleanup orphaned mounts", error=str(e))
-
-    # Must run before OperationRunner.recover_on_startup below: spec 7.6 would
-    # mark an interrupted mirror sync failed, and an rclone sync is a
-    # reconciliation that is safe to re-run, so it is requeued instead.
-    try:
-        resumed_cloud_syncs = (
-            repositories.resume_pending_initial_cloud_mirror_sync_operations()
-        )
-        if resumed_cloud_syncs:
-            logger.info(
-                "Resumed pending initial cloud mirror sync jobs",
-                count=resumed_cloud_syncs,
-            )
-    except Exception as e:
-        logger.error("Failed to resume pending cloud mirror sync jobs", error=str(e))
 
     # Note: Package auto-installation now handled by entrypoint.sh startup script
     # This runs asynchronously via /app/app/scripts/startup_packages.py
@@ -407,8 +383,8 @@ async def startup_event():
     app.state.background_tasks.append(task1)
     logger.info("Scheduled job checker started")
 
-    # Operations runner: recover interrupted rows, register executors, start
-    # the loop, then start the reconcile scheduler that replaces the old
+    # Operations runner: register executors, start the loop (which recovers
+    # interrupted rows), then start the reconcile scheduler that replaces the old
     # stats refresh loop (spec sections 7.1, 7.5, 7.6).
     from app.database.database import SessionLocal
     from app.services.operations.executors import load_default_executors
@@ -416,15 +392,11 @@ async def startup_event():
     from app.services.operations.runner import operation_runner
 
     load_default_executors()
-    try:
-        db = SessionLocal()
-        try:
-            operation_runner.recover_on_startup(db)
-        finally:
-            db.close()
-    except Exception as e:
-        logger.error("Operations recovery failed", error=str(e))
-    task2 = asyncio.create_task(operation_runner.start())
+    # `start()` recovers interrupted rows once it holds the runner lease,
+    # not before: a process being replaced may still be running them.
+    task2 = asyncio.create_task(
+        operation_runner.start(before_recovery=_recover_interrupted_work)
+    )
     app.state.background_tasks.append(task2)
     task2b = asyncio.create_task(reconcile_scheduler.start())
     app.state.background_tasks.append(task2b)
@@ -503,6 +475,39 @@ async def startup_event():
     logger.info("Borg UI started successfully")
 
 
+def _recover_interrupted_work() -> None:
+    """Startup sweeps of rows a restart left behind that the runner's own
+    recovery does not cover. Called by the runner once it holds its lease, so
+    a process being replaced keeps its work."""
+    from app.database.database import SessionLocal
+    from app.utils.process_utils import cleanup_orphaned_jobs
+
+    try:
+        db = SessionLocal()
+        try:
+            cleanup_orphaned_jobs(db)
+        finally:
+            db.close()
+        logger.info("Orphaned job cleanup completed")
+    except Exception as e:
+        logger.error("Failed to cleanup orphaned jobs", error=str(e))
+
+    # Must run before OperationRunner.recover_on_startup: spec 7.6 would
+    # mark an interrupted mirror sync failed, and an rclone sync is a
+    # reconciliation that is safe to re-run, so it is requeued instead.
+    try:
+        resumed_cloud_syncs = (
+            repositories.resume_pending_initial_cloud_mirror_sync_operations()
+        )
+        if resumed_cloud_syncs:
+            logger.info(
+                "Resumed pending initial cloud mirror sync jobs",
+                count=resumed_cloud_syncs,
+            )
+    except Exception as e:
+        logger.error("Failed to resume pending cloud mirror sync jobs", error=str(e))
+
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on application shutdown"""
@@ -522,8 +527,13 @@ async def shutdown_event():
     from app.services.operations.runner import operation_runner
 
     operation_runner.stop()
+    operation_runner.wake()  # end the loop now, not at its next poll
     reconcile_scheduler.stop()
-    await operation_runner.drain()
+    # gunicorn's --graceful-timeout (30s) also covers uvicorn's wait for open
+    # connections before this (app/gunicorn_worker.py, 5s); a drain cut off by
+    # the kill never releases the runner lease, and a replacement waits for it
+    # to expire.
+    await operation_runner.drain(timeout=20.0)
 
     # Cancel background tasks
     tasks = getattr(app.state, "background_tasks", [])

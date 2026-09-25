@@ -50,7 +50,7 @@ echo "[borg-ui] Starting on port ${PORT}..."
 exec "${VENV}/bin/gunicorn" app.main:app \
   --bind "0.0.0.0:${PORT}" \
   --workers 1 \
-  --worker-class uvicorn.workers.UvicornWorker \
+  --worker-class app.gunicorn_worker.BorgUIWorker \
   --timeout 0 \
   --graceful-timeout 30 \
   --worker-tmp-dir /dev/shm \
