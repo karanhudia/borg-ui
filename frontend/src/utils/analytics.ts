@@ -1,110 +1,148 @@
 /**
- * Umami Analytics Integration
+ * Borg UI usage analytics.
  *
- * Provides tracking functionality for user interactions and events in Borg UI.
- * Uses Umami Cloud (https://umami.is) — privacy-focused, no cookies, GDPR compliant.
- *
- * Website ID is hardcoded as this is a centralized analytics instance for all Borg UI installs.
- * Users can opt-out anytime in Settings → Preferences.
+ * Events go to the Borg UI ingest service described in docs/trust.md. Nothing is
+ * sent before the user's preferences load or after analytics is turned off, except
+ * the single consent answer and opt-out events that count those choices. Only
+ * paths are sent, never hostnames, query strings or referrers.
  */
 
 import { authAPI } from '../services/api'
 import { fetchJsonForAuthMode } from '../services/authRequest'
 
-const UMAMI_WEBSITE_ID = '870dcd0c-2fa3-4f78-8180-d0d7895c5d8c'
-const UMAMI_SCRIPT_URL = 'https://cloud.umami.is/script.js'
-const UMAMI_EVENT_URL = 'https://cloud.umami.is/api/send'
-export const PUBLIC_ANALYTICS_DASHBOARD_URL = 'https://analytics.nullcodeai.dev/'
+export const ANALYTICS_ENDPOINT = 'https://t.borgui.com/e'
 
-interface UmamiWindow extends Window {
-  umami?: {
-    track: (...args: unknown[]) => void
-    identify?: (data: Record<string, unknown>) => void
-  }
+const FLUSH_MS = 5000
+const MAX_BATCH = 50
+
+type Props = Record<string, unknown>
+
+interface OutgoingEvent {
+  event_id: string
+  occurred_at: string
+  source: 'app'
+  name: string
+  session_key: string
+  instance_key: string
+  user_key?: string
+  path: string
+  app_version?: string
+  plan?: string
+  props?: Props
 }
 
-declare const window: UmamiWindow
-
-// Track if Umami has been initialized (script loaded)
-let analyticsInitialized = false
-
-// Cache opt-out status and loading state
 let userOptedOut: boolean | null = null
 let consentGiven: boolean | null = null
 let preferenceLoaded = false
+let instanceKey: string | null = null
+let userKey: string | null = null
 let currentAppVersion: string | null = null
-
-const withAppVersion = (data?: Record<string, unknown>): Record<string, unknown> | undefined => {
-  if (!currentAppVersion) return data
-  return {
-    ...(data ?? {}),
-    app_version: currentAppVersion,
-  }
-}
-
-let currentUserId: string | null = null
 let currentPlan: string | null = null
+const queue: OutgoingEvent[] = []
+let flushTimer: ReturnType<typeof setTimeout> | null = null
+let listening = false
 
-const identifySession = (): void => {
-  if (!window.umami?.identify) return
-  const data: Record<string, unknown> = {}
-  if (currentUserId) data.user_id = currentUserId
-  if (currentAppVersion) data.app_version = currentAppVersion
-  if (currentPlan) data.plan = currentPlan
-  if (Object.keys(data).length) window.umami.identify(data)
+// crypto.randomUUID only exists in secure contexts; plain-HTTP LAN installs still have getRandomValues.
+const randomId = (): string => {
+  const bytes = new Uint8Array(16)
+  if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(bytes)
+  else for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256)
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
+const sessionKey = randomId()
+
 /**
- * Check if tracking is allowed
+ * Generate anonymous hash for entity names
  */
-const canTrack = (): boolean => {
-  if (!preferenceLoaded) return false
-  return !userOptedOut && !!window.umami
+export const anonymizeEntityName = (name: string): string => {
+  if (!name) return ''
+
+  let hash = 5381
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 33) ^ name.charCodeAt(i)
+  }
+
+  return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
-/**
- * Initialize Umami script — ONLY if user has not opted out
- */
-const initUmamiScript = (): void => {
-  if (analyticsInitialized) return
-
-  const script = document.createElement('script')
-  script.defer = true
-  // Without this the browser attaches the instance's own origin to the script
-  // request, which hands Umami the private hostname the payload masking exists
-  // to keep from it.
-  script.referrerPolicy = 'no-referrer'
-  script.src = UMAMI_SCRIPT_URL
-  script.setAttribute('data-website-id', UMAMI_WEBSITE_ID)
-  // Disable auto page tracking — we handle it via trackPageView so it respects opt-out
-  script.setAttribute('data-auto-track', 'false')
-  script.addEventListener('load', identifySession)
-  document.head.appendChild(script)
-
-  analyticsInitialized = true
+// One choke point: any *_name prop is hashed here, so no call site can leak a raw name.
+const scrubProps = (data?: Props): Props | undefined => {
+  if (!data) return undefined
+  const out: Props = {}
+  for (const [key, value] of Object.entries(data)) {
+    out[key] =
+      key.endsWith('_name') && typeof value === 'string' ? anonymizeEntityName(value) : value
+  }
+  return Object.keys(out).length ? out : undefined
 }
 
-/**
- * Initialize analytics ONLY if user has enabled analytics
- * Call this after loadUserPreference() has completed
- */
-export const initAnalyticsIfEnabled = (): void => {
-  if (!userOptedOut && preferenceLoaded && !analyticsInitialized) {
-    initUmamiScript()
+export const flushAnalytics = (): void => {
+  if (flushTimer) {
+    clearTimeout(flushTimer)
+    flushTimer = null
+  }
+  while (queue.length) {
+    const body = JSON.stringify({ events: queue.splice(0, MAX_BATCH) })
+    // text/plain keeps this a CORS simple request, so self-hosted origins need no preflight.
+    // sendBeacon is not used because it cannot suppress the Referer header.
+    void fetch(ANALYTICS_ENDPOINT, {
+      method: 'POST',
+      body,
+      headers: { 'Content-Type': 'text/plain' },
+      keepalive: true,
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+    }).catch(() => {
+      // Best-effort analytics transport should never affect the UI.
+    })
   }
 }
 
+const scheduleFlush = (): void => {
+  if (!listening) {
+    listening = true
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flushAnalytics()
+    })
+  }
+  if (!flushTimer) flushTimer = setTimeout(flushAnalytics, FLUSH_MS)
+}
+
+const canTrack = (): boolean => preferenceLoaded && userOptedOut === false && !!instanceKey
+
+const enqueue = (name: string, data?: Props, force = false): void => {
+  if (!instanceKey || (!force && !canTrack())) return
+  const props = scrubProps(data)
+  queue.push({
+    event_id: randomId(),
+    occurred_at: new Date().toISOString(),
+    source: 'app',
+    name,
+    session_key: sessionKey,
+    instance_key: instanceKey,
+    ...(userKey ? { user_key: userKey } : {}),
+    path: window.location.pathname,
+    ...(currentAppVersion ? { app_version: currentAppVersion } : {}),
+    ...(currentPlan ? { plan: currentPlan } : {}),
+    ...(props ? { props } : {}),
+  })
+  if (force || queue.length >= MAX_BATCH) flushAnalytics()
+  else scheduleFlush()
+}
+
 /**
- * Load user's analytics preference from API
- * Should be called on app startup before any tracking
+ * Load the user's analytics preference and pseudonymous keys from the API.
+ * Called on app startup and after login, before any tracking.
  */
 export const loadUserPreference = async (): Promise<void> => {
   try {
-    const authConfigResponse = await authAPI.getAuthConfig()
-    const authConfig = authConfigResponse.data
+    const authConfig = (await authAPI.getAuthConfig()).data
     const proxyAuthEnabled = authConfig.proxy_auth_enabled
     const insecureNoAuthEnabled = authConfig.insecure_no_auth_enabled
-
     const token = localStorage.getItem('access_token')
 
     if (!token && !proxyAuthEnabled && !insecureNoAuthEnabled) {
@@ -119,9 +157,11 @@ export const loadUserPreference = async (): Promise<void> => {
       {},
       insecureNoAuthEnabled ? 'insecure-no-auth' : proxyAuthEnabled ? 'proxy' : 'jwt'
     )
-    const data = await response.json()
-    userOptedOut = !data.preferences?.analytics_enabled
-    consentGiven = data.preferences?.analytics_consent_given ?? false
+    const prefs = (await response.json()).preferences ?? {}
+    userOptedOut = !prefs.analytics_enabled
+    consentGiven = prefs.analytics_consent_given ?? false
+    instanceKey = prefs.analytics_instance_key ?? null
+    userKey = prefs.analytics_user_key ?? null
   } catch {
     userOptedOut = true
     consentGiven = false
@@ -138,45 +178,26 @@ export const hasConsentBeenGiven = (): boolean | null => {
 }
 
 /**
- * Check if preferences have been loaded
+ * Reload the preference after the user changes it
  */
-export const arePreferencesLoaded = (): boolean => {
-  return preferenceLoaded
+export const resetOptOutCache = async (): Promise<void> => {
+  await loadUserPreference()
 }
 
 /**
- * Builds a masked base payload — replaces the real hostname/URL with app.borgui
- * so self-hosted users' private DNS names or IPs are never sent to Umami.
+ * The instance key for buy links, or null when analytics is off
  */
-const maskedPayload = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
-  hostname: 'app.borgui',
-  url: `https://app.borgui${window.location.pathname}${window.location.search}`,
-  ...overrides,
-})
+export const getAnalyticsInstanceKey = (): string | null => (canTrack() ? instanceKey : null)
 
 /**
- * Track a page view.
- * Umami auto-track is disabled — we fire manually to respect opt-out
- * and to mask the real hostname.
+ * Track a page view. Only the path is sent; any query string is dropped.
  */
-export const trackPageView = (path?: string): void => {
-  if (!canTrack()) return
-
-  const url = `https://app.borgui${path ?? window.location.pathname + window.location.search}`
-  window.umami?.track((payload: Record<string, unknown>) => ({
-    ...payload,
-    ...maskedPayload({ url }),
-    data: withAppVersion(
-      payload.data && typeof payload.data === 'object'
-        ? (payload.data as Record<string, unknown>)
-        : undefined
-    ),
-  }))
+export const trackPageView = (_path?: string): void => {
+  enqueue('pageview')
 }
 
 /**
- * Track a custom event.
- * Uses the callback form so hostname is masked before the payload leaves the browser.
+ * Track a custom event as `Category - Action`
  */
 export const trackEvent = (
   category: string,
@@ -184,238 +205,49 @@ export const trackEvent = (
   nameOrData?: string | Record<string, unknown>,
   value?: number
 ): void => {
-  if (!canTrack()) return
-
-  const data: Record<string, unknown> = {}
+  const data: Props = {}
   if (typeof nameOrData === 'string') {
     data.name = nameOrData
   } else if (nameOrData) {
     Object.assign(data, nameOrData)
   }
   if (value !== undefined) data.value = value
-
-  window.umami?.track((payload: Record<string, unknown>) => ({
-    ...payload,
-    ...maskedPayload(),
-    name: `${category} - ${action}`,
-    data: withAppVersion(Object.keys(data).length ? data : undefined),
-  }))
+  enqueue(`${category} - ${action}`, data)
 }
-
-/**
- * Track a site search
- */
-export const trackSiteSearch = (
-  keyword: string,
-  category?: string,
-  resultsCount?: number
-): void => {
-  if (!canTrack()) return
-
-  const data: Record<string, unknown> = { keyword }
-  if (category !== undefined) data.category = category
-  if (resultsCount !== undefined) data.resultsCount = resultsCount
-
-  window.umami?.track('Site Search', withAppVersion(data))
-}
-
-/**
- * No-op — Umami does not use custom dimensions.
- * Kept for API compatibility.
- */
-export const setCustomDimension = (_dimensionId: number, _value: string): void => {}
 
 export const setAppVersion = (version: string): void => {
   currentAppVersion = version || null
-  identifySession()
 }
 
 /**
- * Set the effective subscription plan so Umami can segment visitors by plan.
+ * Set the effective subscription plan so usage can be compared across plans.
  * Only the plan name is sent, never licence keys or customer details.
  */
 export const setAnalyticsPlan = (plan: string | null): void => {
-  const next = plan || null
-  // The plan starts unknown, so the first render would otherwise re-identify
-  // the session with nothing new to say.
-  if (next === currentPlan) return
-  currentPlan = next
-  identifySession()
+  currentPlan = plan || null
 }
 
 /**
- * Set a stable anonymous user ID so Umami counts the same user across sessions.
- * Pass the username — it's combined with a per-install UUID and hashed before sending.
- * This mirrors the old Matomo setUserId behaviour.
- */
-export const identifyUser = (username: string): void => {
-  const installId = getOrCreateInstallId()
-  currentUserId = anonymizeEntityName(installId + username)
-  identifySession()
-}
-
-/**
- * No-op — Umami tracks unique visitors without user IDs.
- * Kept for API compatibility.
- */
-export const setUserId = (_userId: string): void => {}
-
-/**
- * No-op — Umami tracks unique visitors without user IDs.
- * Kept for API compatibility.
- */
-export const resetUserId = (): void => {}
-
-const INSTALL_ID_KEY = 'borg_ui_install_id'
-
-const getCryptoApi = (): Crypto | undefined => {
-  if (typeof globalThis === 'undefined' || !('crypto' in globalThis)) {
-    return undefined
-  }
-
-  return globalThis.crypto
-}
-
-const createUuidFromRandomValues = (randomValues: Uint8Array): string => {
-  randomValues[6] = (randomValues[6] & 0x0f) | 0x40
-  randomValues[8] = (randomValues[8] & 0x3f) | 0x80
-
-  const hex = Array.from(randomValues, (value) => value.toString(16).padStart(2, '0'))
-  return [
-    hex.slice(0, 4).join(''),
-    hex.slice(4, 6).join(''),
-    hex.slice(6, 8).join(''),
-    hex.slice(8, 10).join(''),
-    hex.slice(10, 16).join(''),
-  ].join('-')
-}
-
-const generateInstallId = (): string => {
-  const cryptoApi = getCryptoApi()
-
-  if (cryptoApi?.randomUUID) {
-    return cryptoApi.randomUUID()
-  }
-
-  if (cryptoApi?.getRandomValues) {
-    return createUuidFromRandomValues(cryptoApi.getRandomValues(new Uint8Array(16)))
-  }
-
-  const timestamp = Date.now().toString(16).padStart(12, '0')
-  const random = Math.random().toString(16).slice(2).padEnd(20, '0').slice(0, 20)
-  return `${random.slice(0, 8)}-${random.slice(8, 12)}-4${random.slice(13, 16)}-a${random.slice(17, 20)}-${timestamp}`
-}
-
-/**
- * Get (or lazily create) a random UUID that uniquely identifies this browser/installation.
- */
-export const getOrCreateInstallId = (): string => {
-  let id = localStorage.getItem(INSTALL_ID_KEY)
-  if (!id) {
-    id = generateInstallId()
-    localStorage.setItem(INSTALL_ID_KEY, id)
-  }
-  return id
-}
-
-const sendManualUmamiEvent = (eventName: string, data?: Record<string, unknown>): void => {
-  const payload = {
-    type: 'event',
-    payload: {
-      website: UMAMI_WEBSITE_ID,
-      url: `https://app.borgui${window.location.pathname}${window.location.search}`,
-      hostname: 'app.borgui',
-      language: navigator.language,
-      title: document.title,
-      name: eventName,
-      data: withAppVersion(data),
-    },
-  }
-
-  const body = JSON.stringify(payload)
-
-  if (navigator.sendBeacon) {
-    navigator.sendBeacon(UMAMI_EVENT_URL, body)
-    return
-  }
-
-  void fetch(UMAMI_EVENT_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body,
-    keepalive: true,
-  }).catch(() => {
-    // Best-effort analytics transport should never affect the UI.
-  })
-}
-
-/**
- * Reset opt-out cache and reload preference
- */
-export const resetOptOutCache = async (): Promise<void> => {
-  await loadUserPreference()
-  initAnalyticsIfEnabled()
-}
-
-/**
- * Track analytics opt-out event
+ * Track analytics opt-out. Sent once even when analytics is off, so opt-out rates can be counted.
  */
 export const trackOptOut = (): void => {
-  const data = withAppVersion({ name: 'analytics' })
-
-  if (window.umami) {
-    window.umami.track('Settings - OptOut', data)
-    return
-  }
-
-  sendManualUmamiEvent('Settings - OptOut', data)
+  enqueue('Settings - OptOut', { name: 'analytics' }, true)
 }
 
 /**
  * Track language change event
  */
 export const trackLanguageChange = (languageCode: string): void => {
-  if (!canTrack()) return
-  window.umami?.track('Settings - ChangeLanguage', withAppVersion({ name: languageCode }))
+  enqueue('Settings - ChangeLanguage', { name: languageCode })
 }
 
 /**
- * Track consent banner response
+ * Track consent banner response. Sent once whatever the answer, so accept and
+ * decline rates can be counted.
  */
 export const trackConsentResponse = (accepted: boolean): void => {
-  const eventName = 'Consent - ' + (accepted ? 'Accept' : 'Decline')
-  const data = withAppVersion({ name: 'analytics_banner' })
-
-  if (window.umami) {
-    window.umami.track(eventName, data)
-    return
-  }
-
-  sendManualUmamiEvent(eventName, data)
+  enqueue(`Consent - ${accepted ? 'Accept' : 'Decline'}`, { name: 'analytics_banner' }, true)
 }
-
-/**
- * Generate anonymous hash for entity names
- */
-export const anonymizeEntityName = (name: string): string => {
-  if (!name) return ''
-
-  let hash = 5381
-  for (let i = 0; i < name.length; i++) {
-    hash = (hash * 33) ^ name.charCodeAt(i)
-  }
-
-  return (hash >>> 0).toString(16).padStart(8, '0')
-}
-
-export const getAnalyticsConfig = () => ({
-  url: UMAMI_SCRIPT_URL,
-  siteId: UMAMI_WEBSITE_ID,
-  dashboardUrl: PUBLIC_ANALYTICS_DASHBOARD_URL,
-  enabled: true,
-})
 
 // Pre-defined event categories
 export const EventCategory = {

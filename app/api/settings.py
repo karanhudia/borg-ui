@@ -27,6 +27,7 @@ from app.core.permissions import (
     normalize_repository_role_for_global_role,
 )
 from app.config import get_runtime_app_version, settings as app_settings
+from app.services.analytics_identity import analytics_keys
 from app.services.cache_service import archive_cache
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
@@ -1802,7 +1803,9 @@ async def update_profile(
 
 
 @router.get("/preferences")
-async def get_preferences(current_user: User = Depends(get_current_user)):
+async def get_preferences(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
     """Get current user's preferences"""
     return {
         "success": True,
@@ -1813,6 +1816,7 @@ async def get_preferences(current_user: User = Depends(get_current_user)):
             "analytics_consent_given": current_user.analytics_consent_given
             if hasattr(current_user, "analytics_consent_given")
             else False,
+            **analytics_keys(db, current_user.id),
         },
     }
 

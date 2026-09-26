@@ -180,7 +180,7 @@ export const useAnalytics = () => {
     (action: string, packageName?: string, data?: Record<string, unknown>) => {
       trackEvent(EventCategory.PACKAGE, action, {
         ...(data || {}),
-        ...(packageName ? { name: packageName } : {}),
+        ...(packageName ? { name: anonymizeEntityName(packageName) } : {}),
       })
     },
     []

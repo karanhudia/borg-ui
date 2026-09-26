@@ -531,6 +531,23 @@ describe('RepositoryWizard', () => {
       })
     })
 
+    it('records one repository event per submit', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('create')
+
+      await advanceCreateToReview(user)
+      await user.click(screen.getByRole('button', { name: /Create Repository/i }))
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+      expect(mockTrack).not.toHaveBeenCalled()
+      expect(mockTrackRepository).toHaveBeenCalledTimes(1)
+      expect(mockTrackRepository).toHaveBeenCalledWith(
+        'create',
+        { name: 'Test Repo' },
+        { source: 'wizard', mode: 'create' }
+      )
+    }, 60000)
+
     it('submits upload speed limits in KiB per second', async () => {
       const user = userEvent.setup()
       const { onSubmit } = renderWizard('create')
@@ -1321,13 +1338,13 @@ describe('RepositoryWizard', () => {
           uploadedKeyfile
         )
       })
-      expect(mockTrack).toHaveBeenCalledWith('repository', 'upload', {
-        source: 'wizard',
-        mode: 'import',
-      })
-      expect(mockTrackRepository).toHaveBeenCalledWith('upload', {
-        name: 'Imported Keyfile Repo',
-      })
+      expect(mockTrack).not.toHaveBeenCalled()
+      expect(mockTrackRepository).toHaveBeenCalledTimes(1)
+      expect(mockTrackRepository).toHaveBeenCalledWith(
+        'upload',
+        { name: 'Imported Keyfile Repo' },
+        { source: 'wizard', mode: 'import' }
+      )
     })
 
     it('submits observability-only imports with bypass lock', async () => {

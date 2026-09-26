@@ -56,7 +56,7 @@ describe('PlanGate', () => {
     expect(screen.getByText(/Pro feature/i)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /upgrade at borgui.com/i })).toHaveAttribute(
       'href',
-      BUY_URL
+      `${BUY_URL}?plan=pro&src=app-upgrade-prompt`
     )
   })
 
