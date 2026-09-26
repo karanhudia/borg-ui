@@ -646,3 +646,44 @@ def test_legacy_job_rows_reach_operations_through_the_transfer(tmp_path, monkeyp
     session.close()
     with create_engine(f"sqlite:///{db}").connect() as conn:
         assert "backup_jobs" not in inspect(conn).get_table_names()
+
+
+@pytest.mark.unit
+def test_a_transferred_plaintext_passphrase_is_readable_after_the_upgrade(tmp_path):
+    # Issue #1211: the encrypt-passphrase revision sits before the transfer
+    # point, so it ran on an empty table and the copied rows stayed plaintext.
+    db = tmp_path / "borg.db"
+    _legacy_db(db, lambda s: s.add(Repository(name="r", path="/srv/r")))
+    engine = create_engine(f"sqlite:///{db}")
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE repositories SET passphrase = 'plain secret'"))
+    engine.dispose()
+
+    alembic_init(db)
+
+    session = _open(db)
+    assert session.query(Repository).one().passphrase == "plain secret"
+    raw = session.execute(text("SELECT passphrase FROM repositories")).scalar()
+    assert raw != "plain secret"
+    session.close()
+
+
+@pytest.mark.unit
+def test_an_install_stuck_on_2_3_0_with_a_plaintext_passphrase_is_repaired(tmp_path):
+    db = tmp_path / "borg.db"
+    alembic_init(db)
+    session = _open(db)
+    session.add(Repository(name="r", path="/srv/r"))
+    session.commit()
+    session.close()
+    engine = create_engine(f"sqlite:///{db}")
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE repositories SET passphrase = 'plain secret'"))
+        conn.execute(text("UPDATE alembic_version SET version_num = 'e1a2b3c4d5f6'"))
+    engine.dispose()
+
+    assert alembic_init(db).action == "migrated"
+
+    session = _open(db)
+    assert session.query(Repository).one().passphrase == "plain secret"
+    session.close()
