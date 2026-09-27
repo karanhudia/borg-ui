@@ -112,6 +112,26 @@ describe('analytics transport', () => {
     expect(event.props.schedule_name).toBe(a.anonymizeEntityName('nightly-nas'))
     expect(event.props.name).toBe('de')
   })
+
+  it('hashes path-like and user@host prop values, whatever the key', async () => {
+    const a = await load()
+    a.trackEvent('Navigation', 'Filter', {
+      filter_kind: 'repository',
+      filter_value: '/mnt/backups/nas',
+      remote: 'ssh://borg@host:22/./repo',
+      target: 'borg@host',
+      status: 'failed',
+    })
+    vi.advanceTimersByTime(5000)
+    const [event] = sent()
+    expect(event.props).toEqual({
+      filter_kind: 'repository',
+      filter_value: a.anonymizeEntityName('/mnt/backups/nas'),
+      remote: a.anonymizeEntityName('ssh://borg@host:22/./repo'),
+      target: a.anonymizeEntityName('borg@host'),
+      status: 'failed',
+    })
+  })
 })
 
 describe('analytics gating', () => {
@@ -137,6 +157,38 @@ describe('analytics gating', () => {
     a.trackEvent('Backup', 'Start')
     vi.advanceTimersByTime(5000)
     expect(globalThis.fetch).not.toHaveBeenCalled()
+  })
+
+  it('sends the first page view once preferences load, not before', async () => {
+    vi.resetModules()
+    prefs.value = { analytics_enabled: true, analytics_instance_key: KEY }
+    localStorage.setItem('access_token', 'token')
+    const a = await import('../analytics')
+    a.trackPageView()
+    await a.loadUserPreference()
+    vi.advanceTimersByTime(5000)
+    expect(sent().map((e) => e.name)).toEqual(['pageview'])
+  })
+
+  it('drops the early page view when preferences say analytics is off', async () => {
+    vi.resetModules()
+    prefs.value = { analytics_enabled: false, analytics_instance_key: KEY }
+    localStorage.setItem('access_token', 'token')
+    const a = await import('../analytics')
+    a.trackPageView()
+    await a.loadUserPreference()
+    vi.advanceTimersByTime(5000)
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+  })
+
+  it('on opt-out sends only the opt-out event and nothing queued or tracked after it', async () => {
+    const a = await load()
+    a.trackEvent('Backup', 'Start')
+    a.trackOptOut()
+    a.trackEvent('Settings', 'Edit')
+    a.trackPageView()
+    vi.advanceTimersByTime(5000)
+    expect(sent().map((e) => e.name)).toEqual(['Settings - OptOut'])
   })
 
   it('exposes the instance key only while analytics is on', async () => {

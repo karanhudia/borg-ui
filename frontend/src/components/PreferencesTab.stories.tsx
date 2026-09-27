@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Box } from '@mui/material'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import PreferencesTab from './PreferencesTab'
+import { authAPI, settingsAPI } from '../services/api'
 
 // The analytics section is the toggle and its description only; it no longer
 // links to the retired public Umami dashboard.
@@ -29,6 +30,22 @@ const meta = {
   component: PreferencesTab,
   parameters: {
     layout: 'fullscreen',
+  },
+  // Flipping the switch saves and then reloads the analytics preference. Stub both
+  // calls for these stories so they never reach a backend, and restore them after.
+  beforeEach: () => {
+    const { updatePreferences } = settingsAPI
+    const { getAuthConfig } = authAPI
+    settingsAPI.updatePreferences = async () =>
+      ({ data: { success: true } }) as Awaited<ReturnType<typeof settingsAPI.updatePreferences>>
+    authAPI.getAuthConfig = async () =>
+      ({ data: { proxy_auth_enabled: false, insecure_no_auth_enabled: false } }) as Awaited<
+        ReturnType<typeof authAPI.getAuthConfig>
+      >
+    return () => {
+      settingsAPI.updatePreferences = updatePreferences
+      authAPI.getAuthConfig = getAuthConfig
+    }
   },
 } satisfies Meta<typeof PreferencesTab>
 
