@@ -1,18 +1,18 @@
 {
-  "generatedAt": "2026-09-27T08:55:17.265Z",
+  "generatedAt": "2026-09-27T09:34:28.915Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1206 visual report",
-    "commitSha": "d960f7f59a6f",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36307636550"
+    "commitSha": "d4afb2c1ba24",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36309689825"
   },
   "totals": {
-    "baseline": 1010,
+    "baseline": 1014,
     "actual": 1014,
     "compared": 1008,
     "changed": 2,
     "added": 6,
-    "removed": 2,
+    "removed": 6,
     "unchanged": 1006
   },
   "changed": [
@@ -87,6 +87,22 @@
     {
       "fileName": "components-announcementmodal--many-highlights.png",
       "baselinePath": "images/baseline/components-announcementmodal--many-highlights.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-successdonutlegend--default--mobile.png",
+      "baselinePath": "images/baseline/pages-dashboardv3-successdonutlegend--default--mobile.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-successdonutlegend--default.png",
+      "baselinePath": "images/baseline/pages-dashboardv3-successdonutlegend--default.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-successdonutlegend--german-long-labels--mobile.png",
+      "baselinePath": "images/baseline/pages-dashboardv3-successdonutlegend--german-long-labels--mobile.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-successdonutlegend--german-long-labels.png",
+      "baselinePath": "images/baseline/pages-dashboardv3-successdonutlegend--german-long-labels.png"
     }
   ],
   "unchanged": [
