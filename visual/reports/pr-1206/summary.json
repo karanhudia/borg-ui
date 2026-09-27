@@ -1,21 +1,58 @@
 {
-  "generatedAt": "2026-09-25T10:06:30.257Z",
+  "generatedAt": "2026-09-27T08:55:17.265Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1206 visual report",
-    "commitSha": "bf0493d11192",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36122011232"
+    "commitSha": "d960f7f59a6f",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36307636550"
   },
   "totals": {
-    "baseline": 1008,
+    "baseline": 1010,
     "actual": 1014,
     "compared": 1008,
-    "changed": 0,
+    "changed": 2,
     "added": 6,
-    "removed": 0,
-    "unchanged": 1008
+    "removed": 2,
+    "unchanged": 1006
   },
-  "changed": [],
+  "changed": [
+    {
+      "fileName": "components-announcementmodal--maintenance-notice--mobile.png",
+      "baselinePath": "images/baseline/components-announcementmodal--maintenance-notice--mobile.png",
+      "actualPath": "images/actual/components-announcementmodal--maintenance-notice--mobile.png",
+      "diffPath": "images/diff/components-announcementmodal--maintenance-notice--mobile.png",
+      "diffPixels": 224031,
+      "totalPixels": 329160,
+      "diffRatio": 0.6806142909223478,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-announcementmodal--release-highlight--mobile.png",
+      "baselinePath": "images/baseline/components-announcementmodal--release-highlight--mobile.png",
+      "actualPath": "images/actual/components-announcementmodal--release-highlight--mobile.png",
+      "diffPath": "images/diff/components-announcementmodal--release-highlight--mobile.png",
+      "diffPixels": 231017,
+      "totalPixels": 329160,
+      "diffRatio": 0.701838011909102,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    }
+  ],
   "added": [
     {
       "fileName": "components-analyticsconsentbanner--default--mobile.png",
@@ -42,7 +79,16 @@
       "actualPath": "images/actual/components-preferencestab--analytics-on.png"
     }
   ],
-  "removed": [],
+  "removed": [
+    {
+      "fileName": "components-announcementmodal--many-highlights--mobile.png",
+      "baselinePath": "images/baseline/components-announcementmodal--many-highlights--mobile.png"
+    },
+    {
+      "fileName": "components-announcementmodal--many-highlights.png",
+      "baselinePath": "images/baseline/components-announcementmodal--many-highlights.png"
+    }
+  ],
   "unchanged": [
     {
       "fileName": "activity-activitytimeline--dark--mobile.png"
@@ -753,13 +799,7 @@
       "fileName": "components-advancedrepositoryoptions--with-upload-limit.png"
     },
     {
-      "fileName": "components-announcementmodal--maintenance-notice--mobile.png"
-    },
-    {
       "fileName": "components-announcementmodal--maintenance-notice.png"
-    },
-    {
-      "fileName": "components-announcementmodal--release-highlight--mobile.png"
     },
     {
       "fileName": "components-announcementmodal--release-highlight.png"
