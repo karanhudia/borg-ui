@@ -5,13 +5,18 @@ import { useT } from './tokens'
 function LegendItem({ count, color, label }: { count: number; color: string; label: string }) {
   const T = useT()
   return (
-    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'baseline' }}>
+    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'baseline', minWidth: 0 }}>
       <Typography
         sx={{ fontFamily: T.mono, fontWeight: 700, color, fontSize: '0.875rem', lineHeight: 1 }}
       >
         {count}
       </Typography>
-      <Typography sx={{ fontSize: '0.75rem', color: T.textMuted }}>{label}</Typography>
+      {/* Last resort at large text zoom, where even a lone item outgrows the rail. */}
+      <Typography
+        sx={{ fontSize: '0.75rem', color: T.textMuted, minWidth: 0, overflowWrap: 'anywhere' }}
+      >
+        {label}
+      </Typography>
     </Stack>
   )
 }
