@@ -184,6 +184,14 @@ def _extract_environment(
         if secret_value is not None:
             environment["BORG_PASSPHRASE"] = secret_value
 
+    # A lock wait sent with the job wins over the agent's default, for the
+    # Borg 1 flag and the Borg 2 variable alike.
+    environment_source = payload.get("environment")
+    if isinstance(environment_source, dict):
+        lock_wait = environment_source.get("BORG_LOCK_WAIT")
+        if isinstance(lock_wait, str) and lock_wait.isdigit():
+            environment["BORG_LOCK_WAIT"] = lock_wait
+
     return environment
 
 

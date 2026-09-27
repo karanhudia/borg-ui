@@ -20,11 +20,12 @@ def test_borg1_repository_operation_waits_for_the_lock(monkeypatch):
 
 def test_the_server_value_wins_over_the_agent_default(monkeypatch):
     monkeypatch.delenv("BORG_LOCK_WAIT", raising=False)
-    payload = BackupCreatePayload(
-        repository_path="/repo",
-        archive_name="a",
-        source_paths=["/src"],
-        environment={"BORG_LOCK_WAIT": "30"},
+    payload = BackupCreatePayload.from_job_payload(
+        {
+            "repository": {"path": "/repo"},
+            "backup": {"archive_name": "a", "source_paths": ["/src"]},
+            "environment": {"BORG_LOCK_WAIT": "30"},
+        }
     )
 
     assert payload.build_command()[:4] == ["borg", "--lock-wait", "30", "create"]

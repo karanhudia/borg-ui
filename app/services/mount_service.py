@@ -30,6 +30,7 @@ from app.core.borg_router import BorgRouter
 from app.utils.borg_env import (
     effective_repository_remote_path,
     get_standard_ssh_opts,
+    REQUEST_LOCK_WAIT,
     with_lock_wait,
 )
 from app.utils.fs import active_mount_points, remove_tree_without_crossing_mounts
@@ -1074,6 +1075,7 @@ class MountService:
             try:
                 # Build borg mount command
                 env = os.environ.copy()
+                env["BORG_LOCK_WAIT"] = REQUEST_LOCK_WAIT
 
                 logger.info(
                     "Repository details",
