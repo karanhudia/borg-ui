@@ -233,6 +233,37 @@ async def test_wait_for_backup_operation_returns_the_legacy_word(db, repository)
     )
 
 
+@pytest.mark.asyncio
+async def test_wait_for_backup_operation_waits_for_the_runner_task(db, repository):
+    """#1216: the server backup commits `completed` as soon as `borg create`
+    exits, then runs `borg info`, the rclone mirror and the post-backup
+    hooks. A waiter that stops there starts the plan's prune against a
+    repository `borg info` still has locked. The row is done when the
+    runner's task is, whose terminal write also carries a late failure."""
+    import asyncio
+
+    from app.services.operations.runner import operation_runner
+
+    op = _backup_operation(db, repository, status="completed")
+    task = asyncio.get_running_loop().create_future()
+    operation_runner.running_tasks[op.id] = task
+
+    def _finish():
+        op.status = "failed"
+        db.commit()
+        operation_runner.running_tasks.pop(op.id, None)
+        task.set_result(None)
+
+    asyncio.get_running_loop().call_later(0.05, _finish)
+    try:
+        assert (
+            await wait_for_backup_operation(db, op.id, poll_interval_seconds=0.01)
+            == "failed"
+        )
+    finally:
+        operation_runner.running_tasks.pop(op.id, None)
+
+
 def _locked_database() -> OperationalError:
     """The error SQLAlchemy raises for a locked SQLite database."""
     return OperationalError("SELECT operations.id", {}, Exception("database is locked"))

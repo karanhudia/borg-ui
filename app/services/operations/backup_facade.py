@@ -386,6 +386,12 @@ async def wait_for_backup_operation(
     word. A caller that learns it was cancelled (a plan run) asks the runner
     to cancel once; the executor's watcher does the rest (spec 7.7).
 
+    Terminal means the runner's task is over, not the first terminal word
+    on the row: the server backup writes `completed` when `borg create`
+    exits and then still runs `borg info`, the rclone mirror and the
+    post-backup hooks, any of which can hold the repository lock or turn
+    the row `failed` (#1216).
+
     Each poll ends its read transaction before the sleep, so the session
     holds no connection while a backup runs: every waiter polls on a session
     of its own, and a pool with none free is one of the errors waited out."""
@@ -397,7 +403,10 @@ async def wait_for_backup_operation(
         operation = db.get(Operation, operation_id)
         if operation is None:
             return "failed"
-        if operation.status in TERMINAL_STATUSES:
+        if (
+            operation.status in TERMINAL_STATUSES
+            and operation_id not in operation_runner.running_tasks
+        ):
             return "pending" if operation.status == "queued" else operation.status
         if is_cancelled is not None and not cancel_sent and is_cancelled():
             cancel_sent = True
