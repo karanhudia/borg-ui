@@ -151,6 +151,8 @@ from app.utils.borg_env import (
     get_standard_ssh_opts as shared_get_standard_ssh_opts,
     setup_borg_env as shared_setup_borg_env,
     cleanup_temp_key_file,
+    REQUEST_LOCK_WAIT,
+    with_lock_wait,
 )
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,  # noqa: F401
@@ -472,13 +474,15 @@ def setup_borg_env(base_env=None, passphrase=None, ssh_opts=None):
     )
 
 
-def _prepare_repository_borg_env(repository: Repository, db: Session):
+def _prepare_repository_borg_env(
+    repository: Repository, db: Session, *, lock_wait: str = "180"
+):
     """Build Borg execution environment for a stored repository.
 
     Returns the environment plus any temporary SSH key file that must be
-    cleaned up by the caller.
+    cleaned up by the caller. Request handlers pass REQUEST_LOCK_WAIT.
     """
-    return build_repository_borg_env(repository, db)
+    return build_repository_borg_env(repository, db, lock_wait=lock_wait)
 
 
 def _repository_stats_borg_env(env: Dict[str, str]) -> Dict[str, str]:
@@ -651,7 +655,9 @@ async def _run_repository_command(
     log_fields: Optional[Dict[str, Any]] = None,
 ):
     """Execute a repository-scoped Borg command with common SSH/env handling."""
-    env, temp_key_file = _prepare_repository_borg_env(repository, db)
+    env, temp_key_file = _prepare_repository_borg_env(
+        repository, db, lock_wait=REQUEST_LOCK_WAIT
+    )
     # Both callers machine-parse the JSON output; pin the render zone so borg1
     # timestamps come out UTC instead of server-local.
     env["TZ"] = "UTC"
@@ -660,7 +666,7 @@ async def _run_repository_command(
             logger.info(log_message, **(log_fields or {}))
 
         process = await asyncio.create_subprocess_exec(
-            *cmd,
+            *with_lock_wait(cmd, env),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=env,
@@ -6511,7 +6517,9 @@ async def get_repository_stats(
 
     temp_key_file = None
     try:
-        env, temp_key_file = _prepare_repository_borg_env(repository, db)
+        env, temp_key_file = _prepare_repository_borg_env(
+            repository, db, lock_wait=REQUEST_LOCK_WAIT
+        )
 
         router = BorgRouter(repository)
         cmd = router.build_repo_info_command(repository.path)

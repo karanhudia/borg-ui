@@ -21,6 +21,7 @@ from typing import Any, Optional
 
 from agent.borg_ui_agent.backup import (
     _extract_environment,
+    borg1_lock_wait_args,
     build_borg_env,
     parse_borg_progress,
     progress_replaces_log_line,
@@ -185,7 +186,7 @@ class RepositoryOperationPayload:
         return self.borg_binary or ("borg2" if self.borg_version == 2 else "borg")
 
     def _base_borg1(self, subcommand: str) -> list[str]:
-        cmd = [self.borg_cmd, subcommand]
+        cmd = [self.borg_cmd, *borg1_lock_wait_args(self.environment), subcommand]
         if self.remote_path:
             cmd.extend(["--remote-path", self.remote_path])
         return cmd

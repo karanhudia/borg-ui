@@ -27,7 +27,12 @@ from cryptography.fernet import Fernet
 
 from app.config import settings
 from app.core.borg_router import BorgRouter
-from app.utils.borg_env import effective_repository_remote_path, get_standard_ssh_opts
+from app.utils.borg_env import (
+    effective_repository_remote_path,
+    get_standard_ssh_opts,
+    REQUEST_LOCK_WAIT,
+    with_lock_wait,
+)
 from app.utils.fs import active_mount_points, remove_tree_without_crossing_mounts
 from app.core.security import decrypt_secret
 from app.database.database import SessionLocal
@@ -1070,6 +1075,7 @@ class MountService:
             try:
                 # Build borg mount command
                 env = os.environ.copy()
+                env["BORG_LOCK_WAIT"] = REQUEST_LOCK_WAIT
 
                 logger.info(
                     "Repository details",
@@ -1136,7 +1142,7 @@ class MountService:
                 # Execute mount in foreground mode
                 # We'll start it and let it run in the background
                 process = await asyncio.create_subprocess_exec(
-                    *cmd,
+                    *with_lock_wait(cmd, env),
                     env=env,
                     stdout=asyncio.subprocess.DEVNULL,
                     stderr=asyncio.subprocess.PIPE,

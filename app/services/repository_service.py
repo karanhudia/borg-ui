@@ -14,7 +14,11 @@ from app.core.borg import borg
 from app.database.database import SessionLocal
 from app.database.models import SystemSettings
 from app.config import settings
-from app.utils.borg_env import setup_borg_env, ssh_key_borg_env
+from app.utils.borg_env import (
+    setup_borg_env,
+    ssh_key_borg_env,
+    with_lock_wait,
+)
 
 logger = structlog.get_logger()
 
@@ -119,7 +123,7 @@ class RepositoryService:
                 ssh_key_id=ssh_key_id,
             ) as env:
                 process = await asyncio.create_subprocess_exec(
-                    *cmd,
+                    *with_lock_wait(cmd, env),
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     env=env,

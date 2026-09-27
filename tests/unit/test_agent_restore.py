@@ -116,6 +116,8 @@ def test_repository_restore_builds_borg1_command():
 
     assert payload.build_command() == [
         "borg",
+        "--lock-wait",
+        "180",
         "extract",
         "--progress",
         "--log-json",

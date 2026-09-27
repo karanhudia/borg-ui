@@ -118,8 +118,9 @@ async def test_mount_borg_archive_success(mount_service_fixture, mock_db_session
 
                         # Verify command
                         args = mock_exec.call_args[0]
-                        assert args[0] == "borg"
-                        assert args[1] == "mount"
+                        # Borg 1 ignores BORG_LOCK_WAIT, so a mount must carry
+                        # the request wait as a flag (#1216).
+                        assert args[:4] == ("borg", "--lock-wait", "20", "mount")
                         assert "/backups/repo" in args
                         assert "-f" in args  # Foreground mode
 

@@ -19,6 +19,7 @@ from app.utils.borg_env import (
     cleanup_temp_key_file,
     effective_repository_remote_path,
     get_standard_ssh_opts,
+    with_lock_wait,
 )
 from app.utils.restore_layout import (
     RESTORE_LAYOUT_PRESERVE_PATH,
@@ -703,7 +704,7 @@ class RestoreService:
                 # Execute command with progress tracking
                 # Extract directly to destination (no temp directory)
                 process = await asyncio.create_subprocess_exec(
-                    *cmd,
+                    *with_lock_wait(cmd, env),
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     stdin=asyncio.subprocess.PIPE,  # Pipe stdin so we can close it
@@ -1425,7 +1426,7 @@ class RestoreService:
 
             # Execute extraction (same logic as local restore)
             process = await asyncio.create_subprocess_exec(
-                *cmd,
+                *with_lock_wait(cmd, env),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 stdin=asyncio.subprocess.PIPE,

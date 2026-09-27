@@ -6,6 +6,7 @@ import structlog
 from typing import Dict, List
 from app.config import settings
 from app.core.borg_stream import CommandByteStream, CommandLineStream
+from app.utils.borg_env import with_lock_wait
 from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.ssh_utils import public_key_only_ssh_args
 
@@ -114,7 +115,7 @@ class BorgInterface:
 
         try:
             process = await asyncio.create_subprocess_exec(
-                *cmd,
+                *with_lock_wait(cmd, exec_env),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=cwd,
@@ -209,7 +210,7 @@ class BorgInterface:
 
         try:
             process = await asyncio.create_subprocess_exec(
-                *cmd,
+                *with_lock_wait(cmd, exec_env),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=cwd,

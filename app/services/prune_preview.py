@@ -167,7 +167,7 @@ from app.services.operations.executors.index import (
     fill_archive_info,
 )
 from app.services.operations.repository_status import storage_summaries
-from app.utils.borg_env import cleanup_temp_key_file
+from app.utils.borg_env import REQUEST_LOCK_WAIT, cleanup_temp_key_file
 
 # Candidates re-measured synchronously before the preview answers (spec
 # 4.4 step 3). Beyond it, or when a measurement fails, the stored values
@@ -235,7 +235,9 @@ async def remeasure_candidates(
     `fill_archive_info` commits and stamps `stats_measured_at` itself."""
     if not candidates:
         return False
-    env, temp_key_file = _prepare_repository_borg_env(repository, db)
+    env, temp_key_file = _prepare_repository_borg_env(
+        repository, db, lock_wait=REQUEST_LOCK_WAIT
+    )
     try:
         filled = await fill_archive_info(
             db, repository, candidates, env, limit=MEASURE_CAP
