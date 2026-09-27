@@ -131,7 +131,8 @@ string), the event name and its details, your app version, your plan name
 (community, pro, or enterprise), and two hashes: a SHA-256 of this install's
 random instance id and a SHA-256 of that id plus your user id. The raw instance
 id and your username are never sent. Names of repositories, schedules, and other
-things you create are hashed before sending. Requests go without cookies or a
+things you create are hashed before sending, and so is any detail that looks like
+a path, URL, or user@host, such as a repository you filter by. Requests go without cookies or a
 referrer. Your browser still adds an `Origin` header naming the address you
 reach Borg UI at; the service only compares it for website events and does not
 store it. The service derives a country from your IP address and discards the

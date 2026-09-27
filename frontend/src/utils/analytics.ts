@@ -41,6 +41,8 @@ let currentPlan: string | null = null
 const queue: OutgoingEvent[] = []
 let flushTimer: ReturnType<typeof setTimeout> | null = null
 let listening = false
+// A page view that arrived before tracking was allowed; sent once preferences allow it.
+let pendingPageview = false
 
 // crypto.randomUUID only exists in secure contexts; plain-HTTP LAN installs still have getRandomValues.
 const randomId = (): string => {
@@ -69,13 +71,17 @@ export const anonymizeEntityName = (name: string): string => {
   return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
-// One choke point: any *_name prop is hashed here, so no call site can leak a raw name.
+// One choke point: any *_name prop, and any value that looks like a path, URL or
+// user@host (repository filters, remotes), is hashed here, so no call site can leak one.
+const sensitive = (key: string, value: string): boolean =>
+  key.endsWith('_name') || /[/\\@]/.test(value)
+
 const scrubProps = (data?: Props): Props | undefined => {
   if (!data) return undefined
   const out: Props = {}
   for (const [key, value] of Object.entries(data)) {
     out[key] =
-      key.endsWith('_name') && typeof value === 'string' ? anonymizeEntityName(value) : value
+      typeof value === 'string' && sensitive(key, value) ? anonymizeEntityName(value) : value
   }
   return Object.keys(out).length ? out : undefined
 }
@@ -168,6 +174,10 @@ export const loadUserPreference = async (): Promise<void> => {
   }
 
   preferenceLoaded = true
+  if (pendingPageview && canTrack()) {
+    pendingPageview = false
+    enqueue('pageview')
+  }
 }
 
 /**
@@ -193,6 +203,11 @@ export const getAnalyticsInstanceKey = (): string | null => (canTrack() ? instan
  * Track a page view. Only the path is sent; any query string is dropped.
  */
 export const trackPageView = (_path?: string): void => {
+  // The first route renders before preferences load; hold that view instead of losing it.
+  if (!canTrack()) {
+    pendingPageview = true
+    return
+  }
   enqueue('pageview')
 }
 
@@ -231,6 +246,15 @@ export const setAnalyticsPlan = (plan: string | null): void => {
  * Track analytics opt-out. Sent once even when analytics is off, so opt-out rates can be counted.
  */
 export const trackOptOut = (): void => {
+  // Close the gate now, not when the saved preference reloads: drop anything still
+  // queued and send only the opt-out itself.
+  userOptedOut = true
+  pendingPageview = false
+  queue.length = 0
+  if (flushTimer) {
+    clearTimeout(flushTimer)
+    flushTimer = null
+  }
   enqueue('Settings - OptOut', { name: 'analytics' }, true)
 }
 
