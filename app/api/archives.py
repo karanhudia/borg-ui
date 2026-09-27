@@ -40,6 +40,7 @@ from app.utils.borg_env import (
     cleanup_temp_key_file,
     effective_repository_remote_path,
     get_standard_ssh_opts,
+    REQUEST_LOCK_WAIT,
     setup_borg_env,
 )
 from app.utils.ssh_utils import (
@@ -59,7 +60,9 @@ def _build_repo_env(repo: Repository, db: Session):
         connection=resolve_repository_ssh_connection(repo, db),
         db=db,
     )
-    env = setup_borg_env(passphrase=repo.passphrase, ssh_opts=ssh_opts)
+    env = setup_borg_env(
+        passphrase=repo.passphrase, ssh_opts=ssh_opts, lock_wait=REQUEST_LOCK_WAIT
+    )
     if remote_path := effective_repository_remote_path(repo):
         env["BORG_REMOTE_PATH"] = remote_path
     return env, temp_key_file

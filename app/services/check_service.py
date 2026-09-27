@@ -17,6 +17,7 @@ from app.utils.borg_env import (
     build_repository_borg_env,
     cleanup_temp_key_file,
     effective_repository_remote_path,
+    with_lock_wait,
 )
 
 from app.services.process_cancel import (
@@ -161,7 +162,7 @@ class CheckService:
             # Execute command
             # Note: --progress writes to stderr, not stdout, so we need to capture stderr separately
             process = await asyncio.create_subprocess_exec(
-                *cmd,
+                *with_lock_wait(cmd, env),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,  # Capture stderr separately for progress
                 env=env,

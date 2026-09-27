@@ -48,6 +48,7 @@ from app.utils.borg_env import (
     build_repository_borg_env,
     cleanup_temp_key_file,
     setup_borg_env,
+    with_lock_wait,
 )
 from app.services.repository_command_lock import (
     acquire_repository_command_lock,
@@ -508,7 +509,7 @@ class BackupService:
                     repository_path, archive_name
                 )
                 info_process = await asyncio.create_subprocess_exec(
-                    *info_cmd,
+                    *with_lock_wait(info_cmd, env),
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     env=env,
@@ -1999,7 +2000,7 @@ class BackupService:
 
             # Execute command - NO LOG FILE FOR MAXIMUM PERFORMANCE
             process = await asyncio.create_subprocess_exec(
-                *cmd,
+                *with_lock_wait(cmd, env),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,  # Merge stderr into stdout
                 env=env,

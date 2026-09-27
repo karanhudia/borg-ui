@@ -275,6 +275,8 @@ def test_backup_create_payload_builds_borg1_command():
     assert payload.environment == {"BORG_PASSPHRASE": "secret"}
     assert payload.build_command() == [
         "/usr/bin/borg",
+        "--lock-wait",
+        "180",
         "create",
         "--progress",
         "--stats",
@@ -544,7 +546,15 @@ def test_repository_init_payload_builds_borg1_command():
 
     command = payload.build_command()
 
-    assert command == ["borg", "init", "--encryption", "repokey", "/agent/repo"]
+    assert command == [
+        "borg",
+        "--lock-wait",
+        "180",
+        "init",
+        "--encryption",
+        "repokey",
+        "/agent/repo",
+    ]
 
 
 @pytest.mark.unit
@@ -957,6 +967,8 @@ def test_repository_list_archives_payload_keeps_plain_borg1_command():
 
     assert payload.build_command() == [
         "borg",
+        "--lock-wait",
+        "180",
         "list",
         "--json",
         "/agent/repo",
@@ -997,6 +1009,8 @@ def test_repository_archive_info_payload_builds_borg1_command():
 
     assert payload.build_command() == [
         "borg",
+        "--lock-wait",
+        "180",
         "info",
         "--json",
         "/agent/repo::arch-1",
@@ -2388,6 +2402,8 @@ def test_repository_break_lock_payload_builds_borg1_command():
 
     assert payload.build_command() == [
         "borg",
+        "--lock-wait",
+        "180",
         "break-lock",
         "/agent/repo",
     ]
@@ -2426,6 +2442,8 @@ def test_repository_delete_archive_payload_builds_borg1_command():
 
     assert payload.build_command() == [
         "borg",
+        "--lock-wait",
+        "180",
         "delete",
         "/agent/repo::arch-1",
     ]
@@ -2577,7 +2595,14 @@ def test_repository_operation_payload_builds_agent_local_commands():
         }
     )
 
-    assert info_payload.build_command() == ["borg", "info", "--json", "/agent/repo"]
+    assert info_payload.build_command() == [
+        "borg",
+        "--lock-wait",
+        "180",
+        "info",
+        "--json",
+        "/agent/repo",
+    ]
     # Borg 2 prune: no --stats, quarterly -> --keep-3monthly.
     assert prune_payload.build_command() == [
         "borg2",
@@ -2600,6 +2625,8 @@ def test_repository_operation_payload_builds_agent_local_commands():
     # (borg 1.4 has no --keep-quarterly), and the repo path comes last.
     assert prune_v1_payload.build_command() == [
         "borg",
+        "--lock-wait",
+        "180",
         "prune",
         "--list",
         "--progress",
@@ -2649,6 +2676,8 @@ def test_repository_archive_contents_payload_builds_agent_list_command():
     assert "repository.list_archive_contents" in get_capabilities()
     assert payload.build_command() == [
         "borg",
+        "--lock-wait",
+        "180",
         "list",
         "/agent/repo::archive-1",
         "--json-lines",
@@ -2690,6 +2719,8 @@ def test_repository_extract_file_payload_builds_agent_extract_stdout_command():
     assert "repository.extract_archive_file" in get_capabilities()
     assert payload.build_command() == [
         "borg",
+        "--lock-wait",
+        "180",
         "extract",
         "--stdout",
         "/agent/repo::archive-1",
@@ -2734,6 +2765,8 @@ def test_repository_export_tar_payload_builds_streaming_tar_commands():
     assert "repository.export_archive_tar" in get_capabilities()
     assert payload.build_command() == [
         "borg",
+        "--lock-wait",
+        "180",
         "export-tar",
         "--strip-components",
         "1",
@@ -2761,6 +2794,8 @@ def test_repository_extract_file_job_returns_base64_content(monkeypatch):
     def fake_run(cmd, *, capture_output, env, timeout):
         assert cmd == [
             "borg",
+            "--lock-wait",
+            "180",
             "extract",
             "--stdout",
             "/agent/repo::archive-1",
@@ -2868,7 +2903,7 @@ def test_repository_extract_file_streams_artifact_when_delivery_requested(monkey
             pass
 
     def fake_popen(cmd, **kwargs):
-        assert cmd[:3] == ["borg", "extract", "--stdout"]
+        assert cmd[:5] == ["borg", "--lock-wait", "180", "extract", "--stdout"]
         return SimpleNamespace(
             stdout=_FakeStdout(b"\x00filebytes"),
             stderr=SimpleNamespace(read=lambda: b""),
@@ -3547,6 +3582,8 @@ def test_repository_diff_payload_builds_diff_and_listing_commands():
     )
     assert diff_v1.build_command() == [
         "borg",
+        "--lock-wait",
+        "180",
         "diff",
         "--json-lines",
         "--",
@@ -3567,6 +3604,8 @@ def test_repository_diff_payload_builds_diff_and_listing_commands():
     )
     assert listing_v1.build_command() == [
         "borg",
+        "--lock-wait",
+        "180",
         "list",
         "--remote-path",
         "/opt/borg",
@@ -3707,7 +3746,14 @@ def test_repository_diff_streams_the_listing_as_an_artifact(monkeypatch):
     result, client, seen = _run_diff_job_with_return_code(monkeypatch, 0)
 
     assert result.status == "completed"
-    assert seen["cmd"][:4] == ["borg", "diff", "--json-lines", "--"]
+    assert seen["cmd"][:6] == [
+        "borg",
+        "--lock-wait",
+        "180",
+        "diff",
+        "--json-lines",
+        "--",
+    ]
     assert seen["env"]["TZ"] == "UTC"
     assert seen["env"]["BORG_PASSPHRASE"] == "secret"
     assert client.uploaded["job_id"] == 97

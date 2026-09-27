@@ -5,6 +5,8 @@ large archives (spec 6.7, "diff output is streamed line by line")."""
 import asyncio
 from typing import AsyncIterator, Optional
 
+from app.utils.borg_env import with_lock_wait
+
 # Longest accepted output line. Paths are unbounded in theory; 4 MiB is far
 # past anything a filesystem allows.
 LINE_LIMIT = 4 * 1024 * 1024
@@ -45,7 +47,7 @@ class CommandLineStream:
 
     async def _start(self) -> None:
         self._process = await asyncio.create_subprocess_exec(
-            *self.cmd,
+            *with_lock_wait(self.cmd, self.env),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=self.env,

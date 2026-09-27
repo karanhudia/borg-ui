@@ -18,6 +18,7 @@ from app.utils.borg_env import (
     build_repository_borg_env,
     cleanup_temp_key_file,
     effective_repository_remote_path,
+    with_lock_wait,
 )
 from app.services.operations.job_facade import refresh_job, resolve_maintenance_job
 
@@ -184,7 +185,7 @@ class PruneService:
 
             # Execute command
             process = await asyncio.create_subprocess_exec(
-                *cmd,
+                *with_lock_wait(cmd, env),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=env,

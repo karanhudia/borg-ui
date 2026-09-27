@@ -76,6 +76,12 @@ def get_standard_ssh_opts(
     return opts
 
 
+# Lock wait for Borg commands run inside an HTTP request. Background jobs keep
+# setup_borg_env's 180s; a request should report "repository locked" long
+# before a reverse proxy's read timeout (commonly 60s) cuts it off.
+REQUEST_LOCK_WAIT = "20"
+
+
 def setup_borg_env(
     *,
     base_env=None,
@@ -122,6 +128,22 @@ def setup_borg_env(
         env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
 
     return env
+
+
+def with_lock_wait(cmd, env=None) -> list[str]:
+    """Pass the environment's BORG_LOCK_WAIT to a Borg 1 command line.
+
+    Borg 2 reads BORG_LOCK_WAIT itself. Borg 1.4 never does: its --lock-wait
+    defaults to 1 second, so without the flag every Borg 1 command gives up
+    on a held lock almost at once (#1216). Borg 1 takes common options before
+    the subcommand, and a --lock-wait the caller put after it still wins.
+    `env=None` means the inherited environment, as for subprocess.
+    """
+    cmd = list(cmd)
+    lock_wait = (os.environ if env is None else env).get("BORG_LOCK_WAIT")
+    if not lock_wait or os.path.basename(cmd[0]) != "borg" or "--lock-wait" in cmd:
+        return cmd
+    return [cmd[0], "--lock-wait", lock_wait, *cmd[1:]]
 
 
 def cleanup_temp_key_file(temp_key_file: Optional[str]) -> None:

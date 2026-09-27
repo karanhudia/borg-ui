@@ -295,7 +295,7 @@ async def test_execute_backup_command(
                     create_call_args = None
                     for call_args in mock_exec.call_args_list:
                         args = call_args[0]
-                        if len(args) > 1 and args[0] == "borg" and args[1] == "create":
+                        if args[:4] == ("borg", "--lock-wait", "180", "create"):
                             create_call_args = args
                             break
 
