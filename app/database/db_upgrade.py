@@ -47,6 +47,7 @@ class TableReport:
     dropped_columns: list[str] = field(default_factory=list)
     added_columns: list[str] = field(default_factory=list)
     orphans_cleared: dict[str, int] = field(default_factory=dict)
+    orphans_dropped: int = 0
 
 
 @dataclass
@@ -78,6 +79,11 @@ class UpgradeReport:
                 out.append(
                     f"  {t.name}.{col}: {n} row(s) pointed at a row that no longer "
                     f"exists; cleared to NULL"
+                )
+            if t.orphans_dropped:
+                out.append(
+                    f"  {t.name}: {t.orphans_dropped} row(s) belonged to a row that "
+                    f"no longer exists; not transferred"
                 )
         if self.source_kept_at:
             out.append(f"  previous database kept at {self.source_kept_at}")
@@ -547,6 +553,9 @@ def _transfer(source: Engine, target: Engine) -> UpgradeReport:
 
     with source.connect() as src, target.begin() as dst:
         deferred: list[tuple] = []
+        # Primary keys of rows left behind, per table, so their children are
+        # left behind too: the source still has the parent, so only this knows.
+        dropped: dict[str, set] = {}
 
         # sorted_tables is topological: parents before children, which is what
         # Postgres requires -- it checks every foreign key at insert time.
@@ -576,8 +585,8 @@ def _transfer(source: Engine, target: Engine) -> UpgradeReport:
                         "it cannot be transferred in two passes"
                     )
 
-            cleared = _orphan_columns(src, table, common)
-            tr.orphans_cleared = {c: n for c, n in cleared.items() if n}
+            orphans = _orphan_values(src, table, common, dropped)
+            pk = _pk_name(table)
 
             # Read through the reflected table, not raw SQL: SQLite keeps
             # datetimes as text, and only the column's type turns them back into
@@ -593,16 +602,21 @@ def _transfer(source: Engine, target: Engine) -> UpgradeReport:
             batch = []
             for row in rows:
                 data = dict(zip(common, row))
-                for col in cleared:
-                    if (
-                        data.get(col) is not None
-                        and cleared[col]
-                        and _is_orphan(src, table, col, data[col])
-                    ):
-                        data[col] = None
+                # A required pointer at a missing row is a row the parent's
+                # delete would have taken with it, had SQLite enforced the key
+                # (repository delete removed check jobs by hand only from
+                # 2026-02, #1215). An optional one is kept, pointer cleared.
+                orphaned = [c for c, values in orphans.items() if data.get(c) in values]
+                if any(not table.columns[c].nullable for c in orphaned):
+                    dropped.setdefault(table.name, set()).add(data[pk])
+                    tr.orphans_dropped += 1
+                    continue
+                for col in orphaned:
+                    data[col] = None
+                    tr.orphans_cleared[col] = tr.orphans_cleared.get(col, 0) + 1
                 pending = {c: data.pop(c) for c in self_refs if data.get(c) is not None}
                 if pending:
-                    deferred.append((table, data[_pk_name(table)], pending))
+                    deferred.append((table, data[pk], pending))
                 for c in self_refs:
                     data[c] = None
                 batch.append(data)
@@ -621,6 +635,11 @@ def _transfer(source: Engine, target: Engine) -> UpgradeReport:
             report.tables.append(tr)
 
         for table, pk_value, values in deferred:
+            # A self-reference at a row dropped above stays NULL.
+            gone = dropped.get(table.name, set())
+            values = {c: v for c, v in values.items() if v not in gone}
+            if not values:
+                continue
             dst.execute(
                 table.update()
                 .where(table.c[_pk_name(table)] == pk_value)
@@ -634,50 +653,42 @@ def _pk_name(table) -> str:
     return list(table.primary_key.columns)[0].name
 
 
-def _orphan_columns(src, table, common: list[str]) -> dict[str, int]:
-    """Count rows whose foreign key points at a row that is not there.
+def _orphan_values(src, table, common: list[str], dropped: dict[str, set]) -> dict:
+    """Per foreign key, the values that point at a row that is not there.
 
     SQLite only enforces foreign keys when the connection asks it to, so a
     database can hold references to rows that were deleted years ago. Postgres
-    enforces them always and would reject those rows outright.
+    enforces them always and would reject those rows outright. A parent row the
+    transfer itself left behind (see `dropped`) counts as not there either.
     """
-    counts: dict[str, int] = {}
+    orphans: dict[str, set] = {}
     for fk in table.foreign_keys:
         col = fk.parent.name
         if col not in common:
             continue
         parent_table = fk.column.table.name
         parent_col = fk.column.name
+        values = (
+            set(dropped.get(parent_table, ()))
+            if parent_col == _pk_name(fk.column.table)
+            else set()
+        )
         # The join below reads the source, so the parent has to exist there.
         # Reflection gives the target's foreign keys, and the source is an older
         # schema that may not have the table the target points at.
-        if not inspect(src).has_table(parent_table):
-            continue
-        n = src.execute(
-            text(
-                f'SELECT COUNT(*) FROM "{table.name}" c '
-                f'LEFT JOIN "{parent_table}" p ON p."{parent_col}" = c."{col}" '
-                f'WHERE c."{col}" IS NOT NULL AND p."{parent_col}" IS NULL'
+        if inspect(src).has_table(parent_table):
+            values |= set(
+                src.execute(
+                    text(
+                        f'SELECT DISTINCT c."{col}" FROM "{table.name}" c '
+                        f'LEFT JOIN "{parent_table}" p ON p."{parent_col}" = c."{col}" '
+                        f'WHERE c."{col}" IS NOT NULL AND p."{parent_col}" IS NULL'
+                    )
+                ).scalars()
             )
-        ).scalar()
-        if n:
-            if not table.columns[col].nullable:
-                raise RuntimeError(
-                    f"{table.name}.{col} has {n} row(s) pointing at a missing "
-                    f'"{parent_table}" row, and the column is NOT NULL -- '
-                    "cannot transfer without losing rows"
-                )
-            counts[col] = n
-    return counts
-
-
-def _is_orphan(src, table, col: str, value) -> bool:
-    fk = next(fk for fk in table.foreign_keys if fk.parent.name == col)
-    parent_table = fk.column.table.name
-    parent_col = fk.column.name
-    return not src.execute(
-        text(f'SELECT 1 FROM "{parent_table}" WHERE "{parent_col}" = :v'), {"v": value}
-    ).first()
+        if values:
+            orphans[col] = values
+    return orphans
 
 
 def _reset_sequences(engine: Engine) -> int:
