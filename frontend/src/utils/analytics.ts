@@ -41,8 +41,10 @@ let currentPlan: string | null = null
 const queue: OutgoingEvent[] = []
 let flushTimer: ReturnType<typeof setTimeout> | null = null
 let listening = false
-// A page view that arrived before tracking was allowed; sent once preferences allow it.
-let pendingPageview = false
+// Page views that arrived before tracking was allowed, with where and when they
+// happened; sent once preferences allow it.
+let pendingPageviews: { path: string; at: string }[] = []
+let loadingPreference = false
 
 // crypto.randomUUID only exists in secure contexts; plain-HTTP LAN installs still have getRandomValues.
 const randomId = (): string => {
@@ -72,17 +74,23 @@ export const anonymizeEntityName = (name: string): string => {
 }
 
 // One choke point: any *_name prop, and any value that looks like a path, URL or
-// user@host (repository filters, remotes), is hashed here, so no call site can leak one.
+// user@host (repository filters, remotes), is hashed here, at any depth, so no call
+// site can leak one.
 const sensitive = (key: string, value: string): boolean =>
   key.endsWith('_name') || /[/\\@]/.test(value)
 
+const scrubValue = (key: string, value: unknown): unknown => {
+  if (typeof value === 'string') return sensitive(key, value) ? anonymizeEntityName(value) : value
+  if (Array.isArray(value)) return value.map((item) => scrubValue(key, item))
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, scrubValue(k, v)]))
+  }
+  return value
+}
+
 const scrubProps = (data?: Props): Props | undefined => {
   if (!data) return undefined
-  const out: Props = {}
-  for (const [key, value] of Object.entries(data)) {
-    out[key] =
-      typeof value === 'string' && sensitive(key, value) ? anonymizeEntityName(value) : value
-  }
+  const out = scrubValue('', data) as Props
   return Object.keys(out).length ? out : undefined
 }
 
@@ -120,18 +128,23 @@ const scheduleFlush = (): void => {
 
 const canTrack = (): boolean => preferenceLoaded && userOptedOut === false && !!instanceKey
 
-const enqueue = (name: string, data?: Props, force = false): void => {
+const enqueue = (
+  name: string,
+  data?: Props,
+  force = false,
+  at = { path: window.location.pathname, at: new Date().toISOString() }
+): void => {
   if (!instanceKey || (!force && !canTrack())) return
   const props = scrubProps(data)
   queue.push({
     event_id: randomId(),
-    occurred_at: new Date().toISOString(),
+    occurred_at: at.at,
     source: 'app',
     name,
     session_key: sessionKey,
     instance_key: instanceKey,
     ...(userKey ? { user_key: userKey } : {}),
-    path: window.location.pathname,
+    path: at.path,
     ...(currentAppVersion ? { app_version: currentAppVersion } : {}),
     ...(currentPlan ? { plan: currentPlan } : {}),
     ...(props ? { props } : {}),
@@ -145,6 +158,19 @@ const enqueue = (name: string, data?: Props, force = false): void => {
  * Called on app startup and after login, before any tracking.
  */
 export const loadUserPreference = async (): Promise<void> => {
+  loadingPreference = true
+  try {
+    await readPreference()
+  } finally {
+    loadingPreference = false
+    // Views held during loading go out now if tracking is allowed, otherwise never.
+    const held = pendingPageviews
+    pendingPageviews = []
+    if (canTrack()) for (const view of held) enqueue('pageview', undefined, false, view)
+  }
+}
+
+const readPreference = async (): Promise<void> => {
   try {
     const authConfig = (await authAPI.getAuthConfig()).data
     const proxyAuthEnabled = authConfig.proxy_auth_enabled
@@ -174,10 +200,6 @@ export const loadUserPreference = async (): Promise<void> => {
   }
 
   preferenceLoaded = true
-  if (pendingPageview && canTrack()) {
-    pendingPageview = false
-    enqueue('pageview')
-  }
 }
 
 /**
@@ -203,9 +225,12 @@ export const getAnalyticsInstanceKey = (): string | null => (canTrack() ? instan
  * Track a page view. Only the path is sent; any query string is dropped.
  */
 export const trackPageView = (_path?: string): void => {
-  // The first route renders before preferences load; hold that view instead of losing it.
+  // The first route renders before preferences load; hold that view (where and when it
+  // happened) instead of losing it. A view while analytics is simply off is dropped.
   if (!canTrack()) {
-    pendingPageview = true
+    if ((!preferenceLoaded || loadingPreference) && pendingPageviews.length < MAX_BATCH) {
+      pendingPageviews.push({ path: window.location.pathname, at: new Date().toISOString() })
+    }
     return
   }
   enqueue('pageview')
@@ -249,7 +274,7 @@ export const trackOptOut = (): void => {
   // Close the gate now, not when the saved preference reloads: drop anything still
   // queued and send only the opt-out itself.
   userOptedOut = true
-  pendingPageview = false
+  pendingPageviews = []
   queue.length = 0
   if (flushTimer) {
     clearTimeout(flushTimer)

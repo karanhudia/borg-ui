@@ -132,6 +132,24 @@ describe('analytics transport', () => {
       status: 'failed',
     })
   })
+
+  it('scrubs nested objects and arrays the same way', async () => {
+    const a = await load()
+    a.trackEvent('Backup', 'Start', {
+      source: { repository_name: 'nas', path: '/srv/data', kind: 'local' },
+      paths: ['/etc', 'relative'],
+    })
+    vi.advanceTimersByTime(5000)
+    const [event] = sent()
+    expect(event.props).toEqual({
+      source: {
+        repository_name: a.anonymizeEntityName('nas'),
+        path: a.anonymizeEntityName('/srv/data'),
+        kind: 'local',
+      },
+      paths: [a.anonymizeEntityName('/etc'), 'relative'],
+    })
+  })
 })
 
 describe('analytics gating', () => {
@@ -168,6 +186,37 @@ describe('analytics gating', () => {
     await a.loadUserPreference()
     vi.advanceTimersByTime(5000)
     expect(sent().map((e) => e.name)).toEqual(['pageview'])
+  })
+
+  it('keeps the path and time of each page view made while preferences load', async () => {
+    vi.resetModules()
+    prefs.value = { analytics_enabled: true, analytics_instance_key: KEY }
+    localStorage.setItem('access_token', 'token')
+    const a = await import('../analytics')
+    window.history.pushState({}, '', '/dashboard')
+    a.trackPageView()
+    const firstAt = new Date().toISOString()
+    vi.advanceTimersByTime(1000)
+    window.history.pushState({}, '', '/repositories')
+    a.trackPageView()
+    vi.advanceTimersByTime(1000)
+    window.history.pushState({}, '', '/settings')
+    await a.loadUserPreference()
+    vi.advanceTimersByTime(5000)
+    expect(sent().map((e) => [e.name, e.path])).toEqual([
+      ['pageview', '/dashboard'],
+      ['pageview', '/repositories'],
+    ])
+    expect(sent()[0].occurred_at).toBe(firstAt)
+  })
+
+  it('never replays a page view made while analytics was off after opting back in', async () => {
+    const a = await load({ analytics_enabled: false })
+    a.trackPageView()
+    prefs.value = { ...prefs.value, analytics_enabled: true }
+    await a.resetOptOutCache()
+    vi.advanceTimersByTime(5000)
+    expect(globalThis.fetch).not.toHaveBeenCalled()
   })
 
   it('drops the early page view when preferences say analytics is off', async () => {

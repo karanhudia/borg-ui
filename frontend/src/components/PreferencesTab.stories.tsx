@@ -6,6 +6,16 @@ import { authAPI, settingsAPI } from '../services/api'
 
 // The analytics section is the toggle and its description only; it no longer
 // links to the retired public Umami dashboard.
+const preferences = (analyticsEnabled: boolean) => ({
+  success: true,
+  preferences: {
+    analytics_enabled: analyticsEnabled,
+    analytics_consent_given: true,
+    analytics_instance_key: 'a'.repeat(64),
+    analytics_user_key: 'b'.repeat(64),
+  },
+})
+
 function createMockQueryClient(analyticsEnabled: boolean) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -13,15 +23,7 @@ function createMockQueryClient(analyticsEnabled: boolean) {
       mutations: { retry: false },
     },
   })
-  queryClient.setQueryData(['preferences'], {
-    success: true,
-    preferences: {
-      analytics_enabled: analyticsEnabled,
-      analytics_consent_given: true,
-      analytics_instance_key: 'a'.repeat(64),
-      analytics_user_key: 'b'.repeat(64),
-    },
-  })
+  queryClient.setQueryData(['preferences'], preferences(analyticsEnabled))
   return queryClient
 }
 
@@ -31,18 +33,27 @@ const meta = {
   parameters: {
     layout: 'fullscreen',
   },
-  // Flipping the switch saves and then reloads the analytics preference. Stub both
-  // calls for these stories so they never reach a backend, and restore them after.
+  // Flipping the switch saves, refetches the preferences and reloads the analytics
+  // preference. Stub those calls for these stories so they never reach a backend (the
+  // refetch returns what was saved), and restore them after.
   beforeEach: () => {
-    const { updatePreferences } = settingsAPI
+    const { getPreferences, updatePreferences } = settingsAPI
     const { getAuthConfig } = authAPI
-    settingsAPI.updatePreferences = async () =>
-      ({ data: { success: true } }) as Awaited<ReturnType<typeof settingsAPI.updatePreferences>>
+    let saved = true
+    settingsAPI.getPreferences = async () =>
+      ({ data: preferences(saved) }) as Awaited<ReturnType<typeof settingsAPI.getPreferences>>
+    settingsAPI.updatePreferences = async (update) => {
+      saved = Boolean(update.analytics_enabled)
+      return { data: { success: true } } as Awaited<
+        ReturnType<typeof settingsAPI.updatePreferences>
+      >
+    }
     authAPI.getAuthConfig = async () =>
       ({ data: { proxy_auth_enabled: false, insecure_no_auth_enabled: false } }) as Awaited<
         ReturnType<typeof authAPI.getAuthConfig>
       >
     return () => {
+      settingsAPI.getPreferences = getPreferences
       settingsAPI.updatePreferences = updatePreferences
       authAPI.getAuthConfig = getAuthConfig
     }
