@@ -442,7 +442,9 @@ describe('offset-less backend datetimes', () => {
     process.env.TZ = 'America/New_York'
   })
   afterEach(() => {
-    process.env.TZ = originalTz
+    // assigning undefined would store the string "undefined"
+    if (originalTz === undefined) delete process.env.TZ
+    else process.env.TZ = originalTz
   })
 
   const naive = '2026-09-28T02:01:47'
