@@ -3,6 +3,7 @@ import { Box, Stack, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 
 import QuickStartCustomize from '../QuickStartCustomize'
+import { agentLabel, useManagedAgent } from '../quickStartAgent'
 import { useSshConnection } from '../quickStartSsh'
 import type { QuickStartAnswers, QuickStartSettingsChange } from '../quickStartState'
 
@@ -49,8 +50,13 @@ export default function QuickStartReviewStep({
   const destinationConnection = useSshConnection(
     answers.destinationKind === 'ssh' ? answers.destinationConnectionId : ''
   )
+  const agent = useManagedAgent(answers.sourceKind === 'agent' ? answers.sourceAgentId : '')
   const machine = (connection?: { username: string; host: string }) =>
-    connection ? `${connection.username}@${connection.host}` : t('quickStart.review.thisServer')
+    connection
+      ? `${connection.username}@${connection.host}`
+      : agent
+        ? agentLabel(agent)
+        : t('quickStart.review.thisServer')
   const keep = (
     [
       ['keepHourly', prune.keepHourly],

@@ -41,6 +41,14 @@ const nas: SshConnectionSummary = {
   status: 'connected',
 }
 
+const laptop = {
+  id: 7,
+  name: 'alex-laptop',
+  hostname: 'alex-laptop.local',
+  status: 'online',
+  default_path: '/home/alex',
+}
+
 const NO_CONNECTIONS: SshConnectionSummary[] = []
 
 function StepHarness({
@@ -57,6 +65,7 @@ function StepHarness({
   useEffect(() => {
     const mock = new MockAdapter(api)
     mock.onGet('/ssh-keys/connections').reply(200, { connections })
+    mock.onGet('/managed-machines/agents').reply(200, [laptop])
     setReady(true)
     return () => mock.restore()
   }, [connections])
@@ -120,6 +129,18 @@ export const ConnectExistingMachine: Story = {
   },
 }
 
+export const ConnectAgent: Story = {
+  args: {
+    step: QuickStartConnectStep,
+    initial: {
+      ...createInitialQuickStartAnswers(),
+      sourceKind: 'agent',
+      destinationKind: 'agent',
+      sourceAgentId: 7,
+    },
+  },
+}
+
 export const FoldersEmpty: Story = {
   args: { step: QuickStartFoldersStep, initial: createInitialQuickStartAnswers() },
 }
@@ -142,6 +163,20 @@ export const DestinationSsh: Story = {
       destinationPath: '/volume1/borg-backups/alex',
     },
     connections: [nas],
+  },
+}
+
+export const DestinationAgent: Story = {
+  args: {
+    step: QuickStartDestinationStep,
+    initial: {
+      ...filled,
+      sourceKind: 'agent',
+      sourceAgentId: 7,
+      sourcePaths: ['/home/alex/Documents'],
+      destinationKind: 'agent',
+      destinationPath: '/home/alex/borg-backups/documents',
+    },
   },
 }
 

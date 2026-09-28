@@ -23,6 +23,8 @@ export interface QuickStartAnswers {
   sourceKind: QuickStartSourceKind
   /** SSH connection the files are pulled from (sourceKind 'ssh'). */
   sourceConnectionId: number | ''
+  /** Managed agent the files live on (sourceKind 'agent'); its repository lives there too. */
+  sourceAgentId: number | ''
   sourcePaths: string[]
   destinationKind: QuickStartDestinationKind
   /** SSH connection the repository lives on (destinationKind 'ssh'). */
@@ -50,6 +52,7 @@ export function createInitialQuickStartAnswers(): QuickStartAnswers {
   return {
     sourceKind: 'server',
     sourceConnectionId: '',
+    sourceAgentId: '',
     sourcePaths: [],
     destinationKind: 'server',
     destinationConnectionId: '',
@@ -142,7 +145,8 @@ function sameMachine(answers: QuickStartAnswers): boolean {
       answers.sourceConnectionId === answers.destinationConnectionId
     )
   }
-  return false
+  // The route planner only allows an agent source into a repository on the same agent.
+  return answers.sourceKind === 'agent'
 }
 
 // A repository inside one of the folders it backs up would back itself up.
@@ -158,6 +162,7 @@ export function isStepValid(step: QuickStartStepKey, answers: QuickStartAnswers)
     case 'review':
       return true
     case 'connect':
+      if (answers.sourceKind === 'agent') return answers.sourceAgentId !== ''
       return answers.sourceKind !== 'ssh' || answers.sourceConnectionId !== ''
     case 'folders':
       return answers.sourcePaths.some((path) => path.trim())

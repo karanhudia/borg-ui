@@ -45,7 +45,9 @@ Steps adapt to the answers. The indicator only shows steps that apply.
 
 1. **What**: "Files on this server" or "Files on another computer". For
    another computer, a second choice: "This server can SSH into it" (pull)
-   or "Install the Borg UI agent on it" (Pro, `PlanGate` for Community).
+   or "Install the Borg UI agent on it" (Pro; for Community the card is
+   shown locked with a "requires Pro" note, the same pattern as the
+   repository wizard's agent location).
    A "Not sure?" note explains the difference in two sentences.
 2. **Connect** (another computer only)
    - SSH: pick an existing connection (`SshConnectionSelect`) or add one
@@ -146,8 +148,10 @@ Frontend only. No new backend endpoint and no migration.
   the permission the Repositories page uses for its create button. The SSH connect sub-form needs SSH management permission;
   without it, only existing connections can be picked.
 - Managed agents and Borg 2 are behind the existing feature gates
-  (`managed_agents`, `borg_v2`). Community users see the agent option with
-  `PlanGate`, not hidden.
+  (`managed_agents`, `borg_v2`). Community users see the agent option
+  locked with a "requires Pro" note, not hidden. Adding a machine (SSH or
+  agent) needs `settings.ssh.manage`, the permission the Remote Machines and
+  Managed Agents pages use.
 
 ## Error handling
 

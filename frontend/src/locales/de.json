@@ -6604,7 +6604,10 @@
       "serverDesc": "Ordner auf dem Rechner, auf dem Borg UI läuft, zum Beispiel dein Home-Ordner, Dokumente oder App-Daten.",
       "ssh": "Dateien auf einem anderen Rechner",
       "sshDesc": "Ein Server, NAS oder PC, den dieser Server per SSH erreicht. Borg UI holt die Dateien von dort.",
-      "notSure": "Unsicher? Wähle \"Dateien auf diesem Server\", wenn die Daten dort liegen, wo Borg UI läuft. Wähle \"anderen Rechner\", wenn sie woanders liegen und du dich dort mit Benutzername und Passwort anmelden kannst."
+      "notSure": "Unsicher? Wähle \"Dateien auf diesem Server\", wenn die Daten dort liegen, wo Borg UI läuft. Wähle \"anderen Rechner\", wenn sie woanders liegen und du dich dort mit Benutzername und Passwort anmelden kannst.",
+      "agent": "Anderer Rechner mit dem Borg-UI-Agenten",
+      "agentDesc": "Installiere einen kleinen Agenten auf einem Laptop, Desktop oder Server. Er verbindet sich von sich aus mit Borg UI, funktioniert also auch hinter einer Firewall, und sichert auf seine eigene Festplatte.",
+      "agentPro": "Erfordert einen Pro- oder Enterprise-Plan."
     },
     "folders": {
       "title": "Wähle die Ordner zum Sichern",
@@ -6625,7 +6628,9 @@
       "ssh": "Ein anderer Server per SSH",
       "sshDesc": "Ein NAS oder entfernter Server. Dort muss Borg installiert sein.",
       "sshLabel": "Backup-Server",
-      "remotePathHint": "Ein Ordner auf {{machine}}. Borg UI legt ihn an, falls er nicht existiert."
+      "remotePathHint": "Ein Ordner auf {{machine}}. Borg UI legt ihn an, falls er nicht existiert.",
+      "agent": "Eine Festplatte auf {{machine}}",
+      "agentDesc": "Der Agent sichert in einen Ordner auf demselben Rechner, zum Beispiel auf eine zweite Festplatte oder eine eingebundene NAS-Freigabe."
     },
     "protect": {
       "title": "Benenne und schütze deine Backups",
@@ -6745,6 +6750,13 @@
       "connecting": "Verbinde…",
       "connectFailed": "Verbindung fehlgeschlagen: {{reason}}",
       "noConnectionsNoPermission": "Es sind noch keine Rechner eingerichtet. Bitte eine Admin-Person, unter Remote-Maschinen einen hinzuzufügen."
+    },
+    "agent": {
+      "title": "Wähle den Rechner",
+      "hint": "Wähle einen Rechner, auf dem der Borg-UI-Agent schon läuft, oder füge einen hinzu. Beim Hinzufügen erscheint ein Befehl für diesen Rechner; der Schnellstart geht weiter, sobald er verbunden ist.",
+      "label": "Rechner",
+      "add": "Rechner hinzufügen",
+      "noAgentsNoPermission": "Auf noch keinem Rechner läuft der Agent. Bitte eine Admin-Person, unter Managed Agents einen hinzuzufügen."
     }
   }
 }

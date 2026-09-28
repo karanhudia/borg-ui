@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 
 import PathSelectorField from '../../shared/PathSelectorField'
 import type { QuickStartStepProps } from '../quickStartState'
+import { agentLabel, useManagedAgent } from '../quickStartAgent'
 import { sshBrowseConfig, useSshConnection } from '../quickStartSsh'
 
 export default function QuickStartFoldersStep({ answers, onChange }: QuickStartStepProps) {
@@ -12,6 +13,8 @@ export default function QuickStartFoldersStep({ answers, onChange }: QuickStartS
   const [draft, setDraft] = useState('')
   const remote = answers.sourceKind === 'ssh'
   const connection = useSshConnection(remote ? answers.sourceConnectionId : '')
+  const onAgent = answers.sourceKind === 'agent'
+  const agent = useManagedAgent(onAgent ? answers.sourceAgentId : '')
 
   const addPaths = (paths: string[]) => {
     const next = [...answers.sourcePaths]
@@ -33,7 +36,9 @@ export default function QuickStartFoldersStep({ answers, onChange }: QuickStartS
             ? t('quickStart.folders.remoteHint', {
                 machine: `${connection.username}@${connection.host}`,
               })
-            : t('quickStart.folders.hint')}
+            : onAgent && agent
+              ? t('quickStart.folders.remoteHint', { machine: agentLabel(agent) })
+              : t('quickStart.folders.hint')}
         </Typography>
       </Box>
 
@@ -42,10 +47,13 @@ export default function QuickStartFoldersStep({ answers, onChange }: QuickStartS
           label={t('quickStart.folders.pathLabel')}
           value={draft}
           onChange={setDraft}
-          placeholder={remote ? '/home' : '/local/home'}
+          placeholder={remote || onAgent ? '/home' : '/local/home'}
           multiSelect
-          connectionType={remote ? 'ssh' : 'local'}
+          connectionType={remote ? 'ssh' : onAgent ? 'agent' : 'local'}
           sshConfig={remote ? sshBrowseConfig(connection) : undefined}
+          agentId={agent?.id}
+          agentName={agent ? agentLabel(agent) : undefined}
+          agentDefaultPath={agent?.default_path}
           initialPath={remote ? connection?.default_path || '/' : undefined}
           showSshMountPoints={false}
           onSelectPaths={addPaths}

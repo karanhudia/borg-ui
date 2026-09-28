@@ -41,6 +41,14 @@ export function buildRepositoryPayload(answers: QuickStartAnswers): RepositoryDa
     exclude_patterns: [],
     custom_flags: null,
     mode: 'full',
+    ...(answers.destinationKind === 'agent' && answers.sourceAgentId !== ''
+      ? {
+          executor_type: 'agent' as const,
+          execution_target: 'agent' as const,
+          storage_backend: 'agent_local' as const,
+          agent_machine_id: answers.sourceAgentId,
+        }
+      : {}),
     ...(answers.destinationKind === 'ssh' && answers.destinationConnectionId !== ''
       ? {
           connection_id: answers.destinationConnectionId,
@@ -58,6 +66,14 @@ function sourceLocation(answers: QuickStartAnswers, paths: string[]): SourceLoca
       source_type: 'remote',
       source_ssh_connection_id: answers.sourceConnectionId,
       agent_machine_id: null,
+      paths,
+    }
+  }
+  if (answers.sourceKind === 'agent' && answers.sourceAgentId !== '') {
+    return {
+      source_type: 'agent',
+      source_ssh_connection_id: null,
+      agent_machine_id: answers.sourceAgentId,
       paths,
     }
   }

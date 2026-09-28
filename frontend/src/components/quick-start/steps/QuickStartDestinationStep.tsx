@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { Alert, Stack, Typography } from '@mui/material'
-import { HardDrive, Server } from 'lucide-react'
+import { HardDrive, Laptop, Server } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import PathSelectorField from '../../shared/PathSelectorField'
 import QuickStartChoiceCard from '../QuickStartChoiceCard'
 import QuickStartSshConnect from '../QuickStartSshConnect'
+import { agentLabel, useManagedAgent } from '../quickStartAgent'
 import { sshBrowseConfig, useSshConnection } from '../quickStartSsh'
 import {
   destinationInsideSource,
@@ -25,6 +26,8 @@ export default function QuickStartDestinationStep({
   const remote = answers.destinationKind === 'ssh'
   const connection = useSshConnection(remote ? answers.destinationConnectionId : '')
   const name = answers.name || 'backup'
+  const onAgent = answers.destinationKind === 'agent'
+  const agent = useManagedAgent(onAgent ? answers.sourceAgentId : '')
 
   // Suggest a path once per chosen connection, after it has loaded: a machine
   // added in this step is not in the list until the refetch lands.
@@ -41,6 +44,49 @@ export default function QuickStartDestinationStep({
       onChange({ destinationPath: suggestedRemoteDestinationPath(name, connection) })
     }
   }, [connection, answers.destinationPath, name, onChange])
+
+  if (onAgent) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="h6" component="h3">
+          {t('quickStart.destination.title')}
+        </Typography>
+        <Stack spacing={1.5} role="radiogroup" aria-label={t('quickStart.destination.title')}>
+          <QuickStartChoiceCard
+            icon={<Laptop size={20} />}
+            title={t('quickStart.destination.agent', {
+              machine: agent ? agentLabel(agent) : '',
+            })}
+            description={t('quickStart.destination.agentDesc')}
+            selected
+            onSelect={() => {}}
+          />
+        </Stack>
+        <PathSelectorField
+          label={t('quickStart.destination.pathLabel')}
+          value={answers.destinationPath}
+          onChange={(destinationPath) => onChange({ destinationPath })}
+          placeholder="/var/backups/borg-backups/home"
+          required
+          error={inside}
+          helperText={
+            inside
+              ? t('quickStart.destination.insideSource')
+              : t('quickStart.destination.remotePathHint', {
+                  machine: agent ? agentLabel(agent) : '',
+                })
+          }
+          connectionType="agent"
+          agentId={agent?.id}
+          agentName={agent ? agentLabel(agent) : undefined}
+          agentDefaultPath={agent?.default_path}
+        />
+        <Alert severity="info" variant="outlined">
+          {t('quickStart.destination.offsiteTip')}
+        </Alert>
+      </Stack>
+    )
+  }
 
   return (
     <Stack spacing={2}>

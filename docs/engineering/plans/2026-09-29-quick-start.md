@@ -11,7 +11,7 @@
 | 2 | `feat/quick-start-2-core` | dialog, state, actions, runner, local to local end to end | done |
 | 3 | `feat/quick-start-3-entry` | sidebar button, first-run auto-open, empty-state actions, user docs | done |
 | 4 | `feat/quick-start-4-ssh` | SSH destination and SSH pull source with inline key deploy | done |
-| 5 | `feat/quick-start-5-agent` | managed agent source (Pro) | not started |
+| 5 | `feat/quick-start-5-agent` | managed agent source (Pro) | done |
 
 Each phase: TDD for the pure modules, stories for every new component, all
 four locales (en, de, es, it) for every new key, `npm run lint`,
@@ -81,7 +81,7 @@ clean, then push and PR.
 
 ## Phase 5: agent (Pro)
 
-1. `sourceKind: 'agent'` behind `managed_agents` with `PlanGate`.
+1. `sourceKind: 'agent'` behind `managed_agents`; locked card with a Pro note for Community.
 2. `QuickStartAgentConnect`: `ManagedAgentSelect` plus "Add a new computer"
    opening `AddAgentDialog`; select the agent once it connects.
 3. Destination fixed to a disk on that agent (`storage_backend:
