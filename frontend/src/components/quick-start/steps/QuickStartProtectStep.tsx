@@ -32,8 +32,11 @@ function downloadPassphrase(answers: QuickStartAnswers) {
   const link = document.createElement('a')
   link.href = url
   link.download = `${answers.name.trim() || 'borg'}-passphrase.txt`
+  document.body.appendChild(link)
   link.click()
-  URL.revokeObjectURL(url)
+  link.remove()
+  // Revoking in the same task can cancel the download in some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 export default function QuickStartProtectStep({ answers, onChange }: QuickStartStepProps) {

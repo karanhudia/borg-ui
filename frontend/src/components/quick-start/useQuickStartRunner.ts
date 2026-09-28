@@ -115,9 +115,8 @@ export function useQuickStartRunner() {
   }, [])
 
   // Back to the form after a failure. What already exists is kept, so the next
-  // run only creates the rest. ponytail: edits to an already created object
-  // (e.g. the repository path) are not applied; recreate from its own page.
-  const edit = useCallback(() => setState(idle), [])
+  // run only creates the rest; the dialog tells the user those answers are final.
+  const edit = useCallback(() => setState({ ...idle, results: resultsRef.current }), [])
 
   return { ...state, run, reset, edit }
 }

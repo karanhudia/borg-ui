@@ -69,6 +69,11 @@ describe('useQuickStartRunner', () => {
     expect(result.current.error).toBe('Plan name already exists')
     expect(result.current.running).toBe(false)
 
+    // Editing answers keeps what already exists.
+    act(() => result.current.edit())
+    expect(result.current.actions).toEqual([])
+    expect(result.current.results).toEqual({ repositoryId: 4 })
+
     await act(async () => {
       await result.current.run(answers)
     })

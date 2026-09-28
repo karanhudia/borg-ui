@@ -6714,6 +6714,7 @@
         "done": "fertig",
         "failed": "fehlgeschlagen"
       }
-    }
+    },
+    "repositoryAlreadyCreated": "Das Repository wurde bereits erstellt. Änderungen an Speicherort, Passphrase oder Verschlüsselung werden nicht übernommen. Name, Ordner und Zeitplan des Plans kannst du weiterhin ändern."
   }
 }

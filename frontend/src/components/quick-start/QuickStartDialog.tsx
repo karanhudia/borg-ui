@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Button, DialogActions } from '@mui/material'
+import { Alert, Button, DialogActions, Stack } from '@mui/material'
 import {
   CalendarClock,
   Compass,
@@ -233,6 +233,13 @@ export default function QuickStartDialog({ open, onClose, initialAnswers }: Quic
           error={runner.error}
           finished={finished}
         />
+      ) : runner.results.repositoryId ? (
+        <Stack spacing={2}>
+          <Alert severity="info" variant="outlined">
+            {t('quickStart.repositoryAlreadyCreated')}
+          </Alert>
+          {renderStep()}
+        </Stack>
       ) : (
         renderStep()
       )}

@@ -6714,6 +6714,7 @@
         "done": "fatto",
         "failed": "non riuscito"
       }
-    }
+    },
+    "repositoryAlreadyCreated": "Il repository è già stato creato. Le modifiche a posizione, passphrase o cifratura non verranno applicate. Puoi ancora cambiare nome del piano, cartelle e pianificazione."
   }
 }

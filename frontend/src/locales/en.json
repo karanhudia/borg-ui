@@ -6714,6 +6714,7 @@
         "done": "done",
         "failed": "failed"
       }
-    }
+    },
+    "repositoryAlreadyCreated": "The repository was already created. Changes to its location, passphrase or encryption will not be applied. You can still change the plan name, folders and schedule."
   }
 }
