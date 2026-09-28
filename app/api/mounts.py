@@ -11,9 +11,9 @@ from pydantic import BaseModel
 import structlog
 
 from app.database.database import get_db
-from app.database.models import User
+from app.database.models import User, Repository
 from app.core.authorization import authorize_request
-from app.core.security import get_current_user
+from app.core.security import get_current_user, check_repo_access
 from app.services.mount_service import mount_service, MountType, MountUnavailableError
 from app.utils.datetime_utils import serialize_datetime
 
@@ -21,6 +21,30 @@ logger = structlog.get_logger()
 router = APIRouter(
     prefix="/api/mounts", tags=["mounts"], dependencies=[Depends(authorize_request)]
 )
+
+
+def _require_mount_repo_access(
+    db: Session, user: User, repository_id: Optional[int], role: str
+) -> None:
+    """Gate a mount operation on the repository it targets.
+
+    A mount exposes an archive's real file contents through the mount point, so
+    it needs the same repo-scoped authorization as the archive endpoints. A
+    mount with no repository (should not happen for Borg archives) is admin-only.
+    """
+    if repository_id is None:
+        if user.role != "admin":
+            raise HTTPException(
+                status_code=403,
+                detail={"key": "backend.errors.auth.notEnoughPermissions"},
+            )
+        return
+    repository = db.query(Repository).filter(Repository.id == repository_id).first()
+    if not repository:
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"}
+        )
+    check_repo_access(db, user, repository, role)
 
 
 # Request/Response models
@@ -96,6 +120,11 @@ async def mount_borg_archive(
         - Use the unmount endpoint to cleanup when done
         - Mount points are automatically cleaned up on container restart
     """
+    # Mounting exposes the archive's real file contents, so require operator on
+    # the target repository (not just the global mount policy). Kept outside the
+    # try/except below so the 403 is not swallowed into a 500.
+    _require_mount_repo_access(db, current_user, request.repository_id, "operator")
+
     try:
         logger.info(
             "User requesting Borg mount",
@@ -164,7 +193,10 @@ async def mount_borg_archive(
 
 @router.post("/borg/unmount/{mount_id}")
 async def unmount_borg_archive(
-    mount_id: str, force: bool = False, current_user: User = Depends(get_current_user)
+    mount_id: str,
+    force: bool = False,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     Unmount a Borg archive
@@ -195,6 +227,11 @@ async def unmount_borg_archive(
                     "params": {"mountId": mount_id},
                 },
             )
+
+        # Unmounting another user's mount needs operator on its repository.
+        _require_mount_repo_access(
+            db, current_user, mount_info.repository_id, "operator"
+        )
 
         # Only allow unmounting Borg mounts (not backup job SSHFS mounts)
         if mount_info.mount_type != MountType.BORG_ARCHIVE:
@@ -258,12 +295,22 @@ async def list_mounts(
             username=current_user.username,
         )
 
-        from app.database.models import Repository
-
         mounts = mount_service.list_mounts()
 
         # Filter to only user-facing mounts (Borg archives, not backup job SSHFS mounts)
-        user_mounts = [m for m in mounts if m.mount_type == MountType.BORG_ARCHIVE]
+        borg_mounts = [m for m in mounts if m.mount_type == MountType.BORG_ARCHIVE]
+
+        # Only expose mounts on repositories the user may view. Mounts are
+        # global (shared across users), so without this filter any user sees
+        # every mount's repo, archive, mount point and job id.
+        def _may_view(m) -> bool:
+            try:
+                _require_mount_repo_access(db, current_user, m.repository_id, "viewer")
+                return True
+            except HTTPException:
+                return False
+
+        user_mounts = [m for m in borg_mounts if _may_view(m)]
 
         # Fetch repository names
         repo_ids = [m.repository_id for m in user_mounts if m.repository_id]
@@ -307,7 +354,11 @@ async def list_mounts(
 
 
 @router.get("/{mount_id}")
-async def get_mount_info(mount_id: str, current_user: User = Depends(get_current_user)):
+async def get_mount_info(
+    mount_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     Get information about a specific mount
 
@@ -338,6 +389,8 @@ async def get_mount_info(mount_id: str, current_user: User = Depends(get_current
                     "params": {"mountId": mount_id},
                 },
             )
+
+        _require_mount_repo_access(db, current_user, mount_info.repository_id, "viewer")
 
         return serialize_mount(mount_info)
 

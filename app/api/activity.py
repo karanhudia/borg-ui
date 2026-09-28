@@ -303,6 +303,28 @@ def _get_operation_or_404(
     return op
 
 
+def _require_job_repo_access(
+    db: Session, current_user: Any, repository_id: Optional[int]
+) -> None:
+    """Gate a repo-scoped activity job's logs on viewer access.
+
+    Script and rclone job logs carry hook stdout/stderr and paths that can
+    include secrets. A job with no repository (``repository_id`` None) is
+    treated as global, matching the list endpoint's filter. A job whose
+    repository can no longer be resolved fails closed for non-admins.
+    """
+    if current_user is None or repository_id is None:
+        return
+    repo = db.get(Repository, repository_id)
+    if repo is not None:
+        check_repo_access(db, current_user, repo, "viewer")
+    elif current_user.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail={"key": "backend.errors.auth.notEnoughPermissions"},
+        )
+
+
 def _operation_error_text(op: Operation) -> str:
     """What a reader gets when an operation failed before writing a line: an
     index step that died on a locked repository never opens a log file, and
@@ -1354,6 +1376,7 @@ async def get_job_logs(
                     "params": {"jobType": job_type},
                 },
             )
+        _require_job_repo_access(db, current_user, execution.repository_id)
         _ensure_activity_logs_visible(job_type, execution, db)
         # While an agent hook runs, stream its live agent_job_logs (the terminal
         # stdout/stderr are only captured at completion); afterwards serve the
@@ -1374,6 +1397,7 @@ async def get_job_logs(
                     "params": {"jobType": job_type},
                 },
             )
+        _require_job_repo_access(db, current_user, getattr(job, "repository_id", None))
         _ensure_activity_logs_visible(job_type, job, db)
         log_text = _format_rclone_job_logs(job)
         if log_text:
@@ -1643,6 +1667,7 @@ async def download_job_logs(
                     "params": {"jobType": job_type},
                 },
             )
+        _require_job_repo_access(db, current_user, execution.repository_id)
         if execution.status == "running":
             raise HTTPException(
                 status_code=400,
@@ -1669,6 +1694,7 @@ async def download_job_logs(
                     "params": {"jobType": job_type},
                 },
             )
+        _require_job_repo_access(db, current_user, getattr(job, "repository_id", None))
         if job.status == "running":
             raise HTTPException(
                 status_code=400,
