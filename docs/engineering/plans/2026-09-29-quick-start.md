@@ -53,11 +53,13 @@ clean, then push and PR.
 
 ## Phase 3: entry points and docs
 
-1. Sidebar **New backup** button in `AppSidebar` for users who can create
-   plans; opens `QuickStartDialog` via a small context
+1. Sidebar **New backup** button in `AppSidebar` for users with
+   `repositories.manage_all` (the permission the Repositories page already
+   uses for its create button); opens `QuickStartDialog` via a small context
    (`QuickStartProvider` with `openQuickStart()`), mounted in `Layout`.
-2. First-run auto-open on the dashboard: zero repositories and zero plans,
-   not dismissed in localStorage. Dismissal written on close.
+2. First-run auto-open on the dashboard: the user has
+   `repositories.manage_all`, there are zero repositories and zero plans, and
+   it was not dismissed in localStorage. Dismissal written on close.
 3. Quick start action on the Backup Plans and Repositories empty states.
 4. User docs: new `docs/quick-start.md`, `docs/navigation.md` mention, and
    index link.

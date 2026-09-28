@@ -127,8 +127,8 @@ Frontend only. No new backend endpoint and no migration.
 ## Entry points
 
 - A **New backup** button at the top of the sidebar navigation (visible to
-  users who can create plans). Opens the dialog anywhere in the app.
-- First run: when the user can create plans and there are zero repositories
+  users who can create repositories, `repositories.manage_all`). Opens the dialog anywhere in the app.
+- First run: when the user has `repositories.manage_all` and there are zero repositories
   and zero backup plans, the dialog opens once on the dashboard. Closing it
   records `borg-ui.quickStart.autoOpenDismissed` in localStorage so it does
   not reopen in that browser. Per browser is deliberate; it needs no
@@ -138,8 +138,8 @@ Frontend only. No new backend endpoint and no migration.
 
 ## Permissions and plans
 
-- The dialog needs the same permissions as the plan wizard (operator-level
-  plan create). The SSH connect sub-form needs SSH management permission;
+- The dialog creates a repository, so it needs `repositories.manage_all`,
+  the permission the Repositories page uses for its create button. The SSH connect sub-form needs SSH management permission;
   without it, only existing connections can be picked.
 - Managed agents and Borg 2 are behind the existing feature gates
   (`managed_agents`, `borg_v2`). Community users see the agent option with
