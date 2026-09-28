@@ -2237,7 +2237,22 @@ class BackupPlanExecutionService:
         context: PlanRunContext,
         run_id: int,
     ) -> str:
-        maintenance_ok = True
+        # The first failed step's label outlives later steps, so a run with
+        # a failed prune does not end up reading "maintenance_completed".
+        failed_status = None
+        check_ok = True
+        warned = False
+
+        def record_step(
+            kind: str, job: Operation, succeeded: Any = ("completed",)
+        ) -> bool:
+            nonlocal failed_status
+            ok = job.status in succeeded
+            if not ok:
+                failed_status = failed_status or f"{kind}_failed"
+            backup_job.maintenance_status = failed_status or f"{kind}_completed"
+            db.commit()
+            return ok
 
         if context.run_prune_after:
             if self._is_run_cancelled(run_id):
@@ -2283,12 +2298,7 @@ class BackupPlanExecutionService:
             )
             if self._is_run_cancelled(run_id):
                 return "cancelled"
-            if prune_job.status == "completed":
-                backup_job.maintenance_status = "prune_completed"
-            else:
-                backup_job.maintenance_status = "prune_failed"
-                maintenance_ok = False
-            db.commit()
+            record_step("prune", prune_job)
 
         if context.run_compact_after:
             if self._is_run_cancelled(run_id):
@@ -2317,12 +2327,7 @@ class BackupPlanExecutionService:
             )
             if self._is_run_cancelled(run_id):
                 return "cancelled"
-            if compact_job.status == "completed":
-                backup_job.maintenance_status = "compact_completed"
-            else:
-                backup_job.maintenance_status = "compact_failed"
-                maintenance_ok = False
-            db.commit()
+            record_step("compact", compact_job)
 
         if context.run_check_after:
             if self._is_run_cancelled(run_id):
@@ -2351,18 +2356,10 @@ class BackupPlanExecutionService:
             )
             if self._is_run_cancelled(run_id):
                 return "cancelled"
-            if check_job.status == "completed":
-                backup_job.maintenance_status = "check_completed"
-            else:
-                backup_job.maintenance_status = "check_failed"
-                maintenance_ok = False
-            db.commit()
+            check_ok = record_step("check", check_job)
 
         # Last, so a repository the check just failed is not restore-checked.
-        if (
-            context.run_restore_check_after
-            and backup_job.maintenance_status != "check_failed"
-        ):
+        if context.run_restore_check_after and check_ok:
             if self._is_run_cancelled(run_id):
                 return "cancelled"
             restore_check_job = start_inline_maintenance(
@@ -2395,24 +2392,14 @@ class BackupPlanExecutionService:
             )
             if self._is_run_cancelled(run_id):
                 return "cancelled"
-            if restore_check_job.status in SUCCESS_BACKUP_STATUSES:
-                backup_job.maintenance_status = "restore_check_completed"
-                # borg's warning exit still restored; the run says so
-                if restore_check_job.status == "completed_with_warnings":
-                    maintenance_ok = False
-            else:
-                backup_job.maintenance_status = "restore_check_failed"
-                maintenance_ok = False
-            db.commit()
+            # borg's warning exit still restored; the run says so
+            warned = restore_check_job.status == "completed_with_warnings"
+            record_step("restore_check", restore_check_job, SUCCESS_BACKUP_STATUSES)
 
-        if (
-            backup_job.maintenance_status
-            and "failed" not in backup_job.maintenance_status
-        ):
+        if backup_job.maintenance_status and not failed_status:
             backup_job.maintenance_status = "maintenance_completed"
             db.commit()
-
-        return "completed" if maintenance_ok else "completed_with_warnings"
+        return "completed_with_warnings" if failed_status or warned else "completed"
 
     async def _restore_check_until_cancelled(
         self, db: Session, repo: Repository, operation_id: int, run_id: int

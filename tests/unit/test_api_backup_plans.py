@@ -5793,6 +5793,86 @@ class TestBackupPlanRoutes:
         assert compact_job.params["scheduled_compact"] is False
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("check_status", ["completed", "failed"])
+    async def test_earlier_maintenance_failure_survives_later_steps(
+        self, test_db, check_status
+    ):
+        """A failed prune keeps its label through later steps, and a failed
+        check still skips the restore check under that earlier label."""
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        _plan, run = _create_execution_plan(
+            test_db,
+            [repo],
+            run_prune_after=True,
+            run_compact_after=True,
+            run_check_after=True,
+            run_restore_check_after=True,
+        )
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            job = resolve_backup_job(db, job_id)
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        restore_checked = []
+
+        async def fake_restore_check(job_id, repository_id):
+            restore_checked.append(repository_id)
+            finish(job_id, "restore_check", "completed")
+
+        def finish(job_id, kind, status):
+            op = test_db.query(Operation).filter_by(id=job_id, kind=kind).one()
+            op.status = status
+            op.completed_at = datetime.utcnow()
+            test_db.commit()
+
+        class FakeBorgRouter:
+            def __init__(self, repository):
+                self.repository = repository
+
+            async def prune(self, job_id, **kwargs):
+                finish(job_id, "prune", "failed")
+
+            async def compact(self, job_id, **kwargs):
+                finish(job_id, "compact", "completed")
+
+            async def check(self, job_id):
+                finish(job_id, "check", check_status)
+
+        with (
+            patch(
+                "app.services.operations.backup_facade.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.BorgRouter",
+                FakeBorgRouter,
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.restore_check_service"
+                ".execute_restore_check",
+                new=fake_restore_check,
+            ),
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.expire_all()
+        run = test_db.query(BackupPlanRun).filter_by(id=run.id).one()
+        backup_job = BackupJobFacade(
+            test_db,
+            test_db.query(Operation)
+            .filter(
+                Operation.kind == "backup",
+                Operation.backup_plan_run_id == run.id,
+            )
+            .one(),
+        )
+        assert run.status == "completed_with_warnings"
+        assert backup_job.maintenance_status == "prune_failed"
+        assert restore_checked == ([repo.id] if check_status == "completed" else [])
+
+    @pytest.mark.asyncio
     async def test_cancel_after_backup_completion_does_not_start_maintenance(
         self, test_db
     ):
