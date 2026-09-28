@@ -16,6 +16,9 @@ vi.setConfig({ testTimeout: 60000 })
 vi.mock('../../services/api', () => ({
   sshKeysAPI: {
     getSSHConnections: vi.fn(),
+    getSSHKeys: vi.fn(),
+    createSSHKey: vi.fn(),
+    deleteSSHKey: vi.fn(),
   },
   managedAgentsAPI: {
     listAgents: vi.fn(),
@@ -355,6 +358,12 @@ describe('RepositoryWizard', () => {
     vi.clearAllMocks()
     ;(sshKeysAPI.getSSHConnections as Mock).mockResolvedValue({
       data: { connections: mockSshConnections },
+    })
+    ;(sshKeysAPI.getSSHKeys as Mock).mockResolvedValue({
+      data: { ssh_keys: [{ id: 1, name: 'system', key_type: 'ed25519', is_system_key: true }] },
+    })
+    ;(sshKeysAPI.createSSHKey as Mock).mockResolvedValue({
+      data: { ssh_key: { id: 5, name: 'borgbase-sftp', key_type: 'ed25519' } },
     })
     ;(managedAgentsAPI.listAgents as Mock).mockResolvedValue({
       data: mockManagedAgents,
@@ -908,6 +917,20 @@ describe('RepositoryWizard', () => {
       await user.click(within(remoteListbox).getByText('prod-s3'))
       setInputValue(screen.getByLabelText(/Relative Remote Path/i), 'borg-ui/repositories/ssh')
 
+      await user.click(screen.getByRole('button', { name: /Add key/i }))
+      setInputValue(await screen.findByLabelText(/Key name/i), 'borgbase-sftp')
+      setInputValue(screen.getByLabelText(/Private key/i), 'PRIVATE KEY')
+      await user.click(screen.getByRole('button', { name: /Save key/i }))
+      await waitFor(() => {
+        expect(screen.getByRole('combobox', { name: /SSH key for cloud sync/i })).toHaveTextContent(
+          'borgbase-sftp'
+        )
+      })
+      expect(sshKeysAPI.createSSHKey).toHaveBeenCalledWith({
+        name: 'borgbase-sftp',
+        private_key: 'PRIVATE KEY',
+      })
+
       expect(screen.queryByText(/Local Cache Path/i)).not.toBeInTheDocument()
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(() => {
@@ -935,6 +958,7 @@ describe('RepositoryWizard', () => {
           cloud_mirror_enabled: true,
           rclone_remote_id: 10,
           rclone_remote_path: 'borg-ui/repositories/ssh',
+          rclone_sftp_ssh_key_id: 5,
           rclone_remote_path_verified: false,
           rclone_sync_policy: 'after_success',
         })

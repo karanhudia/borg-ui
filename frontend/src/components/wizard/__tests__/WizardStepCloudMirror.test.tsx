@@ -183,8 +183,93 @@ describe('WizardStepCloudMirror', () => {
 
     expect(screen.getByRole('checkbox', { name: /Mirror this repository/i })).not.toBeDisabled()
     expect(
-      screen.getByText(/Borg UI server mounts the SSH repository via SSHFS/i)
+      screen.getByText(/Borg UI server mounts the SSH repository read-only via SSHFS/i)
     ).toBeInTheDocument()
     expect(screen.queryByText(/Local Cache Path/i)).not.toBeInTheDocument()
+  })
+
+  it('lets an SSH mirror pick a separate SFTP key or fall back to the connection key', async () => {
+    const onChange = vi.fn()
+    const onAddSshKey = vi.fn()
+    const user = userEvent.setup()
+
+    render(
+      <WizardStepCloudMirror
+        data={{ ...defaultData, cloudMirrorEnabled: true, rcloneSftpSshKeyId: 8 }}
+        rcloneRemotes={remotes}
+        sftpSshKeys={[
+          { id: 7, name: 'old-key', key_type: 'rsa' },
+          { id: 8, name: 'borgbase-sftp', key_type: 'ed25519' },
+        ]}
+        rcloneStatus={{ available: true, version: 'rclone v1.66.0' }}
+        eligible={true}
+        primaryLocation="ssh"
+        onChange={onChange}
+        onAddSshKey={onAddSshKey}
+      />
+    )
+
+    const select = screen.getByRole('combobox', { name: /SSH key for cloud sync/i })
+    expect(select).toHaveTextContent('borgbase-sftp')
+
+    await user.click(select)
+    await user.click(await screen.findByRole('option', { name: /Same key as the connection/i }))
+    expect(onChange).toHaveBeenLastCalledWith({ rcloneSftpSshKeyId: '' })
+
+    await user.click(select)
+    await user.click(await screen.findByRole('option', { name: /old-key/i }))
+    expect(onChange).toHaveBeenLastCalledWith({ rcloneSftpSshKeyId: 7 })
+
+    await user.click(screen.getByRole('button', { name: /Add key/i }))
+    expect(onAddSshKey).toHaveBeenCalled()
+  })
+
+  it('deletes only the selected extra key', async () => {
+    const onDeleteSshKey = vi.fn()
+    const user = userEvent.setup()
+    const keys = [
+      { id: 7, name: 'old-key', key_type: 'rsa' },
+      { id: 8, name: 'borgbase-sftp', key_type: 'ed25519', sftp_repository_count: 2 },
+    ]
+    const props = {
+      rcloneRemotes: remotes,
+      sftpSshKeys: keys,
+      rcloneStatus: { available: true, version: 'rclone v1.66.0' },
+      eligible: true,
+      primaryLocation: 'ssh' as const,
+      onChange: vi.fn(),
+      onDeleteSshKey,
+    }
+
+    const { rerender } = render(
+      <WizardStepCloudMirror data={{ ...defaultData, cloudMirrorEnabled: true }} {...props} />
+    )
+    expect(screen.getByRole('button', { name: /Delete key/i })).toBeDisabled()
+
+    rerender(
+      <WizardStepCloudMirror
+        data={{ ...defaultData, cloudMirrorEnabled: true, rcloneSftpSshKeyId: 8 }}
+        {...props}
+      />
+    )
+    await user.click(screen.getByRole('button', { name: /Delete key/i }))
+    expect(onDeleteSshKey).toHaveBeenCalledWith(keys[1])
+  })
+
+  it('hides the SFTP key field for non-SSH mirrors', () => {
+    render(
+      <WizardStepCloudMirror
+        data={{ ...defaultData, cloudMirrorEnabled: true }}
+        rcloneRemotes={remotes}
+        sftpSshKeys={[{ id: 7, name: 'old-key', key_type: 'rsa' }]}
+        rcloneStatus={{ available: true, version: 'rclone v1.66.0' }}
+        eligible={true}
+        onChange={vi.fn()}
+      />
+    )
+
+    expect(
+      screen.queryByRole('combobox', { name: /SSH key for cloud sync/i })
+    ).not.toBeInTheDocument()
   })
 })
