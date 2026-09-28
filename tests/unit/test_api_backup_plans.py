@@ -5648,6 +5648,68 @@ class TestBackupPlanRoutes:
         assert compact_job.params["scheduled_compact"] is False
 
     @pytest.mark.asyncio
+    async def test_earlier_maintenance_failure_survives_later_steps(self, test_db):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        _plan, run = _create_execution_plan(
+            test_db,
+            [repo],
+            run_prune_after=True,
+            run_compact_after=True,
+            run_check_after=True,
+        )
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            job = resolve_backup_job(db, job_id)
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        def finish(job_id, kind, status):
+            op = test_db.query(Operation).filter_by(id=job_id, kind=kind).one()
+            op.status = status
+            op.completed_at = datetime.utcnow()
+            test_db.commit()
+
+        class FakeBorgRouter:
+            def __init__(self, repository):
+                self.repository = repository
+
+            async def prune(self, job_id, **kwargs):
+                finish(job_id, "prune", "failed")
+
+            async def compact(self, job_id, **kwargs):
+                finish(job_id, "compact", "completed")
+
+            async def check(self, job_id):
+                finish(job_id, "check", "completed")
+
+        with (
+            patch(
+                "app.services.operations.backup_facade.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.BorgRouter",
+                FakeBorgRouter,
+            ),
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.expire_all()
+        run = test_db.query(BackupPlanRun).filter_by(id=run.id).one()
+        backup_job = BackupJobFacade(
+            test_db,
+            test_db.query(Operation)
+            .filter(
+                Operation.kind == "backup",
+                Operation.backup_plan_run_id == run.id,
+            )
+            .one(),
+        )
+        assert run.status == "completed_with_warnings"
+        assert backup_job.maintenance_status == "prune_failed"
+
+    @pytest.mark.asyncio
     async def test_cancel_after_backup_completion_does_not_start_maintenance(
         self, test_db
     ):

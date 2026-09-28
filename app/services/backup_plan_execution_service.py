@@ -2233,7 +2233,16 @@ class BackupPlanExecutionService:
         context: PlanRunContext,
         run_id: int,
     ) -> str:
-        maintenance_ok = True
+        # The first failed step's label outlives later steps, so a run with
+        # a failed prune does not end up reading "maintenance_completed".
+        failed_status = None
+
+        def record_step(kind: str, job: Operation) -> None:
+            nonlocal failed_status
+            if job.status != "completed":
+                failed_status = failed_status or f"{kind}_failed"
+            backup_job.maintenance_status = failed_status or f"{kind}_completed"
+            db.commit()
 
         if context.run_prune_after:
             if self._is_run_cancelled(run_id):
@@ -2279,12 +2288,7 @@ class BackupPlanExecutionService:
             )
             if self._is_run_cancelled(run_id):
                 return "cancelled"
-            if prune_job.status == "completed":
-                backup_job.maintenance_status = "prune_completed"
-            else:
-                backup_job.maintenance_status = "prune_failed"
-                maintenance_ok = False
-            db.commit()
+            record_step("prune", prune_job)
 
         if context.run_compact_after:
             if self._is_run_cancelled(run_id):
@@ -2313,12 +2317,7 @@ class BackupPlanExecutionService:
             )
             if self._is_run_cancelled(run_id):
                 return "cancelled"
-            if compact_job.status == "completed":
-                backup_job.maintenance_status = "compact_completed"
-            else:
-                backup_job.maintenance_status = "compact_failed"
-                maintenance_ok = False
-            db.commit()
+            record_step("compact", compact_job)
 
         if context.run_check_after:
             if self._is_run_cancelled(run_id):
@@ -2347,21 +2346,14 @@ class BackupPlanExecutionService:
             )
             if self._is_run_cancelled(run_id):
                 return "cancelled"
-            if check_job.status == "completed":
-                backup_job.maintenance_status = "check_completed"
-            else:
-                backup_job.maintenance_status = "check_failed"
-                maintenance_ok = False
-            db.commit()
+            record_step("check", check_job)
 
-        if (
-            backup_job.maintenance_status
-            and "failed" not in backup_job.maintenance_status
-        ):
+        if failed_status:
+            return "completed_with_warnings"
+        if backup_job.maintenance_status:
             backup_job.maintenance_status = "maintenance_completed"
             db.commit()
-
-        return "completed" if maintenance_ok else "completed_with_warnings"
+        return "completed"
 
     def _mark_repository_skipped(self, run_id: int, repository_id: int) -> None:
         """Mark a pending repository child as skipped."""
