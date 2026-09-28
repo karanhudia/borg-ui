@@ -5,7 +5,6 @@ needs it (#1119)."""
 from datetime import datetime, timedelta
 
 import pytest
-from sqlalchemy import event
 
 from app.database.models import (
     AvailabilityScheduleSkip,
@@ -19,7 +18,7 @@ from app.database.models import (
     SystemSettings,
     UserRepositoryPermission,
 )
-from tests.utils.statements import count_statements
+from tests.utils.statements import count_statements, session_cursor_listener
 
 START = datetime(2026, 9, 1, 2, 0, 0)
 
@@ -183,17 +182,13 @@ def test_script_output_is_read_only_where_the_policy_needs_it(
     test_db.commit()
 
     statements = []
-    engine = test_db.get_bind()
 
     def issued(conn, cursor, statement, parameters, context, executemany):
         if "FROM script_executions" in statement:
             statements.append(statement)
 
-    event.listen(engine, "before_cursor_execute", issued)
-    try:
+    with session_cursor_listener(test_db, issued):
         rows, _ = _recent(test_client, test_db, admin_headers)
-    finally:
-        event.remove(engine, "before_cursor_execute", issued)
 
     has_logs = {
         row["package_name"]: row["has_logs"]
