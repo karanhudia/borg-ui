@@ -1,29 +1,29 @@
 {
-  "generatedAt": "2026-09-28T19:24:10.578Z",
+  "generatedAt": "2026-09-28T19:49:21.543Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1242 visual report",
-    "commitSha": "fa1ef7f9e5b9",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36471807917"
+    "commitSha": "8fce07aab4b4",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36474710011"
   },
   "totals": {
     "baseline": 1040,
     "actual": 1052,
     "compared": 1040,
-    "changed": 13,
+    "changed": 12,
     "added": 12,
     "removed": 0,
-    "unchanged": 1027
+    "unchanged": 1028
   },
   "changed": [
     {
-      "fileName": "components-repositorywipedialog--confirmation-ready--mobile.png",
-      "baselinePath": "images/baseline/components-repositorywipedialog--confirmation-ready--mobile.png",
-      "actualPath": "images/actual/components-repositorywipedialog--confirmation-ready--mobile.png",
-      "diffPath": "images/diff/components-repositorywipedialog--confirmation-ready--mobile.png",
-      "diffPixels": 117056,
+      "fileName": "backup-plans-scriptsstep--database-source-scripts--mobile.png",
+      "baselinePath": "images/baseline/backup-plans-scriptsstep--database-source-scripts--mobile.png",
+      "actualPath": "images/actual/backup-plans-scriptsstep--database-source-scripts--mobile.png",
+      "diffPath": "images/diff/backup-plans-scriptsstep--database-source-scripts--mobile.png",
+      "diffPixels": 211377,
       "totalPixels": 329160,
-      "diffRatio": 0.35562036699477456,
+      "diffRatio": 0.6421709806780896,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -32,42 +32,6 @@
       "actual": {
         "width": 390,
         "height": 844
-      }
-    },
-    {
-      "fileName": "components-wizard-cloud-mirror--scheduled--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-cloud-mirror--scheduled--mobile.png",
-      "actualPath": "images/actual/components-wizard-cloud-mirror--scheduled--mobile.png",
-      "diffPath": "images/diff/components-wizard-cloud-mirror--scheduled--mobile.png",
-      "diffPixels": 329160,
-      "totalPixels": 329160,
-      "diffRatio": 1,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "pages-dashboardv3-capabilitylaunchpad--mixed-adoption.png",
-      "baselinePath": "images/baseline/pages-dashboardv3-capabilitylaunchpad--mixed-adoption.png",
-      "actualPath": "images/actual/pages-dashboardv3-capabilitylaunchpad--mixed-adoption.png",
-      "diffPath": "images/diff/pages-dashboardv3-capabilitylaunchpad--mixed-adoption.png",
-      "diffPixels": 1024000,
-      "totalPixels": 1024000,
-      "diffRatio": 1,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
       }
     },
     {
@@ -240,6 +204,24 @@
       "diffPixels": 243051,
       "totalPixels": 1024000,
       "diffRatio": 0.2373544921875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "remote-machines-sshhostfield--invalid-host.png",
+      "baselinePath": "images/baseline/remote-machines-sshhostfield--invalid-host.png",
+      "actualPath": "images/actual/remote-machines-sshhostfield--invalid-host.png",
+      "diffPath": "images/diff/remote-machines-sshhostfield--invalid-host.png",
+      "diffPixels": 1024000,
+      "totalPixels": 1024000,
+      "diffRatio": 1,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -764,9 +746,6 @@
     },
     {
       "fileName": "backup-plans-schedulestep--when-available.png"
-    },
-    {
-      "fileName": "backup-plans-scriptsstep--database-source-scripts--mobile.png"
     },
     {
       "fileName": "backup-plans-scriptsstep--database-source-scripts.png"
@@ -2356,6 +2335,9 @@
       "fileName": "components-repositorywipedialog--compact-failure-recovery.png"
     },
     {
+      "fileName": "components-repositorywipedialog--confirmation-ready--mobile.png"
+    },
+    {
       "fileName": "components-repositorywipedialog--confirmation-ready.png"
     },
     {
@@ -2561,6 +2543,9 @@
     },
     {
       "fileName": "components-wizard-cloud-mirror--requires-pro.png"
+    },
+    {
+      "fileName": "components-wizard-cloud-mirror--scheduled--mobile.png"
     },
     {
       "fileName": "components-wizard-cloud-mirror--scheduled.png"
@@ -3073,6 +3058,9 @@
       "fileName": "pages-dashboardv3-capabilitylaunchpad--mixed-adoption--mobile.png"
     },
     {
+      "fileName": "pages-dashboardv3-capabilitylaunchpad--mixed-adoption.png"
+    },
+    {
       "fileName": "pages-dashboardv3-repositoryhealthpanel--mixed-warning-and-healthy--mobile.png"
     },
     {
@@ -3332,9 +3320,6 @@
     },
     {
       "fileName": "remote-machines-sshhostfield--invalid-host--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-sshhostfield--invalid-host.png"
     },
     {
       "fileName": "repositories-indexmodesettings--archives-only--mobile.png"
