@@ -29,7 +29,12 @@ export default function QuickStartDestinationStep({
   // added in this step is not in the list until the refetch lands.
   const suggestedFor = useRef<number | null>(null)
   useEffect(() => {
-    if (!connection || suggestedFor.current === connection.id) return
+    if (!connection) {
+      // Leaving SSH and coming back to the same machine suggests again.
+      suggestedFor.current = null
+      return
+    }
+    if (suggestedFor.current === connection.id) return
     suggestedFor.current = connection.id
     if (!answers.destinationPath) {
       onChange({ destinationPath: suggestedRemoteDestinationPath(name, connection) })

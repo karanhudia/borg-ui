@@ -153,7 +153,15 @@ export default function QuickStartSshConnect({
             )}
             <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
               {connections.length > 0 && (
-                <Button onClick={() => setAdding(false)} disabled={connecting}>
+                <Button
+                  onClick={() => {
+                    // Do not keep a typed password around once the form is gone.
+                    setForm(emptyForm)
+                    setError(null)
+                    setAdding(false)
+                  }}
+                  disabled={connecting}
+                >
                   {t('common.buttons.cancel')}
                 </Button>
               )}
