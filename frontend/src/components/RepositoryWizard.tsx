@@ -261,6 +261,15 @@ const RepositoryWizard = ({
   // Repository storage modes are creation-time choices. Preserve direct-rclone
   // edits in place, but never let the wizard submit a mode conversion.
   const directRcloneModeLocked = mode === 'edit' && Boolean(repository)
+  // The backend only accepts another login on the repository's own host and port.
+  const repoSshConnection = sshConnections.find((c) => c.id === wizardState.repoSshConnectionId)
+  const sftpConnectionChoices = repoSshConnection
+    ? sshConnections.filter(
+        (c) =>
+          c.host.toLowerCase() === repoSshConnection.host.toLowerCase() &&
+          c.port === repoSshConnection.port
+      )
+    : []
   const cloudMirrorPrimaryLocation: 'local' | 'ssh' | 'agent' =
     wizardState.executionTarget === 'agent'
       ? 'agent'
@@ -1192,7 +1201,7 @@ const RepositoryWizard = ({
               rcloneExtraFlags: wizardState.rcloneExtraFlags,
               rcloneSftpConnectionId: wizardState.rcloneSftpConnectionId,
             }}
-            sshConnections={sshConnections}
+            sshConnections={sftpConnectionChoices}
             rcloneStatus={rcloneStatus}
             rcloneRemotes={rcloneRemotes}
             eligible={isCloudMirrorEligible(wizardState)}

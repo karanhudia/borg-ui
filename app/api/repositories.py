@@ -2002,6 +2002,30 @@ def _validate_rclone_payload(
     return remote
 
 
+def _validate_sftp_connection(
+    sftp_connection_id: int | None,
+    repository_connection_id: int | None,
+    db: Session,
+) -> None:
+    """The mirror may log in with other credentials, but it must mount the
+    same endpoint Borg uses; another server would sync unrelated data over
+    the cloud copy."""
+    if sftp_connection_id is None:
+        return
+    sftp = get_connection_details(sftp_connection_id, db)
+    if repository_connection_id is None:
+        return
+    primary = get_connection_details(repository_connection_id, db)
+    if ((sftp["host"] or "").lower(), sftp["port"]) != (
+        (primary["host"] or "").lower(),
+        primary["port"],
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.sftpConnectionHostMismatch"},
+        )
+
+
 def _validate_cloud_mirror_payload(
     data: Union[RepositoryCreate, RepositoryImport],
     db: Session,
@@ -2021,8 +2045,7 @@ def _validate_cloud_mirror_payload(
             status_code=400,
             detail={"key": "backend.errors.rclone.mirrorUnsupportedPrimary"},
         )
-    if data.rclone_sftp_connection_id is not None:
-        get_connection_details(data.rclone_sftp_connection_id, db)
+    _validate_sftp_connection(data.rclone_sftp_connection_id, data.connection_id, db)
     if not data.rclone_remote_id:
         raise HTTPException(
             status_code=400,
@@ -4865,8 +4888,9 @@ async def update_repository(
                         detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
                     )
                 _validate_rclone_schedule_payload(repo_data)
-                if repo_data.rclone_sftp_connection_id is not None:
-                    get_connection_details(repo_data.rclone_sftp_connection_id, db)
+                _validate_sftp_connection(
+                    repo_data.rclone_sftp_connection_id, target_connection_id, db
+                )
                 remote = (
                     db.query(RcloneRemote)
                     .filter(RcloneRemote.id == repo_data.rclone_remote_id)
@@ -5011,8 +5035,9 @@ async def update_repository(
                                 "message": str(exc),
                             },
                         ) from exc
-                if repo_data.rclone_sftp_connection_id is not None:
-                    get_connection_details(repo_data.rclone_sftp_connection_id, db)
+                _validate_sftp_connection(
+                    repo_data.rclone_sftp_connection_id, target_connection_id, db
+                )
                 _apply_mirror_source_strategy(storage, repository)
 
             if should_update_direct_rclone:

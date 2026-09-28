@@ -5403,6 +5403,30 @@ def test_update_ssh_cloud_mirror_rejects_unknown_sftp_connection(
 
 
 @pytest.mark.unit
+def test_update_ssh_cloud_mirror_rejects_sftp_connection_on_another_host(
+    test_client: TestClient, admin_headers, test_db
+):
+    repository, storage, _sftp_connection = _ssh_repository_with_mirror(test_db)
+    other_host = SSHConnection(host="other.example", username="sftp", port=22)
+    test_db.add(other_host)
+    test_db.commit()
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={"rclone_sftp_connection_id": other_host.id},
+    )
+
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]["key"]
+        == "backend.errors.rclone.sftpConnectionHostMismatch"
+    )
+    test_db.refresh(storage)
+    assert storage.sftp_connection_id is None
+
+
+@pytest.mark.unit
 def test_delete_ssh_connection_clears_cloud_mirror_sftp_connection(
     test_client: TestClient, admin_headers, test_db
 ):

@@ -5931,7 +5931,8 @@
         "oauthCodeExchangeFailed": "Borg UI no pudo intercambiar el código de autorización del proveedor.",
         "failedToCreateRemote": "No se pudo crear el remoto rclone",
         "failedToUpdateRemote": "No se pudo actualizar el remoto rclone",
-        "failedToDeleteRemote": "No se pudo eliminar el remoto rclone"
+        "failedToDeleteRemote": "No se pudo eliminar el remoto rclone",
+        "sftpConnectionHostMismatch": "La conexión SFTP debe usar el mismo host y puerto que la conexión del repositorio"
       },
       "backup": {
         "backupJobNotFound": "Trabajo de copia de seguridad no encontrado",
