@@ -51,8 +51,8 @@ Steps adapt to the answers. The indicator only shows steps that apply.
    - SSH: pick an existing connection (`SshConnectionSelect`) or add one
      inline with host, user, port and a one-time password. The system SSH
      key is generated if it does not exist, then deployed with the password
-     (`/ssh-keys/generate`, `/ssh-keys/{id}/deploy`). The password is never
-     stored.
+     (`/ssh-keys/generate`, `/ssh-keys/{id}/deploy`). The password is not
+     stored in the SSH connection record or key files.
    - Agent: pick a connected agent (`ManagedAgentSelect`) or open the
      existing `AddAgentDialog` to enroll one; the new agent is selected when
      it connects.
@@ -88,7 +88,7 @@ already exists. On success: **Run first backup now** (starts the plan) and
 
 | Setting | Default | Why |
 | --- | --- | --- |
-| Encryption | `getDefaultRepositoryEncryption(1)` (repokey-blake2) | same as the repository wizard |
+| Encryption | `getDefaultRepositoryEncryption(1)` (repokey) | same as the repository wizard |
 | Compression | `zstd,3` | better ratio than lz4 at similar speed for typical data |
 | Retention | 7 daily, 4 weekly, 6 monthly, 1 yearly | existing plan defaults |
 | After each backup | prune and compact on | keeps the repository bounded |
