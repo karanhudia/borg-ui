@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-09-28T09:42:08.547Z",
+  "generatedAt": "2026-09-28T11:29:10.697Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1206 visual report",
-    "commitSha": "c31d0e51cf75",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36405018930"
+    "commitSha": "9e6ef0fb3953",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36415796570"
   },
   "totals": {
-    "baseline": 1016,
+    "baseline": 1030,
     "actual": 1014,
     "compared": 1008,
-    "changed": 16,
+    "changed": 18,
     "added": 6,
-    "removed": 8,
-    "unchanged": 992
+    "removed": 22,
+    "unchanged": 990
   },
   "changed": [
     {
@@ -303,6 +303,42 @@
         "width": 1280,
         "height": 800
       }
+    },
+    {
+      "fileName": "components-wizard-cloud-mirror--ssh-primary-enabled--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-cloud-mirror--ssh-primary-enabled--mobile.png",
+      "actualPath": "images/actual/components-wizard-cloud-mirror--ssh-primary-enabled--mobile.png",
+      "diffPath": "images/diff/components-wizard-cloud-mirror--ssh-primary-enabled--mobile.png",
+      "diffPixels": 92865,
+      "totalPixels": 329160,
+      "diffRatio": 0.28212723295661685,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-wizard-cloud-mirror--ssh-primary-enabled.png",
+      "baselinePath": "images/baseline/components-wizard-cloud-mirror--ssh-primary-enabled.png",
+      "actualPath": "images/actual/components-wizard-cloud-mirror--ssh-primary-enabled.png",
+      "diffPath": "images/diff/components-wizard-cloud-mirror--ssh-primary-enabled.png",
+      "diffPixels": 119231,
+      "totalPixels": 1024000,
+      "diffRatio": 0.1164365234375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
     }
   ],
   "added": [
@@ -347,6 +383,62 @@
     {
       "fileName": "components-archives-archivegrowthchart--sparse-stale.png",
       "baselinePath": "images/baseline/components-archives-archivegrowthchart--sparse-stale.png"
+    },
+    {
+      "fileName": "components-wizard-cloud-mirror--ssh-primary-with-sftp-key--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-cloud-mirror--ssh-primary-with-sftp-key--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-cloud-mirror--ssh-primary-with-sftp-key.png",
+      "baselinePath": "images/baseline/components-wizard-cloud-mirror--ssh-primary-with-sftp-key.png"
+    },
+    {
+      "fileName": "components-wizard-ssh-key-delete-dialog--deleting--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-ssh-key-delete-dialog--deleting--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-ssh-key-delete-dialog--deleting.png",
+      "baselinePath": "images/baseline/components-wizard-ssh-key-delete-dialog--deleting.png"
+    },
+    {
+      "fileName": "components-wizard-ssh-key-delete-dialog--shared-by-repositories--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-ssh-key-delete-dialog--shared-by-repositories--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-ssh-key-delete-dialog--shared-by-repositories.png",
+      "baselinePath": "images/baseline/components-wizard-ssh-key-delete-dialog--shared-by-repositories.png"
+    },
+    {
+      "fileName": "components-wizard-ssh-key-delete-dialog--unused--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-ssh-key-delete-dialog--unused--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-ssh-key-delete-dialog--unused.png",
+      "baselinePath": "images/baseline/components-wizard-ssh-key-delete-dialog--unused.png"
+    },
+    {
+      "fileName": "components-wizard-ssh-key-dialog--creating--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-ssh-key-dialog--creating--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-ssh-key-dialog--creating.png",
+      "baselinePath": "images/baseline/components-wizard-ssh-key-dialog--creating.png"
+    },
+    {
+      "fileName": "components-wizard-ssh-key-dialog--empty--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-ssh-key-dialog--empty--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-ssh-key-dialog--empty.png",
+      "baselinePath": "images/baseline/components-wizard-ssh-key-dialog--empty.png"
+    },
+    {
+      "fileName": "components-wizard-ssh-key-dialog--with-error--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-ssh-key-dialog--with-error--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-ssh-key-dialog--with-error.png",
+      "baselinePath": "images/baseline/components-wizard-ssh-key-dialog--with-error.png"
     },
     {
       "fileName": "pages-dashboardv3-successdonutlegend--default--mobile.png",
@@ -2543,12 +2635,6 @@
     },
     {
       "fileName": "components-wizard-cloud-mirror--scheduled.png"
-    },
-    {
-      "fileName": "components-wizard-cloud-mirror--ssh-primary-enabled--mobile.png"
-    },
-    {
-      "fileName": "components-wizard-cloud-mirror--ssh-primary-enabled.png"
     },
     {
       "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-missing--mobile.png"
