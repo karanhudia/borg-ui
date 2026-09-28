@@ -5518,7 +5518,9 @@ class TestBackupPlanRoutes:
             restore_check.params["archive_name"]
             == by_kind["backup"].params["archive_name"]
         )
-        assert restore_check.params["archive_name"].startswith("Plan-execution-Primary-")
+        assert restore_check.params["archive_name"].startswith(
+            "Plan-execution-Primary-"
+        )
         assert restore_check.params["probe_paths"] == repo.restore_check_paths
         assert restore_check.params["full_archive"] is False
         assert backup_job.maintenance_status == (
