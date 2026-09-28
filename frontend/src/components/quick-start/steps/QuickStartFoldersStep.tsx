@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 
 import PathSelectorField from '../../shared/PathSelectorField'
 import type { QuickStartStepProps } from '../quickStartState'
-import { agentLabel, useManagedAgent } from '../quickStartAgent'
+import { agentIsOnline, agentLabel, useManagedAgent } from '../quickStartAgent'
 import { sshBrowseConfig, useSshConnection } from '../quickStartSsh'
 
 export default function QuickStartFoldersStep({ answers, onChange }: QuickStartStepProps) {
@@ -37,7 +37,9 @@ export default function QuickStartFoldersStep({ answers, onChange }: QuickStartS
                 machine: `${connection.username}@${connection.host}`,
               })
             : onAgent && agent
-              ? t('quickStart.folders.remoteHint', { machine: agentLabel(agent) })
+              ? agentIsOnline(agent)
+                ? t('quickStart.folders.remoteHint', { machine: agentLabel(agent) })
+                : t('quickStart.agent.offlineBrowse', { machine: agentLabel(agent) })
               : t('quickStart.folders.hint')}
         </Typography>
       </Box>
@@ -54,6 +56,7 @@ export default function QuickStartFoldersStep({ answers, onChange }: QuickStartS
           agentId={agent?.id}
           agentName={agent ? agentLabel(agent) : undefined}
           agentDefaultPath={agent?.default_path}
+          browseButtonDisabled={onAgent && !agentIsOnline(agent)}
           initialPath={remote ? connection?.default_path || '/' : undefined}
           showSshMountPoints={false}
           onSelectPaths={addPaths}

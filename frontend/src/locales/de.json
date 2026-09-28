@@ -6757,7 +6757,8 @@
       "label": "Rechner",
       "add": "Rechner hinzufügen",
       "noAgentsNoPermission": "Auf noch keinem Rechner läuft der Agent. Bitte eine Admin-Person, unter Managed Agents einen hinzuzufügen.",
-      "loadFailed": "Die Rechner konnten nicht geladen werden. Versuche es gleich noch einmal."
+      "loadFailed": "Die Rechner konnten nicht geladen werden. Versuche es gleich noch einmal.",
+      "offlineBrowse": "{{machine}} ist offline, daher lassen sich die Ordner nicht durchsuchen. Gib den Pfad ein oder warte, bis sich der Agent verbindet."
     }
   }
 }

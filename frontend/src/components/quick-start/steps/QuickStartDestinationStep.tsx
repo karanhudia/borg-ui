@@ -6,7 +6,12 @@ import { useTranslation } from 'react-i18next'
 import PathSelectorField from '../../shared/PathSelectorField'
 import QuickStartChoiceCard from '../QuickStartChoiceCard'
 import QuickStartSshConnect from '../QuickStartSshConnect'
-import { agentLabel, useManagedAgent } from '../quickStartAgent'
+import {
+  agentIsOnline,
+  agentLabel,
+  suggestedAgentDestinationPath,
+  useManagedAgent,
+} from '../quickStartAgent'
 import { sshBrowseConfig, useSshConnection } from '../quickStartSsh'
 import {
   destinationInsideSource,
@@ -45,6 +50,17 @@ export default function QuickStartDestinationStep({
     }
   }, [connection, answers.destinationPath, name, onChange])
 
+  // Same for the agent: its default path is only known once it has loaded.
+  const suggestedForAgent = useRef<number | null>(null)
+  useEffect(() => {
+    if (!agent || suggestedForAgent.current === agent.id) return
+    suggestedForAgent.current = agent.id
+    if (!answers.destinationPath) {
+      const destinationPath = suggestedAgentDestinationPath(name, agent, answers.sourcePaths)
+      if (destinationPath) onChange({ destinationPath })
+    }
+  }, [agent, answers.destinationPath, answers.sourcePaths, name, onChange])
+
   if (onAgent) {
     return (
       <Stack spacing={2}>
@@ -66,16 +82,19 @@ export default function QuickStartDestinationStep({
           label={t('quickStart.destination.pathLabel')}
           value={answers.destinationPath}
           onChange={(destinationPath) => onChange({ destinationPath })}
-          placeholder="/var/backups/borg-backups/home"
+          placeholder="/srv/borg-backups/home"
           required
           error={inside}
           helperText={
             inside
               ? t('quickStart.destination.insideSource')
-              : t('quickStart.destination.remotePathHint', {
-                  machine: agent ? agentLabel(agent) : '',
-                })
+              : agent && !agentIsOnline(agent)
+                ? t('quickStart.agent.offlineBrowse', { machine: agentLabel(agent) })
+                : t('quickStart.destination.remotePathHint', {
+                    machine: agent ? agentLabel(agent) : '',
+                  })
           }
+          browseButtonDisabled={!agentIsOnline(agent)}
           connectionType="agent"
           agentId={agent?.id}
           agentName={agent ? agentLabel(agent) : undefined}

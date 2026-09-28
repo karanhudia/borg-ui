@@ -6757,7 +6757,8 @@
       "label": "Computer",
       "add": "Add a computer",
       "noAgentsNoPermission": "No computers run the agent yet. Ask an admin to add one under Managed Agents.",
-      "loadFailed": "Could not load the computers. Try again in a moment."
+      "loadFailed": "Could not load the computers. Try again in a moment.",
+      "offlineBrowse": "{{machine}} is offline, so its folders cannot be browsed. Type the path, or wait until the agent connects."
     }
   }
 }

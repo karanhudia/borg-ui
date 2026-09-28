@@ -9,13 +9,10 @@ describe('suggestedAgentDestinationPath', () => {
     )
   })
 
-  it('falls back to /var/backups when the default path is being backed up', () => {
+  it('suggests nothing when the default path is being backed up or unknown', () => {
     expect(
       suggestedAgentDestinationPath('Home', { default_path: '/home/alex' }, ['/home/alex'])
-    ).toBe('/var/backups/borg-backups/home')
-  })
-
-  it('suggests nothing when every candidate is inside a source folder', () => {
-    expect(suggestedAgentDestinationPath('Everything', undefined, ['/'])).toBe('')
+    ).toBe('')
+    expect(suggestedAgentDestinationPath('Home', undefined, ['/home/alex'])).toBe('')
   })
 })

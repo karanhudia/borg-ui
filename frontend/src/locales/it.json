@@ -6757,7 +6757,8 @@
       "label": "Computer",
       "add": "Aggiungi computer",
       "noAgentsNoPermission": "Nessun computer esegue ancora l'agente. Chiedi a un amministratore di aggiungerne uno in Agenti gestiti.",
-      "loadFailed": "Impossibile caricare i computer. Riprova tra poco."
+      "loadFailed": "Impossibile caricare i computer. Riprova tra poco.",
+      "offlineBrowse": "{{machine}} è offline, quindi non è possibile sfogliarne le cartelle. Scrivi il percorso o attendi che l'agente si connetta."
     }
   }
 }

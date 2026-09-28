@@ -6757,7 +6757,8 @@
       "label": "Equipo",
       "add": "Añadir equipo",
       "noAgentsNoPermission": "Ningún equipo ejecuta el agente todavía. Pide a un administrador que añada uno en Agentes gestionados.",
-      "loadFailed": "No se pudieron cargar los equipos. Inténtalo de nuevo en un momento."
+      "loadFailed": "No se pudieron cargar los equipos. Inténtalo de nuevo en un momento.",
+      "offlineBrowse": "{{machine}} está sin conexión, así que no se pueden explorar sus carpetas. Escribe la ruta o espera a que el agente se conecte."
     }
   }
 }

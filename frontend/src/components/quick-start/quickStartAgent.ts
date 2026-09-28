@@ -30,8 +30,8 @@ export function agentLabel(agent: Pick<AgentMachineResponse, 'name' | 'hostname'
 }
 
 /**
- * A folder on the agent for its repository, outside every source folder.
- * Empty when neither candidate is outside them, so the user picks one.
+ * A folder for the repository under the agent's default path, outside every
+ * source folder. Empty otherwise, so the user picks one.
  */
 export function suggestedAgentDestinationPath(
   name: string,
@@ -44,7 +44,8 @@ export function suggestedAgentDestinationPath(
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '') || 'backup'
-  const bases = [agent?.default_path?.replace(/\/+$/, ''), '/var/backups'].filter(Boolean)
+  // Only the agent's own default path is known to be writable by its service user.
+  const bases = [agent?.default_path?.replace(/\/+$/, '')].filter(Boolean)
   const candidates = bases.map((base) => `${base}/borg-backups/${slug}`)
   return (
     candidates.find(
@@ -63,4 +64,8 @@ export function useEnrolledAgentId(tokenId: number | null): number | null {
   })
   const tokens = Array.isArray(data?.data) ? data.data : []
   return tokens.find((token) => token.id === tokenId)?.used_by_agent_id ?? null
+}
+
+export function agentIsOnline(agent: Pick<AgentMachineResponse, 'status'> | undefined): boolean {
+  return agent?.status === 'online'
 }

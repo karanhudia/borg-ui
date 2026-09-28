@@ -20,7 +20,6 @@ import { backupPlansAPI } from '../../services/api'
 import { getApiErrorDetail } from '../../utils/apiErrors'
 import { translateBackendKey } from '../../utils/translateBackendKey'
 import QuickStartProgress from './QuickStartProgress'
-import { suggestedAgentDestinationPath, useManagedAgent } from './quickStartAgent'
 import {
   createInitialQuickStartAnswers,
   isStepValid,
@@ -74,7 +73,6 @@ export default function QuickStartDialog({
   const [stepIndex, setStepIndex] = useState(0)
   const [startingBackup, setStartingBackup] = useState(false)
 
-  const sourceAgent = useManagedAgent(answers.sourceKind === 'agent' ? answers.sourceAgentId : '')
   const steps = visibleSteps(answers)
   const step = steps[Math.min(stepIndex, steps.length - 1)]
   const showProgress = runner.actions.length > 0
@@ -113,11 +111,7 @@ export default function QuickStartDialog({
         name,
         destinationPath:
           answers.destinationPath ||
-          (answers.destinationKind === 'server'
-            ? suggestedDestinationPath(name)
-            : answers.destinationKind === 'agent'
-              ? suggestedAgentDestinationPath(name, sourceAgent, answers.sourcePaths)
-              : ''),
+          (answers.destinationKind === 'server' ? suggestedDestinationPath(name) : ''),
       })
     }
     setStepIndex((index) => Math.min(index + 1, steps.length - 1))
