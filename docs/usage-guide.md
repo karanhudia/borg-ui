@@ -103,7 +103,7 @@ Cloud mirrors keep the primary repository local, SSH-backed, or managed-agent-ba
 
 For SSH repositories, Borg UI mounts the repository read-only on the server with SSHFS during each mirror sync, then unmounts it after rclone finishes. Borg UI owns that temporary mount path; the UI and API do not ask for a cache or staging path.
 
-The mount needs SFTP access. Some hosts, such as BorgBase, only let a key be used for either Borg or SFTP, so the repository's Borg key gets `Connection reset by peer` when mounting. In that case add a second SSH connection with an SFTP-enabled key and pick it under **SFTP connection for cloud sync** in the Cloud Mirror step. Borg keeps using the repository's own connection.
+The mount needs SFTP access. Some hosts, such as BorgBase, only let a key be used for either Borg or SFTP, so the repository's Borg key gets `Connection reset by peer` when mounting. In that case give that host a second key with SFTP access, then in the Cloud Mirror step choose **Add key** next to **SSH key for cloud sync** and paste its private key (keys with a passphrase are not supported). The mirror signs in to the same connection with that key; Borg keeps using the connection's own key.
 
 For managed-agent repositories, the selected agent syncs its agent-local repository path to the configured rclone remote. Borg UI owns the mirror metadata and rclone target; the agent owns any temporary rclone execution files and removes them after the sync.
 

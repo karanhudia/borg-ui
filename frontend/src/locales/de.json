@@ -4819,9 +4819,16 @@
       "browsing": "Remote wird durchsucht...",
       "noRemoteFolders": "Keine Ordner in diesem Remote-Pfad gefunden.",
       "useFolder": "Ordner verwenden",
-      "sftpConnectionLabel": "SFTP-Verbindung für die Cloud-Synchronisierung",
-      "sftpConnectionDefault": "Wie die Repository-Verbindung",
-      "sftpConnectionHelper": "Manche Anbieter, etwa BorgBase, erlauben einen Schlüssel nur für Borg oder nur für SFTP. Wähle hier eine eigene SFTP-Verbindung, wenn der Schlüssel des Repositorys kein SFTP öffnen kann."
+      "sftpKeyLabel": "SSH-Schlüssel für die Cloud-Synchronisierung",
+      "sftpKeyDefault": "Derselbe Schlüssel wie die Verbindung",
+      "sftpKeyAdd": "Schlüssel hinzufügen",
+      "sftpKeyHelper": "Manche Anbieter, etwa BorgBase, erlauben einen Schlüssel nur für Borg oder nur für SFTP. Füge hier den Schlüssel mit SFTP-Zugriff hinzu; Borg verwendet weiter den Schlüssel der Verbindung.",
+      "sshKeyDialogTitle": "SSH-Schlüssel für die Cloud-Synchronisierung hinzufügen",
+      "sshKeyNameLabel": "Schlüsselname",
+      "sshKeyPrivateKeyLabel": "Privater Schlüssel",
+      "sshKeyPrivateKeyHelper": "Füge den privaten Schlüssel ein, dessen öffentlicher Schlüssel beim Speicheranbieter SFTP-Zugriff hat. Schlüssel mit Passphrase werden nicht unterstützt.",
+      "sshKeyDialogSubmit": "Schlüssel speichern",
+      "sshKeyCreateFailed": "Der SSH-Schlüssel konnte nicht gespeichert werden"
     },
     "restoreDestination": {
       "port": "Port {{port}}",
@@ -5931,8 +5938,7 @@
         "oauthCodeExchangeFailed": "Borg UI konnte den Provider-Autorisierungscode nicht austauschen.",
         "failedToCreateRemote": "rclone-Remote konnte nicht erstellt werden",
         "failedToUpdateRemote": "rclone-Remote konnte nicht aktualisiert werden",
-        "failedToDeleteRemote": "rclone-Remote konnte nicht gelöscht werden",
-        "sftpConnectionHostMismatch": "Die SFTP-Verbindung muss denselben Host und Port wie die Repository-Verbindung verwenden"
+        "failedToDeleteRemote": "rclone-Remote konnte nicht gelöscht werden"
       },
       "backup": {
         "backupJobNotFound": "Sicherungsauftrag nicht gefunden",

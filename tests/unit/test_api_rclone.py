@@ -2653,7 +2653,10 @@ def test_create_ssh_repository_with_cloud_mirror_uses_server_owned_mount_strateg
 ):
     remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
     connection = SSHConnection(host="storage.example", username="borg", port=22)
-    test_db.add_all([remote, connection])
+    sftp_key = SSHKey(
+        name="borgbase-sftp", public_key="ssh-ed25519 AAAA", private_key="x"
+    )
+    test_db.add_all([remote, connection, sftp_key])
     test_db.commit()
     test_db.refresh(remote)
     test_db.refresh(connection)
@@ -2709,7 +2712,7 @@ def test_create_ssh_repository_with_cloud_mirror_uses_server_owned_mount_strateg
             "rclone_remote_path": "borg-ui/repositories/app",
             "rclone_remote_path_verified": True,
             "rclone_sync_policy": "after_success",
-            "rclone_sftp_connection_id": connection.id,
+            "rclone_sftp_ssh_key_id": sftp_key.id,
         },
     )
 
@@ -2725,8 +2728,10 @@ def test_create_ssh_repository_with_cloud_mirror_uses_server_owned_mount_strateg
     assert storage.cache_path is None
     assert storage.sync_direction == "sshfs_mount_to_remote"
     assert storage.sync_status == "current"
-    assert storage.sftp_connection_id == connection.id
-    assert mount_service.mount_ssh_directory.await_args.kwargs["read_only"] is True
+    assert storage.sftp_ssh_key_id == sftp_key.id
+    mount_kwargs = mount_service.mount_ssh_directory.await_args.kwargs
+    assert mount_kwargs["read_only"] is True
+    assert mount_kwargs["ssh_key_id"] == sftp_key.id
     assert response.json()["repository"]["rclone_storage"]["sync_direction"] == (
         "sshfs_mount_to_remote"
     )
@@ -5296,8 +5301,10 @@ def test_update_cloud_mirror_remote_change_blocks_unverified_non_empty_target(
 def _ssh_repository_with_mirror(test_db):
     remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
     connection = SSHConnection(host="storage.example", username="borg", port=22)
-    sftp_connection = SSHConnection(host="storage.example", username="sftp", port=22)
-    test_db.add_all([remote, connection, sftp_connection])
+    sftp_key = SSHKey(
+        name="borgbase-sftp", public_key="ssh-ed25519 AAAA", private_key="x"
+    )
+    test_db.add_all([remote, connection, sftp_key])
     test_db.commit()
     repository = Repository(
         name="SSH App",
@@ -5322,45 +5329,45 @@ def _ssh_repository_with_mirror(test_db):
     )
     test_db.add(storage)
     test_db.commit()
-    return repository, storage, sftp_connection
+    return repository, storage, sftp_key
 
 
 @pytest.mark.unit
-def test_update_ssh_cloud_mirror_sets_and_clears_sftp_connection(
+def test_update_ssh_cloud_mirror_sets_and_clears_sftp_key(
     test_client: TestClient, admin_headers, test_db
 ):
-    repository, storage, sftp_connection = _ssh_repository_with_mirror(test_db)
+    repository, storage, sftp_key = _ssh_repository_with_mirror(test_db)
 
     response = test_client.put(
         f"/api/repositories/{repository.id}",
         headers=admin_headers,
-        json={"rclone_sftp_connection_id": sftp_connection.id},
+        json={"rclone_sftp_ssh_key_id": sftp_key.id},
     )
 
     assert response.status_code == 200, response.json()
     test_db.refresh(storage)
-    assert storage.sftp_connection_id == sftp_connection.id
+    assert storage.sftp_ssh_key_id == sftp_key.id
 
     response = test_client.put(
         f"/api/repositories/{repository.id}",
         headers=admin_headers,
-        json={"rclone_sftp_connection_id": None},
+        json={"rclone_sftp_ssh_key_id": None},
     )
 
     assert response.status_code == 200, response.json()
     test_db.refresh(storage)
-    assert storage.sftp_connection_id is None
+    assert storage.sftp_ssh_key_id is None
 
 
 @pytest.mark.unit
-def test_update_switching_mirror_source_to_ssh_keeps_sftp_connection(
+def test_update_switching_mirror_source_to_ssh_keeps_sftp_key(
     test_client: TestClient, admin_headers, test_db, monkeypatch
 ):
     monkeypatch.setattr(
         "app.api.repositories.BorgRouter.verify_repository",
         AsyncMock(return_value={"success": True}),
     )
-    repository, storage, sftp_connection = _ssh_repository_with_mirror(test_db)
+    repository, storage, sftp_key = _ssh_repository_with_mirror(test_db)
     connection_id = repository.connection_id
     repository.connection_id = None
     repository.path = "/backups/app"
@@ -5375,72 +5382,46 @@ def test_update_switching_mirror_source_to_ssh_keeps_sftp_connection(
         headers=admin_headers,
         json={
             "connection_id": connection_id,
-            "rclone_sftp_connection_id": sftp_connection.id,
+            "rclone_sftp_ssh_key_id": sftp_key.id,
         },
     )
 
     assert response.status_code == 200, response.json()
     test_db.refresh(storage)
     assert storage.sync_direction == "sshfs_mount_to_remote"
-    assert storage.sftp_connection_id == sftp_connection.id
+    assert storage.sftp_ssh_key_id == sftp_key.id
 
 
 @pytest.mark.unit
-def test_update_ssh_cloud_mirror_rejects_unknown_sftp_connection(
+def test_update_ssh_cloud_mirror_rejects_unknown_sftp_key(
     test_client: TestClient, admin_headers, test_db
 ):
-    repository, storage, _sftp_connection = _ssh_repository_with_mirror(test_db)
+    repository, storage, _sftp_key = _ssh_repository_with_mirror(test_db)
 
     response = test_client.put(
         f"/api/repositories/{repository.id}",
         headers=admin_headers,
-        json={"rclone_sftp_connection_id": 9999},
+        json={"rclone_sftp_ssh_key_id": 9999},
     )
 
     assert response.status_code == 404
     test_db.refresh(storage)
-    assert storage.sftp_connection_id is None
+    assert storage.sftp_ssh_key_id is None
 
 
 @pytest.mark.unit
-def test_update_ssh_cloud_mirror_rejects_sftp_connection_on_another_host(
+def test_delete_ssh_key_clears_cloud_mirror_sftp_key(
     test_client: TestClient, admin_headers, test_db
 ):
-    repository, storage, _sftp_connection = _ssh_repository_with_mirror(test_db)
-    other_host = SSHConnection(host="other.example", username="sftp", port=22)
-    test_db.add(other_host)
+    _repository, storage, sftp_key = _ssh_repository_with_mirror(test_db)
+    storage.sftp_ssh_key_id = sftp_key.id
     test_db.commit()
 
-    response = test_client.put(
-        f"/api/repositories/{repository.id}",
-        headers=admin_headers,
-        json={"rclone_sftp_connection_id": other_host.id},
-    )
-
-    assert response.status_code == 400
-    assert (
-        response.json()["detail"]["key"]
-        == "backend.errors.rclone.sftpConnectionHostMismatch"
-    )
-    test_db.refresh(storage)
-    assert storage.sftp_connection_id is None
-
-
-@pytest.mark.unit
-def test_delete_ssh_connection_clears_cloud_mirror_sftp_connection(
-    test_client: TestClient, admin_headers, test_db
-):
-    _repository, storage, sftp_connection = _ssh_repository_with_mirror(test_db)
-    storage.sftp_connection_id = sftp_connection.id
-    test_db.commit()
-
-    response = test_client.delete(
-        f"/api/ssh-keys/connections/{sftp_connection.id}", headers=admin_headers
-    )
+    response = test_client.delete(f"/api/ssh-keys/{sftp_key.id}", headers=admin_headers)
 
     assert response.status_code == 200, response.json()
     test_db.refresh(storage)
-    assert storage.sftp_connection_id is None
+    assert storage.sftp_ssh_key_id is None
 
 
 @pytest.mark.unit

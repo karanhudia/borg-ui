@@ -4819,9 +4819,16 @@
       "browsing": "Explorando remoto...",
       "noRemoteFolders": "No se encontraron carpetas en esta ruta remota.",
       "useFolder": "Usar carpeta",
-      "sftpConnectionLabel": "Conexión SFTP para la sincronización en la nube",
-      "sftpConnectionDefault": "La misma que la conexión del repositorio",
-      "sftpConnectionHelper": "Algunos proveedores, como BorgBase, solo permiten usar una clave para Borg o para SFTP. Elige aquí otra conexión SFTP si la clave del repositorio no puede abrir SFTP."
+      "sftpKeyLabel": "Clave SSH para la sincronización en la nube",
+      "sftpKeyDefault": "La misma clave que la conexión",
+      "sftpKeyAdd": "Añadir clave",
+      "sftpKeyHelper": "Algunos proveedores, como BorgBase, solo permiten usar una clave para Borg o para SFTP. Añade aquí la clave con acceso SFTP; Borg sigue usando la clave de la conexión.",
+      "sshKeyDialogTitle": "Añadir clave SSH para la sincronización en la nube",
+      "sshKeyNameLabel": "Nombre de la clave",
+      "sshKeyPrivateKeyLabel": "Clave privada",
+      "sshKeyPrivateKeyHelper": "Pega la clave privada cuya clave pública tiene acceso SFTP en tu proveedor de almacenamiento. No se admiten claves protegidas con frase de contraseña.",
+      "sshKeyDialogSubmit": "Guardar clave",
+      "sshKeyCreateFailed": "No se pudo guardar la clave SSH"
     },
     "restoreDestination": {
       "port": "Puerto {{port}}",
@@ -5931,8 +5938,7 @@
         "oauthCodeExchangeFailed": "Borg UI no pudo intercambiar el código de autorización del proveedor.",
         "failedToCreateRemote": "No se pudo crear el remoto rclone",
         "failedToUpdateRemote": "No se pudo actualizar el remoto rclone",
-        "failedToDeleteRemote": "No se pudo eliminar el remoto rclone",
-        "sftpConnectionHostMismatch": "La conexión SFTP debe usar el mismo host y puerto que la conexión del repositorio"
+        "failedToDeleteRemote": "No se pudo eliminar el remoto rclone"
       },
       "backup": {
         "backupJobNotFound": "Trabajo de copia de seguridad no encontrado",

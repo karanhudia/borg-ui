@@ -6,6 +6,7 @@ import WizardDialog from './shared/WizardDialog'
 import {
   RcloneRemoteDialog,
   RcloneRemoteFolderPickerDialog,
+  SshKeyDialog,
   WizardStepCloudMirror,
   WizardStepLocation,
   WizardStepDataSource,
@@ -15,6 +16,8 @@ import {
   WizardStepReview,
 } from './wizard'
 import FileExplorerDialog from './FileExplorerDialog'
+import type { SshKeyCreateInput } from './wizard/SshKeyDialog'
+import type { SftpSshKeyOption } from './wizard/WizardStepCloudMirror'
 import { managedAgentsAPI, rcloneAPI, sshKeysAPI, RepositoryData } from '../services/api'
 import { formatDirectRcloneUrl, parseDirectRcloneUrl } from './wizard/directRclonePath'
 import type { IndexMode } from '../types/operations'
@@ -91,7 +94,7 @@ interface WizardState {
   rcloneSyncCronExpression: string
   rcloneSyncTimezone: string
   rcloneExtraFlags: string
-  rcloneSftpConnectionId: number | ''
+  rcloneSftpSshKeyId: number | ''
   // Data source step
   dataSource: 'local' | 'remote'
   sourceSshConnectionId: number | ''
@@ -134,7 +137,7 @@ const createInitialState = (): WizardState => ({
   rcloneSyncCronExpression: '0 */6 * * *',
   rcloneSyncTimezone: 'UTC',
   rcloneExtraFlags: '',
-  rcloneSftpConnectionId: '',
+  rcloneSftpSshKeyId: '',
   dataSource: 'local',
   sourceSshConnectionId: '',
   sourceDirs: [],
@@ -231,6 +234,10 @@ const RepositoryWizard = ({
   const [rcloneRemotes, setRcloneRemotes] = useState<RcloneRemote[]>([])
   const [rcloneProviders, setRcloneProviders] = useState<RcloneProvider[]>([])
   const [showRcloneRemoteDialog, setShowRcloneRemoteDialog] = useState(false)
+  const [sftpSshKeys, setSftpSshKeys] = useState<SftpSshKeyOption[]>([])
+  const [showSshKeyDialog, setShowSshKeyDialog] = useState(false)
+  const [isCreatingSshKey, setIsCreatingSshKey] = useState(false)
+  const [sshKeyCreateError, setSshKeyCreateError] = useState<string | null>(null)
   const [isCreatingRcloneRemote, setIsCreatingRcloneRemote] = useState(false)
   const [rcloneRemoteCreateError, setRcloneRemoteCreateError] = useState<string | null>(null)
 
@@ -261,15 +268,6 @@ const RepositoryWizard = ({
   // Repository storage modes are creation-time choices. Preserve direct-rclone
   // edits in place, but never let the wizard submit a mode conversion.
   const directRcloneModeLocked = mode === 'edit' && Boolean(repository)
-  // The backend only accepts another login on the repository's own host and port.
-  const repoSshConnection = sshConnections.find((c) => c.id === wizardState.repoSshConnectionId)
-  const sftpConnectionChoices = repoSshConnection
-    ? sshConnections.filter(
-        (c) =>
-          c.host.toLowerCase() === repoSshConnection.host.toLowerCase() &&
-          c.port === repoSshConnection.port
-      )
-    : []
   const cloudMirrorPrimaryLocation: 'local' | 'ssh' | 'agent' =
     wizardState.executionTarget === 'agent'
       ? 'agent'
@@ -350,7 +348,7 @@ const RepositoryWizard = ({
 
   // Load selectable remote execution targets.
   const loadWizardData = React.useCallback(async () => {
-    const [connectionsRes, agentsRes, statusRes, remotesRes, providersRes] =
+    const [connectionsRes, agentsRes, statusRes, remotesRes, providersRes, keysRes] =
       await Promise.allSettled([
         sshKeysAPI.getSSHConnections(),
         canUseManagedAgents ? managedAgentsAPI.listAgents() : Promise.resolve({ data: [] }),
@@ -361,7 +359,16 @@ const RepositoryWizard = ({
             }),
         canUseRclone ? rcloneAPI.listRemotes() : Promise.resolve({ data: { remotes: [] } }),
         canUseRclone ? rcloneAPI.getProviders() : Promise.resolve({ data: { providers: [] } }),
+        sshKeysAPI.getSSHKeys(),
       ])
+
+    // Only extra keys: the system key is what every connection already uses.
+    const keys = keysRes.status === 'fulfilled' ? keysRes.value.data?.ssh_keys : null
+    setSftpSshKeys(
+      Array.isArray(keys)
+        ? keys.filter((key: { is_system_key?: boolean }) => !key.is_system_key)
+        : []
+    )
 
     if (connectionsRes.status === 'fulfilled') {
       const connections = connectionsRes.value.data?.connections || []
@@ -477,7 +484,7 @@ const RepositoryWizard = ({
       rcloneExtraFlags: Array.isArray(repository.rclone_storage?.extra_flags)
         ? repository.rclone_storage.extra_flags.join(' ')
         : '',
-      rcloneSftpConnectionId: Number(repository.rclone_storage?.sftp_connection_id || '') || '',
+      rcloneSftpSshKeyId: Number(repository.rclone_storage?.sftp_ssh_key_id || '') || '',
       dataSource:
         executionTarget === 'agent' || !repository.source_ssh_connection_id ? 'local' : 'remote',
       sourceSshConnectionId:
@@ -564,7 +571,7 @@ const RepositoryWizard = ({
         next.rcloneRemoteId = ''
         next.rcloneRemotePath = ''
         next.rcloneRemotePathVerified = false
-        next.rcloneSftpConnectionId = ''
+        next.rcloneSftpSshKeyId = ''
       }
       const sourceFieldsChanged =
         nextUpdates.sourceDirs !== undefined ||
@@ -958,9 +965,9 @@ const RepositoryWizard = ({
       rclone_remote_id:
         rcloneFieldsEnabled && wizardState.rcloneRemoteId ? wizardState.rcloneRemoteId : null,
       rclone_remote_path: rcloneFieldsEnabled ? wizardState.rcloneRemotePath : null,
-      rclone_sftp_connection_id:
+      rclone_sftp_ssh_key_id:
         cloudMirrorEnabled && cloudMirrorPrimaryLocation === 'ssh'
-          ? wizardState.rcloneSftpConnectionId || null
+          ? wizardState.rcloneSftpSshKeyId || null
           : null,
       rclone_remote_path_verified: cloudMirrorEnabled
         ? wizardState.rcloneRemotePathVerified
@@ -1004,7 +1011,7 @@ const RepositoryWizard = ({
       }
       delete data.rclone_remote_id
       delete data.rclone_remote_path
-      delete data.rclone_sftp_connection_id
+      delete data.rclone_sftp_ssh_key_id
       delete data.rclone_remote_path_verified
       delete data.rclone_sync_policy
       delete data.rclone_sync_cron_expression
@@ -1075,6 +1082,24 @@ const RepositoryWizard = ({
       }
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleCreateSshKey = async (data: SshKeyCreateInput) => {
+    setIsCreatingSshKey(true)
+    setSshKeyCreateError(null)
+    try {
+      const response = await sshKeysAPI.createSSHKey(data)
+      const key = response.data?.ssh_key as SftpSshKeyOption
+      setSftpSshKeys((prev) => [...prev.filter((item) => item.id !== key.id), key])
+      handleStateChange({ rcloneSftpSshKeyId: key.id })
+      setShowSshKeyDialog(false)
+    } catch (error) {
+      setSshKeyCreateError(
+        translateBackendKey(getApiErrorDetail(error)) || t('wizard.cloudMirror.sshKeyCreateFailed')
+      )
+    } finally {
+      setIsCreatingSshKey(false)
     }
   }
 
@@ -1199,9 +1224,9 @@ const RepositoryWizard = ({
               rcloneSyncCronExpression: wizardState.rcloneSyncCronExpression,
               rcloneSyncTimezone: wizardState.rcloneSyncTimezone,
               rcloneExtraFlags: wizardState.rcloneExtraFlags,
-              rcloneSftpConnectionId: wizardState.rcloneSftpConnectionId,
+              rcloneSftpSshKeyId: wizardState.rcloneSftpSshKeyId,
             }}
-            sshConnections={sftpConnectionChoices}
+            sftpSshKeys={sftpSshKeys}
             rcloneStatus={rcloneStatus}
             rcloneRemotes={rcloneRemotes}
             eligible={isCloudMirrorEligible(wizardState)}
@@ -1214,6 +1239,10 @@ const RepositoryWizard = ({
               setShowRcloneRemoteDialog(true)
             }}
             onBrowseRemotePath={() => setShowRcloneRemoteExplorer(true)}
+            onAddSshKey={() => {
+              setSshKeyCreateError(null)
+              setShowSshKeyDialog(true)
+            }}
           />
         )
 
@@ -1429,6 +1458,16 @@ const RepositoryWizard = ({
       >
         {renderStepContent()}
       </WizardDialog>
+
+      <SshKeyDialog
+        open={showSshKeyDialog}
+        isCreating={isCreatingSshKey}
+        error={sshKeyCreateError}
+        onClose={() => {
+          if (!isCreatingSshKey) setShowSshKeyDialog(false)
+        }}
+        onCreate={handleCreateSshKey}
+      />
 
       <RcloneRemoteDialog
         open={showRcloneRemoteDialog}

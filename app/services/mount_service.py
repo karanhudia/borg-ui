@@ -505,6 +505,7 @@ class MountService:
         remote_path: str,
         job_id: Optional[int] = None,
         read_only: bool = False,
+        ssh_key_id: Optional[int] = None,
     ) -> Tuple[str, str]:
         """
         Mount a remote SSH directory via SSHFS with proper SSH key authentication
@@ -514,6 +515,7 @@ class MountService:
             remote_path: Remote path to mount
             job_id: Optional backup job ID for tracking
             read_only: Mount with ``-o ro`` so nothing can write through it
+            ssh_key_id: Sign in with this key instead of the connection's own
 
         Returns:
             Tuple of (temp_root, mount_id)
@@ -534,13 +536,12 @@ class MountService:
                 raise Exception(f"SSH connection {connection_id} not found")
 
             # Get SSH key
-            ssh_key = (
-                db.query(SSHKey).filter(SSHKey.id == connection.ssh_key_id).first()
-            )
+            key_id = ssh_key_id or connection.ssh_key_id
+            ssh_key = db.query(SSHKey).filter(SSHKey.id == key_id).first()
 
             if not ssh_key:
                 raise Exception(
-                    f"SSH key {connection.ssh_key_id} not found for connection {connection_id}"
+                    f"SSH key {key_id} not found for connection {connection_id}"
                 )
 
             # Check if SSHFS is available

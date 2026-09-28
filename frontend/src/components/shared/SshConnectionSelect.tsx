@@ -28,12 +28,7 @@ interface SshConnectionSelectProps {
   hideEmptyAlert?: boolean
   /** Tooltip on the status dot when the connection is connected. */
   connectedTooltip?: string
-  /** Adds a first row that stands for "no specific connection"; picking it calls onClear. */
-  defaultOption?: { primary: string; secondary?: string }
-  onClear?: () => void
 }
-
-const DEFAULT_OPTION_VALUE = 'default'
 
 export default function SshConnectionSelect({
   value,
@@ -45,15 +40,13 @@ export default function SshConnectionSelect({
   disabled,
   hideEmptyAlert,
   connectedTooltip,
-  defaultOption,
-  onClear,
 }: SshConnectionSelectProps) {
   if (!Array.isArray(connections) || connections.length === 0) {
     if (hideEmptyAlert) return null
     return <Alert severity="warning">{emptyMessage}</Alert>
   }
 
-  const connectionOptions: RichSelectOption[] = connections.map((conn) => ({
+  const options: RichSelectOption[] = connections.map((conn) => ({
     value: String(conn.id),
     icon: <Cloud size={16} />,
     primary: `${conn.username}@${conn.host}`,
@@ -66,19 +59,11 @@ export default function SshConnectionSelect({
       ) : undefined,
   }))
 
-  const options: RichSelectOption[] = defaultOption
-    ? [
-        { value: DEFAULT_OPTION_VALUE, icon: <Cloud size={16} />, ...defaultOption },
-        ...connectionOptions,
-      ]
-    : connectionOptions
-
   return (
     <RichSelect
-      value={value === '' ? (defaultOption ? DEFAULT_OPTION_VALUE : '') : String(value)}
+      value={value === '' ? '' : String(value)}
       onChange={(next) => {
-        if (next === DEFAULT_OPTION_VALUE) onClear?.()
-        else if (next) onChange(Number(next))
+        if (next) onChange(Number(next))
       }}
       options={options}
       label={label}

@@ -11,12 +11,12 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import { Cloud, Lock, Plus } from 'lucide-react'
+import { Cloud, KeyRound, Lock, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import PathSelectorField from '../shared/PathSelectorField'
 import SchedulePicker from '../shared/SchedulePicker'
 import RcloneRemoteSelect from '../shared/RcloneRemoteSelect'
-import SshConnectionSelect, { type SshConnectionSummary } from '../shared/SshConnectionSelect'
+import RichSelect from '../shared/RichSelect'
 
 export interface CloudMirrorStepData {
   cloudMirrorEnabled: boolean
@@ -27,8 +27,17 @@ export interface CloudMirrorStepData {
   rcloneSyncCronExpression: string
   rcloneSyncTimezone: string
   rcloneExtraFlags: string
-  rcloneSftpConnectionId?: number | ''
+  rcloneSftpSshKeyId?: number | ''
 }
+
+export interface SftpSshKeyOption {
+  id: number
+  name: string
+  key_type: string
+  fingerprint?: string | null
+}
+
+const SAME_KEY_VALUE = 'connection-key'
 
 interface RcloneRemote {
   id: number
@@ -46,7 +55,7 @@ interface RcloneStatus {
 interface WizardStepCloudMirrorProps {
   data: CloudMirrorStepData
   rcloneRemotes?: RcloneRemote[]
-  sshConnections?: SshConnectionSummary[]
+  sftpSshKeys?: SftpSshKeyOption[]
   rcloneStatus?: RcloneStatus | null
   eligible: boolean
   primaryLocation?: 'local' | 'ssh' | 'agent'
@@ -55,12 +64,13 @@ interface WizardStepCloudMirrorProps {
   onChange: (data: Partial<CloudMirrorStepData>) => void
   onAddRcloneRemote?: () => void
   onBrowseRemotePath?: () => void
+  onAddSshKey?: () => void
 }
 
 export default function WizardStepCloudMirror({
   data,
   rcloneRemotes = [],
-  sshConnections = [],
+  sftpSshKeys = [],
   rcloneStatus = null,
   eligible,
   primaryLocation = 'local',
@@ -69,6 +79,7 @@ export default function WizardStepCloudMirror({
   onChange,
   onAddRcloneRemote,
   onBrowseRemotePath,
+  onAddSshKey,
 }: WizardStepCloudMirrorProps) {
   const { t } = useTranslation()
   const isRcloneAvailable = rcloneStatus?.available === true
@@ -203,21 +214,52 @@ export default function WizardStepCloudMirror({
             browseButtonDisabled={controlsDisabled || !data.rcloneRemoteId || !onBrowseRemotePath}
           />
 
-          {primaryLocation === 'ssh' && !isCachedRepositoryMode && sshConnections.length > 0 && (
+          {primaryLocation === 'ssh' && !isCachedRepositoryMode && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-              <SshConnectionSelect
-                value={data.rcloneSftpConnectionId ?? ''}
-                onChange={(id) => onChange({ rcloneSftpConnectionId: id })}
-                onClear={() => onChange({ rcloneSftpConnectionId: '' })}
-                connections={sshConnections}
-                label={t('wizard.cloudMirror.sftpConnectionLabel')}
-                emptyMessage=""
-                labelId="cloud-mirror-sftp-connection-label"
-                disabled={controlsDisabled}
-                defaultOption={{ primary: t('wizard.cloudMirror.sftpConnectionDefault') }}
-              />
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) auto' },
+                  gap: 1,
+                  alignItems: 'start',
+                }}
+              >
+                <RichSelect
+                  value={data.rcloneSftpSshKeyId ? String(data.rcloneSftpSshKeyId) : SAME_KEY_VALUE}
+                  onChange={(next) =>
+                    onChange({ rcloneSftpSshKeyId: next === SAME_KEY_VALUE ? '' : Number(next) })
+                  }
+                  options={[
+                    {
+                      value: SAME_KEY_VALUE,
+                      icon: <KeyRound size={16} />,
+                      primary: t('wizard.cloudMirror.sftpKeyDefault'),
+                    },
+                    ...sftpSshKeys.map((key) => ({
+                      value: String(key.id),
+                      icon: <KeyRound size={16} />,
+                      primary: key.name,
+                      secondary: key.fingerprint || key.key_type,
+                    })),
+                  ]}
+                  label={t('wizard.cloudMirror.sftpKeyLabel')}
+                  labelId="cloud-mirror-sftp-key-label"
+                  disabled={controlsDisabled}
+                />
+                {onAddSshKey && (
+                  <Button
+                    variant="outlined"
+                    startIcon={<Plus size={16} />}
+                    onClick={onAddSshKey}
+                    disabled={controlsDisabled}
+                    sx={{ height: 56, minHeight: 56, whiteSpace: 'nowrap' }}
+                  >
+                    {t('wizard.cloudMirror.sftpKeyAdd')}
+                  </Button>
+                )}
+              </Box>
               <Typography variant="caption" sx={{ color: 'text.secondary', px: 1.75 }}>
-                {t('wizard.cloudMirror.sftpConnectionHelper')}
+                {t('wizard.cloudMirror.sftpKeyHelper')}
               </Typography>
             </Box>
           )}

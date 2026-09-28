@@ -239,7 +239,8 @@ class SSHKeyCreate(BaseModel):
     name: str
     description: Optional[str] = None
     key_type: str = "rsa"  # rsa, ed25519, ecdsa
-    public_key: str
+    # Derived from private_key with ssh-keygen when omitted.
+    public_key: Optional[str] = None
     private_key: str
 
 
@@ -433,6 +434,37 @@ async def get_system_key(
         )
 
 
+def _derive_public_key(private_key: str) -> str:
+    """Public half of a pasted private key; rejects anything ssh-keygen
+    cannot read, including passphrase-protected keys."""
+    with tempfile.TemporaryDirectory() as tmp:
+        key_path = os.path.join(tmp, "key")
+        fd = os.open(key_path, os.O_WRONLY | os.O_CREAT, 0o600)
+        with os.fdopen(fd, "w") as handle:
+            handle.write(private_key.strip() + "\n")
+        result = subprocess.run(
+            ["ssh-keygen", "-y", "-P", "", "-f", key_path],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    if result.returncode != 0 or not result.stdout.strip():
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.ssh.invalidPrivateKeyFormat"},
+        )
+    return result.stdout.strip()
+
+
+def _key_type_from_public_key(public_key: str) -> str:
+    prefix = public_key.split(" ", 1)[0]
+    if prefix == "ssh-ed25519":
+        return "ed25519"
+    if prefix.startswith("ecdsa-"):
+        return "ecdsa"
+    return "rsa"
+
+
 @router.get("")
 @router.get("/")
 async def get_ssh_keys(
@@ -490,6 +522,10 @@ async def create_ssh_key(
                 status_code=400,
                 detail={"key": "backend.errors.ssh.keyNameAlreadyExists"},
             )
+
+        if not key_data.public_key:
+            key_data.public_key = _derive_public_key(key_data.private_key)
+            key_data.key_type = _key_type_from_public_key(key_data.public_key)
 
         # Validate SSH key format
         if not key_data.public_key.startswith(("ssh-rsa", "ssh-ed25519", "ecdsa-sha2")):
@@ -2410,9 +2446,6 @@ async def delete_ssh_connection(
         db.query(ScheduledJob).filter(
             ScheduledJob.source_ssh_connection_id == connection_id
         ).update({"source_ssh_connection_id": None}, synchronize_session=False)
-        db.query(RepositoryStorage).filter(
-            RepositoryStorage.sftp_connection_id == connection_id
-        ).update({"sftp_connection_id": None}, synchronize_session=False)
 
         db.delete(connection)
         db.commit()
@@ -2605,27 +2638,34 @@ async def delete_ssh_key(
                 connection_count=connection_count,
             )
 
+        db.query(RepositoryStorage).filter(
+            RepositoryStorage.sftp_ssh_key_id == key_id
+        ).update({"sftp_ssh_key_id": None}, synchronize_session=False)
+
         # Delete the SSH key from database
+        is_system_key = ssh_key.is_system_key
         db.delete(ssh_key)
         db.commit()
 
-        # Remove key files from filesystem
-        try:
-            ssh_dir = settings.ssh_home_dir
-            private_key_path = os.path.join(ssh_dir, f"id_{key_type}")
-            public_key_path = os.path.join(ssh_dir, f"id_{key_type}.pub")
+        # Remove key files from filesystem. Only the system key is written
+        # there; an extra key sharing its type must not delete those files.
+        if is_system_key:
+            try:
+                ssh_dir = settings.ssh_home_dir
+                private_key_path = os.path.join(ssh_dir, f"id_{key_type}")
+                public_key_path = os.path.join(ssh_dir, f"id_{key_type}.pub")
 
-            if os.path.exists(private_key_path):
-                os.remove(private_key_path)
-                logger.info("Removed private key file", path=private_key_path)
+                if os.path.exists(private_key_path):
+                    os.remove(private_key_path)
+                    logger.info("Removed private key file", path=private_key_path)
 
-            if os.path.exists(public_key_path):
-                os.remove(public_key_path)
-                logger.info("Removed public key file", path=public_key_path)
-        except Exception as e:
-            logger.warning(
-                "Failed to remove SSH key files from filesystem", error=str(e)
-            )
+                if os.path.exists(public_key_path):
+                    os.remove(public_key_path)
+                    logger.info("Removed public key file", path=public_key_path)
+            except Exception as e:
+                logger.warning(
+                    "Failed to remove SSH key files from filesystem", error=str(e)
+                )
 
         logger.info(
             "SSH key deleted",

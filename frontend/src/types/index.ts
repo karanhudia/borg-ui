@@ -175,7 +175,7 @@ export interface RcloneStorage {
   rclone_remote_id: number
   rclone_remote_name?: string | null
   rclone_remote_path: string
-  sftp_connection_id?: number | null
+  sftp_ssh_key_id?: number | null
   rclone_target?: string | null
   cache_path?: string | null
   cache_present?: boolean

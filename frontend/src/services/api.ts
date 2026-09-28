@@ -183,7 +183,7 @@ export interface RepositoryData {
   cloud_mirror_enabled?: boolean
   rclone_remote_id?: number | null
   rclone_remote_path?: string | null
-  rclone_sftp_connection_id?: number | null
+  rclone_sftp_ssh_key_id?: number | null
   rclone_remote_path_verified?: boolean
   rclone_sync_policy?: 'after_success' | 'manual' | 'scheduled'
   rclone_sync_cron_expression?: string | null

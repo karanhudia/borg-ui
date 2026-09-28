@@ -188,46 +188,48 @@ describe('WizardStepCloudMirror', () => {
     expect(screen.queryByText(/Local Cache Path/i)).not.toBeInTheDocument()
   })
 
-  it('lets an SSH mirror pick a separate SFTP connection or fall back to the repository one', async () => {
+  it('lets an SSH mirror pick a separate SFTP key or fall back to the connection key', async () => {
     const onChange = vi.fn()
+    const onAddSshKey = vi.fn()
     const user = userEvent.setup()
-    const sshConnections = [
-      { id: 7, host: 'repo.example', username: 'borg', port: 22, status: 'connected' },
-      { id: 8, host: 'repo.example', username: 'sftp', port: 22, status: 'connected' },
-    ]
 
     render(
       <WizardStepCloudMirror
-        data={{ ...defaultData, cloudMirrorEnabled: true, rcloneSftpConnectionId: 8 }}
+        data={{ ...defaultData, cloudMirrorEnabled: true, rcloneSftpSshKeyId: 8 }}
         rcloneRemotes={remotes}
-        sshConnections={sshConnections}
+        sftpSshKeys={[
+          { id: 7, name: 'old-key', key_type: 'rsa' },
+          { id: 8, name: 'borgbase-sftp', key_type: 'ed25519' },
+        ]}
         rcloneStatus={{ available: true, version: 'rclone v1.66.0' }}
         eligible={true}
         primaryLocation="ssh"
         onChange={onChange}
+        onAddSshKey={onAddSshKey}
       />
     )
 
-    const select = screen.getByRole('combobox', { name: /SFTP connection for cloud sync/i })
-    expect(select).toHaveTextContent('sftp@repo.example')
+    const select = screen.getByRole('combobox', { name: /SSH key for cloud sync/i })
+    expect(select).toHaveTextContent('borgbase-sftp')
 
     await user.click(select)
-    await user.click(await screen.findByRole('option', { name: /Same as repository connection/i }))
-    expect(onChange).toHaveBeenLastCalledWith({ rcloneSftpConnectionId: '' })
+    await user.click(await screen.findByRole('option', { name: /Same key as the connection/i }))
+    expect(onChange).toHaveBeenLastCalledWith({ rcloneSftpSshKeyId: '' })
 
     await user.click(select)
-    await user.click(await screen.findByRole('option', { name: /borg@repo\.example/i }))
-    expect(onChange).toHaveBeenLastCalledWith({ rcloneSftpConnectionId: 7 })
+    await user.click(await screen.findByRole('option', { name: /old-key/i }))
+    expect(onChange).toHaveBeenLastCalledWith({ rcloneSftpSshKeyId: 7 })
+
+    await user.click(screen.getByRole('button', { name: /Add key/i }))
+    expect(onAddSshKey).toHaveBeenCalled()
   })
 
-  it('hides the SFTP connection field for non-SSH mirrors', () => {
+  it('hides the SFTP key field for non-SSH mirrors', () => {
     render(
       <WizardStepCloudMirror
         data={{ ...defaultData, cloudMirrorEnabled: true }}
         rcloneRemotes={remotes}
-        sshConnections={[
-          { id: 7, host: 'repo.example', username: 'borg', port: 22, status: 'connected' },
-        ]}
+        sftpSshKeys={[{ id: 7, name: 'old-key', key_type: 'rsa' }]}
         rcloneStatus={{ available: true, version: 'rclone v1.66.0' }}
         eligible={true}
         onChange={vi.fn()}
@@ -235,7 +237,7 @@ describe('WizardStepCloudMirror', () => {
     )
 
     expect(
-      screen.queryByRole('combobox', { name: /SFTP connection for cloud sync/i })
+      screen.queryByRole('combobox', { name: /SSH key for cloud sync/i })
     ).not.toBeInTheDocument()
   })
 })

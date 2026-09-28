@@ -4819,9 +4819,16 @@
       "browsing": "Browsing remote...",
       "noRemoteFolders": "No folders found in this remote path.",
       "useFolder": "Use folder",
-      "sftpConnectionLabel": "SFTP connection for cloud sync",
-      "sftpConnectionDefault": "Same as repository connection",
-      "sftpConnectionHelper": "Some hosts, like BorgBase, only allow a key to be used for either Borg or SFTP. Pick a separate SFTP connection here if the repository's own key cannot open SFTP."
+      "sftpKeyLabel": "SSH key for cloud sync",
+      "sftpKeyDefault": "Same key as the connection",
+      "sftpKeyAdd": "Add key",
+      "sftpKeyHelper": "Some hosts, like BorgBase, only allow a key to be used for either Borg or SFTP. Add the key that has SFTP access here; Borg keeps using the connection's key.",
+      "sshKeyDialogTitle": "Add SSH key for cloud sync",
+      "sshKeyNameLabel": "Key name",
+      "sshKeyPrivateKeyLabel": "Private key",
+      "sshKeyPrivateKeyHelper": "Paste the private key whose public key has SFTP access at your storage host. Keys protected with a passphrase are not supported.",
+      "sshKeyDialogSubmit": "Save key",
+      "sshKeyCreateFailed": "Could not save the SSH key"
     },
     "restoreDestination": {
       "port": "Port {{port}}",
@@ -5931,8 +5938,7 @@
         "oauthCodeExchangeFailed": "Borg UI could not exchange the provider authorization code.",
         "failedToCreateRemote": "Failed to create rclone remote",
         "failedToUpdateRemote": "Failed to update rclone remote",
-        "failedToDeleteRemote": "Failed to delete rclone remote",
-        "sftpConnectionHostMismatch": "The SFTP connection must use the same host and port as the repository connection"
+        "failedToDeleteRemote": "Failed to delete rclone remote"
       },
       "backup": {
         "backupJobNotFound": "Backup job not found",

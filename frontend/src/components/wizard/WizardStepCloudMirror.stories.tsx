@@ -130,30 +130,21 @@ export const SshPrimaryEnabled: Story = {
   ),
 }
 
-const sshConnections = [
-  {
-    id: 7,
-    host: 'xyz123.repo.borgbase.com',
-    username: 'xyz123',
-    port: 22,
-    status: 'connected',
-  },
-  {
-    id: 8,
-    host: 'xyz123.repo.borgbase.com',
-    username: 'xyz123-sftp',
-    port: 22,
-    status: 'connected',
-  },
-]
-
-export const SshPrimaryWithSftpConnection: Story = {
+export const SshPrimaryWithSftpKey: Story = {
   args: {
     ...SshPrimaryEnabled.args,
-    sshConnections,
+    sftpSshKeys: [
+      {
+        id: 8,
+        name: 'borgbase-sftp',
+        key_type: 'ed25519',
+        fingerprint: 'SHA256:q3Vd9mN2x7Lr0kPzWc5Y1hTg8sJfAe4uBn6oXiRlKtE',
+      },
+    ],
+    onAddSshKey: () => {},
     data: {
       ...SshPrimaryEnabled.args.data,
-      rcloneSftpConnectionId: 8,
+      rcloneSftpSshKeyId: 8,
     },
   },
   render: SshPrimaryEnabled.render,
