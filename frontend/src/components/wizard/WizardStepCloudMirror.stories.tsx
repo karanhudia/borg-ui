@@ -139,9 +139,11 @@ export const SshPrimaryWithSftpKey: Story = {
         name: 'borgbase-sftp',
         key_type: 'ed25519',
         fingerprint: 'SHA256:q3Vd9mN2x7Lr0kPzWc5Y1hTg8sJfAe4uBn6oXiRlKtE',
+        sftp_repository_count: 2,
       },
     ],
     onAddSshKey: () => {},
+    onDeleteSshKey: () => {},
     data: {
       ...SshPrimaryEnabled.args.data,
       rcloneSftpSshKeyId: 8,

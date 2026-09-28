@@ -4832,7 +4832,14 @@
       "sshKeyPrivateKeyLabel": "Chiave privata",
       "sshKeyPrivateKeyHelper": "Incolla la chiave privata la cui chiave pubblica ha accesso SFTP presso il provider di archiviazione. Le chiavi protette da passphrase non sono supportate.",
       "sshKeyDialogSubmit": "Salva chiave",
-      "sshKeyCreateFailed": "Impossibile salvare la chiave SSH"
+      "sshKeyCreateFailed": "Impossibile salvare la chiave SSH",
+      "sftpKeyDelete": "Elimina chiave",
+      "sshKeyDeleteTitle": "Eliminare {{name}}?",
+      "sshKeyDeleteInUse_one": "{{count}} repository usa questa chiave per la sincronizzazione cloud. Tornerà alla chiave della connessione e la sincronizzazione fallirà finché non scegli un'altra chiave SFTP.",
+      "sshKeyDeleteInUse_other": "{{count}} repository usano questa chiave per la sincronizzazione cloud. Torneranno alla chiave della connessione e la sincronizzazione fallirà finché non scegli un'altra chiave SFTP.",
+      "sshKeyDeleteUnused": "Nessun repository usa questa chiave per la sincronizzazione cloud. La chiave privata viene rimossa da Borg UI.",
+      "sshKeyDeleteConfirm": "Elimina chiave",
+      "sshKeyDeleteFailed": "Impossibile eliminare la chiave SSH"
     },
     "restoreDestination": {
       "port": "Porta {{port}}",

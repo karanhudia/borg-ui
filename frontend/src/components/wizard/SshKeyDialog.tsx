@@ -42,6 +42,8 @@ export default function SshKeyDialog({
   useEffect(() => {
     if (open) {
       setName('')
+    } else {
+      // The dialog stays mounted, so drop the pasted key as soon as it closes.
       setPrivateKey('')
     }
   }, [open])

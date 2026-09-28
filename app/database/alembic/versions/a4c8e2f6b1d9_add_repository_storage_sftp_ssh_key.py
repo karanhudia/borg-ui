@@ -5,7 +5,7 @@ cloud mirror's SSHFS mount may need a different key than borg uses on the
 same connection (issue #1062).
 
 Revision ID: a4c8e2f6b1d9
-Revises: f2b3c4d5e6a7
+Revises: a4b5c6d7e8f9
 Create Date: 2026-09-28
 """
 
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 
 revision = "a4c8e2f6b1d9"
-down_revision = "f2b3c4d5e6a7"
+down_revision = "a4b5c6d7e8f9"
 branch_labels = None
 depends_on = None
 

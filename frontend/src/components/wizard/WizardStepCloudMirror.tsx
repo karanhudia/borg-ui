@@ -3,6 +3,8 @@ import {
   Box,
   Button,
   Checkbox,
+  IconButton,
+  Tooltip,
   FormControl,
   FormControlLabel,
   InputLabel,
@@ -11,7 +13,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import { Cloud, KeyRound, Lock, Plus } from 'lucide-react'
+import { Cloud, KeyRound, Lock, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import PathSelectorField from '../shared/PathSelectorField'
 import SchedulePicker from '../shared/SchedulePicker'
@@ -35,6 +37,7 @@ export interface SftpSshKeyOption {
   name: string
   key_type: string
   fingerprint?: string | null
+  sftp_repository_count?: number
 }
 
 const SAME_KEY_VALUE = 'connection-key'
@@ -65,6 +68,7 @@ interface WizardStepCloudMirrorProps {
   onAddRcloneRemote?: () => void
   onBrowseRemotePath?: () => void
   onAddSshKey?: () => void
+  onDeleteSshKey?: (key: SftpSshKeyOption) => void
 }
 
 export default function WizardStepCloudMirror({
@@ -80,6 +84,7 @@ export default function WizardStepCloudMirror({
   onAddRcloneRemote,
   onBrowseRemotePath,
   onAddSshKey,
+  onDeleteSshKey,
 }: WizardStepCloudMirrorProps) {
   const { t } = useTranslation()
   const isRcloneAvailable = rcloneStatus?.available === true
@@ -96,6 +101,7 @@ export default function WizardStepCloudMirror({
   const enableLabel = isCachedRepositoryMode
     ? t('wizard.cloudMirror.cachedRepositoryLabel')
     : t('wizard.cloudMirror.enableLabel')
+  const selectedSftpKey = sftpSshKeys.find((key) => key.id === data.rcloneSftpSshKeyId)
   const enableHelper = isCachedRepositoryMode
     ? t('wizard.cloudMirror.cachedRepositoryHelper')
     : t('wizard.cloudMirror.enableHelper')
@@ -219,7 +225,7 @@ export default function WizardStepCloudMirror({
               <Box
                 sx={{
                   display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) auto' },
+                  gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) auto auto' },
                   gap: 1,
                   alignItems: 'start',
                 }}
@@ -256,6 +262,26 @@ export default function WizardStepCloudMirror({
                   >
                     {t('wizard.cloudMirror.sftpKeyAdd')}
                   </Button>
+                )}
+                {onDeleteSshKey && (
+                  <Tooltip title={t('wizard.cloudMirror.sftpKeyDelete')}>
+                    <span>
+                      <IconButton
+                        aria-label={t('wizard.cloudMirror.sftpKeyDelete')}
+                        onClick={() => selectedSftpKey && onDeleteSshKey(selectedSftpKey)}
+                        disabled={controlsDisabled || !selectedSftpKey}
+                        sx={{
+                          width: 56,
+                          height: 56,
+                          border: 1,
+                          borderColor: 'divider',
+                          borderRadius: 1,
+                        }}
+                      >
+                        <Trash2 size={18} />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
                 )}
               </Box>
               <Typography variant="caption" sx={{ color: 'text.secondary', px: 1.75 }}>

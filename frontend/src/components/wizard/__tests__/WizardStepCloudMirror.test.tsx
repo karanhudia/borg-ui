@@ -224,6 +224,38 @@ describe('WizardStepCloudMirror', () => {
     expect(onAddSshKey).toHaveBeenCalled()
   })
 
+  it('deletes only the selected extra key', async () => {
+    const onDeleteSshKey = vi.fn()
+    const user = userEvent.setup()
+    const keys = [
+      { id: 7, name: 'old-key', key_type: 'rsa' },
+      { id: 8, name: 'borgbase-sftp', key_type: 'ed25519', sftp_repository_count: 2 },
+    ]
+    const props = {
+      rcloneRemotes: remotes,
+      sftpSshKeys: keys,
+      rcloneStatus: { available: true, version: 'rclone v1.66.0' },
+      eligible: true,
+      primaryLocation: 'ssh' as const,
+      onChange: vi.fn(),
+      onDeleteSshKey,
+    }
+
+    const { rerender } = render(
+      <WizardStepCloudMirror data={{ ...defaultData, cloudMirrorEnabled: true }} {...props} />
+    )
+    expect(screen.getByRole('button', { name: /Delete key/i })).toBeDisabled()
+
+    rerender(
+      <WizardStepCloudMirror
+        data={{ ...defaultData, cloudMirrorEnabled: true, rcloneSftpSshKeyId: 8 }}
+        {...props}
+      />
+    )
+    await user.click(screen.getByRole('button', { name: /Delete key/i }))
+    expect(onDeleteSshKey).toHaveBeenCalledWith(keys[1])
+  })
+
   it('hides the SFTP key field for non-SSH mirrors', () => {
     render(
       <WizardStepCloudMirror

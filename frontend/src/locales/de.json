@@ -4832,7 +4832,14 @@
       "sshKeyPrivateKeyLabel": "Privater Schlüssel",
       "sshKeyPrivateKeyHelper": "Füge den privaten Schlüssel ein, dessen öffentlicher Schlüssel beim Speicheranbieter SFTP-Zugriff hat. Schlüssel mit Passphrase werden nicht unterstützt.",
       "sshKeyDialogSubmit": "Schlüssel speichern",
-      "sshKeyCreateFailed": "Der SSH-Schlüssel konnte nicht gespeichert werden"
+      "sshKeyCreateFailed": "Der SSH-Schlüssel konnte nicht gespeichert werden",
+      "sftpKeyDelete": "Schlüssel löschen",
+      "sshKeyDeleteTitle": "{{name}} löschen?",
+      "sshKeyDeleteInUse_one": "{{count}} Repository verwendet diesen Schlüssel für die Cloud-Synchronisierung. Es fällt auf den Schlüssel der Verbindung zurück, und die Cloud-Synchronisierung schlägt fehl, bis du einen anderen SFTP-Schlüssel wählst.",
+      "sshKeyDeleteInUse_other": "{{count}} Repositorys verwenden diesen Schlüssel für die Cloud-Synchronisierung. Sie fallen auf den Schlüssel der Verbindung zurück, und die Cloud-Synchronisierung schlägt fehl, bis du einen anderen SFTP-Schlüssel wählst.",
+      "sshKeyDeleteUnused": "Kein Repository verwendet diesen Schlüssel für die Cloud-Synchronisierung. Der private Schlüssel wird aus Borg UI entfernt.",
+      "sshKeyDeleteConfirm": "Schlüssel löschen",
+      "sshKeyDeleteFailed": "Der SSH-Schlüssel konnte nicht gelöscht werden"
     },
     "restoreDestination": {
       "port": "Port {{port}}",

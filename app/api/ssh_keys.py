@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Body
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
 from datetime import datetime
@@ -473,6 +474,12 @@ async def get_ssh_keys(
     """Get all SSH keys with connection status (deprecated - use /system-key)"""
     try:
         ssh_keys = db.query(SSHKey).all()
+        sftp_counts = dict(
+            db.query(RepositoryStorage.sftp_ssh_key_id, func.count())
+            .filter(RepositoryStorage.sftp_ssh_key_id.isnot(None))
+            .group_by(RepositoryStorage.sftp_ssh_key_id)
+            .all()
+        )
         return {
             "success": True,
             "ssh_keys": [
@@ -491,6 +498,7 @@ async def get_ssh_keys(
                     "active_connections": len(
                         [c for c in key.connections if c.status == "connected"]
                     ),
+                    "sftp_repository_count": sftp_counts.get(key.id, 0),
                 }
                 for key in ssh_keys
             ],
@@ -524,7 +532,9 @@ async def create_ssh_key(
             )
 
         if not key_data.public_key:
-            key_data.public_key = _derive_public_key(key_data.private_key)
+            key_data.public_key = await asyncio.to_thread(
+                _derive_public_key, key_data.private_key
+            )
             key_data.key_type = _key_type_from_public_key(key_data.public_key)
 
         # Validate SSH key format

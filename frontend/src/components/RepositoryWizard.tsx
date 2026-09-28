@@ -6,6 +6,7 @@ import WizardDialog from './shared/WizardDialog'
 import {
   RcloneRemoteDialog,
   RcloneRemoteFolderPickerDialog,
+  SshKeyDeleteDialog,
   SshKeyDialog,
   WizardStepCloudMirror,
   WizardStepLocation,
@@ -238,6 +239,9 @@ const RepositoryWizard = ({
   const [showSshKeyDialog, setShowSshKeyDialog] = useState(false)
   const [isCreatingSshKey, setIsCreatingSshKey] = useState(false)
   const [sshKeyCreateError, setSshKeyCreateError] = useState<string | null>(null)
+  const [sshKeyPendingDelete, setSshKeyPendingDelete] = useState<SftpSshKeyOption | null>(null)
+  const [isDeletingSshKey, setIsDeletingSshKey] = useState(false)
+  const [sshKeyDeleteError, setSshKeyDeleteError] = useState<string | null>(null)
   const [isCreatingRcloneRemote, setIsCreatingRcloneRemote] = useState(false)
   const [rcloneRemoteCreateError, setRcloneRemoteCreateError] = useState<string | null>(null)
 
@@ -1085,6 +1089,27 @@ const RepositoryWizard = ({
     }
   }
 
+  const handleDeleteSshKey = async () => {
+    if (!sshKeyPendingDelete) return
+    const keyId = sshKeyPendingDelete.id
+    setIsDeletingSshKey(true)
+    setSshKeyDeleteError(null)
+    try {
+      await sshKeysAPI.deleteSSHKey(keyId)
+      setSftpSshKeys((prev) => prev.filter((item) => item.id !== keyId))
+      if (wizardState.rcloneSftpSshKeyId === keyId) {
+        handleStateChange({ rcloneSftpSshKeyId: '' })
+      }
+      setSshKeyPendingDelete(null)
+    } catch (error) {
+      setSshKeyDeleteError(
+        translateBackendKey(getApiErrorDetail(error)) || t('wizard.cloudMirror.sshKeyDeleteFailed')
+      )
+    } finally {
+      setIsDeletingSshKey(false)
+    }
+  }
+
   const handleCreateSshKey = async (data: SshKeyCreateInput) => {
     setIsCreatingSshKey(true)
     setSshKeyCreateError(null)
@@ -1242,6 +1267,10 @@ const RepositoryWizard = ({
             onAddSshKey={() => {
               setSshKeyCreateError(null)
               setShowSshKeyDialog(true)
+            }}
+            onDeleteSshKey={(key) => {
+              setSshKeyDeleteError(null)
+              setSshKeyPendingDelete(key)
             }}
           />
         )
@@ -1467,6 +1496,18 @@ const RepositoryWizard = ({
           if (!isCreatingSshKey) setShowSshKeyDialog(false)
         }}
         onCreate={handleCreateSshKey}
+      />
+
+      <SshKeyDeleteDialog
+        open={sshKeyPendingDelete !== null}
+        keyName={sshKeyPendingDelete?.name || ''}
+        repositoryCount={sshKeyPendingDelete?.sftp_repository_count || 0}
+        isDeleting={isDeletingSshKey}
+        error={sshKeyDeleteError}
+        onClose={() => {
+          if (!isDeletingSshKey) setSshKeyPendingDelete(null)
+        }}
+        onConfirm={handleDeleteSshKey}
       />
 
       <RcloneRemoteDialog

@@ -18,6 +18,7 @@ vi.mock('../../services/api', () => ({
     getSSHConnections: vi.fn(),
     getSSHKeys: vi.fn(),
     createSSHKey: vi.fn(),
+    deleteSSHKey: vi.fn(),
   },
   managedAgentsAPI: {
     listAgents: vi.fn(),

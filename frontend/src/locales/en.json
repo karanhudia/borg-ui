@@ -4832,7 +4832,14 @@
       "sshKeyPrivateKeyLabel": "Private key",
       "sshKeyPrivateKeyHelper": "Paste the private key whose public key has SFTP access at your storage host. Keys protected with a passphrase are not supported.",
       "sshKeyDialogSubmit": "Save key",
-      "sshKeyCreateFailed": "Could not save the SSH key"
+      "sshKeyCreateFailed": "Could not save the SSH key",
+      "sftpKeyDelete": "Delete key",
+      "sshKeyDeleteTitle": "Delete {{name}}?",
+      "sshKeyDeleteInUse_one": "{{count}} repository uses this key for cloud sync. It will go back to the connection's key, and its cloud sync will fail until you pick another SFTP key.",
+      "sshKeyDeleteInUse_other": "{{count}} repositories use this key for cloud sync. They will go back to the connection's key, and their cloud sync will fail until you pick another SFTP key.",
+      "sshKeyDeleteUnused": "No repository uses this key for cloud sync. The private key is removed from Borg UI.",
+      "sshKeyDeleteConfirm": "Delete key",
+      "sshKeyDeleteFailed": "Could not delete the SSH key"
     },
     "restoreDestination": {
       "port": "Port {{port}}",

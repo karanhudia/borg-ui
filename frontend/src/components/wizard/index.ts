@@ -9,6 +9,7 @@ export { default as WizardStepReview } from './WizardStepReview'
 export { default as BackupFlowPreview } from './BackupFlowPreview'
 export { default as RcloneRemoteDialog } from './RcloneRemoteDialog'
 export { default as SshKeyDialog } from './SshKeyDialog'
+export { default as SshKeyDeleteDialog } from './SshKeyDeleteDialog'
 export { default as WizardStepCloudMirror } from './WizardStepCloudMirror'
 export { default as RcloneRemoteFolderPickerDialog } from './RcloneRemoteFolderPickerDialog'
 
