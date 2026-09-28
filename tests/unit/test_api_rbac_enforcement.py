@@ -363,3 +363,280 @@ class TestScheduleProtection:
             headers=headers,
         )
         assert response.status_code == 403
+
+
+@pytest.mark.unit
+class TestBrowseProtection:
+    """GET /api/browse/{repository_id}/{archive_name} must be repo-scoped.
+
+    Regression: the endpoint loaded the repo by id but never called
+    check_repo_access, so a user with no grant could enumerate an archive's
+    file tree and per-file metadata (name/size/mtime).
+    """
+
+    def test_no_permission_cannot_browse_archive(self, test_client, test_db):
+        from app.core.security import create_access_token
+
+        user = _make_user(test_db, "brw-np1", role="viewer")
+        repo = _make_repo(test_db, "brw-repo1")
+        token = create_access_token(data={"sub": user.username})
+        headers = {"Authorization": f"Bearer {token}"}
+        response = test_client.get(
+            f"/api/browse/{repo.id}/archive1",
+            headers=headers,
+        )
+        assert response.status_code == 403
+
+    def test_viewer_with_permission_passes_authz(self, test_client, test_db):
+        from app.core.security import create_access_token
+        from unittest.mock import patch
+
+        user = _make_user(test_db, "brw-vwr1", role="viewer")
+        repo = _make_repo(test_db, "brw-repo2")
+        _grant(test_db, user, repo, "viewer")
+        token = create_access_token(data={"sub": user.username})
+        headers = {"Authorization": f"Bearer {token}"}
+        # Cache hit path returns immediately without touching borg, so the only
+        # gate we exercise is the authorization check.
+        with patch("app.api.browse.archive_cache.get", return_value=[]):
+            response = test_client.get(
+                f"/api/browse/{repo.id}/archive1",
+                headers=headers,
+            )
+        assert response.status_code != 403
+
+
+@pytest.mark.unit
+class TestScriptLibraryProtection:
+    """The script library runs arbitrary shell on the server. Regression: any
+    authenticated user (viewer included) could create and test-execute a script,
+    and attach pre/post-backup hooks to any repository.
+    """
+
+    def test_viewer_cannot_create_script(self, test_client, test_db):
+        from app.core.security import create_access_token
+
+        user = _make_user(test_db, "scr-vwr1", role="viewer")
+        token = create_access_token(data={"sub": user.username})
+        headers = {"Authorization": f"Bearer {token}"}
+        response = test_client.post(
+            "/api/scripts",
+            json={"name": "evil", "content": "#!/bin/bash\nid"},
+            headers=headers,
+        )
+        assert response.status_code == 403
+
+    def test_operator_cannot_test_script(self, test_client, test_db):
+        """Even a global operator must not run library scripts; admin only."""
+        from app.core.security import create_access_token
+
+        user = _make_user(test_db, "scr-op1", role="operator")
+        token = create_access_token(data={"sub": user.username})
+        headers = {"Authorization": f"Bearer {token}"}
+        response = test_client.post(
+            "/api/scripts/1/test",
+            json={},
+            headers=headers,
+        )
+        assert response.status_code == 403
+
+    def test_viewer_cannot_assign_hook_to_repo(self, test_client, test_db):
+        from app.core.security import create_access_token
+
+        user = _make_user(test_db, "scr-vwr2", role="viewer")
+        repo = _make_repo(test_db, "scr-repo1")
+        _grant(test_db, user, repo, "viewer")
+        token = create_access_token(data={"sub": user.username})
+        headers = {"Authorization": f"Bearer {token}"}
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/scripts",
+            json={"script_id": 1, "hook_type": "pre-backup"},
+            headers=headers,
+        )
+        assert response.status_code == 403
+
+    def test_no_permission_cannot_list_repo_scripts(self, test_client, test_db):
+        from app.core.security import create_access_token
+
+        user = _make_user(test_db, "scr-np1", role="viewer")
+        repo = _make_repo(test_db, "scr-repo2")
+        token = create_access_token(data={"sub": user.username})
+        headers = {"Authorization": f"Bearer {token}"}
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/scripts",
+            headers=headers,
+        )
+        assert response.status_code == 403
+
+
+def _make_selected_only(db, username, role="operator"):
+    """A 'Selected only' user: global role but no wildcard repo access."""
+    user = _make_user(db, username, role=role)
+    user.all_repositories_role = None
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@pytest.mark.unit
+class TestBrowseNestedPathProtection:
+    """Ayush report suggested test #11: a viewer with no assignment must be
+    denied on both the archive root and nested path variants.
+    """
+
+    def test_no_permission_cannot_browse_nested_path(self, test_client, test_db):
+        from app.core.security import create_access_token
+
+        user = _make_user(test_db, "brw-np2", role="viewer")
+        repo = _make_repo(test_db, "brw-repo3")
+        token = create_access_token(data={"sub": user.username})
+        headers = {"Authorization": f"Bearer {token}"}
+        response = test_client.get(
+            f"/api/browse/{repo.id}/archive1",
+            params={"path": "tmp/borg-idor-canary/home/user/documents"},
+            headers=headers,
+        )
+        assert response.status_code == 403
+
+
+@pytest.mark.unit
+class TestMountProtection:
+    """Mounting exposes an archive's real file contents through the mount
+    point, so it must be repo-scoped. Regression: a 'Selected only' operator
+    with no grant could mount, unmount, list and inspect any repository.
+    """
+
+    def test_selected_only_operator_cannot_mount_unauthorized_repo(
+        self, test_client, test_db
+    ):
+        from app.core.security import create_access_token
+
+        user = _make_selected_only(test_db, "mnt-op1", role="operator")
+        repo = _make_repo(test_db, "mnt-repo1")
+        token = create_access_token(data={"sub": user.username})
+        headers = {"Authorization": f"Bearer {token}"}
+        response = test_client.post(
+            "/api/mounts/borg",
+            json={"repository_id": repo.id},
+            headers=headers,
+        )
+        assert response.status_code == 403
+
+    def test_granted_operator_passes_mount_authz(self, test_client, test_db):
+        """With an operator grant, the request clears authz (any later failure
+        is from the mount backend, not a 403)."""
+        from app.core.security import create_access_token
+        from unittest.mock import patch, AsyncMock
+
+        user = _make_selected_only(test_db, "mnt-op2", role="operator")
+        repo = _make_repo(test_db, "mnt-repo2")
+        _grant(test_db, user, repo, "operator")
+        token = create_access_token(data={"sub": user.username})
+        headers = {"Authorization": f"Bearer {token}"}
+        with (
+            patch(
+                "app.api.mounts.mount_service.mount_borg_archive",
+                new_callable=AsyncMock,
+            ) as mock_mount,
+            patch("app.api.mounts.mount_service.get_mount") as mock_get,
+        ):
+            mock_mount.return_value = ("/mnt/x", "mid-1")
+            mock_get.return_value = None  # forces a 500, proving authz passed
+            response = test_client.post(
+                "/api/mounts/borg",
+                json={"repository_id": repo.id},
+                headers=headers,
+            )
+        assert response.status_code != 403
+
+
+@pytest.mark.unit
+class TestActivityLogProtection:
+    """Script/rclone activity logs carry hook stdout/stderr; a viewer with no
+    grant on the job's repository must not read them.
+    """
+
+    def _make_script_execution(self, db, repo_id):
+        from app.database.models import ScriptExecution
+
+        ex = ScriptExecution(
+            repository_id=repo_id,
+            hook_type="pre-backup",
+            status="completed",
+            stdout="secret hook output",
+        )
+        db.add(ex)
+        db.commit()
+        db.refresh(ex)
+        return ex
+
+    def test_no_permission_cannot_read_script_logs(self, test_client, test_db):
+        from app.core.security import create_access_token
+
+        user = _make_user(test_db, "act-np1", role="viewer")
+        repo = _make_repo(test_db, "act-repo1")
+        ex = self._make_script_execution(test_db, repo.id)
+        token = create_access_token(data={"sub": user.username})
+        headers = {"Authorization": f"Bearer {token}"}
+        response = test_client.get(
+            f"/api/activity/script_execution/{ex.id}/logs",
+            headers=headers,
+        )
+        assert response.status_code == 403
+
+    def test_viewer_with_grant_passes_script_log_authz(self, test_client, test_db):
+        from app.core.security import create_access_token
+
+        user = _make_user(test_db, "act-vwr1", role="viewer")
+        repo = _make_repo(test_db, "act-repo2")
+        _grant(test_db, user, repo, "viewer")
+        ex = self._make_script_execution(test_db, repo.id)
+        token = create_access_token(data={"sub": user.username})
+        headers = {"Authorization": f"Bearer {token}"}
+        response = test_client.get(
+            f"/api/activity/script_execution/{ex.id}/logs",
+            headers=headers,
+        )
+        assert response.status_code != 403
+
+    def _make_orphan_execution(self, db):
+        """A standalone execution: no repository, no plan. Deleting a repo
+        nulls repository_id like this, so its retained logs must not leak."""
+        from app.database.models import ScriptExecution
+
+        ex = ScriptExecution(
+            repository_id=None,
+            backup_plan_id=None,
+            hook_type="pre-backup",
+            status="completed",
+            stdout="secret hook output from a deleted repository",
+        )
+        db.add(ex)
+        db.commit()
+        db.refresh(ex)
+        return ex
+
+    def test_non_admin_cannot_read_orphaned_script_logs(self, test_client, test_db):
+        """Regression for the deleted-repository (null repository_id) case: a
+        job tied to neither a live repo nor a plan is admin-only."""
+        from app.core.security import create_access_token
+
+        user = _make_user(test_db, "act-vwr3", role="viewer")
+        ex = self._make_orphan_execution(test_db)
+        token = create_access_token(data={"sub": user.username})
+        headers = {"Authorization": f"Bearer {token}"}
+        response = test_client.get(
+            f"/api/activity/script_execution/{ex.id}/logs",
+            headers=headers,
+        )
+        assert response.status_code == 403
+
+    def test_admin_can_read_orphaned_script_logs(
+        self, test_client, test_db, admin_headers
+    ):
+        ex = self._make_orphan_execution(test_db)
+        response = test_client.get(
+            f"/api/activity/script_execution/{ex.id}/logs",
+            headers=admin_headers,
+        )
+        assert response.status_code != 403
