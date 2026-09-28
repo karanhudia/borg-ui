@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next'
 import ResponsiveDialog from '../../components/shared/ResponsiveDialog'
 import type { AgentMachineResponse } from '../../services/api'
 import CopyableCodeBlock from './CopyableCodeBlock'
+import { platformFromAgentOs } from './agentInstallCommandText'
 import { quoteForShell } from './agentSetServerCommandText'
 import InsecureCommandWarning from './InsecureCommandWarning'
 
@@ -41,14 +42,25 @@ export default function AgentUninstallDialog({
   const { t } = useTranslation()
   // Quoted through the same helper as the phase 1 command: a `$` is a legal
   // URL sub-delim, and this string is pasted into a root shell.
-  const command = `curl -fsSL ${quoteForShell(`${serverUrl}/agent/uninstall.sh`)} | sudo bash`
+  // A macOS agent runs as the user who installed it, so its uninstaller runs
+  // as that user too and there is no service account to remove.
+  const platform = platformFromAgentOs(agent?.os)
+  const command = `curl -fsSL ${quoteForShell(`${serverUrl}/agent/uninstall.sh`)} | ${
+    platform === 'macos' ? 'bash' : 'sudo bash'
+  }`
 
-  const removals = [
-    t('managedAgents.page.uninstallDialog.removesService'),
-    t('managedAgents.page.uninstallDialog.removesVenv'),
-    t('managedAgents.page.uninstallDialog.removesConfig'),
-    t('managedAgents.page.uninstallDialog.removesUser'),
-  ]
+  const removals =
+    platform === 'macos'
+      ? [
+          t('managedAgents.page.uninstallDialog.removesService'),
+          t('managedAgents.page.uninstallDialog.removesUserDirectory'),
+        ]
+      : [
+          t('managedAgents.page.uninstallDialog.removesService'),
+          t('managedAgents.page.uninstallDialog.removesVenv'),
+          t('managedAgents.page.uninstallDialog.removesConfig'),
+          t('managedAgents.page.uninstallDialog.removesUser'),
+        ]
 
   return (
     <ResponsiveDialog

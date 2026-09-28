@@ -39,3 +39,6 @@ export const Deleting: Story = { args: { onOpen: fn(), isDeleting: true } }
 
 /** A viewer cannot restore, so the restore action is left out of the row. */
 export const Viewer: Story = { args: { onOpen: fn(), onRestore: undefined } }
+
+/** An agent-executed repository cannot be mounted on the server, so the row offers no mount. */
+export const AgentRepository: Story = { args: { onOpen: fn(), mountHidden: true } }

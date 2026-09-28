@@ -7,36 +7,69 @@
   "binaries": {
     "1.4.5": [
       {
+        "platform": "linux",
         "arch": "x86_64",
         "min_glibc": "2.31",
         "asset": "borg-linux-glibc231-x86_64",
         "sha256": "c8457f70660064d0f45b38283ab4cc65b342970012013201d3aec713a75898fb"
       },
       {
+        "platform": "linux",
         "arch": "aarch64",
         "min_glibc": "2.35",
         "asset": "borg-linux-glibc235-arm64-gh",
         "sha256": "aae37546320810969d2f3cb41a23ec6b86f7fa1c5f868e18f10285978bc977e7"
       },
       {
+        "platform": "linux",
         "arch": "x86_64",
         "min_glibc": "2.35",
         "asset": "borg-linux-glibc235-x86_64-gh",
         "sha256": "1410e28609be3080d0e3ab27a78f5c586a29fd0c75c2aa6415fcde1293bcd923"
+      },
+      {
+        "platform": "darwin",
+        "arch": "aarch64",
+        "min_macos": "15",
+        "asset": "borg-macos-15-arm64-gh",
+        "sha256": "a47c308090ce4ada8b734a7fb7ae04269e85621961c61d40833e2ad3997b6c0f"
+      },
+      {
+        "platform": "darwin",
+        "arch": "x86_64",
+        "min_macos": "15",
+        "asset": "borg-macos-15-x86_64-gh",
+        "sha256": "9690873e91beabd50c8873221e9f8ba7b19becd36eb0eb5d37fc34cbf78d15ef"
       }
     ],
     "2.0.0b24": [
       {
+        "platform": "linux",
         "arch": "aarch64",
         "min_glibc": "2.43",
         "asset": "borg-linux-glibc243-arm64-gh",
         "sha256": "c9474a30e30c5e810ae51c2c88075a631fc1753b37513fc45cc5de2915838b3a"
       },
       {
+        "platform": "linux",
         "arch": "x86_64",
         "min_glibc": "2.43",
         "asset": "borg-linux-glibc243-x86_64-gh",
         "sha256": "5fa90f4eac2b6ea4847848c24f3f812926cae117a7a444ee10a2301b9ec6aba7"
+      },
+      {
+        "platform": "darwin",
+        "arch": "aarch64",
+        "min_macos": "15",
+        "asset": "borg-macos-15-arm64-gh",
+        "sha256": "6b4d6b2978f3b9e3a296ff7e095f6d20512b8fb86d615881f4400c0b6fdf75a9"
+      },
+      {
+        "platform": "darwin",
+        "arch": "x86_64",
+        "min_macos": "15",
+        "asset": "borg-macos-15-x86_64-gh",
+        "sha256": "b70ef8dee24afeaac1e35a4f129a1d3f1b49a84783d81da6001f6ca14540f8af"
       }
     ]
   }

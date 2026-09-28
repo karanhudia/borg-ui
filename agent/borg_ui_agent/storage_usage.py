@@ -30,6 +30,8 @@ import time
 from typing import Any, Callable, Optional
 from urllib.parse import unquote, urlsplit
 
+from agent.borg_ui_agent.paths import is_darwin
+
 SOURCE_BORG2_INDEX = "borg2_index"
 SOURCE_STORAGE_USED = "storage_used"
 # storage_used's second slot names the tool that ran; this sentinel means
@@ -514,13 +516,24 @@ def http_storage_used(
     return value if value > 0 else None
 
 
+def _du_command(path: str) -> tuple[list[str], int]:
+    """The du invocation and the unit its first field is in.
+
+    GNU du reports apparent bytes with -b. BSD du has no -b, so on Darwin
+    -A -sk reports the apparent size in KiB: the same measure at a coarser
+    unit, where a plain -k would report allocated blocks instead.
+    """
+    if is_darwin():
+        return ["du", "-A", "-sk", "--", path], 1024
+    return ["du", "-sb", "--", path], 1
+
+
 def du_storage_used(
     path: str, *, timeout: float, should_cancel: ShouldCancel = None
 ) -> Optional[int]:
+    command, unit = _du_command(path)
     try:
-        proc = _run(
-            ["du", "-sb", "--", path], timeout=timeout, should_cancel=should_cancel
-        )
+        proc = _run(command, timeout=timeout, should_cancel=should_cancel)
     except (subprocess.TimeoutExpired, OSError) as exc:
         logger.warning("du did not run: %s", _redact(str(exc)))
         return None
@@ -533,7 +546,7 @@ def du_storage_used(
         return None
     fields = (proc.stdout or "").split()
     if fields and fields[0].isdigit() and int(fields[0]) > 0:
-        return int(fields[0])
+        return int(fields[0]) * unit
     return None
 
 

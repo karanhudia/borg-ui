@@ -152,7 +152,14 @@ describe('ManagedAgents', () => {
     expect(
       await screen.findByText(/Run this on a remote machine to register it/i)
     ).toBeInTheDocument()
-    expect(screen.getByText(/curl -fsSL .*\/agent\/install\.sh/)).toBeInTheDocument()
+    // One command per platform: root on Linux, the signed-in user on macOS.
+    const commands = screen.getAllByText(/curl -fsSL .*\/agent\/install\.sh/)
+    expect(commands).toHaveLength(2)
+    expect(commands[0]).toHaveTextContent('| sudo bash -s --')
+    expect(commands[0]).toHaveTextContent('--service-user current')
+    expect(commands[1]).toHaveTextContent('| bash -s --')
+    expect(commands[1]).not.toHaveTextContent('sudo')
+    expect(commands[1]).not.toHaveTextContent('--service-user')
     expect(screen.getByRole('button', { name: /setup help/i })).toBeInTheDocument()
   })
 
@@ -355,6 +362,12 @@ describe('ManagedAgents', () => {
     expect(onCopy).toHaveBeenCalledWith(expect.stringContaining('git clone'))
     expect(onCopy).toHaveBeenCalledWith(expect.stringContaining('systemctl status'))
     expect(onCopy).toHaveBeenCalledWith(expect.stringContaining('systemctl enable --now'))
+
+    // The launchd template names a placeholder home directory, so the guide
+    // renders it for the real one instead of copying it.
+    await user.click(screen.getByLabelText('Copy launchd commands'))
+    expect(onCopy).toHaveBeenCalledWith(expect.stringContaining('sed "s#/Users/alex/#$HOME/#g"'))
+    expect(onCopy).not.toHaveBeenCalledWith(expect.stringContaining('cp agent/install/launchd'))
   }, 60000)
 
   it('renders setup help details as a standalone story surface', async () => {
@@ -431,9 +444,11 @@ describe('ManagedAgents', () => {
           '--token agent-token-secret',
           '--name "Client laptop"',
           '--borg-version 1',
+          '--borg-repo "<BORG_REPO_URL>" --no-prompt',
         ].every((part) => content.includes(part))
       )
     ).toBeInTheDocument()
+    expect(screen.getByText(/Replace <BORG_REPO_URL> with the repository/)).toBeInTheDocument()
   }, 60000)
 
   it('includes the default browse path when creating a managed-agent enrollment token', async () => {

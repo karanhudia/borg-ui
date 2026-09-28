@@ -56,6 +56,11 @@ RELEASE_URL = "https://github.com/borgbackup/borg/releases/download/{version}/{a
 # glibc 2.39), so it is read back the same way.
 LINUX_ASSET = re.compile(r"^borg-linux-glibc(\d)(\d+)-(x86_64|arm64)(?:-gh)?$")
 
+# The macOS builds, named after the runner's macOS major the same way the Linux
+# ones carry their glibc: borg-macos-15-arm64-gh was built on macOS 15 and runs
+# on that or newer. The managed agent installer uses them on Darwin.
+MACOS_ASSET = re.compile(r"^borg-macos-(\d+)-(x86_64|arm64)-gh$")
+
 # borgbackup names the ARM asset after the Debian architecture; the installer
 # matches on `uname -m`.
 ARCH_NAMES = {"x86_64": "x86_64", "arm64": "aarch64"}
@@ -92,35 +97,70 @@ def versions_from_env() -> dict[str, str]:
     return versions
 
 
+def _digest(asset: dict) -> str:
+    # GitHub serves "digest": null for an asset it has not hashed yet.
+    digest = asset.get("digest") or ""
+    if not digest.startswith("sha256:"):
+        raise SystemExit(f"No sha256 digest published for {asset['name']}")
+    return digest.removeprefix("sha256:")
+
+
 def _linux_binaries(release: dict) -> list[dict]:
-    """The manifest entries an installer can use from a release's assets."""
+    """The manifest entries a Linux installer can use from a release's assets."""
     entries = []
     for asset in release.get("assets", []):
         match = LINUX_ASSET.match(asset["name"])
         if match is None:
             continue
         glibc_major, glibc_minor, arch = match.groups()
-        digest = asset.get("digest", "")
-        if not digest.startswith("sha256:"):
-            raise SystemExit(f"No sha256 digest published for {asset['name']}")
         entries.append(
             {
+                "platform": "linux",
                 "arch": ARCH_NAMES[arch],
                 "min_glibc": f"{glibc_major}.{glibc_minor}",
                 "asset": asset["name"],
-                "sha256": digest.removeprefix("sha256:"),
+                "sha256": _digest(asset),
+            }
+        )
+    return entries
+
+
+def _darwin_binaries(release: dict) -> list[dict]:
+    """The manifest entries a macOS installer can use from a release's assets."""
+    entries = []
+    for asset in release.get("assets", []):
+        match = MACOS_ASSET.match(asset["name"])
+        if match is None:
+            continue
+        # Not hashed yet, or uploaded before GitHub published digests: left
+        # out rather than fatal, so macOS cannot hold the Linux pin back. The
+        # coverage report names the gap.
+        if not (asset.get("digest") or "").startswith("sha256:"):
+            print(f"Skipping {asset['name']}: no sha256 digest published")
+            continue
+        macos_major, arch = match.groups()
+        entries.append(
+            {
+                "platform": "darwin",
+                "arch": ARCH_NAMES[arch],
+                "min_macos": macos_major,
+                "asset": asset["name"],
+                "sha256": _digest(asset),
             }
         )
     return entries
 
 
 def binaries_for(version: str) -> list[dict]:
-    entries = _linux_binaries(_get_json(API.format(version=version)))
+    release = _get_json(API.format(version=version))
+    entries = _linux_binaries(release)
     if not entries:
         raise SystemExit(
             f"Borg {version} publishes no Linux binary this installer can use"
         )
-    return entries
+    # macOS coverage is reported as a regression rather than required: a
+    # release without it must not hold the Linux pin back.
+    return entries + _darwin_binaries(release)
 
 
 def write_manifest(current: dict[str, str]) -> None:
@@ -204,14 +244,26 @@ def bump_version(major: str, new_version: str) -> None:
     _rewrite(DOCKERFILE, rf"^(ARG BORG{major}_VERSION=)\S+", new_version)
 
 
+def _floor(entry: dict) -> str:
+    return (
+        entry["min_macos"] if entry.get("platform") == "darwin" else entry["min_glibc"]
+    )
+
+
 def _coverage(binaries: list[dict]) -> dict[str, str]:
-    """The lowest glibc offered per architecture — the floor a machine of that
-    architecture must clear to get a server-source binary at all."""
+    """The lowest floor offered per platform and architecture: the glibc or
+    macOS version a machine must clear to get a server-source binary at all.
+
+    Keyed by the architecture alone for Linux, which is what the manifest held
+    before macOS was listed, and by ``darwin/<arch>`` for macOS."""
     lowest: dict[str, str] = {}
     for entry in binaries:
-        arch, glibc = entry["arch"], entry["min_glibc"]
-        if arch not in lowest or Version(glibc) < Version(lowest[arch]):
-            lowest[arch] = glibc
+        key = entry["arch"]
+        if entry.get("platform", "linux") != "linux":
+            key = f"{entry['platform']}/{entry['arch']}"
+        floor = _floor(entry)
+        if key not in lowest or Version(floor) < Version(lowest[key]):
+            lowest[key] = floor
     return lowest
 
 
@@ -226,11 +278,12 @@ def _coverage_regressions(old: list[dict], new: list[dict]) -> list[str]:
     """
     before, after = _coverage(old), _coverage(new)
     notes = []
-    for arch, floor in sorted(before.items()):
-        if arch not in after:
-            notes.append(f"drops {arch} (was glibc {floor})")
-        elif Version(after[arch]) > Version(floor):
-            notes.append(f"raises {arch} glibc floor {floor} -> {after[arch]}")
+    for key, floor in sorted(before.items()):
+        kind = "macOS" if key.startswith("darwin/") else "glibc"
+        if key not in after:
+            notes.append(f"drops {key} (was {kind} {floor})")
+        elif Version(after[key]) > Version(floor):
+            notes.append(f"raises {key} {kind} floor {floor} -> {after[key]}")
     return notes
 
 

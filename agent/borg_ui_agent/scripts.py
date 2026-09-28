@@ -29,8 +29,17 @@ from typing import Any, Callable, Optional
 
 from agent.borg_ui_agent.backup import _terminate_process
 from agent.borg_ui_agent.cancel import cancel_requested
+from agent.borg_ui_agent.paths import default_config_dir, is_darwin
 
 DEFAULT_SCRIPTS_DIR = "/etc/borg-ui-agent/scripts.d"
+
+
+def default_scripts_dir() -> str:
+    """The allow-list sits beside config.toml where the agent runs per user."""
+    if is_darwin():
+        return str(default_config_dir() / "scripts.d")
+    return DEFAULT_SCRIPTS_DIR
+
 
 # Cap the stdout/stderr copied into the terminal result so a chatty script can't
 # produce an oversized control-channel frame. The full output is still streamed
@@ -71,7 +80,7 @@ class ScriptRunResult:
 def scripts_dir() -> Path:
     """The single configured location the agent treats as its allow-list."""
     return Path(
-        os.environ.get("BORG_UI_AGENT_SCRIPTS_DIR", DEFAULT_SCRIPTS_DIR)
+        os.environ.get("BORG_UI_AGENT_SCRIPTS_DIR") or default_scripts_dir()
     ).resolve()
 
 

@@ -25,7 +25,7 @@ router = APIRouter(
 
 def _require_mount_repo_access(
     db: Session, user: User, repository_id: Optional[int], role: str
-) -> None:
+) -> Optional[Repository]:
     """Gate a mount operation on the repository it targets.
 
     A mount exposes an archive's real file contents through the mount point, so
@@ -33,6 +33,9 @@ def _require_mount_repo_access(
     mount whose repository is missing (no id, or the row was deleted while the
     mount is still active) stays reachable to an admin so orphaned mounts can be
     cleaned up, and is denied to everyone else.
+
+    Returns the repository it resolved, so a caller that needs the row asks
+    the database once.
     """
     if repository_id is None:
         if user.role != "admin":
@@ -40,15 +43,16 @@ def _require_mount_repo_access(
                 status_code=403,
                 detail={"key": "backend.errors.auth.notEnoughPermissions"},
             )
-        return
+        return None
     repository = db.query(Repository).filter(Repository.id == repository_id).first()
     if not repository:
         if user.role == "admin":
-            return
+            return None
         raise HTTPException(
             status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"}
         )
     check_repo_access(db, user, repository, role)
+    return repository
 
 
 # Request/Response models
@@ -127,7 +131,18 @@ async def mount_borg_archive(
     # Mounting exposes the archive's real file contents, so require operator on
     # the target repository (not just the global mount policy). Kept outside the
     # try/except below so the 403 is not swallowed into a 500.
-    _require_mount_repo_access(db, current_user, request.repository_id, "operator")
+    repository = _require_mount_repo_access(
+        db, current_user, request.repository_id, "operator"
+    )
+
+    # The mount service mounts under this server's data directory. An
+    # agent-executed repository lives on the agent, so the server has neither
+    # the repository nor the agent's filesystem to mount it on.
+    if repository is not None and (repository.executor_type or "server") == "agent":
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.mounts.agentRepository"},
+        )
 
     try:
         logger.info(

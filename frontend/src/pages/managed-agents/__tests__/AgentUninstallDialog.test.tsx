@@ -12,11 +12,11 @@ const agent = {
   status: 'offline',
 } as AgentMachineResponse
 
-const renderDialog = () => {
+const renderDialog = (agentOverrides: Partial<AgentMachineResponse> = {}) => {
   const onCopy = vi.fn()
   render(
     <AgentUninstallDialog
-      agent={agent}
+      agent={{ ...agent, ...agentOverrides }}
       open
       serverUrl="https://borg-ui.example.com"
       onCopy={onCopy}
@@ -32,6 +32,15 @@ describe('AgentUninstallDialog', () => {
     expect(
       screen.getByText('curl -fsSL "https://borg-ui.example.com/agent/uninstall.sh" | sudo bash')
     ).toBeInTheDocument()
+  })
+
+  it('runs the uninstaller as the user on a macOS agent and names no service account', () => {
+    renderDialog({ os: 'darwin' })
+    expect(
+      screen.getByText('curl -fsSL "https://borg-ui.example.com/agent/uninstall.sh" | bash')
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/service user/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/Application Support/)).toBeInTheDocument()
   })
 
   it('quotes the URL, which is pasted into a root shell', () => {

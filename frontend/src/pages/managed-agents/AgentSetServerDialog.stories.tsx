@@ -38,6 +38,11 @@ export const UnknownVersion: Story = {
   args: { agent: { ...agent, agent_version: null } as AgentMachineResponse },
 }
 
+/** A macOS agent: no sudo, the user's own agent, a launchd restart. */
+export const MacosAgent: Story = {
+  args: { agent: { ...agent, agent_version: '0.1.12', os: 'darwin' } as AgentMachineResponse },
+}
+
 export const Mobile: Story = {
   args: { agent },
   parameters: { viewport: { defaultViewport: 'mobile1' } },

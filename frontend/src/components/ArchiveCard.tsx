@@ -17,6 +17,8 @@ interface ArchiveCardProps {
   /** Omit when the user cannot restore from this repository. */
   onRestore?: (archive: Archive) => void
   onMount: (archive: Archive) => void
+  // An agent-executed repository lives on the agent; the server cannot mount it.
+  mountHidden?: boolean
   onDelete: (archive: Archive) => void
   /** The delete job is queued or running (#1197): the row says so and its delete is disabled. */
   isDeleting?: boolean
@@ -31,6 +33,7 @@ export default function ArchiveCard({
   openHref,
   onRestore,
   onMount,
+  mountHidden = false,
   onDelete,
   isDeleting = false,
   mountDisabled = false,
@@ -236,19 +239,21 @@ export default function ArchiveCard({
           </Tooltip>
         )}
 
-        <Tooltip title={t('archiveCard.mount')} arrow>
-          <span>
-            <IconButton
-              size="small"
-              onClick={() => onMount(archive)}
-              disabled={mountDisabled}
-              aria-label={t('archiveCard.mount')}
-              sx={iconBtnSx(theme.palette.info.main)}
-            >
-              <HardDrive size={15} />
-            </IconButton>
-          </span>
-        </Tooltip>
+        {!mountHidden && (
+          <Tooltip title={t('archiveCard.mount')} arrow>
+            <span>
+              <IconButton
+                size="small"
+                onClick={() => onMount(archive)}
+                disabled={mountDisabled}
+                aria-label={t('archiveCard.mount')}
+                sx={iconBtnSx(theme.palette.info.main)}
+              >
+                <HardDrive size={15} />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
 
         {canDelete && (
           <Tooltip

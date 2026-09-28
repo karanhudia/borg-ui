@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Optional
 
+from agent.borg_ui_agent.paths import default_agent_root
+
 
 @dataclass(frozen=True)
 class BorgBinary:
@@ -48,7 +50,7 @@ def _parse_borg_version(output: str) -> Optional[tuple[int, str]]:
 
 def _classify_install_source(path: str) -> str:
     resolved_path = Path(path).resolve(strict=False)
-    installer_root = Path("/opt/borg-ui-agent").resolve(strict=False)
+    installer_root = default_agent_root().resolve(strict=False)
 
     try:
         if resolved_path.is_relative_to(installer_root):
@@ -58,6 +60,13 @@ def _classify_install_source(path: str) -> str:
 
     if path.startswith(("/usr/bin/", "/usr/sbin/")):
         return "system-package"
+    # Homebrew links its binaries out of a cellar, on Apple silicon and Intel
+    # prefixes alike; the resolved path tells such a Borg from a hand-placed one
+    # in the same /usr/local/bin.
+    if "Cellar" in resolved_path.parts:
+        return "homebrew"
+    if path.startswith("/opt/local/"):
+        return "macports"
     return "custom-path"
 
 

@@ -5,18 +5,27 @@ One predicate answers this, and both the capability report and the
 any one piece behind without the others, and each missing piece would otherwise
 fail at a different point, after the operator has already been told the
 endpoint can upgrade itself.
+
+On Linux the pieces are a root-owned conf, a oneshot unit naming the helper
+and a path unit watching the trigger. On macOS they are the per-user conf and
+one launchd job that both names the helper and watches the trigger.
 """
 
 from __future__ import annotations
 
 import os
+import plistlib
 import re
+from xml.parsers.expat import ExpatError
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from agent.borg_ui_agent.paths import default_agent_root, is_darwin
+
 UPGRADE_UNIT_NAME = "borg-ui-agent-upgrade.service"
 UPGRADE_PATH_UNIT_NAME = "borg-ui-agent-upgrade.path"
+UPGRADE_JOB_LABEL = "com.borg-ui.agent-upgrade"
 DEFAULT_TRIGGER_PATH = Path("/etc/borg-ui-agent/upgrade-requested")
 # Outside /etc/borg-ui-agent on purpose: that directory belongs to the service
 # user, and root sources this file.
@@ -41,6 +50,33 @@ class UpgradeReadiness:
     trigger: Optional[Path] = None
 
 
+@dataclass(frozen=True)
+class UpgradePaths:
+    conf_path: Path
+    unit_path: Path
+    path_unit_path: Path
+    trigger_path: Path
+
+
+def default_upgrade_paths() -> UpgradePaths:
+    if is_darwin():
+        root = default_agent_root()
+        job = Path.home() / "Library" / "LaunchAgents" / f"{UPGRADE_JOB_LABEL}.plist"
+        # The one job carries both the helper and the watch condition.
+        return UpgradePaths(
+            conf_path=root / "upgrade.conf",
+            unit_path=job,
+            path_unit_path=job,
+            trigger_path=root / "upgrade-requested",
+        )
+    return UpgradePaths(
+        conf_path=DEFAULT_CONF_PATH,
+        unit_path=DEFAULT_UNIT_PATH,
+        path_unit_path=DEFAULT_PATH_UNIT_PATH,
+        trigger_path=DEFAULT_TRIGGER_PATH,
+    )
+
+
 def _parse_conf(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -50,7 +86,22 @@ def _parse_conf(path: Path) -> dict[str, str]:
     return values
 
 
+def _read_plist(path: Path) -> dict:
+    """The job's definition, or nothing for a file launchd could not load either."""
+    try:
+        with path.open("rb") as handle:
+            loaded = plistlib.load(handle)
+    except (OSError, plistlib.InvalidFileException, ExpatError, ValueError):
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
 def _exec_start(unit_path: Path) -> Optional[Path]:
+    if unit_path.suffix == ".plist":
+        arguments = _read_plist(unit_path).get("ProgramArguments")
+        if isinstance(arguments, list) and arguments and arguments[0]:
+            return Path(str(arguments[0]))
+        return None
     for line in unit_path.read_text(encoding="utf-8").splitlines():
         if line.startswith("ExecStart="):
             command = line.split("=", 1)[1].strip()
@@ -58,13 +109,37 @@ def _exec_start(unit_path: Path) -> Optional[Path]:
     return None
 
 
+def _watches_trigger(path_unit_path: Path, trigger_path: Path) -> bool:
+    """Whether the watcher exists and is armed on this trigger.
+
+    A systemd path unit's presence is the whole check, as the installer writes
+    it for exactly this trigger. A launchd job watches through its own
+    KeepAlive condition, so the plist has to name the trigger.
+    """
+    if not path_unit_path.is_file():
+        return False
+    if path_unit_path.suffix != ".plist":
+        return True
+    keep_alive = _read_plist(path_unit_path).get("KeepAlive")
+    if not isinstance(keep_alive, dict):
+        return False
+    states = keep_alive.get("PathState")
+    return isinstance(states, dict) and states.get(str(trigger_path)) is True
+
+
 def check_self_upgrade(
     *,
-    conf_path: Path = DEFAULT_CONF_PATH,
-    unit_path: Path = DEFAULT_UNIT_PATH,
-    path_unit_path: Path = DEFAULT_PATH_UNIT_PATH,
-    trigger_path: Path = DEFAULT_TRIGGER_PATH,
+    conf_path: Optional[Path] = None,
+    unit_path: Optional[Path] = None,
+    path_unit_path: Optional[Path] = None,
+    trigger_path: Optional[Path] = None,
 ) -> UpgradeReadiness:
+    defaults = default_upgrade_paths()
+    conf_path = conf_path or defaults.conf_path
+    unit_path = unit_path or defaults.unit_path
+    path_unit_path = path_unit_path or defaults.path_unit_path
+    trigger_path = trigger_path or defaults.trigger_path
+
     if not unit_path.is_file():
         return UpgradeReadiness(supported=False, reason="unit_missing")
 
@@ -84,8 +159,8 @@ def check_self_upgrade(
     if not conf["SERVER"].startswith("https://"):
         return UpgradeReadiness(supported=False, reason="server_not_https")
 
-    # Nothing starts the helper without the path unit watching for the trigger.
-    if not path_unit_path.is_file():
+    # Nothing starts the helper without the watcher armed on the trigger.
+    if not _watches_trigger(path_unit_path, trigger_path):
         return UpgradeReadiness(supported=False, reason="path_unit_missing")
 
     # And an agent that cannot create the trigger cannot ask. This is the whole

@@ -4,8 +4,14 @@
  */
 export const SET_SERVER_MIN_AGENT_VERSION = '0.1.5'
 
+import type { AgentPlatform } from './agentInstallCommandText'
+
 const AGENT_CONFIG_PATH = '/etc/borg-ui-agent/config.toml'
 const RESTART = 'sudo systemctl restart borg-ui-agent'
+// A macOS agent runs as its user out of its Application Support directory,
+// and its default config path is the one there, so no --config is needed.
+const MACOS_AGENT = '"$HOME/Library/Application Support/borg-ui-agent/.venv/bin/borg-ui-agent"'
+const MACOS_RESTART = 'launchctl kickstart -k "gui/$(id -u)/com.borg-ui.agent"'
 
 /**
  * Dotted integer components, or null when any component is not a plain
@@ -105,9 +111,14 @@ function quoteForSedReplacement(value: string): string {
  */
 export function buildSetServerCommand(
   newServerUrl: string,
-  agentVersion: string | null | undefined
+  agentVersion: string | null | undefined,
+  platform: AgentPlatform = 'linux'
 ): string {
   const url = newServerUrl.replace(/\/+$/, '')
+  if (platform === 'macos') {
+    // Every macOS agent has the subcommand: the platform arrived after it.
+    return `${MACOS_AGENT} set-server ${quoteForShell(url)} && ${MACOS_RESTART}`
+  }
   if (hasSetServerSubcommand(agentVersion)) {
     return `sudo borg-ui-agent set-server ${quoteForShell(url)} && ${RESTART}`
   }

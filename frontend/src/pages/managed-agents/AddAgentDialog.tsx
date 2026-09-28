@@ -24,7 +24,11 @@ import type {
   AgentMachineResponse,
 } from '../../services/api'
 import AgentInstallCommand from './AgentInstallCommand'
-import type { AgentServiceUserMode, BorgInstallMode } from './agentInstallCommandText'
+import type {
+  AgentPlatform,
+  AgentServiceUserMode,
+  BorgInstallMode,
+} from './agentInstallCommandText'
 import BorgInstallModeRadioGroup from './BorgInstallModeRadioGroup'
 import { isLocalAgentServerUrl, normalizeAgentServerUrl } from './agentServerUrl'
 
@@ -115,6 +119,7 @@ export default function AddAgentDialog({
   initialCreatedToken = null,
   initialBorgInstallMode = 'borg1',
   initialServiceUserMode = 'current',
+  initialPlatform = 'linux',
 }: {
   open: boolean
   onClose: () => void
@@ -128,6 +133,7 @@ export default function AddAgentDialog({
   initialCreatedToken?: AgentEnrollmentTokenCreated | null
   initialBorgInstallMode?: BorgInstallMode
   initialServiceUserMode?: AgentServiceUserMode
+  initialPlatform?: AgentPlatform
 }) {
   const { t } = useTranslation()
   const wizardSteps: WizardStep[] = [
@@ -141,6 +147,7 @@ export default function AddAgentDialog({
   const [borgInstallMode, setBorgInstallMode] = useState<BorgInstallMode>(initialBorgInstallMode)
   const [serviceUserMode, setServiceUserMode] =
     useState<AgentServiceUserMode>(initialServiceUserMode)
+  const [platform, setPlatform] = useState<AgentPlatform>(initialPlatform)
   const [defaultPath, setDefaultPath] = useState('')
   const [serverUrl, setServerUrl] = useState(defaultServerUrl)
   const [createdToken, setCreatedToken] = useState<AgentEnrollmentTokenCreated | null>(null)
@@ -160,6 +167,7 @@ export default function AddAgentDialog({
     setExpiry('7d')
     setBorgInstallMode(initialBorgInstallMode)
     setServiceUserMode(initialServiceUserMode)
+    setPlatform(initialPlatform)
     setDefaultPath('')
     setServerUrl(defaultServerUrl)
     setCreatedToken(initialCreatedToken)
@@ -174,6 +182,7 @@ export default function AddAgentDialog({
     initialStep,
     initialBorgInstallMode,
     initialServiceUserMode,
+    initialPlatform,
   ])
 
   const normalizedServerUrl = useMemo(() => {
@@ -232,14 +241,75 @@ export default function AddAgentDialog({
             gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' },
           }}
         >
+          {(
+            [
+              { key: 'linux', label: t('managedAgents.add.platforms.linux'), Icon: Server },
+              { key: 'macos', label: t('managedAgents.add.platforms.macos'), Icon: Laptop },
+            ] as const
+          ).map(({ key, label, Icon }) => {
+            const selected = platform === key
+            return (
+              <Paper
+                key={key}
+                variant="outlined"
+                role="radio"
+                aria-checked={selected}
+                tabIndex={0}
+                onClick={() => setPlatform(key)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    setPlatform(key)
+                  }
+                }}
+                sx={{
+                  p: 1.5,
+                  borderRadius: 1,
+                  cursor: 'pointer',
+                  borderColor: selected ? 'primary.main' : 'divider',
+                  bgcolor: selected ? 'action.hover' : 'background.paper',
+                  transition: 'border-color 180ms ease, background-color 180ms ease',
+                  '&:hover': { borderColor: selected ? 'primary.main' : 'text.secondary' },
+                }}
+              >
+                <Stack spacing={1}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Icon size={18} />
+                    <Typography
+                      sx={{
+                        fontWeight: 700,
+                      }}
+                    >
+                      {label}
+                    </Typography>
+                  </Stack>
+                  {selected ? (
+                    <Chip
+                      size="small"
+                      color="primary"
+                      label={t('managedAgents.add.selected')}
+                      sx={{ alignSelf: 'flex-start' }}
+                    />
+                  ) : (
+                    <Chip
+                      size="small"
+                      label={t('managedAgents.add.select')}
+                      sx={{ alignSelf: 'flex-start' }}
+                    />
+                  )}
+                </Stack>
+              </Paper>
+            )
+          })}
           <Paper
             variant="outlined"
-            sx={{
-              p: 1.5,
-              borderColor: 'primary.main',
-              bgcolor: 'action.hover',
-              borderRadius: 1,
-            }}
+            sx={{ p: 1.5, borderRadius: 1, opacity: 0.62, bgcolor: 'background.paper' }}
           >
             <Stack spacing={1}>
               <Stack
@@ -249,58 +319,33 @@ export default function AddAgentDialog({
                   alignItems: 'center',
                 }}
               >
-                <Server size={18} />
+                <Monitor size={18} />
                 <Typography
                   sx={{
                     fontWeight: 700,
                   }}
                 >
-                  {t('managedAgents.add.platforms.linux')}
+                  {t('managedAgents.add.platforms.windows')}
                 </Typography>
               </Stack>
               <Chip
                 size="small"
-                color="primary"
-                label={t('managedAgents.add.selected')}
+                label={t('managedAgents.add.comingLater')}
                 sx={{ alignSelf: 'flex-start' }}
               />
             </Stack>
           </Paper>
-          {[
-            { label: t('managedAgents.add.platforms.macos'), Icon: Laptop },
-            { label: t('managedAgents.add.platforms.windows'), Icon: Monitor },
-          ].map(({ label, Icon }) => (
-            <Paper
-              key={label}
-              variant="outlined"
-              sx={{ p: 1.5, borderRadius: 1, opacity: 0.62, bgcolor: 'background.paper' }}
-            >
-              <Stack spacing={1}>
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  sx={{
-                    alignItems: 'center',
-                  }}
-                >
-                  <Icon size={18} />
-                  <Typography
-                    sx={{
-                      fontWeight: 700,
-                    }}
-                  >
-                    {label}
-                  </Typography>
-                </Stack>
-                <Chip
-                  size="small"
-                  label={t('managedAgents.add.comingLater')}
-                  sx={{ alignSelf: 'flex-start' }}
-                />
-              </Stack>
-            </Paper>
-          ))}
         </Box>
+        {platform === 'macos' ? (
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
+            {t('managedAgents.add.macosHint')}
+          </Typography>
+        ) : null}
       </Stack>
       <Stack spacing={1.25}>
         <Typography
@@ -373,48 +418,52 @@ export default function AddAgentDialog({
           ))}
         </Select>
       </FormControl>
-      <FormControl fullWidth>
-        <InputLabel id="agent-service-user-label">{t('managedAgents.add.serviceUser')}</InputLabel>
-        <Select
-          labelId="agent-service-user-label"
-          label={t('managedAgents.add.serviceUser')}
-          value={serviceUserMode}
-          renderValue={(value) => t(`managedAgents.add.serviceUsers.${value}.label`)}
-          onChange={(event) => setServiceUserMode(event.target.value as AgentServiceUserMode)}
-        >
-          {serviceUserOptions.map((option) => (
-            <MenuItem key={option} value={option}>
-              <Stack spacing={0.25}>
-                <Typography
-                  sx={{
-                    fontWeight: 700,
-                  }}
-                >
-                  {t(`managedAgents.add.serviceUsers.${option}.label`)}
-                </Typography>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    color: 'text.secondary',
-                  }}
-                >
-                  {t(`managedAgents.add.serviceUsers.${option}.description`)}
-                </Typography>
-              </Stack>
-            </MenuItem>
-          ))}
-        </Select>
-        <FormHelperText
-          component="div"
-          sx={{ mx: 0, color: isRootServiceUser ? 'warning.main' : undefined }}
-        >
-          {isRootServiceUser ? (
-            <InlineWarning>{t('managedAgents.add.rootWarning')}</InlineWarning>
-          ) : (
-            t(`managedAgents.add.serviceUsers.${selectedServiceUserOption}.description`)
-          )}
-        </FormHelperText>
-      </FormControl>
+      {platform === 'linux' ? (
+        <FormControl fullWidth>
+          <InputLabel id="agent-service-user-label">
+            {t('managedAgents.add.serviceUser')}
+          </InputLabel>
+          <Select
+            labelId="agent-service-user-label"
+            label={t('managedAgents.add.serviceUser')}
+            value={serviceUserMode}
+            renderValue={(value) => t(`managedAgents.add.serviceUsers.${value}.label`)}
+            onChange={(event) => setServiceUserMode(event.target.value as AgentServiceUserMode)}
+          >
+            {serviceUserOptions.map((option) => (
+              <MenuItem key={option} value={option}>
+                <Stack spacing={0.25}>
+                  <Typography
+                    sx={{
+                      fontWeight: 700,
+                    }}
+                  >
+                    {t(`managedAgents.add.serviceUsers.${option}.label`)}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
+                    {t(`managedAgents.add.serviceUsers.${option}.description`)}
+                  </Typography>
+                </Stack>
+              </MenuItem>
+            ))}
+          </Select>
+          <FormHelperText
+            component="div"
+            sx={{ mx: 0, color: isRootServiceUser ? 'warning.main' : undefined }}
+          >
+            {isRootServiceUser ? (
+              <InlineWarning>{t('managedAgents.add.rootWarning')}</InlineWarning>
+            ) : (
+              t(`managedAgents.add.serviceUsers.${selectedServiceUserOption}.description`)
+            )}
+          </FormHelperText>
+        </FormControl>
+      ) : null}
       <BorgInstallModeRadioGroup
         value={borgInstallMode}
         onChange={setBorgInstallMode}
@@ -431,6 +480,7 @@ export default function AddAgentDialog({
         agentName={agentName.trim()}
         borgInstallMode={borgInstallMode}
         serviceUserMode={serviceUserMode}
+        platform={platform}
         connectedAgent={connectedAgent}
         onCopy={onCopy}
       />

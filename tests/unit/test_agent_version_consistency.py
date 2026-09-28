@@ -78,3 +78,15 @@ def test_an_agent_from_before_the_system_trust_store_change_is_offered_an_upgrad
         )
         == "outdated"
     )
+
+
+def test_an_agent_from_before_macos_support_is_offered_an_upgrade():
+    """From 0.1.14 the agent runs on macOS, so a server built from this tree
+    must offer 0.1.13 agents the upgrade.
+    """
+    assert (
+        compute_agent_upgrade_status(
+            reported="0.1.13", desired=None, available=_pyproject_version()
+        )
+        == "outdated"
+    )

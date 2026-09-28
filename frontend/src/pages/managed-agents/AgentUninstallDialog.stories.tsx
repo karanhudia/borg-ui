@@ -38,3 +38,8 @@ export const Mobile: Story = {
 export const PlainHttpServer: Story = {
   args: { serverUrl: 'http://192.168.1.82:8083' },
 }
+
+/** A macOS agent runs as its user: no sudo, and no service account to remove. */
+export const MacosAgent: Story = {
+  args: { agent: { ...agent, os: 'darwin', arch: 'arm64' } },
+}

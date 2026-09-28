@@ -213,6 +213,14 @@ const exampleCommand = buildAgentInstallCommand(
   '<enrollment-token>',
   '<machine-name>'
 )
+const exampleMacosCommand = buildAgentInstallCommand(
+  'https://borg-ui.example.com',
+  '<enrollment-token>',
+  '<machine-name>',
+  'borg1',
+  'current',
+  'macos'
+)
 
 const meta = {
   title: 'Pages/ManagedAgents',
@@ -258,7 +266,11 @@ export const FleetOverview: Story = {
           <Chip label="2 machines / 1 active job" color="primary" variant="outlined" />
         </Stack>
 
-        <AgentSetupGuide command={exampleCommand} onCopy={() => {}} />
+        <AgentSetupGuide
+          command={exampleCommand}
+          macosCommand={exampleMacosCommand}
+          onCopy={() => {}}
+        />
 
         <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
           <Box
@@ -417,7 +429,11 @@ export const SetupHelpDetails: Story = {
               Fresh-machine install, registration URL, and startup guidance
             </Typography>
           </Box>
-          <AgentSetupHelpContent command={exampleCommand} onCopy={() => {}} />
+          <AgentSetupHelpContent
+            command={exampleCommand}
+            macosCommand={exampleMacosCommand}
+            onCopy={() => {}}
+          />
         </Stack>
       </Paper>
     </Box>
@@ -514,6 +530,56 @@ export const AddAgentInstallCommandStep: Story = {
   ),
 }
 
+export const AddAgentMacosInstallCommandStep: Story = {
+  render: () => (
+    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
+      <AddAgentDialog
+        open
+        initialStep={2}
+        initialAgentName="design-laptop"
+        initialPlatform="macos"
+        initialCreatedToken={{
+          ...tokens[0],
+          token: 'borgui_enroll_example_token',
+          expires_at: '2026-05-28T12:00:00.000Z',
+        }}
+        onClose={() => {}}
+        defaultServerUrl="https://borg-ui.example.com"
+        agents={agents}
+        onCreateToken={async () => ({
+          ...tokens[0],
+          token: 'borgui_enroll_example_token',
+          expires_at: '2026-05-28T12:00:00.000Z',
+        })}
+        creatingToken={false}
+        onCopy={() => {}}
+      />
+    </Box>
+  ),
+}
+
+export const AddAgentMacosDetailsStep: Story = {
+  render: () => (
+    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
+      <AddAgentDialog
+        open
+        initialStep={1}
+        initialPlatform="macos"
+        onClose={() => {}}
+        defaultServerUrl="https://borg-ui.example.com"
+        agents={agents}
+        onCreateToken={async () => ({
+          ...tokens[0],
+          token: 'borgui_enroll_example_token',
+          expires_at: '2026-05-28T12:00:00.000Z',
+        })}
+        creatingToken={false}
+        onCopy={() => {}}
+      />
+    </Box>
+  ),
+}
+
 export const AddAgentWaitingForConnection: Story = {
   render: () => (
     <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
@@ -570,6 +636,20 @@ export const AgentReinstallDialogOpen: Story = {
       <AgentReinstallDialog
         open
         agent={agents[0]}
+        serverUrl="https://borg-ui.example.com"
+        onCancel={() => {}}
+        onCopy={() => {}}
+      />
+    </Box>
+  ),
+}
+
+export const AgentReinstallDialogMacos: Story = {
+  render: () => (
+    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
+      <AgentReinstallDialog
+        open
+        agent={{ ...agents[0], os: 'darwin', arch: 'arm64' }}
         serverUrl="https://borg-ui.example.com"
         onCancel={() => {}}
         onCopy={() => {}}

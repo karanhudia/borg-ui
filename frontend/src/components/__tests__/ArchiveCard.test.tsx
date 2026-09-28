@@ -58,6 +58,13 @@ describe('ArchiveCard', () => {
     expect(screen.getByRole('button', { name: /mount/i })).toBeInTheDocument()
   })
 
+  it('offers no mount for an agent-executed repository', () => {
+    render(<ArchiveCard archive={mockArchive} {...mockHandlers} mountHidden />)
+
+    expect(screen.queryByRole('button', { name: /mount/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /restore/i })).toBeInTheDocument()
+  })
+
   it('opens the archive on a row click, but not from an action button', () => {
     const onOpen = vi.fn()
     render(<ArchiveCard archive={mockArchive} {...mockHandlers} onOpen={onOpen} />)
