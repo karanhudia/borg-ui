@@ -1,29 +1,29 @@
 {
-  "generatedAt": "2026-09-28T19:08:30.857Z",
+  "generatedAt": "2026-09-28T19:24:10.578Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1242 visual report",
-    "commitSha": "4de9b4afefdd",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36469940432"
+    "commitSha": "fa1ef7f9e5b9",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36471807917"
   },
   "totals": {
     "baseline": 1040,
     "actual": 1052,
     "compared": 1040,
-    "changed": 11,
+    "changed": 13,
     "added": 12,
     "removed": 0,
-    "unchanged": 1029
+    "unchanged": 1027
   },
   "changed": [
     {
-      "fileName": "pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
-      "baselinePath": "images/baseline/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
-      "actualPath": "images/actual/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
-      "diffPath": "images/diff/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
-      "diffPixels": 59730,
+      "fileName": "components-repositorywipedialog--confirmation-ready--mobile.png",
+      "baselinePath": "images/baseline/components-repositorywipedialog--confirmation-ready--mobile.png",
+      "actualPath": "images/actual/components-repositorywipedialog--confirmation-ready--mobile.png",
+      "diffPath": "images/diff/components-repositorywipedialog--confirmation-ready--mobile.png",
+      "diffPixels": 117056,
       "totalPixels": 329160,
-      "diffRatio": 0.18146190302588408,
+      "diffRatio": 0.35562036699477456,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -32,6 +32,42 @@
       "actual": {
         "width": 390,
         "height": 844
+      }
+    },
+    {
+      "fileName": "components-wizard-cloud-mirror--scheduled--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-cloud-mirror--scheduled--mobile.png",
+      "actualPath": "images/actual/components-wizard-cloud-mirror--scheduled--mobile.png",
+      "diffPath": "images/diff/components-wizard-cloud-mirror--scheduled--mobile.png",
+      "diffPixels": 329160,
+      "totalPixels": 329160,
+      "diffRatio": 1,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-dashboardv3-capabilitylaunchpad--mixed-adoption.png",
+      "baselinePath": "images/baseline/pages-dashboardv3-capabilitylaunchpad--mixed-adoption.png",
+      "actualPath": "images/actual/pages-dashboardv3-capabilitylaunchpad--mixed-adoption.png",
+      "diffPath": "images/diff/pages-dashboardv3-capabilitylaunchpad--mixed-adoption.png",
+      "diffPixels": 1024000,
+      "totalPixels": 1024000,
+      "diffRatio": 1,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
       }
     },
     {
@@ -2320,9 +2356,6 @@
       "fileName": "components-repositorywipedialog--compact-failure-recovery.png"
     },
     {
-      "fileName": "components-repositorywipedialog--confirmation-ready--mobile.png"
-    },
-    {
       "fileName": "components-repositorywipedialog--confirmation-ready.png"
     },
     {
@@ -2528,9 +2561,6 @@
     },
     {
       "fileName": "components-wizard-cloud-mirror--requires-pro.png"
-    },
-    {
-      "fileName": "components-wizard-cloud-mirror--scheduled--mobile.png"
     },
     {
       "fileName": "components-wizard-cloud-mirror--scheduled.png"
@@ -2965,6 +2995,9 @@
       "fileName": "pages-cloudstorage--add-guided-remote--mobile.png"
     },
     {
+      "fileName": "pages-cloudstorage--add-guided-remote-setup-missing--mobile.png"
+    },
+    {
       "fileName": "pages-cloudstorage--add-guided-remote-setup-missing.png"
     },
     {
@@ -3038,9 +3071,6 @@
     },
     {
       "fileName": "pages-dashboardv3-capabilitylaunchpad--mixed-adoption--mobile.png"
-    },
-    {
-      "fileName": "pages-dashboardv3-capabilitylaunchpad--mixed-adoption.png"
     },
     {
       "fileName": "pages-dashboardv3-repositoryhealthpanel--mixed-warning-and-healthy--mobile.png"
