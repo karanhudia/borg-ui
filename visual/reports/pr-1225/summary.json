@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-09-28T06:40:08.441Z",
+  "generatedAt": "2026-09-28T07:22:05.194Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1225 visual report",
-    "commitSha": "59719ff3b748",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36386817818"
+    "commitSha": "ba1f25143e3f",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36390988011"
   },
   "totals": {
     "baseline": 1014,
