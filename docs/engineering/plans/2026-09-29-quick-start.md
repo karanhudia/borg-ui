@@ -9,7 +9,7 @@
 | --- | --- | --- | --- |
 | 1 | `feat/quick-start-1-spec` | spec and this plan | done |
 | 2 | `feat/quick-start-2-core` | dialog, state, actions, runner, local to local end to end | done |
-| 3 | `feat/quick-start-3-entry` | sidebar button, first-run auto-open, empty-state actions, user docs | not started |
+| 3 | `feat/quick-start-3-entry` | sidebar button, first-run auto-open, empty-state actions, user docs | done |
 | 4 | `feat/quick-start-4-ssh` | SSH destination and SSH pull source with inline key deploy | not started |
 | 5 | `feat/quick-start-5-agent` | managed agent source (Pro) | not started |
 
@@ -59,7 +59,7 @@ clean, then push and PR.
    (`QuickStartProvider` with `openQuickStart()`), mounted in `Layout`.
 2. First-run auto-open on the dashboard: the user has
    `repositories.manage_all`, there are zero repositories and zero plans, and
-   it was not dismissed in localStorage. Dismissal written on close.
+   it was not dismissed in localStorage. The flag is written when it opens, so it opens once.
 3. Quick start action on the Backup Plans and Repositories empty states.
 4. User docs: new `docs/quick-start.md`, `docs/navigation.md` mention, and
    index link.

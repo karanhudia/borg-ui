@@ -12,7 +12,12 @@ license supports it.
 
 ## Normal Path
 
-For a new setup, follow the sidebar in this order:
+The quickest way to a first backup is **New backup** at the top of the
+sidebar. It opens [Quick Start](quick-start), which asks what to back up and
+where, then creates the repository and a scheduled backup plan for you. It
+appears for accounts that can create repositories.
+
+To set things up by hand, follow the sidebar in this order:
 
 1. Open Dashboard to check overall health and spot setup gaps.
 2. Add storage targets from Repositories or Cloud Storage, and register infrastructure endpoints
@@ -26,6 +31,7 @@ For a new setup, follow the sidebar in this order:
 
 | Sidebar area | Tab | Use it for |
 | --- | --- | --- |
+| Top | New backup | Open [Quick Start](quick-start) to set up a scheduled backup in a few questions. Visible to accounts that can create repositories. |
 | Main | Dashboard | Check repository health, recent activity, backup freshness, restore-check status, and setup-gap actions for backup plans, cloud storage, remote clients, and verification. |
 | Main | Activity | Review job history as operations: queued, running, and finished work with follow-up index steps nested under their parent, live or recent logs, and failures. |
 | Infrastructure | Remote Machines | Add SSH-connected machines for remote repositories, remote backup sources, and SSH restore destinations. |
@@ -84,7 +90,7 @@ administration.
 
 ## Where To Go Next
 
-- For a first backup, continue with the [Usage Guide](usage-guide#create-a-backup-plan).
+- For a first backup, use [Quick Start](quick-start), or follow the [Usage Guide](usage-guide#create-a-backup-plan) to set it up by hand.
 - For Borg UI instances on other machines, see [Remote Clients](remote-clients).
 - For SSH targets or remote sources, see [Remote Machines](ssh-keys).
 - For notification setup, see [Notifications](notifications).

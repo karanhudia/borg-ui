@@ -129,7 +129,7 @@ Frontend only. No new backend endpoint and no migration.
 - A **New backup** button at the top of the sidebar navigation (visible to
   users who can create repositories, `repositories.manage_all`). Opens the dialog anywhere in the app.
 - First run: when the user has `repositories.manage_all` and there are zero repositories
-  and zero backup plans, the dialog opens once on the dashboard. Closing it
+  and zero backup plans, the dialog opens once on the dashboard. Opening it
   records `borg-ui.quickStart.autoOpenDismissed` in localStorage so it does
   not reopen in that browser. Per browser is deliberate; it needs no
   migration and the sidebar button is always there.

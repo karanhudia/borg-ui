@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import MockAdapter from 'axios-mock-adapter'
 import { Box } from '@mui/material'
 import AppSidebar from './AppSidebar'
+import { QuickStartContext } from './quick-start/quickStartContext'
 import { AppProvider } from '../context/AppContext'
 import { AuthProvider } from '../hooks/useAuth'
 import api from '../services/api'
@@ -145,4 +146,13 @@ export const ViewerSettings: Story = {
     router: { initialEntries: ['/settings/account'] },
   },
   render: () => renderSidebar(proSystemInfo, viewerUser),
+}
+
+// A user who can create repositories gets the Quick Start "New backup" button.
+export const WithQuickStart: Story = {
+  render: () => (
+    <QuickStartContext.Provider value={{ openQuickStart: () => {} }}>
+      {renderSidebar(proSystemInfo)}
+    </QuickStartContext.Provider>
+  ),
 }

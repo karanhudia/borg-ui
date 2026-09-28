@@ -9,6 +9,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useAnnouncementSurface } from '../hooks/useAnnouncementSurface'
 import { useSystemInfo } from '../hooks/useSystemInfo'
 import PasskeyEnrollmentPrompt from './PasskeyEnrollmentPrompt'
+import { QuickStartProvider } from './quick-start/QuickStartProvider'
 import { forgetPendingDeletes } from './jobs/jobCache'
 import { useActiveBackendTarget } from '../services/remoteBackends/context'
 import {
@@ -128,45 +129,47 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         : null
 
   return (
-    <Box sx={{ display: 'flex' }}>
-      <AppHeader onToggleMobileMenu={() => setMobileOpen(!mobileOpen)} />
+    <QuickStartProvider allowAutoOpen={activeSurface === null}>
+      <Box sx={{ display: 'flex' }}>
+        <AppHeader onToggleMobileMenu={() => setMobileOpen(!mobileOpen)} />
 
-      <AppSidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
+        <AppSidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
 
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          minWidth: 0,
-          px: { xs: 1.5, sm: 2.5, md: 3 },
-          py: { xs: 2, sm: 3 },
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          minHeight: '100vh',
-          backgroundColor: 'background.default',
-        }}
-      >
-        <Toolbar />
-        <Container maxWidth="xl" sx={{ mt: { xs: 1, sm: 2 }, px: { xs: 0, sm: 1 } }}>
-          {children}
-        </Container>
+        <Box
+          component="main"
+          sx={{
+            flexGrow: 1,
+            minWidth: 0,
+            px: { xs: 1.5, sm: 2.5, md: 3 },
+            py: { xs: 2, sm: 3 },
+            width: { sm: `calc(100% - ${drawerWidth}px)` },
+            minHeight: '100vh',
+            backgroundColor: 'background.default',
+          }}
+        >
+          <Toolbar />
+          <Container maxWidth="xl" sx={{ mt: { xs: 1, sm: 2 }, px: { xs: 0, sm: 1 } }}>
+            {children}
+          </Container>
+        </Box>
+
+        <AnnouncementModal
+          announcement={announcement}
+          open={activeSurface === 'announcement'}
+          onAcknowledge={acknowledgeAnnouncement}
+          onSnooze={snoozeAnnouncement}
+          onCtaClick={trackAnnouncementCtaClick}
+        />
+        {activeSurface === 'analytics' && (
+          <AnalyticsConsentBanner onConsentGiven={() => setShowConsentBanner(false)} />
+        )}
+        <PasskeyEnrollmentPrompt
+          open={activeSurface === 'passkey'}
+          onSnooze={handlePasskeyPromptSnooze}
+          onIgnore={handlePasskeyPromptIgnore}
+          onSuccess={handlePasskeyPromptSuccess}
+        />
       </Box>
-
-      <AnnouncementModal
-        announcement={announcement}
-        open={activeSurface === 'announcement'}
-        onAcknowledge={acknowledgeAnnouncement}
-        onSnooze={snoozeAnnouncement}
-        onCtaClick={trackAnnouncementCtaClick}
-      />
-      {activeSurface === 'analytics' && (
-        <AnalyticsConsentBanner onConsentGiven={() => setShowConsentBanner(false)} />
-      )}
-      <PasskeyEnrollmentPrompt
-        open={activeSurface === 'passkey'}
-        onSnooze={handlePasskeyPromptSnooze}
-        onIgnore={handlePasskeyPromptIgnore}
-        onSuccess={handlePasskeyPromptSuccess}
-      />
-    </Box>
+    </QuickStartProvider>
   )
 }
