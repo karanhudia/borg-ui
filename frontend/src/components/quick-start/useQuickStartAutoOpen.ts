@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
 
@@ -34,7 +34,9 @@ export function useQuickStartAutoOpen({
   onOpen: () => void
 }) {
   const { pathname } = useLocation()
-  const active = enabled && pathname === '/dashboard' && !isDismissed()
+  // Also kept in state: when storage writes fail, closing must still not reopen it.
+  const [dismissed, setDismissed] = useState(isDismissed)
+  const active = enabled && pathname === '/dashboard' && !dismissed
 
   // Same query keys as the Repositories page and the sidebar, so this reuses their cache.
   const { data: repositories } = useQuery({
@@ -54,6 +56,7 @@ export function useQuickStartAutoOpen({
   useEffect(() => {
     if (!active || repositoryCount !== 0 || planCount !== 0) return
     markDismissed()
+    setDismissed(true)
     onOpen()
   }, [active, repositoryCount, planCount, onOpen])
 }

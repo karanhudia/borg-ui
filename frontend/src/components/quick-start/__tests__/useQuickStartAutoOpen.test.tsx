@@ -76,4 +76,22 @@ describe('useQuickStartAutoOpen', () => {
     expect(repositoriesAPI.getRepositories).not.toHaveBeenCalled()
     expect(onOpen).not.toHaveBeenCalled()
   })
+  it('opens only once per session even when storage cannot be written', async () => {
+    mockCounts(0, 0)
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked')
+    })
+    const onOpen = vi.fn()
+    const { rerender } = renderHook(({ enabled }) => useQuickStartAutoOpen({ enabled, onOpen }), {
+      wrapper: wrapperAt('/dashboard'),
+      initialProps: { enabled: true },
+    })
+    await waitFor(() => expect(onOpen).toHaveBeenCalledTimes(1))
+    // The provider disables the hook while the dialog is open, then enables it again.
+    rerender({ enabled: false })
+    rerender({ enabled: true })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(onOpen).toHaveBeenCalledTimes(1)
+    setItem.mockRestore()
+  })
 })
