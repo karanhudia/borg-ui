@@ -4895,7 +4895,6 @@ async def update_repository(
                         extra_flags=repo_data.rclone_extra_flags,
                         sync_cron_expression=repo_data.rclone_sync_cron_expression,
                         sync_timezone=repo_data.rclone_sync_timezone,
-                        sftp_connection_id=repo_data.rclone_sftp_connection_id,
                     )
                 except ValueError as exc:
                     message = str(exc)
@@ -5012,10 +5011,8 @@ async def update_repository(
                                 "message": str(exc),
                             },
                         ) from exc
-                if "rclone_sftp_connection_id" in update_data:
-                    if repo_data.rclone_sftp_connection_id is not None:
-                        get_connection_details(repo_data.rclone_sftp_connection_id, db)
-                    storage.sftp_connection_id = repo_data.rclone_sftp_connection_id
+                if repo_data.rclone_sftp_connection_id is not None:
+                    get_connection_details(repo_data.rclone_sftp_connection_id, db)
                 _apply_mirror_source_strategy(storage, repository)
 
             if should_update_direct_rclone:
@@ -5478,6 +5475,13 @@ async def update_repository(
             and existing_rclone_storage.backend == "rclone"
             and repository.repository_type != "rclone"
         ):
+            # Applied here, after connection_id and the executor are updated,
+            # so a PUT that switches to SSH keeps it (the strategy clears it
+            # for any other source).
+            if "rclone_sftp_connection_id" in update_data:
+                existing_rclone_storage.sftp_connection_id = (
+                    repo_data.rclone_sftp_connection_id
+                )
             _apply_mirror_source_strategy(existing_rclone_storage, repository)
 
         if reopen_history:

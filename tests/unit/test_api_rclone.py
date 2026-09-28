@@ -5353,6 +5353,39 @@ def test_update_ssh_cloud_mirror_sets_and_clears_sftp_connection(
 
 
 @pytest.mark.unit
+def test_update_switching_mirror_source_to_ssh_keeps_sftp_connection(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    monkeypatch.setattr(
+        "app.api.repositories.BorgRouter.verify_repository",
+        AsyncMock(return_value={"success": True}),
+    )
+    repository, storage, sftp_connection = _ssh_repository_with_mirror(test_db)
+    connection_id = repository.connection_id
+    repository.connection_id = None
+    repository.path = "/backups/app"
+    repository.repository_type = "local"
+    repository.execution_target = "local"
+    storage.cache_path = "/backups/app"
+    storage.sync_direction = "primary_to_remote"
+    test_db.commit()
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={
+            "connection_id": connection_id,
+            "rclone_sftp_connection_id": sftp_connection.id,
+        },
+    )
+
+    assert response.status_code == 200, response.json()
+    test_db.refresh(storage)
+    assert storage.sync_direction == "sshfs_mount_to_remote"
+    assert storage.sftp_connection_id == sftp_connection.id
+
+
+@pytest.mark.unit
 def test_update_ssh_cloud_mirror_rejects_unknown_sftp_connection(
     test_client: TestClient, admin_headers, test_db
 ):
