@@ -14,6 +14,7 @@ const translations: Record<string, string> = {
   'backupPlans.wizard.maintenance.runPruneAfter': 'Run prune after backup',
   'backupPlans.wizard.maintenance.runCompactAfter': 'Run compact after prune',
   'backupPlans.wizard.maintenance.runCheckAfter': 'Run check after backup',
+  'backupPlans.wizard.maintenance.runRestoreCheckAfter': 'Run restore check after backup',
   'backupPlans.wizard.fields.cronExpression': 'Cron expression',
   'backupPlans.wizard.fields.timezone': 'Timezone',
   'backupPlans.wizard.fields.checkMaxDuration': 'Max check duration',
@@ -34,6 +35,7 @@ const conflictState = {
   runPruneAfter: true,
   pruneKeepWithin: '1d',
   runCheckAfter: true,
+  runRestoreCheckAfter: true,
   checkMaxDuration: 3600,
   checkExtraFlags: '--archives-only',
 }

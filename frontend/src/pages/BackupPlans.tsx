@@ -146,6 +146,7 @@ export default function BackupPlans() {
       run_prune_after: data.run_prune_after,
       run_compact_after: data.run_compact_after,
       run_check_after: data.run_check_after,
+      run_restore_check_after: data.run_restore_check_after,
     })
     if (data.repositories.length > 1 || data.repository_run_mode === 'parallel') {
       trackFeatureUsed('backup_plan_multi_repository', {

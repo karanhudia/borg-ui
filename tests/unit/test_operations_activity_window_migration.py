@@ -13,11 +13,12 @@ from datetime import datetime, timedelta
 import pytest
 from alembic import command
 from alembic.script import ScriptDirectory
-from sqlalchemy import event, func, text
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from app.database.db_upgrade import _alembic_config, _engine
 from app.database.models import Operation
+from tests.utils.statements import session_cursor_listener
 
 REVISION = "5c7267e7aa2c"
 PREVIOUS = "d4e5f6a7b8c9"
@@ -104,18 +105,15 @@ def test_migration_and_model_build_the_same_index(tmp_path):
     assert _index_sql(migrated) == _index_sql(created)
 
 
-def _statements_of(engine, request):
-    """`(statement, parameters)` of every query `request()` runs on `engine`."""
+def _statements_of(session, request):
+    """`(statement, parameters)` of every query `request()` runs on `session`."""
     seen = []
 
     def record(conn, cursor, statement, parameters, context, executemany):
         seen.append((statement, parameters))
 
-    event.listen(engine, "before_cursor_execute", record)
-    try:
+    with session_cursor_listener(session, record):
         response = request()
-    finally:
-        event.remove(engine, "before_cursor_execute", record)
     assert response.status_code == 200
     return seen
 
@@ -145,7 +143,7 @@ def test_the_routes_window_query_reads_the_index(
         url += "&before=2026-09-01T00:20:00"
 
     engine = test_db.get_bind()
-    seen = _statements_of(engine, lambda: test_client.get(url, headers=admin_headers))
+    seen = _statements_of(test_db, lambda: test_client.get(url, headers=admin_headers))
     window = [
         (statement, parameters)
         for statement, parameters in seen

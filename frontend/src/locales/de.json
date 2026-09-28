@@ -1307,6 +1307,8 @@
       "runCompactTip": "Repository wird nach jedem Backup komprimiert",
       "runCheck": "Prüfen",
       "runCheckTip": "Integritätsprüfung läuft nach jedem Backup (zusätzlich zu geplanten Prüfungen unten)",
+      "runRestoreCheck": "Wiederherstellungstest",
+      "runRestoreCheckTip": "Stellt nach jedem Backup das neue Archiv wieder her, mit den Wiederherstellungstest-Einstellungen des Repositorys",
       "collapse": "Einklappen",
       "expand": "Ausklappen",
       "togglePlan": "{{action}} {{name}}"
@@ -1906,6 +1908,7 @@
         "runPruneAfter": "Prune nach erfolgreichen Repository-Sicherungen ausführen",
         "runCompactAfter": "Compact nach der Backup-Wartung ausführen",
         "runCheckAfter": "Check nach erfolgreichen Repository-Sicherungen ausführen",
+        "runRestoreCheckAfter": "Wiederherstellungstest für das neue Archiv nach erfolgreichen Repository-Sicherungen ausführen",
         "checkMaxDurationHelper": "Sekunden. 0 bedeutet unbegrenzt.",
         "checkExtraFlagsHelper": "Zusätzliche borg check Optionen, die an Wartungs-Checks des Plans angehängt werden."
       },
@@ -1936,6 +1939,7 @@
         "retentionValueWithWithin": "Innerhalb {{within}} / H {{hourly}} / T {{daily}} / W {{weekly}} / M {{monthly}} / Q {{quarterly}} / J {{yearly}}",
         "compact": "Compact",
         "check": "Check",
+        "restoreCheck": "Wiederherstellungstest",
         "checkExtraFlags": "Check-Flags",
         "checkDuration": "{{seconds}} Sekunden",
         "pathCount_one": "{{count}} Pfad",

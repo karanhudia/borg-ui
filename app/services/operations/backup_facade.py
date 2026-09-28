@@ -95,7 +95,7 @@ AGENT_PARAMS = {
     "upload_ratelimit_kib": "upload_ratelimit_kib",
 }
 
-# The same three words every maintenance reader matches on, in one place.
+# The running words every maintenance reader matches on, in one place.
 RUNNING_MAINTENANCE_WORDS = tuple(RUNNING_BACKUP_MAINTENANCE_FAILURES)
 
 _LEGACY_TO_OPERATION_MODE = {"local": "server"}

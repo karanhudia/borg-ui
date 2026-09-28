@@ -98,6 +98,7 @@ describe('backupPlanPayload prune keep-within', () => {
       run_prune_after: true,
       run_compact_after: false,
       run_check_after: false,
+      run_restore_check_after: false,
       repository_count: 1,
       check_max_duration: 3600,
       prune_keep_hourly: 0,

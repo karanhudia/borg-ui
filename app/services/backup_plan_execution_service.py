@@ -59,6 +59,7 @@ from app.services.repository_executor import (
 )
 from app.services.upload_ratelimit_policies import resolve_scheduled_upload_ratelimit
 from app.services.notification_service import notification_service
+from app.services.restore_check_service import restore_check_service
 from app.services.script_executor import execute_script
 from app.services.template_service import get_system_variables
 from app.services.operations.backup_facade import (
@@ -100,6 +101,7 @@ TERMINAL_PLAN_RUN_REPOSITORY_STATUSES = {
 SUCCESS_BACKUP_STATUSES = {"completed", "completed_with_warnings"}
 WARNING_BACKUP_STATUSES = {"completed_with_warnings", "skipped"}
 CANCELLED_MESSAGE = '{"key": "backend.errors.backup.cancelledByUser"}'
+RESTORE_CHECK_CANCEL_POLL_SECONDS = 2
 
 
 @dataclass(frozen=True)
@@ -128,6 +130,7 @@ class PlanRunContext:
     run_prune_after: bool
     run_compact_after: bool
     run_check_after: bool
+    run_restore_check_after: bool
     check_max_duration: int
     check_extra_flags: Optional[str]
     prune_keep_hourly: int
@@ -1216,6 +1219,7 @@ class BackupPlanExecutionService:
                 run_prune_after=bool(plan.run_prune_after),
                 run_compact_after=bool(plan.run_compact_after),
                 run_check_after=bool(plan.run_check_after),
+                run_restore_check_after=bool(plan.run_restore_check_after),
                 check_max_duration=plan.check_max_duration,
                 check_extra_flags=plan.check_extra_flags,
                 prune_keep_hourly=plan.prune_keep_hourly,
@@ -2354,6 +2358,53 @@ class BackupPlanExecutionService:
                 maintenance_ok = False
             db.commit()
 
+        # Last, so a repository the check just failed is not restore-checked.
+        if (
+            context.run_restore_check_after
+            and backup_job.maintenance_status != "check_failed"
+        ):
+            if self._is_run_cancelled(run_id):
+                return "cancelled"
+            restore_check_job = start_inline_maintenance(
+                db,
+                repo,
+                "restore_check",
+                params={
+                    # The archive this run just wrote, not whatever is newest.
+                    "archive_name": (backup_job.operation.params or {}).get(
+                        "archive_name"
+                    ),
+                    "probe_paths": repo.restore_check_paths,
+                    "full_archive": bool(repo.restore_check_full_archive),
+                    "scheduled_restore_check": False,
+                },
+                user_id=None,
+                run_id=backup_job.operation.run_id,
+                depends_on_id=backup_job.id,
+            )
+            backup_job.maintenance_status = "running_restore_check"
+            db.commit()
+            await self._run_inline_maintenance(
+                db,
+                backup_job,
+                restore_check_job,
+                run_id,
+                lambda: self._restore_check_until_cancelled(
+                    db, repo, restore_check_job.id, run_id
+                ),
+            )
+            if self._is_run_cancelled(run_id):
+                return "cancelled"
+            if restore_check_job.status in SUCCESS_BACKUP_STATUSES:
+                backup_job.maintenance_status = "restore_check_completed"
+                # borg's warning exit still restored; the run says so
+                if restore_check_job.status == "completed_with_warnings":
+                    maintenance_ok = False
+            else:
+                backup_job.maintenance_status = "restore_check_failed"
+                maintenance_ok = False
+            db.commit()
+
         if (
             backup_job.maintenance_status
             and "failed" not in backup_job.maintenance_status
@@ -2362,6 +2413,32 @@ class BackupPlanExecutionService:
             db.commit()
 
         return "completed" if maintenance_ok else "completed_with_warnings"
+
+    async def _restore_check_until_cancelled(
+        self, db: Session, repo: Repository, operation_id: int, run_id: int
+    ) -> None:
+        """Run the restore check, stopping it if the plan run is cancelled.
+        `cancel_run` only reaches the backup, which is done by now, and a
+        full-archive extract can run for hours."""
+        from app.services.operations.executors.maintenance import (
+            cancel_agent_operation_job,
+        )
+        from app.services.repository_executor import is_agent_executor
+
+        task = asyncio.ensure_future(
+            restore_check_service.execute_restore_check(operation_id, repo.id)
+        )
+        stopped = False
+        while not task.done():
+            await asyncio.wait({task}, timeout=RESTORE_CHECK_CANCEL_POLL_SECONDS)
+            if task.done() or stopped or not self._is_run_cancelled(run_id):
+                continue
+            # False means "ask again": the agent has not taken the job yet.
+            if is_agent_executor(repo):
+                stopped = await cancel_agent_operation_job(db, repo, operation_id)
+            else:
+                stopped = await restore_check_service.cancel_restore_check(operation_id)
+        await task
 
     def _mark_repository_skipped(self, run_id: int, repository_id: int) -> None:
         """Mark a pending repository child as skipped."""

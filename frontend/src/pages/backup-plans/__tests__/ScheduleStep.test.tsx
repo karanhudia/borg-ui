@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
 import { describe, expect, it, vi } from 'vitest'
 import type { TFunction } from 'i18next'
@@ -17,6 +17,7 @@ const translations: Record<string, string> = {
   'backupPlans.wizard.maintenance.runPruneAfter': 'Run prune after backup',
   'backupPlans.wizard.maintenance.runCompactAfter': 'Run compact after prune',
   'backupPlans.wizard.maintenance.runCheckAfter': 'Run check after backup',
+  'backupPlans.wizard.maintenance.runRestoreCheckAfter': 'Run restore check after backup',
   'backupPlans.wizard.fields.checkMaxDuration': 'Max check duration',
   'backupPlans.wizard.fields.checkExtraFlags': 'Advanced check flags',
   'backupPlans.wizard.maintenance.checkMaxDurationHelper': 'Seconds. Use 0 for unlimited.',
@@ -29,14 +30,17 @@ const translations: Record<string, string> = {
 const t = ((key: string, params?: Record<string, unknown>) =>
   (translations[key] || key).replace('{{flags}}', String(params?.flags ?? ''))) as TFunction
 
-function renderScheduleStep(stateOverrides: Partial<ReturnType<typeof createInitialState>>) {
+function renderScheduleStep(
+  stateOverrides: Partial<ReturnType<typeof createInitialState>>,
+  updateState = vi.fn()
+) {
   const wizardState = { ...createInitialState(), ...stateOverrides }
 
   return render(
     <ThemeProvider theme={theme}>
       <ScheduleStep
         wizardState={wizardState}
-        updateState={vi.fn()}
+        updateState={updateState}
         handlePruneSettingsChange={vi.fn()}
         t={t}
       />
@@ -55,5 +59,14 @@ describe('Backup plan ScheduleStep', () => {
     expect(
       screen.getByText(/Set max duration to 0 \(unlimited\) to use --archives-only/)
     ).toBeInTheDocument()
+  })
+
+  it('toggles the post-backup restore check', () => {
+    const updateState = vi.fn()
+    renderScheduleStep({}, updateState)
+
+    fireEvent.click(screen.getByLabelText('Run restore check after backup'))
+
+    expect(updateState).toHaveBeenCalledWith({ runRestoreCheckAfter: true })
   })
 })

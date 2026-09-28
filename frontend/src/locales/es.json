@@ -1307,6 +1307,8 @@
       "runCompactTip": "El repositorio se compacta después de cada copia",
       "runCheck": "Comprobar",
       "runCheckTip": "La comprobación de integridad se ejecuta después de cada copia (además de cualquier comprobación programada abajo)",
+      "runRestoreCheck": "Prueba de restauración",
+      "runRestoreCheckTip": "Restaura el nuevo archivo tras cada copia, con los ajustes de prueba de restauración del repositorio",
       "collapse": "Contraer",
       "expand": "Expandir",
       "togglePlan": "{{action}} {{name}}"
@@ -1906,6 +1908,7 @@
         "runPruneAfter": "Ejecutar prune tras copias correctas del repositorio",
         "runCompactAfter": "Ejecutar compact tras el mantenimiento de copia",
         "runCheckAfter": "Ejecutar check tras copias correctas del repositorio",
+        "runRestoreCheckAfter": "Ejecutar prueba de restauración del nuevo archivo tras copias correctas del repositorio",
         "checkMaxDurationHelper": "Segundos. Usa 0 para sin límite.",
         "checkExtraFlagsHelper": "Opciones adicionales de borg check añadidas a los checks de mantenimiento del plan."
       },
@@ -1936,6 +1939,7 @@
         "retentionValueWithWithin": "Dentro de {{within}} / H {{hourly}} / D {{daily}} / S {{weekly}} / M {{monthly}} / T {{quarterly}} / A {{yearly}}",
         "compact": "Compact",
         "check": "Check",
+        "restoreCheck": "Prueba de restauración",
         "checkExtraFlags": "Flags de check",
         "checkDuration": "{{seconds}} segundos",
         "pathCount_one": "{{count}} ruta",

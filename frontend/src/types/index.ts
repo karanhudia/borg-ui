@@ -409,6 +409,7 @@ export interface BackupPlan {
   run_prune_after?: boolean
   run_compact_after?: boolean
   run_check_after?: boolean
+  run_restore_check_after?: boolean
   check_max_duration?: number
   check_extra_flags?: string | null
   prune_keep_hourly?: number
@@ -502,6 +503,7 @@ export interface BackupPlanData {
   run_prune_after: boolean
   run_compact_after: boolean
   run_check_after: boolean
+  run_restore_check_after: boolean
   check_max_duration: number
   check_extra_flags?: string | null
   prune_keep_hourly: number
