@@ -130,6 +130,44 @@ describe('analytics transport', () => {
     expect(sent()).toHaveLength(49)
   })
 
+  it('counts keepalive bytes across overlapping flushes until each send settles', async () => {
+    const a = await load()
+    const hide = () => {
+      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+      document.dispatchEvent(new Event('visibilitychange'))
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+    }
+    for (let i = 0; i < 30; i++) a.trackEvent('Backup', 'Start', { note: 'x'.repeat(1500) })
+    hide()
+    for (let i = 0; i < 30; i++) a.trackEvent('Backup', 'Start', { note: 'x'.repeat(1500) })
+    hide()
+    const kept = fetchMock()
+      .mock.calls.filter(([, init]) => (init as RequestInit).keepalive)
+      .reduce(
+        (total, [, init]) =>
+          total + new TextEncoder().encode((init as RequestInit).body as string).length,
+        0
+      )
+    expect(kept).toBeLessThanOrEqual(60_000)
+    expect(sent()).toHaveLength(60)
+
+    // Once those settle, the budget is free again.
+    await vi.runAllTimersAsync()
+    fetchMock().mockClear()
+    a.trackEvent('Backup', 'Start')
+    hide()
+    expect(fetchMock().mock.calls[0][1].keepalive).toBe(true)
+  })
+
+  it('replaces props the ingest would reject as too large, keeping the event', async () => {
+    const a = await load()
+    a.trackEvent('Backup', 'Fail', { error: 'x'.repeat(100_000), code: 5 })
+    vi.advanceTimersByTime(5000)
+    const [event] = sent()
+    expect(event.name).toBe('Backup - Fail')
+    expect(event.props).toEqual({ props_truncated: true })
+  })
+
   it('hashes any *_name prop so raw entity names cannot leak', async () => {
     const a = await load()
     a.trackEvent('Backup', 'Complete', { schedule_name: 'nightly-nas', name: 'de' })
