@@ -10,7 +10,7 @@ export const formatDate = (dateString: string | null | undefined): string => {
   if (!dateString) return 'Never'
 
   try {
-    const date = new Date(dateString)
+    const date = parseBackendDate(dateString)
     return date.toLocaleString(undefined, {
       day: 'numeric',
       month: 'short',
@@ -33,7 +33,7 @@ export const formatDateShort = (dateString: string | null | undefined): string =
   if (!dateString) return 'Never'
 
   try {
-    const date = new Date(dateString)
+    const date = parseBackendDate(dateString)
     return date.toLocaleDateString(undefined, {
       month: 'short',
       day: 'numeric',
@@ -162,7 +162,7 @@ export const formatRelativeTime = (dateString: string | null | undefined): strin
   if (!dateString) return 'Never'
 
   try {
-    const date = new Date(dateString)
+    const date = parseBackendDate(dateString)
     return formatDistance(date, new Date(), { addSuffix: true })
   } catch (error) {
     console.error('Error formatting relative time:', error)
@@ -211,7 +211,7 @@ export const formatTimeRange = (
   if (!startTime) return 'N/A'
 
   try {
-    const start = new Date(startTime)
+    const start = parseBackendDate(startTime)
 
     if (status === 'running') {
       // Calculate duration from start to now
@@ -222,7 +222,7 @@ export const formatTimeRange = (
 
     if (!endTime) return 'N/A'
 
-    const end = new Date(endTime)
+    const end = parseBackendDate(endTime)
     const durationMs = end.getTime() - start.getTime()
     const durationSec = Math.floor(durationMs / 1000)
 
@@ -233,6 +233,10 @@ export const formatTimeRange = (
   }
 }
 
+// A date and time with no offset. Date-only and zoned values, and anything
+// that is not ISO, go to `new Date()` untouched.
+const NAIVE_ISO_DATETIME = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/
+
 /**
  * Parse a timestamp coming from the backend.
  *
@@ -242,10 +246,8 @@ export const formatTimeRange = (
  * hours". Treat an offset-less value as UTC, and leave anything that already
  * carries an offset alone.
  */
-export const parseBackendDate = (value: string): Date => {
-  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(value)
-  return new Date(hasZone ? value : `${value}Z`)
-}
+export const parseBackendDate = (value: string): Date =>
+  new Date(NAIVE_ISO_DATETIME.test(value) ? `${value.replace(' ', 'T')}Z` : value)
 
 /**
  * Calculate elapsed time from a start date to now
@@ -672,7 +674,7 @@ export const formatDateTimeFull = (dateString: string | null | undefined): strin
   if (!dateString) return 'Never'
 
   try {
-    const date = new Date(dateString)
+    const date = parseBackendDate(dateString)
     const datePart = date.toLocaleDateString(undefined, {
       month: 'long',
       day: 'numeric',
@@ -699,7 +701,7 @@ export const formatDateCompact = (dateString: string | null | undefined): string
   if (!dateString) return 'Never'
 
   try {
-    const date = new Date(dateString)
+    const date = parseBackendDate(dateString)
     return date.toLocaleString(undefined, {
       day: 'numeric',
       month: 'short',
@@ -720,7 +722,7 @@ export const formatDateCompactInTimeZone = (
   if (!dateString) return 'Never'
 
   try {
-    const date = new Date(dateString)
+    const date = parseBackendDate(dateString)
     return date.toLocaleString(undefined, {
       day: 'numeric',
       month: 'short',
@@ -742,7 +744,7 @@ export const formatDateTimeFullInTimeZone = (
   if (!dateString) return 'Never'
 
   try {
-    const date = new Date(dateString)
+    const date = parseBackendDate(dateString)
     const datePart = date.toLocaleDateString(undefined, {
       month: 'long',
       day: 'numeric',

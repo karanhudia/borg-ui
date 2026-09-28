@@ -32,6 +32,7 @@ import { ResourceGaugeGrid } from './dashboard-v3/ResourceGaugeGrid'
 import { makeT, statusColor, TokenContext } from './dashboard-v3/tokens'
 import type { ActivityEntry, DashboardOverview } from './dashboard-v3/types'
 import { gaugeColor, toCompactGB } from './dashboard-v3/utils'
+import { parseBackendDate } from '../utils/dateUtils'
 
 // A backend one release older sends the feed (every run of the window)
 // instead of the timeline counts and the failures; both derive from it here
@@ -58,7 +59,7 @@ function timelineFromFeed(
 ): NonNullable<DashboardOverview['activity_timeline']> {
   const cells = new Map<string, { date: string; type: string; total: number; failed: number }>()
   for (const activity of feed) {
-    const started = new Date(activity.timestamp)
+    const started = parseBackendDate(activity.timestamp)
     // an entry the older backend could not date is skipped, not rendered
     if (Number.isNaN(started.getTime())) continue
     const date = format(started, 'yyyy-MM-dd')
@@ -162,7 +163,7 @@ export default function DashboardV3() {
 
   // Most recent backup across all repos
   const lastBackupDate = repos
-    .map((r) => (r.last_backup ? new Date(r.last_backup) : null))
+    .map((r) => (r.last_backup ? parseBackendDate(r.last_backup) : null))
     .filter(Boolean)
     .sort((a, b) => b!.getTime() - a!.getTime())[0]
   const legacyFeed = ov.activity_feed ?? []

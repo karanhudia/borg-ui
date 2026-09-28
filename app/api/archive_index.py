@@ -52,6 +52,7 @@ from app.services.operations.series import (
 )
 from app.services.operations.runner import operation_runner
 from app.services.operations.vocab import PRIORITY_RECONCILE, SUCCESS_STATUSES
+from app.utils.datetime_utils import serialize_datetime
 
 router = APIRouter()
 
@@ -72,24 +73,24 @@ def serialize_archive(a: Archive) -> dict:
         "borg_id": a.borg_id,
         "name": a.name,
         "series": a.series,
-        "start": a.start,
-        "end": a.end,
+        "start": serialize_datetime(a.start),
+        "end": serialize_datetime(a.end),
         "duration_seconds": a.duration_seconds,
         "nfiles": a.nfiles,
         "original_size": a.original_size,
         "compressed_size": a.compressed_size,
         "deduplicated_size": a.deduplicated_size,
-        "stats_measured_at": a.stats_measured_at,
+        "stats_measured_at": serialize_datetime(a.stats_measured_at),
         "hostname": a.hostname,
         "username": a.username,
         "comment": a.comment,
         "backup_operation_id": a.backup_operation_id,
         "history_state": a.history_state,
-        "history_indexed_at": a.history_indexed_at,
+        "history_indexed_at": serialize_datetime(a.history_indexed_at),
         "history_rows": a.history_rows,
         "history_truncated": a.history_truncated,
-        "first_seen_at": a.first_seen_at,
-        "last_seen_at": a.last_seen_at,
+        "first_seen_at": serialize_datetime(a.first_seen_at),
+        "last_seen_at": serialize_datetime(a.last_seen_at),
     }
 
 
@@ -212,7 +213,7 @@ async def list_archives(
         "archives": [serialize_archive(a) for a in rows],
         "series": all_series,
         "sync_state": state,
-        "last_synced_at": last_at,
+        "last_synced_at": serialize_datetime(last_at),
         # `history_available` keeps its meaning (the plan has the feature);
         # the capability says whether this repository has the stage, and
         # why not.
@@ -286,8 +287,8 @@ async def archives_heatmap(
                     day["anomalies"].append(flag)
         out = {
             "days": list(days.values()),
-            "first": archives[0].start if archives else None,
-            "last": archives[-1].start if archives else None,
+            "first": serialize_datetime(archives[0].start) if archives else None,
+            "last": serialize_datetime(archives[-1].start) if archives else None,
             "count": len(archives),
         }
         if name is not None:

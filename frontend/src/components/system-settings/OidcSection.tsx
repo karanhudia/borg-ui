@@ -24,6 +24,7 @@ import type {
   AuthEventStats,
   AuthEvents,
 } from './types'
+import { parseBackendDate } from '../../utils/dateUtils'
 
 interface OidcSectionProps {
   systemSettings?: SystemSettings
@@ -545,7 +546,7 @@ const OidcSection: React.FC<OidcSectionProps> = ({
                           color: 'text.secondary',
                         }}
                       >
-                        {new Date(event.created_at).toLocaleString()}
+                        {parseBackendDate(event.created_at).toLocaleString()}
                       </Typography>
                     </Stack>
                   </Stack>
