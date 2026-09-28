@@ -10,7 +10,7 @@ interface FileHistoryEntryLineProps {
   entry: HistoryEntry
   /** The oldest `added` entry: the version the path first appeared in. */
   isFirst: boolean
-  onRestore: (entry: HistoryEntry) => void
+  onRestore?: (entry: HistoryEntry) => void
 }
 
 /** One version of a path in the history panel, and in its locked preview. */
@@ -54,14 +54,16 @@ export default function FileHistoryEntryLine({
           </Box>
         </Typography>
       </Box>
-      <Button
-        size="small"
-        startIcon={<RotateCcw size={13} />}
-        onClick={() => onRestore(entry)}
-        sx={{ mt: -0.5, flexShrink: 0 }}
-      >
-        {t('archives.files.restoreThis')}
-      </Button>
+      {onRestore && (
+        <Button
+          size="small"
+          startIcon={<RotateCcw size={13} />}
+          onClick={() => onRestore(entry)}
+          sx={{ mt: -0.5, flexShrink: 0 }}
+        >
+          {t('archives.files.restoreThis')}
+        </Button>
+      )}
     </Box>
   )
 }

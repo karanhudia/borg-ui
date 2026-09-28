@@ -15,6 +15,14 @@ from app.database.models import (
 from tests.unit.helpers import assert_auth_required
 from app.services.operations.restore_facade import resolve_restore_job
 from tests.utils.operations import seed_job_operation
+from app.config import settings as app_settings
+
+
+@pytest.fixture(autouse=True)
+def _whole_filesystem_is_a_mount_point(monkeypatch):
+    # Local restore destinations must sit under a mount point; these tests
+    # use arbitrary absolute paths, so treat "/" as one.
+    monkeypatch.setattr(app_settings, "local_mount_points", "/")
 
 
 def _set_log_save_policy(test_db, policy: str) -> None:
@@ -293,7 +301,11 @@ class TestRestoreStart:
             headers=admin_headers,
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 403
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.restore.destinationNotAllowed"
+        )
 
     def test_start_restore_unauthorized(self, test_client: TestClient):
         """Test starting restore without auth returns 403"""

@@ -12,6 +12,12 @@ from app.services.operations.restore_facade import resolve_restore_job
 from tests.utils.operations import seed_job_operation
 
 
+@pytest.fixture(autouse=True)
+def _tmp_path_is_a_mount_point(monkeypatch, tmp_path):
+    # Local restores only write under a configured mount point.
+    monkeypatch.setattr("app.config.settings.local_mount_points", str(tmp_path))
+
+
 class AsyncReadStream:
     def __init__(self, chunks=None):
         self._chunks = [
@@ -118,7 +124,8 @@ def restore_operation(db_session, restore_repository, tmp_path, monkeypatch):
     from app.database.models import Operation
     from app.services.operations.details import restore_details
 
-    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+    # Kept apart from the restore target: data_dir is never a valid target.
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path / "data"))
     op = Operation(
         repository_id=restore_repository.id,
         kind="restore",
@@ -319,6 +326,37 @@ class TestRestoreServiceExecution:
         refreshed = resolve_restore_job(verification, restore_job.id)
         assert refreshed.status == "failed"
         assert "failedCreateDestinationDir" in refreshed.error_message
+        verification.close()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_local_restore_refuses_destination_outside_mount_points(
+        self, testing_session_local, restore_job, monkeypatch, tmp_path
+    ):
+        monkeypatch.setattr(
+            "app.config.settings.local_mount_points", str(tmp_path / "elsewhere")
+        )
+        service = RestoreService()
+
+        with (
+            patch("app.services.restore_service.SessionLocal", testing_session_local),
+            patch("app.services.restore_service.Path.mkdir") as mkdir,
+            patch("app.services.restore_service.BorgRouter") as borg_router,
+        ):
+            await service._execute_local_to_local(
+                restore_job.id,
+                restore_job.repository,
+                restore_job.archive,
+                restore_job.destination,
+                None,
+            )
+
+        mkdir.assert_not_called()
+        borg_router.assert_not_called()
+        verification = testing_session_local()
+        refreshed = resolve_restore_job(verification, restore_job.id)
+        assert refreshed.status == "failed"
+        assert "destinationNotAllowed" in refreshed.error_message
         verification.close()
 
     @pytest.mark.unit
@@ -718,8 +756,13 @@ class TestRestoreServiceExecution:
         details = verification.get(OperationRestoreDetails, restore_operation.id)
         assert op.status == "completed"
         assert op.progress_percent == 100.0
-        assert op.log_file_path == str(tmp_path / "logs" / f"operation_{op.id}.log")
-        assert "STDOUT:" in (tmp_path / "logs" / f"operation_{op.id}.log").read_text()
+        assert op.log_file_path == str(
+            tmp_path / "data" / "logs" / f"operation_{op.id}.log"
+        )
+        assert (
+            "STDOUT:"
+            in (tmp_path / "data" / "logs" / f"operation_{op.id}.log").read_text()
+        )
         assert details.original_size == 20
         assert details.restored_size == 10
         assert details.nfiles == 1

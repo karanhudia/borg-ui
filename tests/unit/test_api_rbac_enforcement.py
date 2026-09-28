@@ -144,14 +144,35 @@ class TestRepositoriesFilter:
 
 @pytest.mark.unit
 class TestRestoreProtection:
-    def test_viewer_with_permission_can_restore(self, test_client, test_db):
-        """Viewer with explicit permission can call preview (viewer-level action)."""
+    def test_viewer_with_permission_cannot_restore(self, test_client, test_db):
+        """Restore writes files, so a viewer grant is not enough."""
+        from app.core.security import create_access_token
+
+        user = _make_user(test_db, "rst-vwr0", role="viewer")
+        repo = _make_repo(test_db, "rst-repo0")
+        _grant(test_db, user, repo, "viewer")
+        token = create_access_token(data={"sub": user.username})
+        response = test_client.post(
+            "/api/restore/preview",
+            json={
+                "repository": repo.path,
+                "archive": "test-archive",
+                "paths": ["/"],
+                "destination": "/tmp/restore",
+                "repository_id": repo.id,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 403
+
+    def test_operator_with_permission_can_restore(self, test_client, test_db):
+        """Operator with explicit permission can call preview."""
         from app.core.security import create_access_token
         from unittest.mock import patch, AsyncMock
 
-        user = _make_user(test_db, "rst-vwr1", role="viewer")
+        user = _make_user(test_db, "rst-vwr1", role="operator")
         repo = _make_repo(test_db, "rst-repo1")
-        _grant(test_db, user, repo, "viewer")
+        _grant(test_db, user, repo, "operator")
         token = create_access_token(data={"sub": user.username})
         headers = {"Authorization": f"Bearer {token}"}
         with patch(

@@ -38,6 +38,7 @@ import { resyncStoredArchives } from '../utils/archiveResync'
 import type { RestorePathMetadata } from '../utils/restorePaths'
 import type { ArchiveDetailResponse } from '../types/archives'
 import type { Archive, Repository } from '@/types'
+import { usePermissions } from '../hooks/usePermissions'
 
 type DetailTab = 'changes' | 'files'
 
@@ -56,6 +57,7 @@ export default function ArchiveDetail() {
 
   const repositoryId = Number(repositoryIdParam)
   const archiveId = Number(archiveIdParam)
+  const canRestore = usePermissions().canDo(repositoryId, 'restore')
   const validParams = Number.isFinite(repositoryId) && Number.isFinite(archiveId)
 
   // A tab the page does not have would leave the header without a selected
@@ -391,14 +393,16 @@ export default function ArchiveDetail() {
           </Box>
         </Stack>
         <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
-          <Button
-            variant="contained"
-            disableElevation
-            startIcon={<RotateCcw size={16} />}
-            onClick={() => openRestore()}
-          >
-            {t('archives.detail.restore')}
-          </Button>
+          {canRestore && (
+            <Button
+              variant="contained"
+              disableElevation
+              startIcon={<RotateCcw size={16} />}
+              onClick={() => openRestore()}
+            >
+              {t('archives.detail.restore')}
+            </Button>
+          )}
           <Button
             variant="outlined"
             startIcon={<HardDrive size={16} />}
@@ -445,9 +449,7 @@ export default function ArchiveDetail() {
             repositoryId={repositoryId}
             repository={repository}
             archive={archive}
-            onRestorePaths={(paths, items, fromArchiveId) =>
-              openRestore(paths, items, fromArchiveId)
-            }
+            onRestorePaths={canRestore ? openRestore : undefined}
             cornerStack={cornerStack}
             selectionResetToken={selectionEpoch}
           />

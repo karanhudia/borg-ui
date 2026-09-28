@@ -27,6 +27,7 @@ from app.utils.restore_layout import (
 )
 
 from app.services.process_cancel import terminate_tracked_process
+from app.utils.local_paths import is_restore_destination_allowed
 
 logger = structlog.get_logger()
 
@@ -636,6 +637,20 @@ class RestoreService:
                 paths=paths,
                 restore_layout=restore_layout,
             )
+
+            # The API checks this too; re-check here so a queued or replayed
+            # job can never write outside the mount points.
+            if not is_restore_destination_allowed(destination, paths, restore_layout):
+                job.status = "failed"
+                job.error_message = json.dumps(
+                    {
+                        "key": "backend.errors.restore.destinationNotAllowed",
+                        "params": {"path": destination},
+                    }
+                )
+                job.completed_at = datetime.now(timezone.utc)
+                db_session.commit()
+                return
 
             # Ensure destination directory exists
             dest_path = Path(destination)

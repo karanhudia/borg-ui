@@ -45,14 +45,21 @@ function contrastRatio(foreground: string, background: string) {
   return (lighter + 0.05) / (darker + 0.05)
 }
 
-const { logoutMock, trackAuthMock, trackNavigationMock, trackSettingsMock, navigateMock } =
-  vi.hoisted(() => ({
-    logoutMock: vi.fn(),
-    trackAuthMock: vi.fn(),
-    trackNavigationMock: vi.fn(),
-    trackSettingsMock: vi.fn(),
-    navigateMock: vi.fn(),
-  }))
+const {
+  logoutMock,
+  trackAuthMock,
+  trackNavigationMock,
+  trackSettingsMock,
+  navigateMock,
+  authUser,
+} = vi.hoisted(() => ({
+  authUser: { role: 'admin', global_permissions: [] as string[] },
+  logoutMock: vi.fn(),
+  trackAuthMock: vi.fn(),
+  trackNavigationMock: vi.fn(),
+  trackSettingsMock: vi.fn(),
+  navigateMock: vi.fn(),
+}))
 
 vi.mock('../../hooks/useAuth', () => ({
   useAuth: () => ({
@@ -60,7 +67,8 @@ vi.mock('../../hooks/useAuth', () => ({
       username: 'admin',
       full_name: 'Admin User',
       email: 'admin@example.com',
-      role: 'admin',
+      role: authUser.role,
+      global_permissions: authUser.global_permissions,
       deployment_type: 'individual',
     },
     logout: logoutMock,
@@ -122,6 +130,7 @@ describe('AppHeader', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    authUser.role = 'admin'
     resetRemoteBackendStateForTests()
   })
 
@@ -178,6 +187,17 @@ describe('AppHeader', () => {
     expect(await screen.findByText('Account & Security')).toBeInTheDocument()
     expect(await screen.findByText('Appearance')).toBeInTheDocument()
     expect(await screen.findByText('Notifications')).toBeInTheDocument()
+  })
+
+  it('hides the Notifications link from a viewer', async () => {
+    authUser.role = 'viewer'
+    const user = userEvent.setup()
+    renderHeader()
+
+    await user.click(screen.getByRole('button', { name: /user menu/i }))
+
+    expect(await screen.findByText('Appearance')).toBeInTheDocument()
+    expect(screen.queryByText('Notifications')).not.toBeInTheDocument()
   })
 
   it('shows the theme quick switch with the three modes when menu opens', async () => {

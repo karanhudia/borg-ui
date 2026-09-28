@@ -14,9 +14,21 @@ from app.services.borgmatic_service import (
     BorgmaticImportService,
     build_borgmatic_export_artifact,
 )
-from app.core.security import get_current_user
+from app.core.security import get_current_user, require_role_dependency
 
-router = APIRouter(prefix="/config", tags=["config"])
+# Admin only: exports carry repository passphrases and imports create
+# repositories with hooks and live schedules.
+router = APIRouter(
+    prefix="/config",
+    tags=["config"],
+    dependencies=[
+        Depends(
+            require_role_dependency(
+                "admin", detail_key="backend.errors.settings.adminAccessRequired"
+            )
+        )
+    ],
+)
 
 
 class ExportRequest(BaseModel):

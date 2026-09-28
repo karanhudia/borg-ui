@@ -134,3 +134,11 @@ export const Locked: Story = {
   },
   render: (args) => <LockedSearchFieldStory {...args} />,
 }
+
+// A viewer can search and read a file's history but cannot restore from it.
+export const Viewer: Story = {
+  args: { onRestorePath: undefined },
+  parameters: {
+    systemInfo: proSystemInfo,
+  },
+}

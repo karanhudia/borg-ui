@@ -29,10 +29,24 @@ const adminUser = {
     'settings.beta.manage',
     'settings.mounts.manage',
     'settings.ssh.manage',
+    'settings.notifications.manage',
   ],
 }
 
-function installApiMocks(systemInfo: SystemInfo): MockAdapter {
+// Viewers have no admin-only settings, so Notifications stays out of the nav.
+const viewerUser = {
+  ...adminUser,
+  id: 2,
+  username: 'viewer',
+  full_name: 'Viewer User',
+  email: 'viewer@example.com',
+  role: 'viewer',
+  global_permissions: [],
+}
+
+type StoryUser = typeof adminUser | typeof viewerUser
+
+function installApiMocks(systemInfo: SystemInfo, user: StoryUser): MockAdapter {
   const mock = new MockAdapter(api)
   mock.onGet('/auth/config').reply(200, {
     proxy_auth_enabled: true,
@@ -44,7 +58,7 @@ function installApiMocks(systemInfo: SystemInfo): MockAdapter {
     proxy_auth_header: 'x-auth-user',
     proxy_auth_health: { enabled: true, warnings: [] },
   })
-  mock.onGet('/auth/me').reply(200, adminUser)
+  mock.onGet('/auth/me').reply(200, user)
   mock.onGet('/system/info').reply(200, systemInfo)
   mock.onGet('/settings/system').reply(200, { settings: {} })
   mock.onGet('/backup-plans/').reply(200, { backup_plans: [] })
@@ -57,20 +71,22 @@ function installApiMocks(systemInfo: SystemInfo): MockAdapter {
 function SidebarStoryProviders({
   children,
   systemInfo,
+  user,
 }: {
   children: ReactNode
   systemInfo: SystemInfo
+  user: StoryUser
 }) {
   const [isReady, setIsReady] = useState(false)
 
   useEffect(() => {
-    const mock = installApiMocks(systemInfo)
+    const mock = installApiMocks(systemInfo, user)
     setIsReady(true)
 
     return () => {
       mock.restore()
     }
-  }, [systemInfo])
+  }, [systemInfo, user])
 
   if (!isReady) return null
 
@@ -83,9 +99,9 @@ function SidebarStoryProviders({
   )
 }
 
-function renderSidebar(systemInfo: SystemInfo) {
+function renderSidebar(systemInfo: SystemInfo, user: StoryUser = adminUser) {
   return (
-    <SidebarStoryProviders systemInfo={systemInfo}>
+    <SidebarStoryProviders systemInfo={systemInfo} user={user}>
       <Box sx={{ width: 260, height: 720, bgcolor: 'background.default' }}>
         <AppSidebar mobileOpen={false} onClose={() => {}} />
       </Box>
@@ -122,4 +138,11 @@ export const CommunityPlan: Story = {
     systemInfo: communitySystemInfo,
   },
   render: () => renderSidebar(communitySystemInfo),
+}
+
+export const ViewerSettings: Story = {
+  parameters: {
+    router: { initialEntries: ['/settings/account'] },
+  },
+  render: () => renderSidebar(proSystemInfo, viewerUser),
 }

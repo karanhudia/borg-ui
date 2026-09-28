@@ -14,9 +14,22 @@ from app.database.database import get_db
 from app.database.models import NotificationSettings, Repository
 from app.services.notification_service import notification_service
 from app.api.auth import get_current_user, User
+from app.core.security import require_role_dependency
 from app.utils.datetime_utils import serialize_datetime
 
-router = APIRouter(prefix="/api/notifications", tags=["notifications"])
+# Admin only: settings hold provider secrets in service_url, and /test makes
+# the server send requests to arbitrary URLs.
+router = APIRouter(
+    prefix="/api/notifications",
+    tags=["notifications"],
+    dependencies=[
+        Depends(
+            require_role_dependency(
+                "admin", detail_key="backend.errors.settings.adminAccessRequired"
+            )
+        )
+    ],
+)
 
 
 # Pydantic models

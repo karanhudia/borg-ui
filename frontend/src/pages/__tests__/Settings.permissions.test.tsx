@@ -161,6 +161,36 @@ describe('Settings permission routing', () => {
     expect(await screen.findByText('Background Work Tab')).toBeInTheDocument()
   })
 
+  it('does not render the notifications tab for a user without the notifications permission', async () => {
+    currentTab.value = 'notifications'
+
+    renderWithProviders(
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>
+    )
+
+    expect(await screen.findByText('Account Tab')).toBeInTheDocument()
+    expect(screen.queryByText('Notifications Tab')).not.toBeInTheDocument()
+  })
+
+  it('renders the notifications tab for a user with the notifications permission', async () => {
+    currentTab.value = 'notifications'
+    authState.user = {
+      ...authState.user,
+      role: 'admin',
+      global_permissions: ['settings.notifications.manage'],
+    }
+
+    renderWithProviders(
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>
+    )
+
+    expect(await screen.findByText('Notifications Tab')).toBeInTheDocument()
+  })
+
   it('renders the users tab when the user has users permission but not system permission', async () => {
     currentTab.value = 'users'
     authState.user = {

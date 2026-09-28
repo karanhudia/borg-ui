@@ -86,6 +86,10 @@ ENDPOINT_POLICIES: Dict[Tuple[str, str], EndpointPolicy] = {
     ("PUT", "/api/settings/cache/settings"): EndpointPolicy(
         ("admin",), "backend.errors.settings.adminAccessRequired"
     ),
+    # The stats payload carries redis_url, which can embed a password.
+    ("GET", "/api/settings/cache/stats"): EndpointPolicy(
+        ("admin",), "backend.errors.settings.adminAccessRequired"
+    ),
     ("GET", "/api/packages"): EndpointPolicy(
         ("admin",), "backend.errors.settings.adminAccessRequired"
     ),
@@ -173,6 +177,41 @@ ENDPOINT_POLICIES: Dict[Tuple[str, str], EndpointPolicy] = {
         "/api/ssh-keys/connections/{connection_id}/backup-source",
     ): EndpointPolicy(("admin",), "backend.errors.ssh.adminAccessRequired"),
     ("POST", "/api/ssh-keys/connections/{connection_id}/verify-borg"): EndpointPolicy(
+        ("admin",), "backend.errors.ssh.adminAccessRequired"
+    ),
+    ("PUT", "/api/ssh-keys/connections/{connection_id}"): EndpointPolicy(
+        ("admin",), "backend.errors.ssh.adminAccessRequired"
+    ),
+    ("DELETE", "/api/ssh-keys/connections/{connection_id}"): EndpointPolicy(
+        ("admin",), "backend.errors.ssh.adminAccessRequired"
+    ),
+    ("GET", "/api/ssh-keys/connections/host-audit"): EndpointPolicy(
+        ("admin",), "backend.errors.ssh.adminAccessRequired"
+    ),
+    ("POST", "/api/ssh-keys/connections/host-cleanup"): EndpointPolicy(
+        ("admin",), "backend.errors.ssh.adminAccessRequired"
+    ),
+    (
+        "POST",
+        "/api/ssh-keys/connections/{connection_id}/host-key/trust",
+    ): EndpointPolicy(("admin",), "backend.errors.ssh.adminAccessRequired"),
+    ("DELETE", "/api/ssh-keys/connections/{connection_id}/host-key"): EndpointPolicy(
+        ("admin",), "backend.errors.ssh.adminAccessRequired"
+    ),
+    ("POST", "/api/ssh-keys/connections/{connection_id}/redeploy"): EndpointPolicy(
+        ("admin",), "backend.errors.ssh.adminAccessRequired"
+    ),
+    (
+        "POST",
+        "/api/ssh-keys/connections/{connection_id}/refresh-storage",
+    ): EndpointPolicy(("admin",), "backend.errors.ssh.adminAccessRequired"),
+    ("POST", "/api/ssh-keys/connections/{connection_id}/diagnostics"): EndpointPolicy(
+        ("admin",), "backend.errors.ssh.adminAccessRequired"
+    ),
+    ("POST", "/api/ssh-keys/connections/{connection_id}/test"): EndpointPolicy(
+        ("admin",), "backend.errors.ssh.adminAccessRequired"
+    ),
+    ("POST", "/api/ssh-keys/{key_id}/test-connection"): EndpointPolicy(
         ("admin",), "backend.errors.ssh.adminAccessRequired"
     ),
     ("POST", "/api/mounts/borg"): EndpointPolicy(

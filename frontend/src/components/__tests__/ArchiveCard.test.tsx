@@ -41,6 +41,13 @@ describe('ArchiveCard', () => {
     expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument()
   })
 
+  it('hides the restore action when no restore handler is given', () => {
+    render(<ArchiveCard archive={mockArchive} {...mockHandlers} onRestore={undefined} />)
+
+    expect(screen.queryByRole('button', { name: /restore/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /mount/i })).toBeInTheDocument()
+  })
+
   it('opens the archive on a row click, but not from an action button', () => {
     const onOpen = vi.fn()
     render(<ArchiveCard archive={mockArchive} {...mockHandlers} onOpen={onOpen} />)

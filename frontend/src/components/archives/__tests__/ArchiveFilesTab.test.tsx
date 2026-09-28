@@ -137,12 +137,27 @@ describe('ArchiveFilesTab', () => {
 
   it('floats a selection bar with the count once a file is selected', () => {
     renderWithProviders(
-      <ArchiveFilesTab repositoryId={7} repository={repository} archive={archive} />
+      <ArchiveFilesTab
+        repositoryId={7}
+        repository={repository}
+        archive={archive}
+        onRestorePaths={vi.fn()}
+      />
     )
     fireEvent.click(screen.getByTestId('archive-path-selector'))
     const bar = screen.getByRole('toolbar', { name: /selection/i })
     expect(within(bar).getByText(/1 selected/i)).toBeInTheDocument()
     expect(within(bar).getByRole('button', { name: /restore selection/i })).toBeInTheDocument()
+  })
+
+  it('offers no restore in the selection bar when no restore handler is given', () => {
+    renderWithProviders(
+      <ArchiveFilesTab repositoryId={7} repository={repository} archive={archive} />
+    )
+    fireEvent.click(screen.getByTestId('archive-path-selector'))
+    const bar = screen.getByRole('toolbar', { name: /selection/i })
+    expect(within(bar).getByText(/1 selected/i)).toBeInTheDocument()
+    expect(within(bar).queryByRole('button', { name: /restore selection/i })).toBeNull()
   })
 
   it('renders the selection bar into the page corner stack when given one', () => {

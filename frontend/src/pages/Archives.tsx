@@ -138,6 +138,9 @@ const Archives: React.FC = () => {
   const navigate = useNavigate()
   const { trackArchive, EventAction } = useAnalytics()
   const permissions = usePermissions()
+  const canRestore = selectedRepositoryId
+    ? permissions.canDo(selectedRepositoryId, 'restore')
+    : false
 
   // Get repositories list
   const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
@@ -857,7 +860,7 @@ const Archives: React.FC = () => {
               <ArchiveSearchField
                 repositoryId={selectedRepositoryId}
                 newestArchiveIdBySeries={newestArchiveIdBySeries}
-                onRestorePath={handleRestoreSearchHit}
+                onRestorePath={canRestore ? handleRestoreSearchHit : undefined}
               />
             </Box>
             <Tooltip title={t('archives.toolbarOperations')}>
@@ -937,7 +940,7 @@ const Archives: React.FC = () => {
                 if (href) navigate(href)
               }}
               archiveHref={archiveHref}
-              onRestoreArchive={handleRestoreArchive}
+              onRestoreArchive={canRestore ? handleRestoreArchive : undefined}
               onMountArchive={openMountDialog}
               onDeleteArchive={(archive) => setShowDeleteConfirm(archive)}
               mountDisabled={mountArchiveMutation.isPending}

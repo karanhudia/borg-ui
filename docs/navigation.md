@@ -52,7 +52,7 @@ administration.
 | Users | Manage users and repository access. This appears for accounts that can manage users. |
 | Appearance | Choose theme and display preferences. |
 | Preferences | Set personal UI behavior and default preferences. |
-| Notifications | Configure backup, restore, schedule, check, and report notifications. |
+| Notifications | Configure backup, restore, schedule, check, and report notifications. This appears for admins only. |
 
 ### System
 

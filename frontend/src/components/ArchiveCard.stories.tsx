@@ -32,3 +32,6 @@ export const Openable: Story = { args: { onOpen: fn() } }
 
 /** Without an opener the row is inert; only its action icons do anything. */
 export const ActionsOnly: Story = {}
+
+/** A viewer cannot restore, so the restore action is left out of the row. */
+export const Viewer: Story = { args: { onOpen: fn(), onRestore: undefined } }

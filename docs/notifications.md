@@ -8,7 +8,7 @@ description: "Configure Apprise notifications and JSON webhooks"
 
 Borg UI uses [Apprise](https://github.com/caronc/apprise) for notifications.
 
-Configure services in Settings > Notifications.
+Configure services in Settings > Notifications. Notification settings are admin only.
 
 ## Supported Targets
 

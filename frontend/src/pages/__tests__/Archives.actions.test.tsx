@@ -31,7 +31,7 @@ vi.mock('../../components/ArchivesList', () => ({
     onDeleteArchive,
   }: {
     onViewArchive: (archive: { id: string; name: string; start: string }) => void
-    onRestoreArchive: (archive: { id: string; name: string; start: string }) => void
+    onRestoreArchive?: (archive: { id: string; name: string; start: string }) => void
     onMountArchive: (archive: { id: string; name: string; start: string }) => void
     onDeleteArchive: (archive: { id: string; name: string; start: string }) => void
   }) => {
@@ -39,7 +39,9 @@ vi.mock('../../components/ArchivesList', () => ({
     return (
       <div>
         <button onClick={() => onViewArchive(archive)}>View Archive</button>
-        <button onClick={() => onRestoreArchive(archive)}>Restore Archive</button>
+        {onRestoreArchive && (
+          <button onClick={() => onRestoreArchive(archive)}>Restore Archive</button>
+        )}
         <button onClick={() => onMountArchive(archive)}>Mount Archive</button>
         <button onClick={() => onDeleteArchive(archive)}>Delete Archive</button>
       </div>
@@ -105,11 +107,14 @@ vi.mock('../../components/RestoreWizard', () => ({
     ) : null,
 }))
 
+const permissionState = vi.hoisted(() => ({ canRestore: true }))
+
 vi.mock('../../hooks/usePermissions', () => ({
   usePermissions: () => ({
     canAccess: (repoId: number) => repoId === 1,
     roleFor: (repoId: number) => (repoId === 1 ? 'operator' : null),
-    canDo: () => true,
+    canDo: (_repoId: number, action: string) =>
+      action === 'restore' ? permissionState.canRestore : true,
     isLoading: false,
   }),
 }))
@@ -197,6 +202,7 @@ describe('Archives page actions', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    permissionState.canRestore = true
     vi.stubGlobal('open', vi.fn())
     // The list actions this suite drives come from the (mocked) list view;
     // force it so the heatmap, which defaults on, doesn't hide them.
@@ -254,6 +260,17 @@ describe('Archives page actions', () => {
 
   afterEach(() => {
     localStorage.clear()
+  })
+
+  it('hides the archive restore action from a user who cannot restore', async () => {
+    permissionState.canRestore = false
+    const user = userEvent.setup()
+
+    renderWithProviders(<Archives />)
+
+    await user.click(await screen.findByText('Select Repo'))
+    expect(await screen.findByText('Mount Archive')).toBeInTheDocument()
+    expect(screen.queryByText('Restore Archive')).not.toBeInTheDocument()
   })
 
   it('tracks filter/view and calls download, restore, and mount APIs from archive actions', async () => {

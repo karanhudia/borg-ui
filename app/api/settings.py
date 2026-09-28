@@ -2122,7 +2122,7 @@ async def get_cache_stats(
     - Current settings (TTL, max size)
     - Availability status
 
-    Accessible to all authenticated users.
+    Admin only (see ENDPOINT_POLICIES): redis_url can carry a password.
     """
     try:
         # Get cache stats from service

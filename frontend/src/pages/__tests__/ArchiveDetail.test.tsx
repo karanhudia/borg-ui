@@ -5,6 +5,17 @@ import ArchiveDetail from '../ArchiveDetail'
 import { archivesAPI, repositoriesAPI, restoreAPI } from '../../services/api'
 
 let mockParams = { repositoryId: '7', archiveId: '12' }
+const permissionState = { canRestore: true }
+
+vi.mock('../../hooks/usePermissions', () => ({
+  usePermissions: () => ({
+    canAccess: () => true,
+    roleFor: () => (permissionState.canRestore ? 'operator' : 'viewer'),
+    canDo: (_repoId: number, action: string) =>
+      action === 'restore' ? permissionState.canRestore : true,
+    isLoading: false,
+  }),
+}))
 
 vi.mock('react-router-dom', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-router-dom')>()
@@ -134,6 +145,17 @@ describe('ArchiveDetail', () => {
     } as never)
     vi.mocked(restoreAPI.startRestore).mockReset()
     vi.mocked(restoreAPI.getRestoreStatus).mockReset()
+    permissionState.canRestore = true
+  })
+
+  it('hides every restore entry point from a user who cannot restore', async () => {
+    permissionState.canRestore = false
+    vi.mocked(archivesAPI.getArchive).mockResolvedValue({ data: archive } as never)
+    renderRoute('/archives/7/12?tab=files')
+    expect(await screen.findByRole('button', { name: /mount/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^restore$/i })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /restore selection/i }))
+    expect(screen.queryByText(/Wizard:/)).not.toBeInTheDocument()
   })
 
   it('shows the stats header with deltas in place of the size chips', async () => {

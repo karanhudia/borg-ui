@@ -36,6 +36,7 @@ GLOBAL_PERMISSION_RULES: Dict[str, str] = {
     "settings.ssh.manage": "admin",
     "settings.scripts.manage": "admin",
     "settings.export_import.manage": "admin",
+    "settings.notifications.manage": "admin",
     "settings.mounts.manage": "operator",
     "activity.view_all": "admin",
 }
@@ -43,7 +44,7 @@ GLOBAL_PERMISSION_RULES: Dict[str, str] = {
 # Minimum repository role required to perform a repository-scoped action.
 REPOSITORY_ACTION_RULES: Dict[str, str] = {
     "view": "viewer",
-    "restore": "viewer",
+    "restore": "operator",
     "backup": "operator",
     "maintenance": "operator",
     "delete_archive": "operator",

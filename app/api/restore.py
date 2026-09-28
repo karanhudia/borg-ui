@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from app.database.models import User, Repository
 from app.database.database import get_db
 from app.core.borg_router import BorgRouter
+from app.core.permissions import REPOSITORY_ACTION_RULES
 from app.core.security import (
     get_current_user,
     check_repo_access,
@@ -27,6 +28,7 @@ from app.services.operations.runner import operation_runner
 from app.services.repository_executor import is_agent_executor
 from app.services.restore_service import restore_service
 from app.utils.datetime_utils import serialize_datetime
+from app.utils.local_paths import is_restore_destination_allowed
 from app.utils.borg_env import (
     get_standard_ssh_opts,
     REQUEST_LOCK_WAIT,
@@ -42,12 +44,48 @@ logger = structlog.get_logger()
 router = APIRouter()
 
 
-def _get_restore_job_repository(
-    db: Session, repository_path: Optional[str]
-) -> Optional[Repository]:
-    if not repository_path:
-        return None
-    return db.query(Repository).filter(Repository.path == repository_path).first()
+RESTORE_ROLE = REPOSITORY_ACTION_RULES["restore"]
+
+
+def _require_restore_job_access(
+    db: Session, user: User, job: Any, required_role: str
+) -> None:
+    """Raise 403 unless `user` holds `required_role` on the job's repository.
+
+    Looked up by the job's repository_id. A job whose repository is gone is
+    visible to admins only.
+    """
+    if user.role == "admin":
+        return
+    repo_id = getattr(job, "repository_id", None)
+    repo = db.get(Repository, repo_id) if repo_id is not None else None
+    if repo is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"key": "backend.errors.auth.notEnoughPermissions"},
+        )
+    check_repo_access(db, user, repo, required_role)
+
+
+def _require_allowed_local_destination(
+    restore_request: "RestoreRequest", repository: Repository
+) -> None:
+    # SSH destinations and agent repositories write on another host; only a
+    # restore that lands on this server is confined to the mount points.
+    if restore_request.destination_type == "ssh" or is_agent_executor(repository):
+        return
+    if not is_restore_destination_allowed(
+        restore_request.destination,
+        restore_request.paths,
+        restore_request.restore_layout,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "key": "backend.errors.restore.destinationNotAllowed",
+                "params": {"path": restore_request.destination},
+            },
+        )
 
 
 def _restore_job_logs_visible(job: Any, log_save_policy: str, logs: Any) -> bool:
@@ -109,7 +147,7 @@ async def preview_restore(
             db,
             current_user,
             restore_request.repository,
-            "viewer",
+            RESTORE_ROLE,
         )
 
         if (
@@ -163,8 +201,8 @@ async def start_restore(
                 status_code=404,
                 detail={"key": "backend.errors.restore.repositoryNotFound"},
             )
-        check_repo_access(db, current_user, repository, "viewer")
-        repository_path = repository.path
+        check_repo_access(db, current_user, repository, RESTORE_ROLE)
+        _require_allowed_local_destination(restore_request, repository)
 
         # Validate scenario: SSH repository → SSH destination is not supported
         if (
@@ -183,20 +221,25 @@ async def start_restore(
 
         # Fetch destination hostname if SSH destination
         destination_hostname = None
-        destination_connection = None
-        if (
-            restore_request.destination_type == "ssh"
-            and restore_request.destination_connection_id
-        ):
+        if restore_request.destination_connection_id is not None:
             from app.database.models import SSHConnection
 
-            destination_connection = (
-                db.query(SSHConnection)
-                .filter(SSHConnection.id == restore_request.destination_connection_id)
-                .first()
+            # Writing through a saved SSH connection needs a global operator,
+            # on top of the operator role on the repository checked above.
+            if current_user.role not in ("admin", "operator"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={"key": "backend.errors.restore.operatorAccessRequired"},
+                )
+            destination_connection = db.get(
+                SSHConnection, restore_request.destination_connection_id
             )
-            if destination_connection:
-                destination_hostname = destination_connection.host
+            if destination_connection is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail={"key": "backend.errors.ssh.sshConnectionNotFound"},
+                )
+            destination_hostname = destination_connection.host
 
         # Phase 7: the row is an operation (spec 6.1) with its restore columns
         # on the details row (spec 6.2). The runner dispatches it (spec 7.1);
@@ -266,13 +309,8 @@ async def get_restore_jobs(
         jobs = list_restore_jobs(db, limit)
         visible_jobs = []
         for job in jobs:
-            repo = _get_restore_job_repository(db, job.repository)
-            if repo is None:
-                if current_user.role == "admin":
-                    visible_jobs.append(job)
-                continue
             try:
-                check_repo_access(db, current_user, repo, "viewer")
+                _require_restore_job_access(db, current_user, job, "viewer")
                 visible_jobs.append(job)
             except HTTPException:
                 continue
@@ -332,9 +370,7 @@ async def get_restore_status(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"key": "backend.errors.restore.restoreJobNotFound"},
             )
-        repo = _get_restore_job_repository(db, job.repository)
-        if repo:
-            check_repo_access(db, current_user, repo, "operator")
+        _require_restore_job_access(db, current_user, job, "operator")
         log_save_policy = get_log_save_policy(db)
         logs = job.logs
 
@@ -383,9 +419,7 @@ async def cancel_restore(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"key": "backend.errors.restore.restoreJobNotFound"},
             )
-        repo = _get_restore_job_repository(db, job.repository)
-        if repo:
-            check_repo_access(db, current_user, repo, "viewer")
+        _require_restore_job_access(db, current_user, job, "operator")
 
         if job.status != "running":
             raise HTTPException(

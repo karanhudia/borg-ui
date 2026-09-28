@@ -13,8 +13,8 @@ Borg UI uses global roles for app-wide permissions and repository roles for repo
 | Role | What it means |
 | --- | --- |
 | `viewer` | Can use repositories they have access to |
-| `operator` | Can operate repositories they have access to and use operator-level tools such as schedules and mounts |
-| `admin` | Can manage users, settings, repositories, SSH, packages, scripts, logs, cache, and permissions |
+| `operator` | Can operate repositories they have access to and use operator-level tools such as schedules, mounts, and the local file browser |
+| `admin` | Can manage users, settings, repositories, SSH, notifications, packages, scripts, logs, cache, and permissions |
 
 Admins have access to every repository.
 
@@ -26,10 +26,12 @@ Current global permissions are:
 | --- | --- |
 | Create, import, edit, and delete repositories | `admin` |
 | Manage users and repository permissions | `admin` |
-| Manage system, licensing, cache, logs, packages, SSH, scripts, export/import, beta, and MQTT settings | `admin` |
+| Manage system, licensing, cache, logs, packages, SSH, scripts, notifications, export/import, beta, and MQTT settings | `admin` |
 | Delete job history entries and associated log files | `admin` |
 | Create, edit, run, duplicate, and delete schedules | `operator`, plus operator access to the schedule repositories |
 | Mount and unmount Borg archives | `operator` |
+| Browse local paths and create folders (operators are limited to `LOCAL_MOUNT_POINTS`, admins are not) | `operator` |
+| Restore to a saved SSH connection | `operator` |
 
 Activity and job history are visible to signed-in users. Admins can delete supported job entries and their log files.
 
@@ -37,8 +39,8 @@ Activity and job history are visible to signed-in users. Admins can delete suppo
 
 | Role | Allows |
 | --- | --- |
-| `viewer` | View the repository, browse archives, restore files |
-| `operator` | Everything viewer can do, plus run backups, maintenance, and archive deletion |
+| `viewer` | View the repository and browse archives |
+| `operator` | Everything viewer can do, plus restore files, run backups, maintenance, and archive deletion |
 
 Repository roles are assigned per user.
 
@@ -47,7 +49,7 @@ Repository action rules are:
 | Action | Required repository role |
 | --- | --- |
 | View repository and browse archives | `viewer` |
-| Restore files | `viewer` |
+| Restore files | `operator` |
 | Run backups | `operator` |
 | Run repository maintenance such as check, restore check, prune, and compact | `operator` |
 | Delete archives | `operator` |

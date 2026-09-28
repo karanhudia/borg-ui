@@ -11,7 +11,11 @@ import structlog
 import tempfile
 from datetime import datetime, timezone
 
-from app.core.security import get_current_user, decrypt_secret
+from app.core.security import (
+    decrypt_secret,
+    get_current_user,
+    require_role_dependency,
+)
 from app.database.database import get_db
 from sqlalchemy.orm import Session
 from app.database.models import SSHConnection, SSHKey
@@ -19,10 +23,43 @@ from app.config import settings
 from app.utils.ssh_host_keys import host_key_ssh_opts_for_host
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.ssh_utils import ssh_key_auth_args
+from app.utils.local_paths import is_within_local_mount, mount_entries_below
 
 logger = structlog.get_logger()
 
-router = APIRouter()
+# Admin or operator: the repository wizard, backup plan source picker and
+# restore destination picker are the only callers.
+router = APIRouter(
+    dependencies=[
+        Depends(
+            require_role_dependency(
+                "admin",
+                "operator",
+                detail_key="backend.errors.filesystem.operatorAccessRequired",
+            )
+        )
+    ]
+)
+
+
+def _confined(user) -> bool:
+    # Admins configure the mounts and repositories themselves, so only
+    # operators are held to LOCAL_MOUNT_POINTS.
+    return user.role != "admin"
+
+
+def _require_local_mount_path(path: str, user) -> str:
+    """Resolve a local path and refuse it unless it is inside a mount point."""
+    resolved = os.path.realpath(path)
+    if _confined(user) and not is_within_local_mount(resolved):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "key": "backend.errors.filesystem.permissionDenied",
+                "params": {"path": path},
+            },
+        )
+    return resolved
 
 
 SSH_REMOTE_PATH_FAILURE_MARKERS = (
@@ -216,7 +253,7 @@ async def browse_filesystem(
     """
     try:
         if connection_type == "local":
-            return await browse_local_filesystem(path)
+            return await browse_local_filesystem(path, confine=_confined(current_user))
         elif connection_type == "ssh":
             if not all([ssh_key_id, host, username]):
                 raise HTTPException(
@@ -268,10 +305,22 @@ async def browse_filesystem(
         )
 
 
-async def browse_local_filesystem(path: str) -> BrowseResponse:
+async def browse_local_filesystem(path: str, confine: bool = True) -> BrowseResponse:
     """Browse local filesystem"""
-    # Security: Prevent directory traversal attacks
-    path = os.path.abspath(path)
+    # Symlinks and ".." are resolved before the mount check. Ancestors of a
+    # mount point (such as "/") list only the entries leading down to it.
+    path = os.path.realpath(path)
+    visible_entries = None
+    if confine and not is_within_local_mount(path):
+        visible_entries = mount_entries_below(path)
+        if not visible_entries:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "key": "backend.errors.filesystem.permissionDenied",
+                    "params": {"path": path},
+                },
+            )
 
     # Check if path exists
     if not os.path.exists(path):
@@ -298,6 +347,8 @@ async def browse_local_filesystem(path: str) -> BrowseResponse:
     try:
         # List directory contents
         entries = os.listdir(path)
+        if visible_entries is not None:
+            entries = [entry for entry in entries if entry in visible_entries]
 
         # Get mount points once for reuse
         mount_points = settings.get_local_mount_points()
@@ -666,6 +717,7 @@ async def validate_path(
     """
     try:
         if connection_type == "local":
+            _require_local_mount_path(path, current_user)
             exists = os.path.exists(path)
             is_dir = os.path.isdir(path) if exists else False
             is_borg = is_borg_repository(path) if is_dir else False
@@ -825,6 +877,7 @@ async def create_folder(
         full_path = os.path.join(path, folder_name)
 
         if connection_type == "local":
+            _require_local_mount_path(full_path, current_user)
             # Create local folder
             try:
                 os.makedirs(full_path, exist_ok=False)

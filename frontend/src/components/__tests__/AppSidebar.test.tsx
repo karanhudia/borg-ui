@@ -79,6 +79,7 @@ vi.mock('../../hooks/useAuth', () => ({
         'settings.beta.manage',
         'settings.mounts.manage',
         'settings.ssh.manage',
+        'settings.notifications.manage',
       ],
     },
     hasGlobalPermission: mockHasGlobalPermission,
@@ -290,6 +291,23 @@ describe('AppSidebar', () => {
     // must not come with it.
     expect(screen.queryAllByRole('link', { name: /^logs$/i })).toHaveLength(0)
     expect(screen.queryAllByRole('link', { name: /^cache$/i })).toHaveLength(0)
+  })
+
+  it('shows Notifications to a user who can manage notifications', async () => {
+    renderSidebar({ initialRoute: '/settings/account' })
+
+    expect(await screen.findAllByRole('link', { name: /notifications/i })).not.toHaveLength(0)
+  })
+
+  it('hides Notifications from a user without the notifications permission', async () => {
+    mockHasGlobalPermission.mockImplementation(
+      (permission: string) => permission !== 'settings.notifications.manage'
+    )
+
+    renderSidebar({ initialRoute: '/settings/account' })
+
+    expect(await screen.findAllByRole('link', { name: /appearance/i })).not.toHaveLength(0)
+    expect(screen.queryAllByRole('link', { name: /notifications/i })).toHaveLength(0)
   })
 
   it('hides Background work from a viewer', async () => {

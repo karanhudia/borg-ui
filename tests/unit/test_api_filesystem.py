@@ -18,6 +18,12 @@ from app.database.models import SSHConnection, SSHKey
 from tests.utils.ssh import ssh_key
 
 
+@pytest.fixture(autouse=True)
+def _tmp_path_is_a_mount_point(monkeypatch, tmp_path):
+    # Local browsing is confined to the configured mount points.
+    monkeypatch.setattr(filesystem.settings, "local_mount_points", str(tmp_path))
+
+
 def _encrypt_private_key(secret_key: str, private_key: str) -> str:
     key = base64.urlsafe_b64encode(secret_key.encode()[:32])
     return Fernet(key).encrypt(private_key.encode()).decode()
@@ -95,6 +101,7 @@ class TestFilesystemBrowseLocal:
         assert data["current_path"] == str(root)
         assert data["is_inside_local_mount"] is False
 
+        # Admins are not confined to the mount points, so root lists everything.
         items = data["items"]
         assert [item["name"] for item in items][:2] == ["mount-point", "plain-dir"]
         mount_item = next(item for item in items if item["name"] == "mount-point")
@@ -105,10 +112,11 @@ class TestFilesystemBrowseLocal:
         self,
         test_client: TestClient,
         admin_headers,
+        tmp_path,
     ):
         response = test_client.get(
             "/api/filesystem/browse",
-            params={"path": "/definitely/missing", "connection_type": "local"},
+            params={"path": str(tmp_path / "missing"), "connection_type": "local"},
             headers=admin_headers,
         )
 
@@ -609,7 +617,7 @@ class TestFilesystemValidationAndCreateFolder:
         monkeypatch.setattr(
             filesystem.settings.__class__,
             "get_local_mount_points",
-            lambda self: [],
+            lambda self: [str(tmp_path)],
         )
 
         response = test_client.post(

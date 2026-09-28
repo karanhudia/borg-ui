@@ -41,7 +41,8 @@ interface ArchivesListProps {
   onOpenArchive?: (archive: Archive) => void
   /** The detail route for an archive, when the page knows it. */
   archiveHref?: (archive: Archive) => string | undefined
-  onRestoreArchive: (archive: Archive) => void
+  /** Omit when the user cannot restore from this repository. */
+  onRestoreArchive?: (archive: Archive) => void
   onMountArchive: (archive: Archive) => void
   onDeleteArchive: (archive: Archive) => void
   mountDisabled?: boolean

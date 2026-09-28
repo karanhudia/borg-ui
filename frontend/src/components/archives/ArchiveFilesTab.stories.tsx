@@ -60,3 +60,6 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const Default: Story = {}
+
+// A viewer browses and selects, but the selection bar offers no restore.
+export const Viewer: Story = { args: { onRestorePaths: undefined } }

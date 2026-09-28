@@ -27,12 +27,12 @@ vi.mock('../../../services/api', () => ({
 const newestBySeries = { nightly: 12, photos: 40 }
 const onRestorePath = vi.fn()
 
-function renderField() {
+function renderField(canRestore = true) {
   renderWithProviders(
     <ArchiveSearchField
       repositoryId={7}
       newestArchiveIdBySeries={newestBySeries}
-      onRestorePath={onRestorePath}
+      onRestorePath={canRestore ? onRestorePath : undefined}
     />
   )
 }
@@ -167,6 +167,34 @@ describe('ArchiveSearchField', () => {
     expect(onRestorePath).toHaveBeenCalledWith(9, 'home/alex/docs/invoices.xlsx')
     // The dialog closes so the wizard is not stacked behind it.
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('offers no restore from the history when no restore handler is given', async () => {
+    respondWith([searchResult()])
+    vi.mocked(archivesAPI.getPathHistory).mockResolvedValue({
+      data: {
+        path: 'home/alex/docs/invoices.xlsx',
+        entries: [
+          {
+            archive_id: 9,
+            archive_name: 'nightly-2026-09-01',
+            series: 'nightly',
+            start: '2026-09-01T02:00:00Z',
+            change: 'modified',
+            size_before: 10,
+            size_after: 20,
+          },
+        ],
+        present: [],
+        coverage: { indexed: 1, total: 1, exhausted: 0, capability: 'available' },
+      },
+    } as never)
+
+    renderField(false)
+    submitSearch()
+    fireEvent.click(await screen.findByTestId('search-result-home/alex/docs/invoices.xlsx'))
+    expect(await screen.findByText('nightly-2026-09-01')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /restore this/i })).not.toBeInTheDocument()
   })
 
   it('runs the search on Community and says how many matched', async () => {

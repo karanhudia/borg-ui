@@ -23,7 +23,7 @@ import ResponsiveDialog from '../shared/ResponsiveDialog'
 import { downloadArchiveFile, downloadArchiveFolder } from '../../utils/downloadArchiveFile'
 import { formatBytes } from '../../utils/dateUtils'
 import { getBorgVersion } from '../../utils/repoCapabilities'
-import type { ArchiveDetailResponse } from '../../types/archives'
+import type { ArchiveDetailResponse, HistoryEntry } from '../../types/archives'
 import type { RestorePathMetadata } from '../../utils/restorePaths'
 import {
   cornerPanelFooterSx,
@@ -139,6 +139,15 @@ export default function ArchiveFilesTab({
   const archiveRef = getBorgVersion(repository) === 2 ? `aid:${archive.borg_id}` : archive.name
 
   const restoreSelection = () => onRestorePaths?.(selection.selectedPaths, selectedItems)
+  const restoreEntry = onRestorePaths
+    ? (entry: HistoryEntry) =>
+        lastClicked &&
+        onRestorePaths(
+          [lastClicked.path],
+          [{ path: lastClicked.path, type: lastClicked.type }],
+          entry.archive_id
+        )
+    : undefined
   const clearSelection = () => {
     setSelection({ selectedPaths: [], selectedItems: [] })
     setSelectedEntries(new Map())
@@ -201,14 +210,7 @@ export default function ArchiveFilesTab({
       indexMode={repository.index_mode ?? 'full'}
       selectedPath={lastClicked?.path ?? null}
       selectedEntry={lastClicked}
-      onRestore={(entry) =>
-        lastClicked &&
-        onRestorePaths?.(
-          [lastClicked.path],
-          [{ path: lastClicked.path, type: lastClicked.type }],
-          entry.archive_id
-        )
-      }
+      onRestore={restoreEntry}
       onDownload={() =>
         lastClicked && downloadArchiveFile(repository, archiveRef, lastClicked.path)
       }
@@ -393,18 +395,20 @@ export default function ArchiveFilesTab({
                 })}
               </Box>
             )}
-            <Box sx={cornerPanelFooterSx}>
-              <Button
-                size="small"
-                variant="contained"
-                disableElevation
-                startIcon={<RotateCcw size={14} />}
-                onClick={restoreSelection}
-                sx={{ whiteSpace: 'nowrap' }}
-              >
-                {t('archives.files.restoreSelection')}
-              </Button>
-            </Box>
+            {onRestorePaths && (
+              <Box sx={cornerPanelFooterSx}>
+                <Button
+                  size="small"
+                  variant="contained"
+                  disableElevation
+                  startIcon={<RotateCcw size={14} />}
+                  onClick={restoreSelection}
+                  sx={{ whiteSpace: 'nowrap' }}
+                >
+                  {t('archives.files.restoreSelection')}
+                </Button>
+              </Box>
+            )}
           </Box>
         )}
     </Box>

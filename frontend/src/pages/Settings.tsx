@@ -39,6 +39,7 @@ const Settings: React.FC = () => {
   const canManageMounts = hasGlobalPermission('settings.mounts.manage')
   const canManageScripts = hasGlobalPermission('settings.scripts.manage')
   const canManageExportImport = hasGlobalPermission('settings.export_import.manage')
+  const canManageNotifications = hasGlobalPermission('settings.notifications.manage')
   const { globalRoleRank, currentGlobalRole, isLoading: authorizationLoading } = useAuthorization()
   const canViewBackgroundWork =
     (globalRoleRank?.get(currentGlobalRole ?? '') ?? 0) >=
@@ -62,7 +63,7 @@ const Settings: React.FC = () => {
       ...(canManageUsers ? ['users'] : []),
       'appearance',
       'preferences',
-      'notifications',
+      ...(canManageNotifications ? ['notifications'] : []),
     ]
     return [
       ...baseTabs,
@@ -92,6 +93,7 @@ const Settings: React.FC = () => {
     canManageMounts,
     canManageScripts,
     canManageExportImport,
+    canManageNotifications,
     mqttBetaEnabled,
     canViewBackgroundWork,
   ])
@@ -152,7 +154,7 @@ const Settings: React.FC = () => {
       )}
 
       {/* Notifications Tab */}
-      {currentTabId === 'notifications' && (
+      {currentTabId === 'notifications' && canManageNotifications && (
         <TabContentLayout>
           <NotificationsTab />
         </TabContentLayout>

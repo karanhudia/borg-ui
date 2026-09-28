@@ -5986,7 +5986,9 @@
         "sshToSshNotSupported": "Die Wiederherstellung von einem SSH-Repository auf ein SSH-Ziel wird nicht unterstützt",
         "failedStartRestore": "Fehler beim Starten der Wiederherstellung",
         "failedFetchArchives": "Fehler beim Abrufen der Archive",
-        "failedFetchArchiveContents": "Fehler beim Abrufen des Archivinhalts"
+        "failedFetchArchiveContents": "Fehler beim Abrufen des Archivinhalts",
+        "destinationNotAllowed": "Das Wiederherstellungsziel liegt außerhalb der erlaubten lokalen Einhängepunkte: {{path}}",
+        "operatorAccessRequired": "Für die Wiederherstellung auf eine SSH-Verbindung ist Operator- oder Administratorzugriff erforderlich"
       },
       "schedule": {
         "adminAccessRequired": "Administratorzugriff erforderlich",
@@ -6147,7 +6149,8 @@
         "permissionDeniedCreateFolder": "Zugriff zum Erstellen des Ordners verweigert",
         "sshConnectionDetailsRequired": "SSH-Verbindungsdetails erforderlich",
         "sshConnectionTimeout": "SSH-Verbindungs-Timeout",
-        "sshParamsRequired": "SSH-Schlüssel-ID, Host und Benutzername sind für das SSH-Browsing erforderlich"
+        "sshParamsRequired": "SSH-Schlüssel-ID, Host und Benutzername sind für das SSH-Browsing erforderlich",
+        "operatorAccessRequired": "Operator- oder Administratorzugriff erforderlich"
       },
       "mounts": {
         "canOnlyUnmountBorgMounts": "Über diesen Endpunkt können nur Borg-Archiv-Mounts ausgehängt werden",

@@ -37,7 +37,8 @@ interface ArchiveSearchFieldProps {
   /** Restore one version of a file the search found. The wizard and the
    *  restore mutation live on the page, so the dialog hands over the archive
    *  that holds the version and the path, already selected. */
-  onRestorePath: (archiveId: number, path: string) => void
+  /** Omit when the user cannot restore from this repository. */
+  onRestorePath?: (archiveId: number, path: string) => void
 }
 
 const LIST_WIDTH = 380
@@ -283,10 +284,14 @@ export default function ArchiveSearchField({
                     // Straight into the restore wizard with this path
                     // selected: sending the reader to the archive page would
                     // land them at its root with the file nowhere in sight.
-                    onRestoreEntry={(entry) => {
-                      setOpen(false)
-                      onRestorePath(entry.archive_id, selectedPath)
-                    }}
+                    onRestoreEntry={
+                      onRestorePath
+                        ? (entry) => {
+                            setOpen(false)
+                            onRestorePath(entry.archive_id, selectedPath)
+                          }
+                        : undefined
+                    }
                   />
                 </>
               ) : (

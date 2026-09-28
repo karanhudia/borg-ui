@@ -5986,7 +5986,9 @@
         "sshToSshNotSupported": "No se admite la restauración desde un repositorio SSH a un destino SSH",
         "failedStartRestore": "Error al iniciar la restauración",
         "failedFetchArchives": "Error al obtener los archivos",
-        "failedFetchArchiveContents": "Error al obtener el contenido del archivo"
+        "failedFetchArchiveContents": "Error al obtener el contenido del archivo",
+        "destinationNotAllowed": "El destino de restauración está fuera de los puntos de montaje locales permitidos: {{path}}",
+        "operatorAccessRequired": "Se requiere acceso de operador o administrador para restaurar en una conexión SSH"
       },
       "schedule": {
         "adminAccessRequired": "Se requiere acceso de administrador",
@@ -6147,7 +6149,8 @@
         "permissionDeniedCreateFolder": "Permiso denegado para crear la carpeta",
         "sshConnectionDetailsRequired": "Se requieren los detalles de la conexión SSH",
         "sshConnectionTimeout": "Tiempo de espera de la conexión SSH",
-        "sshParamsRequired": "Se requieren el ID de clave SSH, el host y el nombre de usuario para la navegación SSH"
+        "sshParamsRequired": "Se requieren el ID de clave SSH, el host y el nombre de usuario para la navegación SSH",
+        "operatorAccessRequired": "Se requiere acceso de operador o administrador"
       },
       "mounts": {
         "canOnlyUnmountBorgMounts": "Solo se pueden desmontar montajes de archivos Borg a través de este endpoint",

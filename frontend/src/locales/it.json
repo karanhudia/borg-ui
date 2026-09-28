@@ -5986,7 +5986,9 @@
         "sshToSshNotSupported": "Il ripristino da repository SSH a destinazione SSH non è supportato",
         "failedStartRestore": "Impossibile avviare il ripristino",
         "failedFetchArchives": "Impossibile recuperare gli archivi",
-        "failedFetchArchiveContents": "Impossibile recuperare il contenuto dell'archivio"
+        "failedFetchArchiveContents": "Impossibile recuperare il contenuto dell'archivio",
+        "destinationNotAllowed": "La destinazione del ripristino è al di fuori dei punti di montaggio locali consentiti: {{path}}",
+        "operatorAccessRequired": "È richiesto l'accesso come operatore o amministratore per ripristinare su una connessione SSH"
       },
       "schedule": {
         "adminAccessRequired": "Accesso amministratore richiesto",
@@ -6147,7 +6149,8 @@
         "permissionDeniedCreateFolder": "Permesso negato per creare la cartella",
         "sshConnectionDetailsRequired": "Dettagli connessione SSH richiesti",
         "sshConnectionTimeout": "Timeout connessione SSH",
-        "sshParamsRequired": "ID chiave SSH, host e nome utente sono richiesti per la navigazione SSH"
+        "sshParamsRequired": "ID chiave SSH, host e nome utente sono richiesti per la navigazione SSH",
+        "operatorAccessRequired": "È richiesto l'accesso come operatore o amministratore"
       },
       "mounts": {
         "canOnlyUnmountBorgMounts": "Puoi smontare solo mount di archivi Borg tramite questo endpoint",

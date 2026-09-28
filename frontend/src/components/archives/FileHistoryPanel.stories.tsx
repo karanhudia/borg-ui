@@ -296,3 +296,11 @@ export const AgentWithOlderIndex: Story = {
     </SeededCoverage>
   ),
 }
+
+// A viewer sees the history but no "Restore this" on any version.
+export const Viewer: Story = {
+  args: { onRestoreEntry: undefined },
+  parameters: {
+    systemInfo: proSystemInfo,
+  },
+}

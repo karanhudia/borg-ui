@@ -12,7 +12,8 @@ import type { HistoryEntry } from '../../types/archives'
 interface FileHistoryPanelProps {
   repositoryId: number
   path: string | null
-  onRestoreEntry: (entry: HistoryEntry) => void
+  /** Omit when the user cannot restore from this repository. */
+  onRestoreEntry?: (entry: HistoryEntry) => void
 }
 
 function FileHistoryPanelContent({ repositoryId, path, onRestoreEntry }: FileHistoryPanelProps) {

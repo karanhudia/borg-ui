@@ -14,7 +14,8 @@ interface ArchiveCardProps {
   onOpen?: (archive: Archive) => void
   /** Where the row leads, so the name is a real link (new tab, copy link). */
   openHref?: string
-  onRestore: (archive: Archive) => void
+  /** Omit when the user cannot restore from this repository. */
+  onRestore?: (archive: Archive) => void
   onMount: (archive: Archive) => void
   onDelete: (archive: Archive) => void
   mountDisabled?: boolean
@@ -201,16 +202,18 @@ export default function ArchiveCard({
           </IconButton>
         </Tooltip>
 
-        <Tooltip title={t('archiveCard.restore')} arrow>
-          <IconButton
-            size="small"
-            onClick={() => onRestore(archive)}
-            aria-label={t('archiveCard.restore')}
-            sx={iconBtnSx(theme.palette.warning.main)}
-          >
-            <RotateCcw size={15} />
-          </IconButton>
-        </Tooltip>
+        {onRestore && (
+          <Tooltip title={t('archiveCard.restore')} arrow>
+            <IconButton
+              size="small"
+              onClick={() => onRestore(archive)}
+              aria-label={t('archiveCard.restore')}
+              sx={iconBtnSx(theme.palette.warning.main)}
+            >
+              <RotateCcw size={15} />
+            </IconButton>
+          </Tooltip>
+        )}
 
         <Tooltip title={t('archiveCard.mount')} arrow>
           <span>

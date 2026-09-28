@@ -23,9 +23,15 @@ vi.mock('../../../services/api', () => ({
   },
 }))
 
-function renderPanel(path = 'home/alex/docs/invoices.xlsx') {
+function renderPanel(path = 'home/alex/docs/invoices.xlsx', canRestore = true) {
   const onRestore = vi.fn()
-  renderWithProviders(<FileHistoryPanel repositoryId={7} path={path} onRestoreEntry={onRestore} />)
+  renderWithProviders(
+    <FileHistoryPanel
+      repositoryId={7}
+      path={path}
+      onRestoreEntry={canRestore ? onRestore : undefined}
+    />
+  )
   return { onRestore }
 }
 
@@ -82,6 +88,33 @@ describe('FileHistoryPanel', () => {
     expect(await screen.findByText('nas-2026-09-02T02:00')).toBeInTheDocument()
     expect(screen.getByText('nas-2026-08-24T02:00')).toBeInTheDocument()
     expect(screen.getByText(/first seen/i)).toBeInTheDocument()
+  })
+
+  it('offers no restore on an entry when no restore handler is given', async () => {
+    vi.mocked(archivesAPI.getPathHistory).mockResolvedValue({
+      data: {
+        path: 'home/alex/docs/invoices.xlsx',
+        entries: [
+          {
+            archive_id: 12,
+            archive_name: 'nas-2026-09-02T02:00',
+            series: 'nightly',
+            start: '2026-09-02T02:00:00Z',
+            change: 'added',
+            size_before: null,
+            size_after: 374_000,
+            mode_changed: false,
+            owner_changed: false,
+          },
+        ],
+        present: [{ series: 'nightly', from_archive_id: 12, to_archive_id: null }],
+        present_in_latest: true,
+      },
+    } as never)
+
+    renderPanel('home/alex/docs/invoices.xlsx', false)
+    expect(await screen.findByText('nas-2026-09-02T02:00')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /restore this/i })).not.toBeInTheDocument()
   })
 
   it('renders a not-present range from the present ranges', async () => {

@@ -89,6 +89,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
   const canManageBeta = hasGlobalPermission('settings.beta.manage')
   const canManageMounts = hasGlobalPermission('settings.mounts.manage')
   const canManageSsh = hasGlobalPermission('settings.ssh.manage')
+  const canManageNotifications = hasGlobalPermission('settings.notifications.manage')
   const { globalRoleRank, currentGlobalRole } = useAuthorization()
   const canViewBackgroundWork =
     (globalRoleRank?.get(currentGlobalRole ?? '') ?? 0) >=
@@ -251,7 +252,9 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
               { name: 'Account', href: '/settings/account', icon: User },
               { name: 'Appearance', href: '/settings/appearance', icon: Palette },
               { name: 'Preferences', href: '/settings/preferences', icon: Sliders },
-              { name: 'Notifications', href: '/settings/notifications', icon: Bell },
+              ...(canManageNotifications
+                ? [{ name: 'Notifications', href: '/settings/notifications', icon: Bell }]
+                : []),
             ],
           },
           // The System group also carries Background work, which operators
@@ -344,6 +347,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
     canManageBeta,
     canManageMounts,
     canManageSsh,
+    canManageNotifications,
     canViewBackgroundWork,
   ])
 
