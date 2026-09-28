@@ -1,6 +1,6 @@
 import { createInitialState } from '../../pages/backup-plans/state'
 import type { RepositoryData } from '../../services/api'
-import type { BackupPlanData } from '../../types'
+import type { BackupPlanData, SourceLocation } from '../../types'
 import { buildBackupPlanPayload } from '../../utils/backupPlanPayload'
 import { usesEncryption, type QuickStartAnswers } from './quickStartState'
 
@@ -41,7 +41,27 @@ export function buildRepositoryPayload(answers: QuickStartAnswers): RepositoryDa
     exclude_patterns: [],
     custom_flags: null,
     mode: 'full',
+    ...(answers.destinationKind === 'ssh' && answers.destinationConnectionId !== ''
+      ? {
+          connection_id: answers.destinationConnectionId,
+          storage_backend: 'ssh' as const,
+          execution_target: 'ssh' as const,
+          executor_type: 'server' as const,
+        }
+      : {}),
   }
+}
+
+function sourceLocation(answers: QuickStartAnswers, paths: string[]): SourceLocation {
+  if (answers.sourceKind === 'ssh' && answers.sourceConnectionId !== '') {
+    return {
+      source_type: 'remote',
+      source_ssh_connection_id: answers.sourceConnectionId,
+      agent_machine_id: null,
+      paths,
+    }
+  }
+  return { source_type: 'local', source_ssh_connection_id: null, agent_machine_id: null, paths }
 }
 
 export function buildPlanPayload(answers: QuickStartAnswers, repositoryId: number): BackupPlanData {
@@ -50,11 +70,8 @@ export function buildPlanPayload(answers: QuickStartAnswers, repositoryId: numbe
   return buildBackupPlanPayload({
     ...createInitialState(),
     name: answers.name.trim(),
-    sourceType: 'local',
     sourceDirectories: paths,
-    sourceLocations: [
-      { source_type: 'local', source_ssh_connection_id: null, agent_machine_id: null, paths },
-    ],
+    sourceLocations: [sourceLocation(answers, paths)],
     repositoryIds: [repositoryId],
     compression: settings.compression,
     scheduleEnabled: settings.scheduleEnabled,

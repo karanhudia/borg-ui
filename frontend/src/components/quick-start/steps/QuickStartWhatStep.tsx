@@ -1,5 +1,5 @@
 import { Stack, Typography } from '@mui/material'
-import { Server } from 'lucide-react'
+import { Monitor, Server } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import QuickStartChoiceCard from '../QuickStartChoiceCard'
@@ -20,7 +20,19 @@ export default function QuickStartWhatStep({ answers, onChange }: QuickStartStep
           selected={answers.sourceKind === 'server'}
           onSelect={() => onChange({ sourceKind: 'server', destinationKind: 'server' })}
         />
+        <QuickStartChoiceCard
+          icon={<Monitor size={20} />}
+          title={t('quickStart.what.ssh')}
+          description={t('quickStart.what.sshDesc')}
+          selected={answers.sourceKind === 'ssh'}
+          onSelect={() =>
+            onChange({ sourceKind: 'ssh', sourcePaths: [], destinationKind: 'server' })
+          }
+        />
       </Stack>
+      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+        {t('quickStart.what.notSure')}
+      </Typography>
     </Stack>
   )
 }

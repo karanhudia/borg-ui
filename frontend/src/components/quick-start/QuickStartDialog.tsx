@@ -30,6 +30,7 @@ import {
   type QuickStartSettingsChange,
   type QuickStartStepKey,
 } from './quickStartState'
+import QuickStartConnectStep from './steps/QuickStartConnectStep'
 import QuickStartDestinationStep from './steps/QuickStartDestinationStep'
 import QuickStartFoldersStep from './steps/QuickStartFoldersStep'
 import QuickStartProtectStep from './steps/QuickStartProtectStep'
@@ -53,9 +54,15 @@ interface QuickStartDialogProps {
   open: boolean
   onClose: () => void
   initialAnswers?: QuickStartAnswers
+  canAddMachine?: boolean
 }
 
-export default function QuickStartDialog({ open, onClose, initialAnswers }: QuickStartDialogProps) {
+export default function QuickStartDialog({
+  open,
+  onClose,
+  initialAnswers,
+  canAddMachine = false,
+}: QuickStartDialogProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { can } = usePlan()
@@ -99,7 +106,9 @@ export default function QuickStartDialog({ open, onClose, initialAnswers }: Quic
       const name = answers.name.trim() || suggestedName(answers)
       update({
         name,
-        destinationPath: answers.destinationPath || suggestedDestinationPath(name),
+        destinationPath:
+          answers.destinationPath ||
+          (answers.destinationKind === 'server' ? suggestedDestinationPath(name) : ''),
       })
     }
     setStepIndex((index) => Math.min(index + 1, steps.length - 1))
@@ -128,10 +137,24 @@ export default function QuickStartDialog({ open, onClose, initialAnswers }: Quic
     switch (step) {
       case 'what':
         return <QuickStartWhatStep answers={answers} onChange={update} />
+      case 'connect':
+        return (
+          <QuickStartConnectStep
+            answers={answers}
+            onChange={update}
+            canAddMachine={canAddMachine}
+          />
+        )
       case 'folders':
         return <QuickStartFoldersStep answers={answers} onChange={update} />
       case 'destination':
-        return <QuickStartDestinationStep answers={answers} onChange={update} />
+        return (
+          <QuickStartDestinationStep
+            answers={answers}
+            onChange={update}
+            canAddMachine={canAddMachine}
+          />
+        )
       case 'protect':
         return <QuickStartProtectStep answers={answers} onChange={update} />
       case 'schedule':

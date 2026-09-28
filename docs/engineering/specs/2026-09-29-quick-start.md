@@ -52,7 +52,10 @@ Steps adapt to the answers. The indicator only shows steps that apply.
      inline with host, user, port and a one-time password. The system SSH
      key is generated if it does not exist, then deployed with the password
      (`/ssh-keys/generate`, `/ssh-keys/{id}/deploy`). The password is not
-     stored in the SSH connection record or key files.
+     stored in the SSH connection record or key files. This happens right
+     in the step (a **Connect** button), not at the end: the connection
+     then exists, so the folder and destination pickers can browse the
+     machine, and a wrong password shows up where it was typed.
    - Agent: pick a connected agent (`ManagedAgentSelect`) or open the
      existing `AddAgentDialog` to enroll one; the new agent is selected when
      it connects.
@@ -104,8 +107,9 @@ Frontend only. No new backend endpoint and no migration.
   - `quickStartState.ts`: the answer model, initial state, per-step
     validity, which steps apply.
   - `quickStartActions.ts`: a pure function from answers to an ordered list
-    of actions (`generate_key`, `deploy_key`, `create_repository`,
-    `create_plan`), and the payload builders. The plan payload goes through
+    of actions (`create_repository`, `create_plan`), and the payload
+    builders. SSH connections are created earlier, in the Connect and Where
+    steps (`quickStartSsh.ts`). The plan payload goes through
     the existing `buildBackupPlanPayload` from `createInitialState()` with
     Quick Start overrides, so plan shape stays in one place.
   - `useQuickStartRunner.ts`: runs the actions in order with the existing

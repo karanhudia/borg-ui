@@ -31,7 +31,13 @@ export function QuickStartProvider({ children, allowAutoOpen }: QuickStartProvid
   return (
     <QuickStartContext.Provider value={value}>
       {children}
-      {canQuickStart && <QuickStartDialog open={open} onClose={() => setOpen(false)} />}
+      {canQuickStart && (
+        <QuickStartDialog
+          open={open}
+          onClose={() => setOpen(false)}
+          canAddMachine={hasGlobalPermission('settings.ssh.manage')}
+        />
+      )}
     </QuickStartContext.Provider>
   )
 }

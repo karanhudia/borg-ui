@@ -21,8 +21,12 @@ export interface QuickStartSettings {
 
 export interface QuickStartAnswers {
   sourceKind: QuickStartSourceKind
+  /** SSH connection the files are pulled from (sourceKind 'ssh'). */
+  sourceConnectionId: number | ''
   sourcePaths: string[]
   destinationKind: QuickStartDestinationKind
+  /** SSH connection the repository lives on (destinationKind 'ssh'). */
+  destinationConnectionId: number | ''
   destinationPath: string
   name: string
   passphrase: string
@@ -45,8 +49,10 @@ export const SCHEDULE_PRESET_CRON: Record<Exclude<QuickStartSchedulePreset, 'cus
 export function createInitialQuickStartAnswers(): QuickStartAnswers {
   return {
     sourceKind: 'server',
+    sourceConnectionId: '',
     sourcePaths: [],
     destinationKind: 'server',
+    destinationConnectionId: '',
     destinationPath: '',
     name: '',
     passphrase: '',
@@ -107,9 +113,21 @@ function isInsidePath(child: string, parent: string): boolean {
   return c === p || c.startsWith(`${p}/`)
 }
 
-// A local repository inside one of the folders it backs up would back itself up.
+function sameMachine(answers: QuickStartAnswers): boolean {
+  if (answers.sourceKind === 'server') return answers.destinationKind === 'server'
+  if (answers.sourceKind === 'ssh') {
+    return (
+      answers.destinationKind === 'ssh' &&
+      answers.sourceConnectionId !== '' &&
+      answers.sourceConnectionId === answers.destinationConnectionId
+    )
+  }
+  return false
+}
+
+// A repository inside one of the folders it backs up would back itself up.
 export function destinationInsideSource(answers: QuickStartAnswers): boolean {
-  if (answers.sourceKind !== 'server' || answers.destinationKind !== 'server') return false
+  if (!sameMachine(answers)) return false
   if (!answers.destinationPath.trim()) return false
   return answers.sourcePaths.some((source) => isInsidePath(answers.destinationPath, source))
 }
@@ -117,12 +135,14 @@ export function destinationInsideSource(answers: QuickStartAnswers): boolean {
 export function isStepValid(step: QuickStartStepKey, answers: QuickStartAnswers): boolean {
   switch (step) {
     case 'what':
-    case 'connect':
     case 'review':
       return true
+    case 'connect':
+      return answers.sourceKind !== 'ssh' || answers.sourceConnectionId !== ''
     case 'folders':
       return answers.sourcePaths.some((path) => path.trim())
     case 'destination':
+      if (answers.destinationKind === 'ssh' && answers.destinationConnectionId === '') return false
       return Boolean(answers.destinationPath.trim()) && !destinationInsideSource(answers)
     case 'protect':
       if (!answers.name.trim()) return false
@@ -144,19 +164,37 @@ export function suggestedName(answers: QuickStartAnswers): string {
   return first.trim().replace(/\/+$/, '').split('/').pop() || 'root'
 }
 
+function slugify(name: string): string {
+  return (
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'backup'
+  )
+}
+
 // /local is the default host mount inside the container (LOCAL_MOUNT_POINTS).
 export function suggestedDestinationPath(name: string): string {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-  return `/local/borg-backups/${slug || 'backup'}`
+  return `/local/borg-backups/${slugify(name)}`
+}
+
+/** Under the connection's default path, else the SSH user's home. */
+export function suggestedRemoteDestinationPath(
+  name: string,
+  connection: { username: string; default_path?: string | null }
+): string {
+  const base =
+    connection.default_path?.replace(/\/+$/, '') ||
+    (connection.username === 'root' ? '/root' : `/home/${connection.username}`)
+  return `${base}/borg-backups/${slugify(name)}`
 }
 
 export interface QuickStartStepProps {
   answers: QuickStartAnswers
   onChange: (patch: Partial<QuickStartAnswers>) => void
+  /** settings.ssh.manage: may add a new SSH machine, not just pick one. */
+  canAddMachine?: boolean
 }
 
 // Must be referentially stable: CompressionSettings calls it from an effect.

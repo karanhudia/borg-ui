@@ -6601,14 +6601,18 @@
     "what": {
       "title": "Cosa vuoi salvare?",
       "server": "File su questo server",
-      "serverDesc": "Cartelle sulla macchina che esegue Borg UI, come la tua cartella home, i documenti o i dati delle app."
+      "serverDesc": "Cartelle sulla macchina che esegue Borg UI, come la tua cartella home, i documenti o i dati delle app.",
+      "ssh": "File su un altro computer",
+      "sshDesc": "Un server, NAS o PC che questo server raggiunge via SSH. Borg UI preleva i file da lì.",
+      "notSure": "Non sei sicuro? Scegli \"File su questo server\" se i dati si trovano dove gira Borg UI. Scegli \"altro computer\" se si trovano altrove e puoi accedervi con nome utente e password."
     },
     "folders": {
       "title": "Scegli le cartelle da salvare",
       "hint": "Aggiungi una o più cartelle. In Docker, il disco del server di solito compare sotto /local.",
       "pathLabel": "Cartella",
       "add": "Aggiungi",
-      "empty": "Nessuna cartella. Scrivi un percorso o usa il pulsante cartella per sfogliare."
+      "empty": "Nessuna cartella. Scrivi un percorso o usa il pulsante cartella per sfogliare.",
+      "remoteHint": "Cartelle su {{machine}}. Usa il pulsante cartella per sfogliarlo."
     },
     "destination": {
       "title": "Dove devono stare i backup?",
@@ -6617,7 +6621,11 @@
       "pathLabel": "Posizione dei backup",
       "pathHint": "Una cartella nuova e vuota. Borg UI la crea se non esiste.",
       "insideSource": "Questa cartella si trova dentro una delle cartelle che stai salvando. Scegli una posizione esterna.",
-      "offsiteTip": "Un backup sullo stesso disco dei dati non sopravvive a un guasto del disco. Se puoi, usa un secondo disco o un'altra macchina."
+      "offsiteTip": "Un backup sullo stesso disco dei dati non sopravvive a un guasto del disco. Se puoi, usa un secondo disco o un'altra macchina.",
+      "ssh": "Un altro server via SSH",
+      "sshDesc": "Un NAS o un server remoto. Lì deve essere installato Borg.",
+      "sshLabel": "Server di backup",
+      "remotePathHint": "Una cartella su {{machine}}. Borg UI la crea se non esiste."
     },
     "protect": {
       "title": "Dai un nome ai backup e proteggili",
@@ -6677,7 +6685,9 @@
       "encrypted": "Attiva ({{mode}})",
       "unencrypted": "Disattivata",
       "creates": "Crea",
-      "createsList": "Repository «{{name}}» e piano di backup «{{name}}»"
+      "createsList": "Repository «{{name}}» e piano di backup «{{name}}»",
+      "thisServer": "questo server",
+      "onMachine": "su {{machine}}"
     },
     "customize": {
       "title": "Personalizza",
@@ -6716,6 +6726,25 @@
       }
     },
     "repositoryAlreadyCreated": "Il repository è già stato creato. Le modifiche a posizione, passphrase o cifratura non verranno applicate. Puoi ancora cambiare nome del piano, cartelle e pianificazione.",
-    "newBackup": "Nuovo backup"
+    "newBackup": "Nuovo backup",
+    "connect": {
+      "title": "Connetti l'altro computer",
+      "hint": "Scegli un computer che Borg UI conosce già o aggiungine uno. Borg UI installa lì la sua chiave SSH così i backup funzionano senza password.",
+      "label": "Computer"
+    },
+    "ssh": {
+      "addMachine": "Aggiungi computer",
+      "newMachine": "Aggiungi computer",
+      "newMachineHint": "Inserisci l'accesso che useresti con SSH. La password viene usata una sola volta per installare la chiave di Borg UI e non viene salvata.",
+      "host": "Nome host o indirizzo IP",
+      "port": "Porta",
+      "username": "Nome utente",
+      "password": "Password",
+      "passwordHint": "Usata una volta, non salvata.",
+      "connect": "Connetti",
+      "connecting": "Connessione…",
+      "connectFailed": "Connessione non riuscita: {{reason}}",
+      "noConnectionsNoPermission": "Non ci sono ancora computer configurati. Chiedi a un amministratore di aggiungerne uno in Macchine Remote."
+    }
   }
 }

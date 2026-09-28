@@ -21,19 +21,27 @@ that permission do not see the button.
 ## The steps
 
 1. **What**: choose what to back up. Pick **Files on this server** for folders
-   on the machine running Borg UI.
-2. **Folders**: add one or more folders. In Docker, your server's disk usually
+   on the machine running Borg UI, or **Files on another computer** for a
+   server, NAS or PC that Borg UI can reach over SSH.
+2. **Connect** (another computer only): pick a computer Borg UI already knows,
+   or add one with its host name, username and password. Borg UI installs its
+   SSH key there with that password once; the password is not saved. Adding a
+   computer needs an account that can manage SSH; otherwise you can only pick
+   an existing one.
+3. **Folders**: add one or more folders. In Docker, your server's disk usually
    appears under `/local` (see
    [Understand Container Paths](usage-guide#understand-container-paths)).
-3. **Where**: choose where the backups live and the folder to use. Borg UI
-   suggests `/local/borg-backups/<name>`. The location cannot be inside a
-   folder you are backing up.
-4. **Protect**: name the backup and set a passphrase. Save the passphrase
+   For another computer, the folder button browses that computer.
+4. **Where**: a disk on this server, or another server over SSH (Borg must be
+   installed there; see [Remote Machines](ssh-keys)). Borg UI suggests a
+   folder, `/local/borg-backups/<name>` on this server. The location cannot
+   be inside a folder you are backing up.
+5. **Protect**: name the backup and set a passphrase. Save the passphrase
    somewhere outside this server (the **Download** button gives you a text
    file). Without it, the backups cannot be restored.
-5. **When**: every day at 02:00 by default, or every 6 hours, weekly, or a
+6. **When**: every day at 02:00 by default, or every 6 hours, weekly, or a
    custom schedule.
-6. **Review**: check the summary and press **Create backup**.
+7. **Review**: check the summary and press **Create backup**.
 
 When it finishes you can run the first backup right away or leave it to the
 schedule.
