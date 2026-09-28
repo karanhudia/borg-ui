@@ -6659,7 +6659,7 @@
       "keepLabel": "Conservar",
       "keepAll": "Todas las copias (no se borra nada)",
       "keep": {
-        "keepHourly": "{{count}} por hora",
+        "keepHourly": "{{count}} horarias",
         "keepDaily": "{{count}} diarias",
         "keepWeekly": "{{count}} semanales",
         "keepMonthly": "{{count}} mensuales",
