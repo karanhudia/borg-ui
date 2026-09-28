@@ -64,7 +64,7 @@ describe('analytics transport', () => {
     expect(url).toBe(a.ANALYTICS_ENDPOINT)
     expect(init).toMatchObject({
       method: 'POST',
-      keepalive: true,
+      keepalive: false,
       credentials: 'omit',
       referrerPolicy: 'no-referrer',
     })
@@ -101,7 +101,33 @@ describe('analytics transport', () => {
     Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
     document.dispatchEvent(new Event('visibilitychange'))
     expect(sent()).toHaveLength(1)
+    expect(fetchMock().mock.calls[0][1].keepalive).toBe(true)
     Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+  })
+
+  it('splits batches by size so no body passes 60 KB, and keepalive stays within 64 KB', async () => {
+    const a = await load()
+    for (let i = 0; i < 50; i++) a.trackEvent('Backup', 'Start', { note: 'x'.repeat(1500) })
+    const bodies = fetchMock().mock.calls.map(([, init]) => (init as RequestInit).body as string)
+    expect(bodies.length).toBeGreaterThan(1)
+    for (const body of bodies)
+      expect(new TextEncoder().encode(body).length).toBeLessThanOrEqual(60_000)
+    expect(sent()).toHaveLength(50)
+
+    fetchMock().mockClear()
+    for (let i = 0; i < 49; i++) a.trackEvent('Backup', 'Start', { note: 'x'.repeat(1500) })
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+    const kept = fetchMock()
+      .mock.calls.filter(([, init]) => (init as RequestInit).keepalive)
+      .reduce(
+        (total, [, init]) =>
+          total + new TextEncoder().encode((init as RequestInit).body as string).length,
+        0
+      )
+    expect(kept).toBeLessThanOrEqual(60_000)
+    expect(sent()).toHaveLength(49)
   })
 
   it('hashes any *_name prop so raw entity names cannot leak', async () => {
@@ -217,6 +243,30 @@ describe('analytics gating', () => {
     await a.resetOptOutCache()
     vi.advanceTimersByTime(5000)
     expect(globalThis.fetch).not.toHaveBeenCalled()
+  })
+
+  it('does not hold page views made while an off preference reloads', async () => {
+    const a = await load({ analytics_enabled: false })
+    prefs.value = { ...prefs.value, analytics_enabled: true }
+    const reloading = a.resetOptOutCache()
+    a.trackPageView()
+    await reloading
+    vi.advanceTimersByTime(5000)
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+  })
+
+  it('keeps the consent answer when preferences failed to load, and sends it once they do', async () => {
+    vi.resetModules()
+    prefs.value = { analytics_enabled: true, analytics_instance_key: KEY }
+    localStorage.setItem('access_token', 'token')
+    const req = await import('../../services/authRequest')
+    vi.mocked(req.fetchJsonForAuthMode).mockRejectedValueOnce(new Error('offline'))
+    const a = await import('../analytics')
+    await a.loadUserPreference()
+    a.trackConsentResponse(true)
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+    await a.resetOptOutCache()
+    expect(sent().map((e) => e.name)).toEqual(['Consent - Accept'])
   })
 
   it('drops the early page view when preferences say analytics is off', async () => {
