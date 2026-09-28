@@ -2,6 +2,7 @@ import { Box, Button, IconButton, Stack, Typography, useTheme } from '@mui/mater
 import { KeyRound, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { PasskeyCredentialResponse } from '../services/api'
+import { parseBackendDate } from '../utils/dateUtils'
 
 interface AccountPasskeysSectionProps {
   passkeys: PasskeyCredentialResponse[]
@@ -180,7 +181,7 @@ export default function AccountPasskeysSection({
                   >
                     {passkey.last_used_at
                       ? t('settings.account.security.passkeyLastUsed', {
-                          date: new Date(passkey.last_used_at).toLocaleString(),
+                          date: parseBackendDate(passkey.last_used_at).toLocaleString(),
                         })
                       : t('settings.account.security.passkeyNeverUsed')}
                   </Typography>

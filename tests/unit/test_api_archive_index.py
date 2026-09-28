@@ -126,6 +126,26 @@ class TestArchiveList:
         )
         assert [a["name"] for a in r.json()["archives"]] == ["a2"]
 
+    def test_datetimes_carry_a_utc_offset(self, test_client, test_db, admin_headers):
+        # #1221: an offset-less value is read as browser-local time, so an
+        # archive made at 22:01 in New York listed as 02:01.
+        repo = _repo(test_db)
+        a = _archive(test_db, repo, "a1", 1)
+        a.end = datetime(2026, 9, 1, 2, 5)
+        a.first_seen_at = datetime(2026, 9, 1, 2, 6)
+        test_db.commit()
+        listed = test_client.get(
+            f"/api/repositories/{repo.id}/archives", headers=admin_headers
+        ).json()["archives"][0]
+        detail = test_client.get(
+            f"/api/repositories/{repo.id}/archives/{a.id}", headers=admin_headers
+        ).json()
+        for body in (listed, detail):
+            assert body["start"] == "2026-09-01T02:00:00+00:00"
+            assert body["end"] == "2026-09-01T02:05:00+00:00"
+            assert body["first_seen_at"] == "2026-09-01T02:06:00+00:00"
+            assert body["stats_measured_at"] is None
+
     def test_sync_state_fresh_syncing_stale(self, test_client, test_db, admin_headers):
         repo = _repo(test_db)
         _op(test_db, repo, "archive_sync", completed_at=utc_now())

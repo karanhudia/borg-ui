@@ -4,7 +4,7 @@ import { alpha } from '@mui/material/styles'
 import { Server, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatDistanceToNow } from 'date-fns'
-import { formatDateTimeFull } from '../../utils/dateUtils'
+import { formatDateTimeFull, parseBackendDate } from '../../utils/dateUtils'
 import { translateBackendKey } from '../../utils/translateBackendKey'
 import { DimStatusGrid, PulseDot, ScheduleBadge } from './health'
 import { statusColor, typeColor, type HealthStatus, type Tokens } from './tokens'
@@ -227,7 +227,7 @@ export function RepositoryHealthPanel({
                       flexShrink: 0,
                     }}
                   >
-                    {formatDistanceToNow(new Date(a.timestamp), { addSuffix: true })}
+                    {formatDistanceToNow(parseBackendDate(a.timestamp), { addSuffix: true })}
                   </Typography>
                 </Tooltip>
                 {a.error && (
@@ -321,7 +321,7 @@ export function RepositoryHealthPanel({
           // weight. Same outer surface, border, hover, and click target.
           if (repo.health_status === 'healthy') {
             const lastBackupLabel = repo.last_backup
-              ? formatDistanceToNow(new Date(repo.last_backup), { addSuffix: false })
+              ? formatDistanceToNow(parseBackendDate(repo.last_backup), { addSuffix: false })
               : t('common.never')
 
             return (

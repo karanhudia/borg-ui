@@ -29,6 +29,7 @@ import PlanInfoDrawer from './PlanInfoDrawer'
 import LicenseSeatsCard from './LicenseSeatsCard'
 import LicenseIdentifierRow from './LicenseIdentifierRow'
 import { tintChipSx, type Tone } from './shared/tones'
+import { parseBackendDate } from '../utils/dateUtils'
 
 export default function LicensingTab() {
   const { t, i18n } = useTranslation()
@@ -170,7 +171,7 @@ export default function LicensingTab() {
         ? t('licensing.statusExpired')
         : t('licensing.statusCommunity')
   const expiresOn = entitlement?.expires_at
-    ? new Date(entitlement.expires_at).toLocaleDateString(i18n.resolvedLanguage)
+    ? parseBackendDate(entitlement.expires_at).toLocaleDateString(i18n.resolvedLanguage)
     : null
   const headerSubline = activePaidLicense
     ? expiresOn

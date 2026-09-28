@@ -28,7 +28,7 @@ import { usePlan } from '../hooks/usePlan'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import PlanGate from './shared/PlanGate'
 import SchedulePicker from './shared/SchedulePicker'
-import { getBrowserTimeZone } from '../utils/dateUtils'
+import { getBrowserTimeZone, parseBackendDate } from '../utils/dateUtils'
 
 type ReportFrequency = 'daily' | 'weekly' | 'monthly'
 
@@ -531,7 +531,7 @@ const MonitoringReportsTab: React.FC = () => {
             {settings?.backup_reports_last_sent_at && (
               <Alert severity="info">
                 {t('monitoringReports.lastReport')}{' '}
-                {new Date(settings.backup_reports_last_sent_at).toLocaleString()}
+                {parseBackendDate(settings.backup_reports_last_sent_at).toLocaleString()}
               </Alert>
             )}
           </Stack>
