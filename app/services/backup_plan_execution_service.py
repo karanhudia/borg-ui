@@ -59,6 +59,7 @@ from app.services.repository_executor import (
 )
 from app.services.upload_ratelimit_policies import resolve_scheduled_upload_ratelimit
 from app.services.notification_service import notification_service
+from app.services.restore_check_service import restore_check_service
 from app.services.script_executor import execute_script
 from app.services.template_service import get_system_variables
 from app.services.operations.backup_facade import (
@@ -128,6 +129,7 @@ class PlanRunContext:
     run_prune_after: bool
     run_compact_after: bool
     run_check_after: bool
+    run_restore_check_after: bool
     check_max_duration: int
     check_extra_flags: Optional[str]
     prune_keep_hourly: int
@@ -1216,6 +1218,7 @@ class BackupPlanExecutionService:
                 run_prune_after=bool(plan.run_prune_after),
                 run_compact_after=bool(plan.run_compact_after),
                 run_check_after=bool(plan.run_check_after),
+                run_restore_check_after=bool(plan.run_restore_check_after),
                 check_max_duration=plan.check_max_duration,
                 check_extra_flags=plan.check_extra_flags,
                 prune_keep_hourly=plan.prune_keep_hourly,
@@ -2351,6 +2354,50 @@ class BackupPlanExecutionService:
                 backup_job.maintenance_status = "check_completed"
             else:
                 backup_job.maintenance_status = "check_failed"
+                maintenance_ok = False
+            db.commit()
+
+        # Last, so a repository the check just failed is not restore-checked.
+        if (
+            context.run_restore_check_after
+            and backup_job.maintenance_status != "check_failed"
+        ):
+            if self._is_run_cancelled(run_id):
+                return "cancelled"
+            restore_check_job = start_inline_maintenance(
+                db,
+                repo,
+                "restore_check",
+                params={
+                    # The archive this run just wrote, not whatever is newest.
+                    "archive_name": (backup_job.operation.params or {}).get(
+                        "archive_name"
+                    ),
+                    "probe_paths": repo.restore_check_paths,
+                    "full_archive": bool(repo.restore_check_full_archive),
+                    "scheduled_restore_check": False,
+                },
+                user_id=None,
+                run_id=backup_job.operation.run_id,
+                depends_on_id=backup_job.id,
+            )
+            backup_job.maintenance_status = "running_restore_check"
+            db.commit()
+            await self._run_inline_maintenance(
+                db,
+                backup_job,
+                restore_check_job,
+                run_id,
+                lambda: restore_check_service.execute_restore_check(
+                    restore_check_job.id, repo.id
+                ),
+            )
+            if self._is_run_cancelled(run_id):
+                return "cancelled"
+            if restore_check_job.status == "completed":
+                backup_job.maintenance_status = "restore_check_completed"
+            else:
+                backup_job.maintenance_status = "restore_check_failed"
                 maintenance_ok = False
             db.commit()
 

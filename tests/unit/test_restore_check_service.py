@@ -5,7 +5,10 @@ import pytest
 from sqlalchemy.orm import sessionmaker
 
 from app.database.models import Repository
-from app.services.restore_check_service import RestoreCheckService
+from app.services.restore_check_service import (
+    RestoreCheckService,
+    _select_latest_archive,
+)
 from app.services.operations.job_facade import resolve_maintenance_job
 from tests.utils.operations import seed_job_operation
 
@@ -912,3 +915,18 @@ async def test_keepalives_alone_do_not_hold_a_job_forever(
     assert stopped.status == want_status
     assert stopped.error_message == want_message
     assert dispatch.await_count == dispatched
+
+
+def test_select_latest_archive_targets_a_named_archive():
+    """A plan's post-backup restore check names the archive it just wrote;
+    a newer archive from another writer must not be picked instead. For a
+    Borg 2 series (one shared name) the newest of the series wins."""
+    archives = [
+        {"name": "plan-a", "id": "1", "start": "2026-09-28T10:00:00"},
+        {"name": "plan-a", "id": "2", "start": "2026-09-28T11:00:00"},
+        {"name": "other", "id": "3", "start": "2026-09-28T12:00:00"},
+    ]
+
+    assert _select_latest_archive(archives)["id"] == "3"
+    assert _select_latest_archive(archives, "plan-a")["id"] == "2"
+    assert _select_latest_archive(archives, "gone") is None

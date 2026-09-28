@@ -1307,6 +1307,8 @@
       "runCompactTip": "Repository is compacted after each backup",
       "runCheck": "Check",
       "runCheckTip": "Integrity check runs after each backup (in addition to any scheduled check below)",
+      "runRestoreCheck": "Restore check",
+      "runRestoreCheckTip": "Restores the new archive after each backup, using the repository's restore check settings",
       "collapse": "Collapse",
       "expand": "Expand",
       "togglePlan": "{{action}} {{name}}"
@@ -1906,6 +1908,7 @@
         "runPruneAfter": "Run prune after successful repository backups",
         "runCompactAfter": "Run compact after backup maintenance",
         "runCheckAfter": "Run check after successful repository backups",
+        "runRestoreCheckAfter": "Run restore check on the new archive after successful repository backups",
         "checkMaxDurationHelper": "Seconds. Use 0 for unlimited.",
         "checkExtraFlagsHelper": "Additional borg check options appended to plan maintenance checks."
       },
@@ -1936,6 +1939,7 @@
         "retentionValueWithWithin": "Within {{within}} / H {{hourly}} / D {{daily}} / W {{weekly}} / M {{monthly}} / Q {{quarterly}} / Y {{yearly}}",
         "compact": "Compact",
         "check": "Check",
+        "restoreCheck": "Restore check",
         "checkExtraFlags": "Check flags",
         "checkDuration": "{{seconds}} seconds",
         "pathCount_one": "{{count}} path",
