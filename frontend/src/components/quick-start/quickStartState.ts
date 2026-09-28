@@ -128,7 +128,7 @@ function normalizePath(value: string): string {
   return `/${segments.join('/')}`
 }
 
-function isInsidePath(child: string, parent: string): boolean {
+export function isInsidePath(child: string, parent: string): boolean {
   const normalize = normalizePath
   const c = normalize(child)
   const p = normalize(parent)

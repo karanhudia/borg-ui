@@ -6756,7 +6756,8 @@
       "hint": "Wähle einen Rechner, auf dem der Borg-UI-Agent schon läuft, oder füge einen hinzu. Beim Hinzufügen erscheint ein Befehl für diesen Rechner; der Schnellstart geht weiter, sobald er verbunden ist.",
       "label": "Rechner",
       "add": "Rechner hinzufügen",
-      "noAgentsNoPermission": "Auf noch keinem Rechner läuft der Agent. Bitte eine Admin-Person, unter Managed Agents einen hinzuzufügen."
+      "noAgentsNoPermission": "Auf noch keinem Rechner läuft der Agent. Bitte eine Admin-Person, unter Managed Agents einen hinzuzufügen.",
+      "loadFailed": "Die Rechner konnten nicht geladen werden. Versuche es gleich noch einmal."
     }
   }
 }

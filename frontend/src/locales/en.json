@@ -6756,7 +6756,8 @@
       "hint": "Pick a computer that already runs the Borg UI agent, or add one. Adding shows a command to run on that computer; Quick Start continues once it connects.",
       "label": "Computer",
       "add": "Add a computer",
-      "noAgentsNoPermission": "No computers run the agent yet. Ask an admin to add one under Managed Agents."
+      "noAgentsNoPermission": "No computers run the agent yet. Ask an admin to add one under Managed Agents.",
+      "loadFailed": "Could not load the computers. Try again in a moment."
     }
   }
 }

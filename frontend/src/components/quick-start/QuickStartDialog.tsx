@@ -116,7 +116,7 @@ export default function QuickStartDialog({
           (answers.destinationKind === 'server'
             ? suggestedDestinationPath(name)
             : answers.destinationKind === 'agent'
-              ? suggestedAgentDestinationPath(name, sourceAgent)
+              ? suggestedAgentDestinationPath(name, sourceAgent, answers.sourcePaths)
               : ''),
       })
     }

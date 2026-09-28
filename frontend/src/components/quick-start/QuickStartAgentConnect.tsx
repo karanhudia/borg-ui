@@ -9,7 +9,7 @@ import ManagedAgentSelect from '../shared/ManagedAgentSelect'
 import AddAgentDialog from '../../pages/managed-agents/AddAgentDialog'
 import { resolveAgentServerUrl } from '../../pages/managed-agents/agentServerUrl'
 import { managedAgentsAPI } from '../../services/api'
-import { useManagedAgents } from './quickStartAgent'
+import { useEnrolledAgentId, useManagedAgents } from './quickStartAgent'
 
 interface QuickStartAgentConnectProps {
   value: number | ''
@@ -26,28 +26,31 @@ export default function QuickStartAgentConnect({
 }: QuickStartAgentConnectProps) {
   const { t } = useTranslation()
   const [adding, setAdding] = useState(false)
-  const agents = useManagedAgents(true, adding)
-  const knownIds = useRef<Set<number> | null>(null)
+  const { agents, failed } = useManagedAgents(true, adding)
+  const [tokenId, setTokenId] = useState<number | null>(null)
+  const enrolledAgentId = useEnrolledAgentId(tokenId)
+  const selectedEnrollment = useRef<number | null>(null)
   const createToken = useMutation({ mutationFn: managedAgentsAPI.createEnrollmentToken })
   const serverUrl = useMemo(() => resolveAgentServerUrl(undefined, window.location.origin), [])
 
-  // Select the agent that connects while the Add agent dialog is open.
+  // Select the agent that enrolled with the token created in this dialog, once it is listed.
   useEffect(() => {
-    if (!adding || !knownIds.current) return
-    const joined = agents.find((agent) => !knownIds.current?.has(agent.id))
-    if (!joined) return
-    knownIds.current.add(joined.id)
-    onChange(joined.id)
-  }, [adding, agents, onChange])
+    if (enrolledAgentId === null || selectedEnrollment.current === enrolledAgentId) return
+    if (!agents.some((agent) => agent.id === enrolledAgentId)) return
+    selectedEnrollment.current = enrolledAgentId
+    onChange(enrolledAgentId)
+  }, [agents, enrolledAgentId, onChange])
 
-  const startAdding = () => {
-    knownIds.current = new Set(agents.map((agent) => agent.id))
-    setAdding(true)
-  }
+  const startAdding = () => setAdding(true)
 
   return (
     <Stack spacing={1.5}>
-      {agents.length === 0 && !canAddMachine ? (
+      {failed && (
+        <Alert severity="error" variant="outlined">
+          {t('quickStart.agent.loadFailed')}
+        </Alert>
+      )}
+      {failed ? null : agents.length === 0 && !canAddMachine ? (
         <Alert severity="info" variant="outlined">
           {t('quickStart.agent.noAgentsNoPermission')}
         </Alert>
@@ -83,7 +86,11 @@ export default function QuickStartAgentConnect({
         onClose={() => setAdding(false)}
         defaultServerUrl={serverUrl}
         agents={agents}
-        onCreateToken={async (payload) => (await createToken.mutateAsync(payload)).data}
+        onCreateToken={async (payload) => {
+          const created = (await createToken.mutateAsync(payload)).data
+          setTokenId(created.id)
+          return created
+        }}
         creatingToken={createToken.isPending}
         onCopy={async (text) => {
           await navigator.clipboard.writeText(text)

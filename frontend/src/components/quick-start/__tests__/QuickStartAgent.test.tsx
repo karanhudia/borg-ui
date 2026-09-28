@@ -11,21 +11,39 @@ vi.mock('../../../services/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../services/api')>()
   return {
     ...actual,
-    managedAgentsAPI: { listAgents: vi.fn(), createEnrollmentToken: vi.fn() },
+    managedAgentsAPI: {
+      listAgents: vi.fn(),
+      createEnrollmentToken: vi.fn(),
+      listEnrollmentTokens: vi.fn(),
+    },
   }
 })
 
 // The real dialog is covered on the Managed Agents page; here only open/close matters.
 vi.mock('../../../pages/managed-agents/AddAgentDialog', () => ({
-  default: ({ open }: { open: boolean }) => (open ? <div>add agent dialog</div> : null),
+  default: ({
+    open,
+    onCreateToken,
+  }: {
+    open: boolean
+    onCreateToken: (payload: { name: string }) => Promise<unknown>
+  }) =>
+    open ? <button onClick={() => onCreateToken({ name: 'desktop' })}>create token</button> : null,
 }))
 
 const laptop = { id: 1, name: 'laptop', hostname: 'laptop.local', status: 'online' }
 const desktop = { id: 2, name: 'desktop', hostname: 'desktop.local', status: 'online' }
 
 describe('QuickStartAgentConnect', () => {
-  it('selects the agent that connects while the add dialog is open', async () => {
+  it('selects the agent that enrolled with the token created in the dialog', async () => {
+    const other = { id: 3, name: 'other', hostname: 'other.local', status: 'online' }
     vi.mocked(managedAgentsAPI.listAgents).mockResolvedValue({ data: [laptop] } as never)
+    vi.mocked(managedAgentsAPI.createEnrollmentToken).mockResolvedValue({
+      data: { id: 30, token: 'secret' },
+    } as never)
+    vi.mocked(managedAgentsAPI.listEnrollmentTokens).mockResolvedValue({
+      data: [{ id: 30, used_by_agent_id: null }],
+    } as never)
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const onChange = vi.fn()
     const user = userEvent.setup()
@@ -34,13 +52,29 @@ describe('QuickStartAgentConnect', () => {
     })
 
     await user.click(await screen.findByRole('button', { name: 'Add a computer' }))
-    expect(screen.getByText('add agent dialog')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'create token' }))
 
-    vi.mocked(managedAgentsAPI.listAgents).mockResolvedValue({ data: [laptop, desktop] } as never)
-    await queryClient.refetchQueries({ queryKey: ['managed-agents'] })
+    // Another agent joining at the same time is not picked.
+    vi.mocked(managedAgentsAPI.listAgents).mockResolvedValue({
+      data: [laptop, other, desktop],
+    } as never)
+    vi.mocked(managedAgentsAPI.listEnrollmentTokens).mockResolvedValue({
+      data: [{ id: 30, used_by_agent_id: 2 }],
+    } as never)
+    await queryClient.refetchQueries()
 
     await waitFor(() => expect(onChange).toHaveBeenCalledWith(2))
     expect(onChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('says when the computers cannot be loaded', async () => {
+    vi.mocked(managedAgentsAPI.listAgents).mockRejectedValue(new Error('offline'))
+    renderWithProviders(<QuickStartAgentConnect value="" onChange={() => {}} canAddMachine />, {
+      queryClient: new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+    })
+    expect(
+      await screen.findByText('Could not load the computers. Try again in a moment.')
+    ).toBeInTheDocument()
   })
 })
 

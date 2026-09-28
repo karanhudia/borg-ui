@@ -6756,7 +6756,8 @@
       "hint": "Elige un equipo que ya ejecute el agente de Borg UI o añade uno. Al añadirlo verás un comando para ejecutar en ese equipo; el inicio rápido continúa cuando se conecte.",
       "label": "Equipo",
       "add": "Añadir equipo",
-      "noAgentsNoPermission": "Ningún equipo ejecuta el agente todavía. Pide a un administrador que añada uno en Agentes gestionados."
+      "noAgentsNoPermission": "Ningún equipo ejecuta el agente todavía. Pide a un administrador que añada uno en Agentes gestionados.",
+      "loadFailed": "No se pudieron cargar los equipos. Inténtalo de nuevo en un momento."
     }
   }
 }

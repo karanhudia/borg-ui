@@ -6756,7 +6756,8 @@
       "hint": "Scegli un computer su cui gira già l'agente di Borg UI o aggiungine uno. Aggiungendolo vedrai un comando da eseguire su quel computer; l'avvio rapido prosegue appena si connette.",
       "label": "Computer",
       "add": "Aggiungi computer",
-      "noAgentsNoPermission": "Nessun computer esegue ancora l'agente. Chiedi a un amministratore di aggiungerne uno in Agenti gestiti."
+      "noAgentsNoPermission": "Nessun computer esegue ancora l'agente. Chiedi a un amministratore di aggiungerne uno in Agenti gestiti.",
+      "loadFailed": "Impossibile caricare i computer. Riprova tra poco."
     }
   }
 }
