@@ -209,3 +209,14 @@ export const Review: Story = {
   args: { step: QuickStartReviewStep as never, initial: filled },
   render: (args) => <ReviewHarness initial={args.initial} />,
 }
+
+function WhatStepWithAgents(props: QuickStartStepProps) {
+  return <QuickStartWhatStep {...props} canUseAgents />
+}
+
+export const WhatAgentPro: Story = {
+  args: {
+    step: WhatStepWithAgents,
+    initial: { ...createInitialQuickStartAnswers(), sourceKind: 'agent', destinationKind: 'agent' },
+  },
+}
