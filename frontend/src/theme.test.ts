@@ -20,6 +20,7 @@ describe.each(['light', 'dark'] as const)('%s theme palette contrast', (mode) =>
   it.each(TONES)('%s.main reads as text on surfaces and on its own tint', (tone) => {
     const { main, contrastText } = palette[tone]
     expect(alphaOf(main), `${tone}.main is opaque`).toBe(1)
+    expect(alphaOf(contrastText), `${tone}.contrastText is opaque`).toBe(1)
     for (const surface of surfaces) {
       expect(getContrastRatio(main, surface), `${tone} on ${surface}`).toBeGreaterThanOrEqual(AA)
       const tint = blend(surface, main, 0.16)
