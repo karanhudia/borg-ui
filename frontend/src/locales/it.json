@@ -1307,6 +1307,8 @@
       "runCompactTip": "Il repository viene compattato dopo ogni backup",
       "runCheck": "Controlla",
       "runCheckTip": "Il controllo di integrità viene eseguito dopo ogni backup (oltre a qualsiasi controllo pianificato qui sotto)",
+      "runRestoreCheck": "Test di ripristino",
+      "runRestoreCheckTip": "Ripristina il nuovo archivio dopo ogni backup, con le impostazioni del test di ripristino del repository",
       "collapse": "Comprimi",
       "expand": "Espandi",
       "togglePlan": "{{action}} {{name}}"
@@ -1906,6 +1908,7 @@
         "runPruneAfter": "Esegui prune dopo backup repository riusciti",
         "runCompactAfter": "Esegui compact dopo la manutenzione del backup",
         "runCheckAfter": "Esegui check dopo backup repository riusciti",
+        "runRestoreCheckAfter": "Esegui test di ripristino sul nuovo archivio dopo backup repository riusciti",
         "checkMaxDurationHelper": "Secondi. Usa 0 per nessun limite.",
         "checkExtraFlagsHelper": "Opzioni aggiuntive di borg check aggiunte ai check di manutenzione del piano."
       },
@@ -1936,6 +1939,7 @@
         "retentionValueWithWithin": "Entro {{within}} / H {{hourly}} / G {{daily}} / S {{weekly}} / M {{monthly}} / T {{quarterly}} / A {{yearly}}",
         "compact": "Compatta",
         "check": "Controllo",
+        "restoreCheck": "Test di ripristino",
         "checkExtraFlags": "Flag di check",
         "checkDuration": "{{seconds}} secondi",
         "pathCount_one": "{{count}} percorso",

@@ -921,6 +921,7 @@ class BackupPlan(Base):
     run_prune_after = Column(Boolean, default=False, nullable=False)
     run_compact_after = Column(Boolean, default=False, nullable=False)
     run_check_after = Column(Boolean, default=False, nullable=False)
+    run_restore_check_after = Column(Boolean, default=False, nullable=False)
     check_max_duration = Column(Integer, default=3600, nullable=False)
     check_extra_flags = Column(Text, nullable=True)
     prune_keep_hourly = Column(Integer, default=0, nullable=False)

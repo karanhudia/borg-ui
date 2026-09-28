@@ -13,6 +13,7 @@ import {
 } from '@mui/material'
 import {
   Archive,
+  ArchiveRestore,
   ChevronDown,
   ChevronRight,
   Database,
@@ -298,9 +299,12 @@ const PlanScheduleCard: React.FC<PlanScheduleCardProps> = ({
 
       {/* Post-backup actions: prune / compact / check that run inline after
           each scheduled backup. Each chip carries its own semantic color so
-          the three actions are distinguishable at a glance (not just by
+          the actions are distinguishable at a glance (not just by
           icon). */}
-      {(plan.run_prune_after || plan.run_compact_after || plan.run_check_after) &&
+      {(plan.run_prune_after ||
+        plan.run_compact_after ||
+        plan.run_check_after ||
+        plan.run_restore_check_after) &&
         (() => {
           const chipSxFor = (chipColor: string) =>
             ({
@@ -316,6 +320,7 @@ const PlanScheduleCard: React.FC<PlanScheduleCardProps> = ({
           const pruneColor = theme.palette.secondary.main
           const compactColor = theme.palette.info.main
           const checkColor = theme.palette.warning.main
+          const restoreCheckColor = theme.palette.success.main
 
           return (
             <Box
@@ -369,6 +374,16 @@ const PlanScheduleCard: React.FC<PlanScheduleCardProps> = ({
                       icon={<ShieldCheck size={11} aria-hidden />}
                       label={t('schedule.byPlan.runCheck')}
                       sx={chipSxFor(checkColor)}
+                    />
+                  </Tooltip>
+                )}
+                {plan.run_restore_check_after && (
+                  <Tooltip title={t('schedule.byPlan.runRestoreCheckTip')} arrow>
+                    <Chip
+                      size="small"
+                      icon={<ArchiveRestore size={11} aria-hidden />}
+                      label={t('schedule.byPlan.runRestoreCheck')}
+                      sx={chipSxFor(restoreCheckColor)}
                     />
                   </Tooltip>
                 )}

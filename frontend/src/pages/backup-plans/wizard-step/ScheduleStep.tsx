@@ -210,6 +210,17 @@ export function ScheduleStep({
             </Box>
           )}
         </Box>
+
+        <FormControlLabel
+          sx={wizardSwitchRowSx}
+          control={
+            <Switch
+              checked={wizardState.runRestoreCheckAfter}
+              onChange={(event) => updateState({ runRestoreCheckAfter: event.target.checked })}
+            />
+          }
+          label={t('backupPlans.wizard.maintenance.runRestoreCheckAfter')}
+        />
       </Stack>
     </Stack>
   )

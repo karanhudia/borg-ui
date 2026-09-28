@@ -193,6 +193,7 @@ def _plan_run_context(**overrides):
         run_prune_after=False,
         run_compact_after=False,
         run_check_after=False,
+        run_restore_check_after=False,
         check_max_duration=3600,
         check_extra_flags=None,
         prune_keep_hourly=0,

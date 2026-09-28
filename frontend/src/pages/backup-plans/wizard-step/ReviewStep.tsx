@@ -671,6 +671,12 @@ export function ReviewStep({
               <ReviewCodePill>{wizardState.checkExtraFlags.trim()}</ReviewCodePill>
             </ReviewAttrRow>
           )}
+          <ReviewAttrRow label={t('backupPlans.wizard.review.restoreCheck')}>
+            <ReviewStatus
+              enabled={wizardState.runRestoreCheckAfter}
+              label={wizardState.runRestoreCheckAfter ? t('common.enabled') : t('common.disabled')}
+            />
+          </ReviewAttrRow>
         </ReviewSectionCard>
       </ReviewSectionGrid>
     </Box>

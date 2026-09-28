@@ -318,6 +318,7 @@ class TestBackupPlanRoutes:
             json=_payload(
                 [repo.id],
                 run_check_after=True,
+                run_restore_check_after=True,
                 check_max_duration=0,
                 check_extra_flags=" --verify-data ",
             ),
@@ -326,6 +327,7 @@ class TestBackupPlanRoutes:
 
         assert create_response.status_code == 201
         created = create_response.json()
+        assert created["run_restore_check_after"] is True
         assert created["name"] == "Nightly project plan"
         assert created["source_directories"] == ["/srv/project"]
         assert created["repository_count"] == 1
@@ -5435,6 +5437,149 @@ class TestBackupPlanRoutes:
         assert (
             test_db.query(Operation).filter(Operation.status == "running").count() == 0
         )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "check_status, restore_status, run_status",
+        [
+            ("completed", "completed", "completed"),
+            ("completed", "completed_with_warnings", "completed_with_warnings"),
+            ("completed", "failed", "completed_with_warnings"),
+            ("failed", None, "completed_with_warnings"),
+        ],
+    )
+    async def test_restore_check_after_targets_the_new_archive(
+        self, test_db, check_status, restore_status, run_status
+    ):
+        """The restore check runs last, against the archive this run wrote,
+        with the repository's restore check settings. A failed check skips
+        it, and the run ends with warnings rather than failing."""
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        repo.restore_check_paths = json.dumps(["/srv/project/probe"])
+        test_db.commit()
+        _plan, run = _create_execution_plan(
+            test_db, [repo], run_check_after=True, run_restore_check_after=True
+        )
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            job = resolve_backup_job(db, job_id)
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        async def fake_check(self, job_id, *args, **kwargs):
+            operation = test_db.get(Operation, job_id)
+            operation.status = check_status
+            operation.completed_at = datetime.utcnow()
+            test_db.commit()
+
+        restore_checked = []
+
+        async def fake_restore_check(job_id, repository_id):
+            restore_checked.append(repository_id)
+            operation = test_db.get(Operation, job_id)
+            operation.status = restore_status
+            operation.completed_at = datetime.utcnow()
+            test_db.commit()
+
+        with (
+            patch(
+                "app.services.operations.backup_facade.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
+            ),
+            patch.object(BorgRouter, "check", new=fake_check),
+            patch(
+                "app.services.backup_plan_execution_service.restore_check_service"
+                ".execute_restore_check",
+                new=fake_restore_check,
+            ),
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.expire_all()
+        run = test_db.query(BackupPlanRun).filter_by(id=run.id).one()
+        by_kind = {
+            operation.kind: operation
+            for operation in test_db.query(Operation)
+            .filter(Operation.repository_id == repo.id)
+            .all()
+        }
+        backup_job = BackupJobFacade(test_db, by_kind["backup"])
+        if check_status == "failed":
+            assert restore_checked == []
+            assert "restore_check" not in by_kind
+            assert backup_job.maintenance_status == "check_failed"
+            assert run.status == run_status
+            return
+        assert restore_checked == [repo.id]
+        restore_check = by_kind["restore_check"]
+        assert restore_check.depends_on_id == backup_job.id
+        assert (
+            restore_check.params["archive_name"]
+            == by_kind["backup"].params["archive_name"]
+        )
+        assert restore_check.params["archive_name"].startswith(
+            "Plan-execution-Primary-"
+        )
+        assert restore_check.params["probe_paths"] == repo.restore_check_paths
+        assert restore_check.params["full_archive"] is False
+        assert backup_job.maintenance_status == (
+            "restore_check_failed"
+            if restore_status == "failed"
+            else "maintenance_completed"
+        )
+        assert run.status == run_status
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("agent", [False, True])
+    async def test_cancelled_run_stops_its_restore_check(self, test_db, agent):
+        """`cancel_run` only reaches the backup, which has finished by the
+        time the restore check runs, so the step itself must stop the check:
+        the server's extract process, or the agent's job."""
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        stop = asyncio.Event()
+        cancelled = []
+
+        async def fake_restore_check(job_id, repository_id):
+            await stop.wait()
+
+        async def fake_cancel(*args):
+            cancelled.append(args[-1])
+            stop.set()
+            return True
+
+        service = "app.services.backup_plan_execution_service"
+        with (
+            patch(f"{service}.RESTORE_CHECK_CANCEL_POLL_SECONDS", 0.01),
+            patch.object(
+                backup_plan_execution_service, "_is_run_cancelled", return_value=True
+            ),
+            patch(
+                f"{service}.restore_check_service.execute_restore_check",
+                new=fake_restore_check,
+            ),
+            patch(
+                f"{service}.restore_check_service.cancel_restore_check",
+                new=fake_cancel,
+            ),
+            patch(
+                "app.services.operations.executors.maintenance"
+                ".cancel_agent_operation_job",
+                new=fake_cancel,
+            ),
+            patch(
+                "app.services.repository_executor.is_agent_executor",
+                return_value=agent,
+            ),
+        ):
+            await asyncio.wait_for(
+                backup_plan_execution_service._restore_check_until_cancelled(
+                    test_db, repo, 42, run_id=1
+                ),
+                timeout=5,
+            )
+
+        assert cancelled == [42]
 
     @pytest.mark.asyncio
     async def test_maintenance_step_left_to_its_agent_still_fails_the_run(
