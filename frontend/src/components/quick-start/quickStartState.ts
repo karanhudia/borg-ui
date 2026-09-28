@@ -89,6 +89,26 @@ export function visibleSteps(answers: QuickStartAnswers): QuickStartStepKey[] {
   return steps
 }
 
+/**
+ * The patch for picking a source kind. Folders and the destination belong to
+ * the previous machine, so a real change starts them over; re-picking the same
+ * kind changes nothing.
+ */
+export function sourceKindPatch(
+  answers: QuickStartAnswers,
+  sourceKind: QuickStartSourceKind
+): Partial<QuickStartAnswers> {
+  if (answers.sourceKind === sourceKind) return {}
+  return {
+    sourceKind,
+    sourcePaths: [],
+    // An agent can only back up to its own disk (route planner).
+    destinationKind: sourceKind === 'agent' ? 'agent' : 'server',
+    destinationConnectionId: '',
+    destinationPath: '',
+  }
+}
+
 export function usesEncryption(answers: QuickStartAnswers): boolean {
   return answers.settings.encryption !== 'none'
 }

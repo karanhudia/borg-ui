@@ -3,7 +3,7 @@ import { Monitor, Server } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import QuickStartChoiceCard from '../QuickStartChoiceCard'
-import type { QuickStartStepProps } from '../quickStartState'
+import { sourceKindPatch, type QuickStartStepProps } from '../quickStartState'
 
 export default function QuickStartWhatStep({ answers, onChange }: QuickStartStepProps) {
   const { t } = useTranslation()
@@ -18,16 +18,14 @@ export default function QuickStartWhatStep({ answers, onChange }: QuickStartStep
           title={t('quickStart.what.server')}
           description={t('quickStart.what.serverDesc')}
           selected={answers.sourceKind === 'server'}
-          onSelect={() => onChange({ sourceKind: 'server', destinationKind: 'server' })}
+          onSelect={() => onChange(sourceKindPatch(answers, 'server'))}
         />
         <QuickStartChoiceCard
           icon={<Monitor size={20} />}
           title={t('quickStart.what.ssh')}
           description={t('quickStart.what.sshDesc')}
           selected={answers.sourceKind === 'ssh'}
-          onSelect={() =>
-            onChange({ sourceKind: 'ssh', sourcePaths: [], destinationKind: 'server' })
-          }
+          onSelect={() => onChange(sourceKindPatch(answers, 'ssh'))}
         />
       </Stack>
       <Typography variant="body2" sx={{ color: 'text.secondary' }}>

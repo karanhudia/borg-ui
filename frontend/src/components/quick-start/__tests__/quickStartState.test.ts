@@ -5,6 +5,7 @@ import {
   destinationInsideSource,
   isStepValid,
   suggestedDestinationPath,
+  sourceKindPatch,
   suggestedName,
   suggestedRemoteDestinationPath,
   visibleSteps,
@@ -144,5 +145,24 @@ describe('quickStartState', () => {
     expect(suggestedRemoteDestinationPath('Home', { username: 'root' })).toBe(
       '/root/borg-backups/home'
     )
+  })
+  it('starts folders and destination over when the source kind changes', () => {
+    const picked = answers({
+      sourceKind: 'ssh',
+      sourceConnectionId: 3,
+      sourcePaths: ['/srv/data'],
+      destinationKind: 'ssh',
+      destinationConnectionId: 5,
+      destinationPath: '/home/bob/borg-backups/data',
+    })
+    expect(sourceKindPatch(picked, 'ssh')).toEqual({})
+    expect(sourceKindPatch(picked, 'server')).toEqual({
+      sourceKind: 'server',
+      sourcePaths: [],
+      destinationKind: 'server',
+      destinationConnectionId: '',
+      destinationPath: '',
+    })
+    expect(sourceKindPatch(picked, 'agent').destinationKind).toBe('agent')
   })
 })

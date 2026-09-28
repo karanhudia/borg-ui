@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Alert, Stack, Typography } from '@mui/material'
 import { HardDrive, Server } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -5,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import PathSelectorField from '../../shared/PathSelectorField'
 import QuickStartChoiceCard from '../QuickStartChoiceCard'
 import QuickStartSshConnect from '../QuickStartSshConnect'
-import { sshBrowseConfig, useSshConnection, useSshConnections } from '../quickStartSsh'
+import { sshBrowseConfig, useSshConnection } from '../quickStartSsh'
 import {
   destinationInsideSource,
   suggestedDestinationPath,
@@ -21,9 +22,19 @@ export default function QuickStartDestinationStep({
   const { t } = useTranslation()
   const inside = destinationInsideSource(answers)
   const remote = answers.destinationKind === 'ssh'
-  const connections = useSshConnections(remote)
   const connection = useSshConnection(remote ? answers.destinationConnectionId : '')
   const name = answers.name || 'backup'
+
+  // Suggest a path once per chosen connection, after it has loaded: a machine
+  // added in this step is not in the list until the refetch lands.
+  const suggestedFor = useRef<number | null>(null)
+  useEffect(() => {
+    if (!connection || suggestedFor.current === connection.id) return
+    suggestedFor.current = connection.id
+    if (!answers.destinationPath) {
+      onChange({ destinationPath: suggestedRemoteDestinationPath(name, connection) })
+    }
+  }, [connection, answers.destinationPath, name, onChange])
 
   return (
     <Stack spacing={2}>
@@ -36,16 +47,23 @@ export default function QuickStartDestinationStep({
           title={t('quickStart.destination.server')}
           description={t('quickStart.destination.serverDesc')}
           selected={!remote}
-          onSelect={() =>
-            onChange({ destinationKind: 'server', destinationPath: suggestedDestinationPath(name) })
-          }
+          onSelect={() => {
+            if (!remote) return
+            onChange({
+              destinationKind: 'server',
+              destinationConnectionId: '',
+              destinationPath: suggestedDestinationPath(name),
+            })
+          }}
         />
         <QuickStartChoiceCard
           icon={<Server size={20} />}
           title={t('quickStart.destination.ssh')}
           description={t('quickStart.destination.sshDesc')}
           selected={remote}
-          onSelect={() => onChange({ destinationKind: 'ssh', destinationPath: '' })}
+          onSelect={() => {
+            if (!remote) onChange({ destinationKind: 'ssh', destinationPath: '' })
+          }}
         />
       </Stack>
 
@@ -54,11 +72,9 @@ export default function QuickStartDestinationStep({
           canAddMachine={canAddMachine}
           value={answers.destinationConnectionId}
           onChange={(destinationConnectionId) => {
-            const chosen = connections.find((item) => item.id === destinationConnectionId)
-            onChange({
-              destinationConnectionId,
-              destinationPath: chosen ? suggestedRemoteDestinationPath(name, chosen) : '',
-            })
+            if (destinationConnectionId !== answers.destinationConnectionId) {
+              onChange({ destinationConnectionId, destinationPath: '' })
+            }
           }}
           label={t('quickStart.destination.sshLabel')}
         />

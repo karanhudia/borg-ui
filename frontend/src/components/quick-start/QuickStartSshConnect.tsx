@@ -28,7 +28,8 @@ export default function QuickStartSshConnect({
 }: QuickStartSshConnectProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const connections = useSshConnections()
+  // A failed deploy leaves a connection row behind; it cannot run backups, so it is not offered.
+  const connections = useSshConnections().filter((connection) => connection.status !== 'failed')
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [connecting, setConnecting] = useState(false)
