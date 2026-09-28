@@ -414,6 +414,80 @@ class TestHeatmap:
         days = {d["date"]: d for d in r.json()["repository"]["days"]}
         assert days["2026-09-08"]["anomalies"] == ["size_outlier"]
 
+    def _evening_archive(self, test_db, repo, local_day):
+        # 22:00 in New York (EDT) is 02:00 UTC on the next calendar day.
+        a = _archive(test_db, repo, f"e{local_day}", local_day)
+        a.start = datetime(2026, 9, local_day + 1, 2, 0)
+        test_db.commit()
+        return a
+
+    def test_days_are_the_viewers_calendar_days(
+        self, test_client, test_db, admin_headers
+    ):
+        """A 22:00 backup in New York belongs to that evening's cell, not the
+        next day's (issue #1221)."""
+        repo = _repo(test_db)
+        self._evening_archive(test_db, repo, 1)
+        url = f"/api/repositories/{repo.id}/archives/heatmap"
+        ny = test_client.get(
+            url, params={"timezone": "America/New_York"}, headers=admin_headers
+        ).json()
+        assert [d["date"] for d in ny["repository"]["days"]] == ["2026-09-01"]
+        assert [d["date"] for d in ny["series"][0]["days"]] == ["2026-09-01"]
+        utc = test_client.get(url, headers=admin_headers).json()
+        assert [d["date"] for d in utc["repository"]["days"]] == ["2026-09-02"]
+
+    def test_an_unknown_zone_falls_back_to_utc(
+        self, test_client, test_db, admin_headers
+    ):
+        repo = _repo(test_db)
+        self._evening_archive(test_db, repo, 1)
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/archives/heatmap",
+            params={"timezone": "Not/AZone"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 200
+        assert [d["date"] for d in r.json()["repository"]["days"]] == ["2026-09-02"]
+
+    def test_missed_days_use_the_viewers_calendar_days(
+        self, test_client, test_db, admin_headers
+    ):
+        """A nightly 22:00 New York schedule that skipped the 3rd is missed on
+        the 3rd for a New York viewer, the same cell the archives sit in."""
+        repo = _repo(test_db)
+        _plan(test_db, repo, cron_expression="0 22 * * *", timezone="America/New_York")
+        for d in (1, 2, 4, 5):
+            self._evening_archive(test_db, repo, d)
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/archives/heatmap",
+            params={"until": "2026-09-06T12:00:00", "timezone": "America/New_York"},
+            headers=admin_headers,
+        )
+        assert r.json()["repository"]["missed_days"] == ["2026-09-03"]
+
+    def test_retention_window_starts_on_the_viewers_day(
+        self, test_client, test_db, admin_headers
+    ):
+        """`until` 02:00 UTC on the 6th is still the 5th in New York, so two
+        kept days reach back to the 3rd there, not the 4th."""
+        repo = _repo(test_db)
+        _plan(
+            test_db,
+            repo,
+            cron_expression="0 22 * * *",
+            timezone="America/New_York",
+            run_prune_after=True,
+            prune_keep_daily=2,
+        )
+        self._evening_archive(test_db, repo, 1)
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/archives/heatmap",
+            params={"until": "2026-09-06T02:30:00", "timezone": "America/New_York"},
+            headers=admin_headers,
+        )
+        assert r.json()["retention_since"] == "2026-09-03"
+
 
 @pytest.mark.unit
 class TestArchiveGrowth:

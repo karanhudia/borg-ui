@@ -3,7 +3,7 @@ heatmap, status, rebuild, and (Pro) changes, history, search."""
 
 import asyncio
 from bisect import bisect_right
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone, tzinfo
 from time import monotonic
 from typing import Literal, Optional
 
@@ -12,6 +12,7 @@ from pydantic import UUID4, BaseModel, Field
 from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session
 
+from app.api.dashboard import resolve_timezone
 from app.api.maintenance_jobs import get_repository_with_access
 from app.core.features import require_feature, require_feature_access
 from app.core.security import get_current_user
@@ -150,9 +151,13 @@ def _naive_utc(value: Optional[datetime]) -> Optional[datetime]:
 
 
 def completed_backup_days(
-    db: Session, repository: Repository, since: Optional[datetime], until: datetime
+    db: Session,
+    repository: Repository,
+    since: Optional[datetime],
+    until: datetime,
+    zone: tzinfo = timezone.utc,
 ) -> set[date]:
-    """Days with a completed backup operation on this repository.
+    """Days in `zone` with a completed backup operation on this repository.
 
     Run evidence for the missed-run rule: the archive of such a run may have
     been pruned since (#966 keeps the row and marks `archive_pruned_at`), and
@@ -167,7 +172,7 @@ def completed_backup_days(
     )
     if since is not None:
         q = q.filter(ran_at >= since)
-    return {value.date() for (value,) in q.all() if value is not None}
+    return {anomalies.day_in(value, zone) for (value,) in q.all() if value is not None}
 
 
 def _archives_query(db: Session, repository: Repository, series, since, until):
@@ -226,6 +231,7 @@ async def archives_heatmap(
     repo_id: int,
     since: Optional[datetime] = None,
     until: Optional[datetime] = None,
+    tz_name: Optional[str] = Query(default=None, alias="timezone"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -237,8 +243,13 @@ async def archives_heatmap(
     heuristic (spec 6.6) and must never decide whether an archive is visible
     (issue #943), so the window has no default either: what the list shows,
     the heatmap shows.
+
+    Days are calendar days in the viewer's zone (`?timezone=`, UTC for a zone
+    the host does not know), so an evening backup west of UTC sits in that
+    evening's cell and the missed days use the same calendar (issue #1221).
     """
     repository = _repo(db, current_user, repo_id)
+    zone = resolve_timezone(tz_name)
     until = _naive_utc(until) or utc_now().replace(tzinfo=None)
     since = _naive_utc(since)
     rows = (
@@ -265,7 +276,7 @@ async def archives_heatmap(
     def band(name: Optional[str], archives: list[Archive]) -> dict:
         days: dict[str, dict] = {}
         for a in archives:
-            key = a.start.date().isoformat()
+            key = anomalies.day_in(a.start, zone).isoformat()
             day = days.setdefault(
                 key,
                 {
@@ -296,7 +307,7 @@ async def archives_heatmap(
 
     retention_days = retention_days_for_repository(db, repository)
     retention_since = (
-        (until - timedelta(days=retention_days)).date()
+        anomalies.day_in(until, zone) - timedelta(days=retention_days)
         if retention_days is not None
         else None
     )
@@ -304,8 +315,9 @@ async def archives_heatmap(
         [a.start for a in rows],
         until=until,
         crons=crons,
-        run_days=completed_backup_days(db, repository, since, until),
+        run_days=completed_backup_days(db, repository, since, until, zone),
         retention_since=retention_since,
+        day_zone=zone,
     )
     repository_band = band(None, rows)
     repository_band["missed_days"] = sorted(d.isoformat() for d in missed)

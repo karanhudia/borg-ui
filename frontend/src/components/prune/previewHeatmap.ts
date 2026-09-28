@@ -1,11 +1,14 @@
+import { format } from 'date-fns'
 import type {
   HeatmapDay,
   HeatmapResponse,
   HeatmapSeries,
   PrunePreviewArchive,
 } from '../../types/archives'
+import { parseBackendDate } from '../../utils/dateUtils'
 
-const isoDay = (start: string) => start.slice(0, 10)
+// The viewer's calendar day, the one the heatmap grid draws (issue #1221).
+const isoDay = (start: string) => format(parseBackendDate(start), 'yyyy-MM-dd')
 
 function band(archives: PrunePreviewArchive[]) {
   const days = new Map<string, HeatmapDay>()
