@@ -52,6 +52,7 @@ from app.services.log_policy import (
 )
 from app.services.operations.backup_facade import BackupJobFacade
 from app.services.repository_executor import repository_executor_type
+from app.utils.borg_flags import borg_flags_validator, parse_borg_flags
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
     InvalidScheduleTimezone,
@@ -99,6 +100,10 @@ class BackupPlanRepositoryPayload(BaseModel):
     custom_flags_override: Optional[str] = None
     upload_ratelimit_kib_override: Optional[int] = None
     failure_behavior_override: Optional[str] = None
+
+    _validate_custom_flags_override = borg_flags_validator(
+        "custom_flags_override", "create"
+    )
 
 
 class UploadRatelimitSchedulePolicyPayload(BaseModel):
@@ -174,6 +179,9 @@ class BackupPlanPayload(BaseModel):
     prune_keep_within: Optional[str] = None
     repositories: list[BackupPlanRepositoryPayload]
     clear_legacy_source_repository_ids: list[int] = Field(default_factory=list)
+
+    _validate_custom_flags = borg_flags_validator("custom_flags", "create")
+    _validate_check_extra_flags = borg_flags_validator("check_extra_flags", "check")
 
 
 class BackupPlanFromRepositoryPayload(BaseModel):
@@ -1617,6 +1625,16 @@ async def create_backup_plan_from_repository(
     else:
         plan_name = _unique_backup_plan_name(db, f"{repository.name} Backup Plan")
 
+    try:
+        parse_borg_flags(repository.custom_flags, "create")
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "key": "backend.errors.repo.invalidBorgFlags",
+                "params": {"reason": str(exc)},
+            },
+        ) from exc
     plan_payload = _payload_from_repository(
         repository,
         schedule,

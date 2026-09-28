@@ -38,6 +38,7 @@ from app.services.filesystem_snapshot_service import (
     PreparedFilesystemSnapshot,
     build_filesystem_snapshot_plans,
 )
+from app.utils.borg_flags import parse_borg_flags
 from app.utils.fs import remove_tree_without_crossing_mounts
 from app.utils.ssh_paths import resolve_sshfs_source_path
 from app.utils.source_locations import (
@@ -1917,7 +1918,6 @@ class BackupService:
                 job_id=job_id,
             )
 
-            custom_flag_list = []
             custom_flags_text = (
                 custom_flags_override
                 if custom_flags_override is not None
@@ -1925,25 +1925,14 @@ class BackupService:
                 if repo_record
                 else None
             )
-            if custom_flags_text:
-                custom_flags = custom_flags_text.strip()
-                if custom_flags:
-                    import shlex
-
-                    try:
-                        custom_flag_list = shlex.split(custom_flags)
-                        logger.info(
-                            "Added custom flags to borg create command",
-                            job_id=job_id,
-                            custom_flags=custom_flags,
-                        )
-                    except ValueError as e:
-                        logger.warning(
-                            "Failed to parse custom flags, skipping",
-                            job_id=job_id,
-                            custom_flags=custom_flags,
-                            error=str(e),
-                        )
+            # A stored value the allowlist rejects fails the job here.
+            custom_flag_list = parse_borg_flags(custom_flags_text, "create")
+            if custom_flag_list:
+                logger.info(
+                    "Added custom flags to borg create command",
+                    job_id=job_id,
+                    custom_flags=custom_flag_list,
+                )
 
             cmd = router.build_backup_create_command(
                 repository_path=actual_repository_path,

@@ -146,6 +146,7 @@ from app.utils.source_locations import (
     legacy_source_fields,
     normalize_source_locations,
 )
+from app.utils.borg_flags import borg_flags_validator, parse_borg_flags
 from app.utils.borg_env import (
     build_repository_borg_env,
     effective_repository_remote_path,
@@ -230,10 +231,20 @@ def _normalize_restore_check_paths(paths: Any) -> list[str]:
     return normalized_paths
 
 
-def _normalize_optional_flags(value: Any) -> Optional[str]:
+def _normalize_check_flags(value: Any) -> Optional[str]:
     if value is None:
         return None
     text = str(value).strip()
+    try:
+        parse_borg_flags(text, "check")
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "key": "backend.errors.repo.invalidBorgFlags",
+                "params": {"reason": str(exc)},
+            },
+        ) from exc
     return text or None
 
 
@@ -1375,6 +1386,7 @@ class RepositoryCreate(BaseModel):
     custom_flags: Optional[str] = (
         None  # Custom command-line flags for borg create (e.g., "--stats --list")
     )
+    _validate_custom_flags = borg_flags_validator("custom_flags", "create")
     upload_ratelimit_kib: Optional[int] = None
     source_connection_id: Optional[int] = (
         None  # SSH connection ID for remote data source (pull-based backups)
@@ -1432,6 +1444,7 @@ class RepositoryImport(BaseModel):
     custom_flags: Optional[str] = (
         None  # Custom command-line flags for borg create (e.g., "--stats --list")
     )
+    _validate_custom_flags = borg_flags_validator("custom_flags", "create")
     upload_ratelimit_kib: Optional[int] = None
     source_connection_id: Optional[int] = (
         None  # SSH connection ID for remote data source (pull-based backups)
@@ -1487,6 +1500,7 @@ class RepositoryUpdate(BaseModel):
     history_index_excludes: Optional[List[str]] = None
     index_mode: Optional[Literal["full", "archives", "off"]] = None
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create
+    _validate_custom_flags = borg_flags_validator("custom_flags", "create")
     upload_ratelimit_kib: Optional[int] = None
     source_connection_id: Optional[int] = (
         None  # SSH connection ID for remote data source
@@ -5765,7 +5779,7 @@ async def check_repository(
         # Extract max_duration from request body (default to 3600)
         max_duration = request.get("max_duration", 3600) if request else 3600
         check_extra_flags = (
-            _normalize_optional_flags(request.get("check_extra_flags"))
+            _normalize_check_flags(request.get("check_extra_flags"))
             if request
             else None
         )
@@ -7086,7 +7100,7 @@ async def update_check_schedule(
             repo.check_max_duration = max_duration
 
         if "check_extra_flags" in request:
-            repo.check_extra_flags = _normalize_optional_flags(
+            repo.check_extra_flags = _normalize_check_flags(
                 request.get("check_extra_flags")
             )
 

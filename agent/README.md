@@ -238,6 +238,9 @@ The first implementation supports:
   the agent's default of 180 s), because Borg 1.4 never reads the
   variable and gives up on a lock another process holds after 1 second
   (#1216); Borg 2 keeps reading the variable
+- from 0.1.12 custom `borg create` flags and extra `borg check` flags in a
+  job are checked against an allowlist of safe options before Borg runs;
+  a job carrying any other option or a positional argument fails
 - cancellation through heartbeat; from 0.1.7 (`jobs.cancel`) a running
   backup, check, prune, compact, restore or archive delete stops as well,
   even while Borg prints nothing

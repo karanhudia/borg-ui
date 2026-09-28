@@ -5849,6 +5849,7 @@
         "cannotDeleteRepoWithArchives": "No se puede eliminar el repositorio con archivos existentes. Elimine todos los archivos primero.",
         "checkAlreadyRunning": "Ya hay una operación de verificación en curso para este repositorio",
         "checkFlagsRequireUnlimitedDuration": "Establece la duración máxima en 0 (sin límite) al usar {{flags}} porque estas opciones de Borg check requieren una comprobación completa con archivos.",
+        "invalidBorgFlags": "Estas opciones de Borg no están permitidas: {{reason}}",
         "compactAlreadyRunning": "Ya hay una operación de compactación en curso para este repositorio",
         "restoreCheckCanaryUnsupportedObserve": "Las comprobaciones de restauración canaria no están disponibles para repositorios solo de observación. Usa rutas de prueba seleccionadas o una prueba de archivo completo.",
         "breakLockTimeout": "Tiempo de espera al intentar romper el bloqueo",

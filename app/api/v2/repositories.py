@@ -35,6 +35,7 @@ from app.services.repository_executor import (
 from app.services.v2.repository_service import repository_v2_service
 from app.utils.borg_env import effective_repository_remote_path, repository_borg_env
 from app.utils.archive_job_metadata import enrich_archives_with_backup_metadata
+from app.utils.borg_flags import borg_flags_validator
 from app.utils.repository_paths import build_ssh_repository_path
 from app.utils.source_locations import legacy_source_fields, normalize_source_locations
 
@@ -59,6 +60,7 @@ class RepositoryV2Create(BaseModel):
     mode: str = "full"
     bypass_lock: bool = False
     custom_flags: Optional[str] = None
+    _validate_custom_flags = borg_flags_validator("custom_flags", "create")
     upload_ratelimit_kib: Optional[int] = None
     pre_backup_script: Optional[str] = None
     post_backup_script: Optional[str] = None
@@ -83,6 +85,7 @@ class RepositoryV2Import(BaseModel):
     mode: str = "full"
     bypass_lock: bool = False
     custom_flags: Optional[str] = None
+    _validate_custom_flags = borg_flags_validator("custom_flags", "create")
     upload_ratelimit_kib: Optional[int] = None
     pre_backup_script: Optional[str] = None
     post_backup_script: Optional[str] = None

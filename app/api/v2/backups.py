@@ -21,6 +21,7 @@ from app.database.models import (
 from app.api.maintenance_jobs import get_repository_with_access
 from app.core.security import get_current_user
 from app.core.features import require_feature
+from app.utils.borg_flags import borg_flags_validator
 from app.services.check_flag_validation import (
     CheckFlagConflictError,
     validate_check_flags_for_max_duration,
@@ -79,6 +80,7 @@ class CheckV2Request(BaseModel):
     repository_id: int
     max_duration: Optional[int] = None
     check_extra_flags: Optional[str] = None
+    _validate_check_extra_flags = borg_flags_validator("check_extra_flags", "check")
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

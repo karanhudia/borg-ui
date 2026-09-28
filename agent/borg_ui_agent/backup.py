@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from agent.borg_ui_agent.borg import is_warning_return_code
+from agent.borg_ui_agent.borg_flags import parse_borg_flags
 from agent.borg_ui_agent.cancel import (
     cancel_requested,
     start_cancel_poller,
@@ -57,12 +58,12 @@ class BackupCreatePayload:
             raise ValueError("backup.create payload requires backup.source_paths")
 
         custom_flags = backup.get("custom_flags", payload.get("custom_flags", []))
-        if isinstance(custom_flags, str):
-            custom_flags = shlex.split(custom_flags)
-        if not isinstance(custom_flags, list) or not all(
-            isinstance(flag, str) for flag in custom_flags
+        if not isinstance(custom_flags, (str, list)) or (
+            isinstance(custom_flags, list)
+            and not all(isinstance(flag, str) for flag in custom_flags)
         ):
             raise ValueError("backup.create custom_flags must be a string or list")
+        custom_flags = parse_borg_flags(custom_flags, "create")
 
         exclude_patterns = backup.get(
             "exclude_patterns", payload.get("exclude_patterns", [])

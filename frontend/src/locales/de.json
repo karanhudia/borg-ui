@@ -5849,6 +5849,7 @@
         "cannotDeleteRepoWithArchives": "Repository mit vorhandenen Archiven kann nicht gelöscht werden. Bitte löschen Sie zuerst alle Archive.",
         "checkAlreadyRunning": "Für dieses Repository wird bereits eine Überprüfungsoperation ausgeführt",
         "checkFlagsRequireUnlimitedDuration": "Setze die maximale Dauer auf 0 (unbegrenzt), wenn {{flags}} verwendet wird, da diese Borg-Check-Flags eine vollständige archivbezogene Prüfung erfordern.",
+        "invalidBorgFlags": "Diese Borg-Flags sind nicht erlaubt: {{reason}}",
         "compactAlreadyRunning": "Für dieses Repository wird bereits eine Komprimierungsoperation ausgeführt",
         "restoreCheckCanaryUnsupportedObserve": "Canary-Restore-Prüfungen sind für Observe-only-Repositories nicht verfügbar. Nutze ausgewählte Probe-Pfade oder einen vollständigen Archiv-Drill.",
         "breakLockTimeout": "Timeout beim Versuch, die Sperre aufzuheben",

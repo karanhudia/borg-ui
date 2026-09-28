@@ -454,6 +454,53 @@ class TestCheckServiceSSHKey:
         assert "--save-space" in captured_cmd
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "extra_flags",
+        ["--rsh=sh -c id", "--verify-data; id", "--remote-path=/tmp/evil"],
+    )
+    async def test_disallowed_extra_flags_fail_the_check_without_running_borg(
+        self, extra_flags
+    ):
+        repo = _make_repo(repository_type="local")
+        job = MagicMock()
+        job.id = 1
+        job.status = "pending"
+        job.kind = "check"
+        job.params = {"max_duration": 0, "extra_flags": extra_flags}
+        job.process_pid = None
+        job.process_start_time = None
+
+        def mock_query(model):
+            m = MagicMock()
+            if model == Operation:
+                m.filter.return_value.first.return_value = job
+            elif model == Repository:
+                m.filter.return_value.first.return_value = repo
+            return m
+
+        mock_db = MagicMock()
+        mock_db.query.side_effect = mock_query
+        exec_mock = AsyncMock()
+
+        with patch("app.services.check_service.SessionLocal", return_value=mock_db):
+            with patch(
+                "app.services.check_service.asyncio.create_subprocess_exec",
+                exec_mock,
+            ):
+                with patch("app.services.check_service.settings") as mock_settings:
+                    mock_settings.data_dir = tempfile.mkdtemp()
+                    with patch(
+                        "app.services.check_service.build_repository_borg_env",
+                        return_value=({}, None),
+                    ):
+                        with patch("app.services.check_service.NotificationService"):
+                            service = CheckService()
+                            await service.execute_check(job_id=1, repository_id=1)
+
+        exec_mock.assert_not_called()
+        assert job.status == "failed"
+
+    @pytest.mark.asyncio
     async def test_legacy_ssh_key_id_injected_into_borg_rsh(self):
         """BORG_RSH must include -i <key> for legacy repos using ssh_key_id directly."""
         secret = "testsecretkey1234567890123456789"

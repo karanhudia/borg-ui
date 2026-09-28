@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import shlex
 import time
 from datetime import datetime
 from typing import Any, Callable, Mapping, Optional
@@ -30,6 +31,7 @@ from app.services.operations.backup_facade import (
     backup_job_link_columns,
     resolve_backup_job,
 )
+from app.utils.borg_flags import parse_borg_flags
 from app.utils.redaction import redact_secrets
 
 logger = structlog.get_logger()
@@ -253,9 +255,12 @@ def build_agent_backup_payload(
         "exclude_patterns": exclude_patterns
         if exclude_patterns is not None
         else decode_json_list(repository.exclude_patterns),
-        "custom_flags": custom_flags
-        if custom_flags is not None
-        else repository.custom_flags or "",
+        "custom_flags": shlex.join(
+            parse_borg_flags(
+                custom_flags if custom_flags is not None else repository.custom_flags,
+                "create",
+            )
+        ),
     }
     effective_upload_ratelimit_kib = (
         upload_ratelimit_kib

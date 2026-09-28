@@ -18,6 +18,7 @@ import structlog
 from sqlalchemy.orm import Session
 
 from app.utils.borg_env import effective_repository_remote_path
+from app.utils.borg_flags import parse_borg_flags
 
 logger = structlog.get_logger()
 
@@ -196,7 +197,7 @@ class BorgRouter:
             cmd.extend(["--upload-ratelimit", str(upload_ratelimit_kib)])
         for pattern in exclude_patterns:
             cmd.extend(["--exclude", pattern])
-        cmd.extend(custom_flags)
+        cmd.extend(parse_borg_flags(custom_flags, "create"))
         cmd.append(f"{repository_path}::{archive_name}")
         return cmd
 

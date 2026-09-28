@@ -41,6 +41,7 @@ from app.services.agent_connection_manager import (
 from app.services.agent_upgrades import release_agent_upgrade_waves
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.utils.datetime_utils import serialize_datetime
+from app.utils.borg_flags import borg_flags_validator
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/managed-machines", tags=["managed-machines"])
@@ -216,6 +217,7 @@ class AgentBackupJobCreate(BaseModel):
     compression: str = "lz4"
     exclude_patterns: list[str] = Field(default_factory=list)
     custom_flags: list[str] = Field(default_factory=list)
+    _validate_custom_flags = borg_flags_validator("custom_flags", "create")
     remote_path: Optional[str] = None
     repository_id: Optional[int] = None
     secrets: dict[str, Any] = Field(default_factory=dict)

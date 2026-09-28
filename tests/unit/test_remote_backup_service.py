@@ -1141,3 +1141,57 @@ async def test_execute_ssh_command_never_returns_or_logs_the_passphrase(monkeypa
     assert "BORG_PASSPHRASE=***" in result["stdout"]
     assert "BORG_PASSPHRASE=***" in result["stderr"]
     assert secret not in repr(log_records)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "custom_flags",
+    [
+        "--stats; id",
+        "--stats && id",
+        "--stats\nid",
+        "--rsh='sh -c id'",
+        "$(id)",
+        "--stats id",
+    ],
+)
+async def test_build_remote_command_rejects_disallowed_custom_flags(
+    test_db, monkeypatch, custom_flags
+):
+    connection, repository, _job = _remote_entities(test_db)
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+
+    with pytest.raises(ValueError):
+        await RemoteBackupService()._build_remote_command(
+            repository=repository,
+            source_ssh_connection=connection,
+            archive_name="test",
+            source_paths=["/srv/data"],
+            exclude_patterns=[],
+            custom_flags=custom_flags,
+            borg_binary_path=connection.borg_binary_path,
+            use_sudo=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_build_remote_command_quotes_allowed_custom_flags(test_db, monkeypatch):
+    connection, repository, _job = _remote_entities(test_db)
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+
+    command = await RemoteBackupService()._build_remote_command(
+        repository=repository,
+        source_ssh_connection=connection,
+        archive_name="test",
+        source_paths=["/srv/data"],
+        exclude_patterns=[],
+        custom_flags="--one-file-system --comment='nightly $(id)'",
+        borg_binary_path=connection.borg_binary_path,
+    )
+
+    assert "--one-file-system '--comment=nightly $(id)'" in command
+    assert shlex.split(command).count("--comment=nightly $(id)") == 1

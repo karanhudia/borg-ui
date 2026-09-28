@@ -1241,3 +1241,24 @@ def test_queue_failure_message_keeps_a_database_error_as_the_cause():
     # The statement and its parameters (the agent job payload, secrets
     # included) stay out of the row; the driver's error is the cause.
     assert message == "agent job could not be queued: Exception: database is locked"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("borg_version", [1, 2])
+@pytest.mark.parametrize(
+    "custom_flags",
+    [["--rsh=sh -c id"], ["--remote-path=/tmp/evil"], ["--stats", "id"]],
+)
+def test_build_backup_create_command_rejects_disallowed_custom_flags(
+    borg_version, custom_flags
+):
+    repo = SimpleNamespace(borg_version=borg_version)
+
+    with pytest.raises(ValueError):
+        BorgRouter(repo).build_backup_create_command(
+            repository_path="/repos/r",
+            archive_name="manual-1",
+            compression="lz4",
+            exclude_patterns=[],
+            custom_flags=custom_flags,
+        )

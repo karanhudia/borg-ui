@@ -4762,6 +4762,64 @@ class TestRepositoryCheckSchedule:
         )
         assert response.json()["detail"]["params"]["flags"] == "--verify-data"
 
+    @pytest.mark.parametrize(
+        "flags", ["--verify-data --rsh='sh -c id'", "--verify-data; id", "id"]
+    )
+    def test_update_check_schedule_rejects_disallowed_flags(
+        self, test_client: TestClient, admin_headers, test_db, flags
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/check-schedule",
+            headers=admin_headers,
+            json={
+                "cron_expression": "0 3 * * *",
+                "max_duration": 0,
+                "check_extra_flags": flags,
+            },
+        )
+
+        assert response.status_code == 422
+        assert (
+            response.json()["detail"]["key"] == "backend.errors.repo.invalidBorgFlags"
+        )
+        test_db.refresh(repo)
+        assert repo.check_extra_flags is None
+
+    @pytest.mark.parametrize("flags", ["--rsh='sh -c id'", "--verify-data && id"])
+    def test_manual_check_rejects_disallowed_flags(
+        self, test_client: TestClient, admin_headers, test_db, flags
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/check",
+            headers=admin_headers,
+            json={"max_duration": 0, "check_extra_flags": flags},
+        )
+
+        assert response.status_code == 422
+        assert (
+            response.json()["detail"]["key"] == "backend.errors.repo.invalidBorgFlags"
+        )
+
     def test_update_check_schedule_allows_verify_data_with_unlimited_duration(
         self, test_client: TestClient, admin_headers, test_db
     ):

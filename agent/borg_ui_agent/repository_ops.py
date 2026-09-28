@@ -27,6 +27,7 @@ from agent.borg_ui_agent.backup import (
     progress_replaces_log_line,
 )
 from agent.borg_ui_agent.borg import is_warning_return_code
+from agent.borg_ui_agent.borg_flags import parse_borg_flags
 from agent.borg_ui_agent.cancel import (
     KILL_GROUP_AFTER_SECONDS,
     SELF_CANCELLING_JOB_KINDS,
@@ -453,7 +454,9 @@ class RepositoryOperationPayload:
             return cmd
 
         if self.job_kind == "repository.check":
-            extra_flags = _split_flags((self.operation or {}).get("check_extra_flags"))
+            extra_flags = parse_borg_flags(
+                _split_flags((self.operation or {}).get("check_extra_flags")), "check"
+            )
             max_duration = (self.operation or {}).get("max_duration")
             if self.borg_version == 2:
                 cmd = [*self._base_borg2("check"), "--progress", "--log-json"]

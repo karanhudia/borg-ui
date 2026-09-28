@@ -105,3 +105,19 @@ async def test_run_backup_delegates_to_borg2_create():
         passphrase="secret",
         remote_path="/usr/local/bin/borg2",
     )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "custom_flags",
+    [["--rsh=sh -c id"], ["--content-from-command", "--", "id"], ["; id"]],
+)
+def test_build_backup_create_command_rejects_disallowed_custom_flags(custom_flags):
+    with pytest.raises(ValueError):
+        BackupV2Service().build_backup_create_command(
+            repository_path="/repos/v2",
+            archive_name="manual-1",
+            compression="zstd",
+            exclude_patterns=[],
+            custom_flags=custom_flags,
+        )

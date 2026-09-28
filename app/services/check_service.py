@@ -1,6 +1,5 @@
 import asyncio
 import json
-import shlex
 from datetime import datetime
 from pathlib import Path
 import structlog
@@ -12,6 +11,7 @@ from app.core.borg import borg
 from app.core.borg_errors import is_borg_warning_exit_code
 from app.services.notification_service import NotificationService
 from app.services.operations.job_facade import refresh_job, resolve_maintenance_job
+from app.utils.borg_flags import parse_borg_flags
 from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import (
     build_repository_borg_env,
@@ -133,20 +133,13 @@ class CheckService:
                 extra_flags_value.strip() if isinstance(extra_flags_value, str) else ""
             )
             if extra_flags:
-                try:
-                    cmd.extend(shlex.split(extra_flags))
-                    logger.info(
-                        "Added extra flags to borg check command",
-                        job_id=job_id,
-                        extra_flags=extra_flags,
-                    )
-                except ValueError as exc:
-                    logger.warning(
-                        "Failed to parse check extra flags, skipping",
-                        job_id=job_id,
-                        extra_flags=extra_flags,
-                        error=str(exc),
-                    )
+                # A stored value the allowlist rejects fails the check here.
+                cmd.extend(parse_borg_flags(extra_flags, "check"))
+                logger.info(
+                    "Added extra flags to borg check command",
+                    job_id=job_id,
+                    extra_flags=extra_flags,
+                )
 
             if remote_path := effective_repository_remote_path(repository):
                 cmd.extend(["--remote-path", remote_path])

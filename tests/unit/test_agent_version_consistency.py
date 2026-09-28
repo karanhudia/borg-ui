@@ -53,3 +53,15 @@ def test_an_agent_from_before_the_borg1_lock_wait_change_is_offered_an_upgrade()
         )
         == "outdated"
     )
+
+
+def test_an_agent_from_before_the_borg_flag_allowlist_is_offered_an_upgrade():
+    """The agent validates custom borg flags itself from 0.1.12, so a server
+    built from this tree must offer 0.1.11 agents the upgrade.
+    """
+    assert (
+        compute_agent_upgrade_status(
+            reported="0.1.11", desired=None, available=_pyproject_version()
+        )
+        == "outdated"
+    )

@@ -402,6 +402,47 @@ class TestCheckV2Service:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
+    async def test_execute_check_rejects_disallowed_extra_flags(
+        self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
+    ):
+        job = seed_job_operation(
+            db_session,
+            "check",
+            repository_id=borg_v2_repo_for_services.id,
+            status="running",
+            max_duration=0,
+            extra_flags="--verify-data --rsh='sh -c id'",
+        )
+        db_session.commit()
+        db_session.refresh(job)
+
+        service = CheckV2Service()
+        service.log_dir = tmp_path
+
+        with (
+            patch("app.services.v2.check_service.SessionLocal", testing_session_local),
+            patch(
+                "app.services.v2.check_service.resolve_repo_ssh_key_file",
+                return_value=None,
+            ),
+            patch(
+                "app.services.v2.check_service._get_borg2_binary", return_value="borg2"
+            ),
+            patch(
+                "app.services.v2.check_service.asyncio.create_subprocess_exec",
+            ) as mock_exec,
+        ):
+            await service.execute_check(job.id, borg_v2_repo_for_services.id)
+
+        mock_exec.assert_not_called()
+        verification = testing_session_local()
+        refreshed_job = resolve_maintenance_job(verification, job.id, "check")
+        assert refreshed_job.status == "failed"
+        assert "--rsh" in refreshed_job.error_message
+        verification.close()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
     async def test_execute_check_sets_warning_state(
         self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
     ):

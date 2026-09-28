@@ -662,6 +662,35 @@ class TestBackupPlanRoutes:
         )
         assert response.json()["detail"]["params"]["flags"] == "--repair"
 
+    @pytest.mark.parametrize(
+        "field,value",
+        [
+            ("custom_flags", "--rsh='sh -c id'"),
+            ("custom_flags", "--stats; id"),
+            ("custom_flags", "--content-from-command -- id"),
+            ("custom_flags_override", "--remote-path=/tmp/evil"),
+            ("custom_flags_override", "--paths-from-command -- id"),
+            ("check_extra_flags", "--verify-data --rsh=id"),
+            ("check_extra_flags", "--repair\nid"),
+        ],
+    )
+    def test_create_plan_rejects_disallowed_borg_flags(
+        self, test_client: TestClient, admin_headers, test_db, field, value
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        payload = _payload([repo.id], run_check_after=True, check_max_duration=0)
+        if field == "custom_flags_override":
+            payload["repositories"][0][field] = value
+        else:
+            payload[field] = value
+
+        response = test_client.post(
+            "/api/backup-plans/", json=payload, headers=admin_headers
+        )
+
+        assert response.status_code == 422
+        assert test_db.query(BackupPlan).count() == 0
+
     def test_create_plan_defaults_to_repository_scripts_enabled(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -1756,6 +1785,29 @@ class TestBackupPlanRoutes:
         assert response.json()["detail"] == {
             "key": "backend.errors.backupPlans.sourceConnectionRequired"
         }
+
+    def test_create_plan_from_repository_rejects_stored_disallowed_flags(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(
+            test_db,
+            "Primary",
+            "/repos/primary",
+            source_directories=json.dumps(["/srv/project"]),
+            custom_flags="--rsh='sh -c id'",
+        )
+
+        response = test_client.post(
+            f"/api/backup-plans/from-repository/{repo.id}",
+            json={"copy_schedule": False, "move_source_settings": False},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+        assert (
+            response.json()["detail"]["key"] == "backend.errors.repo.invalidBorgFlags"
+        )
+        assert test_db.query(BackupPlan).count() == 0
 
     def test_create_plan_from_repository_copies_backup_settings(
         self, test_client: TestClient, admin_headers, test_db
