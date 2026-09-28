@@ -5439,9 +5439,17 @@ class TestBackupPlanRoutes:
         )
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("check_status", ["completed", "failed"])
+    @pytest.mark.parametrize(
+        "check_status, restore_status, run_status",
+        [
+            ("completed", "completed", "completed"),
+            ("completed", "completed_with_warnings", "completed_with_warnings"),
+            ("completed", "failed", "completed_with_warnings"),
+            ("failed", None, "completed_with_warnings"),
+        ],
+    )
     async def test_restore_check_after_targets_the_new_archive(
-        self, test_db, check_status
+        self, test_db, check_status, restore_status, run_status
     ):
         """The restore check runs last, against the archive this run wrote,
         with the repository's restore check settings. A failed check skips
@@ -5470,7 +5478,7 @@ class TestBackupPlanRoutes:
         async def fake_restore_check(job_id, repository_id):
             restore_checked.append(repository_id)
             operation = test_db.get(Operation, job_id)
-            operation.status = "completed"
+            operation.status = restore_status
             operation.completed_at = datetime.utcnow()
             test_db.commit()
 
@@ -5501,7 +5509,7 @@ class TestBackupPlanRoutes:
             assert restore_checked == []
             assert "restore_check" not in by_kind
             assert backup_job.maintenance_status == "check_failed"
-            assert run.status == "completed_with_warnings"
+            assert run.status == run_status
             return
         assert restore_checked == [repo.id]
         restore_check = by_kind["restore_check"]
@@ -5510,11 +5518,15 @@ class TestBackupPlanRoutes:
             restore_check.params["archive_name"]
             == by_kind["backup"].params["archive_name"]
         )
-        assert restore_check.params["archive_name"].startswith("Plan execution-")
+        assert restore_check.params["archive_name"].startswith("Plan-execution-Primary-")
         assert restore_check.params["probe_paths"] == repo.restore_check_paths
         assert restore_check.params["full_archive"] is False
-        assert backup_job.maintenance_status == "maintenance_completed"
-        assert run.status == "completed"
+        assert backup_job.maintenance_status == (
+            "restore_check_failed"
+            if restore_status == "failed"
+            else "maintenance_completed"
+        )
+        assert run.status == run_status
 
     @pytest.mark.asyncio
     async def test_maintenance_step_left_to_its_agent_still_fails_the_run(

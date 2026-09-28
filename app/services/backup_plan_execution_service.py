@@ -2394,8 +2394,11 @@ class BackupPlanExecutionService:
             )
             if self._is_run_cancelled(run_id):
                 return "cancelled"
-            if restore_check_job.status == "completed":
+            if restore_check_job.status in SUCCESS_BACKUP_STATUSES:
                 backup_job.maintenance_status = "restore_check_completed"
+                # borg's warning exit still restored; the run says so
+                if restore_check_job.status == "completed_with_warnings":
+                    maintenance_ok = False
             else:
                 backup_job.maintenance_status = "restore_check_failed"
                 maintenance_ok = False
