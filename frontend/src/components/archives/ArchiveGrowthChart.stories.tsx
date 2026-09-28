@@ -141,3 +141,18 @@ export const Sparse: Story = {
     },
   },
 }
+
+// The same four archives with the last two being re-measured: hollow rings
+// among the filled dots, and the legend naming them.
+export const SparseStale: Story = {
+  args: {
+    data: {
+      ...Sparse.args!.data!,
+      points: Sparse.args!.data!.points.map((point, index) => ({
+        ...point,
+        stale: index >= 2,
+      })),
+      stale_count: 2,
+    },
+  },
+}

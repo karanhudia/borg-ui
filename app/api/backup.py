@@ -314,6 +314,12 @@ async def _cancel_running_maintenance_job(db: Session, backup_job):
             process_killed = await compact_service.cancel_compact(maintenance_job.id)
     elif failure_status == "check_failed":
         process_killed = False
+    elif failure_status == "restore_check_failed":
+        from app.services.restore_check_service import restore_check_service
+
+        process_killed = await restore_check_service.cancel_restore_check(
+            maintenance_job.id
+        )
     else:
         return None
 

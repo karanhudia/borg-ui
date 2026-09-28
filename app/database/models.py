@@ -638,6 +638,12 @@ class RepositoryStorage(Base):
         Integer, ForeignKey("rclone_remotes.id", ondelete="SET NULL"), nullable=True
     )
     rclone_remote_path = Column(String, nullable=True)
+    # SSH mirrors only: sign in to the repository's connection with this key
+    # instead of the connection's own, for hosts whose borg key cannot open
+    # SFTP (#1062).
+    sftp_ssh_key_id = Column(
+        Integer, ForeignKey("ssh_keys.id", ondelete="SET NULL"), nullable=True
+    )
     cache_path = Column(String, nullable=True)
     sync_policy = Column(String, default="after_success", nullable=False)
     sync_direction = Column(String, default="cache_to_remote", nullable=False)
@@ -921,6 +927,7 @@ class BackupPlan(Base):
     run_prune_after = Column(Boolean, default=False, nullable=False)
     run_compact_after = Column(Boolean, default=False, nullable=False)
     run_check_after = Column(Boolean, default=False, nullable=False)
+    run_restore_check_after = Column(Boolean, default=False, nullable=False)
     check_max_duration = Column(Integer, default=3600, nullable=False)
     check_extra_flags = Column(Text, nullable=True)
     prune_keep_hourly = Column(Integer, default=0, nullable=False)

@@ -303,6 +303,46 @@ def _get_operation_or_404(
     return op
 
 
+def _require_job_repo_access(db: Session, current_user: Any, job: Any) -> None:
+    """Gate a repo-scoped activity job's logs on viewer access.
+
+    Script and rclone job logs carry hook stdout/stderr and paths that can
+    include secrets, so a reader must be able to view the job's repository.
+
+    ``repository_id`` is not enough on its own: repository deletion nulls it
+    on ``ScriptExecution`` rows to preserve history (see delete_repository),
+    while a backup-plan hook is born with a null ``repository_id`` and a
+    ``backup_plan_id`` instead. So the check falls back to the plan's
+    repositories, matching how the activity list scopes plan-linked rows, and
+    only a job tied to neither a live repository nor a plan (a deleted
+    repository's standalone execution, or an admin script test) is admin-only.
+    """
+    if current_user is None:
+        return
+
+    repository_id = getattr(job, "repository_id", None)
+    if repository_id is not None:
+        repo = db.get(Repository, repository_id)
+        if repo is not None:
+            check_repo_access(db, current_user, repo, "viewer")
+            return
+        # repository row is gone; fall through to any plan link before denying
+
+    backup_plan_id = getattr(job, "backup_plan_id", None)
+    if backup_plan_id is not None:
+        from app.api.backup_plans import _plans_viewable
+
+        plan = db.get(BackupPlan, backup_plan_id)
+        if plan is not None and _plans_viewable(db, current_user, [plan]):
+            return
+
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail={"key": "backend.errors.auth.notEnoughPermissions"},
+        )
+
+
 def _operation_error_text(op: Operation) -> str:
     """What a reader gets when an operation failed before writing a line: an
     index step that died on a locked repository never opens a log file, and
@@ -1357,6 +1397,7 @@ async def get_job_logs(
                     "params": {"jobType": job_type},
                 },
             )
+        _require_job_repo_access(db, current_user, execution)
         _ensure_activity_logs_visible(job_type, execution, db)
         # While an agent hook runs, stream its live agent_job_logs (the terminal
         # stdout/stderr are only captured at completion); afterwards serve the
@@ -1377,6 +1418,7 @@ async def get_job_logs(
                     "params": {"jobType": job_type},
                 },
             )
+        _require_job_repo_access(db, current_user, job)
         _ensure_activity_logs_visible(job_type, job, db)
         log_text = _format_rclone_job_logs(job)
         if log_text:
@@ -1646,6 +1688,7 @@ async def download_job_logs(
                     "params": {"jobType": job_type},
                 },
             )
+        _require_job_repo_access(db, current_user, execution)
         if execution.status == "running":
             raise HTTPException(
                 status_code=400,
@@ -1672,6 +1715,7 @@ async def download_job_logs(
                     "params": {"jobType": job_type},
                 },
             )
+        _require_job_repo_access(db, current_user, job)
         if job.status == "running":
             raise HTTPException(
                 status_code=400,

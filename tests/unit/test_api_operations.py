@@ -561,7 +561,7 @@ class TestOperationsRepositories:
         """The board polls this route every thirty seconds: the capability
         of every agent repository comes from one query for the page's
         agents, not one per repository."""
-        from sqlalchemy import event
+        from tests.utils.statements import session_cursor_listener
 
         from app.database.models import AgentMachine
 
@@ -585,17 +585,13 @@ class TestOperationsRepositories:
         test_db.commit()
 
         agent_queries = []
-        engine = test_db.get_bind()
 
         def count(conn, cursor, statement, parameters, context, executemany):
             if "FROM agent_machines" in statement:
                 agent_queries.append(statement)
 
-        event.listen(engine, "before_cursor_execute", count)
-        try:
+        with session_cursor_listener(test_db, count):
             r = test_client.get("/api/operations/repositories", headers=admin_headers)
-        finally:
-            event.remove(engine, "before_cursor_execute", count)
 
         assert r.status_code == 200
         rows = {row["repository_name"]: row for row in r.json()["repositories"]}

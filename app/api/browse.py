@@ -9,6 +9,7 @@ import structlog
 from app.database.models import User, Repository, SystemSettings, AgentJob
 from app.database.database import get_db
 from app.api.auth import get_current_user
+from app.core.security import check_repo_access
 from app.core.borg_router import BorgRouter
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
 from app.services.archive_browse_service import (
@@ -204,6 +205,10 @@ async def browse_archive_contents(
                 status_code=404,
                 detail={"key": "backend.errors.restore.repositoryNotFound"},
             )
+
+        # Browsing an archive exposes its file tree and per-file metadata, so it
+        # needs the same repo-scoped gate as the archive/repository endpoints.
+        check_repo_access(db, current_user, repository, "viewer")
 
         # Get memory limit settings from database
         settings = db.query(SystemSettings).first()
