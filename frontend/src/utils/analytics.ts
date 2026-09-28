@@ -18,6 +18,8 @@ const MAX_BATCH = 50
 // keepalive requests in flight at once.
 const MAX_BYTES = 60_000
 const bytes = (text: string): number => new TextEncoder().encode(text).length
+// The ingest drops an event whose props serialize to more than this.
+const PROPS_MAX = 2048
 
 type Props = Record<string, unknown>
 
@@ -43,6 +45,8 @@ let userKey: string | null = null
 let currentAppVersion: string | null = null
 let currentPlan: string | null = null
 const queue: OutgoingEvent[] = []
+// Bytes of keepalive sends not yet settled, across flushes: the browser's budget is shared.
+let keepaliveBytes = 0
 let flushTimer: ReturnType<typeof setTimeout> | null = null
 let listening = false
 // Page views that arrived before tracking was allowed, with where and when they
@@ -97,24 +101,25 @@ const scrubValue = (key: string, value: unknown): unknown => {
 const scrubProps = (data?: Props): Props | undefined => {
   if (!data) return undefined
   const out = scrubValue('', data) as Props
-  return Object.keys(out).length ? out : undefined
+  if (!Object.keys(out).length) return undefined
+  // Rather than lose the whole event at the ingest, send it without its details.
+  return JSON.stringify(out).length > PROPS_MAX ? { props_truncated: true } : out
 }
 
 /**
  * Send everything queued, in batches of at most MAX_BATCH events and MAX_BYTES.
  * `keepalive` lets a send outlive the page (tab hidden, reload right after opt-out);
- * it is only used then, and only while the batches sent so far fit its 64 KiB budget.
+ * it is only used then, and only while unsettled keepalive sends fit its 64 KiB budget.
  */
 export const flushAnalytics = (keepalive = false): void => {
   if (flushTimer) {
     clearTimeout(flushTimer)
     flushTimer = null
   }
-  let keptBytes = 0
   while (queue.length) {
     let count = 0
     let body = ''
-    // At least one event per batch, so an oversized one is still attempted.
+    // At least one event per batch; props are capped, so any single event fits.
     while (count < Math.min(MAX_BATCH, queue.length)) {
       const next = JSON.stringify({ events: queue.slice(0, count + 1) })
       if (count > 0 && bytes(next) > MAX_BYTES) break
@@ -123,8 +128,8 @@ export const flushAnalytics = (keepalive = false): void => {
     }
     queue.splice(0, count)
     const size = bytes(body)
-    const keep = keepalive && keptBytes + size <= MAX_BYTES
-    if (keep) keptBytes += size
+    const keep = keepalive && keepaliveBytes + size <= MAX_BYTES
+    if (keep) keepaliveBytes += size
     // text/plain keeps this a CORS simple request, so self-hosted origins need no preflight.
     // sendBeacon is not used because it cannot suppress the Referer header.
     void fetch(ANALYTICS_ENDPOINT, {
@@ -134,9 +139,13 @@ export const flushAnalytics = (keepalive = false): void => {
       keepalive: keep,
       credentials: 'omit',
       referrerPolicy: 'no-referrer',
-    }).catch(() => {
-      // Best-effort analytics transport should never affect the UI.
     })
+      .catch(() => {
+        // Best-effort analytics transport should never affect the UI.
+      })
+      .finally(() => {
+        if (keep) keepaliveBytes -= size
+      })
   }
 }
 
