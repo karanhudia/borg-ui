@@ -1384,6 +1384,7 @@ class RepositoryCreate(BaseModel):
     storage_backend: str = "local"  # local, ssh, agent_local, rclone
     rclone_remote_id: Optional[int] = None
     rclone_remote_path: Optional[str] = None
+    rclone_sftp_connection_id: Optional[int] = None
     cloud_mirror_enabled: bool = False
     rclone_remote_path_verified: bool = False
     rclone_sync_policy: str = "after_success"
@@ -1443,6 +1444,7 @@ class RepositoryImport(BaseModel):
     storage_backend: str = "local"  # local, ssh, agent_local, rclone
     rclone_remote_id: Optional[int] = None
     rclone_remote_path: Optional[str] = None
+    rclone_sftp_connection_id: Optional[int] = None
     cloud_mirror_enabled: bool = False
     rclone_remote_path_verified: bool = False
     rclone_sync_policy: str = "after_success"
@@ -1494,6 +1496,7 @@ class RepositoryUpdate(BaseModel):
     storage_backend: Optional[str] = None
     rclone_remote_id: Optional[int] = None
     rclone_remote_path: Optional[str] = None
+    rclone_sftp_connection_id: Optional[int] = None
     cloud_mirror_enabled: Optional[bool] = None
     rclone_remote_path_verified: Optional[bool] = None
     rclone_sync_policy: Optional[str] = None
@@ -1662,6 +1665,8 @@ def _apply_mirror_source_strategy(
     else:
         storage.cache_path = repository.path
         storage.sync_direction = SYNC_DIRECTION_PRIMARY_TO_REMOTE
+    if source_backend != "ssh":
+        storage.sftp_connection_id = None
 
 
 def _reject_unsupported_rclone_borg2(
@@ -1700,6 +1705,7 @@ def _validate_direct_rclone_payload(
         or data.cloud_mirror_enabled
         or data.rclone_remote_id is not None
         or bool((data.rclone_remote_path or "").strip())
+        or data.rclone_sftp_connection_id is not None
         or bool(data.rclone_extra_flags)
         or data.rclone_sync_policy != "after_success"
         or bool((data.rclone_sync_cron_expression or "").strip())
@@ -1722,6 +1728,7 @@ def _validate_direct_rclone_update(
         or bool((repo_data.rclone_cache_path or "").strip())
         or repo_data.rclone_remote_id is not None
         or bool((repo_data.rclone_remote_path or "").strip())
+        or repo_data.rclone_sftp_connection_id is not None
         or bool(repo_data.rclone_extra_flags)
         or bool((repo_data.rclone_sync_cron_expression or "").strip())
         or bool((repo_data.rclone_sync_timezone or "").strip())
@@ -1757,6 +1764,7 @@ def _strip_direct_rclone_noop_update_fields(update_data: dict[str, Any]) -> None
         "storage_backend",
         "rclone_remote_id",
         "rclone_remote_path",
+        "rclone_sftp_connection_id",
         "rclone_sync_policy",
         "rclone_sync_cron_expression",
         "rclone_sync_timezone",
@@ -1817,6 +1825,7 @@ def _strip_disabled_rclone_noop_update_fields(update_data: dict[str, Any]) -> No
         "cloud_mirror_enabled": {None, False},
         "rclone_remote_id": {None},
         "rclone_remote_path": {None, ""},
+        "rclone_sftp_connection_id": {None},
         "rclone_remote_path_verified": {None, False},
         "rclone_sync_policy": {None, "after_success"},
         "rclone_sync_cron_expression": {None, ""},
@@ -1847,6 +1856,7 @@ def _rclone_feature_gate_updates(
     default_values = {
         "rclone_remote_id": {None},
         "rclone_remote_path": {None, ""},
+        "rclone_sftp_connection_id": {None},
         "rclone_remote_path_verified": {None, False},
         "rclone_sync_policy": {None, "after_success"},
         "rclone_sync_cron_expression": {None, ""},
@@ -2011,6 +2021,8 @@ def _validate_cloud_mirror_payload(
             status_code=400,
             detail={"key": "backend.errors.rclone.mirrorUnsupportedPrimary"},
         )
+    if data.rclone_sftp_connection_id is not None:
+        get_connection_details(data.rclone_sftp_connection_id, db)
     if not data.rclone_remote_id:
         raise HTTPException(
             status_code=400,
@@ -3768,6 +3780,7 @@ async def create_repository(
                 extra_flags=repo_data.rclone_extra_flags,
                 sync_cron_expression=repo_data.rclone_sync_cron_expression,
                 sync_timezone=repo_data.rclone_sync_timezone,
+                sftp_connection_id=repo_data.rclone_sftp_connection_id,
             )
             db.add(storage)
             db.commit()
@@ -4153,6 +4166,7 @@ async def import_repository(
                 extra_flags=repo_data.rclone_extra_flags,
                 sync_cron_expression=repo_data.rclone_sync_cron_expression,
                 sync_timezone=repo_data.rclone_sync_timezone,
+                sftp_connection_id=repo_data.rclone_sftp_connection_id,
             )
             db.add(storage)
             db.commit()
@@ -4706,6 +4720,7 @@ async def update_repository(
             "storage_backend",
             "rclone_remote_id",
             "rclone_remote_path",
+            "rclone_sftp_connection_id",
             "rclone_sync_policy",
             "rclone_sync_cron_expression",
             "rclone_sync_timezone",
@@ -4797,6 +4812,7 @@ async def update_repository(
                     for key in (
                         "rclone_remote_id",
                         "rclone_remote_path",
+                        "rclone_sftp_connection_id",
                         "rclone_sync_policy",
                         "rclone_sync_cron_expression",
                         "rclone_sync_timezone",
@@ -4849,6 +4865,8 @@ async def update_repository(
                         detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
                     )
                 _validate_rclone_schedule_payload(repo_data)
+                if repo_data.rclone_sftp_connection_id is not None:
+                    get_connection_details(repo_data.rclone_sftp_connection_id, db)
                 remote = (
                     db.query(RcloneRemote)
                     .filter(RcloneRemote.id == repo_data.rclone_remote_id)
@@ -4877,6 +4895,7 @@ async def update_repository(
                         extra_flags=repo_data.rclone_extra_flags,
                         sync_cron_expression=repo_data.rclone_sync_cron_expression,
                         sync_timezone=repo_data.rclone_sync_timezone,
+                        sftp_connection_id=repo_data.rclone_sftp_connection_id,
                     )
                 except ValueError as exc:
                     message = str(exc)
@@ -4993,6 +5012,10 @@ async def update_repository(
                                 "message": str(exc),
                             },
                         ) from exc
+                if "rclone_sftp_connection_id" in update_data:
+                    if repo_data.rclone_sftp_connection_id is not None:
+                        get_connection_details(repo_data.rclone_sftp_connection_id, db)
+                    storage.sftp_connection_id = repo_data.rclone_sftp_connection_id
                 _apply_mirror_source_strategy(storage, repository)
 
             if should_update_direct_rclone:

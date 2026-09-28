@@ -500,7 +500,11 @@ class MountService:
             logger.error("Failed to cleanup orphaned mount directories", error=str(e))
 
     async def mount_ssh_directory(
-        self, connection_id: int, remote_path: str, job_id: Optional[int] = None
+        self,
+        connection_id: int,
+        remote_path: str,
+        job_id: Optional[int] = None,
+        read_only: bool = False,
     ) -> Tuple[str, str]:
         """
         Mount a remote SSH directory via SSHFS with proper SSH key authentication
@@ -509,6 +513,7 @@ class MountService:
             connection_id: SSHConnection ID to use
             remote_path: Remote path to mount
             job_id: Optional backup job ID for tracking
+            read_only: Mount with ``-o ro`` so nothing can write through it
 
         Returns:
             Tuple of (temp_root, mount_id)
@@ -581,6 +586,7 @@ class MountService:
                     remote_path=remote_path,
                     mount_point=mount_dir,
                     temp_key_file=temp_key_file,
+                    read_only=read_only,
                 )
 
                 # Verify mount with READ-ONLY check (NEVER write to user data!)
@@ -1666,12 +1672,14 @@ class MountService:
         mount_point: str,
         temp_key_file: str,
         preserve_symlinks: bool = False,
+        read_only: bool = False,
     ):
         """Execute SSHFS mount command with SSH key authentication.
 
         ``preserve_symlinks`` selects faithful symlink handling for backup sources
         and restore destinations (see ``_sshfs_symlink_options``); browse and
         cloud-mirror keep the default ``follow_symlinks`` behavior.
+        ``read_only`` adds ``-o ro`` for callers that only ever read.
         """
         sftp_server_path = None
         use_sudo = getattr(connection, "use_sudo", False)
@@ -1761,6 +1769,8 @@ class MountService:
                 "-o",
                 "workaround=rename",
             ]
+            if read_only:
+                cmd.extend(["-o", "ro"])
 
             # When use_sudo is enabled, tell SSHFS to run the remote sftp-server via sudo.
             # This allows reading files owned by root/other users (e.g. vault TLS keys, raft DB).

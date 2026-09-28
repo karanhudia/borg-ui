@@ -130,6 +130,35 @@ export const SshPrimaryEnabled: Story = {
   ),
 }
 
+const sshConnections = [
+  {
+    id: 7,
+    host: 'xyz123.repo.borgbase.com',
+    username: 'xyz123',
+    port: 22,
+    status: 'connected',
+  },
+  {
+    id: 8,
+    host: 'xyz123.repo.borgbase.com',
+    username: 'xyz123-sftp',
+    port: 22,
+    status: 'connected',
+  },
+]
+
+export const SshPrimaryWithSftpConnection: Story = {
+  args: {
+    ...SshPrimaryEnabled.args,
+    sshConnections,
+    data: {
+      ...SshPrimaryEnabled.args.data,
+      rcloneSftpConnectionId: 8,
+    },
+  },
+  render: SshPrimaryEnabled.render,
+}
+
 export const ManagedAgentPrimaryEnabled: Story = {
   args: {
     ...baseArgs,

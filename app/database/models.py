@@ -638,6 +638,11 @@ class RepositoryStorage(Base):
         Integer, ForeignKey("rclone_remotes.id", ondelete="SET NULL"), nullable=True
     )
     rclone_remote_path = Column(String, nullable=True)
+    # SSH mirrors only: mount the source over this connection instead of the
+    # repository's own, for hosts whose borg key cannot open SFTP (#1062).
+    sftp_connection_id = Column(
+        Integer, ForeignKey("ssh_connections.id", ondelete="SET NULL"), nullable=True
+    )
     cache_path = Column(String, nullable=True)
     sync_policy = Column(String, default="after_success", nullable=False)
     sync_direction = Column(String, default="cache_to_remote", nullable=False)

@@ -4810,7 +4810,7 @@
       "remotePathVerified": "Path verified from remote browse.",
       "browseRemote": "Browse rclone remote",
       "routePreview": "Borg UI server -> primary repository path -> rclone sync -> remote",
-      "sshRoutePreview": "Borg UI server mounts the SSH repository via SSHFS -> rclone sync -> remote",
+      "sshRoutePreview": "Borg UI server mounts the SSH repository read-only via SSHFS -> rclone sync -> remote",
       "agentRoutePreview": "Selected managed agent syncs its repository path to the rclone remote. Borg UI does not ask for a cache path.",
       "cachedRepositoryRoutePreview": "Borg UI server cache -> rclone sync -> remote",
       "browseFailed": "Failed to browse rclone remote.",
@@ -4818,7 +4818,10 @@
       "remoteRoot": "Remote root",
       "browsing": "Browsing remote...",
       "noRemoteFolders": "No folders found in this remote path.",
-      "useFolder": "Use folder"
+      "useFolder": "Use folder",
+      "sftpConnectionLabel": "SFTP connection for cloud sync",
+      "sftpConnectionDefault": "Same as repository connection",
+      "sftpConnectionHelper": "Some hosts, like BorgBase, only allow a key to be used for either Borg or SFTP. Pick a separate SFTP connection here if the repository's own key cannot open SFTP."
     },
     "restoreDestination": {
       "port": "Port {{port}}",

@@ -4810,7 +4810,7 @@
       "remotePathVerified": "Ruta verificada desde el explorador remoto.",
       "browseRemote": "Explorar remoto rclone",
       "routePreview": "Servidor Borg UI -> ruta principal del repositorio -> sincronización rclone -> remoto",
-      "sshRoutePreview": "El servidor Borg UI monta el repositorio SSH mediante SSHFS -> sincronización rclone -> remoto",
+      "sshRoutePreview": "El servidor Borg UI monta el repositorio SSH en solo lectura mediante SSHFS -> sincronización rclone -> remoto",
       "agentRoutePreview": "El agente gestionado seleccionado sincroniza su ruta del repositorio con el remoto rclone. Borg UI no solicita una ruta de caché.",
       "cachedRepositoryRoutePreview": "Caché del servidor Borg UI -> sincronización rclone -> remoto",
       "browseFailed": "No se pudo explorar el remoto rclone.",
@@ -4818,7 +4818,10 @@
       "remoteRoot": "Raíz remota",
       "browsing": "Explorando remoto...",
       "noRemoteFolders": "No se encontraron carpetas en esta ruta remota.",
-      "useFolder": "Usar carpeta"
+      "useFolder": "Usar carpeta",
+      "sftpConnectionLabel": "Conexión SFTP para la sincronización en la nube",
+      "sftpConnectionDefault": "La misma que la conexión del repositorio",
+      "sftpConnectionHelper": "Algunos proveedores, como BorgBase, solo permiten usar una clave para Borg o para SFTP. Elige aquí otra conexión SFTP si la clave del repositorio no puede abrir SFTP."
     },
     "restoreDestination": {
       "port": "Puerto {{port}}",

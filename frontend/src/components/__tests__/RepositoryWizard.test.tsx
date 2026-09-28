@@ -935,6 +935,7 @@ describe('RepositoryWizard', () => {
           cloud_mirror_enabled: true,
           rclone_remote_id: 10,
           rclone_remote_path: 'borg-ui/repositories/ssh',
+          rclone_sftp_connection_id: null,
           rclone_remote_path_verified: false,
           rclone_sync_policy: 'after_success',
         })

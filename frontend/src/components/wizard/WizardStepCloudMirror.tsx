@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next'
 import PathSelectorField from '../shared/PathSelectorField'
 import SchedulePicker from '../shared/SchedulePicker'
 import RcloneRemoteSelect from '../shared/RcloneRemoteSelect'
+import SshConnectionSelect, { type SshConnectionSummary } from '../shared/SshConnectionSelect'
 
 export interface CloudMirrorStepData {
   cloudMirrorEnabled: boolean
@@ -26,6 +27,7 @@ export interface CloudMirrorStepData {
   rcloneSyncCronExpression: string
   rcloneSyncTimezone: string
   rcloneExtraFlags: string
+  rcloneSftpConnectionId?: number | ''
 }
 
 interface RcloneRemote {
@@ -44,6 +46,7 @@ interface RcloneStatus {
 interface WizardStepCloudMirrorProps {
   data: CloudMirrorStepData
   rcloneRemotes?: RcloneRemote[]
+  sshConnections?: SshConnectionSummary[]
   rcloneStatus?: RcloneStatus | null
   eligible: boolean
   primaryLocation?: 'local' | 'ssh' | 'agent'
@@ -57,6 +60,7 @@ interface WizardStepCloudMirrorProps {
 export default function WizardStepCloudMirror({
   data,
   rcloneRemotes = [],
+  sshConnections = [],
   rcloneStatus = null,
   eligible,
   primaryLocation = 'local',
@@ -198,6 +202,25 @@ export default function WizardStepCloudMirror({
             browseButtonLabel={t('wizard.cloudMirror.browseRemote')}
             browseButtonDisabled={controlsDisabled || !data.rcloneRemoteId || !onBrowseRemotePath}
           />
+
+          {primaryLocation === 'ssh' && !isCachedRepositoryMode && sshConnections.length > 0 && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+              <SshConnectionSelect
+                value={data.rcloneSftpConnectionId ?? ''}
+                onChange={(id) => onChange({ rcloneSftpConnectionId: id })}
+                onClear={() => onChange({ rcloneSftpConnectionId: '' })}
+                connections={sshConnections}
+                label={t('wizard.cloudMirror.sftpConnectionLabel')}
+                emptyMessage=""
+                labelId="cloud-mirror-sftp-connection-label"
+                disabled={controlsDisabled}
+                defaultOption={{ primary: t('wizard.cloudMirror.sftpConnectionDefault') }}
+              />
+              <Typography variant="caption" sx={{ color: 'text.secondary', px: 1.75 }}>
+                {t('wizard.cloudMirror.sftpConnectionHelper')}
+              </Typography>
+            </Box>
+          )}
 
           <FormControl fullWidth disabled={controlsDisabled}>
             <InputLabel id="cloud-mirror-sync-policy-label">

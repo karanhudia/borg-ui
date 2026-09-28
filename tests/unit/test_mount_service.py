@@ -77,7 +77,9 @@ class TestMountService:
         assert "follow_symlinks" in opts
         assert "no_contain_symlinks" not in opts
 
-    async def _capture_sshfs_argv(self, mount_service, *, preserve_symlinks):
+    async def _capture_sshfs_argv(
+        self, mount_service, *, preserve_symlinks, read_only=False
+    ):
         """Run _execute_sshfs_mount with a stubbed subprocess and return its argv."""
         from types import SimpleNamespace
 
@@ -106,6 +108,7 @@ class TestMountService:
                 mount_point="/mnt/x",
                 temp_key_file="/tmp/key",
                 preserve_symlinks=preserve_symlinks,
+                read_only=read_only,
             )
         return captured["argv"]
 
@@ -126,6 +129,14 @@ class TestMountService:
         argv = await self._capture_sshfs_argv(mount_service, preserve_symlinks=False)
         assert "follow_symlinks" in argv
         assert "no_contain_symlinks" not in argv
+        assert "ro" not in argv
+
+    @pytest.mark.asyncio
+    async def test_execute_sshfs_mount_read_only_adds_ro_option(self, mount_service):
+        argv = await self._capture_sshfs_argv(
+            mount_service, preserve_symlinks=False, read_only=True
+        )
+        assert argv[argv.index("ro") - 1] == "-o"
 
     def test_validate_mount_point_sensitive_paths(self, mount_service):
         """Test mount point validation rejects sensitive system paths"""

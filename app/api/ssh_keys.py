@@ -19,6 +19,7 @@ from app.database.models import (
     SSHKey,
     SSHConnection,
     Repository,
+    RepositoryStorage,
     OperationBackupDetails,
     OperationRestoreDetails,
     ScheduledJob,
@@ -2409,6 +2410,9 @@ async def delete_ssh_connection(
         db.query(ScheduledJob).filter(
             ScheduledJob.source_ssh_connection_id == connection_id
         ).update({"source_ssh_connection_id": None}, synchronize_session=False)
+        db.query(RepositoryStorage).filter(
+            RepositoryStorage.sftp_connection_id == connection_id
+        ).update({"sftp_connection_id": None}, synchronize_session=False)
 
         db.delete(connection)
         db.commit()

@@ -2709,6 +2709,7 @@ def test_create_ssh_repository_with_cloud_mirror_uses_server_owned_mount_strateg
             "rclone_remote_path": "borg-ui/repositories/app",
             "rclone_remote_path_verified": True,
             "rclone_sync_policy": "after_success",
+            "rclone_sftp_connection_id": connection.id,
         },
     )
 
@@ -2724,6 +2725,8 @@ def test_create_ssh_repository_with_cloud_mirror_uses_server_owned_mount_strateg
     assert storage.cache_path is None
     assert storage.sync_direction == "sshfs_mount_to_remote"
     assert storage.sync_status == "current"
+    assert storage.sftp_connection_id == connection.id
+    assert mount_service.mount_ssh_directory.await_args.kwargs["read_only"] is True
     assert response.json()["repository"]["rclone_storage"]["sync_direction"] == (
         "sshfs_mount_to_remote"
     )
@@ -5288,6 +5291,99 @@ def test_update_cloud_mirror_remote_change_blocks_unverified_non_empty_target(
     )
     test_db.refresh(storage)
     assert storage.rclone_remote_id == old_remote.id
+
+
+def _ssh_repository_with_mirror(test_db):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    connection = SSHConnection(host="storage.example", username="borg", port=22)
+    sftp_connection = SSHConnection(host="storage.example", username="sftp", port=22)
+    test_db.add_all([remote, connection, sftp_connection])
+    test_db.commit()
+    repository = Repository(
+        name="SSH App",
+        path="ssh://borg@storage.example:22/backups/app",
+        encryption="none",
+        repository_type="ssh",
+        connection_id=connection.id,
+        execution_target="ssh",
+        executor_type="server",
+    )
+    test_db.add(repository)
+    test_db.commit()
+    storage = RepositoryStorage(
+        repository_id=repository.id,
+        backend="rclone",
+        rclone_remote_id=remote.id,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=None,
+        sync_policy="manual",
+        sync_status="current",
+        sync_direction="sshfs_mount_to_remote",
+    )
+    test_db.add(storage)
+    test_db.commit()
+    return repository, storage, sftp_connection
+
+
+@pytest.mark.unit
+def test_update_ssh_cloud_mirror_sets_and_clears_sftp_connection(
+    test_client: TestClient, admin_headers, test_db
+):
+    repository, storage, sftp_connection = _ssh_repository_with_mirror(test_db)
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={"rclone_sftp_connection_id": sftp_connection.id},
+    )
+
+    assert response.status_code == 200, response.json()
+    test_db.refresh(storage)
+    assert storage.sftp_connection_id == sftp_connection.id
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={"rclone_sftp_connection_id": None},
+    )
+
+    assert response.status_code == 200, response.json()
+    test_db.refresh(storage)
+    assert storage.sftp_connection_id is None
+
+
+@pytest.mark.unit
+def test_update_ssh_cloud_mirror_rejects_unknown_sftp_connection(
+    test_client: TestClient, admin_headers, test_db
+):
+    repository, storage, _sftp_connection = _ssh_repository_with_mirror(test_db)
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={"rclone_sftp_connection_id": 9999},
+    )
+
+    assert response.status_code == 404
+    test_db.refresh(storage)
+    assert storage.sftp_connection_id is None
+
+
+@pytest.mark.unit
+def test_delete_ssh_connection_clears_cloud_mirror_sftp_connection(
+    test_client: TestClient, admin_headers, test_db
+):
+    _repository, storage, sftp_connection = _ssh_repository_with_mirror(test_db)
+    storage.sftp_connection_id = sftp_connection.id
+    test_db.commit()
+
+    response = test_client.delete(
+        f"/api/ssh-keys/connections/{sftp_connection.id}", headers=admin_headers
+    )
+
+    assert response.status_code == 200, response.json()
+    test_db.refresh(storage)
+    assert storage.sftp_connection_id is None
 
 
 @pytest.mark.unit

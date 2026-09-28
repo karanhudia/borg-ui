@@ -91,6 +91,7 @@ interface WizardState {
   rcloneSyncCronExpression: string
   rcloneSyncTimezone: string
   rcloneExtraFlags: string
+  rcloneSftpConnectionId: number | ''
   // Data source step
   dataSource: 'local' | 'remote'
   sourceSshConnectionId: number | ''
@@ -133,6 +134,7 @@ const createInitialState = (): WizardState => ({
   rcloneSyncCronExpression: '0 */6 * * *',
   rcloneSyncTimezone: 'UTC',
   rcloneExtraFlags: '',
+  rcloneSftpConnectionId: '',
   dataSource: 'local',
   sourceSshConnectionId: '',
   sourceDirs: [],
@@ -466,6 +468,7 @@ const RepositoryWizard = ({
       rcloneExtraFlags: Array.isArray(repository.rclone_storage?.extra_flags)
         ? repository.rclone_storage.extra_flags.join(' ')
         : '',
+      rcloneSftpConnectionId: Number(repository.rclone_storage?.sftp_connection_id || '') || '',
       dataSource:
         executionTarget === 'agent' || !repository.source_ssh_connection_id ? 'local' : 'remote',
       sourceSshConnectionId:
@@ -552,6 +555,7 @@ const RepositoryWizard = ({
         next.rcloneRemoteId = ''
         next.rcloneRemotePath = ''
         next.rcloneRemotePathVerified = false
+        next.rcloneSftpConnectionId = ''
       }
       const sourceFieldsChanged =
         nextUpdates.sourceDirs !== undefined ||
@@ -945,6 +949,10 @@ const RepositoryWizard = ({
       rclone_remote_id:
         rcloneFieldsEnabled && wizardState.rcloneRemoteId ? wizardState.rcloneRemoteId : null,
       rclone_remote_path: rcloneFieldsEnabled ? wizardState.rcloneRemotePath : null,
+      rclone_sftp_connection_id:
+        cloudMirrorEnabled && cloudMirrorPrimaryLocation === 'ssh'
+          ? wizardState.rcloneSftpConnectionId || null
+          : null,
       rclone_remote_path_verified: cloudMirrorEnabled
         ? wizardState.rcloneRemotePathVerified
         : false,
@@ -987,6 +995,7 @@ const RepositoryWizard = ({
       }
       delete data.rclone_remote_id
       delete data.rclone_remote_path
+      delete data.rclone_sftp_connection_id
       delete data.rclone_remote_path_verified
       delete data.rclone_sync_policy
       delete data.rclone_sync_cron_expression
@@ -1181,7 +1190,9 @@ const RepositoryWizard = ({
               rcloneSyncCronExpression: wizardState.rcloneSyncCronExpression,
               rcloneSyncTimezone: wizardState.rcloneSyncTimezone,
               rcloneExtraFlags: wizardState.rcloneExtraFlags,
+              rcloneSftpConnectionId: wizardState.rcloneSftpConnectionId,
             }}
+            sshConnections={sshConnections}
             rcloneStatus={rcloneStatus}
             rcloneRemotes={rcloneRemotes}
             eligible={isCloudMirrorEligible(wizardState)}

@@ -4810,7 +4810,7 @@
       "remotePathVerified": "Percorso verificato dalla navigazione del remoto.",
       "browseRemote": "Sfoglia remoto rclone",
       "routePreview": "Server Borg UI -> percorso repository primario -> sincronizzazione rclone -> remoto",
-      "sshRoutePreview": "Il server Borg UI monta il repository SSH tramite SSHFS -> sincronizzazione rclone -> remoto",
+      "sshRoutePreview": "Il server Borg UI monta il repository SSH in sola lettura tramite SSHFS -> sincronizzazione rclone -> remoto",
       "agentRoutePreview": "L'agente gestito selezionato sincronizza il proprio percorso repository con il remoto rclone. Borg UI non richiede un percorso cache.",
       "cachedRepositoryRoutePreview": "Cache del server Borg UI -> sincronizzazione rclone -> remoto",
       "browseFailed": "Impossibile sfogliare il remoto rclone.",
@@ -4818,7 +4818,10 @@
       "remoteRoot": "Radice remota",
       "browsing": "Navigazione remoto...",
       "noRemoteFolders": "Nessuna cartella trovata in questo percorso remoto.",
-      "useFolder": "Usa cartella"
+      "useFolder": "Usa cartella",
+      "sftpConnectionLabel": "Connessione SFTP per la sincronizzazione cloud",
+      "sftpConnectionDefault": "Uguale alla connessione del repository",
+      "sftpConnectionHelper": "Alcuni provider, come BorgBase, consentono di usare una chiave solo per Borg o solo per SFTP. Scegli qui una connessione SFTP separata se la chiave del repository non può aprire SFTP."
     },
     "restoreDestination": {
       "port": "Porta {{port}}",

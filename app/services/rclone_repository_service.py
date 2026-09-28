@@ -99,6 +99,7 @@ class RcloneRepositoryService:
             "rclone_remote_id": storage.rclone_remote_id,
             "rclone_remote_name": remote.name if remote else None,
             "rclone_remote_path": storage.rclone_remote_path,
+            "sftp_connection_id": storage.sftp_connection_id,
             "rclone_target": self.compose_target(remote, storage.rclone_remote_path)
             if remote and storage.rclone_remote_path
             else None,
@@ -183,6 +184,7 @@ class RcloneRepositoryService:
         extra_flags: Any = None,
         sync_cron_expression: str | None = None,
         sync_timezone: str | None = None,
+        sftp_connection_id: int | None = None,
         now: datetime | None = None,
     ) -> RepositoryStorage:
         if sync_policy not in VALID_SYNC_POLICIES:
@@ -206,6 +208,7 @@ class RcloneRepositoryService:
             rclone_remote_id=remote_id,
             rclone_remote_path=normalize_rclone_relative_path(remote_path),
             cache_path=cache_path,
+            sftp_connection_id=sftp_connection_id if source_backend == "ssh" else None,
             sync_policy=sync_policy,
             sync_direction=sync_direction,
             sync_status="pending",
@@ -287,14 +290,16 @@ class RcloneRepositoryService:
         return source
 
     async def _mount_ssh_repository_source(
-        self, repository: Repository
+        self, repository: Repository, storage: RepositoryStorage
     ) -> tuple[str, str, Any]:
-        if not repository.connection_id:
+        connection_id = storage.sftp_connection_id or repository.connection_id
+        if not connection_id:
             raise ValueError("SSH cloud mirror requires a stored SSH connection")
         remote_path = self._ssh_repository_remote_path(repository)
         mount_service = self._get_ssh_mount_service()
+        # rclone only reads the source, so never mount it writable.
         _temp_root, mount_id = await mount_service.mount_ssh_directory(
-            repository.connection_id, remote_path
+            connection_id, remote_path, read_only=True
         )
         mount_info = mount_service.active_mounts.get(mount_id)
         mount_point = getattr(mount_info, "mount_point", None)
@@ -480,7 +485,7 @@ class RcloneRepositoryService:
                     source,
                     mount_id,
                     mount_service,
-                ) = await self._mount_ssh_repository_source(repository)
+                ) = await self._mount_ssh_repository_source(repository, storage)
                 if not source:
                     raise ValueError("rclone sync source path is not available")
                 result = await self.service.sync(
