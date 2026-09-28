@@ -3029,7 +3029,7 @@ class TestAgentOperationLogLateLines:
         before the commit expires the row (no refresh)."""
         from types import SimpleNamespace
 
-        from sqlalchemy import event
+        from tests.utils.statements import session_cursor_listener
 
         agent, headers, _, _ = self._setup(test_client, test_db, admin_headers)
         backup = AgentJob(
@@ -3050,9 +3050,7 @@ class TestAgentOperationLogLateLines:
             ):
                 selects.append(" ".join(statement.split()))
 
-        engine = test_db.get_bind()
-        event.listen(engine, "before_cursor_execute", record)
-        try:
+        with session_cursor_listener(test_db, record):
             self._post_line(test_client, headers, SimpleNamespace(id=backup_id), 1)
             await _handle_agent_session_message(
                 test_db,
@@ -3065,8 +3063,6 @@ class TestAgentOperationLogLateLines:
                     "message": "line 2",
                 },
             )
-        finally:
-            event.remove(engine, "before_cursor_execute", record)
 
         # Only the handlers' own lookup of the agent's job, once per line.
         assert len(selects) == 2
