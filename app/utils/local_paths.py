@@ -57,15 +57,17 @@ def is_restore_destination_allowed(
     destination: str,
     paths: Optional[Iterable[str]] = None,
     restore_layout: str = "preserve_path",
+    confine_to_mounts: bool = True,
 ) -> bool:
-    """True when a server-local restore writes only inside a mount point and
-    never into the application or its data directory."""
+    """True when a server-local restore never writes into the application or
+    its data directory and, when ``confine_to_mounts``, only inside a mount
+    point."""
     if not destination:
         return False
     reserved = [os.path.realpath(_APP_DIR), os.path.realpath(settings.data_dir)]
     for target in _restore_targets(destination, paths, restore_layout):
         resolved = os.path.realpath(target)
-        if not is_within_local_mount(resolved):
+        if confine_to_mounts and not is_within_local_mount(resolved):
             return False
         # Reject a target inside a reserved directory, and one that contains
         # it (restoring a whole tree over "/" would reach it too).

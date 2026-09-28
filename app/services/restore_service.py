@@ -638,9 +638,11 @@ class RestoreService:
                 restore_layout=restore_layout,
             )
 
-            # The API checks this too; re-check here so a queued or replayed
-            # job can never write outside the mount points.
-            if not is_restore_destination_allowed(destination, paths, restore_layout):
+            # The API confines non-admins to the mount points; re-check here
+            # that no queued or replayed job writes into the app or its data.
+            if not is_restore_destination_allowed(
+                destination, paths, restore_layout, confine_to_mounts=False
+            ):
                 job.status = "failed"
                 job.error_message = json.dumps(
                     {

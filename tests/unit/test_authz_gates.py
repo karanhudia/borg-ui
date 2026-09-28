@@ -344,9 +344,33 @@ class TestRestoreGate:
 
     @pytest.mark.parametrize("destination", ["/etc", "/app/restore", "/"])
     def test_destination_outside_mounts_is_forbidden(
-        self, test_client, test_db, admin_headers, mount_root, destination
+        self, test_client, test_db, mount_root, destination
     ):
         repo = _repo(test_db, "rg-dest")
+        headers = _user_headers(test_db, "rg-dest-op", "operator", repo, "operator")
+        response = test_client.post(
+            "/api/restore/start",
+            json=_restore_body(repo, destination),
+            headers=headers,
+        )
+        assert response.status_code == 403
+
+    def test_admin_can_restore_outside_mounts(
+        self, test_client, test_db, admin_headers, mount_root, no_restore_execution
+    ):
+        repo = _repo(test_db, "rg-admin-out")
+        response = test_client.post(
+            "/api/restore/start",
+            json=_restore_body(repo, "/srv/restore"),
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+
+    @pytest.mark.parametrize("destination", ["/app/restore", "/"])
+    def test_admin_cannot_restore_into_the_app(
+        self, test_client, test_db, admin_headers, mount_root, destination
+    ):
+        repo = _repo(test_db, "rg-admin-app")
         response = test_client.post(
             "/api/restore/start",
             json=_restore_body(repo, destination),
@@ -374,12 +398,13 @@ class TestRestoreGate:
         self, test_client, test_db, admin_headers, mount_root
     ):
         repo = _repo(test_db, "rg-orig-out")
+        headers = _user_headers(test_db, "rg-orig-op", "operator", repo, "operator")
         response = test_client.post(
             "/api/restore/start",
             json=_restore_body(
                 repo, "/", paths=["etc/cron.d"], restore_layout="preserve_path"
             ),
-            headers=admin_headers,
+            headers=headers,
         )
         assert response.status_code == 403
 

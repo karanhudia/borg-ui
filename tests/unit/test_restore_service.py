@@ -330,12 +330,12 @@ class TestRestoreServiceExecution:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_local_restore_refuses_destination_outside_mount_points(
+    async def test_local_restore_refuses_destination_in_data_dir(
         self, testing_session_local, restore_job, monkeypatch, tmp_path
     ):
-        monkeypatch.setattr(
-            "app.config.settings.local_mount_points", str(tmp_path / "elsewhere")
-        )
+        # The API confines non-admins to the mount points; the service only
+        # re-checks that no job writes into the app or its data directory.
+        monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
         service = RestoreService()
 
         with (

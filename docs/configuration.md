@@ -22,7 +22,7 @@ Most configuration is available in the UI under Settings. Use environment variab
 | `SECRET_KEY` | generated | JWT/session signing key. Auto-generated into `/data/.secret_key` if omitted |
 | `INITIAL_ADMIN_PASSWORD` | `admin123` | Password for the first `admin` user, used on first start only. Empty or whitespace-only counts as unset; surrounding whitespace is dropped |
 | `LOG_LEVEL` | `INFO` | Backend log level |
-| `LOCAL_MOUNT_POINTS` | `/local` | Comma-separated container paths shown as local mounts in the file browser. Local restores are limited to these paths, and so is the file browser for operators (admins can browse anywhere) |
+| `LOCAL_MOUNT_POINTS` | `/local` | Comma-separated container paths shown as local mounts in the file browser. Operators can only browse and restore inside these paths; admins are not limited |
 | `BASE_PATH` | empty | Sub-path deployment, for example `/borg-ui` |
 
 `PUID` and `PGID` set the Borg UI process's primary identity. If a source is

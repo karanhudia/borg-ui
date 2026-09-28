@@ -68,16 +68,18 @@ def _require_restore_job_access(
 
 
 def _require_allowed_local_destination(
-    restore_request: "RestoreRequest", repository: Repository
+    restore_request: "RestoreRequest", repository: Repository, user: User
 ) -> None:
     # SSH destinations and agent repositories write on another host; only a
-    # restore that lands on this server is confined to the mount points.
+    # restore that lands on this server is checked. Admins set up the mounts
+    # themselves, so only other users are confined to the mount points.
     if restore_request.destination_type == "ssh" or is_agent_executor(repository):
         return
     if not is_restore_destination_allowed(
         restore_request.destination,
         restore_request.paths,
         restore_request.restore_layout,
+        confine_to_mounts=user.role != "admin",
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -202,7 +204,7 @@ async def start_restore(
                 detail={"key": "backend.errors.restore.repositoryNotFound"},
             )
         check_repo_access(db, current_user, repository, RESTORE_ROLE)
-        _require_allowed_local_destination(restore_request, repository)
+        _require_allowed_local_destination(restore_request, repository, current_user)
 
         # Validate scenario: SSH repository → SSH destination is not supported
         if (
