@@ -63,6 +63,11 @@ describe('quickStartState', () => {
     expect(
       destinationInsideSource(answers({ sourcePaths: ['/'], destinationPath: '/local/x' }))
     ).toBe(true)
+    expect(
+      destinationInsideSource(
+        answers({ sourcePaths: ['/local/data'], destinationPath: '/local/other/../data/./repo' })
+      )
+    ).toBe(true)
   })
 
   it('requires a matching passphrase that the user confirmed saving', () => {

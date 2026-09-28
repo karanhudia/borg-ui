@@ -45,6 +45,12 @@ describe('QuickStartDialog', () => {
     await user.type(screen.getByLabelText(/Repeat passphrase/), 'correct horse')
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
     await user.click(screen.getByLabelText(/I have saved my passphrase/))
+    // Editing the passphrase afterwards asks for the confirmation again.
+    await user.type(screen.getByLabelText(/^Passphrase/), '!')
+    await user.type(screen.getByLabelText(/Repeat passphrase/), '!')
+    expect(screen.getByLabelText(/I have saved my passphrase/)).not.toBeChecked()
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
+    await user.click(screen.getByLabelText(/I have saved my passphrase/))
     await next()
 
     expect(screen.getByRole('radio', { name: /Every day/ })).toBeChecked()

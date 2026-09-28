@@ -93,7 +93,10 @@ export default function QuickStartProtectStep({ answers, onChange }: QuickStartS
             label={t('quickStart.protect.passphraseLabel')}
             type={visible ? 'text' : 'password'}
             value={answers.passphrase}
-            onChange={(event) => onChange({ passphrase: event.target.value })}
+            // A changed passphrase is not the one the user saved.
+            onChange={(event) =>
+              onChange({ passphrase: event.target.value, passphraseSaved: false })
+            }
             error={tooShort}
             helperText={t('quickStart.protect.passphraseHint', { count: MIN_PASSPHRASE_LENGTH })}
             autoComplete="new-password"
@@ -106,7 +109,9 @@ export default function QuickStartProtectStep({ answers, onChange }: QuickStartS
             label={t('quickStart.protect.confirmLabel')}
             type={visible ? 'text' : 'password'}
             value={answers.passphraseConfirm}
-            onChange={(event) => onChange({ passphraseConfirm: event.target.value })}
+            onChange={(event) =>
+              onChange({ passphraseConfirm: event.target.value, passphraseSaved: false })
+            }
             error={mismatch}
             helperText={mismatch ? t('quickStart.protect.mismatch') : ' '}
             autoComplete="new-password"

@@ -87,8 +87,20 @@ export function usesEncryption(answers: QuickStartAnswers): boolean {
   return answers.settings.encryption !== 'none'
 }
 
+// Resolves "." and ".." the way the backend's os.path.abspath will, so
+// "/local/other/../data/repo" is seen as inside "/local/data".
+function normalizePath(value: string): string {
+  const segments: string[] = []
+  for (const segment of value.trim().split('/')) {
+    if (!segment || segment === '.') continue
+    if (segment === '..') segments.pop()
+    else segments.push(segment)
+  }
+  return `/${segments.join('/')}`
+}
+
 function isInsidePath(child: string, parent: string): boolean {
-  const normalize = (value: string) => value.trim().replace(/\/+$/, '') || '/'
+  const normalize = normalizePath
   const c = normalize(child)
   const p = normalize(parent)
   if (p === '/') return true
