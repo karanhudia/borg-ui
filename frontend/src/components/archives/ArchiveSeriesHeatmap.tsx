@@ -365,7 +365,11 @@ export default function ArchiveSeriesHeatmap({
   }, [window.weeks, window.cell, scrollRef])
 
   const band = data.repository
-  const daysWithArchives = band.days.filter((d) => d.archive_ids.length > 0).length
+  const archiveDays = band.days
+    .filter((d) => d.archive_ids.length > 0)
+    .map((d) => d.date)
+    .sort()
+  const daysWithArchives = archiveDays.length
 
   return (
     <Stack spacing={2}>
@@ -373,12 +377,14 @@ export default function ArchiveSeriesHeatmap({
         <HeatmapHeader
           toolbar={header.toolbar}
           summary={
-            band.count > 0 && band.first && band.last
+            // The day keys, not `first`/`last`: those are UTC timestamps,
+            // the keys are the viewer's days the cells draw (issue #1221).
+            daysWithArchives > 0
               ? t('archives.heatmap.summary', {
                   count: band.count,
                   days: daysWithArchives,
-                  first: formatCalendarDay(band.first),
-                  last: formatCalendarDay(band.last),
+                  first: formatCalendarDay(archiveDays[0]),
+                  last: formatCalendarDay(archiveDays[daysWithArchives - 1]),
                 })
               : t('archives.heatmap.none')
           }

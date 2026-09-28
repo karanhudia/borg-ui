@@ -1,3 +1,7 @@
+// Pin a zone west of UTC before anything touches Date, so the local-day
+// assertions fail for a UTC-day implementation on any runner (issue #1221).
+process.env.TZ = 'America/New_York'
+
 import { describe, expect, it } from 'vitest'
 import { dayVerdict, previewToHeatmap, sizeIntensity } from '../previewHeatmap'
 import type { PrunePreviewArchive } from '../../../types/archives'
@@ -30,6 +34,15 @@ describe('previewToHeatmap', () => {
     expect(data.repository.days.map((d) => d.archive_ids)).toEqual([[1, 2]])
     expect(data.series.map((s) => s.series)).toEqual(['docs', 'nas'])
     expect(data.repository.count).toBe(2)
+  })
+  it("buckets by the viewer's calendar day, not the UTC day", () => {
+    // 22:00 on the 9th in New York is 02:00 UTC on the 10th.
+    const data = previewToHeatmap([
+      a(1, 'nas', '2026-09-10T02:00:00+00:00', 'kept', 10),
+      a(2, 'nas', '2026-09-10T02:00:00', 'kept', 10),
+    ])
+    expect(data.repository.days.map((d) => d.date)).toEqual(['2026-09-09'])
+    expect(data.series[0].days.map((d) => d.date)).toEqual(['2026-09-09'])
   })
   it('skips archives without a start', () => {
     expect(
@@ -109,5 +122,24 @@ describe('sizeIntensity', () => {
     })
     expect(intensity(day([1, 2]))).toBe(1)
     expect(intensity(day([3]))).toBeCloseTo(0.725)
+  })
+  it("sums the viewer's calendar day", () => {
+    // 1 and 2 are the evening of the 9th in New York, either side of UTC
+    // midnight, so that day (20) outweighs the 10th (15).
+    const list = [
+      a(1, 'nas', '2026-09-09T23:00:00', 'kept', 10),
+      a(2, 'nas', '2026-09-10T02:00:00', 'kept', 10),
+      a(3, 'nas', '2026-09-10T20:00:00', 'kept', 15),
+    ]
+    const intensity = sizeIntensity(list)
+    const day = (ids: number[]) => ({
+      date: '2026-09-09',
+      archive_ids: ids,
+      count: ids.length,
+      deduplicated_size: 0,
+      duration_seconds: 0,
+      anomalies: [],
+    })
+    expect(intensity(day([1, 2]))).toBe(1)
   })
 })
