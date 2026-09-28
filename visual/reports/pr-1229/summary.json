@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-09-28T07:37:05.728Z",
+  "generatedAt": "2026-09-28T08:02:49.028Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1229 visual report",
-    "commitSha": "ba1f25143e3f",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36392482663"
+    "commitSha": "ad3fcad5a2aa",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36394867031"
   },
   "totals": {
-    "baseline": 1014,
+    "baseline": 1016,
     "actual": 1014,
     "compared": 1014,
-    "changed": 10,
+    "changed": 14,
     "added": 0,
-    "removed": 0,
-    "unchanged": 1004
+    "removed": 2,
+    "unchanged": 1000
   },
   "changed": [
     {
@@ -195,10 +195,91 @@
         "width": 1280,
         "height": 800
       }
+    },
+    {
+      "fileName": "components-archives-archivegrowthchart--dark--mobile.png",
+      "baselinePath": "images/baseline/components-archives-archivegrowthchart--dark--mobile.png",
+      "actualPath": "images/actual/components-archives-archivegrowthchart--dark--mobile.png",
+      "diffPath": "images/diff/components-archives-archivegrowthchart--dark--mobile.png",
+      "diffPixels": 23963,
+      "totalPixels": 329160,
+      "diffRatio": 0.07280046178150444,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-archives-archivegrowthchart--dark.png",
+      "baselinePath": "images/baseline/components-archives-archivegrowthchart--dark.png",
+      "actualPath": "images/actual/components-archives-archivegrowthchart--dark.png",
+      "diffPath": "images/diff/components-archives-archivegrowthchart--dark.png",
+      "diffPixels": 1028,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00100390625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-archives-archivegrowthchart--repository--mobile.png",
+      "baselinePath": "images/baseline/components-archives-archivegrowthchart--repository--mobile.png",
+      "actualPath": "images/actual/components-archives-archivegrowthchart--repository--mobile.png",
+      "diffPath": "images/diff/components-archives-archivegrowthchart--repository--mobile.png",
+      "diffPixels": 955,
+      "totalPixels": 329160,
+      "diffRatio": 0.0029013245837890386,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-archives-archivegrowthchart--repository.png",
+      "baselinePath": "images/baseline/components-archives-archivegrowthchart--repository.png",
+      "actualPath": "images/actual/components-archives-archivegrowthchart--repository.png",
+      "diffPath": "images/diff/components-archives-archivegrowthchart--repository.png",
+      "diffPixels": 1044,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00101953125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
     }
   ],
   "added": [],
-  "removed": [],
+  "removed": [
+    {
+      "fileName": "components-archives-archivegrowthchart--sparse-stale--mobile.png",
+      "baselinePath": "images/baseline/components-archives-archivegrowthchart--sparse-stale--mobile.png"
+    },
+    {
+      "fileName": "components-archives-archivegrowthchart--sparse-stale.png",
+      "baselinePath": "images/baseline/components-archives-archivegrowthchart--sparse-stale.png"
+    }
+  ],
   "unchanged": [
     {
       "fileName": "activity-activitytimeline--dark--mobile.png"
@@ -1029,12 +1110,6 @@
       "fileName": "components-archives-archivefilestab--default.png"
     },
     {
-      "fileName": "components-archives-archivegrowthchart--dark--mobile.png"
-    },
-    {
-      "fileName": "components-archives-archivegrowthchart--dark.png"
-    },
-    {
       "fileName": "components-archives-archivegrowthchart--empty--mobile.png"
     },
     {
@@ -1045,12 +1120,6 @@
     },
     {
       "fileName": "components-archives-archivegrowthchart--one-series.png"
-    },
-    {
-      "fileName": "components-archives-archivegrowthchart--repository--mobile.png"
-    },
-    {
-      "fileName": "components-archives-archivegrowthchart--repository.png"
     },
     {
       "fileName": "components-archives-archivegrowthchart--sparse--mobile.png"
