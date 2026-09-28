@@ -1,21 +1,39 @@
 {
-  "generatedAt": "2026-09-28T18:47:22.369Z",
+  "generatedAt": "2026-09-28T19:08:30.857Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1242 visual report",
-    "commitSha": "a435f1a4e660",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36467438888"
+    "commitSha": "4de9b4afefdd",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36469940432"
   },
   "totals": {
-    "baseline": 1030,
-    "actual": 1042,
-    "compared": 1030,
-    "changed": 10,
+    "baseline": 1040,
+    "actual": 1052,
+    "compared": 1040,
+    "changed": 11,
     "added": 12,
     "removed": 0,
-    "unchanged": 1020
+    "unchanged": 1029
   },
   "changed": [
+    {
+      "fileName": "pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
+      "baselinePath": "images/baseline/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
+      "actualPath": "images/actual/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
+      "diffPath": "images/diff/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
+      "diffPixels": 59730,
+      "totalPixels": 329160,
+      "diffRatio": 0.18146190302588408,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
     {
       "fileName": "pages-managedagents--add-agent-localhost-warning--mobile.png",
       "baselinePath": "images/baseline/pages-managedagents--add-agent-localhost-warning--mobile.png",
@@ -982,6 +1000,12 @@
       "fileName": "components-appsidebar--community-plan.png"
     },
     {
+      "fileName": "components-appsidebar--viewer-settings--mobile.png"
+    },
+    {
+      "fileName": "components-appsidebar--viewer-settings.png"
+    },
+    {
       "fileName": "components-appsidebar--with-remote-clients--mobile.png"
     },
     {
@@ -998,6 +1022,12 @@
     },
     {
       "fileName": "components-archivecard--openable.png"
+    },
+    {
+      "fileName": "components-archivecard--viewer--mobile.png"
+    },
+    {
+      "fileName": "components-archivecard--viewer.png"
     },
     {
       "fileName": "components-archivecontentsdialog--awaiting-agent-listing--mobile.png"
@@ -1108,6 +1138,12 @@
       "fileName": "components-archives-archivefilestab--default.png"
     },
     {
+      "fileName": "components-archives-archivefilestab--viewer--mobile.png"
+    },
+    {
+      "fileName": "components-archives-archivefilestab--viewer.png"
+    },
+    {
       "fileName": "components-archives-archivegrowthchart--dark--mobile.png"
     },
     {
@@ -1184,6 +1220,12 @@
     },
     {
       "fileName": "components-archives-archivesearchfield--unlocked.png"
+    },
+    {
+      "fileName": "components-archives-archivesearchfield--viewer--mobile.png"
+    },
+    {
+      "fileName": "components-archives-archivesearchfield--viewer.png"
     },
     {
       "fileName": "components-archives-archiveseriesheatmap--default--mobile.png"
@@ -1304,6 +1346,12 @@
     },
     {
       "fileName": "components-archives-filehistorypanel--unlocked.png"
+    },
+    {
+      "fileName": "components-archives-filehistorypanel--viewer--mobile.png"
+    },
+    {
+      "fileName": "components-archives-filehistorypanel--viewer.png"
     },
     {
       "fileName": "components-archives-heatmaplegend--cadence-unknown--mobile.png"
@@ -2915,9 +2963,6 @@
     },
     {
       "fileName": "pages-cloudstorage--add-guided-remote--mobile.png"
-    },
-    {
-      "fileName": "pages-cloudstorage--add-guided-remote-setup-missing--mobile.png"
     },
     {
       "fileName": "pages-cloudstorage--add-guided-remote-setup-missing.png"
