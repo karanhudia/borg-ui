@@ -6151,7 +6151,10 @@
         "sshConnectionDetailsRequired": "SSH connection details required",
         "sshConnectionTimeout": "SSH connection timeout",
         "sshParamsRequired": "SSH key ID, host, and username are required for SSH browsing",
-        "operatorAccessRequired": "Operator or admin access required"
+        "operatorAccessRequired": "Operator or admin access required",
+        "invalidRemotePath": "This path contains quotes, line breaks, or null characters, which cannot be used on an SSH connection",
+        "invalidSshTarget": "Invalid SSH host or username",
+        "sshConnectionNotSaved": "Browse this host through a saved SSH connection"
       },
       "mounts": {
         "canOnlyUnmountBorgMounts": "Can only unmount Borg archive mounts via this endpoint",

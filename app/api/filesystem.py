@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from typing import List, Optional
 import os
+import shlex
 import subprocess
 import structlog
 import tempfile
@@ -24,6 +25,11 @@ from app.utils.ssh_host_keys import host_key_ssh_opts_for_host
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.ssh_utils import ssh_key_auth_args
 from app.utils.local_paths import is_within_local_mount, mount_entries_below
+from app.utils.ssh_host_validation import (
+    normalize_ssh_host,
+    normalize_ssh_username,
+    ssh_destination,
+)
 
 logger = structlog.get_logger()
 
@@ -71,6 +77,10 @@ SSH_REMOTE_PATH_FAILURE_MARKERS = (
     "cannot",
     "failure",
 )
+
+# sftp batch files have no quoting that survives these: a newline ends the
+# command, and a following line starting with "!" runs on this host.
+SFTP_BATCH_UNSAFE_CHARS = ("\n", "\r", "\0", '"')
 
 
 class FileSystemItem(BaseModel):
@@ -151,7 +161,10 @@ def is_borg_repository_ssh(
     try:
         # Check for config file and data directory using 'ls' (compatible with restricted shells)
         # We'll check if both config and data exist
-        check_cmd = f'ls "{remote_path}/config" "{remote_path}/data"'
+        check_cmd = (
+            f"ls {shlex.quote(f'{remote_path}/config')} "
+            f"{shlex.quote(f'{remote_path}/data')}"
+        )
 
         ssh_cmd = [
             "ssh",
@@ -161,7 +174,8 @@ def is_borg_repository_ssh(
             *host_key_ssh_opts_for_host(host, port, username),
             "-o",
             "ConnectTimeout=5",
-            f"{username}@{host}",
+            "--",
+            ssh_destination(username, host),
             check_cmd,
         ]
 
@@ -194,6 +208,41 @@ def _get_matching_ssh_connection(
         )
     except Exception:
         return None
+
+
+def _validate_remote_path(path: Optional[str]) -> None:
+    """Refuse a path that would break out of its sftp batch argument."""
+    if path and any(char in path for char in SFTP_BATCH_UNSAFE_CHARS):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.filesystem.invalidRemotePath"},
+        )
+
+
+def _resolve_ssh_target(
+    db: Session, current_user, ssh_key_id: int, host: str, username: str, port: int
+):
+    """Normalize host and username, and keep non-admins on saved connections.
+
+    A stored key is only ever used against the target it was saved with, so a
+    non-admin cannot point the server's private key at a host of their choice.
+    """
+    try:
+        host = normalize_ssh_host(host)
+        username = normalize_ssh_username(username)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.filesystem.invalidSshTarget"},
+        )
+
+    connection = _get_matching_ssh_connection(db, ssh_key_id, host, username, port)
+    if connection is None and not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail={"key": "backend.errors.filesystem.sshConnectionNotSaved"},
+        )
+    return host, username, connection
 
 
 def _login_relative_remote_path_candidate(
@@ -262,15 +311,8 @@ async def browse_filesystem(
                 )
 
             # Check if SSH connection has a default_path and use it when path is "/" or "/local"
-            ssh_connection = (
-                db.query(SSHConnection)
-                .filter(
-                    SSHConnection.ssh_key_id == ssh_key_id,
-                    SSHConnection.host == host,
-                    SSHConnection.username == username,
-                    SSHConnection.port == port,
-                )
-                .first()
+            host, username, ssh_connection = _resolve_ssh_target(
+                db, current_user, ssh_key_id, host, username, port
             )
 
             if (
@@ -447,6 +489,7 @@ async def browse_ssh_filesystem(
         os.chmod(temp_key_file, 0o600)
 
         def run_sftp_listing(cd_path: Optional[str]):
+            _validate_remote_path(cd_path)
             sftp_batch_file = None
             try:
                 # Create SFTP batch file with commands
@@ -470,7 +513,8 @@ async def browse_ssh_filesystem(
                     *host_key_ssh_opts_for_host(host, port, username),
                     "-o",
                     "ConnectTimeout=10",
-                    f"{username}@{host}",
+                    "--",
+                    ssh_destination(username, host),
                 ]
 
                 return subprocess.run(
@@ -737,6 +781,10 @@ async def validate_path(
                     detail={"key": "backend.errors.filesystem.sshParamsRequired"},
                 )
 
+            host, username, _ = _resolve_ssh_target(
+                db, current_user, ssh_key_id, host, username, port
+            )
+
             ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
             if not ssh_key:
                 raise HTTPException(
@@ -762,7 +810,7 @@ async def validate_path(
                 def run_ssh_stat(command_path: str):
                     # Check if path exists via SSH using 'stat' (compatible with restricted shells like Hetzner Storage Box)
                     # stat returns exit code 0 if path exists, non-zero if not
-                    check_cmd = f'stat "{command_path}"'
+                    check_cmd = f"stat {shlex.quote(command_path)}"
 
                     ssh_cmd = [
                         "ssh",
@@ -772,7 +820,8 @@ async def validate_path(
                         *host_key_ssh_opts_for_host(host, port, username),
                         "-o",
                         "ConnectTimeout=5",
-                        f"{username}@{host}",
+                        "--",
+                        ssh_destination(username, host),
                         check_cmd,
                     ]
 
@@ -919,6 +968,10 @@ async def create_folder(
                     },
                 )
 
+            host, username, _ = _resolve_ssh_target(
+                db, current_user, ssh_key_id, host, username, port
+            )
+
             # Get SSH key
             ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
             if not ssh_key:
@@ -942,6 +995,7 @@ async def create_folder(
                 os.chmod(temp_key_file, 0o600)
 
                 def run_sftp_mkdir(command_path: str):
+                    _validate_remote_path(command_path)
                     sftp_batch_file = None
                     try:
                         # Create SFTP batch file to create directory
@@ -965,7 +1019,8 @@ async def create_folder(
                             *host_key_ssh_opts_for_host(host, port, username),
                             "-o",
                             "ConnectTimeout=10",
-                            f"{username}@{host}",
+                            "--",
+                            ssh_destination(username, host),
                         ]
 
                         return subprocess.run(

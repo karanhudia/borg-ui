@@ -15,6 +15,7 @@ from fastapi import HTTPException
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, joinedload
 
+from app.utils.ssh_host_validation import ssh_destination
 from app.config import settings
 from app.core.borg_router import BorgRouter
 from app.core.security import decrypt_secret
@@ -1878,7 +1879,8 @@ class BackupPlanExecutionService:
                 "ServerAliveCountMax=3",
                 "-p",
                 str(source_connection.port or 22),
-                f"{source_connection.username}@{source_connection.host}",
+                "--",
+                ssh_destination(source_connection.username, source_connection.host),
                 "/bin/bash -s",
             ]
             logger.info(

@@ -707,7 +707,7 @@ class TestFilesystemValidationAndCreateFolder:
             host="example.com",
             username="borg",
             port=22,
-            current_user=SimpleNamespace(username="admin"),
+            current_user=SimpleNamespace(username="admin", is_admin=True),
             db=test_db,
         )
 
@@ -736,13 +736,13 @@ class TestFilesystemValidationAndCreateFolder:
 
         def run_side_effect(cmd, *args, **kwargs):
             stat_commands.append(cmd[-1])
-            if cmd[-1] == 'stat "/backups"':
+            if cmd[-1] == "stat /backups":
                 return SimpleNamespace(
                     returncode=1,
                     stdout="",
                     stderr='stat: cannot stat "/backups": No such file or directory',
                 )
-            if cmd[-1] == 'stat "backups"':
+            if cmd[-1] == "stat backups":
                 return SimpleNamespace(
                     returncode=0,
                     stdout="File: backups\nType: directory\n",
@@ -768,11 +768,11 @@ class TestFilesystemValidationAndCreateFolder:
             host="example.com",
             username="borg",
             port=22,
-            current_user=SimpleNamespace(username="admin"),
+            current_user=SimpleNamespace(username="admin", is_admin=True),
             db=test_db,
         )
 
-        assert stat_commands == ['stat "/backups"', 'stat "backups"']
+        assert stat_commands == ["stat /backups", "stat backups"]
         assert repo_checks == ["backups"]
         assert payload == {
             "exists": True,

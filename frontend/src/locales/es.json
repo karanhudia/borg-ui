@@ -6151,7 +6151,10 @@
         "sshConnectionDetailsRequired": "Se requieren los detalles de la conexión SSH",
         "sshConnectionTimeout": "Tiempo de espera de la conexión SSH",
         "sshParamsRequired": "Se requieren el ID de clave SSH, el host y el nombre de usuario para la navegación SSH",
-        "operatorAccessRequired": "Se requiere acceso de operador o administrador"
+        "operatorAccessRequired": "Se requiere acceso de operador o administrador",
+        "invalidRemotePath": "Esta ruta contiene comillas, saltos de línea o caracteres nulos, que no se pueden usar en una conexión SSH",
+        "invalidSshTarget": "Host o nombre de usuario SSH no válido",
+        "sshConnectionNotSaved": "Explora este host mediante una conexión SSH guardada"
       },
       "mounts": {
         "canOnlyUnmountBorgMounts": "Solo se pueden desmontar montajes de archivos Borg a través de este endpoint",

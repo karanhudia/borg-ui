@@ -5,11 +5,13 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import shlex
 import subprocess
 import structlog
 from typing import Optional
 
 from app.utils.ssh_host_keys import host_key_ssh_opts_for_path
+from app.utils.ssh_host_validation import ssh_destination
 from app.utils.ssh_utils import public_key_only_ssh_args, ssh_key_auth_args
 
 logger = structlog.get_logger()
@@ -225,6 +227,11 @@ def _parse_ssh_url(path: str) -> Optional[tuple[str, str, str, str]]:
     match = re.match(r"ssh://([^@]+)@([^:]+):(\d+)(/.*)", path)
     if not match:
         return None
+    username, host, _, _ = match.groups()
+    try:
+        ssh_destination(username, host)
+    except ValueError:
+        return None
     return match.groups()
 
 
@@ -286,8 +293,9 @@ async def _du_ssh(
                 "ConnectTimeout=10",
                 "-p",
                 port,
-                f"{username}@{host}",
-                f"du -sb{du_excludes} {command_remote_path} 2>/dev/null | cut -f1",
+                "--",
+                ssh_destination(username, host),
+                f"du -sb{du_excludes} {shlex.quote(command_remote_path)} 2>/dev/null | cut -f1",
             ]
         )
 

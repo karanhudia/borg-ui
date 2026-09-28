@@ -6151,7 +6151,10 @@
         "sshConnectionDetailsRequired": "SSH-Verbindungsdetails erforderlich",
         "sshConnectionTimeout": "SSH-Verbindungs-Timeout",
         "sshParamsRequired": "SSH-Schlüssel-ID, Host und Benutzername sind für das SSH-Browsing erforderlich",
-        "operatorAccessRequired": "Operator- oder Administratorzugriff erforderlich"
+        "operatorAccessRequired": "Operator- oder Administratorzugriff erforderlich",
+        "invalidRemotePath": "Dieser Pfad enthält Anführungszeichen, Zeilenumbrüche oder Nullzeichen, die über eine SSH-Verbindung nicht verwendet werden können",
+        "invalidSshTarget": "Ungültiger SSH-Host oder Benutzername",
+        "sshConnectionNotSaved": "Durchsuchen Sie diesen Host über eine gespeicherte SSH-Verbindung"
       },
       "mounts": {
         "canOnlyUnmountBorgMounts": "Über diesen Endpunkt können nur Borg-Archiv-Mounts ausgehängt werden",

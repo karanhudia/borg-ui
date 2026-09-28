@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
+from app.utils.ssh_host_validation import ssh_destination
 from app.config import settings
 from app.core.features import require_feature_access
 from app.core.security import get_current_user
@@ -1081,7 +1082,8 @@ def _run_remote_mount_size_probe(
         *host_key_ssh_opts(connection),
         "-o",
         f"ConnectTimeout={max(1, int(timeout_seconds))}",
-        f"{connection.username}@{connection.host}",
+        "--",
+        ssh_destination(connection.username, connection.host),
         remote_command,
     ]
     return subprocess.run(
@@ -1300,7 +1302,8 @@ def _run_remote_container_scan(
         *host_key_ssh_opts(connection),
         "-o",
         f"ConnectTimeout={max(1, int(timeout_seconds))}",
-        f"{connection.username}@{connection.host}",
+        "--",
+        ssh_destination(connection.username, connection.host),
         remote_command,
     ]
     return subprocess.run(
@@ -1609,7 +1612,8 @@ def _run_remote_database_probe(
         *host_key_ssh_opts(connection),
         "-o",
         f"ConnectTimeout={max(1, int(timeout_seconds))}",
-        f"{connection.username}@{connection.host}",
+        "--",
+        ssh_destination(connection.username, connection.host),
         remote_command,
     ]
     return subprocess.run(

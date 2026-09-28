@@ -1,4 +1,4 @@
-"""Validation helpers for SSH connection host input."""
+"""Validation helpers for SSH connection host and username input."""
 
 from __future__ import annotations
 
@@ -14,6 +14,15 @@ SSH_HOST_VALIDATION_MESSAGE = (
 
 _DNS_LABEL_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
 _FORBIDDEN_HOST_CHARS = frozenset("/\\@[]()<>,\"'`|")
+
+SSH_USERNAME_VALIDATION_MESSAGE = (
+    "Enter a username using only letters, digits, dots, underscores, and "
+    "hyphens, not starting with a hyphen."
+)
+
+# Covers POSIX login names and hosted accounts like Hetzner's u123456-sub1.
+# No leading hyphen, so the value can never be read as an ssh option.
+_SSH_USERNAME_RE = re.compile(r"^[A-Za-z0-9._][A-Za-z0-9._-]{0,63}$")
 
 
 def normalize_ssh_host(host: str) -> str:
@@ -43,6 +52,37 @@ def normalize_ssh_host(host: str) -> str:
         raise ValueError(SSH_HOST_VALIDATION_MESSAGE)
 
     return candidate
+
+
+def normalize_ssh_username(username: str) -> str:
+    """Return a trimmed SSH login name, or raise ValueError."""
+    if not isinstance(username, str):
+        raise ValueError(SSH_USERNAME_VALIDATION_MESSAGE)
+    candidate = username.strip()
+    if not _SSH_USERNAME_RE.fullmatch(candidate):
+        raise ValueError(SSH_USERNAME_VALIDATION_MESSAGE)
+    return candidate
+
+
+def ssh_destination(username: str, host: str) -> str:
+    """Return ``user@host`` for an ssh, sftp, sshfs or ssh-copy-id argv.
+
+    The last line of defense for rows stored before input validation existed:
+    refuses any value OpenSSH could read as an option or that would shift the
+    user/host split. Deliberately looser than the input validators so a legacy
+    row with an unusual but harmless value keeps working.
+    """
+    for value in (username, host):
+        if (
+            not isinstance(value, str)
+            or not value
+            or value.startswith("-")
+            or _has_hidden_or_space_character(value)
+        ):
+            raise ValueError("Refusing an SSH user or host that could be an option")
+    if "@" in host:
+        raise ValueError("Refusing an SSH host that contains '@'")
+    return f"{username}@{host}"
 
 
 def _has_hidden_or_space_character(host: str) -> bool:

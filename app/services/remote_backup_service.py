@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 import structlog
 from sqlalchemy.orm import Session
 
+from app.utils.ssh_host_validation import ssh_destination
 from app.database.models import Repository, SSHConnection, SSHKey
 from app.utils.borg_env import effective_repository_remote_path
 from app.utils.borg_flags import parse_borg_flags
@@ -571,7 +572,8 @@ class RemoteBackupService:
                     "ServerAliveCountMax=3",
                     "-p",
                     str(ssh_connection.port),
-                    f"{ssh_connection.username}@{ssh_connection.host}",
+                    "--",
+                    ssh_destination(ssh_connection.username, ssh_connection.host),
                     command,
                 ]
 
@@ -781,7 +783,8 @@ class RemoteBackupService:
                     *host_key_ssh_opts(ssh_connection, db),
                     "-p",
                     str(ssh_connection.port),
-                    f"{ssh_connection.username}@{ssh_connection.host}",
+                    "--",
+                    ssh_destination(ssh_connection.username, ssh_connection.host),
                     remote_command,
                 ]
 

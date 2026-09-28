@@ -25,6 +25,7 @@ import structlog
 import base64
 from cryptography.fernet import Fernet
 
+from app.utils.ssh_host_validation import ssh_destination
 from app.config import settings
 from app.core.borg_router import BorgRouter
 from app.utils.borg_env import (
@@ -1518,7 +1519,8 @@ class MountService:
                 "ConnectTimeout=10",
                 "-p",
                 str(connection.port),
-                f"{connection.username}@{connection.host}",
+                "--",
+                ssh_destination(connection.username, connection.host),
                 f"{check} && echo 'FILE' || echo 'DIR'",
             ]
 
@@ -1598,7 +1600,8 @@ class MountService:
             "ConnectTimeout=10",
             "-P",
             str(connection.port),
-            f"{connection.username}@{connection.host}",
+            "--",
+            ssh_destination(connection.username, connection.host),
         ]
         process = await asyncio.create_subprocess_exec(
             *cmd,
@@ -1697,7 +1700,8 @@ class MountService:
                     "ConnectTimeout=10",
                     "-p",
                     str(connection.port),
-                    f"{connection.username}@{connection.host}",
+                    "--",
+                    ssh_destination(connection.username, connection.host),
                     # Emit key=value lines for parsing; also locate sftp-server binary
                     "printf 'user=%s\\n' \"$(whoami)\"; "
                     "printf 'uid=%s\\n' \"$(id -u)\"; "
@@ -1746,7 +1750,7 @@ class MountService:
             # Build SSHFS command WITH IdentityFile (this is the fix!)
             cmd = [
                 "sshfs",
-                f"{connection.username}@{connection.host}:{path_to_mount}",
+                f"{ssh_destination(connection.username, connection.host)}:{path_to_mount}",
                 mount_point,
                 "-p",
                 str(connection.port),

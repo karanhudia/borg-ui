@@ -41,7 +41,11 @@ from app.utils.ssh_host_keys import (
     sort_host_key_lines,
 )
 from app.utils.datetime_utils import serialize_datetime
-from app.utils.ssh_host_validation import normalize_ssh_host
+from app.utils.ssh_host_validation import (
+    normalize_ssh_host,
+    normalize_ssh_username,
+    ssh_destination,
+)
 from app.utils.ssh_utils import ssh_key_auth_args, write_ssh_key_to_tempfile
 import hashlib
 
@@ -98,7 +102,8 @@ async def _run_df_command(
         "ConnectTimeout=10",
         "-p",
         str(connection.port),
-        f"{connection.username}@{connection.host}",
+        "--",
+        ssh_destination(connection.username, connection.host),
         df_command,
     ]
 
@@ -290,6 +295,13 @@ class SSHQuickSetup(BaseModel):
             return value
         return normalize_ssh_host(value)
 
+    @field_validator("username")
+    @classmethod
+    def normalize_username(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        return normalize_ssh_username(value)
+
 
 class SSHConnectionCreate(BaseModel):
     host: str
@@ -312,6 +324,11 @@ class SSHConnectionCreate(BaseModel):
     def normalize_host(cls, value: str) -> str:
         return normalize_ssh_host(value)
 
+    @field_validator("username")
+    @classmethod
+    def normalize_username(cls, value: str) -> str:
+        return normalize_ssh_username(value)
+
 
 class SSHConnectionTest(BaseModel):
     host: str
@@ -322,6 +339,11 @@ class SSHConnectionTest(BaseModel):
     @classmethod
     def normalize_host(cls, value: str) -> str:
         return normalize_ssh_host(value)
+
+    @field_validator("username")
+    @classmethod
+    def normalize_username(cls, value: str) -> str:
+        return normalize_ssh_username(value)
 
 
 class SSHConnectionUpdate(BaseModel):
@@ -340,6 +362,13 @@ class SSHConnectionUpdate(BaseModel):
         if value is None:
             return value
         return normalize_ssh_host(value)
+
+    @field_validator("username")
+    @classmethod
+    def normalize_username(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        return normalize_ssh_username(value)
 
 
 class SSHConnectionStorage(BaseModel):
@@ -1263,7 +1292,7 @@ def _ssh_command_base(
 
 
 def _ssh_destination(connection: SSHConnection) -> str:
-    return f"{connection.username}@{connection.host}"
+    return ssh_destination(connection.username, connection.host)
 
 
 def _diagnostic_connection_metadata(connection: SSHConnection) -> dict[str, Any]:
@@ -1355,6 +1384,7 @@ async def _run_ssh_latency_probe(
     timeout_seconds: float,
 ) -> dict[str, Any]:
     cmd = _ssh_command_base(connection, key_file_path, timeout_seconds) + [
+        "--",
         _ssh_destination(connection),
         "pwd",
     ]
@@ -1402,6 +1432,7 @@ async def _run_ssh_tcp_probe(
     cmd = _ssh_command_base(connection, key_file_path, effective_timeout) + [
         "-W",
         f"{target.host}:{target.port}",
+        "--",
         _ssh_destination(connection),
     ]
     started_at = _monotonic()
@@ -1447,6 +1478,7 @@ async def _run_ssh_throughput_probe(
 ) -> dict[str, Any]:
     block_count = math.ceil(probe_size_bytes / SSH_DIAGNOSTICS_BLOCK_SIZE_BYTES)
     cmd = _ssh_command_base(connection, key_file_path, timeout_seconds) + [
+        "--",
         _ssh_destination(connection),
         f"dd if=/dev/zero bs={SSH_DIAGNOSTICS_BLOCK_SIZE_BYTES} count={block_count}",
     ]
@@ -2801,6 +2833,8 @@ async def deploy_ssh_key_with_copy_id(
 ) -> Dict[str, Any]:
     """Deploy SSH key using ssh-copy-id"""
     try:
+        destination = ssh_destination(username, host)
+
         # Decrypt private key
         private_key = decrypt_secret(ssh_key.private_key)
 
@@ -2854,7 +2888,7 @@ async def deploy_ssh_key_with_copy_id(
                 "ConnectTimeout=10",
                 "-p",
                 str(port),
-                f"{username}@{host}",
+                destination,
             ]
         )
 
@@ -2977,6 +3011,8 @@ async def test_ssh_key_connection(
 ) -> Dict[str, Any]:
     """Test SSH connection using the specified key"""
     try:
+        destination = ssh_destination(username, host)
+
         # Decrypt private key
         private_key = decrypt_secret(ssh_key.private_key)
 
@@ -3036,7 +3072,8 @@ async def test_ssh_key_connection(
             "ConnectTimeout=10",
             "-p",
             str(port),
-            f"{username}@{host}",
+            "--",
+            destination,
             "pwd",
         ]
 
