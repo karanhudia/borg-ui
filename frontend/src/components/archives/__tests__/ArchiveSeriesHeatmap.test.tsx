@@ -2,6 +2,7 @@ import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import ArchiveSeriesHeatmap from '../ArchiveSeriesHeatmap'
 import type { HeatmapDay, HeatmapResponse } from '../../../types/archives'
+import { formatCalendarDay } from '../../../utils/dateUtils'
 
 const day = (date: string, overrides = {}) => ({
   date,
@@ -48,6 +49,26 @@ describe('ArchiveSeriesHeatmap', () => {
     render(<ArchiveSeriesHeatmap data={data} onSelectDay={vi.fn()} />)
     expect(screen.queryByText(/All archives/)).not.toBeInTheDocument()
     expect(screen.queryByText('nightly')).not.toBeInTheDocument()
+  })
+
+  it("spans the summary over the band's own days, not the UTC day of first and last", () => {
+    // `first`/`last` are UTC timestamps; the day keys are already the
+    // viewer's calendar days, the ones the cells draw (issue #1221).
+    const evening: HeatmapResponse = {
+      ...data,
+      repository: {
+        ...band([day('2026-09-01'), day('2026-09-03')]),
+        first: '2026-09-02T02:00:00+00:00',
+        last: '2026-09-04T02:00:00+00:00',
+      },
+      series: [],
+    }
+    render(<ArchiveSeriesHeatmap data={evening} onSelectDay={vi.fn()} header={{}} />)
+    expect(
+      screen.getByText(
+        `2 archives on 2 days, ${formatCalendarDay('2026-09-01')} to ${formatCalendarDay('2026-09-03')}`
+      )
+    ).toBeInTheDocument()
   })
 
   it('opens the archive for a day that has one', () => {
