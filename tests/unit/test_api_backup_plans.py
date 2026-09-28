@@ -5531,6 +5531,57 @@ class TestBackupPlanRoutes:
         assert run.status == run_status
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("agent", [False, True])
+    async def test_cancelled_run_stops_its_restore_check(self, test_db, agent):
+        """`cancel_run` only reaches the backup, which has finished by the
+        time the restore check runs, so the step itself must stop the check:
+        the server's extract process, or the agent's job."""
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        stop = asyncio.Event()
+        cancelled = []
+
+        async def fake_restore_check(job_id, repository_id):
+            await stop.wait()
+
+        async def fake_cancel(*args):
+            cancelled.append(args[-1])
+            stop.set()
+            return True
+
+        service = "app.services.backup_plan_execution_service"
+        with (
+            patch(f"{service}.RESTORE_CHECK_CANCEL_POLL_SECONDS", 0.01),
+            patch.object(
+                backup_plan_execution_service, "_is_run_cancelled", return_value=True
+            ),
+            patch(
+                f"{service}.restore_check_service.execute_restore_check",
+                new=fake_restore_check,
+            ),
+            patch(
+                f"{service}.restore_check_service.cancel_restore_check",
+                new=fake_cancel,
+            ),
+            patch(
+                "app.services.operations.executors.maintenance"
+                ".cancel_agent_operation_job",
+                new=fake_cancel,
+            ),
+            patch(
+                "app.services.repository_executor.is_agent_executor",
+                return_value=agent,
+            ),
+        ):
+            await asyncio.wait_for(
+                backup_plan_execution_service._restore_check_until_cancelled(
+                    test_db, repo, 42, run_id=1
+                ),
+                timeout=5,
+            )
+
+        assert cancelled == [42]
+
+    @pytest.mark.asyncio
     async def test_maintenance_step_left_to_its_agent_still_fails_the_run(
         self, test_db
     ):

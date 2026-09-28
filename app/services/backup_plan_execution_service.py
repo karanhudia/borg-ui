@@ -101,6 +101,7 @@ TERMINAL_PLAN_RUN_REPOSITORY_STATUSES = {
 SUCCESS_BACKUP_STATUSES = {"completed", "completed_with_warnings"}
 WARNING_BACKUP_STATUSES = {"completed_with_warnings", "skipped"}
 CANCELLED_MESSAGE = '{"key": "backend.errors.backup.cancelledByUser"}'
+RESTORE_CHECK_CANCEL_POLL_SECONDS = 2
 
 
 @dataclass(frozen=True)
@@ -2388,8 +2389,8 @@ class BackupPlanExecutionService:
                 backup_job,
                 restore_check_job,
                 run_id,
-                lambda: restore_check_service.execute_restore_check(
-                    restore_check_job.id, repo.id
+                lambda: self._restore_check_until_cancelled(
+                    db, repo, restore_check_job.id, run_id
                 ),
             )
             if self._is_run_cancelled(run_id):
@@ -2412,6 +2413,32 @@ class BackupPlanExecutionService:
             db.commit()
 
         return "completed" if maintenance_ok else "completed_with_warnings"
+
+    async def _restore_check_until_cancelled(
+        self, db: Session, repo: Repository, operation_id: int, run_id: int
+    ) -> None:
+        """Run the restore check, stopping it if the plan run is cancelled.
+        `cancel_run` only reaches the backup, which is done by now, and a
+        full-archive extract can run for hours."""
+        from app.services.operations.executors.maintenance import (
+            cancel_agent_operation_job,
+        )
+        from app.services.repository_executor import is_agent_executor
+
+        task = asyncio.ensure_future(
+            restore_check_service.execute_restore_check(operation_id, repo.id)
+        )
+        stopped = False
+        while not task.done():
+            await asyncio.wait({task}, timeout=RESTORE_CHECK_CANCEL_POLL_SECONDS)
+            if task.done() or stopped or not self._is_run_cancelled(run_id):
+                continue
+            # False means "ask again": the agent has not taken the job yet.
+            if is_agent_executor(repo):
+                stopped = await cancel_agent_operation_job(db, repo, operation_id)
+            else:
+                stopped = await restore_check_service.cancel_restore_check(operation_id)
+        await task
 
     def _mark_repository_skipped(self, run_id: int, repository_id: int) -> None:
         """Mark a pending repository child as skipped."""
