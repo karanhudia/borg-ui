@@ -398,9 +398,7 @@ class TestBrowseProtection:
         headers = {"Authorization": f"Bearer {token}"}
         # Cache hit path returns immediately without touching borg, so the only
         # gate we exercise is the authorization check.
-        with patch(
-            "app.api.browse.archive_cache.get", return_value=[]
-        ):
+        with patch("app.api.browse.archive_cache.get", return_value=[]):
             response = test_client.get(
                 f"/api/browse/{repo.id}/archive1",
                 headers=headers,
@@ -535,12 +533,13 @@ class TestMountProtection:
         _grant(test_db, user, repo, "operator")
         token = create_access_token(data={"sub": user.username})
         headers = {"Authorization": f"Bearer {token}"}
-        with patch(
-            "app.api.mounts.mount_service.mount_borg_archive",
-            new_callable=AsyncMock,
-        ) as mock_mount, patch(
-            "app.api.mounts.mount_service.get_mount"
-        ) as mock_get:
+        with (
+            patch(
+                "app.api.mounts.mount_service.mount_borg_archive",
+                new_callable=AsyncMock,
+            ) as mock_mount,
+            patch("app.api.mounts.mount_service.get_mount") as mock_get,
+        ):
             mock_mount.return_value = ("/mnt/x", "mid-1")
             mock_get.return_value = None  # forces a 500, proving authz passed
             response = test_client.post(
@@ -597,5 +596,47 @@ class TestActivityLogProtection:
         response = test_client.get(
             f"/api/activity/script_execution/{ex.id}/logs",
             headers=headers,
+        )
+        assert response.status_code != 403
+
+    def _make_orphan_execution(self, db):
+        """A standalone execution: no repository, no plan. Deleting a repo
+        nulls repository_id like this, so its retained logs must not leak."""
+        from app.database.models import ScriptExecution
+
+        ex = ScriptExecution(
+            repository_id=None,
+            backup_plan_id=None,
+            hook_type="pre-backup",
+            status="completed",
+            stdout="secret hook output from a deleted repository",
+        )
+        db.add(ex)
+        db.commit()
+        db.refresh(ex)
+        return ex
+
+    def test_non_admin_cannot_read_orphaned_script_logs(self, test_client, test_db):
+        """Regression for the deleted-repository (null repository_id) case: a
+        job tied to neither a live repo nor a plan is admin-only."""
+        from app.core.security import create_access_token
+
+        user = _make_user(test_db, "act-vwr3", role="viewer")
+        ex = self._make_orphan_execution(test_db)
+        token = create_access_token(data={"sub": user.username})
+        headers = {"Authorization": f"Bearer {token}"}
+        response = test_client.get(
+            f"/api/activity/script_execution/{ex.id}/logs",
+            headers=headers,
+        )
+        assert response.status_code == 403
+
+    def test_admin_can_read_orphaned_script_logs(
+        self, test_client, test_db, admin_headers
+    ):
+        ex = self._make_orphan_execution(test_db)
+        response = test_client.get(
+            f"/api/activity/script_execution/{ex.id}/logs",
+            headers=admin_headers,
         )
         assert response.status_code != 403

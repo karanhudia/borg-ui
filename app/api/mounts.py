@@ -30,7 +30,9 @@ def _require_mount_repo_access(
 
     A mount exposes an archive's real file contents through the mount point, so
     it needs the same repo-scoped authorization as the archive endpoints. A
-    mount with no repository (should not happen for Borg archives) is admin-only.
+    mount whose repository is missing (no id, or the row was deleted while the
+    mount is still active) stays reachable to an admin so orphaned mounts can be
+    cleaned up, and is denied to everyone else.
     """
     if repository_id is None:
         if user.role != "admin":
@@ -41,6 +43,8 @@ def _require_mount_repo_access(
         return
     repository = db.query(Repository).filter(Repository.id == repository_id).first()
     if not repository:
+        if user.role == "admin":
+            return
         raise HTTPException(
             status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"}
         )
