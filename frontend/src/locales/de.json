@@ -6584,5 +6584,136 @@
       "autoOff": "Die automatische Prune-Vorschau ist aus, daher ist dieser Vergleich veraltet und wird nicht angezeigt. Klicke auf Jetzt vergleichen, um ihn auszuführen.",
       "autoOffAction": "In den Einstellungen einschalten"
     }
+  },
+  "quickStart": {
+    "title": "Schnellstart",
+    "subtitle": "Beantworte ein paar Fragen und Borg UI richtet ein geplantes, sich selbst pflegendes Backup für dich ein.",
+    "create": "Backup erstellen",
+    "steps": {
+      "what": "Was",
+      "connect": "Verbinden",
+      "folders": "Ordner",
+      "destination": "Wohin",
+      "protect": "Schützen",
+      "schedule": "Wann",
+      "review": "Prüfen"
+    },
+    "what": {
+      "title": "Was möchtest du sichern?",
+      "server": "Dateien auf diesem Server",
+      "serverDesc": "Ordner auf dem Rechner, auf dem Borg UI läuft, zum Beispiel dein Home-Ordner, Dokumente oder App-Daten."
+    },
+    "folders": {
+      "title": "Wähle die Ordner zum Sichern",
+      "hint": "Füge einen oder mehrere Ordner hinzu. In Docker erscheint die Festplatte deines Servers meist unter /local.",
+      "pathLabel": "Ordner",
+      "add": "Hinzufügen",
+      "empty": "Noch keine Ordner. Gib einen Pfad ein oder nutze den Ordner-Button zum Durchsuchen."
+    },
+    "destination": {
+      "title": "Wo sollen die Backups liegen?",
+      "server": "Eine Festplatte auf diesem Server",
+      "serverDesc": "Gut für eine zweite Festplatte oder eine eingebundene NAS-Freigabe.",
+      "pathLabel": "Backup-Speicherort",
+      "pathHint": "Ein neuer, leerer Ordner. Borg UI legt ihn an, falls er nicht existiert.",
+      "insideSource": "Dieser Ordner liegt in einem der Ordner, die du sicherst. Wähle einen Ort außerhalb davon.",
+      "offsiteTip": "Ein Backup auf derselben Festplatte wie deine Daten übersteht keinen Festplattenausfall. Nutze wenn möglich eine zweite Festplatte oder einen anderen Rechner."
+    },
+    "protect": {
+      "title": "Benenne und schütze deine Backups",
+      "hint": "Backups werden verschlüsselt. Nur wer die Passphrase hat, kann sie lesen.",
+      "nameLabel": "Name",
+      "nameHint": "Wird für das Repository und den Backup-Plan verwendet.",
+      "passphraseLabel": "Passphrase",
+      "passphraseHint": "Mindestens {{count}} Zeichen. Ein paar zufällige Wörter funktionieren gut.",
+      "confirmLabel": "Passphrase wiederholen",
+      "mismatch": "Die Passphrasen stimmen nicht überein.",
+      "showPassphrase": "Passphrase anzeigen",
+      "hidePassphrase": "Passphrase verbergen",
+      "warning": "Bewahre diese Passphrase an einem sicheren Ort außerhalb dieses Servers auf. Geht sie verloren, lassen sich deine Backups nicht wiederherstellen.",
+      "download": "Herunterladen",
+      "savedConfirm": "Ich habe meine Passphrase sicher aufbewahrt",
+      "unencrypted": "Die Verschlüsselung ist aus. Jeder mit Zugriff auf den Backup-Speicherort kann deine Dateien lesen."
+    },
+    "schedule": {
+      "title": "Wann soll es laufen?",
+      "hint": "Zeiten gelten in {{timezone}}. Du kannst das später im Backup-Plan ändern.",
+      "presets": {
+        "daily": "Jeden Tag",
+        "dailyDesc": "Um 02:00, wenn die meisten Rechner ruhig sind.",
+        "every6h": "Alle 6 Stunden",
+        "every6hDesc": "Für Daten, die sich oft ändern.",
+        "weekly": "Jede Woche",
+        "weeklyDesc": "Sonntags um 02:00.",
+        "custom": "Eigener Zeitplan",
+        "customDesc": "Lege deinen eigenen Zeitplan fest."
+      }
+    },
+    "review": {
+      "title": "Prüfen und erstellen",
+      "hint": "Das richtet Borg UI ein. Die Standardwerte passen für die meisten.",
+      "backUp": "Sichern",
+      "storeIn": "Speichern in",
+      "schedule": "Zeitplan",
+      "manualOnly": "Nur manuell",
+      "keepLabel": "Behalten",
+      "keepAll": "Jedes Backup (nichts wird gelöscht)",
+      "keep": {
+        "keepHourly": "{{count}} stündlich",
+        "keepDaily": "{{count}} täglich",
+        "keepWeekly": "{{count}} wöchentlich",
+        "keepMonthly": "{{count}} monatlich",
+        "keepQuarterly": "{{count}} vierteljährlich",
+        "keepYearly": "{{count}} jährlich"
+      },
+      "afterEachRun": "Nach jedem Lauf",
+      "nothing": "Nichts",
+      "maintenance": {
+        "prune": "alte Backups löschen",
+        "compact": "Speicher freigeben",
+        "check": "Integrität prüfen"
+      },
+      "encryption": "Verschlüsselung",
+      "encrypted": "An ({{mode}})",
+      "unencrypted": "Aus",
+      "creates": "Erstellt",
+      "createsList": "Repository „{{name}}“ und Backup-Plan „{{name}}“"
+    },
+    "customize": {
+      "title": "Anpassen",
+      "subtitle": "Optional. Verschlüsselung, Aufbewahrung, Wartung und Kompression ändern.",
+      "schedule": "Nach Zeitplan ausführen",
+      "scheduleHint": "Aus heißt, der Plan läuft nur, wenn du ihn startest.",
+      "encrypt": "Backups verschlüsseln",
+      "encryptHint": "Dringend empfohlen.",
+      "prune": "Alte Backups löschen",
+      "pruneHint": "Behält die Anzahlen unten und entfernt ältere Backups nach jedem Lauf.",
+      "compact": "Speicher freigeben",
+      "compactHint": "Gibt Speicherplatz frei, nachdem alte Backups gelöscht wurden.",
+      "check": "Integrität prüfen",
+      "checkHint": "Prüft das Repository nach jedem Lauf bis zu einer Stunde lang und macht beim nächsten Mal dort weiter.",
+      "borgVersion": "Borg-Version"
+    },
+    "progress": {
+      "title": "Dein Backup wird eingerichtet",
+      "doneTitle": "Dein Backup ist bereit",
+      "doneHint": "Alles ist eingerichtet. Starte das erste Backup jetzt oder lass den Zeitplan es starten.",
+      "failed": "Einrichtung angehalten",
+      "retry": "Erneut versuchen",
+      "editAnswers": "Antworten bearbeiten",
+      "openPlan": "Backup-Pläne öffnen",
+      "runNow": "Erstes Backup jetzt starten",
+      "backupStarted": "Erstes Backup gestartet",
+      "actions": {
+        "create_repository": "Repository erstellen",
+        "create_plan": "Backup-Plan mit Zeitplan erstellen"
+      },
+      "status": {
+        "pending": "wartet",
+        "running": "läuft",
+        "done": "fertig",
+        "failed": "fehlgeschlagen"
+      }
+    }
   }
 }

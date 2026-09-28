@@ -6584,5 +6584,136 @@
       "autoOff": "Automatic prune previews are off, so this comparison is out of date and is not shown. Press Compare now to run it.",
       "autoOffAction": "Turn on in Settings"
     }
+  },
+  "quickStart": {
+    "title": "Quick start",
+    "subtitle": "Answer a few questions and Borg UI sets up a scheduled, self-maintaining backup for you.",
+    "create": "Create backup",
+    "steps": {
+      "what": "What",
+      "connect": "Connect",
+      "folders": "Folders",
+      "destination": "Where",
+      "protect": "Protect",
+      "schedule": "When",
+      "review": "Review"
+    },
+    "what": {
+      "title": "What do you want to back up?",
+      "server": "Files on this server",
+      "serverDesc": "Folders on the machine that runs Borg UI, such as your home folder, documents or app data."
+    },
+    "folders": {
+      "title": "Pick the folders to back up",
+      "hint": "Add one or more folders. In Docker, your server's disk usually appears under /local.",
+      "pathLabel": "Folder",
+      "add": "Add",
+      "empty": "No folders yet. Type a path or use the folder button to browse."
+    },
+    "destination": {
+      "title": "Where should the backups live?",
+      "server": "A disk on this server",
+      "serverDesc": "Good for a second drive or a mounted NAS share.",
+      "pathLabel": "Backup location",
+      "pathHint": "A new, empty folder. Borg UI creates it if it does not exist.",
+      "insideSource": "This folder is inside one of the folders you are backing up. Pick a location outside them.",
+      "offsiteTip": "A backup on the same disk as your data does not survive a disk failure. Use a second drive or another machine if you can."
+    },
+    "protect": {
+      "title": "Name and protect your backups",
+      "hint": "Backups are encrypted. Only someone with the passphrase can read them.",
+      "nameLabel": "Name",
+      "nameHint": "Used for the repository and the backup plan.",
+      "passphraseLabel": "Passphrase",
+      "passphraseHint": "At least {{count}} characters. A few random words work well.",
+      "confirmLabel": "Repeat passphrase",
+      "mismatch": "The passphrases do not match.",
+      "showPassphrase": "Show passphrase",
+      "hidePassphrase": "Hide passphrase",
+      "warning": "Keep this passphrase somewhere safe outside this server. If it is lost, your backups cannot be restored.",
+      "download": "Download",
+      "savedConfirm": "I have saved my passphrase somewhere safe",
+      "unencrypted": "Encryption is off. Anyone with access to the backup location can read your files."
+    },
+    "schedule": {
+      "title": "When should it run?",
+      "hint": "Times are in {{timezone}}. You can change this later on the backup plan.",
+      "presets": {
+        "daily": "Every day",
+        "dailyDesc": "At 02:00, when most machines are quiet.",
+        "every6h": "Every 6 hours",
+        "every6hDesc": "For data that changes often.",
+        "weekly": "Every week",
+        "weeklyDesc": "Sundays at 02:00.",
+        "custom": "Custom",
+        "customDesc": "Pick your own schedule."
+      }
+    },
+    "review": {
+      "title": "Check and create",
+      "hint": "This is what Borg UI will set up. The defaults suit most people.",
+      "backUp": "Back up",
+      "storeIn": "Store in",
+      "schedule": "Schedule",
+      "manualOnly": "Manual only",
+      "keepLabel": "Keep",
+      "keepAll": "Every backup (nothing is deleted)",
+      "keep": {
+        "keepHourly": "{{count}} hourly",
+        "keepDaily": "{{count}} daily",
+        "keepWeekly": "{{count}} weekly",
+        "keepMonthly": "{{count}} monthly",
+        "keepQuarterly": "{{count}} quarterly",
+        "keepYearly": "{{count}} yearly"
+      },
+      "afterEachRun": "After each run",
+      "nothing": "Nothing",
+      "maintenance": {
+        "prune": "delete old backups",
+        "compact": "free up space",
+        "check": "check integrity"
+      },
+      "encryption": "Encryption",
+      "encrypted": "On ({{mode}})",
+      "unencrypted": "Off",
+      "creates": "Creates",
+      "createsList": "Repository \"{{name}}\" and backup plan \"{{name}}\""
+    },
+    "customize": {
+      "title": "Customize",
+      "subtitle": "Optional. Change encryption, retention, maintenance and compression.",
+      "schedule": "Run on a schedule",
+      "scheduleHint": "Off means the plan only runs when you start it.",
+      "encrypt": "Encrypt backups",
+      "encryptHint": "Strongly recommended.",
+      "prune": "Delete old backups",
+      "pruneHint": "Keeps the counts below and removes older backups after each run.",
+      "compact": "Free up space",
+      "compactHint": "Reclaims disk space after old backups are deleted.",
+      "check": "Check integrity",
+      "checkHint": "Verifies the repository for up to an hour after each run, picking up where it left off.",
+      "borgVersion": "Borg version"
+    },
+    "progress": {
+      "title": "Setting up your backup",
+      "doneTitle": "Your backup is ready",
+      "doneHint": "Everything is in place. Run the first backup now, or let the schedule start it.",
+      "failed": "Setup stopped",
+      "retry": "Retry",
+      "editAnswers": "Edit answers",
+      "openPlan": "Open backup plans",
+      "runNow": "Run first backup now",
+      "backupStarted": "First backup started",
+      "actions": {
+        "create_repository": "Create the repository",
+        "create_plan": "Create the backup plan with its schedule"
+      },
+      "status": {
+        "pending": "waiting",
+        "running": "in progress",
+        "done": "done",
+        "failed": "failed"
+      }
+    }
   }
 }

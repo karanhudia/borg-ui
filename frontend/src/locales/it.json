@@ -6584,5 +6584,136 @@
       "autoOff": "Le anteprime di prune automatiche sono disattivate, quindi questo confronto non è aggiornato e non viene mostrato. Premi Confronta ora per eseguirlo.",
       "autoOffAction": "Attiva nelle Impostazioni"
     }
+  },
+  "quickStart": {
+    "title": "Avvio rapido",
+    "subtitle": "Rispondi a poche domande e Borg UI configura per te un backup pianificato che si mantiene da solo.",
+    "create": "Crea backup",
+    "steps": {
+      "what": "Cosa",
+      "connect": "Connetti",
+      "folders": "Cartelle",
+      "destination": "Dove",
+      "protect": "Proteggi",
+      "schedule": "Quando",
+      "review": "Verifica"
+    },
+    "what": {
+      "title": "Cosa vuoi salvare?",
+      "server": "File su questo server",
+      "serverDesc": "Cartelle sulla macchina che esegue Borg UI, come la tua cartella home, i documenti o i dati delle app."
+    },
+    "folders": {
+      "title": "Scegli le cartelle da salvare",
+      "hint": "Aggiungi una o più cartelle. In Docker, il disco del server di solito compare sotto /local.",
+      "pathLabel": "Cartella",
+      "add": "Aggiungi",
+      "empty": "Nessuna cartella. Scrivi un percorso o usa il pulsante cartella per sfogliare."
+    },
+    "destination": {
+      "title": "Dove devono stare i backup?",
+      "server": "Un disco su questo server",
+      "serverDesc": "Ideale per un secondo disco o una condivisione NAS montata.",
+      "pathLabel": "Posizione dei backup",
+      "pathHint": "Una cartella nuova e vuota. Borg UI la crea se non esiste.",
+      "insideSource": "Questa cartella si trova dentro una delle cartelle che stai salvando. Scegli una posizione esterna.",
+      "offsiteTip": "Un backup sullo stesso disco dei dati non sopravvive a un guasto del disco. Se puoi, usa un secondo disco o un'altra macchina."
+    },
+    "protect": {
+      "title": "Dai un nome ai backup e proteggili",
+      "hint": "I backup sono cifrati. Solo chi ha la passphrase può leggerli.",
+      "nameLabel": "Nome",
+      "nameHint": "Usato per il repository e il piano di backup.",
+      "passphraseLabel": "Passphrase",
+      "passphraseHint": "Almeno {{count}} caratteri. Qualche parola casuale funziona bene.",
+      "confirmLabel": "Ripeti la passphrase",
+      "mismatch": "Le passphrase non coincidono.",
+      "showPassphrase": "Mostra passphrase",
+      "hidePassphrase": "Nascondi passphrase",
+      "warning": "Conserva questa passphrase in un posto sicuro fuori da questo server. Se la perdi, i backup non potranno essere ripristinati.",
+      "download": "Scarica",
+      "savedConfirm": "Ho salvato la mia passphrase in un posto sicuro",
+      "unencrypted": "La cifratura è disattivata. Chiunque abbia accesso alla posizione dei backup può leggere i tuoi file."
+    },
+    "schedule": {
+      "title": "Quando deve essere eseguito?",
+      "hint": "Gli orari sono in {{timezone}}. Puoi cambiarlo più avanti nel piano di backup.",
+      "presets": {
+        "daily": "Ogni giorno",
+        "dailyDesc": "Alle 02:00, quando la maggior parte delle macchine è inattiva.",
+        "every6h": "Ogni 6 ore",
+        "every6hDesc": "Per dati che cambiano spesso.",
+        "weekly": "Ogni settimana",
+        "weeklyDesc": "La domenica alle 02:00.",
+        "custom": "Personalizzato",
+        "customDesc": "Scegli la tua pianificazione."
+      }
+    },
+    "review": {
+      "title": "Verifica e crea",
+      "hint": "Ecco cosa configurerà Borg UI. I valori predefiniti vanno bene per la maggior parte delle persone.",
+      "backUp": "Salva",
+      "storeIn": "Archivia in",
+      "schedule": "Pianificazione",
+      "manualOnly": "Solo manuale",
+      "keepLabel": "Conserva",
+      "keepAll": "Ogni backup (non viene eliminato nulla)",
+      "keep": {
+        "keepHourly": "{{count}} orari",
+        "keepDaily": "{{count}} giornalieri",
+        "keepWeekly": "{{count}} settimanali",
+        "keepMonthly": "{{count}} mensili",
+        "keepQuarterly": "{{count}} trimestrali",
+        "keepYearly": "{{count}} annuali"
+      },
+      "afterEachRun": "Dopo ogni esecuzione",
+      "nothing": "Niente",
+      "maintenance": {
+        "prune": "elimina i backup vecchi",
+        "compact": "libera spazio",
+        "check": "verifica l'integrità"
+      },
+      "encryption": "Cifratura",
+      "encrypted": "Attiva ({{mode}})",
+      "unencrypted": "Disattivata",
+      "creates": "Crea",
+      "createsList": "Repository «{{name}}» e piano di backup «{{name}}»"
+    },
+    "customize": {
+      "title": "Personalizza",
+      "subtitle": "Facoltativo. Modifica cifratura, conservazione, manutenzione e compressione.",
+      "schedule": "Esegui secondo pianificazione",
+      "scheduleHint": "Disattivato significa che il piano si avvia solo quando lo avvii tu.",
+      "encrypt": "Cifra i backup",
+      "encryptHint": "Fortemente consigliato.",
+      "prune": "Elimina i backup vecchi",
+      "pruneHint": "Mantiene le quantità qui sotto ed elimina i backup più vecchi dopo ogni esecuzione.",
+      "compact": "Libera spazio",
+      "compactHint": "Recupera spazio su disco dopo l'eliminazione dei backup vecchi.",
+      "check": "Verifica l'integrità",
+      "checkHint": "Verifica il repository fino a un'ora dopo ogni esecuzione, riprendendo da dove si era fermato.",
+      "borgVersion": "Versione di Borg"
+    },
+    "progress": {
+      "title": "Configurazione del backup in corso",
+      "doneTitle": "Il tuo backup è pronto",
+      "doneHint": "È tutto pronto. Avvia ora il primo backup o lascia che parta con la pianificazione.",
+      "failed": "Configurazione interrotta",
+      "retry": "Riprova",
+      "editAnswers": "Modifica risposte",
+      "openPlan": "Apri i piani di backup",
+      "runNow": "Avvia ora il primo backup",
+      "backupStarted": "Primo backup avviato",
+      "actions": {
+        "create_repository": "Crea il repository",
+        "create_plan": "Crea il piano di backup con la sua pianificazione"
+      },
+      "status": {
+        "pending": "in attesa",
+        "running": "in corso",
+        "done": "fatto",
+        "failed": "non riuscito"
+      }
+    }
   }
 }
