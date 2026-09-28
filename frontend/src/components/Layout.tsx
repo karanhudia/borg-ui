@@ -35,8 +35,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     canEnrollPasskeyFromRecentLogin,
     clearRecentPasskeyEnrollmentState,
   } = useAuth()
-  const { announcement, acknowledgeAnnouncement, snoozeAnnouncement, trackAnnouncementCtaClick } =
-    useAnnouncementSurface()
+  const {
+    announcement,
+    acknowledgeAnnouncement,
+    snoozeAnnouncement,
+    trackAnnouncementCtaClick,
+    settled: announcementSettled,
+  } = useAnnouncementSurface()
   const { data: systemInfo } = useSystemInfo()
 
   // Segment Umami visitors by plan. Read straight from the query so a loading
@@ -47,6 +52,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, [systemInfo?.plan])
   const [mobileOpen, setMobileOpen] = useState(false)
   const [showConsentBanner, setShowConsentBanner] = useState(false)
+  const [consentChecked, setConsentChecked] = useState(false)
   const [showPasskeyPrompt, setShowPasskeyPrompt] = useState(false)
   const activeBackendTarget = useActiveBackendTarget()
   const queryClient = useQueryClient()
@@ -60,6 +66,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       } else {
         setShowConsentBanner(false)
       }
+      setConsentChecked(true)
     }
     checkConsent()
   }, [])
@@ -129,7 +136,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         : null
 
   return (
-    <QuickStartProvider allowAutoOpen={activeSurface === null}>
+    <QuickStartProvider
+      allowAutoOpen={consentChecked && announcementSettled && activeSurface === null}
+    >
       <Box sx={{ display: 'flex' }}>
         <AppHeader onToggleMobileMenu={() => setMobileOpen(!mobileOpen)} />
 

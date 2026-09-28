@@ -22,6 +22,8 @@ interface UseAnnouncementSurfaceResult {
   acknowledgeAnnouncement: () => void
   snoozeAnnouncement: () => void
   trackAnnouncementCtaClick: () => void
+  /** False until the manifest fetch and system info have answered, so no announcement can still appear. */
+  settled: boolean
 }
 
 export function useAnnouncementSurface(): UseAnnouncementSurfaceResult {
@@ -32,7 +34,11 @@ export function useAnnouncementSurface(): UseAnnouncementSurfaceResult {
   const announcementsUrl = getAnnouncementsUrl()
   const lastTrackedAnnouncementIdRef = useRef<string | null>(null)
 
-  const { data: manifest } = useQuery({
+  const {
+    data: manifest,
+    dataUpdatedAt,
+    errorUpdatedAt,
+  } = useQuery({
     queryKey: ['announcements-manifest', announcementsUrl],
     queryFn: () => fetchAnnouncementsManifest(announcementsUrl),
     initialData: DEFAULT_ANNOUNCEMENTS_MANIFEST,
@@ -113,5 +119,7 @@ export function useAnnouncementSurface(): UseAnnouncementSurfaceResult {
     acknowledgeAnnouncement: handleAcknowledgeAnnouncement,
     snoozeAnnouncement: handleSnoozeAnnouncement,
     trackAnnouncementCtaClick: handleTrackAnnouncementCtaClick,
+    // initialData is stamped at 0, so either timestamp moves only once the real fetch answers.
+    settled: Boolean(systemInfo) && (dataUpdatedAt > 0 || errorUpdatedAt > 0),
   }
 }
