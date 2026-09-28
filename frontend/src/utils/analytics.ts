@@ -14,6 +14,10 @@ export const ANALYTICS_ENDPOINT = 'https://t.borgui.com/e'
 
 const FLUSH_MS = 5000
 const MAX_BATCH = 50
+// Under the ingest's 64 KiB body limit, and the browser's 64 KiB budget for all
+// keepalive requests in flight at once.
+const MAX_BYTES = 60_000
+const bytes = (text: string): number => new TextEncoder().encode(text).length
 
 type Props = Record<string, unknown>
 
@@ -44,7 +48,9 @@ let listening = false
 // Page views that arrived before tracking was allowed, with where and when they
 // happened; sent once preferences allow it.
 let pendingPageviews: { path: string; at: string }[] = []
-let loadingPreference = false
+// Consent and opt-out answers given before an install key is known (the preference
+// request failed); sent once a later load provides the key.
+let pendingForced: { name: string; data?: Props; at: { path: string; at: string } }[] = []
 
 // crypto.randomUUID only exists in secure contexts; plain-HTTP LAN installs still have getRandomValues.
 const randomId = (): string => {
@@ -94,20 +100,38 @@ const scrubProps = (data?: Props): Props | undefined => {
   return Object.keys(out).length ? out : undefined
 }
 
-export const flushAnalytics = (): void => {
+/**
+ * Send everything queued, in batches of at most MAX_BATCH events and MAX_BYTES.
+ * `keepalive` lets a send outlive the page (tab hidden, reload right after opt-out);
+ * it is only used then, and only while the batches sent so far fit its 64 KiB budget.
+ */
+export const flushAnalytics = (keepalive = false): void => {
   if (flushTimer) {
     clearTimeout(flushTimer)
     flushTimer = null
   }
+  let keptBytes = 0
   while (queue.length) {
-    const body = JSON.stringify({ events: queue.splice(0, MAX_BATCH) })
+    let count = 0
+    let body = ''
+    // At least one event per batch, so an oversized one is still attempted.
+    while (count < Math.min(MAX_BATCH, queue.length)) {
+      const next = JSON.stringify({ events: queue.slice(0, count + 1) })
+      if (count > 0 && bytes(next) > MAX_BYTES) break
+      body = next
+      count++
+    }
+    queue.splice(0, count)
+    const size = bytes(body)
+    const keep = keepalive && keptBytes + size <= MAX_BYTES
+    if (keep) keptBytes += size
     // text/plain keeps this a CORS simple request, so self-hosted origins need no preflight.
     // sendBeacon is not used because it cannot suppress the Referer header.
     void fetch(ANALYTICS_ENDPOINT, {
       method: 'POST',
       body,
       headers: { 'Content-Type': 'text/plain' },
-      keepalive: true,
+      keepalive: keep,
       credentials: 'omit',
       referrerPolicy: 'no-referrer',
     }).catch(() => {
@@ -120,10 +144,10 @@ const scheduleFlush = (): void => {
   if (!listening) {
     listening = true
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') flushAnalytics()
+      if (document.visibilityState === 'hidden') flushAnalytics(true)
     })
   }
-  if (!flushTimer) flushTimer = setTimeout(flushAnalytics, FLUSH_MS)
+  if (!flushTimer) flushTimer = setTimeout(() => flushAnalytics(), FLUSH_MS)
 }
 
 const canTrack = (): boolean => preferenceLoaded && userOptedOut === false && !!instanceKey
@@ -134,7 +158,11 @@ const enqueue = (
   force = false,
   at = { path: window.location.pathname, at: new Date().toISOString() }
 ): void => {
-  if (!instanceKey || (!force && !canTrack())) return
+  if (!instanceKey) {
+    if (force && pendingForced.length < MAX_BATCH) pendingForced.push({ name, data, at })
+    return
+  }
+  if (!force && !canTrack()) return
   const props = scrubProps(data)
   queue.push({
     event_id: randomId(),
@@ -149,7 +177,8 @@ const enqueue = (
     ...(currentPlan ? { plan: currentPlan } : {}),
     ...(props ? { props } : {}),
   })
-  if (force || queue.length >= MAX_BATCH) flushAnalytics()
+  if (force) flushAnalytics(true)
+  else if (queue.length >= MAX_BATCH) flushAnalytics()
   else scheduleFlush()
 }
 
@@ -158,15 +187,18 @@ const enqueue = (
  * Called on app startup and after login, before any tracking.
  */
 export const loadUserPreference = async (): Promise<void> => {
-  loadingPreference = true
   try {
     await readPreference()
   } finally {
-    loadingPreference = false
-    // Views held during loading go out now if tracking is allowed, otherwise never.
+    // Views held before the first load go out now if tracking is allowed, otherwise never.
     const held = pendingPageviews
     pendingPageviews = []
     if (canTrack()) for (const view of held) enqueue('pageview', undefined, false, view)
+    if (instanceKey) {
+      const forced = pendingForced
+      pendingForced = []
+      for (const event of forced) enqueue(event.name, event.data, true, event.at)
+    }
   }
 }
 
@@ -225,10 +257,11 @@ export const getAnalyticsInstanceKey = (): string | null => (canTrack() ? instan
  * Track a page view. Only the path is sent; any query string is dropped.
  */
 export const trackPageView = (_path?: string): void => {
-  // The first route renders before preferences load; hold that view (where and when it
-  // happened) instead of losing it. A view while analytics is simply off is dropped.
+  // The first route renders before preferences first load; hold that view (where and when
+  // it happened) instead of losing it. Once a preference is known, a view while analytics
+  // is off is dropped, even during a reload that turns it on.
   if (!canTrack()) {
-    if ((!preferenceLoaded || loadingPreference) && pendingPageviews.length < MAX_BATCH) {
+    if (!preferenceLoaded && pendingPageviews.length < MAX_BATCH) {
       pendingPageviews.push({ path: window.location.pathname, at: new Date().toISOString() })
     }
     return
