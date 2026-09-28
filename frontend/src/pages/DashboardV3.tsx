@@ -25,12 +25,14 @@ import { DashboardSkeleton } from './dashboard-v3/DashboardSkeleton'
 import { PulseDot } from './dashboard-v3/health'
 import { UpcomingBackupsPanel } from './dashboard-v3/UpcomingBackupsPanel'
 import { SpaceSavingsPanel } from './dashboard-v3/SpaceSavingsPanel'
+import { SuccessDonutLegend } from './dashboard-v3/SuccessDonutLegend'
 import { CapabilityLaunchpad } from './dashboard-v3/CapabilityLaunchpad'
 import { RepositoryHealthPanel } from './dashboard-v3/RepositoryHealthPanel'
 import { ResourceGaugeGrid } from './dashboard-v3/ResourceGaugeGrid'
 import { makeT, statusColor, TokenContext } from './dashboard-v3/tokens'
 import type { ActivityEntry, DashboardOverview } from './dashboard-v3/types'
 import { gaugeColor, toCompactGB } from './dashboard-v3/utils'
+import { parseBackendDate } from '../utils/dateUtils'
 
 // A backend one release older sends the feed (every run of the window)
 // instead of the timeline counts and the failures; both derive from it here
@@ -57,7 +59,7 @@ function timelineFromFeed(
 ): NonNullable<DashboardOverview['activity_timeline']> {
   const cells = new Map<string, { date: string; type: string; total: number; failed: number }>()
   for (const activity of feed) {
-    const started = new Date(activity.timestamp)
+    const started = parseBackendDate(activity.timestamp)
     // an entry the older backend could not date is skipped, not rendered
     if (Number.isNaN(started.getTime())) continue
     const date = format(started, 'yyyy-MM-dd')
@@ -161,7 +163,7 @@ export default function DashboardV3() {
 
   // Most recent backup across all repos
   const lastBackupDate = repos
-    .map((r) => (r.last_backup ? new Date(r.last_backup) : null))
+    .map((r) => (r.last_backup ? parseBackendDate(r.last_backup) : null))
     .filter(Boolean)
     .sort((a, b) => b!.getTime() - a!.getTime())[0]
   const legacyFeed = ov.activity_feed ?? []
@@ -436,59 +438,12 @@ export default function DashboardV3() {
                 good={summary.successful_jobs_30d}
                 total={summary.total_jobs_30d}
               />
-              <Stack
-                direction="row"
-                sx={{
-                  justifyContent: 'space-between',
-                  mt: 1.75,
-                  px: 0.5,
-                }}
-              >
-                <Stack
-                  direction="row"
-                  spacing={0.75}
-                  sx={{
-                    alignItems: 'baseline',
-                  }}
-                >
-                  <Typography
-                    sx={{
-                      fontFamily: T.mono,
-                      fontWeight: 700,
-                      color: T.green,
-                      fontSize: '0.875rem',
-                      lineHeight: 1,
-                    }}
-                  >
-                    {summary.successful_jobs_30d}
-                  </Typography>
-                  <Typography sx={{ fontSize: '0.75rem', color: T.textMuted }}>
-                    {t('dashboard.successDonut.passed')}
-                  </Typography>
-                </Stack>
-                <Stack
-                  direction="row"
-                  spacing={0.75}
-                  sx={{
-                    alignItems: 'baseline',
-                  }}
-                >
-                  <Typography
-                    sx={{
-                      fontFamily: T.mono,
-                      fontWeight: 700,
-                      color: summary.failed_jobs_30d > 0 ? T.red : T.textMuted,
-                      fontSize: '0.875rem',
-                      lineHeight: 1,
-                    }}
-                  >
-                    {summary.failed_jobs_30d}
-                  </Typography>
-                  <Typography sx={{ fontSize: '0.75rem', color: T.textMuted }}>
-                    {t('dashboard.successDonut.failed')}
-                  </Typography>
-                </Stack>
-              </Stack>
+              <Box sx={{ mt: 1.75, px: 0.5 }}>
+                <SuccessDonutLegend
+                  passed={summary.successful_jobs_30d}
+                  failed={summary.failed_jobs_30d}
+                />
+              </Box>
             </Box>
 
             <Box sx={{ ...surface, p: 2 }}>

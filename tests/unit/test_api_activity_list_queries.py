@@ -3,7 +3,6 @@
 from datetime import datetime, timedelta
 
 import pytest
-from sqlalchemy import event
 
 from app.database.models import (
     AgentJob,
@@ -18,7 +17,7 @@ from app.database.models import (
     ScheduledJob,
     SystemSettings,
 )
-from tests.utils.statements import count_statements
+from tests.utils.statements import count_statements, session_cursor_listener
 
 START = datetime(2026, 9, 1, 2, 0, 0)
 
@@ -263,17 +262,13 @@ def test_archives_are_read_by_repository_and_name_pairs(test_db):
     )
 
     rows = []
-    engine = test_db.get_bind()
 
     def loaded(conn, cursor, statement, parameters, context, executemany):
         if "FROM archives" in statement:
             rows.extend(cursor.connection.execute(statement, parameters).fetchall())
 
-    event.listen(engine, "before_cursor_execute", loaded)
-    try:
+    with session_cursor_listener(test_db, loaded):
         borg_ids = archive_borg_ids_for(test_db, jobs)
-    finally:
-        event.remove(engine, "before_cursor_execute", loaded)
 
     by_repository = {job.repository_id: borg_ids[job.id] for job in jobs}
     assert by_repository == {repo.id: f"{0:064x}", other.id: f"{1:064x}"}

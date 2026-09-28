@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient } from '@tanstack/react-query'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import Layout from '../Layout'
+import { deleteJobFromLists, pendingDeletes } from '../jobs/jobCache'
 import { RemoteBackendProvider } from '../../services/remoteBackends/context'
 import {
   createRemoteBackendClient,
@@ -217,12 +218,16 @@ describe('Layout', () => {
     )
 
     expect(queryClient.getQueryData(['repositories'])).toEqual([{ id: 1, name: 'Local Repo' }])
+    // A delete still out on the old backend names a row of that backend.
+    void deleteJobFromLists(queryClient, { id: 7, type: 'backup' }, () => new Promise(() => {}))
+    expect(pendingDeletes(queryClient).has('backup-7')).toBe(true)
 
     await user.click(screen.getByRole('button', { name: 'Switch backend' }))
 
     await waitFor(() => {
       expect(queryClient.getQueryData(['repositories'])).toBeUndefined()
     })
+    expect(pendingDeletes(queryClient).size).toBe(0)
   })
 
   it('shows the passkey prompt before analytics even when password setup is still pending', async () => {

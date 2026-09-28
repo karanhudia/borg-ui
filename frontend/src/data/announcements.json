@@ -1,7 +1,153 @@
 {
   "version": 1,
-  "generated_at": "2026-06-07T08:04:30Z",
+  "generated_at": "2026-09-26T00:00:00Z",
   "announcements": [
+    {
+      "id": "update-available-2.3.0",
+      "type": "update_available",
+      "priority": 170,
+      "title": "Borg UI 2.3.0 is available",
+      "title_localized": {
+        "es": "Borg UI 2.3.0 ya está disponible",
+        "de": "Borg UI 2.3.0 ist verfügbar",
+        "it": "Borg UI 2.3.0 è disponibile"
+      },
+      "message": "Update to Borg UI 2.3.0 for a backup calendar heatmap, a repository growth chart, prune preview, a new archive page, a redesigned activity timeline, and managed agent upgrades.",
+      "message_localized": {
+        "es": "Actualiza a Borg UI 2.3.0 para obtener un mapa de calor del calendario de copias, un gráfico de crecimiento del repositorio, vista previa de poda, una nueva página de archivo, una línea de tiempo de actividad rediseñada y actualizaciones de agentes gestionados.",
+        "de": "Aktualisieren Sie auf Borg UI 2.3.0 für einen Backup-Kalender als Heatmap, ein Wachstumsdiagramm für Repositories, eine Prune-Vorschau, eine neue Archivseite, einen neu gestalteten Aktivitätsverlauf und Upgrades für Managed Agents.",
+        "it": "Aggiorna a Borg UI 2.3.0 per avere una heatmap del calendario dei backup, un grafico di crescita del repository, l'anteprima della potatura, una nuova pagina dell'archivio, una cronologia delle attività ridisegnata e aggiornamenti degli agent gestiti."
+      },
+      "highlights": [
+        "Backup calendar heatmap with missed runs and unusual backups flagged",
+        "Repository growth chart, with one click from any point to its archive",
+        "Prune preview: compare retention policies before anything is deleted",
+        "A new archive page with file browsing, per-backup changes, and restore progress",
+        "A redesigned activity timeline with running work pinned at the top",
+        "Background work tab with each repository's indexing, stats, and history",
+        "Managed agents (Pro): upgrade one machine or the whole fleet, and change or uninstall agents from their cards",
+        "Safer by default: verified SSH host keys and encrypted repository passphrases"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Mapa de calor del calendario de copias con ejecuciones perdidas y copias inusuales señaladas",
+          "Gráfico de crecimiento del repositorio, con un clic desde cualquier punto a su archivo",
+          "Vista previa de poda: compara políticas de retención antes de eliminar nada",
+          "Una nueva página de archivo con exploración de ficheros, cambios por copia y progreso de restauración",
+          "Una línea de tiempo de actividad rediseñada con el trabajo en curso fijado arriba",
+          "Pestaña Trabajo en segundo plano con la indexación, las estadísticas y el historial de cada repositorio",
+          "Agentes gestionados (Pro): actualiza una máquina o toda la flota, y cambia o desinstala agentes desde sus tarjetas",
+          "Más seguro por defecto: claves de host SSH verificadas y frases de contraseña de repositorios cifradas"
+        ],
+        "de": [
+          "Backup-Kalender als Heatmap mit markierten verpassten Läufen und ungewöhnlichen Backups",
+          "Wachstumsdiagramm für Repositories, mit einem Klick von jedem Punkt zum Archiv",
+          "Prune-Vorschau: Aufbewahrungsrichtlinien vergleichen, bevor etwas gelöscht wird",
+          "Eine neue Archivseite mit Dateiansicht, Änderungen pro Backup und Fortschritt der Wiederherstellung",
+          "Ein neu gestalteter Aktivitätsverlauf mit laufender Arbeit oben angeheftet",
+          "Tab Hintergrundarbeit mit Indexierung, Statistiken und Verlauf jedes Repositorys",
+          "Managed Agents (Pro): einen Rechner oder die ganze Flotte aktualisieren und Agents direkt auf ihren Karten ändern oder deinstallieren",
+          "Standardmäßig sicherer: geprüfte SSH-Hostschlüssel und verschlüsselte Repository-Passphrasen"
+        ],
+        "it": [
+          "Heatmap del calendario dei backup con esecuzioni mancate e backup insoliti evidenziati",
+          "Grafico di crescita del repository, con un clic da qualsiasi punto al suo archivio",
+          "Anteprima della potatura: confronta le politiche di conservazione prima di eliminare qualcosa",
+          "Una nuova pagina dell'archivio con esplorazione dei file, modifiche per backup e avanzamento del ripristino",
+          "Una cronologia delle attività ridisegnata con il lavoro in corso fissato in alto",
+          "Scheda Lavoro in background con indicizzazione, statistiche e cronologia di ogni repository",
+          "Agent gestiti (Pro): aggiorna una macchina o l'intera flotta, e modifica o disinstalla gli agent dalle loro schede",
+          "Più sicuro per impostazione predefinita: chiavi host SSH verificate e passphrase dei repository cifrate"
+        ]
+      },
+      "cta_label": "Upgrade details",
+      "cta_label_localized": {
+        "es": "Detalles de la actualización",
+        "de": "Upgrade-Details",
+        "it": "Dettagli dell'aggiornamento"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.3.0",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-09-25T00:00:00Z",
+      "ends_at": "2027-09-26T00:00:00Z",
+      "min_app_version": "2.0.0",
+      "max_app_version": "2.3.0-rc.999",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
+    {
+      "id": "release-2.3.0-whats-new",
+      "type": "release_highlight",
+      "priority": 140,
+      "title": "What's new in 2.3.0",
+      "title_localized": {
+        "es": "Novedades de la versión 2.3.0",
+        "de": "Neu in Version 2.3.0",
+        "it": "Novità della versione 2.3.0"
+      },
+      "message": "Borg UI 2.3.0 adds a backup calendar heatmap, a repository growth chart, prune preview, a new archive page, a redesigned activity timeline, and managed agent upgrades.",
+      "message_localized": {
+        "es": "Borg UI 2.3.0 agrega un mapa de calor del calendario de copias, un gráfico de crecimiento del repositorio, vista previa de poda, una nueva página de archivo, una línea de tiempo de actividad rediseñada y actualizaciones de agentes gestionados.",
+        "de": "Borg UI 2.3.0 bringt einen Backup-Kalender als Heatmap, ein Wachstumsdiagramm für Repositories, eine Prune-Vorschau, eine neue Archivseite, einen neu gestalteten Aktivitätsverlauf und Upgrades für Managed Agents.",
+        "it": "Borg UI 2.3.0 aggiunge una heatmap del calendario dei backup, un grafico di crescita del repository, l'anteprima della potatura, una nuova pagina dell'archivio, una cronologia delle attività ridisegnata e aggiornamenti degli agent gestiti."
+      },
+      "highlights": [
+        "Backup calendar heatmap with missed runs and unusual backups flagged",
+        "Repository growth chart, with one click from any point to its archive",
+        "Prune preview: compare retention policies before anything is deleted",
+        "A new archive page with file browsing, per-backup changes, and restore progress",
+        "A redesigned activity timeline with running work pinned at the top",
+        "Background work tab with each repository's indexing, stats, and history",
+        "Managed agents (Pro): upgrade one machine or the whole fleet, and change or uninstall agents from their cards",
+        "Safer by default: verified SSH host keys and encrypted repository passphrases"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Mapa de calor del calendario de copias con ejecuciones perdidas y copias inusuales señaladas",
+          "Gráfico de crecimiento del repositorio, con un clic desde cualquier punto a su archivo",
+          "Vista previa de poda: compara políticas de retención antes de eliminar nada",
+          "Una nueva página de archivo con exploración de ficheros, cambios por copia y progreso de restauración",
+          "Una línea de tiempo de actividad rediseñada con el trabajo en curso fijado arriba",
+          "Pestaña Trabajo en segundo plano con la indexación, las estadísticas y el historial de cada repositorio",
+          "Agentes gestionados (Pro): actualiza una máquina o toda la flota, y cambia o desinstala agentes desde sus tarjetas",
+          "Más seguro por defecto: claves de host SSH verificadas y frases de contraseña de repositorios cifradas"
+        ],
+        "de": [
+          "Backup-Kalender als Heatmap mit markierten verpassten Läufen und ungewöhnlichen Backups",
+          "Wachstumsdiagramm für Repositories, mit einem Klick von jedem Punkt zum Archiv",
+          "Prune-Vorschau: Aufbewahrungsrichtlinien vergleichen, bevor etwas gelöscht wird",
+          "Eine neue Archivseite mit Dateiansicht, Änderungen pro Backup und Fortschritt der Wiederherstellung",
+          "Ein neu gestalteter Aktivitätsverlauf mit laufender Arbeit oben angeheftet",
+          "Tab Hintergrundarbeit mit Indexierung, Statistiken und Verlauf jedes Repositorys",
+          "Managed Agents (Pro): einen Rechner oder die ganze Flotte aktualisieren und Agents direkt auf ihren Karten ändern oder deinstallieren",
+          "Standardmäßig sicherer: geprüfte SSH-Hostschlüssel und verschlüsselte Repository-Passphrasen"
+        ],
+        "it": [
+          "Heatmap del calendario dei backup con esecuzioni mancate e backup insoliti evidenziati",
+          "Grafico di crescita del repository, con un clic da qualsiasi punto al suo archivio",
+          "Anteprima della potatura: confronta le politiche di conservazione prima di eliminare qualcosa",
+          "Una nuova pagina dell'archivio con esplorazione dei file, modifiche per backup e avanzamento del ripristino",
+          "Una cronologia delle attività ridisegnata con il lavoro in corso fissato in alto",
+          "Scheda Lavoro in background con indicizzazione, statistiche e cronologia di ogni repository",
+          "Agent gestiti (Pro): aggiorna una macchina o l'intera flotta, e modifica o disinstalla gli agent dalle loro schede",
+          "Più sicuro per impostazione predefinita: chiavi host SSH verificate e passphrase dei repository cifrate"
+        ]
+      },
+      "cta_label": "View release notes",
+      "cta_label_localized": {
+        "es": "Ver notas de la versión",
+        "de": "Release Notes ansehen",
+        "it": "Vedi note di rilascio"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.3.0",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-09-25T00:00:00Z",
+      "ends_at": "2027-09-26T00:00:00Z",
+      "min_app_version": "2.3.0",
+      "max_app_version": "2.3.0",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
     {
       "id": "update-2.2.2-available",
       "type": "update_available",

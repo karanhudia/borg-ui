@@ -44,7 +44,7 @@ from app.services.operations.backup_facade import (
     create_backup_operation,
     refresh_backup_job,
     resolve_backup_job,
-    wait_for_backup_operation,
+    wait_out_backup_operation,
 )
 from app.utils.archive_names import build_archive_name
 from app.utils.schedule_time import (
@@ -2244,8 +2244,16 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
             # Execute backup.
             # When run_repository_scripts=True the schedule already ran pre-backup scripts
             # explicitly above, so tell execute_backup to skip its own hook execution to
-            # avoid running the same scripts a second time.
-            await wait_for_backup_operation(db, backup_job.id)
+            # avoid running the same scripts a second time. A read of the
+            # backup that fails is waited out: its post-scripts and
+            # maintenance follow the backup, not the read. The wait polls on
+            # a session of its own, so this one ends its transaction first:
+            # a connection held idle for the whole backup is one the runner
+            # cannot use, and one a database may close under it. The id is
+            # read first: the commit expires the row.
+            operation_id = backup_job.id
+            db.commit()
+            await wait_out_backup_operation(operation_id)
 
             # Run repository-level post-scripts if enabled
             if scheduled_job.run_repository_scripts:
@@ -2577,8 +2585,9 @@ async def execute_scheduled_backup_with_maintenance(
 
     db = next(get_db())
     try:
-        # The runner dispatches the row; wait for the verdict it writes.
-        await wait_for_backup_operation(db, backup_job_id)
+        # The runner dispatches the row; wait for the verdict it writes. A
+        # read that fails is waited out, or prune/compact would never run.
+        await wait_out_backup_operation(backup_job_id)
 
         # Check if backup was successful (or completed with warnings)
         backup_job = resolve_backup_job(db, backup_job_id)
@@ -2914,6 +2923,19 @@ def _dispatch_due_scheduled_job(
     return run_key
 
 
+async def _send_schedule_failure(
+    job_name: str, repository: Optional[str], error: str
+) -> None:
+    """Fire-and-forget alert on its own session; the caller's closes first."""
+    db = SessionLocal()
+    try:
+        await notification_service.send_schedule_failure(
+            db, job_name, repository, error
+        )
+    finally:
+        db.close()
+
+
 async def dispatch_due_scheduled_backups(
     db: Session, now: Optional[datetime] = None
 ) -> None:
@@ -3048,9 +3070,7 @@ async def dispatch_due_scheduled_backups(
 
             try:
                 asyncio.create_task(
-                    notification_service.send_schedule_failure(
-                        db, job.name, job.repository, str(e)
-                    )
+                    _send_schedule_failure(job.name, job.repository, str(e))
                 )
             except Exception as notif_error:
                 logger.warning(

@@ -3,6 +3,7 @@ import type { RepositoryStorage } from '../types'
 import type { SyncState } from '../types/archives'
 import { toast } from 'react-hot-toast'
 import { BASE_PATH } from '@/utils/basePath'
+import { getBrowserTimeZone } from '@/utils/dateUtils'
 import {
   API_BASE_URL,
   buildApiUrl,
@@ -182,6 +183,7 @@ export interface RepositoryData {
   cloud_mirror_enabled?: boolean
   rclone_remote_id?: number | null
   rclone_remote_path?: string | null
+  rclone_sftp_ssh_key_id?: number | null
   rclone_remote_path_verified?: boolean
   rclone_sync_policy?: 'after_success' | 'manual' | 'scheduled'
   rclone_sync_cron_expression?: string | null
@@ -747,8 +749,11 @@ export const archivesAPI = {
     repositoryId: number,
     params?: { series?: string; since?: string; until?: string }
   ) => api.get<ArchiveListResponse>(`/repositories/${repositoryId}/archives`, { params }),
+  // Days are bucketed in the viewer's time zone, the one the grid draws.
   getHeatmap: (repositoryId: number, params?: { since?: string; until?: string }) =>
-    api.get<HeatmapResponse>(`/repositories/${repositoryId}/archives/heatmap`, { params }),
+    api.get<HeatmapResponse>(`/repositories/${repositoryId}/archives/heatmap`, {
+      params: { ...params, timezone: getBrowserTimeZone() },
+    }),
   getGrowth: (repositoryId: number, params?: { series?: string }) =>
     api.get<GrowthResponse>(`/repositories/${repositoryId}/archives/growth`, { params }),
   getArchive: (repositoryId: number, archiveId: number) =>

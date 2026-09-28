@@ -1,14 +1,4 @@
-import {
-  Box,
-  Button,
-  Chip,
-  Dialog,
-  IconButton,
-  Link,
-  Stack,
-  useTheme,
-  Typography,
-} from '@mui/material'
+import { Box, Button, Chip, IconButton, Link, Stack, useTheme, Typography } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 import {
   BellRing,
@@ -21,6 +11,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Announcement } from '../types/announcements'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 
 interface AnnouncementModalProps {
   announcement: Announcement | null
@@ -86,11 +77,85 @@ export default function AnnouncementModal({
   const glintTop = isDark ? alpha('#ffffff', 0.08) : alpha('#ffffff', 0.6)
   const hoverBg = isDark ? alpha('#ffffff', 0.08) : alpha('#000000', 0.06)
 
+  // Header and actions stay put; the highlights scroll when they outgrow the viewport.
+  const actions = (
+    <Box sx={{ px: { xs: 2.25, sm: 3 }, pt: { xs: 2, md: 0 }, pb: { xs: 2.25, sm: 3 } }}>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1.25}
+        sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between' }}
+      >
+        {announcement.cta_url ? (
+          <Link
+            href={announcement.cta_url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={onCtaClick}
+            underline="none"
+            sx={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 0.9,
+              fontSize: '0.95rem',
+              fontWeight: 700,
+              color: accentColor,
+              '&:hover': {
+                textDecoration: 'underline',
+              },
+            }}
+          >
+            {announcement.cta_label || t('announcements.viewDetails')}
+            <ExternalLink size={15} />
+          </Link>
+        ) : (
+          <Box />
+        )}
+
+        <Stack direction="row" spacing={1.25} sx={{ justifyContent: 'flex-end' }}>
+          <Button
+            onClick={onSnooze}
+            variant="outlined"
+            sx={{
+              color: mutedText,
+              borderColor: isDark ? alpha('#ffffff', 0.16) : alpha('#000000', 0.15),
+              bgcolor: isDark ? alpha('#ffffff', 0.04) : alpha('#000000', 0.03),
+              '&:hover': {
+                borderColor: isDark ? alpha('#ffffff', 0.28) : alpha('#000000', 0.25),
+                bgcolor: hoverBg,
+              },
+            }}
+          >
+            {t('announcements.remindLater')}
+          </Button>
+
+          {announcement.dismissible !== false ? (
+            <Button
+              onClick={onAcknowledge}
+              variant="contained"
+              endIcon={<ChevronRight size={16} />}
+              sx={{
+                bgcolor: accentColor,
+                color: theme.palette.getContrastText(accentColor),
+                '&:hover': {
+                  bgcolor: alpha(accentColor, 0.88),
+                },
+              }}
+            >
+              {t('announcements.gotIt')}
+            </Button>
+          ) : null}
+        </Stack>
+      </Stack>
+    </Box>
+  )
+
   return (
-    <Dialog
+    <ResponsiveDialog
       open={open}
       maxWidth="sm"
       fullWidth
+      footer={actions}
+      mobilePaperSx={{ color: foreground, background: panelBackground }}
       slotProps={{
         paper: {
           sx: {
@@ -210,12 +275,14 @@ export default function AnnouncementModal({
         </Box>
       </Box>
 
-      <Box sx={{ px: { xs: 2.25, sm: 3 }, pb: { xs: 2.25, sm: 3 } }}>
-        {announcement.highlights?.length ? (
+      {announcement.highlights?.length ? (
+        <Box
+          data-testid="announcement-highlights"
+          sx={{ px: { xs: 2.25, sm: 3 }, pb: 2.25, minHeight: 0, overflowY: 'auto' }}
+        >
           <Box
             sx={{
               p: 2,
-              mb: 2.25,
               borderRadius: 2.5,
               bgcolor: highlightBg,
               border: `1px solid ${alpha(accentColor, 0.18)}`,
@@ -256,75 +323,8 @@ export default function AnnouncementModal({
               ))}
             </Stack>
           </Box>
-        ) : null}
-
-        <Stack
-          direction={{ xs: 'column', sm: 'row' }}
-          spacing={1.25}
-          sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between' }}
-        >
-          {announcement.cta_url ? (
-            <Link
-              href={announcement.cta_url}
-              target="_blank"
-              rel="noreferrer"
-              onClick={onCtaClick}
-              underline="none"
-              sx={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 0.9,
-                fontSize: '0.95rem',
-                fontWeight: 700,
-                color: accentColor,
-                '&:hover': {
-                  textDecoration: 'underline',
-                },
-              }}
-            >
-              {announcement.cta_label || t('announcements.viewDetails')}
-              <ExternalLink size={15} />
-            </Link>
-          ) : (
-            <Box />
-          )}
-
-          <Stack direction="row" spacing={1.25} sx={{ justifyContent: 'flex-end' }}>
-            <Button
-              onClick={onSnooze}
-              variant="outlined"
-              sx={{
-                color: mutedText,
-                borderColor: isDark ? alpha('#ffffff', 0.16) : alpha('#000000', 0.15),
-                bgcolor: isDark ? alpha('#ffffff', 0.04) : alpha('#000000', 0.03),
-                '&:hover': {
-                  borderColor: isDark ? alpha('#ffffff', 0.28) : alpha('#000000', 0.25),
-                  bgcolor: hoverBg,
-                },
-              }}
-            >
-              {t('announcements.remindLater')}
-            </Button>
-
-            {announcement.dismissible !== false ? (
-              <Button
-                onClick={onAcknowledge}
-                variant="contained"
-                endIcon={<ChevronRight size={16} />}
-                sx={{
-                  bgcolor: accentColor,
-                  color: theme.palette.getContrastText(accentColor),
-                  '&:hover': {
-                    bgcolor: alpha(accentColor, 0.88),
-                  },
-                }}
-              >
-                {t('announcements.gotIt')}
-              </Button>
-            ) : null}
-          </Stack>
-        </Stack>
-      </Box>
-    </Dialog>
+        </Box>
+      ) : null}
+    </ResponsiveDialog>
   )
 }

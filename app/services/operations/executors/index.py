@@ -536,8 +536,11 @@ async def fill_archive_info(
                 pass
         if info["duration"] is not None:
             archive.duration_seconds = float(info["duration"])
+        # Commit each archive as it is measured: the next archive's admission
+        # rolls the session back when it is refused, which would take any
+        # stats still pending with it.
+        db.commit()
         filled += 1
-    db.commit()
     return filled
 
 

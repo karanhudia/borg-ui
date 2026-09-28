@@ -7,10 +7,11 @@ Handles sending notifications for backup/restore events.
 import apprise
 from typing import Optional, List
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import ObjectDeletedError
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
+import asyncio
 import structlog
-import socket
 import re
 
 from app.services.storage_usage import format_bytes
@@ -582,6 +583,20 @@ def _append_json_to_body(
     return body
 
 
+def _existing(settings):
+    """Yield settings whose row still exists.
+
+    Delivery awaits off the event loop, so a setting can be deleted while an
+    earlier one is sending; the commit after that send expires the rest.
+    """
+    for setting in settings:
+        try:
+            setting.id
+        except ObjectDeletedError:
+            continue
+        yield setting
+
+
 class NotificationService:
     """Service for sending notifications via Apprise."""
 
@@ -671,7 +686,7 @@ class NotificationService:
         )
 
         # Send to all enabled services with this event trigger
-        for setting in settings:
+        for setting in _existing(settings):
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
@@ -905,7 +920,7 @@ class NotificationService:
             title=markdown_title, content_blocks=markdown_blocks, footer=footer
         )
 
-        for setting in settings:
+        for setting in _existing(settings):
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
@@ -1049,7 +1064,7 @@ class NotificationService:
             footer=f"Failed at {timestamp_str}",
         )
 
-        for setting in settings:
+        for setting in _existing(settings):
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
@@ -1294,7 +1309,7 @@ class NotificationService:
             title=markdown_title, content_blocks=markdown_blocks, footer=footer
         )
 
-        for setting in settings:
+        for setting in _existing(settings):
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
@@ -1418,7 +1433,7 @@ class NotificationService:
             footer=f"Completed at {timestamp_str}",
         )
 
-        for setting in settings:
+        for setting in _existing(settings):
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
@@ -1557,7 +1572,7 @@ class NotificationService:
             footer=f"Failed at {timestamp_str}",
         )
 
-        for setting in settings:
+        for setting in _existing(settings):
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
@@ -1685,7 +1700,7 @@ class NotificationService:
             footer=f"Failed at {timestamp_str}",
         )
 
-        for setting in settings:
+        for setting in _existing(settings):
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
@@ -1765,17 +1780,13 @@ class NotificationService:
                 service_url_prefix=service_url.split(":")[0],
             )
 
-            # Use longer timeout for slow services like Signal (60 seconds)
-            # Temporarily set socket timeout since Apprise plugins use it for HTTP connections
-            old_timeout = socket.getdefaulttimeout()
-            socket.setdefaulttimeout(60)
-            try:
-                success = apobj.notify(
-                    title="🔔 Borg UI Test Notification",
-                    body="This is a test notification from Borg UI. If you received this, your notification service is configured correctly!",
-                )
-            finally:
-                socket.setdefaulttimeout(old_timeout)
+            # Apprise blocks on network I/O; keep it off the event loop.
+            # Slow endpoints can raise the per-URL read timeout with ?rto=<seconds>.
+            success = await asyncio.to_thread(
+                apobj.notify,
+                title="🔔 Borg UI Test Notification",
+                body="This is a test notification from Borg UI. If you received this, your notification service is configured correctly!",
+            )
 
             if success:
                 logger.info("Test notification sent successfully")
@@ -1819,43 +1830,38 @@ class NotificationService:
             html_body: HTML formatted body (for email)
             markdown_body: Markdown formatted body (for chat services)
         """
+        # Read before the await: the row can be deleted while delivery runs
+        setting_id = setting.id
+        service_name = setting.name
         try:
             apobj = apprise.Apprise()
             apobj.add(setting.service_url)
 
-            # Choose format based on service type
-            # Use longer timeout (60s) for slow services like Signal
-            # Temporarily set socket timeout since Apprise plugins use it for HTTP connections
-            old_timeout = socket.getdefaulttimeout()
-            socket.setdefaulttimeout(60)
-            try:
-                if _is_email_service(setting.service_url):
-                    # Email service - use HTML format
-                    success = apobj.notify(
-                        title=title,
-                        body=html_body,
-                        body_format=apprise.NotifyFormat.HTML,
-                    )
-                else:
-                    # Chat service - use Markdown format
-                    success = apobj.notify(
-                        title=title,
-                        body=markdown_body,
-                        body_format=apprise.NotifyFormat.MARKDOWN,
-                    )
-            finally:
-                socket.setdefaulttimeout(old_timeout)
+            # Choose format based on service type: HTML for email, Markdown for chat
+            if _is_email_service(setting.service_url):
+                body, body_format = html_body, apprise.NotifyFormat.HTML
+            else:
+                body, body_format = markdown_body, apprise.NotifyFormat.MARKDOWN
+
+            # Apprise blocks on network I/O; keep it off the event loop.
+            # Slow endpoints can raise the per-URL read timeout with ?rto=<seconds>.
+            success = await asyncio.to_thread(
+                apobj.notify, title=title, body=body, body_format=body_format
+            )
 
             if success:
-                # Update last_used_at timestamp
-                setting.last_used_at = datetime.utcnow()
+                # Conditional update: a deleted row matches nothing instead of
+                # raising StaleDataError and rolling back the caller's session
+                db.query(NotificationSettings).filter(
+                    NotificationSettings.id == setting_id
+                ).update({"last_used_at": datetime.utcnow()}, synchronize_session=False)
                 db.commit()
-                logger.info("notification_sent", service=setting.name, title=title)
+                logger.info("notification_sent", service=service_name, title=title)
             else:
-                logger.warning("notification_failed", service=setting.name, title=title)
+                logger.warning("notification_failed", service=service_name, title=title)
 
         except Exception as e:
-            logger.error("notification_error", service=setting.name, error=str(e))
+            logger.error("notification_error", service=service_name, error=str(e))
 
     @staticmethod
     async def _send_to_services(
@@ -1870,7 +1876,7 @@ class NotificationService:
             title: Notification title
             body: Notification body
         """
-        for setting in settings:
+        for setting in _existing(settings):
             await NotificationService._send_to_service(db, setting, title, body, body)
 
     @staticmethod
@@ -2060,7 +2066,7 @@ class NotificationService:
             footer=f"Completed at {timestamp_str}",
         )
 
-        for setting in settings:
+        for setting in _existing(settings):
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
 
@@ -2219,7 +2225,7 @@ class NotificationService:
         )
 
         # Send to all enabled services with this event trigger
-        for setting in settings:
+        for setting in _existing(settings):
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue

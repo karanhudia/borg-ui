@@ -4,6 +4,7 @@ import math
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
@@ -45,6 +46,7 @@ from app.services.operations.backup_facade import (
     is_backup_operation,
 )
 from app.services.operations.job_facade import resolve_agent_maintenance_job
+from app.services.repository_executor import lock_failure_was_deferred
 from app.services.agent_artifact_relay import (
     CLOSE_ACK_TIMEOUT_SECONDS,
     agent_artifact_relay,
@@ -315,6 +317,10 @@ class AgentJobFailRequest(BaseModel):
     completed_at: Optional[datetime] = None
     error_message: str
     return_code: Optional[int] = None
+    # Since agent 0.1.10: the last lines Borg wrote and the failure's kind
+    # (`lock_contention` or `other`); see `agent_failure_result`.
+    stderr_tail: Optional[str] = None
+    failure_kind: Optional[str] = None
 
 
 class AgentJobCanceledRequest(BaseModel):
@@ -953,7 +959,11 @@ def _complete_finished_operation_log(
         if status_value not in FINAL_AGENT_JOB_STATUSES:
             return
         job = db.get(AgentJob, agent_job_id)
-        operation_job = _get_repository_operation_job(job, db) if job else None
+        if job is None or lock_failure_was_deferred(job):
+            # The row was left for another attempt (#1056): its log is that
+            # attempt's, and this job's lines must not replace it.
+            return
+        operation_job = _get_repository_operation_job(job, db)
         path = getattr(operation_job, "log_file_path", None)
         if not path:
             return
@@ -1245,11 +1255,30 @@ def _fail_agent_job(
     error_message: str,
     return_code: Optional[int] = None,
     completed_at: Optional[datetime] = None,
+    stderr_tail: Optional[str] = None,
+    failure_kind: Optional[str] = None,
 ) -> bool:
     """Returns True when this report moved the job into a terminal state."""
+    from app.services.repository_executor import (
+        LOCK_FAILURE_DEFERRED_KEY,
+        _agent_job_failure_message,
+        agent_failure_result,
+    )
+
     if job.status in FINAL_AGENT_JOB_STATUSES:
         return False
     completed = _normalize_agent_timestamp(completed_at)
+    result = agent_failure_result(
+        return_code, stderr_tail=stderr_tail, failure_kind=failure_kind
+    )
+    # Decided once, here, and kept in the result: the row's deferral count
+    # moves on with the runner, so a later reader (a late log line) must
+    # not ask again.
+    deferred = _lock_failure_is_deferred(
+        SimpleNamespace(id=job.id, payload=job.payload, result=result), db
+    )
+    if deferred:
+        result[LOCK_FAILURE_DEFERRED_KEY] = True
     if not _claim_terminal_transition(
         job,
         db,
@@ -1257,28 +1286,53 @@ def _fail_agent_job(
             AgentJob.status: "failed",
             AgentJob.completed_at: completed,
             AgentJob.error_message: error_message,
-            AgentJob.result: {"return_code": return_code}
-            if return_code is not None
-            else {},
+            AgentJob.result: result,
             AgentJob.updated_at: _now_utc(),
         },
     ):
         return False
+    if deferred:
+        # The caller's wait ends on this failure and raises it as a
+        # deferral; the maintenance row stays open for the next attempt
+        # instead of being closed as failed here.
+        return True
+    # The linked rows (and their notifications) carry Borg's reason from
+    # the report; the agent job keeps the message as the agent sent it.
+    linked_message = _agent_job_failure_message(db, job) or error_message
     _finish_linked_backup_job(
         job,
         db,
         status_value="failed",
         completed_at=completed,
-        error_message=error_message,
+        error_message=linked_message,
     )
     _finish_linked_repository_operation_job(
         job,
         db,
         status_value="failed",
         completed_at=completed,
-        error_message=error_message,
+        error_message=linked_message,
     )
     return True
+
+
+def _lock_failure_is_deferred(job: Any, db: Session) -> bool:
+    """Whether the runner will defer this lock failure (see
+    `lock_contention_defers`); `job` carries the payload and the failure
+    result. Not once the linked operation's deferral budget is spent: the
+    runner records that attempt as the failure, so the row is finished
+    here, and its notification (a check's) goes out."""
+    from app.services.operations.runner import MAX_DEFERRALS, deferral_count
+    from app.services.repository_executor import lock_contention_defers
+
+    if not lock_contention_defers(job, db):
+        return False
+    operation_job = _get_repository_operation_job(job, db)
+    if operation_job is None:
+        return True
+    # the facade hides the row's params; the budget is the runner's
+    operation = db.get(Operation, operation_job.id)
+    return operation is None or deferral_count(operation) < MAX_DEFERRALS
 
 
 async def _notify_agent_job_outcome(db: Session, job: AgentJob) -> None:
@@ -1534,12 +1588,16 @@ async def _handle_agent_session_message(
             job_id=int(job_id) if job_id else None,
         )
         if job:
+            stderr_tail = error_payload.get("stderr_tail")
+            failure_kind = error_payload.get("failure_kind")
             transitioned = _fail_agent_job(
                 job,
                 db,
                 error_message=error_message,
                 return_code=error_payload.get("return_code"),
                 completed_at=_parse_optional_datetime(message.get("completed_at")),
+                stderr_tail=stderr_tail if isinstance(stderr_tail, str) else None,
+                failure_kind=failure_kind if isinstance(failure_kind, str) else None,
             )
             db.commit()
             if transitioned:
@@ -2054,6 +2112,8 @@ async def fail_job(
         error_message=payload.error_message,
         return_code=payload.return_code,
         completed_at=payload.completed_at,
+        stderr_tail=payload.stderr_tail,
+        failure_kind=payload.failure_kind,
     )
     db.commit()
     if transitioned:

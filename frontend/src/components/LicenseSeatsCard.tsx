@@ -23,6 +23,7 @@ import SettingsCard from './SettingsCard'
 import ResponsiveDialog from './shared/ResponsiveDialog'
 import { tintChipSx } from './shared/tones'
 import { licensingAPI } from '../services/api'
+import { parseBackendDate } from '../utils/dateUtils'
 
 const MONO = '"JetBrains Mono","Fira Code",ui-monospace,monospace'
 
@@ -231,11 +232,11 @@ export default function LicenseSeatsCard() {
                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                   {t('licensing.seats.meta', {
                     version: seat.app_version || t('common.unknown'),
-                    activated: new Date(seat.activated_at).toLocaleDateString(
+                    activated: parseBackendDate(seat.activated_at).toLocaleDateString(
                       i18n.resolvedLanguage
                     ),
                     lastSeen: seat.last_seen_at
-                      ? new Date(seat.last_seen_at).toLocaleString(i18n.resolvedLanguage)
+                      ? parseBackendDate(seat.last_seen_at).toLocaleString(i18n.resolvedLanguage)
                       : t('common.never'),
                   })}
                 </Typography>

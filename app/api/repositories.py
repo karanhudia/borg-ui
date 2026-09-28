@@ -28,6 +28,7 @@ from app.database.models import (
     RepositoryStorage,
     ScheduledJob,
     ScheduledJobRepository,
+    SSHKey,
     SystemSettings,
     User,
     UserRepositoryPermission,
@@ -151,6 +152,8 @@ from app.utils.borg_env import (
     get_standard_ssh_opts as shared_get_standard_ssh_opts,
     setup_borg_env as shared_setup_borg_env,
     cleanup_temp_key_file,
+    REQUEST_LOCK_WAIT,
+    with_lock_wait,
 )
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,  # noqa: F401
@@ -472,13 +475,15 @@ def setup_borg_env(base_env=None, passphrase=None, ssh_opts=None):
     )
 
 
-def _prepare_repository_borg_env(repository: Repository, db: Session):
+def _prepare_repository_borg_env(
+    repository: Repository, db: Session, *, lock_wait: str = "180"
+):
     """Build Borg execution environment for a stored repository.
 
     Returns the environment plus any temporary SSH key file that must be
-    cleaned up by the caller.
+    cleaned up by the caller. Request handlers pass REQUEST_LOCK_WAIT.
     """
-    return build_repository_borg_env(repository, db)
+    return build_repository_borg_env(repository, db, lock_wait=lock_wait)
 
 
 def _repository_stats_borg_env(env: Dict[str, str]) -> Dict[str, str]:
@@ -651,7 +656,9 @@ async def _run_repository_command(
     log_fields: Optional[Dict[str, Any]] = None,
 ):
     """Execute a repository-scoped Borg command with common SSH/env handling."""
-    env, temp_key_file = _prepare_repository_borg_env(repository, db)
+    env, temp_key_file = _prepare_repository_borg_env(
+        repository, db, lock_wait=REQUEST_LOCK_WAIT
+    )
     # Both callers machine-parse the JSON output; pin the render zone so borg1
     # timestamps come out UTC instead of server-local.
     env["TZ"] = "UTC"
@@ -660,7 +667,7 @@ async def _run_repository_command(
             logger.info(log_message, **(log_fields or {}))
 
         process = await asyncio.create_subprocess_exec(
-            *cmd,
+            *with_lock_wait(cmd, env),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=env,
@@ -1378,6 +1385,7 @@ class RepositoryCreate(BaseModel):
     storage_backend: str = "local"  # local, ssh, agent_local, rclone
     rclone_remote_id: Optional[int] = None
     rclone_remote_path: Optional[str] = None
+    rclone_sftp_ssh_key_id: Optional[int] = None
     cloud_mirror_enabled: bool = False
     rclone_remote_path_verified: bool = False
     rclone_sync_policy: str = "after_success"
@@ -1437,6 +1445,7 @@ class RepositoryImport(BaseModel):
     storage_backend: str = "local"  # local, ssh, agent_local, rclone
     rclone_remote_id: Optional[int] = None
     rclone_remote_path: Optional[str] = None
+    rclone_sftp_ssh_key_id: Optional[int] = None
     cloud_mirror_enabled: bool = False
     rclone_remote_path_verified: bool = False
     rclone_sync_policy: str = "after_success"
@@ -1488,6 +1497,7 @@ class RepositoryUpdate(BaseModel):
     storage_backend: Optional[str] = None
     rclone_remote_id: Optional[int] = None
     rclone_remote_path: Optional[str] = None
+    rclone_sftp_ssh_key_id: Optional[int] = None
     cloud_mirror_enabled: Optional[bool] = None
     rclone_remote_path_verified: Optional[bool] = None
     rclone_sync_policy: Optional[str] = None
@@ -1656,6 +1666,8 @@ def _apply_mirror_source_strategy(
     else:
         storage.cache_path = repository.path
         storage.sync_direction = SYNC_DIRECTION_PRIMARY_TO_REMOTE
+    if source_backend != "ssh":
+        storage.sftp_ssh_key_id = None
 
 
 def _reject_unsupported_rclone_borg2(
@@ -1694,6 +1706,7 @@ def _validate_direct_rclone_payload(
         or data.cloud_mirror_enabled
         or data.rclone_remote_id is not None
         or bool((data.rclone_remote_path or "").strip())
+        or data.rclone_sftp_ssh_key_id is not None
         or bool(data.rclone_extra_flags)
         or data.rclone_sync_policy != "after_success"
         or bool((data.rclone_sync_cron_expression or "").strip())
@@ -1716,6 +1729,7 @@ def _validate_direct_rclone_update(
         or bool((repo_data.rclone_cache_path or "").strip())
         or repo_data.rclone_remote_id is not None
         or bool((repo_data.rclone_remote_path or "").strip())
+        or repo_data.rclone_sftp_ssh_key_id is not None
         or bool(repo_data.rclone_extra_flags)
         or bool((repo_data.rclone_sync_cron_expression or "").strip())
         or bool((repo_data.rclone_sync_timezone or "").strip())
@@ -1751,6 +1765,7 @@ def _strip_direct_rclone_noop_update_fields(update_data: dict[str, Any]) -> None
         "storage_backend",
         "rclone_remote_id",
         "rclone_remote_path",
+        "rclone_sftp_ssh_key_id",
         "rclone_sync_policy",
         "rclone_sync_cron_expression",
         "rclone_sync_timezone",
@@ -1811,6 +1826,7 @@ def _strip_disabled_rclone_noop_update_fields(update_data: dict[str, Any]) -> No
         "cloud_mirror_enabled": {None, False},
         "rclone_remote_id": {None},
         "rclone_remote_path": {None, ""},
+        "rclone_sftp_ssh_key_id": {None},
         "rclone_remote_path_verified": {None, False},
         "rclone_sync_policy": {None, "after_success"},
         "rclone_sync_cron_expression": {None, ""},
@@ -1841,6 +1857,7 @@ def _rclone_feature_gate_updates(
     default_values = {
         "rclone_remote_id": {None},
         "rclone_remote_path": {None, ""},
+        "rclone_sftp_ssh_key_id": {None},
         "rclone_remote_path_verified": {None, False},
         "rclone_sync_policy": {None, "after_success"},
         "rclone_sync_cron_expression": {None, ""},
@@ -1986,6 +2003,15 @@ def _validate_rclone_payload(
     return remote
 
 
+def _require_sftp_ssh_key(ssh_key_id: int | None, db: Session) -> None:
+    if ssh_key_id is None:
+        return
+    if not db.query(SSHKey.id).filter(SSHKey.id == ssh_key_id).first():
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.ssh.sshKeyNotFound"}
+        )
+
+
 def _validate_cloud_mirror_payload(
     data: Union[RepositoryCreate, RepositoryImport],
     db: Session,
@@ -2005,6 +2031,7 @@ def _validate_cloud_mirror_payload(
             status_code=400,
             detail={"key": "backend.errors.rclone.mirrorUnsupportedPrimary"},
         )
+    _require_sftp_ssh_key(data.rclone_sftp_ssh_key_id, db)
     if not data.rclone_remote_id:
         raise HTTPException(
             status_code=400,
@@ -3347,6 +3374,7 @@ def get_repositories(
                 ),
                 "exclude_patterns": _decode_json_list_field(repo.exclude_patterns),
                 "repository_type": repo.repository_type,
+                "connection_id": repo.connection_id,
                 "execution_target": repo.execution_target or "local",
                 "executor_type": repository_executor_type(repo),
                 "agent_machine_id": repo.agent_machine_id,
@@ -3761,6 +3789,7 @@ async def create_repository(
                 extra_flags=repo_data.rclone_extra_flags,
                 sync_cron_expression=repo_data.rclone_sync_cron_expression,
                 sync_timezone=repo_data.rclone_sync_timezone,
+                sftp_ssh_key_id=repo_data.rclone_sftp_ssh_key_id,
             )
             db.add(storage)
             db.commit()
@@ -4146,6 +4175,7 @@ async def import_repository(
                 extra_flags=repo_data.rclone_extra_flags,
                 sync_cron_expression=repo_data.rclone_sync_cron_expression,
                 sync_timezone=repo_data.rclone_sync_timezone,
+                sftp_ssh_key_id=repo_data.rclone_sftp_ssh_key_id,
             )
             db.add(storage)
             db.commit()
@@ -4699,6 +4729,7 @@ async def update_repository(
             "storage_backend",
             "rclone_remote_id",
             "rclone_remote_path",
+            "rclone_sftp_ssh_key_id",
             "rclone_sync_policy",
             "rclone_sync_cron_expression",
             "rclone_sync_timezone",
@@ -4790,6 +4821,7 @@ async def update_repository(
                     for key in (
                         "rclone_remote_id",
                         "rclone_remote_path",
+                        "rclone_sftp_ssh_key_id",
                         "rclone_sync_policy",
                         "rclone_sync_cron_expression",
                         "rclone_sync_timezone",
@@ -4842,6 +4874,7 @@ async def update_repository(
                         detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
                     )
                 _validate_rclone_schedule_payload(repo_data)
+                _require_sftp_ssh_key(repo_data.rclone_sftp_ssh_key_id, db)
                 remote = (
                     db.query(RcloneRemote)
                     .filter(RcloneRemote.id == repo_data.rclone_remote_id)
@@ -4986,6 +5019,7 @@ async def update_repository(
                                 "message": str(exc),
                             },
                         ) from exc
+                _require_sftp_ssh_key(repo_data.rclone_sftp_ssh_key_id, db)
                 _apply_mirror_source_strategy(storage, repository)
 
             if should_update_direct_rclone:
@@ -5448,6 +5482,13 @@ async def update_repository(
             and existing_rclone_storage.backend == "rclone"
             and repository.repository_type != "rclone"
         ):
+            # Applied here, after connection_id and the executor are updated,
+            # so a PUT that switches to SSH keeps it (the strategy clears it
+            # for any other source).
+            if "rclone_sftp_ssh_key_id" in update_data:
+                existing_rclone_storage.sftp_ssh_key_id = (
+                    repo_data.rclone_sftp_ssh_key_id
+                )
             _apply_mirror_source_strategy(existing_rclone_storage, repository)
 
         if reopen_history:
@@ -6510,7 +6551,9 @@ async def get_repository_stats(
 
     temp_key_file = None
     try:
-        env, temp_key_file = _prepare_repository_borg_env(repository, db)
+        env, temp_key_file = _prepare_repository_borg_env(
+            repository, db, lock_wait=REQUEST_LOCK_WAIT
+        )
 
         router = BorgRouter(repository)
         cmd = router.build_repo_info_command(repository.path)

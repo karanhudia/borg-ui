@@ -22,7 +22,7 @@ from app.database.db_upgrade import (
     alembic_init,
 )
 from app.database.models import BackupPlanRun, BackupPlanRunRepository
-from app.database.models import Repository, User
+from app.database.models import Archive, ArchiveChange, Repository, User
 
 POSTGRES_URL = os.getenv("BORG_TEST_POSTGRES_URL")
 requires_postgres = pytest.mark.skipif(
@@ -205,6 +205,62 @@ def test_a_row_pointing_at_a_deleted_row_is_kept_and_its_pointer_cleared(tmp_pat
     row = session.query(BackupPlanRunRepository).one()
     assert row.backup_operation_id is None
     assert row.repository_id == 1
+    session.close()
+
+
+@pytest.mark.unit
+def test_a_required_pointer_at_a_deleted_row_drops_the_row_and_its_children(
+    tmp_path,
+):
+    # Issue #1215: repositories deleted before foreign keys were enforced left
+    # their check jobs and archives behind. repository_id is NOT NULL, so the
+    # rows cannot be kept with the pointer cleared; the transfer used to refuse.
+    db = tmp_path / "borg.db"
+
+    def populate(s):
+        s.add(Repository(id=1, name="r", path="/srv/r"))
+        s.flush()
+        for archive_id, repo_id in ((1, 1), (2, 999)):
+            s.add(
+                Archive(
+                    id=archive_id,
+                    repository_id=repo_id,
+                    borg_id=f"b{archive_id}",
+                    name=f"a{archive_id}",
+                    series="a",
+                    start=datetime(2026, 1, 1),
+                )
+            )
+        s.flush()
+        # The change on archive 2 points at a row that exists in the source but
+        # is dropped on the way over, so only the cascade can catch it.
+        for archive_id in (1, 2):
+            s.add(ArchiveChange(archive_id=archive_id, path="/x", change="added"))
+
+    _legacy_db(db, populate)
+    engine = create_engine(f"sqlite:///{db}")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO check_jobs "
+                "(id, repository_id, status, scheduled_check, created_at) VALUES "
+                "(1, 1, 'completed', 0, '2026-01-01 00:00:00'), "
+                "(2, 999, 'completed', 0, '2026-01-01 00:00:00')"
+            )
+        )
+    engine.dispose()
+
+    report = alembic_init(db)
+
+    by_name = {t.name: t for t in report.tables}
+    assert by_name["check_jobs"].orphans_dropped == 1
+    assert by_name["check_jobs"].rows == 1
+    assert by_name["archives"].orphans_dropped == 1
+    assert by_name["archive_changes"].orphans_dropped == 1
+
+    session = _open(db)
+    assert [a.id for a in session.query(Archive).all()] == [1]
+    assert [c.archive_id for c in session.query(ArchiveChange).all()] == [1]
     session.close()
 
 
@@ -646,3 +702,44 @@ def test_legacy_job_rows_reach_operations_through_the_transfer(tmp_path, monkeyp
     session.close()
     with create_engine(f"sqlite:///{db}").connect() as conn:
         assert "backup_jobs" not in inspect(conn).get_table_names()
+
+
+@pytest.mark.unit
+def test_a_transferred_plaintext_passphrase_is_readable_after_the_upgrade(tmp_path):
+    # Issue #1211: the encrypt-passphrase revision sits before the transfer
+    # point, so it ran on an empty table and the copied rows stayed plaintext.
+    db = tmp_path / "borg.db"
+    _legacy_db(db, lambda s: s.add(Repository(name="r", path="/srv/r")))
+    engine = create_engine(f"sqlite:///{db}")
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE repositories SET passphrase = 'plain secret'"))
+    engine.dispose()
+
+    alembic_init(db)
+
+    session = _open(db)
+    assert session.query(Repository).one().passphrase == "plain secret"
+    raw = session.execute(text("SELECT passphrase FROM repositories")).scalar()
+    assert raw != "plain secret"
+    session.close()
+
+
+@pytest.mark.unit
+def test_an_install_stuck_on_2_3_0_with_a_plaintext_passphrase_is_repaired(tmp_path):
+    db = tmp_path / "borg.db"
+    alembic_init(db)
+    session = _open(db)
+    session.add(Repository(name="r", path="/srv/r"))
+    session.commit()
+    session.close()
+    engine = create_engine(f"sqlite:///{db}")
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE repositories SET passphrase = 'plain secret'"))
+        conn.execute(text("UPDATE alembic_version SET version_num = 'e1a2b3c4d5f6'"))
+    engine.dispose()
+
+    assert alembic_init(db).action == "migrated"
+
+    session = _open(db)
+    assert session.query(Repository).one().passphrase == "plain secret"
+    session.close()

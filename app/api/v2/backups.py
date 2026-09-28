@@ -32,7 +32,7 @@ from app.services.job_admission import (
 from app.services.operations.backup_facade import (
     create_backup_operation,
     refresh_backup_job,
-    wait_for_backup_operation,
+    wait_out_backup_operation,
 )
 from app.services.operations.maintenance_start import start_maintenance
 from app.services.v2.prune_service import prune_v2_service
@@ -141,7 +141,15 @@ async def run_backup(
         user_id=current_user.id,
         params={"archive_name": data.archive_name},
     )
-    final_status = await wait_for_backup_operation(db, backup_job.id)
+    # A read of the backup that fails is waited out: the answer is the
+    # backup's own outcome, not a 500 while it goes on. The wait polls on a
+    # session of its own, so this one ends its transaction first: a
+    # connection held idle for the whole backup is one the runner cannot
+    # use, and one a database may close under it. The id is read first: the
+    # commit expires the row.
+    operation_id = backup_job.id
+    db.commit()
+    final_status = await wait_out_backup_operation(operation_id)
     refresh_backup_job(db, backup_job)
 
     if final_status not in {"completed", "completed_with_warnings"}:

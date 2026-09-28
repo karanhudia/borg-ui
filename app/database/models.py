@@ -638,6 +638,12 @@ class RepositoryStorage(Base):
         Integer, ForeignKey("rclone_remotes.id", ondelete="SET NULL"), nullable=True
     )
     rclone_remote_path = Column(String, nullable=True)
+    # SSH mirrors only: sign in to the repository's connection with this key
+    # instead of the connection's own, for hosts whose borg key cannot open
+    # SFTP (#1062).
+    sftp_ssh_key_id = Column(
+        Integer, ForeignKey("ssh_keys.id", ondelete="SET NULL"), nullable=True
+    )
     cache_path = Column(String, nullable=True)
     sync_policy = Column(String, default="after_success", nullable=False)
     sync_direction = Column(String, default="cache_to_remote", nullable=False)
@@ -921,6 +927,7 @@ class BackupPlan(Base):
     run_prune_after = Column(Boolean, default=False, nullable=False)
     run_compact_after = Column(Boolean, default=False, nullable=False)
     run_check_after = Column(Boolean, default=False, nullable=False)
+    run_restore_check_after = Column(Boolean, default=False, nullable=False)
     check_max_duration = Column(Integer, default=3600, nullable=False)
     check_extra_flags = Column(Text, nullable=True)
     prune_keep_hourly = Column(Integer, default=0, nullable=False)
@@ -1074,9 +1081,13 @@ class BackupPlanRun(Base):
         back_populates="backup_plan_run",
         cascade="all, delete-orphan",
     )
+    # The hooks go with their run, as the foreign key says. Without a delete
+    # cascade here the ORM would null their run id before the row is deleted,
+    # and the database cascade would find nothing left to remove.
     script_executions = relationship(
         "ScriptExecution",
         back_populates="backup_plan_run",
+        cascade="all, delete-orphan",
     )
 
 
@@ -1245,6 +1256,13 @@ class Operation(Base):
         Index("ix_operations_category_created", "category", "created_at"),
         # the dashboard's activity window: every row of a kind since a date
         Index("ix_operations_kind_started_at", "kind", "started_at"),
+        # the Activity window: newest first by when the row ran, else when
+        # it was queued (app/api/activity.py orders and pages on this)
+        Index(
+            "ix_operations_activity_window",
+            func.coalesce(started_at, created_at).desc(),
+            id.desc(),
+        ),
     )
 
 
@@ -1801,6 +1819,22 @@ class MQTTSyncState(Base):
     sync_key = Column(String, unique=True, nullable=False, index=True)
     sync_value = Column(Text, nullable=False)  # JSON payload
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+
+
+class OperationsRunnerLease(Base):
+    """Which server process runs the operations runner (#1166).
+
+    One row. A replacement process can start while the old one is still in
+    its graceful shutdown (a Kubernetes pod replacement); the runner of each
+    only recovers, sweeps and claims while it holds this lease, so the two
+    never run the same operation.
+    """
+
+    __tablename__ = "operations_runner_lease"
+
+    id = Column(Integer, primary_key=True)
+    holder = Column(String, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
 
 
 # Association table for repository notification filters

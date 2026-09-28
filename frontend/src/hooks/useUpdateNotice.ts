@@ -34,9 +34,11 @@ function setNoticeDismissed(announcementId: string) {
   }
 }
 
-const VERSION_REGEX = /(\d+(?:\.\d+){1,3}(?:-[\w.]+)?)/
+// Only a real prerelease tag, so the "-available" in "update-2.3.0-available" is
+// not read as one.
+const VERSION_REGEX = /(\d+(?:\.\d+){1,3}(?:-(?:alpha|beta|rc)(?:\.\d+)*)?)/
 
-function extractVersion(announcement: Announcement): string | null {
+export function extractVersion(announcement: Announcement): string | null {
   const idMatch = announcement.id.match(VERSION_REGEX)
   if (idMatch) return idMatch[1]
   const titleMatch = announcement.title.match(VERSION_REGEX)

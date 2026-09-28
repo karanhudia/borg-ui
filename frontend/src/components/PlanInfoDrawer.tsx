@@ -21,6 +21,7 @@ import { compareVersions } from '../utils/announcements'
 import { buildBuyUrl } from '../utils/externalLinks'
 import { getPlanDrawerColors } from './planDrawerColors'
 import PlanUpcomingFeatures from './PlanUpcomingFeatures'
+import { parseBackendDate } from '../utils/dateUtils'
 
 interface PlanInfoDrawerProps {
   open: boolean
@@ -126,7 +127,7 @@ export default function PlanInfoDrawer({
   const [referenceNowMs, setReferenceNowMs] = useState<number | null>(null)
 
   const fullAccessExpiry = entitlement?.expires_at
-    ? new Date(entitlement.expires_at).toLocaleDateString()
+    ? parseBackendDate(entitlement.expires_at).toLocaleDateString()
     : null
   const isFullAccess = entitlement?.is_full_access && entitlement.status === 'active'
   const isLite = normalizedPlan === 'pro' && entitlement?.license_plan === 'lite'
@@ -152,7 +153,8 @@ export default function PlanInfoDrawer({
       ? Math.max(
           0,
           Math.ceil(
-            (new Date(entitlement.expires_at).getTime() - referenceNowMs) / (1000 * 60 * 60 * 24)
+            (parseBackendDate(entitlement.expires_at).getTime() - referenceNowMs) /
+              (1000 * 60 * 60 * 24)
           )
         )
       : null

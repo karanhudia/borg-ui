@@ -51,6 +51,7 @@ export interface BackupPlanPayloadState {
   runPruneAfter: boolean
   runCompactAfter: boolean
   runCheckAfter: boolean
+  runRestoreCheckAfter: boolean
   checkMaxDuration: number
   checkExtraFlags: string
   pruneKeepHourly: number
@@ -423,6 +424,7 @@ export function buildBackupPlanPayload(
     run_prune_after: state.runPruneAfter,
     run_compact_after: state.runCompactAfter,
     run_check_after: state.runCheckAfter,
+    run_restore_check_after: state.runRestoreCheckAfter,
     check_max_duration: state.checkMaxDuration,
     check_extra_flags: state.checkExtraFlags.trim() || null,
     prune_keep_hourly: state.pruneKeepHourly,

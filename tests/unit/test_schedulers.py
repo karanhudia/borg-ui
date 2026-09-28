@@ -759,3 +759,44 @@ async def test_start_mqtt_sync_scheduler_delegates_to_periodic_sync():
         await start_mqtt_sync_scheduler()
 
     mock_periodic.assert_awaited_once_with(5)
+
+
+@pytest.mark.asyncio
+async def test_schedule_failure_alert_uses_its_own_session(db_session):
+    """The fire-and-forget alert must not outlive the scheduler's session."""
+    repo = Repository(
+        name="Repo",
+        path="/tmp/repo",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+    )
+    db_session.add(repo)
+    db_session.flush()
+    db_session.add(
+        ScheduledJob(
+            name="Broken",
+            cron_expression="0 2 * * *",
+            enabled=True,
+            repository_id=repo.id,
+            next_run=datetime.now(timezone.utc) - timedelta(minutes=1),
+        )
+    )
+    db_session.commit()
+
+    alert_session = MagicMock()
+    send = AsyncMock()
+    with (
+        patch.object(
+            schedule_api, "_dispatch_due_scheduled_job", side_effect=RuntimeError("x")
+        ),
+        patch.object(schedule_api, "SessionLocal", return_value=alert_session),
+        patch.object(schedule_api.notification_service, "send_schedule_failure", send),
+    ):
+        await dispatch_due_scheduled_backups(db_session, datetime.now(timezone.utc))
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+
+    send.assert_awaited_once()
+    assert send.await_args.args[0] is alert_session
+    alert_session.close.assert_called_once()

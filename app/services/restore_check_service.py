@@ -28,6 +28,7 @@ from app.utils.borg_env import (
     build_repository_borg_env,
     cleanup_temp_key_file,
     effective_repository_remote_path,
+    with_lock_wait,
 )
 
 from app.services.process_cancel import (
@@ -75,7 +76,14 @@ def _coerce_archive_timestamp(archive: dict | str) -> str:
     return ""
 
 
-def _select_latest_archive(archives: list[dict | str]) -> dict | str | None:
+def _select_latest_archive(
+    archives: list[dict | str], name: str | None = None
+) -> dict | str | None:
+    """The newest archive, or the newest one called `name` when given (a
+    plan's post-backup restore check targets the archive it just wrote; a
+    Borg 2 series shares one name, so the newest of the series is it)."""
+    if name:
+        archives = [a for a in archives if _get_archive_name(a) == name]
     if not archives:
         return None
     return max(archives, key=_coerce_archive_timestamp)
@@ -276,7 +284,7 @@ class RestoreCheckService:
             )
             use_canary = not full_archive and not probe_paths
             archives = await BorgRouter(repository).list_archives(env=env)
-            archive = _select_latest_archive(archives)
+            archive = _select_latest_archive(archives, job.archive_name)
             archive_name = _get_archive_name(archive)
             archive_selector = _get_archive_selector(archive, repository)
             if not archive_name:
@@ -356,7 +364,7 @@ class RestoreCheckService:
                 )
 
                 process = await asyncio.create_subprocess_exec(
-                    *cmd,
+                    *with_lock_wait(cmd, env),
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     cwd=temp_restore_dir,
@@ -578,7 +586,7 @@ class RestoreCheckService:
             )
             return
 
-        archive = _select_latest_archive(archives)
+        archive = _select_latest_archive(archives, job.archive_name)
         archive_name = _get_archive_name(archive)
         archive_selector = _get_archive_selector(archive, repository)
         if not archive_name:

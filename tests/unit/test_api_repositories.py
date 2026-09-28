@@ -233,6 +233,41 @@ class TestRepositoriesListAndGet:
             "STATUS_FILE": "/tmp/status"
         }
 
+    def test_list_repositories_includes_ssh_connection_id(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        # The plan wizard matches this against each source's connection to
+        # preview the route; without it every SSH repository looked
+        # connectionless and remote-direct was never previewed.
+        connection = SSHConnection(host="repo-host", username="user", port=22)
+        test_db.add(connection)
+        test_db.commit()
+        test_db.add_all(
+            [
+                Repository(
+                    name="On SSH",
+                    path="ssh://user@repo-host:22/srv/repo",
+                    encryption="none",
+                    repository_type="ssh",
+                    connection_id=connection.id,
+                ),
+                Repository(
+                    name="Local",
+                    path="/repo-local-conn",
+                    encryption="none",
+                    repository_type="local",
+                ),
+            ]
+        )
+        test_db.commit()
+
+        response = test_client.get("/api/repositories/", headers=admin_headers)
+
+        assert response.status_code == 200
+        by_name = {repo["name"]: repo for repo in response.json()["repositories"]}
+        assert by_name["On SSH"]["connection_id"] == connection.id
+        assert by_name["Local"]["connection_id"] is None
+
     def test_list_repositories_includes_schedule_summary(
         self, test_client: TestClient, admin_headers, test_db
     ):

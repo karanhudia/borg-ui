@@ -144,6 +144,10 @@ describe('archivesAPI stored-archive methods', () => {
     })
     await archivesApiClient.getHeatmap(7)
     expect(mock.history.get[0].url).toBe('/repositories/7/archives/heatmap')
+    // Days are bucketed in the viewer's zone server-side (issue #1221).
+    expect(mock.history.get[0].params).toEqual({
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    })
     mock.restore()
   })
 

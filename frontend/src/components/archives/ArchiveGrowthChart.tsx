@@ -68,17 +68,43 @@ function GrowthTooltip({ active, payload }: TooltipProps) {
   )
 }
 
+interface RepositoryDotProps {
+  cx?: number
+  cy?: number
+  index: number
+  payload: GrowthPoint
+}
+
 function Swatch({
   color,
   line,
   dashed,
+  ring,
   opacity = 1,
 }: {
   color: string
   line?: boolean
   dashed?: boolean
+  ring?: boolean
   opacity?: number
 }) {
+  if (ring) {
+    return (
+      <Box
+        component="span"
+        sx={{
+          display: 'inline-block',
+          width: 10,
+          height: 10,
+          borderRadius: '50%',
+          border: `2px solid ${color}`,
+          bgcolor: 'background.paper',
+          mr: 0.75,
+          verticalAlign: '-1px',
+        }}
+      />
+    )
+  }
   return (
     <Box
       component="span"
@@ -111,6 +137,31 @@ export default function ArchiveGrowthChart({ data, onSelectArchive }: ArchiveGro
   const gridColor = alpha(theme.palette.text.primary, 0.08)
   const tick = { fill: theme.palette.text.secondary, fontSize: 11 }
   const dots = data.points.length <= 40
+  const paper = theme.palette.background.paper
+
+  // A stale measurement is a hollow ring on the repository line, so it reads
+  // apart from a filled current dot without leaning on color. Rings are drawn
+  // even when the chart is too dense for dots, since they are the only mark
+  // that says which figures are being re-measured.
+  const repositoryDot = ({ cx, cy, index, payload }: RepositoryDotProps) => {
+    if (cx == null || cy == null) return <g key={index} />
+    if (payload.stale) {
+      return (
+        <circle
+          key={index}
+          className="growth-stale-point"
+          cx={cx}
+          cy={cy}
+          r={4}
+          fill={paper}
+          stroke={repositoryColor}
+          strokeWidth={2}
+        />
+      )
+    }
+    if (!dots) return <g key={index} />
+    return <circle key={index} cx={cx} cy={cy} r={3.5} fill={repositoryColor} />
+  }
 
   const enough = data.points.length >= 2
 
@@ -192,7 +243,7 @@ export default function ArchiveGrowthChart({ data, onSelectArchive }: ArchiveGro
                   stroke={repositoryColor}
                   strokeWidth={2.5}
                   fill="url(#growth-repository-fill)"
-                  dot={dots ? { r: 3.5, fill: repositoryColor, strokeWidth: 0 } : false}
+                  dot={repositoryDot}
                   activeDot={{ r: 5 }}
                   isAnimationActive={false}
                   connectNulls
@@ -226,6 +277,12 @@ export default function ArchiveGrowthChart({ data, onSelectArchive }: ArchiveGro
               <Swatch color={sourceColor} line dashed />
               {t('archives.growth.legendSource')}
             </span>
+            {data.stale_count > 0 && (
+              <span>
+                <Swatch color={repositoryColor} ring />
+                {t('archives.growth.tooltipStale')}
+              </span>
+            )}
           </Stack>
 
           {(data.stale_count > 0 || data.unmeasured_count > 0) && (

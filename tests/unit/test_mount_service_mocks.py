@@ -118,8 +118,9 @@ async def test_mount_borg_archive_success(mount_service_fixture, mock_db_session
 
                         # Verify command
                         args = mock_exec.call_args[0]
-                        assert args[0] == "borg"
-                        assert args[1] == "mount"
+                        # Borg 1 ignores BORG_LOCK_WAIT, so a mount must carry
+                        # the request wait as a flag (#1216).
+                        assert args[:4] == ("borg", "--lock-wait", "20", "mount")
                         assert "/backups/repo" in args
                         assert "-f" in args  # Foreground mode
 
@@ -211,10 +212,8 @@ async def test_mount_borg_archive_uses_unique_path_for_empty_occupied_target(
     mock_process.kill = MagicMock()
     mount_output = MagicMock()
     mount_output.__contains__.return_value = True
-    active_mount_output = (
-        f"fuse on {occupied_mount_point} type fuse"
-        if occupation_source == "system"
-        else ""
+    active_mount_points = (
+        {str(occupied_mount_point)} if occupation_source == "system" else set()
     )
 
     with (
@@ -223,12 +222,13 @@ async def test_mount_borg_archive_uses_unique_path_for_empty_occupied_target(
             "app.services.mount_service.asyncio.create_subprocess_exec",
             return_value=mock_process,
         ),
+        patch(
+            "app.services.mount_service.active_mount_points",
+            return_value=active_mount_points,
+        ),
         patch("app.services.mount_service.subprocess.run") as mock_run,
     ):
-        mock_run.side_effect = [
-            MagicMock(returncode=0, stdout=active_mount_output),
-            MagicMock(returncode=0, stdout=mount_output),
-        ]
+        mock_run.side_effect = [MagicMock(returncode=0, stdout=mount_output)]
 
         mounted_path, _ = await mount_service_fixture.mount_borg_archive(
             repository_id=1, mount_point=str(occupied_mount_point)

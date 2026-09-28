@@ -4,15 +4,27 @@ cancellation, and crash recovery. One instance per process."""
 import asyncio
 import math
 import time
+import uuid
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import structlog
+from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError, InterfaceError, OperationalError
+from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 from sqlalchemy.orm import Session
 
 import app.config as app_config
-from app.database.models import Operation, Repository, SystemSettings, utc_now
+from app.core.borg_errors import LOCK_CONTENTION_DETAIL_KEY
+from app.database.models import (
+    Operation,
+    OperationsRunnerLease,
+    Repository,
+    SystemSettings,
+    utc_now,
+)
 from app.services.operations import executors as executor_registry
 from app.services.operations.events import (
     broadcast_operation_progress,
@@ -57,7 +69,16 @@ MAX_REQUEUES = 3
 # repository about 75 minutes to free up.
 DEFERRAL_DELAY_SECONDS = 5.0
 DEFERRAL_MAX_DELAY_SECONDS = 300.0
+# How long the runner lease outlives its last renewal (#1166): a holder that
+# died without releasing it keeps a replacement waiting this long. Renewed
+# every tick, and it has to outlast the tick before `stop()` plus the
+# `drain()` after it, whose end releases it.
+LEASE_SECONDS = 60.0
 REPOSITORY_BUSY_KEY = "backend.errors.jobs.repositoryOperationActive"
+# The errors a database that is locked, gone or out of connections raises:
+# an outcome whose write fails with one of these is written again on a later
+# tick, for as long as it takes. Anything else does not go away by waiting.
+TRANSIENT_DATABASE_ERRORS = (OperationalError, InterfaceError, PoolTimeoutError)
 
 
 def deferred_until(op: Operation) -> Optional[float]:
@@ -96,11 +117,18 @@ def requeue_count(op: Operation) -> int:
 
 
 def repository_busy(exc: BaseException) -> bool:
-    """True for the admission's 409 (repositoryOperationActive)."""
-    if getattr(exc, "status_code", None) != 409:
-        return False
+    """True when the repository is taken for now: the admission's 409
+    (repositoryOperationActive), or the waiter's 502 for an agent job whose
+    Borg run ended on a lock another process holds (marked
+    `lock_contention`, see `wait_for_agent_repository_operation_job`). Both
+    are deferred the same way."""
     detail = getattr(exc, "detail", None)
-    return isinstance(detail, dict) and detail.get("key") == REPOSITORY_BUSY_KEY
+    if not isinstance(detail, dict):
+        return False
+    status_code = getattr(exc, "status_code", None)
+    if status_code == 409:
+        return detail.get("key") == REPOSITORY_BUSY_KEY
+    return status_code == 502 and detail.get(LOCK_CONTENTION_DETAIL_KEY) is True
 
 
 @dataclass
@@ -113,6 +141,29 @@ class Outcome:
     def __post_init__(self):
         if self.status not in _OUTCOME_STATUSES:
             raise ValueError(f"Invalid outcome status: {self.status!r}")
+
+
+@dataclass
+class _UnrecordedOutcome:
+    """The terminal state a task of this runner reached but could not
+    commit: what `run_operation` would have written. `kind`,
+    `repository_id` and `run_id` identify the row beyond its id, which
+    SQLite hands out again once the last row is deleted; `fallback` marks a
+    failure the runner made up for a task that ended before any outcome,
+    which only a row still `running` takes."""
+
+    kind: str
+    repository_id: Optional[int]
+    run_id: str
+    status: str
+    result: Optional[dict]
+    skip_reason: Optional[str]
+    error_message: Optional[str]
+    started_at: Optional[datetime]
+    completed_at: datetime
+    fallback: bool = False
+    # one more try after an error that is not the database's
+    retried: bool = False
 
 
 def operation_log_path(operation_id: int) -> Path:
@@ -187,6 +238,7 @@ class OperationRunner:
         registry=None,
         poll_interval: float = 5.0,
         deferral_delay: float = DEFERRAL_DELAY_SECONDS,
+        lease_seconds: float = LEASE_SECONDS,
     ):
         self._session_factory = session_factory
         self._registry = (
@@ -194,10 +246,23 @@ class OperationRunner:
         )
         self._poll_interval = poll_interval
         self._deferral_delay = deferral_delay
+        self._lease_seconds = lease_seconds
+        self._lease_holder = uuid.uuid4().hex
+        # None until the first attempt, so a runner that starts without the
+        # lease says it is waiting
+        self._holds_lease: Optional[bool] = None
+        # True once `start()`'s loop has returned: no tick can claim after it
+        self._loop_exited = True
+        # Set by a drain that timed out: its tasks were cancelled, not
+        # finished, and what they started may outlive them
+        self._drain_timed_out = False
         self._wake: Optional[asyncio.Event] = None
         self._stopped = False
         self.running_tasks: dict[int, asyncio.Task] = {}
         self.cancel_requested: set[int] = set()
+        # Outcomes of this runner's own tasks whose terminal commit failed,
+        # by operation id; the tick writes them (`record_unrecorded_outcomes`).
+        self.unrecorded_outcomes: dict[int, _UnrecordedOutcome] = {}
 
     def _session(self) -> Session:
         """Open a session. Resolved lazily so test fixtures that patch
@@ -255,6 +320,7 @@ class OperationRunner:
         from that point on; filter those out instead of gathering them."""
         tasks = [t for t in self.running_tasks.values() if asyncio.isfuture(t)]
         if not tasks:
+            self._release_lease_if_idle()
             return
         for operation_id in list(self.running_tasks):
             await self.request_cancel(operation_id)
@@ -267,9 +333,18 @@ class OperationRunner:
                 "Operations runner drain timed out",
                 remaining=len(self.running_tasks),
             )
+            # the lease stays and expires rather than hand that over
+            self._drain_timed_out = True
+            return
+        self._release_lease_if_idle()
 
-    async def start(self) -> None:
+    async def start(self, before_recovery: Optional[Callable[[], None]] = None) -> None:
+        """`before_recovery` runs once, as this runner's recovery does, when
+        it first holds the lease: the startup sweeps outside the runner touch
+        rows a process being replaced may still own too."""
         self._stopped = False
+        self._loop_exited = False
+        self._drain_timed_out = False
         # A fresh `asyncio.Event` every time: the one from a previous call
         # is bound to that call's event loop (asyncio.Event binds to the
         # loop of its first `wait()`/`clear()`), and reusing it here after
@@ -292,22 +367,270 @@ class OperationRunner:
         # the next process-lifetime's `drain()` crashes trying to `gather()`
         # it (`TypeError: ... a coroutine or an awaitable is required`).
         self.running_tasks = {}
+        # Same reasoning: those rows belong to a previous lifetime's database
+        # session, and `recover_on_startup` owns rows left running across one.
+        self.unrecorded_outcomes = {}
         logger.info("Operations runner started", poll_interval=self._poll_interval)
-        while not self._stopped:
-            try:
-                await self.tick()
-            except Exception as exc:  # keep the loop alive
-                logger.error("Operations runner tick failed", error=str(exc))
-            try:
-                await asyncio.wait_for(
-                    self._event().wait(), timeout=self._poll_interval
-                )
-            except asyncio.TimeoutError:
-                pass
-            self._event().clear()
+        recovered = False
+        try:
+            while not self._stopped:
+                # Recovery, the sweep and the claims all assume this is the
+                # only runner; the lease makes that so while a replacement
+                # process overlaps this one (#1166).
+                if self._renew_lease():
+                    if not recovered:
+                        self._recover(before_recovery)
+                        recovered = True
+                    try:
+                        await self.tick()
+                    except Exception as exc:  # keep the loop alive
+                        logger.error("Operations runner tick failed", error=str(exc))
+                try:
+                    await asyncio.wait_for(
+                        self._event().wait(), timeout=self._poll_interval
+                    )
+                except asyncio.TimeoutError:
+                    pass
+                self._event().clear()
+        finally:
+            # With tasks still running, `drain()` releases it once they end.
+            self._loop_exited = True
+            self._release_lease_if_idle()
         logger.info("Operations runner stopped")
 
+    # -- lease -----------------------------------------------------------------
+
+    def acquire_lease(self, db: Session) -> bool:
+        """Take or renew the runner lease; False while another live runner
+        holds it."""
+        now = utc_now()
+        values = {
+            "holder": self._lease_holder,
+            "expires_at": now + timedelta(seconds=self._lease_seconds),
+        }
+        taken = (
+            db.query(OperationsRunnerLease)
+            .filter(
+                OperationsRunnerLease.id == 1,
+                or_(
+                    OperationsRunnerLease.holder == self._lease_holder,
+                    OperationsRunnerLease.holder.is_(None),
+                    OperationsRunnerLease.expires_at < now,
+                ),
+            )
+            .update(values, synchronize_session=False)
+        )
+        if taken:
+            db.commit()
+            return True
+        if db.get(OperationsRunnerLease, 1) is not None:
+            db.rollback()
+            return False
+        db.add(OperationsRunnerLease(id=1, **values))
+        try:
+            db.commit()
+        except IntegrityError:  # another runner inserted it first
+            db.rollback()
+            return False
+        return True
+
+    def release_lease(self, db: Session) -> None:
+        db.query(OperationsRunnerLease).filter(
+            OperationsRunnerLease.id == 1,
+            OperationsRunnerLease.holder == self._lease_holder,
+        ).update({"holder": None, "expires_at": None}, synchronize_session=False)
+        db.commit()
+
+    def _renew_lease(self) -> bool:
+        db = self._session()
+        try:
+            held = self.acquire_lease(db)
+        except Exception as exc:
+            # a locked database: the tick would fail on it too
+            db.rollback()
+            logger.warning(
+                "Could not renew the operations runner lease", error=str(exc)
+            )
+            return False
+        finally:
+            db.close()
+        if held != self._holds_lease:
+            if held:
+                logger.info("Operations runner lease acquired")
+            else:
+                # ponytail: a runner that loses the lease (a loop stalled past
+                # it) keeps the tasks it already started running
+                logger.warning(
+                    "Operations runner is waiting for the lease, another "
+                    "process holds it"
+                )
+        self._holds_lease = held
+        return held
+
+    def _release_lease_if_idle(self) -> None:
+        """Hand the lease over only when nothing of this runner can still
+        claim or run: the loop has ended and its tasks with it."""
+        if not self._loop_exited or self.running_tasks or self._drain_timed_out:
+            return
+        db = self._session()
+        try:
+            self.release_lease(db)
+        except Exception as exc:  # it expires on its own
+            db.rollback()
+            logger.warning(
+                "Could not release the operations runner lease", error=str(exc)
+            )
+        finally:
+            db.close()
+        self._holds_lease = None
+
+    def _recover(self, before_recovery: Optional[Callable[[], None]]) -> None:
+        if before_recovery is not None:
+            try:
+                before_recovery()
+            except Exception as exc:
+                logger.error("Startup sweeps failed", error=str(exc))
+        try:
+            db = self._session()
+            try:
+                self.recover_on_startup(db)
+            finally:
+                db.close()
+        except Exception as exc:
+            logger.error("Operations recovery failed", error=str(exc))
+
     # -- scheduling ------------------------------------------------------------
+
+    async def record_unrecorded_outcomes(self, db: Session) -> int:
+        """Write the outcome of a task of this runner whose terminal commit
+        failed (a locked or unreachable database at that moment). Its row
+        would otherwise stay `running` with nothing behind it until the next
+        restart: an exclusive kind holds its repository's lane, and every
+        `wait_for_backup_operation` on it polls forever. Only rows this
+        process ran are here, so a row another process or inline
+        maintenance keeps `running` is never touched; index kinds are not
+        either, `requeue_abandoned_index_rows` recovers those. The write is
+        the terminal write's, which the service that ran the work in its
+        own session (a server backup, a maintenance service) does not
+        pre-empt: the row it closed gets the task's verdict and the rest of
+        what the terminal write carries, its result above all, a cancel the
+        task observed included. A row already `failed` or `cancelled` keeps
+        that: the service's own failure says the same, another process's
+        failure (`recover_on_startup`: "interrupted by restart") is its
+        diagnosis of the row, and a cancel written after the task ended (the
+        backup cancel route on a row left `running`) is the newer word, as
+        is the executor's own. A success still owes the chain the terminal write never
+        reached, once: a follow-up chain that already hangs off the row (a
+        retry after the chain's commit) is not enqueued again, while a
+        plan's maintenance hanging off it is not the chain. An entry stays
+        for the next tick until its row and follow-ups are both in, without
+        costing the others theirs, for as long as the database is the
+        problem (`TRANSIENT_DATABASE_ERRORS`). Any other error is the
+        write's own: the entry gets one more try, without its result (the
+        one field with content of its own) when the row has not taken it
+        yet; failing that it is dropped with an error log, and the row
+        stays as it is."""
+        recorded = 0
+        for operation_id, pending in list(self.unrecorded_outcomes.items()):
+            if operation_id in self.running_tasks:
+                # a new dispatch owns the row; its task writes the verdict
+                del self.unrecorded_outcomes[operation_id]
+                continue
+            statuses = (
+                {"running"}
+                if pending.fallback
+                else {"running", "skipped", *SUCCESS_STATUSES}
+            )
+            values = {
+                "status": pending.status,
+                "result": pending.result,
+                "skip_reason": pending.skip_reason,
+                "error_message": pending.error_message,
+                "completed_at": pending.completed_at,
+            }
+            if pending.started_at is not None:
+                values["started_at"] = pending.started_at
+            record_committed = False
+            try:
+                written = (
+                    db.query(Operation)
+                    .filter(
+                        Operation.id == operation_id,
+                        Operation.kind == pending.kind,
+                        Operation.repository_id == pending.repository_id,
+                        Operation.run_id == pending.run_id,
+                        Operation.status.in_(tuple(sorted(statuses))),
+                    )
+                    .update(values, synchronize_session=False)
+                )
+                db.commit()
+                record_committed = True
+                op = db.get(Operation, operation_id)
+                if op is not None and op.run_id != pending.run_id:
+                    op = None  # the id was handed out again; not this row
+                if (
+                    op is not None
+                    and op.status in SUCCESS_STATUSES
+                    and db.query(Operation.id)
+                    .filter(
+                        Operation.depends_on_id == op.id,
+                        Operation.trigger == "followup",
+                    )
+                    .first()
+                    is None
+                ):
+                    enqueue_followups(
+                        db, op, depends_on_id=op.id, available=self._registered_kinds()
+                    )
+            except TRANSIENT_DATABASE_ERRORS as exc:
+                db.rollback()
+                logger.warning(
+                    "Could not record an operation outcome yet",
+                    operation_id=operation_id,
+                    error=str(exc),
+                )
+                continue
+            except Exception as exc:
+                db.rollback()
+                if not pending.retried:
+                    pending.retried = True
+                    if not record_committed:
+                        pending.result = None
+                    logger.warning(
+                        "Could not record an operation outcome, trying once more",
+                        operation_id=operation_id,
+                        without_result=pending.result is None,
+                        error=str(exc),
+                    )
+                else:
+                    del self.unrecorded_outcomes[operation_id]
+                    logger.error(
+                        "Could not record an operation outcome; the row keeps "
+                        "its status",
+                        operation_id=operation_id,
+                        status=pending.status,
+                        error=str(exc),
+                    )
+                continue
+            del self.unrecorded_outcomes[operation_id]
+            self.cancel_requested.discard(operation_id)
+            if not written or op is None:
+                continue
+            recorded += 1
+            logger.warning(
+                "Recorded an operation outcome after its terminal commit failed",
+                operation_id=operation_id,
+                status=pending.status,
+            )
+            try:
+                await broadcast_operation_updated(op, db)
+            except Exception as exc:  # the row is stored; the board refetches
+                logger.warning(
+                    "Could not broadcast a recorded operation",
+                    operation_id=operation_id,
+                    error=str(exc),
+                )
+        return recorded
 
     async def requeue_abandoned_index_rows(self, db: Session) -> int:
         """Index rows left `running` by a task this runner no longer has (a
@@ -411,6 +734,12 @@ class OperationRunner:
         db: Session = self._session()
         try:
             try:
+                await self.record_unrecorded_outcomes(db)
+            except Exception as exc:
+                # housekeeping like the sweep below
+                db.rollback()
+                logger.warning("Recording unrecorded outcomes failed", error=str(exc))
+            try:
                 await self.requeue_abandoned_index_rows(db)
             except Exception as exc:
                 # the sweep is housekeeping; the dispatch pass must not
@@ -432,6 +761,10 @@ class OperationRunner:
             )
             now = time.time()
             for op in queued:
+                if self._stopped:
+                    # a stop during this tick's awaits; the drain after it
+                    # waits only for what is already running
+                    break
                 if op.id in self.running_tasks:
                     continue
                 not_before = deferred_until(op)
@@ -475,7 +808,13 @@ class OperationRunner:
                 db.refresh(op)
                 await broadcast_operation_updated(op, db)
                 self.running_tasks[op.id] = asyncio.create_task(
-                    self.run_operation(op.id)
+                    self.run_operation(
+                        op.id,
+                        kind=op.kind,
+                        repository_id=op.repository_id,
+                        run_id=op.run_id,
+                        claimed_at=op.started_at,
+                    )
                 )
                 dispatched += 1
         finally:
@@ -491,15 +830,32 @@ class OperationRunner:
 
     # -- execution -------------------------------------------------------------
 
-    async def run_operation(self, operation_id: int) -> None:
+    async def run_operation(
+        self,
+        operation_id: int,
+        *,
+        kind: Optional[str] = None,
+        repository_id: Optional[int] = None,
+        run_id: Optional[str] = None,
+        claimed_at: Optional[datetime] = None,
+    ) -> None:
+        """`kind`, `repository_id`, `run_id` and `claimed_at` are the tick's
+        claim: the row is `running` because of this task from here on, even
+        when its first read below fails, so the outcome bookkeeping in
+        `finally` does not depend on that read."""
         db: Session = self._session()
         ctx: Optional[OperationContext] = None
         deferred = False
         terminal_committed = False
+        terminal: Optional[_UnrecordedOutcome] = None
         try:
             op = db.get(Operation, operation_id)
             if op is None or op.status != "running":
+                kind = None  # not this task's row
                 return
+            kind = op.kind
+            repository_id = op.repository_id
+            run_id = op.run_id
             # The start this dispatch's claim wrote. An executor that hands
             # its row to a service which claims it through `claim_running`
             # (`executors/maintenance.py`) clears it first; a service that
@@ -518,6 +874,7 @@ class OperationRunner:
                 if op.started_at is None:
                     op.started_at = claimed_at
                 op.completed_at = utc_now()
+                terminal = self._terminal_of(op)
                 db.commit()
                 terminal_committed = True
                 await broadcast_operation_updated(op, db)
@@ -584,11 +941,11 @@ class OperationRunner:
                             ),
                         )
                     else:
-                        await broadcast_operation_updated(op, db)
                         # no wake, and the tick skips the operation until
                         # deferred_until: wakes from other completions must
                         # not burn the deferrals
                         deferred = True
+                        await broadcast_operation_updated(op, db)
                         return
             if op.status == "cancelled" or (
                 operation_id in self.cancel_requested and outcome.status != "failed"
@@ -602,6 +959,7 @@ class OperationRunner:
             if op.started_at is None:
                 op.started_at = claimed_at
             op.completed_at = utc_now()
+            terminal = self._terminal_of(op)
             db.commit()
             terminal_committed = True
             await broadcast_operation_updated(op, db)
@@ -614,12 +972,50 @@ class OperationRunner:
                 ctx.close()
             db.close()
             self.running_tasks.pop(operation_id, None)
+            if (
+                kind is not None
+                and run_id is not None
+                and kind not in INDEX_KINDS
+                and not terminal_committed
+                and not deferred
+            ):
+                # The row stays `running` with no task behind it; the tick
+                # writes what this task reached, or a failure when it ended
+                # before an outcome (an error in the runner's own bookkeeping).
+                self.unrecorded_outcomes[operation_id] = terminal or _UnrecordedOutcome(
+                    kind=kind,
+                    repository_id=repository_id,
+                    run_id=run_id,
+                    status="failed",
+                    result=None,
+                    skip_reason=None,
+                    error_message="the operation ended without a recorded result",
+                    started_at=claimed_at,
+                    completed_at=utc_now(),
+                    fallback=True,
+                )
             # Recovery needs the accepted request if the terminal write
             # failed; only a committed terminal state consumes it.
             if terminal_committed:
                 self.cancel_requested.discard(operation_id)
             if not deferred:
                 self.wake()
+
+    @staticmethod
+    def _terminal_of(op: Operation) -> _UnrecordedOutcome:
+        """Snapshot the terminal fields before their commit: a failed commit
+        expires them."""
+        return _UnrecordedOutcome(
+            kind=op.kind,
+            repository_id=op.repository_id,
+            run_id=op.run_id,
+            status=op.status,
+            result=op.result,
+            skip_reason=op.skip_reason,
+            error_message=op.error_message,
+            started_at=op.started_at,
+            completed_at=op.completed_at,
+        )
 
     # -- cancellation ----------------------------------------------------------
 

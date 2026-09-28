@@ -314,7 +314,7 @@ if [ "$PUID" = "0" ]; then
     exec gunicorn app.main:app \
         --bind 0.0.0.0:${PORT} \
         --workers 1 \
-        --worker-class uvicorn.workers.UvicornWorker \
+        --worker-class app.gunicorn_worker.BorgUIWorker \
         --timeout 0 \
         --graceful-timeout 30 \
         --worker-tmp-dir /dev/shm \
@@ -324,7 +324,7 @@ else
     exec gosu borg gunicorn app.main:app \
         --bind 0.0.0.0:${PORT} \
         --workers 1 \
-        --worker-class uvicorn.workers.UvicornWorker \
+        --worker-class app.gunicorn_worker.BorgUIWorker \
         --timeout 0 \
         --graceful-timeout 30 \
         --worker-tmp-dir /dev/shm \

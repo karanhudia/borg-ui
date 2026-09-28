@@ -33,7 +33,12 @@ import {
 import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
 import BorgVersionChip from './BorgVersionChip'
 import { getRepoCapabilities } from '../utils/repoCapabilities'
-import { formatDateShort, formatDateTimeFull, formatElapsedTime } from '../utils/dateUtils'
+import {
+  formatDateShort,
+  formatDateTimeFull,
+  formatElapsedTime,
+  parseBackendDate,
+} from '../utils/dateUtils'
 import { formatUploadRatelimit } from '../utils/uploadRatelimit'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAnalytics } from '../hooks/useAnalytics'
@@ -462,7 +467,7 @@ export default function RepositoryCard({
       }
     }
 
-    const nextRunDate = new Date(rcloneStorage.next_scheduled_sync_at)
+    const nextRunDate = parseBackendDate(rcloneStorage.next_scheduled_sync_at)
     if (Number.isNaN(nextRunDate.getTime())) {
       return {
         label: t('repositoryCard.rcloneScheduled'),
@@ -545,7 +550,7 @@ export default function RepositoryCard({
 
     if (!repository.next_run) return null
 
-    const nextRunDate = new Date(repository.next_run)
+    const nextRunDate = parseBackendDate(repository.next_run)
     let whenLabel = format(
       nextRunDate,
       isThisYear(nextRunDate) ? 'MMM d · h:mm a' : 'MMM d, yyyy · h:mm a'

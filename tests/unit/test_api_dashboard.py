@@ -1507,18 +1507,19 @@ class TestDashboardOverviewAggregates:
 
         statements: list[str] = []
 
-        def record(conn, cursor, statement, parameters, context, executemany):
-            statements.append(statement)
+        def record(orm_execute_state):
+            statements.append(str(orm_execute_state.statement))
 
-        engine = test_db.get_bind()
-
+        # Count on the request's session, not the engine: a background task
+        # an earlier test left running opens its sessions on this test's
+        # engine, and its statements would land in the count.
         def count_request() -> int:
             statements.clear()
-            event.listen(engine, "before_cursor_execute", record)
+            event.listen(test_db, "do_orm_execute", record)
             try:
                 _overview(test_client, admin_headers)
             finally:
-                event.remove(engine, "before_cursor_execute", record)
+                event.remove(test_db, "do_orm_execute", record)
             return len(statements)
 
         seed(3, 0)

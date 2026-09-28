@@ -27,6 +27,7 @@ from app.services.repository_executor import (
 )
 from app.utils.borg_env import (
     get_standard_ssh_opts,
+    REQUEST_LOCK_WAIT,
     setup_borg_env,
     cleanup_temp_key_file,
 )
@@ -75,7 +76,9 @@ def _build_repo_env(repo: Repository, db: Session):
         connection=resolve_repository_ssh_connection(repo, db),
         db=db,
     )
-    env = setup_borg_env(passphrase=repo.passphrase, ssh_opts=ssh_opts)
+    env = setup_borg_env(
+        passphrase=repo.passphrase, ssh_opts=ssh_opts, lock_wait=REQUEST_LOCK_WAIT
+    )
     return env, temp_key_file
 
 

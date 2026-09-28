@@ -56,7 +56,7 @@ class BrowseClient:
     def complete_job(self, job_id, *, result):
         self.calls.append(("complete_job", job_id, result))
 
-    def fail_job(self, job_id, *, error_message, return_code=None):
+    def fail_job(self, job_id, *, error_message, return_code=None, **report):
         self.calls.append(("fail_job", job_id, error_message, return_code))
 
 

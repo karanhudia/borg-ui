@@ -2,7 +2,7 @@ import { Box, Chip, Stack, Tooltip, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { formatDistanceToNow } from 'date-fns'
 import { RotateCw } from 'lucide-react'
-import { formatDateTimeFull } from '../../utils/dateUtils'
+import { formatDateTimeFull, parseBackendDate } from '../../utils/dateUtils'
 import { useT } from './tokens'
 import type { UpcomingTask } from './types'
 
@@ -59,7 +59,7 @@ export function UpcomingBackupsPanel({ tasks }: { tasks: UpcomingTask[] }) {
             : task.repository
               ? 1
               : 0
-          const nextRunDate = task.next_run ? new Date(task.next_run) : null
+          const nextRunDate = task.next_run ? parseBackendDate(task.next_run) : null
           const hasValidNextRun = nextRunDate != null && !Number.isNaN(nextRunDate.getTime())
           const nextRunLabel = hasValidNextRun
             ? formatDistanceToNow(nextRunDate, { addSuffix: true })

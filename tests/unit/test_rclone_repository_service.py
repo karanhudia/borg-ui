@@ -165,8 +165,12 @@ class _RecordingMountService:
         self.unmount_calls = []
         self.active_mounts = {}
 
-    async def mount_ssh_directory(self, connection_id, remote_path, job_id=None):
-        self.mount_calls.append((connection_id, remote_path, job_id))
+    async def mount_ssh_directory(
+        self, connection_id, remote_path, job_id=None, read_only=False, ssh_key_id=None
+    ):
+        self.mount_calls.append(
+            (connection_id, remote_path, job_id, read_only, ssh_key_id)
+        )
         mount_id = "mount-ssh-repo"
         self.active_mounts[mount_id] = SimpleNamespace(
             mount_point="/tmp/sshfs_mount_9/backups/app"
@@ -533,10 +537,48 @@ async def test_sync_repository_ssh_mirror_mounts_server_owned_source(db_session)
 
     await service.sync_repository(db_session, repository)
 
-    assert mount_service.mount_calls == [(7, "/backups/app", None)]
+    assert mount_service.mount_calls == [(7, "/backups/app", None, True, None)]
     assert rclone.sync_calls[0][0] == "/tmp/sshfs_mount_9/backups/app"
     assert rclone.sync_calls[0][1] == "prod-s3:borg-ui/repositories/app"
     assert mount_service.unmount_calls == [("mount-ssh-repo", True)]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_sync_repository_ssh_mirror_mounts_with_sftp_key(db_session):
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    repository = Repository(
+        id=9,
+        name="SSH App",
+        path="ssh://borg@storage.example:22/backups/app",
+        connection_id=7,
+        encryption="none",
+        repository_type="ssh",
+    )
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        sftp_ssh_key_id=11,
+        cache_path=None,
+        sync_policy="manual",
+        sync_status="pending",
+        sync_direction="sshfs_mount_to_remote",
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+    mount_service = _RecordingMountService()
+    service = RcloneRepositoryService(
+        cache_root="/cache",
+        service=_RecordingRcloneService(),
+        ssh_mount_service=mount_service,
+    )
+
+    status = await service.sync_repository(db_session, repository)
+
+    assert mount_service.mount_calls == [(7, "/backups/app", None, True, 11)]
+    assert status["sftp_ssh_key_id"] == 11
 
 
 @pytest.mark.unit

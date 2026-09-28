@@ -46,6 +46,7 @@ from app.services.repository_executor import (
     AGENT_DIFF_JOB_KIND,
     agent_supports_job,
     is_agent_executor,
+    lock_contention_error,
 )
 from app.utils.borg_env import cleanup_temp_key_file
 
@@ -328,9 +329,11 @@ async def collect_changes(
             await stream.close()
         raise
     if stream.return_code not in BORG_OK_EXIT_CODES:
-        raise RuntimeError(
-            f"borg exited {stream.return_code}: {(stream.stderr or '').strip()[-500:]}"
-        )
+        reason = (stream.stderr or "").strip()[-500:]
+        if getattr(stream, "lock_contention", False):
+            # the runner defers the operation (`repository_busy`)
+            raise lock_contention_error(reason)
+        raise RuntimeError(f"borg exited {stream.return_code}: {reason}")
     return collector
 
 

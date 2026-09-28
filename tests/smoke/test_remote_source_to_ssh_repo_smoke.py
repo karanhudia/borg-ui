@@ -50,15 +50,8 @@ def main() -> int:
         verify_payload = client.verify_ssh_connection_borg(connection["id"])
         if not verify_payload.get("installed"):
             raise SmokeFailure(f"Remote Borg verification failed: {verify_payload}")
-        backup_source_payload = client.request_ok(
-            "PATCH",
-            f"/api/ssh-keys/connections/{connection['id']}/backup-source",
-            params={"enable": "true"},
-        ).json()
-        if not backup_source_payload.get("is_backup_source"):
-            raise SmokeFailure(
-                f"Unable to enable SSH connection as backup source: {backup_source_payload}"
-            )
+        # No per-connection "backup source" switch: the route comes from the
+        # source and repository alone (#834).
 
         run_id = client.temp_dir.name
         remote_source_path = Path(args.remote_root) / f"remote-source-{run_id}"

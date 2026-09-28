@@ -146,3 +146,53 @@ def test_borg1_exec_env_asks_for_modern_exit_codes(monkeypatch):
 
     monkeypatch.setenv("BORG_EXIT_CODES", "legacy")
     assert borg._build_exec_env()["BORG_EXIT_CODES"] == "legacy"
+
+
+@pytest.mark.unit
+def test_borg1_argv_carries_the_env_lock_wait():
+    """Borg 1.4 never reads BORG_LOCK_WAIT (its --lock-wait defaults to 1s),
+    so the env value has to reach it as the common option (#1216)."""
+    from app.utils.borg_env import with_lock_wait
+
+    env = {"BORG_LOCK_WAIT": "180"}
+
+    assert with_lock_wait(["borg", "prune", "repo"], env) == [
+        "borg",
+        "--lock-wait",
+        "180",
+        "prune",
+        "repo",
+    ]
+    # Borg 2 reads the variable itself; a caller's explicit flag wins.
+    assert with_lock_wait(["borg2", "prune"], env) == ["borg2", "prune"]
+    assert with_lock_wait(["borg", "info", "--lock-wait", "5"], env) == [
+        "borg",
+        "info",
+        "--lock-wait",
+        "5",
+    ]
+    assert with_lock_wait(["borg", "info"], {}) == ["borg", "info"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_borg1_interface_runs_borg_with_its_lock_wait(monkeypatch):
+    from app.core import borg as borg_module
+
+    seen = {}
+
+    class _Process:
+        returncode = 0
+
+        async def communicate(self):
+            return b"", b""
+
+    async def fake_exec(*cmd, **kwargs):
+        seen["cmd"] = list(cmd)
+        return _Process()
+
+    monkeypatch.setattr(borg_module.asyncio, "create_subprocess_exec", fake_exec)
+
+    await borg_module.borg._execute_command(["borg", "list", "repo"])
+
+    assert seen["cmd"][:3] == ["borg", "--lock-wait", "20"]

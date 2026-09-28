@@ -38,6 +38,7 @@ from app.services.filesystem_snapshot_service import (
     PreparedFilesystemSnapshot,
     build_filesystem_snapshot_plans,
 )
+from app.utils.fs import remove_tree_without_crossing_mounts
 from app.utils.ssh_paths import resolve_sshfs_source_path
 from app.utils.source_locations import (
     decode_source_locations,
@@ -47,6 +48,7 @@ from app.utils.borg_env import (
     build_repository_borg_env,
     cleanup_temp_key_file,
     setup_borg_env,
+    with_lock_wait,
 )
 from app.services.repository_command_lock import (
     acquire_repository_command_lock,
@@ -507,7 +509,7 @@ class BackupService:
                     repository_path, archive_name
                 )
                 info_process = await asyncio.create_subprocess_exec(
-                    *info_cmd,
+                    *with_lock_wait(info_cmd, env),
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     env=env,
@@ -1215,14 +1217,13 @@ class BackupService:
         )
         cleanup_paths.sort(key=len, reverse=True)
         for cleanup_path in cleanup_paths:
-            try:
-                shutil.rmtree(cleanup_path, ignore_errors=True)
-            except Exception as e:
+            # A snapshot whose cleanup command failed is still its own
+            # filesystem under here; the guard leaves it alone.
+            if not remove_tree_without_crossing_mounts(cleanup_path):
                 logger.warning(
-                    "Filesystem snapshot staging cleanup failed",
+                    "Filesystem snapshot staging cleanup incomplete",
                     job_id=job_id,
                     path=cleanup_path,
-                    error=str(e),
                 )
 
     def _resolve_backup_command_paths(
@@ -1999,7 +2000,7 @@ class BackupService:
 
             # Execute command - NO LOG FILE FOR MAXIMUM PERFORMANCE
             process = await asyncio.create_subprocess_exec(
-                *cmd,
+                *with_lock_wait(cmd, env),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,  # Merge stderr into stdout
                 env=env,

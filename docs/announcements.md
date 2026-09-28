@@ -15,8 +15,10 @@ This file is sourced from `docs/announcements.json`.
 
 1. Edit `docs/announcements.json`.
 2. Commit and push to `main`.
-3. Wait for the docs deployment to finish.
-4. Verify the live manifest URL returns JSON.
+3. Deploy the updates worker: `cd updates-worker && npm run deploy:updates`. The worker bundles
+   `docs/announcements.json` and `docs/plan-content.json` at deploy time, so the docs deployment
+   does not update the feed.
+4. Verify the live manifest URL returns the new entries.
 
 ## Localization
 

@@ -508,6 +508,14 @@ class SmokeClient:
         return parse_archives_payload(response.json())
 
     def generate_ssh_key(self, *, name: str = "SSH Smoke Key") -> dict:
+        """The server's system SSH key, generated on first use.
+
+        There is only one, so a smoke run against a server an earlier smoke
+        already used gets that key back instead of a 400.
+        """
+        existing = self.request_ok("GET", "/api/ssh-keys/system-key").json()
+        if existing.get("exists"):
+            return existing["ssh_key"]
         response = self.request_ok(
             "POST",
             "/api/ssh-keys/generate",

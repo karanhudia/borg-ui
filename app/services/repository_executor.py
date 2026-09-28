@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from datetime import datetime
 from typing import Any, Callable, Mapping, Optional
@@ -12,6 +13,10 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import SingletonThreadPool, StaticPool
 
+from app.core.borg_errors import (
+    LOCK_CONTENTION_DETAIL_KEY,
+    is_lock_contention_exit_code,
+)
 from app.database.models import AgentJob, AgentJobLog, AgentMachine, Repository
 from app.services.agent_job_dispatcher import dispatch_agent_cancel_if_connected
 from app.services.job_admission import (
@@ -25,6 +30,7 @@ from app.services.operations.backup_facade import (
     backup_job_link_columns,
     resolve_backup_job,
 )
+from app.utils.redaction import redact_secrets
 
 logger = structlog.get_logger()
 
@@ -473,17 +479,23 @@ def queue_agent_repository_operation_job(
         ignore_queued_operations=ignore_queued_operations,
     )
     now = datetime.utcnow()
+    payload = build_agent_repository_operation_payload(
+        repository,
+        job_kind,
+        operation=operation_payload,
+        maintenance_job_kind=maintenance_job_kind,
+        maintenance_job_id=maintenance_job_id,
+    )
+    if ignore_queued_operations:
+        # The same caller defers a run that Borg gave up on a foreign lock:
+        # the failure report leaves its maintenance row open for that (see
+        # `lock_contention_defers`).
+        payload[LOCK_CONTENTION_DEFERS_KEY] = True
     agent_job = AgentJob(
         agent_machine_id=agent.id,
         job_type="repository",
         status="queued",
-        payload=build_agent_repository_operation_payload(
-            repository,
-            job_kind,
-            operation=operation_payload,
-            maintenance_job_kind=maintenance_job_kind,
-            maintenance_job_id=maintenance_job_id,
-        ),
+        payload=payload,
         created_at=now,
         updated_at=now,
     )
@@ -524,6 +536,156 @@ def get_agent_archive_browse_job(
 # line arrives as its own row.
 FAILURE_LOG_TAIL = 40
 
+# The agent's failure report (agent 0.1.10): the last lines Borg wrote and
+# whether a lock another process holds ended the run. Kept in the job's
+# `result` next to the return code; an older agent sends neither.
+FAILURE_KIND_LOCK_CONTENTION = "lock_contention"
+FAILURE_KIND_OTHER = "other"
+FAILURE_TAIL_MAX_CHARS = 4096
+# Payload key of an agent job whose caller defers a lock another process
+# holds (the operations runner, through the repository lane).
+LOCK_CONTENTION_DEFERS_KEY = "lock_contention_defers"
+# Result key the failure report sets when it left the linked row for the
+# next attempt. Recorded once, at failure time: the row's deferral count
+# moves on afterwards, so it cannot be asked again later.
+LOCK_FAILURE_DEFERRED_KEY = "deferred"
+# What a Borg 1 on legacy exit codes says instead of exit code 73.
+_LOCK_CONTENTION_LINE = re.compile(
+    r"Failed to create/acquire the lock .*\(timeout\)\.?\s*$"
+)
+# Borg 2 also exits 73 for a lock of its own that another borg killed:
+# not contention, and nothing a wait changes. The agent's report says
+# `other` for it; the old-agent fallback looks for the line in the log rows.
+LOCK_LOST_LINE = "Our lock was killed by another borg"
+# `--show-rc` ends Borg's output with its exit code, which is not a reason.
+_SHOW_RC_LINE = re.compile(
+    r"^terminating with (success|warning|error) status, rc -?\d+"
+)
+# Borg prints its reason first and, for some errors, a traceback after it.
+_TRACEBACK_HEADER = "Traceback (most recent call last):"
+
+
+def agent_failure_result(
+    return_code: Optional[int],
+    *,
+    stderr_tail: Optional[str] = None,
+    failure_kind: Optional[str] = None,
+) -> dict[str, Any]:
+    """The `result` a failed agent job keeps: the return code as before,
+    and the report's fields when the agent sent them. The tail is bounded
+    here too, and a kind this server does not know reads as `other`. Borg
+    names the repository in its messages, so a location with credentials
+    is redacted before the tail is kept: it reaches the operation's
+    message and the failure notifications from here."""
+    result: dict[str, Any] = {}
+    if return_code is not None:
+        result["return_code"] = return_code
+    if stderr_tail is not None:
+        # redacted first: a cut through a location could take the scheme
+        # the redaction recognises a credential by
+        result["stderr_tail"] = (redact_secrets(stderr_tail) or "")[
+            -FAILURE_TAIL_MAX_CHARS:
+        ]
+    if failure_kind is not None:
+        result["failure_kind"] = (
+            FAILURE_KIND_LOCK_CONTENTION
+            if failure_kind == FAILURE_KIND_LOCK_CONTENTION
+            else FAILURE_KIND_OTHER
+        )
+    return result
+
+
+def _failure_result(agent_job: Any) -> dict[str, Any]:
+    result = getattr(agent_job, "result", None)
+    return result if isinstance(result, dict) else {}
+
+
+def agent_failure_is_lock_contention(
+    agent_job: Any, db: Optional[Session] = None
+) -> bool:
+    """Whether the agent's Borg run ended on a lock another process holds:
+    the report's classification, or, from an agent that sent none, Borg's
+    modern exit code (the agent has asked Borg for them since #1100). The
+    log rows are not the source (they may not have arrived); with `db` they
+    only rule out a Borg 2 run that lost its own lock, which exits 73 too."""
+    result = _failure_result(agent_job)
+    failure_kind = result.get("failure_kind")
+    if failure_kind is not None:
+        return failure_kind == FAILURE_KIND_LOCK_CONTENTION
+    if not is_lock_contention_exit_code(result.get("return_code")):
+        return False
+    if db is None or getattr(agent_job, "id", None) is None:
+        return True
+    lost = (
+        db.query(AgentJobLog.id)
+        .filter(
+            AgentJobLog.agent_job_id == agent_job.id,
+            AgentJobLog.message.contains(LOCK_LOST_LINE),
+        )
+        .first()
+    )
+    return lost is None
+
+
+def lock_contention_defers(agent_job: Any, db: Optional[Session] = None) -> bool:
+    """Whether this failure is one the caller defers instead of recording:
+    a lock another process holds, on a job queued by a caller that asked
+    for it (`LOCK_CONTENTION_DEFERS_KEY`). The failure report then leaves
+    the linked maintenance row as it is; the caller's wait raises the
+    marked error and the operations runner runs the row again later -
+    unless the row's deferral budget is spent (`_fail_agent_job`)."""
+    payload = getattr(agent_job, "payload", None)
+    if (
+        not isinstance(payload, dict)
+        or payload.get(LOCK_CONTENTION_DEFERS_KEY) is not True
+    ):
+        return False
+    return agent_failure_is_lock_contention(agent_job, db)
+
+
+def lock_failure_was_deferred(agent_job: Any) -> bool:
+    """Whether this job's failure report left the linked row for another
+    attempt (see `lock_contention_defers`): its late log lines belong to no
+    operation log."""
+    return _failure_result(agent_job).get(LOCK_FAILURE_DEFERRED_KEY) is True
+
+
+def lock_contention_for_waiter(agent_job: Any, db: Session) -> bool:
+    """The mark on the waiter's error. For a job whose caller defers
+    (`LOCK_CONTENTION_DEFERS_KEY`) it is the decision the failure report
+    recorded, never taken again: the log rows may have changed since, and
+    the caller must see what the report did with the row. Any other job is
+    classified as it stands."""
+    payload = getattr(agent_job, "payload", None)
+    if isinstance(payload, dict) and payload.get(LOCK_CONTENTION_DEFERS_KEY) is True:
+        return lock_failure_was_deferred(agent_job)
+    return agent_failure_is_lock_contention(agent_job, db)
+
+
+def _tail_reason_line(tail: str, *, lock_contention: bool) -> Optional[str]:
+    """The reason line from the report's tail: the lock line when the run
+    ended on a lock (Borg may go on after it), else the last non-empty
+    line - Borg ends with the sentence that says what was wrong, after any
+    usage block - skipping the `--show-rc` status line, which only repeats
+    the exit code. An error Borg follows with a traceback (and its platform
+    block) is the line before the traceback."""
+    lines = [
+        line.strip()
+        for line in tail.splitlines()
+        if line.strip() and not _SHOW_RC_LINE.match(line.strip())
+    ]
+    if not lines:
+        return None
+    if lock_contention:
+        for line in reversed(lines):
+            if _LOCK_CONTENTION_LINE.search(line):
+                return line
+    if _TRACEBACK_HEADER in lines:
+        before = lines[: lines.index(_TRACEBACK_HEADER)]
+        if before:
+            return before[-1]
+    return lines[-1]
+
 
 def _log_reason_line(rows: list, *, stream: Optional[str]) -> Optional[str]:
     """The reason line from the job's newest log row on `stream` (any stream
@@ -545,45 +707,76 @@ def _log_reason_line(rows: list, *, stream: Optional[str]) -> Optional[str]:
 
 
 def _agent_job_failure_message(db: Session, agent_job: AgentJob) -> Optional[str]:
-    """The agent only reports "exited with code N"; borg's actual reason is in
-    the job log.
+    """The agent reports "exited with code N" and, since 0.1.10, the tail of
+    what borg wrote; borg's actual reason is taken from that tail.
 
-    Prefer stderr, but fall back to stdout: borg prints an argument error
-    ("invalid choice: ...") on stdout, and reporting only the exit code there
-    leaves the operator with nothing to act on.
+    An older agent sends no tail, and its reason is in the job log - read
+    back here, though the log line may not have arrived yet (the report and
+    the log travel separately). Prefer stderr, but fall back to stdout: borg
+    prints an argument error ("invalid choice: ...") on stdout, and reporting
+    only the exit code there leaves the operator with nothing to act on.
     """
-    rows = (
-        db.query(AgentJobLog.sequence, AgentJobLog.stream, AgentJobLog.message)
-        .filter(AgentJobLog.agent_job_id == agent_job.id)
-        .order_by(AgentJobLog.sequence.desc())
-        .limit(FAILURE_LOG_TAIL)
-        .all()
-    )
-    reason = _log_reason_line(rows, stream="stderr") or _log_reason_line(
-        rows, stream=None
-    )
+    tail = _failure_result(agent_job).get("stderr_tail")
+    if isinstance(tail, str) and tail.strip():
+        reason = _tail_reason_line(
+            tail, lock_contention=agent_failure_is_lock_contention(agent_job, db)
+        )
+    else:
+        rows = (
+            db.query(AgentJobLog.sequence, AgentJobLog.stream, AgentJobLog.message)
+            .filter(AgentJobLog.agent_job_id == agent_job.id)
+            .order_by(AgentJobLog.sequence.desc())
+            .limit(FAILURE_LOG_TAIL)
+            .all()
+        )
+        reason = _log_reason_line(rows, stream="stderr") or _log_reason_line(
+            rows, stream=None
+        )
+    # Redacted as a whole: the log rows of an older agent are raw, and the
+    # message reaches the operation row and the notifications.
     if not reason:
-        return agent_job.error_message
+        return redact_secrets(agent_job.error_message)
     if not agent_job.error_message:
-        return reason
-    return f"{agent_job.error_message}: {reason}"
+        return redact_secrets(reason)
+    return redact_secrets(f"{agent_job.error_message}: {reason}")
 
 
-def agent_operation_failed_detail(reason: Optional[str]) -> dict[str, Any]:
+def agent_operation_failed_detail(
+    reason: Optional[str], *, lock_contention: bool = False
+) -> dict[str, Any]:
     """The error detail for a failed agent repository operation.
 
     The reason belongs in `params`, not in a `message` key: the frontend renders
     a detail by translating its key with its params and drops every other field,
     so a `message` never reaches the operator - which is how borg's actual
     complaint used to surface as a bare "The agent repository operation failed".
+
+    `lock_contention` marks the detail for the operations runner, which
+    defers the operation on it (`repository_busy`); a route's answer keeps
+    its status and key, the frontend does not read the mark.
     """
     reason = (reason or "").strip()
     if not reason:
-        return {"key": "backend.errors.agents.repositoryOperationFailed"}
-    return {
-        "key": "backend.errors.agents.repositoryOperationFailedWithReason",
-        "params": {"reason": reason},
-    }
+        detail: dict[str, Any] = {
+            "key": "backend.errors.agents.repositoryOperationFailed"
+        }
+    else:
+        detail = {
+            "key": "backend.errors.agents.repositoryOperationFailedWithReason",
+            "params": {"reason": reason},
+        }
+    if lock_contention:
+        detail[LOCK_CONTENTION_DETAIL_KEY] = True
+    return detail
+
+
+def lock_contention_error(reason: Optional[str]) -> HTTPException:
+    """The waiter's error for an agent run that ended on a lock another
+    process holds, for a reader that learns of the failure another way."""
+    return HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail=agent_operation_failed_detail(reason, lock_contention=True),
+    )
 
 
 def is_machine_parsed_job(agent_job: AgentJob) -> bool:
@@ -664,7 +857,8 @@ async def wait_for_agent_repository_operation_job(
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=agent_operation_failed_detail(
-                    _agent_job_failure_message(db, agent_job)
+                    _agent_job_failure_message(db, agent_job),
+                    lock_contention=lock_contention_for_waiter(agent_job, db),
                 ),
             )
         await asyncio.sleep(poll_interval_seconds)

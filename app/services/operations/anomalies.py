@@ -1,7 +1,7 @@
 """Anomaly rules (spec section 9.5). Pure functions; the heatmap and
 repository status routes call them and decide which flags the plan may show."""
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone, tzinfo
 from typing import Iterable, Optional, Sequence
 from zoneinfo import ZoneInfo
 
@@ -60,17 +60,23 @@ def median_gap(starts: Sequence[datetime]) -> Optional[timedelta]:
     return timedelta(seconds=median(gaps))
 
 
+def day_in(value: datetime, zone: tzinfo) -> date:
+    """The calendar day a naive UTC timestamp falls on in `zone`."""
+    return value.replace(tzinfo=timezone.utc).astimezone(zone).date()
+
+
 def expected_days_from_cron(
     cron_expression: str,
     start: datetime,
     until: datetime,
     timezone_name: Optional[str] = None,
+    day_zone: tzinfo = timezone.utc,
 ) -> set[date]:
     tz = ZoneInfo(timezone_name) if timezone_name else None
     # `start` and `until` are naive UTC, matching Archive.start. A cron fires in
     # its own zone, so the base is converted into that zone and every firing is
-    # converted back, keeping the returned days in UTC like the archive days
-    # they are compared against.
+    # converted back to UTC, then counted on its day in `day_zone`, the zone
+    # the archive days they are compared against were bucketed in.
     base = start.replace(tzinfo=timezone.utc).astimezone(tz) if tz else start
     it = croniter(cron_expression, base)
     days: set[date] = set()
@@ -79,7 +85,7 @@ def expected_days_from_cron(
         naive = nxt.astimezone(timezone.utc).replace(tzinfo=None) if nxt.tzinfo else nxt
         if naive > until:
             break
-        days.add(naive.date())
+        days.add(day_in(naive, day_zone))
     return days
 
 
@@ -90,6 +96,7 @@ def missed_run_days(
     crons: Sequence[tuple[str, Optional[str]]] = (),
     run_days: Iterable[date] = (),
     retention_since: Optional[date] = None,
+    day_zone: tzinfo = timezone.utc,
 ) -> set[date]:
     """Days a run was expected and nothing says it happened.
 
@@ -102,22 +109,26 @@ def missed_run_days(
     guess, so nothing is flagged.
 
     `crons` holds every cadence targeting the repository; a day expected by
-    any one of them is expected.
+    any one of them is expected. Days are calendar days in `day_zone`, the
+    same zone `run_days` and `retention_since` must be expressed in.
     """
     if not starts or not crons:
         return set()
     first = min(starts)
-    known = {s.date() for s in starts} | set(run_days)
+    known = {day_in(s, day_zone) for s in starts} | set(run_days)
     # Start the iteration just before the first archive so its own day
     # counts as expected. Days after `until` are excluded by the helper.
     expected: set[date] = set()
     for cron_expression, timezone_name in crons:
         expected |= expected_days_from_cron(
-            cron_expression, first - timedelta(seconds=1), until, timezone_name
+            cron_expression,
+            first - timedelta(seconds=1),
+            until,
+            timezone_name,
+            day_zone,
         )
-    floor = (
-        first.date() if retention_since is None else max(first.date(), retention_since)
-    )
+    first_day = day_in(first, day_zone)
+    floor = first_day if retention_since is None else max(first_day, retention_since)
     return {d for d in expected if d not in known and d >= floor}
 
 

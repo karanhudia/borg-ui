@@ -696,7 +696,7 @@ class TestBackupService:
         notifications.send_backup_failure = AsyncMock()
 
         async def fake_create_subprocess_exec(*cmd, **kwargs):
-            order.append(f"subprocess:{cmd[1]}")
+            order.append(f"subprocess:{cmd[3]}")
             return fake_process
 
         try:
