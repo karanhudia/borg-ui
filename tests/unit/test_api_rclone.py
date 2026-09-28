@@ -5410,6 +5410,41 @@ def test_update_ssh_cloud_mirror_rejects_unknown_sftp_key(
 
 
 @pytest.mark.unit
+def test_update_enabling_ssh_cloud_mirror_stores_sftp_key(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    repository, storage, sftp_key = _ssh_repository_with_mirror(test_db)
+    remote_id = storage.rclone_remote_id
+    test_db.delete(storage)
+    test_db.commit()
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_service.lsjson",
+        AsyncMock(return_value=[]),
+    )
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={
+            "cloud_mirror_enabled": True,
+            "rclone_remote_id": remote_id,
+            "rclone_remote_path": "borg-ui/repositories/app",
+            "rclone_sync_policy": "manual",
+            "rclone_sftp_ssh_key_id": sftp_key.id,
+        },
+    )
+
+    assert response.status_code == 200, response.json()
+    created = (
+        test_db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .one()
+    )
+    assert created.sync_direction == "sshfs_mount_to_remote"
+    assert created.sftp_ssh_key_id == sftp_key.id
+
+
+@pytest.mark.unit
 def test_sftp_key_is_shared_by_repositories_and_deleting_it_clears_all(
     test_client: TestClient, admin_headers, test_db
 ):
