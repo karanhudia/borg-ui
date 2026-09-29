@@ -1,39 +1,21 @@
 {
-  "generatedAt": "2026-09-28T19:49:21.543Z",
+  "generatedAt": "2026-09-29T11:24:12.855Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1242 visual report",
-    "commitSha": "8fce07aab4b4",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36474710011"
+    "commitSha": "7f69508dcbfc",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36561342743"
   },
   "totals": {
-    "baseline": 1040,
-    "actual": 1052,
-    "compared": 1040,
-    "changed": 12,
+    "baseline": 1088,
+    "actual": 1100,
+    "compared": 1088,
+    "changed": 10,
     "added": 12,
     "removed": 0,
-    "unchanged": 1028
+    "unchanged": 1078
   },
   "changed": [
-    {
-      "fileName": "backup-plans-scriptsstep--database-source-scripts--mobile.png",
-      "baselinePath": "images/baseline/backup-plans-scriptsstep--database-source-scripts--mobile.png",
-      "actualPath": "images/actual/backup-plans-scriptsstep--database-source-scripts--mobile.png",
-      "diffPath": "images/diff/backup-plans-scriptsstep--database-source-scripts--mobile.png",
-      "diffPixels": 211377,
-      "totalPixels": 329160,
-      "diffRatio": 0.6421709806780896,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
     {
       "fileName": "pages-managedagents--add-agent-localhost-warning--mobile.png",
       "baselinePath": "images/baseline/pages-managedagents--add-agent-localhost-warning--mobile.png",
@@ -204,24 +186,6 @@
       "diffPixels": 243051,
       "totalPixels": 1024000,
       "diffRatio": 0.2373544921875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "remote-machines-sshhostfield--invalid-host.png",
-      "baselinePath": "images/baseline/remote-machines-sshhostfield--invalid-host.png",
-      "actualPath": "images/actual/remote-machines-sshhostfield--invalid-host.png",
-      "diffPath": "images/diff/remote-machines-sshhostfield--invalid-host.png",
-      "diffPixels": 1024000,
-      "totalPixels": 1024000,
-      "diffRatio": 1,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -748,6 +712,9 @@
       "fileName": "backup-plans-schedulestep--when-available.png"
     },
     {
+      "fileName": "backup-plans-scriptsstep--database-source-scripts--mobile.png"
+    },
+    {
       "fileName": "backup-plans-scriptsstep--database-source-scripts.png"
     },
     {
@@ -1019,6 +986,12 @@
     },
     {
       "fileName": "components-appsidebar--viewer-settings.png"
+    },
+    {
+      "fileName": "components-appsidebar--with-quick-start--mobile.png"
+    },
+    {
+      "fileName": "components-appsidebar--with-quick-start.png"
     },
     {
       "fileName": "components-appsidebar--with-remote-clients--mobile.png"
@@ -2965,6 +2938,12 @@
       "fileName": "pages-backup-plans-content--community-locked-runs.png"
     },
     {
+      "fileName": "pages-backup-plans-content--empty-with-quick-start--mobile.png"
+    },
+    {
+      "fileName": "pages-backup-plans-content--empty-with-quick-start.png"
+    },
+    {
       "fileName": "pages-backup-plans-content--skipped-repository--mobile.png"
     },
     {
@@ -3211,6 +3190,138 @@
       "fileName": "pages-remoteclients--overview.png"
     },
     {
+      "fileName": "pages-repositories-groups--empty-with-quick-start--mobile.png"
+    },
+    {
+      "fileName": "pages-repositories-groups--empty-with-quick-start.png"
+    },
+    {
+      "fileName": "pages-repositories-groups--empty-without-quick-start--mobile.png"
+    },
+    {
+      "fileName": "pages-repositories-groups--empty-without-quick-start.png"
+    },
+    {
+      "fileName": "quick-start-dialog--first-step--mobile.png"
+    },
+    {
+      "fileName": "quick-start-dialog--first-step.png"
+    },
+    {
+      "fileName": "quick-start-progress--done--mobile.png"
+    },
+    {
+      "fileName": "quick-start-progress--done.png"
+    },
+    {
+      "fileName": "quick-start-progress--failed--mobile.png"
+    },
+    {
+      "fileName": "quick-start-progress--failed.png"
+    },
+    {
+      "fileName": "quick-start-progress--running--mobile.png"
+    },
+    {
+      "fileName": "quick-start-progress--running.png"
+    },
+    {
+      "fileName": "quick-start-steps--connect-agent--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--connect-agent.png"
+    },
+    {
+      "fileName": "quick-start-steps--connect-existing-machine--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--connect-existing-machine.png"
+    },
+    {
+      "fileName": "quick-start-steps--connect-new-machine--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--connect-new-machine.png"
+    },
+    {
+      "fileName": "quick-start-steps--destination--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--destination-agent--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--destination-agent.png"
+    },
+    {
+      "fileName": "quick-start-steps--destination-inside-source--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--destination-inside-source.png"
+    },
+    {
+      "fileName": "quick-start-steps--destination-ssh--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--destination-ssh.png"
+    },
+    {
+      "fileName": "quick-start-steps--destination.png"
+    },
+    {
+      "fileName": "quick-start-steps--folders-empty--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--folders-empty.png"
+    },
+    {
+      "fileName": "quick-start-steps--folders-picked--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--folders-picked.png"
+    },
+    {
+      "fileName": "quick-start-steps--protect--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--protect.png"
+    },
+    {
+      "fileName": "quick-start-steps--review--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--review.png"
+    },
+    {
+      "fileName": "quick-start-steps--schedule--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--schedule-custom--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--schedule-custom.png"
+    },
+    {
+      "fileName": "quick-start-steps--schedule.png"
+    },
+    {
+      "fileName": "quick-start-steps--what--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--what-agent-pro--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--what-agent-pro.png"
+    },
+    {
+      "fileName": "quick-start-steps--what-another-computer--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--what-another-computer.png"
+    },
+    {
+      "fileName": "quick-start-steps--what.png"
+    },
+    {
       "fileName": "remote-machines-connectiondiagnosticsdialog--partial-tcp-failure--mobile.png"
     },
     {
@@ -3320,6 +3431,9 @@
     },
     {
       "fileName": "remote-machines-sshhostfield--invalid-host--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-sshhostfield--invalid-host.png"
     },
     {
       "fileName": "repositories-indexmodesettings--archives-only--mobile.png"
