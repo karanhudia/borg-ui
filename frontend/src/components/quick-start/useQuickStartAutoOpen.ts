@@ -39,12 +39,12 @@ export function useQuickStartAutoOpen({
   const active = enabled && pathname === '/dashboard' && !dismissed
 
   // Same query keys as the Repositories page and the sidebar, so this reuses their cache.
-  const { data: repositories } = useQuery({
+  const { data: repositories, isFetching: fetchingRepositories } = useQuery({
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.getRepositories,
     enabled: active,
   })
-  const { data: plans } = useQuery({
+  const { data: plans, isFetching: fetchingPlans } = useQuery({
     queryKey: ['backup-plans'],
     queryFn: () => backupPlansAPI.list(),
     enabled: active,
@@ -52,11 +52,13 @@ export function useQuickStartAutoOpen({
 
   const repositoryCount = repositories?.data?.repositories?.length
   const planCount = plans?.data?.backup_plans?.length
+  // Cached empty lists can be stale while a refetch runs; decide on fresh answers only.
+  const settled = !fetchingRepositories && !fetchingPlans
 
   useEffect(() => {
-    if (!active || repositoryCount !== 0 || planCount !== 0) return
+    if (!active || !settled || repositoryCount !== 0 || planCount !== 0) return
     markDismissed()
     setDismissed(true)
     onOpen()
-  }, [active, repositoryCount, planCount, onOpen])
+  }, [active, settled, repositoryCount, planCount, onOpen])
 }

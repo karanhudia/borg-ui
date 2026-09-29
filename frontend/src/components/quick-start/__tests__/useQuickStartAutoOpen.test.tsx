@@ -12,8 +12,10 @@ vi.mock('../../../services/api', () => ({
   backupPlansAPI: { list: vi.fn() },
 }))
 
-function wrapperAt(path: string) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+function wrapperAt(
+  path: string,
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+) {
   return ({ children }: { children: React.ReactNode }) =>
     React.createElement(
       QueryClientProvider,
@@ -93,5 +95,20 @@ describe('useQuickStartAutoOpen', () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(onOpen).toHaveBeenCalledTimes(1)
     setItem.mockRestore()
+  })
+  it('waits for fresh counts instead of trusting a stale empty cache', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    // Another page cached empty lists earlier; a repository exists by now.
+    client.setQueryData(['repositories'], { data: { repositories: [] } }, { updatedAt: 0 })
+    client.setQueryData(['backup-plans'], { data: { backup_plans: [] } }, { updatedAt: 0 })
+    mockCounts(1, 0)
+    const onOpen = vi.fn()
+    renderHook(() => useQuickStartAutoOpen({ enabled: true, onOpen }), {
+      wrapper: wrapperAt('/dashboard', client),
+    })
+    await waitFor(() => expect(repositoriesAPI.getRepositories).toHaveBeenCalled())
+    await waitFor(() => expect(client.isFetching()).toBe(0))
+    expect(onOpen).not.toHaveBeenCalled()
+    expect(localStorage.getItem(QUICK_START_DISMISSED_KEY)).toBeNull()
   })
 })
