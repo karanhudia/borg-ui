@@ -165,4 +165,18 @@ describe('quickStartState', () => {
     })
     expect(sourceKindPatch(picked, 'agent').destinationKind).toBe('agent')
   })
+
+  it('needs a chosen agent, and an agent backs up to its own disk', () => {
+    expect(isStepValid('connect', answers({ sourceKind: 'agent' }))).toBe(false)
+    expect(isStepValid('connect', answers({ sourceKind: 'agent', sourceAgentId: 7 }))).toBe(true)
+    const agent = answers({
+      sourceKind: 'agent',
+      sourceAgentId: 7,
+      sourcePaths: ['/home/alex'],
+      destinationKind: 'agent',
+      destinationPath: '/home/alex/borg',
+    })
+    expect(destinationInsideSource(agent)).toBe(true)
+    expect(destinationInsideSource({ ...agent, destinationPath: '/srv/borg' })).toBe(false)
+  })
 })

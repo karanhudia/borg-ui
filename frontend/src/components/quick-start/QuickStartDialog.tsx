@@ -139,7 +139,13 @@ export default function QuickStartDialog({
   const renderStep = () => {
     switch (step) {
       case 'what':
-        return <QuickStartWhatStep answers={answers} onChange={update} />
+        return (
+          <QuickStartWhatStep
+            answers={answers}
+            onChange={update}
+            canUseAgents={can('managed_agents')}
+          />
+        )
       case 'connect':
         return (
           <QuickStartConnectStep

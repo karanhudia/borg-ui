@@ -121,4 +121,25 @@ describe('quickStartActions', () => {
       }),
     ])
   })
+  it('runs an agent backup into a repository on the same agent', () => {
+    const agent = localAnswers({
+      sourceKind: 'agent',
+      sourceAgentId: 7,
+      sourcePaths: ['/home/alex'],
+      destinationKind: 'agent',
+      destinationPath: '/srv/borg/alex',
+    })
+    expect(buildRepositoryPayload(agent)).toMatchObject({
+      path: '/srv/borg/alex',
+      executor_type: 'agent',
+      execution_target: 'agent',
+      storage_backend: 'agent_local',
+      agent_machine_id: 7,
+    })
+    const plan = buildPlanPayload(agent, 4)
+    expect(plan.source_type).toBe('agent')
+    expect(plan.source_locations).toEqual([
+      expect.objectContaining({ source_type: 'agent', agent_machine_id: 7, paths: ['/home/alex'] }),
+    ])
+  })
 })

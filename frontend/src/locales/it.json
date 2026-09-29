@@ -6604,7 +6604,10 @@
       "serverDesc": "Cartelle sulla macchina che esegue Borg UI, come la tua cartella home, i documenti o i dati delle app.",
       "ssh": "File su un altro computer",
       "sshDesc": "Un server, NAS o PC che questo server raggiunge via SSH. Borg UI preleva i file da lì.",
-      "notSure": "Non sei sicuro? Scegli \"File su questo server\" se i dati si trovano dove gira Borg UI. Scegli \"altro computer\" se si trovano altrove e puoi accedervi con nome utente e password."
+      "notSure": "Non sei sicuro? Scegli \"File su questo server\" se i dati si trovano dove gira Borg UI. Scegli \"altro computer\" se si trovano altrove e puoi accedervi con nome utente e password.",
+      "agent": "Un altro computer con l'agente di Borg UI",
+      "agentDesc": "Installa un piccolo agente su un portatile, desktop o server. Si collega da solo a Borg UI, quindi funziona anche dietro un firewall, e salva i backup sul proprio disco.",
+      "agentPro": "Richiede un piano Pro o Enterprise."
     },
     "folders": {
       "title": "Scegli le cartelle da salvare",
@@ -6625,7 +6628,9 @@
       "ssh": "Un altro server via SSH",
       "sshDesc": "Un NAS o un server remoto. Lì deve essere installato Borg.",
       "sshLabel": "Server di backup",
-      "remotePathHint": "Una cartella su {{machine}}. Borg UI la crea se non esiste."
+      "remotePathHint": "Una cartella su {{machine}}. Borg UI la crea se non esiste.",
+      "agent": "Un disco su {{machine}}",
+      "agentDesc": "L'agente salva i backup in una cartella dello stesso computer, come un secondo disco o una condivisione NAS montata."
     },
     "protect": {
       "title": "Dai un nome ai backup e proteggili",
@@ -6745,6 +6750,15 @@
       "connecting": "Connessione…",
       "connectFailed": "Connessione non riuscita: {{reason}}",
       "noConnectionsNoPermission": "Non ci sono ancora computer configurati. Chiedi a un amministratore di aggiungerne uno in Macchine Remote."
+    },
+    "agent": {
+      "title": "Scegli il computer",
+      "hint": "Scegli un computer su cui gira già l'agente di Borg UI o aggiungine uno. Aggiungendolo vedrai un comando da eseguire su quel computer; l'avvio rapido prosegue appena si connette.",
+      "label": "Computer",
+      "add": "Aggiungi computer",
+      "noAgentsNoPermission": "Nessun computer esegue ancora l'agente. Chiedi a un amministratore di aggiungerne uno in Agenti gestiti.",
+      "loadFailed": "Impossibile caricare i computer. Riprova tra poco.",
+      "offlineBrowse": "{{machine}} è offline, quindi non è possibile sfogliarne le cartelle. Scrivi il percorso o attendi che l'agente si connetta."
     }
   }
 }

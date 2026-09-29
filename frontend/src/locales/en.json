@@ -6604,7 +6604,10 @@
       "serverDesc": "Folders on the machine that runs Borg UI, such as your home folder, documents or app data.",
       "ssh": "Files on another computer",
       "sshDesc": "A server, NAS or PC that this server can reach over SSH. Borg UI pulls the files from it.",
-      "notSure": "Not sure? Pick \"Files on this server\" if the data lives where Borg UI runs. Pick \"another computer\" if it lives elsewhere and you can log in to it with a username and password."
+      "notSure": "Not sure? Pick \"Files on this server\" if the data lives where Borg UI runs. Pick \"another computer\" if it lives elsewhere and you can log in to it with a username and password.",
+      "agent": "Another computer with the Borg UI agent",
+      "agentDesc": "Install a small agent on a laptop, desktop or server. It connects out to Borg UI, so it works behind a firewall, and backs up to its own disk.",
+      "agentPro": "Requires a Pro or Enterprise plan."
     },
     "folders": {
       "title": "Pick the folders to back up",
@@ -6625,7 +6628,9 @@
       "ssh": "Another server over SSH",
       "sshDesc": "A NAS or remote server. Borg needs to be installed there.",
       "sshLabel": "Backup server",
-      "remotePathHint": "A folder on {{machine}}. Borg UI creates it if it does not exist."
+      "remotePathHint": "A folder on {{machine}}. Borg UI creates it if it does not exist.",
+      "agent": "A disk on {{machine}}",
+      "agentDesc": "The agent backs up to a folder on the same computer, such as a second drive or a mounted NAS share."
     },
     "protect": {
       "title": "Name and protect your backups",
@@ -6745,6 +6750,15 @@
       "connecting": "Connecting…",
       "connectFailed": "Could not connect: {{reason}}",
       "noConnectionsNoPermission": "No computers are set up yet. Ask an admin to add one under Remote Machines."
+    },
+    "agent": {
+      "title": "Choose the computer",
+      "hint": "Pick a computer that already runs the Borg UI agent, or add one. Adding shows a command to run on that computer; Quick Start continues once it connects.",
+      "label": "Computer",
+      "add": "Add a computer",
+      "noAgentsNoPermission": "No computers run the agent yet. Ask an admin to add one under Managed Agents.",
+      "loadFailed": "Could not load the computers. Try again in a moment.",
+      "offlineBrowse": "{{machine}} is offline, so its folders cannot be browsed. Type the path, or wait until the agent connects."
     }
   }
 }
