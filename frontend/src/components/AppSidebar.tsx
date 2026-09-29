@@ -39,7 +39,6 @@ import { useAuthorization } from '../hooks/useAuthorization'
 import NavItem from './NavItem'
 import NavGroup from './NavGroup'
 import SidebarVersionInfo from './SidebarVersionInfo'
-import QuickStartSidebarButton from './quick-start/QuickStartSidebarButton'
 
 const drawerWidth = 240
 
@@ -463,7 +462,6 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
           </Box>
         </Toolbar>
         <Divider />
-        <QuickStartSidebarButton onOpened={onClose} />
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         {navigationSections.map((section: any, sectionIndex: number) => (
           <React.Fragment key={section.heading || section.segment}>

@@ -1,15 +1,5 @@
 import { useCallback, useState } from 'react'
 import { Alert, Button, DialogActions, Stack } from '@mui/material'
-import {
-  CalendarClock,
-  Compass,
-  FolderOpen,
-  HardDrive,
-  ListChecks,
-  Lock,
-  Plug,
-  type LucideIcon,
-} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
@@ -20,6 +10,7 @@ import { backupPlansAPI } from '../../services/api'
 import { getApiErrorDetail } from '../../utils/apiErrors'
 import { translateBackendKey } from '../../utils/translateBackendKey'
 import QuickStartProgress from './QuickStartProgress'
+import { STEP_META } from './quickStartStepMeta'
 import {
   createInitialQuickStartAnswers,
   isStepValid,
@@ -28,7 +19,6 @@ import {
   visibleSteps,
   type QuickStartAnswers,
   type QuickStartSettingsChange,
-  type QuickStartStepKey,
 } from './quickStartState'
 import QuickStartConnectStep from './steps/QuickStartConnectStep'
 import QuickStartDestinationStep from './steps/QuickStartDestinationStep'
@@ -38,17 +28,6 @@ import QuickStartReviewStep from './steps/QuickStartReviewStep'
 import QuickStartScheduleStep from './steps/QuickStartScheduleStep'
 import QuickStartWhatStep from './steps/QuickStartWhatStep'
 import { useQuickStartRunner } from './useQuickStartRunner'
-
-// Color keys come from WizardStepIndicator; each step needs its own.
-const STEP_META: Record<QuickStartStepKey, { colorKey: string; icon: LucideIcon }> = {
-  what: { colorKey: 'basic', icon: Compass },
-  connect: { colorKey: 'config', icon: Plug },
-  folders: { colorKey: 'source', icon: FolderOpen },
-  destination: { colorKey: 'location', icon: HardDrive },
-  protect: { colorKey: 'security', icon: Lock },
-  schedule: { colorKey: 'schedule', icon: CalendarClock },
-  review: { colorKey: 'review', icon: ListChecks },
-}
 
 interface QuickStartDialogProps {
   open: boolean

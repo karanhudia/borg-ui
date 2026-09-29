@@ -1,32 +1,31 @@
 import type { ReactNode } from 'react'
-import { Box, Stack, Typography } from '@mui/material'
+import { Box, Stack, Typography, useTheme } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 
+import { getWizardStepColor } from '../../shared/wizardStepColors'
+import {
+  ReviewAttrRow,
+  ReviewCodePill,
+  ReviewSectionCard,
+  ReviewSectionGrid,
+  ReviewStatus,
+} from '../../wizard/WizardReviewComponents'
 import QuickStartCustomize from '../QuickStartCustomize'
+import { STEP_META } from '../quickStartStepMeta'
 import { agentLabel, useManagedAgent } from '../quickStartAgent'
 import { useSshConnection } from '../quickStartSsh'
-import type { QuickStartAnswers, QuickStartSettingsChange } from '../quickStartState'
+import type {
+  QuickStartAnswers,
+  QuickStartSettingsChange,
+  QuickStartStepKey,
+} from '../quickStartState'
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+// Value text sized like the other wizard reviews.
+function Value({ children }: { children: ReactNode }) {
   return (
-    <Box
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: { xs: '1fr', sm: '140px 1fr' },
-        gap: { xs: 0.25, sm: 2 },
-        py: 1.25,
-        borderBottom: 1,
-        borderColor: 'divider',
-        '&:last-of-type': { borderBottom: 0 },
-      }}
-    >
-      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-        {label}
-      </Typography>
-      <Typography variant="body2" component="div" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
-        {children}
-      </Typography>
-    </Box>
+    <Typography component="span" sx={{ fontSize: '0.75rem', fontWeight: 500, textAlign: 'right' }}>
+      {children}
+    </Typography>
   )
 }
 
@@ -42,6 +41,15 @@ export default function QuickStartReviewStep({
   canUseBorg2,
 }: QuickStartReviewStepProps) {
   const { t } = useTranslation()
+  const theme = useTheme()
+  // Each card wears the color and icon of the step its answers came from.
+  const card = (step: QuickStartStepKey) => {
+    const { colorKey, icon: Icon } = STEP_META[step]
+    return {
+      icon: <Icon size={15} />,
+      accentColor: getWizardStepColor(colorKey, theme.palette.mode),
+    }
+  }
   const { settings } = answers
   const prune = settings.prune
   const sourceConnection = useSshConnection(
@@ -79,6 +87,7 @@ export default function QuickStartReviewStep({
     : answers.schedulePreset === 'custom'
       ? `${answers.cronExpression} (${answers.timezone})`
       : `${t(`quickStart.schedule.presets.${answers.schedulePreset}`)} (${answers.timezone})`
+  const encrypted = settings.encryption !== 'none'
 
   return (
     <Stack spacing={2.5}>
@@ -91,41 +100,72 @@ export default function QuickStartReviewStep({
         </Typography>
       </Box>
 
-      <Box>
-        <Row label={t('quickStart.review.backUp')}>
+      <ReviewSectionGrid>
+        <ReviewSectionCard label={t('quickStart.review.backUp')} {...card('folders')}>
           {answers.sourcePaths.map((path) => (
-            <Box key={path} component="span" sx={{ display: 'block', fontFamily: 'monospace' }}>
+            <ReviewCodePill key={path} block>
               {path}
-            </Box>
+            </ReviewCodePill>
           ))}
-          <Box component="span" sx={{ color: 'text.secondary' }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
             {t('quickStart.review.onMachine', { machine: machine(sourceConnection) })}
-          </Box>
-        </Row>
-        <Row label={t('quickStart.review.storeIn')}>
-          <Box component="span" sx={{ fontFamily: 'monospace' }}>
-            {answers.destinationPath}
-          </Box>
-          <Box component="span" sx={{ display: 'block', color: 'text.secondary' }}>
+          </Typography>
+        </ReviewSectionCard>
+
+        <ReviewSectionCard label={t('quickStart.review.storeIn')} {...card('destination')}>
+          <ReviewCodePill block>{answers.destinationPath}</ReviewCodePill>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
             {t('quickStart.review.onMachine', { machine: machine(destinationConnection) })}
-          </Box>
-        </Row>
-        <Row label={t('quickStart.review.schedule')}>{schedule}</Row>
-        <Row label={t('quickStart.review.keepLabel')}>
-          {settings.runPruneAfter && keep.length ? keep.join(', ') : t('quickStart.review.keepAll')}
-        </Row>
-        <Row label={t('quickStart.review.afterEachRun')}>
-          {maintenance.length ? maintenance.join(', ') : t('quickStart.review.nothing')}
-        </Row>
-        <Row label={t('quickStart.review.encryption')}>
-          {settings.encryption === 'none'
-            ? t('quickStart.review.unencrypted')
-            : t('quickStart.review.encrypted', { mode: settings.encryption })}
-        </Row>
-        <Row label={t('quickStart.review.creates')}>
+          </Typography>
+        </ReviewSectionCard>
+
+        <ReviewSectionCard label={t('quickStart.review.encryption')} {...card('protect')}>
+          <ReviewStatus
+            enabled={encrypted}
+            tone={encrypted ? 'success' : 'warning'}
+            label={
+              encrypted
+                ? t('quickStart.review.encrypted', { mode: settings.encryption })
+                : t('quickStart.review.unencrypted')
+            }
+          />
+        </ReviewSectionCard>
+
+        <ReviewSectionCard
+          label={t('quickStart.review.schedule')}
+          {...card('schedule')}
+          trailing={
+            settings.scheduleEnabled ? undefined : (
+              <ReviewStatus enabled={false} label={t('quickStart.review.manualOnly')} />
+            )
+          }
+        >
+          {settings.scheduleEnabled && (
+            <ReviewAttrRow label={t('quickStart.steps.schedule')}>
+              <Value>{schedule}</Value>
+            </ReviewAttrRow>
+          )}
+          <ReviewAttrRow label={t('quickStart.review.keepLabel')}>
+            <Value>
+              {settings.runPruneAfter && keep.length
+                ? keep.join(', ')
+                : t('quickStart.review.keepAll')}
+            </Value>
+          </ReviewAttrRow>
+          <ReviewAttrRow label={t('quickStart.review.afterEachRun')}>
+            <Value>
+              {maintenance.length ? maintenance.join(', ') : t('quickStart.review.nothing')}
+            </Value>
+          </ReviewAttrRow>
+        </ReviewSectionCard>
+      </ReviewSectionGrid>
+
+      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+        {t('quickStart.review.creates')}:{' '}
+        <Typography component="span" variant="body2" sx={{ color: 'text.primary' }}>
           {t('quickStart.review.createsList', { name: answers.name.trim() })}
-        </Row>
-      </Box>
+        </Typography>
+      </Typography>
 
       <QuickStartCustomize
         answers={answers}

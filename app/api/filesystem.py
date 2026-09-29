@@ -5,6 +5,7 @@ Filesystem browsing API endpoints
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from typing import List, Optional
+import asyncio
 import os
 import shlex
 import subprocess
@@ -23,7 +24,7 @@ from app.database.models import SSHConnection, SSHKey
 from app.config import settings
 from app.utils.ssh_host_keys import host_key_ssh_opts_for_host
 from app.utils.datetime_utils import serialize_datetime
-from app.utils.ssh_utils import ssh_key_auth_args
+from app.utils.ssh_utils import resolve_ssh_key_file_by_id, ssh_key_auth_args
 from app.utils.local_paths import is_within_local_mount, mount_entries_below
 from app.utils.ssh_host_validation import (
     normalize_ssh_host,
@@ -263,6 +264,55 @@ def _login_relative_remote_path_candidate(
     return relative_path or None
 
 
+SFTP_PWD_PREFIX = "Remote working directory:"
+
+
+def _sftp_working_directory(stdout: str) -> Optional[str]:
+    """The absolute path sftp's pwd printed, or None if it printed none."""
+    for line in (stdout or "").splitlines():
+        if line.startswith(SFTP_PWD_PREFIX):
+            cwd = line[len(SFTP_PWD_PREFIX) :].strip()
+            if cwd.startswith("/") and not any(
+                char in cwd for char in SFTP_BATCH_UNSAFE_CHARS
+            ):
+                return os.path.normpath(cwd)
+    return None
+
+
+def _run_sftp_batch(
+    key_file: str, host: str, username: str, port: int, commands: List[str]
+):
+    """Run sftp batch commands. SFTP only, so restricted shells work too."""
+    batch_file = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".sftp"
+        ) as batch_f:
+            batch_f.write("".join(f"{command}\n" for command in commands))
+            batch_file = batch_f.name
+
+        sftp_cmd = [
+            "sftp",
+            "-b",
+            batch_file,
+            *ssh_key_auth_args(key_file),
+            "-P",
+            str(port),
+            *host_key_ssh_opts_for_host(host, port, username),
+            "-o",
+            "ConnectTimeout=10",
+            "--",
+            ssh_destination(username, host),
+        ]
+        return subprocess.run(sftp_cmd, capture_output=True, text=True, timeout=30)
+    finally:
+        if batch_file and os.path.exists(batch_file):
+            try:
+                os.unlink(batch_file)
+            except Exception:
+                pass
+
+
 def _join_remote_path(base_path: str, name: str) -> str:
     if not base_path:
         return name
@@ -345,6 +395,52 @@ async def browse_filesystem(
         raise HTTPException(
             status_code=500, detail=f"Failed to browse filesystem: {str(e)}"
         )
+
+
+@router.get("/ssh-home")
+async def ssh_home_directory(
+    ssh_key_id: int = Query(..., description="SSH key ID"),
+    host: str = Query(..., description="SSH host"),
+    username: str = Query(..., description="SSH username"),
+    port: int = Query(22, description="SSH port"),
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """The folder an SSH login lands in, or null when the machine does not say.
+
+    Cheaper than browsing "/": no listing and no per-folder repository checks.
+    """
+    host, username, _ = _resolve_ssh_target(
+        db, current_user, ssh_key_id, host, username, port
+    )
+    key_file = resolve_ssh_key_file_by_id(ssh_key_id, db)
+    if not key_file:
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.ssh.sshKeyNotFound"}
+        )
+    try:
+        result = await asyncio.to_thread(
+            _run_sftp_batch, key_file, host, username, port, ["pwd"]
+        )
+    except Exception as exc:
+        # Only a prefill hint: a timeout, host-key lookup or target error
+        # means "no suggestion", never a failed request.
+        logger.warning("SSH home lookup failed", host=host, error=str(exc))
+        return {"path": None}
+    finally:
+        try:
+            os.unlink(key_file)
+        except OSError as exc:
+            logger.warning("Failed to delete temporary SSH key file", error=str(exc))
+    if result.returncode != 0:
+        logger.warning(
+            "SSH home lookup failed",
+            host=host,
+            returncode=result.returncode,
+            stderr=result.stderr[:500] if result.stderr else None,
+        )
+        return {"path": None}
+    return {"path": _sftp_working_directory(result.stdout)}
 
 
 async def browse_local_filesystem(path: str, confine: bool = True) -> BrowseResponse:
@@ -490,43 +586,10 @@ async def browse_ssh_filesystem(
 
         def run_sftp_listing(cd_path: Optional[str]):
             _validate_remote_path(cd_path)
-            sftp_batch_file = None
-            try:
-                # Create SFTP batch file with commands
-                with tempfile.NamedTemporaryFile(
-                    mode="w", delete=False, suffix=".sftp"
-                ) as batch_f:
-                    if cd_path:
-                        batch_f.write(f'cd "{cd_path}"\n')
-                    batch_f.write("ls -la\n")
-                    sftp_batch_file = batch_f.name
-
-                logger.info("Browsing SSH path via SFTP", host=host, path=path)
-
-                sftp_cmd = [
-                    "sftp",
-                    "-b",
-                    sftp_batch_file,
-                    *ssh_key_auth_args(temp_key_file),
-                    "-P",
-                    str(port),
-                    *host_key_ssh_opts_for_host(host, port, username),
-                    "-o",
-                    "ConnectTimeout=10",
-                    "--",
-                    ssh_destination(username, host),
-                ]
-
-                return subprocess.run(
-                    sftp_cmd, capture_output=True, text=True, timeout=30
-                )
-            finally:
-                # Clean up SFTP batch file
-                if sftp_batch_file and os.path.exists(sftp_batch_file):
-                    try:
-                        os.unlink(sftp_batch_file)
-                    except Exception:
-                        pass
+            # Without a cd, sftp lists the login directory; pwd names it.
+            logger.info("Browsing SSH path via SFTP", host=host, path=path)
+            commands = [f'cd "{cd_path}"' if cd_path else "pwd", "ls -la"]
+            return _run_sftp_batch(temp_key_file, host, username, port, commands)
 
         def has_sftp_listing_entries(stdout: str) -> bool:
             for line in stdout.strip().split("\n"):
@@ -597,6 +660,10 @@ async def browse_ssh_filesystem(
                 detail=f"Failed to list remote directory '{path}': {error_msg or 'Permission denied or path not found'}",
             )
 
+        # "/" lists the login directory (see #488), so report its real path.
+        if path == "/":
+            path = _sftp_working_directory(result.stdout) or path
+
         # Log raw output for debugging
         output_lines = result.stdout.strip().split("\n")
         logger.info(
@@ -617,6 +684,7 @@ async def browse_ssh_filesystem(
                 not line
                 or line.startswith("sftp>")
                 or line.startswith("total")
+                or line.startswith(SFTP_PWD_PREFIX)
                 or "Connecting to" in line
             ):
                 continue

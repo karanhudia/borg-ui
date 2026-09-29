@@ -256,6 +256,8 @@ class RepositoryOperationPayload:
                 *self._base_borg1("init"),
                 "--encryption",
                 encryption,
+                # Borg 2 creates missing parents on its own; Borg 1 needs asking.
+                "--make-parent-dirs",
                 self.repository_path,
             ]
 

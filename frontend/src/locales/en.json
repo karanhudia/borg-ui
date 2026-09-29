@@ -6731,7 +6731,6 @@
       }
     },
     "repositoryAlreadyCreated": "The repository was already created. Changes to its location, passphrase or encryption will not be applied. You can still change the plan name, folders and schedule.",
-    "newBackup": "New backup",
     "connect": {
       "title": "Connect to the other computer",
       "hint": "Pick a computer Borg UI already knows, or add one. Borg UI installs its SSH key there so backups run without a password.",

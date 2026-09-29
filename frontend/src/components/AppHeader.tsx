@@ -26,6 +26,7 @@ import { useNavigate } from 'react-router-dom'
 import { PLAN_LABEL } from '../core/features'
 import { getProfileMenuColors, getRoleBadgeStyles } from './profileMenuColors'
 import BackendTargetSwitcher from './BackendTargetSwitcher'
+import QuickStartHeaderButton from './quick-start/QuickStartHeaderButton'
 import { useTheme } from '../context/ThemeContext'
 
 const drawerWidth = 240
@@ -112,6 +113,8 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
         </IconButton>
 
         <Box sx={{ flexGrow: 1 }} />
+
+        <QuickStartHeaderButton />
 
         <Box sx={{ mr: 1, display: 'flex', alignItems: 'center' }}>
           <BackendTargetSwitcher />

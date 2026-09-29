@@ -135,15 +135,10 @@ describe('quickStartState', () => {
     expect(destinationInsideSource({ ...same, destinationKind: 'server' })).toBe(false)
   })
 
-  it('suggests a remote path under the default path or the home folder', () => {
-    expect(
-      suggestedRemoteDestinationPath('Home', { username: 'backup', default_path: '/srv/' })
-    ).toBe('/srv/borg-backups/home')
-    expect(suggestedRemoteDestinationPath('Home', { username: 'backup' })).toBe(
-      '/home/backup/borg-backups/home'
-    )
-    expect(suggestedRemoteDestinationPath('Home', { username: 'root' })).toBe(
-      '/root/borg-backups/home'
+  it('suggests a remote path under the base path', () => {
+    expect(suggestedRemoteDestinationPath('Home', '/srv/')).toBe('/srv/borg-backups/home')
+    expect(suggestedRemoteDestinationPath('My Laptop', '/home/alex')).toBe(
+      '/home/alex/borg-backups/my-laptop'
     )
   })
   it('starts folders and destination over when the source kind changes', () => {
