@@ -665,11 +665,17 @@ async def _run_repository_command(
     *,
     log_message: Optional[str] = None,
     log_fields: Optional[Dict[str, Any]] = None,
+    passphrase: Optional[str] = None,
 ):
-    """Execute a repository-scoped Borg command with common SSH/env handling."""
+    """Execute a repository-scoped Borg command with common SSH/env handling.
+
+    ``passphrase`` replaces the stored one for this command only.
+    """
     env, temp_key_file = _prepare_repository_borg_env(
         repository, db, lock_wait=REQUEST_LOCK_WAIT
     )
+    if passphrase is not None:
+        env["BORG_PASSPHRASE"] = passphrase
     # Both callers machine-parse the JSON output; pin the render zone so borg1
     # timestamps come out UTC instead of server-local.
     env["TZ"] = "UTC"
@@ -1519,6 +1525,12 @@ class RepositoryUpdate(BaseModel):
     rclone_sync_timezone: Optional[str] = None
     rclone_extra_flags: Optional[List[str]] = None
     rclone_cache_path: Optional[str] = None
+    passphrase: Optional[str] = None  # Blank or absent keeps the stored one
+
+    @field_validator("passphrase")
+    @classmethod
+    def _passphrase_single_line(cls, value: Optional[str]) -> Optional[str]:
+        return _single_line_passphrase(value)
 
 
 class RepositoryInfo(BaseModel):
@@ -4669,6 +4681,60 @@ def _relink_over_cancelled(
     db.commit()
 
 
+async def _verify_updated_passphrase(
+    repository: Repository, db: Session, passphrase: str
+) -> None:
+    """Refuse a new passphrase the repository does not open with, so a wrong
+    value is never stored. Runs the command of the info route."""
+    router = BorgRouter(repository)
+    cmd = router.build_repo_info_command(repository.path)
+    if remote_path := effective_repository_remote_path(repository):
+        cmd.extend(["--remote-path", remote_path])
+    use_bypass_lock, _ = _resolve_bypass_lock(repository, db, "bypass_lock_on_info")
+    if use_bypass_lock and not router.is_v2:
+        cmd.append("--bypass-lock")
+
+    # Preparing the command can commit its session (a host key pinned on
+    # first use). A session of its own keeps the pending update out of that.
+    command_db = SessionLocal()
+    timeout = get_operation_timeouts(db)["info_timeout"]
+
+    async def _operation():
+        return await _run_repository_command(
+            repository, command_db, cmd, timeout, passphrase=passphrase
+        )
+
+    try:
+        returncode, _, stderr = await run_serialized_repository_command(
+            repository.id, _operation
+        )
+        error_msg = stderr.decode(errors="replace").strip() if stderr else ""
+    except asyncio.TimeoutError:
+        returncode, error_msg = None, "Repository verification timed out"
+    except Exception as e:
+        returncode, error_msg = None, str(e)
+    finally:
+        command_db.close()
+    if returncode == 0:
+        return
+
+    logger.warning(
+        "Repository did not verify with the new passphrase",
+        repo_id=repository.id,
+        borg_exit_code=returncode,
+        error=error_msg,
+    )
+    if "passphrase" in error_msg.lower() or "encrypted" in error_msg.lower():
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.encryptedPassphraseIncorrect"},
+        )
+    raise HTTPException(
+        status_code=400,
+        detail={"key": "backend.errors.repo.failedToVerifyRepository"},
+    )
+
+
 @router.put("/{repo_id}")
 async def update_repository(
     repo_id: int,
@@ -4689,6 +4755,13 @@ async def update_repository(
         update_data = repo_data.model_dump(exclude_unset=True)
         if "upload_ratelimit_kib" in update_data:
             _validate_upload_ratelimit_kib(repo_data.upload_ratelimit_kib)
+
+        # No response returns the passphrase, so the edit form submits a blank
+        # one unless a new one was typed: blank keeps the stored value.
+        passphrase_changed = bool(
+            (repo_data.passphrase or "").strip()
+            and repo_data.passphrase != repository.passphrase
+        )
 
         # Update fields
         if repo_data.name is not None:
@@ -5155,6 +5228,11 @@ async def update_repository(
                 # Switching to SSH - set repository_type (for backward compatibility with old code)
                 repository.repository_type = "ssh"
 
+        stored_passphrase = repository.passphrase
+        if passphrase_changed:
+            # The path handling below opens a changed path with it.
+            repository.passphrase = repo_data.passphrase
+
         # Reconstruct path if connection_id or path changed (similar to create endpoint logic)
         path_changed = False
         old_path = repository.path
@@ -5309,6 +5387,11 @@ async def update_repository(
                         new_path=repository.path,
                         borg_version=repository.borg_version or 1,
                     )
+
+        if passphrase_changed and not path_changed:
+            # Not verified yet, and the steps up to the verification may
+            # commit the session: keep it off the row until then.
+            repository.passphrase = stored_passphrase
 
         if repo_data.compression is not None:
             repository.compression = repo_data.compression
@@ -5504,6 +5587,24 @@ async def update_repository(
                     repo_data.rclone_sftp_ssh_key_id
                 )
             _apply_mirror_source_strategy(existing_rclone_storage, repository)
+
+        if passphrase_changed:
+            # A changed path was opened with the new passphrase above. An
+            # agent runs Borg itself, so its repositories take the value as
+            # given, like an agent import. Verified before the first
+            # statement of this update is sent, so that the wait for Borg
+            # holds no write lock on the database.
+            if not path_changed:
+                if repository_executor_type(repository) != "agent":
+                    await _verify_updated_passphrase(
+                        repository, db, repo_data.passphrase
+                    )
+                repository.passphrase = repo_data.passphrase
+            logger.info(
+                "Repository passphrase updated",
+                repo_id=repo_id,
+                user=current_user.username,
+            )
 
         if reopen_history:
             # On the server the history stage exists again: the archives an

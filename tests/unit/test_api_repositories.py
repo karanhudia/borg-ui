@@ -14,6 +14,7 @@ Integration tests (test_api_repositories_integration.py) handle:
 - Import existing repositories
 """
 
+import asyncio
 import pytest
 import json
 import os
@@ -23,6 +24,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from sqlalchemy import text
+from sqlalchemy.orm import sessionmaker
+from structlog.testing import capture_logs
 from app.core.agent_auth import AGENT_AUTH_HEADER
 from app.core.security import get_password_hash
 from app.services.operations.maintenance_start import active_maintenance_operation
@@ -2514,6 +2518,451 @@ class TestRepositoriesUpdate:
         )
 
         assert response.status_code == 200
+
+    def _encrypted_repository(self, test_db, **overrides) -> Repository:
+        values = {
+            "name": "Passphrase Repo",
+            "path": "/tmp/passphrase-repo",
+            "encryption": "repokey",
+            "compression": "lz4",
+            "repository_type": "local",
+            "passphrase": "old-passphrase",
+        }
+        values.update(overrides)
+        repo = Repository(**values)
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        return repo
+
+    def _stored_passphrase(self, test_db, repo: Repository) -> str:
+        test_db.expire_all()
+        return (
+            test_db.query(Repository).filter(Repository.id == repo.id).one().passphrase
+        )
+
+    def test_update_repository_stores_new_passphrase(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """A passphrase sent on update is verified, then stored encrypted."""
+        repo = self._encrypted_repository(test_db)
+        runs = []
+
+        async def run(repository, db, cmd, timeout, **kwargs):
+            runs.append((cmd, kwargs["passphrase"]))
+            return 0, b"{}", b""
+
+        serialized = []
+
+        async def serialize(repo_id, operation, **kwargs):
+            serialized.append((repo_id, kwargs))
+            return await operation()
+
+        with (
+            patch("app.api.repositories._run_repository_command", new=run),
+            patch(
+                "app.api.repositories.run_serialized_repository_command",
+                new=serialize,
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+            capture_logs() as logs,
+        ):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"passphrase": "new-passphrase"},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        # queued behind the other metadata commands of this repository
+        assert serialized == [(repo.id, {})]
+        assert "new-passphrase" not in response.text
+        assert "new-passphrase" not in repr(logs)
+        assert "Repository passphrase updated" in [log["event"] for log in logs]
+        assert runs == [
+            (["borg", "info", "--json", "/tmp/passphrase-repo"], "new-passphrase")
+        ]
+        assert self._stored_passphrase(test_db, repo) == "new-passphrase"
+        raw = test_db.execute(
+            text("SELECT passphrase FROM repositories WHERE id = :id"),
+            {"id": repo.id},
+        ).scalar_one()
+        assert raw != "new-passphrase"
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"name": "Renamed"},
+            {"passphrase": None},
+            {"passphrase": ""},
+            {"passphrase": "   "},
+            {"passphrase": "old-passphrase"},
+        ],
+    )
+    def test_update_repository_keeps_passphrase_when_blank_or_unchanged(
+        self, test_client: TestClient, admin_headers, test_db, payload
+    ):
+        """The edit form submits a blank passphrase unless one was typed."""
+        repo = self._encrypted_repository(test_db)
+        run = AsyncMock(return_value=(0, b"{}", b""))
+
+        with (
+            patch("app.api.repositories._run_repository_command", new=run),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json=payload,
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        run.assert_not_awaited()
+        assert self._stored_passphrase(test_db, repo) == "old-passphrase"
+
+    @pytest.mark.parametrize(
+        "stderr,key",
+        [
+            (
+                b"passphrase supplied in BORG_PASSPHRASE is incorrect.",
+                "backend.errors.repo.encryptedPassphraseIncorrect",
+            ),
+            (
+                b"Connection closed by remote host",
+                "backend.errors.repo.failedToVerifyRepository",
+            ),
+            (b"", "backend.errors.repo.failedToVerifyRepository"),
+        ],
+    )
+    def test_update_repository_refuses_passphrase_that_does_not_verify(
+        self, test_client: TestClient, admin_headers, test_db, stderr, key
+    ):
+        """Nothing of the update is stored when the repository does not open."""
+        repo = self._encrypted_repository(test_db)
+
+        with (
+            patch(
+                "app.api.repositories._run_repository_command",
+                new=AsyncMock(return_value=(2, b"", stderr)),
+            ),
+            capture_logs() as logs,
+        ):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"passphrase": "wrong-passphrase", "compression": "zstd"},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["key"] == key
+        assert "wrong-passphrase" not in response.text
+        assert "wrong-passphrase" not in repr(logs)
+        assert self._stored_passphrase(test_db, repo) == "old-passphrase"
+        test_db.refresh(repo)
+        assert repo.compression == "lz4"
+
+    @pytest.mark.parametrize(
+        "failure", [asyncio.TimeoutError(), RuntimeError("borg not found")]
+    )
+    def test_update_repository_refuses_passphrase_when_verification_cannot_run(
+        self, test_client: TestClient, admin_headers, test_db, failure
+    ):
+        repo = self._encrypted_repository(test_db)
+
+        with patch(
+            "app.api.repositories._run_repository_command",
+            new=AsyncMock(side_effect=failure),
+        ):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"passphrase": "new-passphrase"},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.failedToVerifyRepository"
+        )
+        assert self._stored_passphrase(test_db, repo) == "old-passphrase"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "passphrase,expected",
+        [(None, "old-passphrase"), ("new-passphrase", "new-passphrase")],
+    )
+    async def test_repository_command_runs_with_the_passphrase_given(
+        self, test_db, passphrase, expected
+    ):
+        from app.api.repositories import _run_repository_command
+
+        repo = self._encrypted_repository(test_db)
+        process = SimpleNamespace(
+            communicate=AsyncMock(return_value=(b"{}", b"")), returncode=0
+        )
+
+        with patch(
+            "app.api.repositories.asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=process),
+        ) as spawn:
+            await _run_repository_command(
+                repo, test_db, ["borg", "info", repo.path], 5, passphrase=passphrase
+            )
+
+        assert spawn.call_args.kwargs["env"]["BORG_PASSPHRASE"] == expected
+        assert repo.passphrase == "old-passphrase"
+
+    def test_update_repository_refused_passphrase_stores_nothing(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Preparing the command can commit its session (a host key pinned
+        on first use); nothing of the refused update may be part of that."""
+        repo = self._encrypted_repository(test_db)
+        command_sessions = sessionmaker(bind=test_db.get_bind())
+        seen = []
+
+        async def run(repository, db, cmd, timeout, **kwargs):
+            seen.append(
+                (db is not test_db, repository.passphrase, kwargs["passphrase"])
+            )
+            db.commit()
+            return 2, b"", b"passphrase supplied in BORG_PASSPHRASE is incorrect."
+
+        with (
+            patch("app.api.repositories.SessionLocal", new=command_sessions),
+            patch("app.api.repositories._run_repository_command", new=run),
+        ):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={
+                    "passphrase": "wrong-passphrase",
+                    "remote_path": "/no/such/borg",
+                    "compression": "zstd",
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 400
+        assert seen == [(True, "old-passphrase", "wrong-passphrase")]
+        assert self._stored_passphrase(test_db, repo) == "old-passphrase"
+        test_db.refresh(repo)
+        assert repo.remote_path is None
+        assert repo.compression == "lz4"
+
+    def test_update_repository_verifies_before_its_first_write(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Moving a repository back to the server rewrites its archives. The
+        wait for Borg comes first, or it would hold the write lock of the
+        database against every other writer."""
+        from app.database.models import Archive
+
+        repo = self._encrypted_repository(
+            test_db,
+            path="/repos/moved-back-passphrase",
+            executor_type="agent",
+            execution_target="agent",
+        )
+        test_db.add(
+            Archive(
+                repository_id=repo.id,
+                borg_id="id-moved-back",
+                name="moved-back",
+                series="nas",
+                start=datetime(2026, 9, 1, 2),
+                history_state="skipped",
+            )
+        )
+        test_db.commit()
+        command_sessions = sessionmaker(bind=test_db.get_bind())
+
+        async def run(repository, db, cmd, timeout, **kwargs):
+            # another writer, like a host key pinned on first use
+            db.add(SSHConnection(host="writer.local", username="borg", port=22))
+            db.commit()
+            return 0, b"{}", b""
+
+        from app.services.operations.executors import load_default_executors
+
+        load_default_executors()
+        with (
+            patch("app.api.repositories.SessionLocal", new=command_sessions),
+            patch("app.api.repositories._run_repository_command", new=run),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"executor_type": "server", "passphrase": "new-passphrase"},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200, response.text
+        assert self._stored_passphrase(test_db, repo) == "new-passphrase"
+        archive = test_db.query(Archive).filter_by(repository_id=repo.id).one()
+        assert archive.history_state == "pending"
+
+    def test_update_direct_rclone_repository_refuses_wrong_passphrase(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """The feature check of this repository type commits the session; a
+        refused passphrase must not have been part of that commit."""
+        repo = self._encrypted_repository(
+            test_db,
+            path="rclone:prod-s3:borg-ui/direct",
+            encryption="repokey-aes-ocb",
+            repository_type="rclone",
+            execution_target="local",
+            executor_type="server",
+            borg_version=2,
+            bypass_lock=True,
+        )
+        runs = []
+
+        async def run(repository, db, cmd, timeout, **kwargs):
+            runs.append(cmd)
+            return 2, b"", b"passphrase supplied in BORG_PASSPHRASE is incorrect."
+
+        with patch("app.api.repositories._run_repository_command", new=run):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"passphrase": "wrong-passphrase"},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.encryptedPassphraseIncorrect"
+        )
+        # Borg 2 has no --bypass-lock
+        assert len(runs) == 1
+        assert "--bypass-lock" not in runs[0]
+        assert self._stored_passphrase(test_db, repo) == "old-passphrase"
+
+    def test_update_repository_verifies_with_the_settings_of_the_same_request(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = self._encrypted_repository(test_db)
+        runs = []
+
+        async def run(repository, db, cmd, timeout, **kwargs):
+            runs.append(cmd)
+            return 0, b"{}", b""
+
+        with (
+            patch("app.api.repositories._run_repository_command", new=run),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={
+                    "passphrase": "new-passphrase",
+                    "remote_path": "/usr/local/bin/borg",
+                    "bypass_lock": True,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        assert runs == [
+            [
+                "borg",
+                "info",
+                "--json",
+                "/tmp/passphrase-repo",
+                "--remote-path",
+                "/usr/local/bin/borg",
+                "--bypass-lock",
+            ]
+        ]
+
+    def test_update_repository_rejects_multiline_passphrase(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = self._encrypted_repository(test_db)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={"passphrase": "first line\nsecond line"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+        assert self._stored_passphrase(test_db, repo) == "old-passphrase"
+
+    def test_update_agent_repository_stores_passphrase_unverified(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """The agent runs Borg, so the server takes the value as given."""
+        agent = AgentMachine(
+            name="Passphrase Agent",
+            agent_id="agt_passphrase",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="offline",
+        )
+        test_db.add(agent)
+        test_db.commit()
+        repo = self._encrypted_repository(
+            test_db,
+            path="/agent/passphrase-repo",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=agent.id,
+        )
+        run = AsyncMock(return_value=(2, b"", b"unused"))
+
+        with (
+            patch("app.api.repositories._run_repository_command", new=run),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"passphrase": "new-passphrase"},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        run.assert_not_awaited()
+        assert self._stored_passphrase(test_db, repo) == "new-passphrase"
+
+    def test_update_repository_path_change_opens_with_new_passphrase(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """A changed path is opened once, with the passphrase of the same
+        request, so a repository is not initialized over a stale one."""
+        repo = self._encrypted_repository(test_db)
+        verified_with = []
+
+        async def verify(router, **kwargs):
+            verified_with.append((router.repo.path, router.repo.passphrase))
+            return {"success": True}
+
+        initialize = AsyncMock(return_value={"success": True})
+        run = AsyncMock(return_value=(0, b"{}", b""))
+        with (
+            patch("app.api.repositories.BorgRouter.verify_repository", new=verify),
+            patch(
+                "app.api.repositories.BorgRouter.initialize_repository",
+                new=initialize,
+            ),
+            patch("app.api.repositories._run_repository_command", new=run),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={
+                    "path": "/tmp/passphrase-repo-moved",
+                    "passphrase": "new-passphrase",
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        assert verified_with == [("/tmp/passphrase-repo-moved", "new-passphrase")]
+        initialize.assert_not_awaited()
+        run.assert_not_awaited()
+        assert self._stored_passphrase(test_db, repo) == "new-passphrase"
 
     def test_update_repository_upload_ratelimit_default(
         self, test_client: TestClient, admin_headers, test_db
