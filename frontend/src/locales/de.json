@@ -5836,6 +5836,8 @@
         "encryptedPassphraseRequired": "Passphrase ist für den Verschlüsselungsmodus '{{mode}}' erforderlich",
         "agentBorg2Unavailable": "Auf diesem Endpunkt ist Borg 2 nicht installiert, daher kann dort kein Borg-2-Repository erstellt oder geöffnet werden. Installiere Borg 2 auf dem Endpunkt oder wähle Borg 1.",
         "agentBorg2TooOld": "Das Borg 2 dieses Endpunkts ist {{version}}; borg-ui benötigt {{minimum}} oder neuer für ein Borg-2-Repository. Aktualisiere Borg 2 auf dem Endpunkt oder wähle Borg 1.",
+        "borg2OnlyUrl": "Eine Repository-URL mit {{scheme}} benötigt Borg 2; Borg 1 kann sie nicht öffnen. Wähle Borg 2 für dieses Repository.",
+        "borg2OnlyUrlOrSshHost": "Eine Repository-URL mit {{scheme}} benötigt Borg 2; Borg 1 liest sie als SSH-Host namens {{host}}. Wähle Borg 2 für dieses Repository oder schreibe den SSH-Host als ssh://{{host}}/pfad (ssh://{{host}}/./pfad für einen Pfad relativ zum Login-Verzeichnis).",
         "agentPassphraseUnavailable": "Dieser Managed Agent hat keine BORG_PASSPHRASE gemeldet, daher kann er ein verschlüsseltes Repository nicht öffnen. Setze BORG_PASSPHRASE in der Umgebung des Agents oder gib hier eine Passphrase ein.",
         "encryptedPassphraseIncorrect": "Das Repository ist verschlüsselt, aber die Passphrase ist falsch oder fehlt. Bitte geben Sie die korrekte Passphrase an.",
         "encryptionKeyfileNotRequired": "Das Repository verwendet die Verschlüsselung '{{mode}}', für die keine Schlüsseldatei erforderlich ist. Der Upload einer Schlüsseldatei ist nur für die Verschlüsselungsmodi 'keyfile' oder 'keyfile-blake2' erforderlich.",
