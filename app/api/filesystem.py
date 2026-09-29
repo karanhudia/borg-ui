@@ -422,7 +422,10 @@ async def ssh_home_directory(
         result = await asyncio.to_thread(
             _run_sftp_batch, key_file, host, username, port, ["pwd"]
         )
-    except subprocess.TimeoutExpired:
+    except Exception as exc:
+        # Only a prefill hint: a timeout, host-key lookup or target error
+        # means "no suggestion", never a failed request.
+        logger.warning("SSH home lookup failed", host=host, error=str(exc))
         return {"path": None}
     finally:
         os.unlink(key_file)

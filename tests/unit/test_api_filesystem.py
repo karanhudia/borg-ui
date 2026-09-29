@@ -1192,3 +1192,21 @@ class TestSshHomeDirectory:
 
         assert response.status_code == 200
         assert response.json() == {"path": None}
+
+    def test_returns_null_when_the_lookup_raises(
+        self, test_client, admin_headers, test_db, monkeypatch
+    ):
+        def fail(*args, **kwargs):
+            raise RuntimeError("host key lookup failed")
+
+        monkeypatch.setattr(filesystem, "host_key_ssh_opts_for_host", fail)
+        response, _ = self._call(
+            test_client,
+            admin_headers,
+            test_db,
+            monkeypatch,
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"path": None}
