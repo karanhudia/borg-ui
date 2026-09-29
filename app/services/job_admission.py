@@ -60,6 +60,12 @@ ACTIVE_MAINTENANCE_STATUSES = {"pending", "running"}
 ACTIVE_AGENT_STATUSES = {"queued", "claimed", "cancel_requested", "running"}
 ACTIVE_OPERATION_STATUSES = {"queued", "running"}
 
+# `agent_jobs.job_type` of the row that carries a backup to its agent. Named
+# once: the writers set it, `get_agent_job_for_backup` reads it and admission
+# counts it, and a mismatch between them fails silently — the cancel route
+# would find no job and refuse, the log endpoints would serve nothing.
+BACKUP_AGENT_JOB_TYPE = "backup"
+
 # Every kind admission watches, mapped to the admission operation it is
 # recorded as.
 MIGRATED_OPERATION_KINDS = {
@@ -187,6 +193,18 @@ def _is_ignored(work: ActiveRepositoryWork, ignore: Optional[IgnoreActiveJob]) -
     )
 
 
+def _carries_ignored_operation(
+    job: AgentJob, ignore: Optional[IgnoreActiveJob]
+) -> bool:
+    """Whether `job` carries the operation `ignore` names to its agent."""
+    return bool(
+        ignore
+        and ignore.job_table == Operation.__tablename__
+        and job.operation_id is not None
+        and job.operation_id == ignore.job_id
+    )
+
+
 def _dialect_name(db: Session) -> str:
     try:
         return db.get_bind().dialect.name
@@ -256,6 +274,13 @@ def list_active_repository_work(
     `ignore_queued_operations` leaves out `operations` rows that are still
     queued. Such a row holds no lock, and it starts only through the
     runner's repository lane, which the operation asking here already holds.
+
+    A backup's agent job counts for as long as the agent has not reported
+    its end, whatever became of the backup's own row: a row closed without
+    the agent's word (a restart's recovery, an executor that failed) leaves
+    Borg running on the agent, holding the repository lock. An ignored
+    operation's own agent jobs are ignored with it, as they were before
+    they counted.
     """
     active: list[ActiveRepositoryWork] = []
     operation_statuses = (
@@ -289,7 +314,7 @@ def list_active_repository_work(
     agent_jobs = (
         db.query(AgentJob)
         .filter(
-            AgentJob.job_type == "repository",
+            AgentJob.job_type.in_(("repository", BACKUP_AGENT_JOB_TYPE)),
             AgentJob.status.in_(ACTIVE_AGENT_STATUSES),
         )
         .all()
@@ -302,6 +327,13 @@ def list_active_repository_work(
         payload_repo_id = repository_payload.get("id")
         payload_repo_path = repository_payload.get("path")
         if payload_repo_id != repository.id and payload_repo_path != repository.path:
+            continue
+        if job.job_type == BACKUP_AGENT_JOB_TYPE:
+            if _carries_ignored_operation(job, ignore):
+                continue
+            active.append(
+                _active_work(repository, OPERATION_BACKUP, AgentJob.__tablename__, job)
+            )
             continue
         job_kind = payload.get("job_kind")
         try:
