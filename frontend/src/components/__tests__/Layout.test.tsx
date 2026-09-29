@@ -17,7 +17,9 @@ const {
   loadUserPreferenceMock,
   announcementSurfaceMock,
   useAuthMock,
+  quickStartProviderMock,
 } = vi.hoisted(() => ({
+  quickStartProviderMock: vi.fn(),
   logoutMock: vi.fn(),
   refreshUserMock: vi.fn(),
   hasConsentBeenGivenMock: vi.fn(),
@@ -98,6 +100,19 @@ vi.mock('../PasskeyEnrollmentPrompt', () => ({
     ) : null,
 }))
 
+vi.mock('../quick-start/QuickStartProvider', () => ({
+  QuickStartProvider: ({
+    children,
+    allowAutoOpen,
+  }: {
+    children: React.ReactNode
+    allowAutoOpen: boolean
+  }) => {
+    quickStartProviderMock(allowAutoOpen)
+    return <>{children}</>
+  },
+}))
+
 vi.mock('../AppSidebar', () => ({
   default: () => <div>Sidebar</div>,
 }))
@@ -138,6 +153,7 @@ describe('Layout', () => {
       acknowledgeAnnouncement: vi.fn(),
       snoozeAnnouncement: vi.fn(),
       trackAnnouncementCtaClick: vi.fn(),
+      settled: true,
     })
     useAuthMock.mockReturnValue({
       user: { username: 'admin', email: 'admin@example.com', role: 'admin', passkey_count: 0 },
@@ -416,5 +432,32 @@ describe('Layout', () => {
 
     expect(await screen.findByText('Consent Banner')).toBeInTheDocument()
     expect(screen.queryByText('Announcement Modal')).not.toBeInTheDocument()
+  })
+
+  it('lets Quick Start open on its own only after the other first-login surfaces settle', async () => {
+    let resolvePreference: () => void = () => {}
+    loadUserPreferenceMock.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolvePreference = resolve
+      })
+    )
+    renderLayout(<Layout>content</Layout>)
+
+    expect(quickStartProviderMock).toHaveBeenLastCalledWith(false)
+    resolvePreference()
+    await waitFor(() => expect(quickStartProviderMock).toHaveBeenLastCalledWith(true))
+  })
+
+  it('keeps Quick Start closed while the announcement manifest is still loading', async () => {
+    announcementSurfaceMock.mockReturnValue({
+      announcement: null,
+      acknowledgeAnnouncement: vi.fn(),
+      snoozeAnnouncement: vi.fn(),
+      trackAnnouncementCtaClick: vi.fn(),
+      settled: false,
+    })
+    renderLayout(<Layout>content</Layout>)
+    await waitFor(() => expect(loadUserPreferenceMock).toHaveBeenCalled())
+    expect(quickStartProviderMock).not.toHaveBeenCalledWith(true)
   })
 })

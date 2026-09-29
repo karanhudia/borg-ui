@@ -41,6 +41,7 @@ import {
 import type { PruneForm, Repository } from './repositories-page/types'
 import type { BackupPlan, RepositoryWipeExecuteRequest, RepositoryWipeJob } from '../types'
 import type { OperationItem } from '../types/operations'
+import { useQuickStart } from '../components/quick-start/quickStartContext'
 import { SUCCESS_OPERATION_STATUSES } from '../utils/operationStatus'
 
 const EMPTY_REPOSITORIES: Repository[] = []
@@ -145,6 +146,7 @@ export default function Repositories() {
   const { hasGlobalPermission } = useAuth()
   const { can } = usePlan()
   const canManageRepositoriesGlobally = hasGlobalPermission('repositories.manage_all')
+  const quickStart = useQuickStart()
   const canUseManagedAgents = can('managed_agents')
   const canUseRclone = can('rclone')
   const permissions = usePermissions()
@@ -1118,6 +1120,7 @@ export default function Repositories() {
         canBreakLock={(repository) => canBreakLock({ repository_id: repository.id })}
         onSearchChange={setSearchQuery}
         onOpenWizard={openWizard}
+        onQuickStart={quickStart?.openQuickStart}
         onViewInfo={setViewingInfoRepository}
         onCheck={handleCheckRepository}
         onCompact={handleCompactRepository}

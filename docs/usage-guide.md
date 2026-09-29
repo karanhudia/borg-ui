@@ -28,6 +28,10 @@ admin / admin123
 
 Change the password in Settings > Account.
 
+For your first backup, the easiest path is **New backup** at the top of the
+sidebar. See [Quick Start](quick-start). The rest of this guide walks through
+the same setup by hand.
+
 ## Understand Container Paths
 
 Borg UI sees paths inside the container, not host paths.

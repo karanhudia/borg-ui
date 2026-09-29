@@ -1,7 +1,7 @@
 import { memo, type Dispatch, type SetStateAction } from 'react'
 import { alpha, Box, Button, Chip, Divider, Stack, Typography, useTheme } from '@mui/material'
 import FilterListIcon from '@mui/icons-material/FilterList'
-import { Database, ListChecks, Plus, RefreshCw } from 'lucide-react'
+import { Database, ListChecks, Plus, RefreshCw, Rocket } from 'lucide-react'
 import type { TFunction } from 'i18next'
 
 import EmptyStateCard from '../../components/EmptyStateCard'
@@ -46,6 +46,8 @@ interface BackupPlansContentProps {
   togglePending: boolean
   toggleVariables: number | undefined
   openCreateWizard: () => void
+  /** Opens Quick Start from the empty state; omitted where Quick Start is unavailable. */
+  onQuickStart?: () => void
   onRunPlan: (planId: number) => void
   onCancelRun: (runId: number) => void
   onViewLogs: (job: BackupPlanRunLogJob) => void
@@ -165,6 +167,7 @@ function BackupPlansContentImpl({
   togglePending,
   toggleVariables,
   openCreateWizard,
+  onQuickStart,
   onRunPlan,
   onCancelRun,
   onViewLogs,
@@ -447,16 +450,27 @@ function BackupPlansContentImpl({
           title={t('backupPlans.empty.title')}
           description={t('backupPlans.empty.description')}
           actions={
-            <Button
-              variant="contained"
-              startIcon={<Plus size={16} />}
-              onClick={() => {
-                trackBackupPlan(EventAction.VIEW, { operation: 'open_create_plan_wizard' })
-                openCreateWizard()
-              }}
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1.5}
+              sx={{ justifyContent: 'center' }}
             >
-              {t('backupPlans.actions.create')}
-            </Button>
+              {onQuickStart && (
+                <Button variant="contained" startIcon={<Rocket size={16} />} onClick={onQuickStart}>
+                  {t('quickStart.title')}
+                </Button>
+              )}
+              <Button
+                variant={onQuickStart ? 'outlined' : 'contained'}
+                startIcon={<Plus size={16} />}
+                onClick={() => {
+                  trackBackupPlan(EventAction.VIEW, { operation: 'open_create_plan_wizard' })
+                  openCreateWizard()
+                }}
+              >
+                {t('backupPlans.actions.create')}
+              </Button>
+            </Stack>
           }
         />
       ) : backupPlans.length === 0 || processedPlans.groups.every((g) => g.plans.length === 0) ? (

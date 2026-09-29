@@ -26,6 +26,7 @@ import {
 import { BorgApiClient } from '../services/borgApi'
 import { usePlan } from '../hooks/usePlan'
 import { usePermissions } from '../hooks/usePermissions'
+import { useQuickStart } from '../components/quick-start/quickStartContext'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useFeatureAnalytics } from '../hooks/useFeatureAnalytics'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -98,6 +99,7 @@ export default function BackupPlans() {
   const { trackFeatureUsed, trackFeatureBlocked } = useFeatureAnalytics()
   const { can } = usePlan()
   const permissions = usePermissions()
+  const quickStart = useQuickStart()
   const canUseMultiRepository = can('backup_plan_multi_repository')
   const canUseMixedSourceTypes = can('backup_plan_mixed_sources')
   const canUseManagedAgents = can('managed_agents')
@@ -882,6 +884,7 @@ export default function BackupPlans() {
   return (
     <Box>
       <BackupPlansContent
+        onQuickStart={quickStart?.openQuickStart}
         loadingPlans={loadingPlans}
         backupPlans={backupPlans}
         processedPlans={processedPlans}

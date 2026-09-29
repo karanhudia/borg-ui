@@ -6715,6 +6715,7 @@
         "failed": "fallido"
       }
     },
-    "repositoryAlreadyCreated": "El repositorio ya se creó. Los cambios en su ubicación, frase de contraseña o cifrado no se aplicarán. Aún puedes cambiar el nombre del plan, las carpetas y la programación."
+    "repositoryAlreadyCreated": "El repositorio ya se creó. Los cambios en su ubicación, frase de contraseña o cifrado no se aplicarán. Aún puedes cambiar el nombre del plan, las carpetas y la programación.",
+    "newBackup": "Nueva copia"
   }
 }

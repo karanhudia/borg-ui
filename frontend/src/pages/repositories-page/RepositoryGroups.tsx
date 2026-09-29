@@ -1,6 +1,7 @@
 import Add from '@mui/icons-material/Add'
 import FileUpload from '@mui/icons-material/FileUpload'
 import FilterList from '@mui/icons-material/FilterList'
+import RocketLaunch from '@mui/icons-material/RocketLaunch'
 import Storage from '@mui/icons-material/Storage'
 import { Box, Button, Divider, Stack, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
@@ -21,6 +22,8 @@ interface RepositoryGroupsProps {
   canBreakLock: (repository: Repository) => boolean
   onSearchChange: (value: string) => void
   onOpenWizard: (mode: 'create' | 'edit' | 'import', repository?: Repository) => void
+  /** Opens Quick Start from the empty state; omitted where Quick Start is unavailable. */
+  onQuickStart?: () => void
   onViewInfo: (repository: Repository) => void
   onCheck: (repository: Repository) => void
   onCompact: (repository: Repository) => void
@@ -53,6 +56,7 @@ export function RepositoryGroups({
   canBreakLock,
   onSearchChange,
   onOpenWizard,
+  onQuickStart,
   onViewInfo,
   onCheck,
   onCompact,
@@ -101,8 +105,18 @@ export function RepositoryGroups({
                 justifyContent: 'center',
               }}
             >
+              {onQuickStart && (
+                <Button
+                  variant="contained"
+                  startIcon={<RocketLaunch />}
+                  onClick={onQuickStart}
+                  sx={{ width: { xs: '100%', sm: 'auto' } }}
+                >
+                  {t('quickStart.title')}
+                </Button>
+              )}
               <Button
-                variant="contained"
+                variant={onQuickStart ? 'outlined' : 'contained'}
                 startIcon={<Add />}
                 onClick={() => onOpenWizard('create')}
                 sx={{ width: { xs: '100%', sm: 'auto' } }}
