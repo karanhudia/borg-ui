@@ -2870,9 +2870,10 @@ async def deploy_ssh_key_with_copy_id(
             pub_file=pub_file_path,
         )
 
-        # Use sshpass with ssh-copy-id
+        # sshpass -e reads the password from SSHPASS in this subprocess's env,
+        # keeping it out of argv (visible to anyone via ps or /proc/<pid>/cmdline)
         # Build command with optional -s flag for SFTP mode
-        cmd = ["sshpass", "-p", password, "ssh-copy-id"]
+        cmd = ["sshpass", "-e", "ssh-copy-id"]
 
         # Add -s flag only if use_sftp_mode is enabled
         # SFTP mode is required by some servers (Hetzner Storage Box) but breaks others (Synology NAS)
@@ -2892,18 +2893,20 @@ async def deploy_ssh_key_with_copy_id(
             ]
         )
 
-        # Sanitized command for logging (hide password)
-        safe_cmd = " ".join(cmd[0:2] + ["***"] + cmd[3:])
+        command_line = " ".join(cmd)
         logger.info(
             "ssh_key_deployment_started",
             host=host,
             username=username,
             port=port,
-            command=safe_cmd,
+            command=command_line,
         )
 
         process = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env={**os.environ, "SSHPASS": password},
         )
 
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
@@ -2963,7 +2966,7 @@ async def deploy_ssh_key_with_copy_id(
                 host=host,
                 username=username,
                 port=port,
-                command=safe_cmd,
+                command=command_line,
                 key_file=key_file_path,
                 return_code=process.returncode,
                 error_summary=error_summary,
