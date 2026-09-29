@@ -8,7 +8,7 @@
 | Phase | Branch | Scope | Status |
 | --- | --- | --- | --- |
 | 1 | `feat/quick-start-1-spec` | spec and this plan | done |
-| 2 | `feat/quick-start-2-core` | dialog, state, actions, runner, local to local end to end | not started |
+| 2 | `feat/quick-start-2-core` | dialog, state, actions, runner, local to local end to end | done |
 | 3 | `feat/quick-start-3-entry` | sidebar button, first-run auto-open, empty-state actions, user docs | not started |
 | 4 | `feat/quick-start-4-ssh` | SSH destination and SSH pull source with inline key deploy | not started |
 | 5 | `feat/quick-start-5-agent` | managed agent source (Pro) | not started |

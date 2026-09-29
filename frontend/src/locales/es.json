@@ -6584,5 +6584,137 @@
       "autoOff": "Las vistas previas de poda automáticas están desactivadas, así que esta comparación está desactualizada y no se muestra. Pulsa Comparar ahora para ejecutarla.",
       "autoOffAction": "Activar en Configuración"
     }
+  },
+  "quickStart": {
+    "title": "Inicio rápido",
+    "subtitle": "Responde unas pocas preguntas y Borg UI configura por ti una copia de seguridad programada que se mantiene sola.",
+    "create": "Crear copia de seguridad",
+    "steps": {
+      "what": "Qué",
+      "connect": "Conectar",
+      "folders": "Carpetas",
+      "destination": "Dónde",
+      "protect": "Proteger",
+      "schedule": "Cuándo",
+      "review": "Revisar"
+    },
+    "what": {
+      "title": "¿Qué quieres respaldar?",
+      "server": "Archivos en este servidor",
+      "serverDesc": "Carpetas del equipo donde se ejecuta Borg UI, como tu carpeta personal, documentos o datos de aplicaciones."
+    },
+    "folders": {
+      "title": "Elige las carpetas a respaldar",
+      "hint": "Añade una o más carpetas. En Docker, el disco de tu servidor suele aparecer bajo /local.",
+      "pathLabel": "Carpeta",
+      "add": "Añadir",
+      "empty": "Aún no hay carpetas. Escribe una ruta o usa el botón de carpeta para explorar."
+    },
+    "destination": {
+      "title": "¿Dónde deben guardarse las copias?",
+      "server": "Un disco de este servidor",
+      "serverDesc": "Ideal para un segundo disco o una carpeta compartida de un NAS montada.",
+      "pathLabel": "Ubicación de las copias",
+      "pathHint": "Una carpeta nueva y vacía. Borg UI la crea si no existe.",
+      "insideSource": "Esta carpeta está dentro de una de las carpetas que respaldas. Elige una ubicación fuera de ellas.",
+      "offsiteTip": "Una copia en el mismo disco que tus datos no sobrevive a un fallo del disco. Usa un segundo disco u otro equipo si puedes."
+    },
+    "protect": {
+      "title": "Nombra y protege tus copias",
+      "hint": "Las copias se cifran. Solo quien tenga la frase de contraseña puede leerlas.",
+      "nameLabel": "Nombre",
+      "nameHint": "Se usa para el repositorio y el plan de copias.",
+      "passphraseLabel": "Frase de contraseña",
+      "passphraseHint": "Al menos {{count}} caracteres. Unas cuantas palabras al azar funcionan bien.",
+      "confirmLabel": "Repite la frase de contraseña",
+      "mismatch": "Las frases de contraseña no coinciden.",
+      "showPassphrase": "Mostrar frase de contraseña",
+      "hidePassphrase": "Ocultar frase de contraseña",
+      "warning": "Guarda esta frase de contraseña en un lugar seguro fuera de este servidor. Si se pierde, tus copias no se podrán restaurar.",
+      "download": "Descargar",
+      "savedConfirm": "He guardado mi frase de contraseña en un lugar seguro",
+      "unencrypted": "El cifrado está desactivado. Cualquiera con acceso a la ubicación de las copias puede leer tus archivos."
+    },
+    "schedule": {
+      "title": "¿Cuándo debe ejecutarse?",
+      "hint": "Las horas están en {{timezone}}. Puedes cambiarlo después en el plan de copias.",
+      "presets": {
+        "daily": "Cada día",
+        "dailyDesc": "A las 02:00, cuando la mayoría de equipos están tranquilos.",
+        "every6h": "Cada 6 horas",
+        "every6hDesc": "Para datos que cambian a menudo.",
+        "weekly": "Cada semana",
+        "weeklyDesc": "Los domingos a las 02:00.",
+        "custom": "Personalizado",
+        "customDesc": "Elige tu propia programación."
+      }
+    },
+    "review": {
+      "title": "Revisar y crear",
+      "hint": "Esto es lo que configurará Borg UI. Los valores predeterminados sirven para la mayoría.",
+      "backUp": "Respaldar",
+      "storeIn": "Guardar en",
+      "schedule": "Programación",
+      "manualOnly": "Solo manual",
+      "keepLabel": "Conservar",
+      "keepAll": "Todas las copias (no se borra nada)",
+      "keep": {
+        "keepHourly": "{{count}} horarias",
+        "keepDaily": "{{count}} diarias",
+        "keepWeekly": "{{count}} semanales",
+        "keepMonthly": "{{count}} mensuales",
+        "keepQuarterly": "{{count}} trimestrales",
+        "keepYearly": "{{count}} anuales"
+      },
+      "afterEachRun": "Tras cada ejecución",
+      "nothing": "Nada",
+      "maintenance": {
+        "prune": "borrar copias antiguas",
+        "compact": "liberar espacio",
+        "check": "comprobar integridad"
+      },
+      "encryption": "Cifrado",
+      "encrypted": "Activado ({{mode}})",
+      "unencrypted": "Desactivado",
+      "creates": "Crea",
+      "createsList": "Repositorio «{{name}}» y plan de copias «{{name}}»"
+    },
+    "customize": {
+      "title": "Personalizar",
+      "subtitle": "Opcional. Cambia el cifrado, la retención, el mantenimiento y la compresión.",
+      "schedule": "Ejecutar según programación",
+      "scheduleHint": "Desactivado significa que el plan solo se ejecuta cuando lo inicias.",
+      "encrypt": "Cifrar las copias",
+      "encryptHint": "Muy recomendado.",
+      "prune": "Borrar copias antiguas",
+      "pruneHint": "Conserva las cantidades de abajo y elimina copias más antiguas tras cada ejecución.",
+      "compact": "Liberar espacio",
+      "compactHint": "Recupera espacio en disco tras borrar copias antiguas.",
+      "check": "Comprobar integridad",
+      "checkHint": "Verifica el repositorio hasta una hora tras cada ejecución y continúa donde lo dejó.",
+      "borgVersion": "Versión de Borg"
+    },
+    "progress": {
+      "title": "Configurando tu copia de seguridad",
+      "doneTitle": "Tu copia de seguridad está lista",
+      "doneHint": "Todo está listo. Ejecuta la primera copia ahora o deja que la inicie la programación.",
+      "failed": "La configuración se detuvo",
+      "retry": "Reintentar",
+      "editAnswers": "Editar respuestas",
+      "openPlan": "Abrir planes de copias",
+      "runNow": "Ejecutar la primera copia ahora",
+      "backupStarted": "Primera copia iniciada",
+      "actions": {
+        "create_repository": "Crear el repositorio",
+        "create_plan": "Crear el plan de copias con su programación"
+      },
+      "status": {
+        "pending": "en espera",
+        "running": "en curso",
+        "done": "hecho",
+        "failed": "fallido"
+      }
+    },
+    "repositoryAlreadyCreated": "El repositorio ya se creó. Los cambios en su ubicación, frase de contraseña o cifrado no se aplicarán. Aún puedes cambiar el nombre del plan, las carpetas y la programación."
   }
 }
