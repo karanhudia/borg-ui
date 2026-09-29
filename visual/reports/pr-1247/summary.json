@@ -1,47 +1,29 @@
 {
-  "generatedAt": "2026-09-29T05:09:52.777Z",
+  "generatedAt": "2026-09-29T06:13:00.377Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1247 visual report",
-    "commitSha": "c890f8b456ed",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36524582069"
+    "commitSha": "928fe2b2c399",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36529752482"
   },
   "totals": {
-    "baseline": 1066,
+    "baseline": 1082,
     "actual": 1088,
-    "compared": 1066,
-    "changed": 11,
-    "added": 22,
+    "compared": 1082,
+    "changed": 6,
+    "added": 6,
     "removed": 0,
-    "unchanged": 1055
+    "unchanged": 1076
   },
   "changed": [
-    {
-      "fileName": "pages-dashboardv3-successdonutlegend--default--mobile.png",
-      "baselinePath": "images/baseline/pages-dashboardv3-successdonutlegend--default--mobile.png",
-      "actualPath": "images/actual/pages-dashboardv3-successdonutlegend--default--mobile.png",
-      "diffPath": "images/diff/pages-dashboardv3-successdonutlegend--default--mobile.png",
-      "diffPixels": 329160,
-      "totalPixels": 329160,
-      "diffRatio": 1,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
     {
       "fileName": "quick-start-dialog--first-step--mobile.png",
       "baselinePath": "images/baseline/quick-start-dialog--first-step--mobile.png",
       "actualPath": "images/actual/quick-start-dialog--first-step--mobile.png",
       "diffPath": "images/diff/quick-start-dialog--first-step--mobile.png",
-      "diffPixels": 230025,
+      "diffPixels": 112987,
       "totalPixels": 329160,
-      "diffRatio": 0.6988242799854174,
+      "diffRatio": 0.3432585976424839,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -57,117 +39,9 @@
       "baselinePath": "images/baseline/quick-start-dialog--first-step.png",
       "actualPath": "images/actual/quick-start-dialog--first-step.png",
       "diffPath": "images/diff/quick-start-dialog--first-step.png",
-      "diffPixels": 15941,
+      "diffPixels": 15542,
       "totalPixels": 1024000,
-      "diffRatio": 0.0155673828125,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "quick-start-steps--destination--mobile.png",
-      "baselinePath": "images/baseline/quick-start-steps--destination--mobile.png",
-      "actualPath": "images/actual/quick-start-steps--destination--mobile.png",
-      "diffPath": "images/diff/quick-start-steps--destination--mobile.png",
-      "diffPixels": 62509,
-      "totalPixels": 329160,
-      "diffRatio": 0.1899046056628995,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "quick-start-steps--destination-inside-source--mobile.png",
-      "baselinePath": "images/baseline/quick-start-steps--destination-inside-source--mobile.png",
-      "actualPath": "images/actual/quick-start-steps--destination-inside-source--mobile.png",
-      "diffPath": "images/diff/quick-start-steps--destination-inside-source--mobile.png",
-      "diffPixels": 63646,
-      "totalPixels": 329160,
-      "diffRatio": 0.19335885283752582,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "quick-start-steps--destination-inside-source.png",
-      "baselinePath": "images/baseline/quick-start-steps--destination-inside-source.png",
-      "actualPath": "images/actual/quick-start-steps--destination-inside-source.png",
-      "diffPath": "images/diff/quick-start-steps--destination-inside-source.png",
-      "diffPixels": 89614,
-      "totalPixels": 1024000,
-      "diffRatio": 0.087513671875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "quick-start-steps--destination.png",
-      "baselinePath": "images/baseline/quick-start-steps--destination.png",
-      "actualPath": "images/actual/quick-start-steps--destination.png",
-      "diffPath": "images/diff/quick-start-steps--destination.png",
-      "diffPixels": 87717,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0856611328125,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "quick-start-steps--review--mobile.png",
-      "baselinePath": "images/baseline/quick-start-steps--review--mobile.png",
-      "actualPath": "images/actual/quick-start-steps--review--mobile.png",
-      "diffPath": "images/diff/quick-start-steps--review--mobile.png",
-      "diffPixels": 49380,
-      "totalPixels": 329160,
-      "diffRatio": 0.15001822821728036,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "quick-start-steps--review.png",
-      "baselinePath": "images/baseline/quick-start-steps--review.png",
-      "actualPath": "images/actual/quick-start-steps--review.png",
-      "diffPath": "images/diff/quick-start-steps--review.png",
-      "diffPixels": 64554,
-      "totalPixels": 1024000,
-      "diffRatio": 0.063041015625,
+      "diffRatio": 0.015177734375,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -183,9 +57,9 @@
       "baselinePath": "images/baseline/quick-start-steps--what--mobile.png",
       "actualPath": "images/actual/quick-start-steps--what--mobile.png",
       "diffPath": "images/diff/quick-start-steps--what--mobile.png",
-      "diffPixels": 90498,
+      "diffPixels": 69947,
       "totalPixels": 329160,
-      "diffRatio": 0.2749362012395188,
+      "diffRatio": 0.21250151901810668,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -197,13 +71,49 @@
       }
     },
     {
+      "fileName": "quick-start-steps--what-another-computer--mobile.png",
+      "baselinePath": "images/baseline/quick-start-steps--what-another-computer--mobile.png",
+      "actualPath": "images/actual/quick-start-steps--what-another-computer--mobile.png",
+      "diffPath": "images/diff/quick-start-steps--what-another-computer--mobile.png",
+      "diffPixels": 69313,
+      "totalPixels": 329160,
+      "diffRatio": 0.2105754040588164,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "quick-start-steps--what-another-computer.png",
+      "baselinePath": "images/baseline/quick-start-steps--what-another-computer.png",
+      "actualPath": "images/actual/quick-start-steps--what-another-computer.png",
+      "diffPath": "images/diff/quick-start-steps--what-another-computer.png",
+      "diffPixels": 94064,
+      "totalPixels": 1024000,
+      "diffRatio": 0.091859375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
       "fileName": "quick-start-steps--what.png",
       "baselinePath": "images/baseline/quick-start-steps--what.png",
       "actualPath": "images/actual/quick-start-steps--what.png",
       "diffPath": "images/diff/quick-start-steps--what.png",
-      "diffPixels": 136667,
+      "diffPixels": 94023,
       "totalPixels": 1024000,
-      "diffRatio": 0.1334638671875,
+      "diffRatio": 0.0918193359375,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -217,60 +127,12 @@
   ],
   "added": [
     {
-      "fileName": "components-appsidebar--with-quick-start--mobile.png",
-      "actualPath": "images/actual/components-appsidebar--with-quick-start--mobile.png"
-    },
-    {
-      "fileName": "components-appsidebar--with-quick-start.png",
-      "actualPath": "images/actual/components-appsidebar--with-quick-start.png"
-    },
-    {
-      "fileName": "pages-backup-plans-content--empty-with-quick-start--mobile.png",
-      "actualPath": "images/actual/pages-backup-plans-content--empty-with-quick-start--mobile.png"
-    },
-    {
-      "fileName": "pages-backup-plans-content--empty-with-quick-start.png",
-      "actualPath": "images/actual/pages-backup-plans-content--empty-with-quick-start.png"
-    },
-    {
-      "fileName": "pages-repositories-groups--empty-with-quick-start--mobile.png",
-      "actualPath": "images/actual/pages-repositories-groups--empty-with-quick-start--mobile.png"
-    },
-    {
-      "fileName": "pages-repositories-groups--empty-with-quick-start.png",
-      "actualPath": "images/actual/pages-repositories-groups--empty-with-quick-start.png"
-    },
-    {
-      "fileName": "pages-repositories-groups--empty-without-quick-start--mobile.png",
-      "actualPath": "images/actual/pages-repositories-groups--empty-without-quick-start--mobile.png"
-    },
-    {
-      "fileName": "pages-repositories-groups--empty-without-quick-start.png",
-      "actualPath": "images/actual/pages-repositories-groups--empty-without-quick-start.png"
-    },
-    {
       "fileName": "quick-start-steps--connect-agent--mobile.png",
       "actualPath": "images/actual/quick-start-steps--connect-agent--mobile.png"
     },
     {
       "fileName": "quick-start-steps--connect-agent.png",
       "actualPath": "images/actual/quick-start-steps--connect-agent.png"
-    },
-    {
-      "fileName": "quick-start-steps--connect-existing-machine--mobile.png",
-      "actualPath": "images/actual/quick-start-steps--connect-existing-machine--mobile.png"
-    },
-    {
-      "fileName": "quick-start-steps--connect-existing-machine.png",
-      "actualPath": "images/actual/quick-start-steps--connect-existing-machine.png"
-    },
-    {
-      "fileName": "quick-start-steps--connect-new-machine--mobile.png",
-      "actualPath": "images/actual/quick-start-steps--connect-new-machine--mobile.png"
-    },
-    {
-      "fileName": "quick-start-steps--connect-new-machine.png",
-      "actualPath": "images/actual/quick-start-steps--connect-new-machine.png"
     },
     {
       "fileName": "quick-start-steps--destination-agent--mobile.png",
@@ -281,28 +143,12 @@
       "actualPath": "images/actual/quick-start-steps--destination-agent.png"
     },
     {
-      "fileName": "quick-start-steps--destination-ssh--mobile.png",
-      "actualPath": "images/actual/quick-start-steps--destination-ssh--mobile.png"
-    },
-    {
-      "fileName": "quick-start-steps--destination-ssh.png",
-      "actualPath": "images/actual/quick-start-steps--destination-ssh.png"
-    },
-    {
       "fileName": "quick-start-steps--what-agent-pro--mobile.png",
       "actualPath": "images/actual/quick-start-steps--what-agent-pro--mobile.png"
     },
     {
       "fileName": "quick-start-steps--what-agent-pro.png",
       "actualPath": "images/actual/quick-start-steps--what-agent-pro.png"
-    },
-    {
-      "fileName": "quick-start-steps--what-another-computer--mobile.png",
-      "actualPath": "images/actual/quick-start-steps--what-another-computer--mobile.png"
-    },
-    {
-      "fileName": "quick-start-steps--what-another-computer.png",
-      "actualPath": "images/actual/quick-start-steps--what-another-computer.png"
     }
   ],
   "removed": [],
@@ -1044,6 +890,12 @@
     },
     {
       "fileName": "components-appsidebar--viewer-settings.png"
+    },
+    {
+      "fileName": "components-appsidebar--with-quick-start--mobile.png"
+    },
+    {
+      "fileName": "components-appsidebar--with-quick-start.png"
     },
     {
       "fileName": "components-appsidebar--with-remote-clients--mobile.png"
@@ -2990,6 +2842,12 @@
       "fileName": "pages-backup-plans-content--community-locked-runs.png"
     },
     {
+      "fileName": "pages-backup-plans-content--empty-with-quick-start--mobile.png"
+    },
+    {
+      "fileName": "pages-backup-plans-content--empty-with-quick-start.png"
+    },
+    {
       "fileName": "pages-backup-plans-content--skipped-repository--mobile.png"
     },
     {
@@ -3108,6 +2966,9 @@
     },
     {
       "fileName": "pages-dashboardv3-spacesavingspanel--three-rows.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-successdonutlegend--default--mobile.png"
     },
     {
       "fileName": "pages-dashboardv3-successdonutlegend--default.png"
@@ -3263,6 +3124,18 @@
       "fileName": "pages-remoteclients--overview.png"
     },
     {
+      "fileName": "pages-repositories-groups--empty-with-quick-start--mobile.png"
+    },
+    {
+      "fileName": "pages-repositories-groups--empty-with-quick-start.png"
+    },
+    {
+      "fileName": "pages-repositories-groups--empty-without-quick-start--mobile.png"
+    },
+    {
+      "fileName": "pages-repositories-groups--empty-without-quick-start.png"
+    },
+    {
       "fileName": "quick-start-progress--done--mobile.png"
     },
     {
@@ -3281,6 +3154,36 @@
       "fileName": "quick-start-progress--running.png"
     },
     {
+      "fileName": "quick-start-steps--connect-existing-machine--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--connect-existing-machine.png"
+    },
+    {
+      "fileName": "quick-start-steps--connect-new-machine--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--connect-new-machine.png"
+    },
+    {
+      "fileName": "quick-start-steps--destination--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--destination-inside-source--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--destination-inside-source.png"
+    },
+    {
+      "fileName": "quick-start-steps--destination-ssh--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--destination-ssh.png"
+    },
+    {
+      "fileName": "quick-start-steps--destination.png"
+    },
+    {
       "fileName": "quick-start-steps--folders-empty--mobile.png"
     },
     {
@@ -3297,6 +3200,12 @@
     },
     {
       "fileName": "quick-start-steps--protect.png"
+    },
+    {
+      "fileName": "quick-start-steps--review--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--review.png"
     },
     {
       "fileName": "quick-start-steps--schedule--mobile.png"
