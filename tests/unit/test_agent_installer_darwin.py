@@ -419,6 +419,79 @@ def test_a_bootstrap_that_keeps_failing_stops_the_reinstall_with_the_error(mac):
     assert "Bootstrap failed: 5: Input/output error" in result.stderr
 
 
+def _recorded_server(mac: dict) -> str:
+    conf = (mac["root"] / "upgrade.conf").read_text(encoding="utf-8")
+    return re.search(r'^SERVER="(.*)"$', conf, re.M).group(1)
+
+
+def _readiness(mac: dict):
+    job = mac["agents"] / "com.borg-ui.agent-upgrade.plist"
+    return check_self_upgrade(
+        conf_path=mac["root"] / "upgrade.conf",
+        unit_path=job,
+        path_unit_path=job,
+        trigger_path=mac["root"] / "upgrade-requested",
+    )
+
+
+def _move_to(mac: dict, server: str) -> None:
+    """What `set-server` does: the config moves, the upgrade record does not."""
+    config = mac["root"] / "config.toml"
+    config.write_text(
+        config.read_text(encoding="utf-8").replace("https://borg.example", server),
+        encoding="utf-8",
+    )
+
+
+def test_a_moved_endpoint_gets_remote_upgrade_back_by_a_reinstall_naming_the_server(
+    mac,
+):
+    _run(mac, *ENROL, "--borg-version", "1")
+    _move_to(mac, "https://new.example")
+    assert _readiness(mac).reason == "server_mismatch"
+
+    result = _run(mac, "--server", "https://new.example", "--reinstall")
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert _recorded_server(mac) == "https://new.example"
+    assert _readiness(mac).supported is True
+
+
+def test_a_plain_reinstall_of_a_moved_endpoint_says_what_is_missing(mac):
+    _run(mac, *ENROL, "--borg-version", "1")
+    _move_to(mac, "https://new.example")
+
+    result = _run(mac, "--reinstall")
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    # The record wins over the config, as before; the difference is named.
+    assert _recorded_server(mac) == "https://borg.example"
+    assert "enrolled\nagainst https://new.example." in result.stderr
+    assert "run the reinstall with --server" in result.stderr
+    assert _readiness(mac).reason == "server_mismatch"
+
+
+def test_the_notice_never_repeats_an_address_that_is_not_a_plain_url(mac):
+    """The agent can write its config, and root reads this notice."""
+    _run(mac, *ENROL, "--borg-version", "1")
+    _move_to(mac, "https://new.example/$(id)")
+
+    result = _run(mac, "--reinstall")
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "against another server." in result.stderr
+    assert "$(id)" not in result.stderr
+
+
+def test_a_plain_reinstall_of_an_endpoint_that_never_moved_says_nothing(mac):
+    _run(mac, *ENROL, "--borg-version", "1")
+
+    result = _run(mac, "--reinstall")
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "upgrade record" not in result.stderr
+
+
 def test_a_reinstall_from_inside_the_upgrade_job_does_not_unload_itself(mac):
     _run(mac, *ENROL, "--borg-version", "1")
     mac["log"].write_text("")

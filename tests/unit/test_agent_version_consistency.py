@@ -104,3 +104,15 @@ def test_an_agent_from_before_the_borg2_b25_adoption_is_offered_an_upgrade():
         )
         == "outdated"
     )
+
+
+def test_an_agent_from_before_the_upgrade_record_comparison_is_offered_an_upgrade():
+    """From 0.1.16 the agent compares its server with the upgrade record, so a
+    server built from this tree must offer 0.1.15 agents the upgrade.
+    """
+    assert (
+        compute_agent_upgrade_status(
+            reported="0.1.15", desired=None, available=_pyproject_version()
+        )
+        == "outdated"
+    )

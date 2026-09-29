@@ -378,6 +378,10 @@ The first implementation supports:
   a Borg 2 restore into a directory that holds anything is refused with a
   message before Borg runs, where the machine's Borg 2 is 2.0.0b25 or later
   (which does not extract into one)
+- from 0.1.16 the self-upgrade readiness compares the server in the upgrade
+  record with the one the agent is enrolled against and reports no
+  `self_upgrade` capability when they differ, which is what `set-server`
+  leaves behind; `set-server` names the reinstall that brings it back
 - cancellation through heartbeat; from 0.1.7 (`jobs.cancel`) a running
   backup, check, prune, compact, restore or archive delete stops as well,
   even while Borg prints nothing
