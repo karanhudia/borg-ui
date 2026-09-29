@@ -38,22 +38,26 @@ export function useQuickStartAutoOpen({
   const [dismissed, setDismissed] = useState(isDismissed)
   const active = enabled && pathname === '/dashboard' && !dismissed
 
-  // Same query keys as the Repositories page and the sidebar, so this reuses their cache.
-  const { data: repositories, isFetching: fetchingRepositories } = useQuery({
+  // Same query keys as the Repositories page and the sidebar. A cached empty
+  // list may be stale (default staleTime) or kept after a failed refetch, so the
+  // decision needs a fetch that succeeded after this hook mounted.
+  const freshOnly = { enabled: active, staleTime: 0, refetchOnMount: 'always' as const }
+  const repositories = useQuery({
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.getRepositories,
-    enabled: active,
+    ...freshOnly,
   })
-  const { data: plans, isFetching: fetchingPlans } = useQuery({
+  const plans = useQuery({
     queryKey: ['backup-plans'],
     queryFn: () => backupPlansAPI.list(),
-    enabled: active,
+    ...freshOnly,
   })
 
-  const repositoryCount = repositories?.data?.repositories?.length
-  const planCount = plans?.data?.backup_plans?.length
-  // Cached empty lists can be stale while a refetch runs; decide on fresh answers only.
-  const settled = !fetchingRepositories && !fetchingPlans
+  const fresh = (query: typeof repositories | typeof plans) =>
+    query.isFetchedAfterMount && !query.isFetching && query.isSuccess
+  const settled = fresh(repositories) && fresh(plans)
+  const repositoryCount = repositories.data?.data?.repositories?.length
+  const planCount = plans.data?.data?.backup_plans?.length
 
   useEffect(() => {
     if (!active || !settled || repositoryCount !== 0 || planCount !== 0) return

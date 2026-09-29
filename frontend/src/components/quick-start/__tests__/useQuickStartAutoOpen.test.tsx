@@ -97,10 +97,12 @@ describe('useQuickStartAutoOpen', () => {
     setItem.mockRestore()
   })
   it('waits for fresh counts instead of trusting a stale empty cache', async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    // Another page cached empty lists earlier; a repository exists by now.
-    client.setQueryData(['repositories'], { data: { repositories: [] } }, { updatedAt: 0 })
-    client.setQueryData(['backup-plans'], { data: { backup_plans: [] } }, { updatedAt: 0 })
+    // The app caches for 30s; an empty list cached a moment ago is still "fresh" to it.
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: 30_000 } },
+    })
+    client.setQueryData(['repositories'], { data: { repositories: [] } })
+    client.setQueryData(['backup-plans'], { data: { backup_plans: [] } })
     mockCounts(1, 0)
     const onOpen = vi.fn()
     renderHook(() => useQuickStartAutoOpen({ enabled: true, onOpen }), {
@@ -110,5 +112,19 @@ describe('useQuickStartAutoOpen', () => {
     await waitFor(() => expect(client.isFetching()).toBe(0))
     expect(onOpen).not.toHaveBeenCalled()
     expect(localStorage.getItem(QUICK_START_DISMISSED_KEY)).toBeNull()
+  })
+  it('stays closed when the refetch fails, even with empty lists cached', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData(['repositories'], { data: { repositories: [] } })
+    client.setQueryData(['backup-plans'], { data: { backup_plans: [] } })
+    vi.mocked(repositoriesAPI.getRepositories).mockRejectedValue(new Error('offline'))
+    vi.mocked(backupPlansAPI.list).mockResolvedValue({ data: { backup_plans: [] } } as never)
+    const onOpen = vi.fn()
+    renderHook(() => useQuickStartAutoOpen({ enabled: true, onOpen }), {
+      wrapper: wrapperAt('/dashboard', client),
+    })
+    await waitFor(() => expect(repositoriesAPI.getRepositories).toHaveBeenCalled())
+    await waitFor(() => expect(client.isFetching()).toBe(0))
+    expect(onOpen).not.toHaveBeenCalled()
   })
 })
