@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Alert, Box, Button, Stack, TextField, Typography } from '@mui/material'
 import { Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -15,6 +15,8 @@ interface QuickStartSshConnectProps {
   label: string
   /** settings.ssh.manage: without it only existing connections can be picked. */
   canAddMachine: boolean
+  /** Reports a key deploy in flight, so the dialog can refuse to close under it. */
+  onBusyChange?: (busy: boolean) => void
 }
 
 const emptyForm = { host: '', username: '', port: '22', password: '' }
@@ -25,6 +27,7 @@ export default function QuickStartSshConnect({
   onChange,
   label,
   canAddMachine,
+  onBusyChange,
 }: QuickStartSshConnectProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -34,6 +37,11 @@ export default function QuickStartSshConnect({
   const [form, setForm] = useState(emptyForm)
   const [connecting, setConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    onBusyChange?.(connecting)
+    return () => onBusyChange?.(false)
+  }, [connecting, onBusyChange])
 
   const showForm = canAddMachine && (adding || connections.length === 0)
   const port = Number(form.port)

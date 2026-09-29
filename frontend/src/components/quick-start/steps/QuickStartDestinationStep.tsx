@@ -18,6 +18,7 @@ export default function QuickStartDestinationStep({
   answers,
   onChange,
   canAddMachine = false,
+  onBusyChange,
 }: QuickStartStepProps) {
   const { t } = useTranslation()
   const inside = destinationInsideSource(answers)
@@ -75,6 +76,7 @@ export default function QuickStartDestinationStep({
       {remote && (
         <QuickStartSshConnect
           canAddMachine={canAddMachine}
+          onBusyChange={onBusyChange}
           value={answers.destinationConnectionId}
           onChange={(destinationConnectionId) => {
             if (destinationConnectionId !== answers.destinationConnectionId) {

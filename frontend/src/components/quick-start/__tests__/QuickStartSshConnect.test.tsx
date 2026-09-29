@@ -71,4 +71,31 @@ describe('QuickStartSshConnect', () => {
     )
     expect(onChange).not.toHaveBeenCalled()
   })
+  it('reports a deploy in flight so the dialog can refuse to close', async () => {
+    let finish: (value: unknown) => void = () => {}
+    vi.mocked(sshKeysAPI.deploySSHKey).mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve
+      }) as never
+    )
+    const onBusyChange = vi.fn()
+    const user = userEvent.setup()
+    renderWithProviders(
+      <QuickStartSshConnect
+        value=""
+        onChange={() => {}}
+        label="Computer"
+        canAddMachine
+        onBusyChange={onBusyChange}
+      />
+    )
+    await user.type(await screen.findByLabelText(/Host name/), 'nas.local')
+    await user.type(screen.getByLabelText(/^Username/), 'backup')
+    await user.type(screen.getByLabelText(/^Password/), 'secret')
+    await user.click(screen.getByRole('button', { name: 'Connect' }))
+
+    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(true))
+    finish({ data: { success: true, connection: { id: 12 } } })
+    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false))
+  })
 })

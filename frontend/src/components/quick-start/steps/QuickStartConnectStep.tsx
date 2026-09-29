@@ -8,6 +8,7 @@ export default function QuickStartConnectStep({
   answers,
   onChange,
   canAddMachine = false,
+  onBusyChange,
 }: QuickStartStepProps) {
   const { t } = useTranslation()
   return (
@@ -22,6 +23,7 @@ export default function QuickStartConnectStep({
       </Box>
       <QuickStartSshConnect
         canAddMachine={canAddMachine}
+        onBusyChange={onBusyChange}
         value={answers.sourceConnectionId}
         // Folders picked on another machine do not carry over.
         onChange={(sourceConnectionId) => onChange({ sourceConnectionId, sourcePaths: [] })}

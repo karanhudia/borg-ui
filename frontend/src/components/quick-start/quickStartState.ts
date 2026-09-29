@@ -215,6 +215,8 @@ export interface QuickStartStepProps {
   onChange: (patch: Partial<QuickStartAnswers>) => void
   /** settings.ssh.manage: may add a new SSH machine, not just pick one. */
   canAddMachine?: boolean
+  /** True while the step talks to another machine; the dialog must not close meanwhile. */
+  onBusyChange?: (busy: boolean) => void
 }
 
 // Must be referentially stable: CompressionSettings calls it from an effect.
