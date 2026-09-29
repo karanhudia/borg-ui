@@ -1,14 +1,46 @@
+import { useEffect, useRef } from 'react'
 import { Alert, Stack, Typography } from '@mui/material'
-import { HardDrive } from 'lucide-react'
+import { HardDrive, Server } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import PathSelectorField from '../../shared/PathSelectorField'
 import QuickStartChoiceCard from '../QuickStartChoiceCard'
-import { destinationInsideSource, type QuickStartStepProps } from '../quickStartState'
+import QuickStartSshConnect from '../QuickStartSshConnect'
+import { sshBrowseConfig, useSshConnection } from '../quickStartSsh'
+import {
+  destinationInsideSource,
+  suggestedDestinationPath,
+  suggestedRemoteDestinationPath,
+  type QuickStartStepProps,
+} from '../quickStartState'
 
-export default function QuickStartDestinationStep({ answers, onChange }: QuickStartStepProps) {
+export default function QuickStartDestinationStep({
+  answers,
+  onChange,
+  canAddMachine = false,
+  onBusyChange,
+}: QuickStartStepProps) {
   const { t } = useTranslation()
   const inside = destinationInsideSource(answers)
+  const remote = answers.destinationKind === 'ssh'
+  const connection = useSshConnection(remote ? answers.destinationConnectionId : '')
+  const name = answers.name || 'backup'
+
+  // Suggest a path once per chosen connection, after it has loaded: a machine
+  // added in this step is not in the list until the refetch lands.
+  const suggestedFor = useRef<number | null>(null)
+  useEffect(() => {
+    if (!connection) {
+      // Leaving SSH and coming back to the same machine suggests again.
+      suggestedFor.current = null
+      return
+    }
+    if (suggestedFor.current === connection.id) return
+    suggestedFor.current = connection.id
+    if (!answers.destinationPath) {
+      onChange({ destinationPath: suggestedRemoteDestinationPath(name, connection) })
+    }
+  }, [connection, answers.destinationPath, name, onChange])
 
   return (
     <Stack spacing={2}>
@@ -20,26 +52,70 @@ export default function QuickStartDestinationStep({ answers, onChange }: QuickSt
           icon={<HardDrive size={20} />}
           title={t('quickStart.destination.server')}
           description={t('quickStart.destination.serverDesc')}
-          selected={answers.destinationKind === 'server'}
-          onSelect={() => onChange({ destinationKind: 'server' })}
+          selected={!remote}
+          onSelect={() => {
+            if (!remote) return
+            onChange({
+              destinationKind: 'server',
+              destinationConnectionId: '',
+              destinationPath: suggestedDestinationPath(name),
+            })
+          }}
+        />
+        <QuickStartChoiceCard
+          icon={<Server size={20} />}
+          title={t('quickStart.destination.ssh')}
+          description={t('quickStart.destination.sshDesc')}
+          selected={remote}
+          onSelect={() => {
+            if (!remote) onChange({ destinationKind: 'ssh', destinationPath: '' })
+          }}
         />
       </Stack>
 
-      <PathSelectorField
-        label={t('quickStart.destination.pathLabel')}
-        value={answers.destinationPath}
-        onChange={(destinationPath) => onChange({ destinationPath })}
-        placeholder="/local/borg-backups/home"
-        required
-        error={inside}
-        helperText={
-          inside ? t('quickStart.destination.insideSource') : t('quickStart.destination.pathHint')
-        }
-      />
+      {remote && (
+        <QuickStartSshConnect
+          canAddMachine={canAddMachine}
+          onBusyChange={onBusyChange}
+          value={answers.destinationConnectionId}
+          onChange={(destinationConnectionId) => {
+            if (destinationConnectionId !== answers.destinationConnectionId) {
+              onChange({ destinationConnectionId, destinationPath: '' })
+            }
+          }}
+          label={t('quickStart.destination.sshLabel')}
+        />
+      )}
 
-      <Alert severity="info" variant="outlined">
-        {t('quickStart.destination.offsiteTip')}
-      </Alert>
+      {(!remote || connection) && (
+        <PathSelectorField
+          label={t('quickStart.destination.pathLabel')}
+          value={answers.destinationPath}
+          onChange={(destinationPath) => onChange({ destinationPath })}
+          placeholder={remote ? '/srv/borg-backups/home' : '/local/borg-backups/home'}
+          required
+          error={inside}
+          helperText={
+            inside
+              ? t('quickStart.destination.insideSource')
+              : remote && connection
+                ? t('quickStart.destination.remotePathHint', {
+                    machine: `${connection.username}@${connection.host}`,
+                  })
+                : t('quickStart.destination.pathHint')
+          }
+          connectionType={remote ? 'ssh' : 'local'}
+          sshConfig={remote ? sshBrowseConfig(connection) : undefined}
+          initialPath={remote ? connection?.default_path || '/' : undefined}
+          showSshMountPoints={false}
+        />
+      )}
+
+      {!remote && (
+        <Alert severity="info" variant="outlined">
+          {t('quickStart.destination.offsiteTip')}
+        </Alert>
+      )}
     </Stack>
   )
 }

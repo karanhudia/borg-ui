@@ -10,7 +10,7 @@
 | 1 | `feat/quick-start-1-spec` | spec and this plan | done |
 | 2 | `feat/quick-start-2-core` | dialog, state, actions, runner, local to local end to end | done |
 | 3 | `feat/quick-start-3-entry` | sidebar button, first-run auto-open, empty-state actions, user docs | done |
-| 4 | `feat/quick-start-4-ssh` | SSH destination and SSH pull source with inline key deploy | not started |
+| 4 | `feat/quick-start-4-ssh` | SSH destination and SSH pull source with inline key deploy | done |
 | 5 | `feat/quick-start-5-agent` | managed agent source (Pro) | not started |
 
 Each phase: TDD for the pure modules, stories for every new component, all
@@ -70,9 +70,10 @@ clean, then push and PR.
 1. State: `sourceKind: 'ssh'` and `destinationKind: 'ssh'` choices enabled;
    `QuickStartSshConnect` sub-form (existing connection via
    `SshConnectionSelect`, or new host/user/port/password).
-2. Actions: `ensure_key` (generate when `/ssh-keys/system-key` says it does
-   not exist) and `deploy_key` per new connection; deploy `success: false`
-   is a failure. Repository payload for SSH (`storage_backend: 'ssh'`,
+2. `quickStartSsh.ts` `connectNewMachine`: generate the system key when
+   `/ssh-keys/system-key` says it does not exist, then deploy it; deploy
+   `success: false` is a failure. Runs from the Connect button in the step,
+   so the machine can be browsed right away (changed from runner actions). Repository payload for SSH (`storage_backend: 'ssh'`,
    `connection_id`, `execution_target: 'ssh'`); plan source location
    `remote` with `source_ssh_connection_id`.
 3. Folder and destination browsing on the SSH connection.

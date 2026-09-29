@@ -5,10 +5,13 @@ import { useTranslation } from 'react-i18next'
 
 import PathSelectorField from '../../shared/PathSelectorField'
 import type { QuickStartStepProps } from '../quickStartState'
+import { sshBrowseConfig, useSshConnection } from '../quickStartSsh'
 
 export default function QuickStartFoldersStep({ answers, onChange }: QuickStartStepProps) {
   const { t } = useTranslation()
   const [draft, setDraft] = useState('')
+  const remote = answers.sourceKind === 'ssh'
+  const connection = useSshConnection(remote ? answers.sourceConnectionId : '')
 
   const addPaths = (paths: string[]) => {
     const next = [...answers.sourcePaths]
@@ -26,7 +29,11 @@ export default function QuickStartFoldersStep({ answers, onChange }: QuickStartS
           {t('quickStart.folders.title')}
         </Typography>
         <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-          {t('quickStart.folders.hint')}
+          {remote && connection
+            ? t('quickStart.folders.remoteHint', {
+                machine: `${connection.username}@${connection.host}`,
+              })
+            : t('quickStart.folders.hint')}
         </Typography>
       </Box>
 
@@ -35,8 +42,12 @@ export default function QuickStartFoldersStep({ answers, onChange }: QuickStartS
           label={t('quickStart.folders.pathLabel')}
           value={draft}
           onChange={setDraft}
-          placeholder="/local/home"
+          placeholder={remote ? '/home' : '/local/home'}
           multiSelect
+          connectionType={remote ? 'ssh' : 'local'}
+          sshConfig={remote ? sshBrowseConfig(connection) : undefined}
+          initialPath={remote ? connection?.default_path || '/' : undefined}
+          showSshMountPoints={false}
           onSelectPaths={addPaths}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {

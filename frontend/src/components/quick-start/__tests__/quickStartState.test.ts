@@ -5,7 +5,9 @@ import {
   destinationInsideSource,
   isStepValid,
   suggestedDestinationPath,
+  sourceKindPatch,
   suggestedName,
+  suggestedRemoteDestinationPath,
   visibleSteps,
   type QuickStartAnswers,
 } from '../quickStartState'
@@ -109,5 +111,58 @@ describe('quickStartState', () => {
     expect(suggestedName(answers())).toBe('')
     expect(suggestedDestinationPath('My Photos!')).toBe('/local/borg-backups/my-photos')
     expect(suggestedDestinationPath('')).toBe('/local/borg-backups/backup')
+  })
+  it('needs a chosen connection for SSH sources and destinations', () => {
+    expect(isStepValid('connect', answers({ sourceKind: 'ssh' }))).toBe(false)
+    expect(isStepValid('connect', answers({ sourceKind: 'ssh', sourceConnectionId: 3 }))).toBe(true)
+    const ssh = answers({ destinationKind: 'ssh', destinationPath: '/srv/borg/home' })
+    expect(isStepValid('destination', ssh)).toBe(false)
+    expect(isStepValid('destination', { ...ssh, destinationConnectionId: 5 })).toBe(true)
+  })
+
+  it('treats the same SSH connection as the same machine', () => {
+    const same = answers({
+      sourceKind: 'ssh',
+      sourceConnectionId: 3,
+      sourcePaths: ['/srv/data'],
+      destinationKind: 'ssh',
+      destinationConnectionId: 3,
+      destinationPath: '/srv/data/borg',
+    })
+    expect(destinationInsideSource(same)).toBe(true)
+    expect(destinationInsideSource({ ...same, destinationConnectionId: 4 })).toBe(false)
+    // Pulled files stored on this server live on a different machine.
+    expect(destinationInsideSource({ ...same, destinationKind: 'server' })).toBe(false)
+  })
+
+  it('suggests a remote path under the default path or the home folder', () => {
+    expect(
+      suggestedRemoteDestinationPath('Home', { username: 'backup', default_path: '/srv/' })
+    ).toBe('/srv/borg-backups/home')
+    expect(suggestedRemoteDestinationPath('Home', { username: 'backup' })).toBe(
+      '/home/backup/borg-backups/home'
+    )
+    expect(suggestedRemoteDestinationPath('Home', { username: 'root' })).toBe(
+      '/root/borg-backups/home'
+    )
+  })
+  it('starts folders and destination over when the source kind changes', () => {
+    const picked = answers({
+      sourceKind: 'ssh',
+      sourceConnectionId: 3,
+      sourcePaths: ['/srv/data'],
+      destinationKind: 'ssh',
+      destinationConnectionId: 5,
+      destinationPath: '/home/bob/borg-backups/data',
+    })
+    expect(sourceKindPatch(picked, 'ssh')).toEqual({})
+    expect(sourceKindPatch(picked, 'server')).toEqual({
+      sourceKind: 'server',
+      sourcePaths: [],
+      destinationKind: 'server',
+      destinationConnectionId: '',
+      destinationPath: '',
+    })
+    expect(sourceKindPatch(picked, 'agent').destinationKind).toBe('agent')
   })
 })

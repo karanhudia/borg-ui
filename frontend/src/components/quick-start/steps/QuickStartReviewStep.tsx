@@ -3,6 +3,7 @@ import { Box, Stack, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 
 import QuickStartCustomize from '../QuickStartCustomize'
+import { useSshConnection } from '../quickStartSsh'
 import type { QuickStartAnswers, QuickStartSettingsChange } from '../quickStartState'
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -42,6 +43,14 @@ export default function QuickStartReviewStep({
   const { t } = useTranslation()
   const { settings } = answers
   const prune = settings.prune
+  const sourceConnection = useSshConnection(
+    answers.sourceKind === 'ssh' ? answers.sourceConnectionId : ''
+  )
+  const destinationConnection = useSshConnection(
+    answers.destinationKind === 'ssh' ? answers.destinationConnectionId : ''
+  )
+  const machine = (connection?: { username: string; host: string }) =>
+    connection ? `${connection.username}@${connection.host}` : t('quickStart.review.thisServer')
   const keep = (
     [
       ['keepHourly', prune.keepHourly],
@@ -83,10 +92,16 @@ export default function QuickStartReviewStep({
               {path}
             </Box>
           ))}
+          <Box component="span" sx={{ color: 'text.secondary' }}>
+            {t('quickStart.review.onMachine', { machine: machine(sourceConnection) })}
+          </Box>
         </Row>
         <Row label={t('quickStart.review.storeIn')}>
           <Box component="span" sx={{ fontFamily: 'monospace' }}>
             {answers.destinationPath}
+          </Box>
+          <Box component="span" sx={{ display: 'block', color: 'text.secondary' }}>
+            {t('quickStart.review.onMachine', { machine: machine(destinationConnection) })}
           </Box>
         </Row>
         <Row label={t('quickStart.review.schedule')}>{schedule}</Row>

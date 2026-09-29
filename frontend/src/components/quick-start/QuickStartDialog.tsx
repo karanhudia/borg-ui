@@ -30,6 +30,7 @@ import {
   type QuickStartSettingsChange,
   type QuickStartStepKey,
 } from './quickStartState'
+import QuickStartConnectStep from './steps/QuickStartConnectStep'
 import QuickStartDestinationStep from './steps/QuickStartDestinationStep'
 import QuickStartFoldersStep from './steps/QuickStartFoldersStep'
 import QuickStartProtectStep from './steps/QuickStartProtectStep'
@@ -53,9 +54,15 @@ interface QuickStartDialogProps {
   open: boolean
   onClose: () => void
   initialAnswers?: QuickStartAnswers
+  canAddMachine?: boolean
 }
 
-export default function QuickStartDialog({ open, onClose, initialAnswers }: QuickStartDialogProps) {
+export default function QuickStartDialog({
+  open,
+  onClose,
+  initialAnswers,
+  canAddMachine = false,
+}: QuickStartDialogProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { can } = usePlan()
@@ -86,8 +93,11 @@ export default function QuickStartDialog({ open, onClose, initialAnswers }: Quic
     []
   )
 
+  // An SSH key deploy in flight would land in the next session's answers.
+  const [busy, setBusy] = useState(false)
+
   const close = () => {
-    if (runner.running) return
+    if (runner.running || busy) return
     runner.reset()
     setAnswers(initialAnswers ?? createInitialQuickStartAnswers())
     setStepIndex(0)
@@ -99,7 +109,9 @@ export default function QuickStartDialog({ open, onClose, initialAnswers }: Quic
       const name = answers.name.trim() || suggestedName(answers)
       update({
         name,
-        destinationPath: answers.destinationPath || suggestedDestinationPath(name),
+        destinationPath:
+          answers.destinationPath ||
+          (answers.destinationKind === 'server' ? suggestedDestinationPath(name) : ''),
       })
     }
     setStepIndex((index) => Math.min(index + 1, steps.length - 1))
@@ -128,10 +140,26 @@ export default function QuickStartDialog({ open, onClose, initialAnswers }: Quic
     switch (step) {
       case 'what':
         return <QuickStartWhatStep answers={answers} onChange={update} />
+      case 'connect':
+        return (
+          <QuickStartConnectStep
+            answers={answers}
+            onChange={update}
+            canAddMachine={canAddMachine}
+            onBusyChange={setBusy}
+          />
+        )
       case 'folders':
         return <QuickStartFoldersStep answers={answers} onChange={update} />
       case 'destination':
-        return <QuickStartDestinationStep answers={answers} onChange={update} />
+        return (
+          <QuickStartDestinationStep
+            answers={answers}
+            onChange={update}
+            canAddMachine={canAddMachine}
+            onBusyChange={setBusy}
+          />
+        )
       case 'protect':
         return <QuickStartProtectStep answers={answers} onChange={update} />
       case 'schedule':
@@ -151,8 +179,10 @@ export default function QuickStartDialog({ open, onClose, initialAnswers }: Quic
 
   const formFooter = (
     <DialogActions>
-      <Button onClick={close}>{t('common.buttons.cancel')}</Button>
-      <Button onClick={() => setStepIndex((index) => index - 1)} disabled={stepIndex === 0}>
+      <Button onClick={close} disabled={busy}>
+        {t('common.buttons.cancel')}
+      </Button>
+      <Button onClick={() => setStepIndex((index) => index - 1)} disabled={stepIndex === 0 || busy}>
         {t('common.buttons.back')}
       </Button>
       {step === 'review' ? (
@@ -164,7 +194,7 @@ export default function QuickStartDialog({ open, onClose, initialAnswers }: Quic
           {t('quickStart.create')}
         </Button>
       ) : (
-        <Button variant="contained" onClick={next} disabled={!isStepValid(step, answers)}>
+        <Button variant="contained" onClick={next} disabled={busy || !isStepValid(step, answers)}>
           {t('common.buttons.next')}
         </Button>
       )}

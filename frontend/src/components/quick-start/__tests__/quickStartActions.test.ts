@@ -86,4 +86,39 @@ describe('quickStartActions', () => {
     expect(payload.schedule_enabled).toBe(false)
     expect(payload.cron_expression).toBeNull()
   })
+  it('stores the repository on the chosen SSH connection', () => {
+    const payload = buildRepositoryPayload(
+      localAnswers({
+        destinationKind: 'ssh',
+        destinationConnectionId: 5,
+        destinationPath: '/srv/borg/home',
+      })
+    )
+    expect(payload).toMatchObject({
+      path: '/srv/borg/home',
+      connection_id: 5,
+      storage_backend: 'ssh',
+      execution_target: 'ssh',
+      executor_type: 'server',
+    })
+  })
+
+  it('pulls the folders over the chosen SSH connection', () => {
+    const payload = buildPlanPayload(
+      localAnswers({ sourceKind: 'ssh', sourceConnectionId: 3, sourcePaths: ['/srv/data'] }),
+      4
+    )
+    expect(payload).toMatchObject({
+      source_type: 'remote',
+      source_ssh_connection_id: 3,
+      source_directories: ['/srv/data'],
+    })
+    expect(payload.source_locations).toEqual([
+      expect.objectContaining({
+        source_type: 'remote',
+        source_ssh_connection_id: 3,
+        paths: ['/srv/data'],
+      }),
+    ])
+  })
 })

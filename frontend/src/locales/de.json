@@ -6601,14 +6601,18 @@
     "what": {
       "title": "Was möchtest du sichern?",
       "server": "Dateien auf diesem Server",
-      "serverDesc": "Ordner auf dem Rechner, auf dem Borg UI läuft, zum Beispiel dein Home-Ordner, Dokumente oder App-Daten."
+      "serverDesc": "Ordner auf dem Rechner, auf dem Borg UI läuft, zum Beispiel dein Home-Ordner, Dokumente oder App-Daten.",
+      "ssh": "Dateien auf einem anderen Rechner",
+      "sshDesc": "Ein Server, NAS oder PC, den dieser Server per SSH erreicht. Borg UI holt die Dateien von dort.",
+      "notSure": "Unsicher? Wähle \"Dateien auf diesem Server\", wenn die Daten dort liegen, wo Borg UI läuft. Wähle \"anderen Rechner\", wenn sie woanders liegen und du dich dort mit Benutzername und Passwort anmelden kannst."
     },
     "folders": {
       "title": "Wähle die Ordner zum Sichern",
       "hint": "Füge einen oder mehrere Ordner hinzu. In Docker erscheint die Festplatte deines Servers meist unter /local.",
       "pathLabel": "Ordner",
       "add": "Hinzufügen",
-      "empty": "Noch keine Ordner. Gib einen Pfad ein oder nutze den Ordner-Button zum Durchsuchen."
+      "empty": "Noch keine Ordner. Gib einen Pfad ein oder nutze den Ordner-Button zum Durchsuchen.",
+      "remoteHint": "Ordner auf {{machine}}. Mit dem Ordner-Button kannst du ihn durchsuchen."
     },
     "destination": {
       "title": "Wo sollen die Backups liegen?",
@@ -6617,7 +6621,11 @@
       "pathLabel": "Backup-Speicherort",
       "pathHint": "Ein neuer, leerer Ordner. Borg UI legt ihn an, falls er nicht existiert.",
       "insideSource": "Dieser Ordner liegt in einem der Ordner, die du sicherst. Wähle einen Ort außerhalb davon.",
-      "offsiteTip": "Ein Backup auf derselben Festplatte wie deine Daten übersteht keinen Festplattenausfall. Nutze wenn möglich eine zweite Festplatte oder einen anderen Rechner."
+      "offsiteTip": "Ein Backup auf derselben Festplatte wie deine Daten übersteht keinen Festplattenausfall. Nutze wenn möglich eine zweite Festplatte oder einen anderen Rechner.",
+      "ssh": "Ein anderer Server per SSH",
+      "sshDesc": "Ein NAS oder entfernter Server. Dort muss Borg installiert sein.",
+      "sshLabel": "Backup-Server",
+      "remotePathHint": "Ein Ordner auf {{machine}}. Borg UI legt ihn an, falls er nicht existiert."
     },
     "protect": {
       "title": "Benenne und schütze deine Backups",
@@ -6677,7 +6685,9 @@
       "encrypted": "An ({{mode}})",
       "unencrypted": "Aus",
       "creates": "Erstellt",
-      "createsList": "Repository „{{name}}“ und Backup-Plan „{{name}}“"
+      "createsList": "Repository „{{name}}“ und Backup-Plan „{{name}}“",
+      "thisServer": "diesem Server",
+      "onMachine": "auf {{machine}}"
     },
     "customize": {
       "title": "Anpassen",
@@ -6716,6 +6726,25 @@
       }
     },
     "repositoryAlreadyCreated": "Das Repository wurde bereits erstellt. Änderungen an Speicherort, Passphrase oder Verschlüsselung werden nicht übernommen. Name, Ordner und Zeitplan des Plans kannst du weiterhin ändern.",
-    "newBackup": "Neues Backup"
+    "newBackup": "Neues Backup",
+    "connect": {
+      "title": "Mit dem anderen Rechner verbinden",
+      "hint": "Wähle einen Rechner, den Borg UI schon kennt, oder füge einen hinzu. Borg UI installiert dort seinen SSH-Schlüssel, damit Backups ohne Passwort laufen.",
+      "label": "Rechner"
+    },
+    "ssh": {
+      "addMachine": "Rechner hinzufügen",
+      "newMachine": "Rechner hinzufügen",
+      "newMachineHint": "Gib die Anmeldedaten ein, die du für SSH verwenden würdest. Das Passwort wird einmal verwendet, um den Schlüssel von Borg UI zu installieren, und nicht gespeichert.",
+      "host": "Hostname oder IP-Adresse",
+      "port": "Port",
+      "username": "Benutzername",
+      "password": "Passwort",
+      "passwordHint": "Wird einmal verwendet, nicht gespeichert.",
+      "connect": "Verbinden",
+      "connecting": "Verbinde…",
+      "connectFailed": "Verbindung fehlgeschlagen: {{reason}}",
+      "noConnectionsNoPermission": "Es sind noch keine Rechner eingerichtet. Bitte eine Admin-Person, unter Remote-Maschinen einen hinzuzufügen."
+    }
   }
 }

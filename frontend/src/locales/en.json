@@ -6601,14 +6601,18 @@
     "what": {
       "title": "What do you want to back up?",
       "server": "Files on this server",
-      "serverDesc": "Folders on the machine that runs Borg UI, such as your home folder, documents or app data."
+      "serverDesc": "Folders on the machine that runs Borg UI, such as your home folder, documents or app data.",
+      "ssh": "Files on another computer",
+      "sshDesc": "A server, NAS or PC that this server can reach over SSH. Borg UI pulls the files from it.",
+      "notSure": "Not sure? Pick \"Files on this server\" if the data lives where Borg UI runs. Pick \"another computer\" if it lives elsewhere and you can log in to it with a username and password."
     },
     "folders": {
       "title": "Pick the folders to back up",
       "hint": "Add one or more folders. In Docker, your server's disk usually appears under /local.",
       "pathLabel": "Folder",
       "add": "Add",
-      "empty": "No folders yet. Type a path or use the folder button to browse."
+      "empty": "No folders yet. Type a path or use the folder button to browse.",
+      "remoteHint": "Folders on {{machine}}. Use the folder button to browse it."
     },
     "destination": {
       "title": "Where should the backups live?",
@@ -6617,7 +6621,11 @@
       "pathLabel": "Backup location",
       "pathHint": "A new, empty folder. Borg UI creates it if it does not exist.",
       "insideSource": "This folder is inside one of the folders you are backing up. Pick a location outside them.",
-      "offsiteTip": "A backup on the same disk as your data does not survive a disk failure. Use a second drive or another machine if you can."
+      "offsiteTip": "A backup on the same disk as your data does not survive a disk failure. Use a second drive or another machine if you can.",
+      "ssh": "Another server over SSH",
+      "sshDesc": "A NAS or remote server. Borg needs to be installed there.",
+      "sshLabel": "Backup server",
+      "remotePathHint": "A folder on {{machine}}. Borg UI creates it if it does not exist."
     },
     "protect": {
       "title": "Name and protect your backups",
@@ -6677,7 +6685,9 @@
       "encrypted": "On ({{mode}})",
       "unencrypted": "Off",
       "creates": "Creates",
-      "createsList": "Repository \"{{name}}\" and backup plan \"{{name}}\""
+      "createsList": "Repository \"{{name}}\" and backup plan \"{{name}}\"",
+      "thisServer": "this server",
+      "onMachine": "on {{machine}}"
     },
     "customize": {
       "title": "Customize",
@@ -6716,6 +6726,25 @@
       }
     },
     "repositoryAlreadyCreated": "The repository was already created. Changes to its location, passphrase or encryption will not be applied. You can still change the plan name, folders and schedule.",
-    "newBackup": "New backup"
+    "newBackup": "New backup",
+    "connect": {
+      "title": "Connect to the other computer",
+      "hint": "Pick a computer Borg UI already knows, or add one. Borg UI installs its SSH key there so backups run without a password.",
+      "label": "Computer"
+    },
+    "ssh": {
+      "addMachine": "Add a computer",
+      "newMachine": "Add a computer",
+      "newMachineHint": "Enter the login you would use with SSH. The password is used once to install Borg UI's key and is not saved.",
+      "host": "Host name or IP address",
+      "port": "Port",
+      "username": "Username",
+      "password": "Password",
+      "passwordHint": "Used once, not saved.",
+      "connect": "Connect",
+      "connecting": "Connecting…",
+      "connectFailed": "Could not connect: {{reason}}",
+      "noConnectionsNoPermission": "No computers are set up yet. Ask an admin to add one under Remote Machines."
+    }
   }
 }

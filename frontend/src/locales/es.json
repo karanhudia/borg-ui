@@ -6601,14 +6601,18 @@
     "what": {
       "title": "¿Qué quieres respaldar?",
       "server": "Archivos en este servidor",
-      "serverDesc": "Carpetas del equipo donde se ejecuta Borg UI, como tu carpeta personal, documentos o datos de aplicaciones."
+      "serverDesc": "Carpetas del equipo donde se ejecuta Borg UI, como tu carpeta personal, documentos o datos de aplicaciones.",
+      "ssh": "Archivos en otro equipo",
+      "sshDesc": "Un servidor, NAS o PC al que este servidor llega por SSH. Borg UI trae los archivos desde allí.",
+      "notSure": "¿No lo tienes claro? Elige \"Archivos en este servidor\" si los datos están donde se ejecuta Borg UI. Elige \"otro equipo\" si están en otro sitio y puedes entrar en él con usuario y contraseña."
     },
     "folders": {
       "title": "Elige las carpetas a respaldar",
       "hint": "Añade una o más carpetas. En Docker, el disco de tu servidor suele aparecer bajo /local.",
       "pathLabel": "Carpeta",
       "add": "Añadir",
-      "empty": "Aún no hay carpetas. Escribe una ruta o usa el botón de carpeta para explorar."
+      "empty": "Aún no hay carpetas. Escribe una ruta o usa el botón de carpeta para explorar.",
+      "remoteHint": "Carpetas en {{machine}}. Usa el botón de carpeta para explorarlo."
     },
     "destination": {
       "title": "¿Dónde deben guardarse las copias?",
@@ -6617,7 +6621,11 @@
       "pathLabel": "Ubicación de las copias",
       "pathHint": "Una carpeta nueva y vacía. Borg UI la crea si no existe.",
       "insideSource": "Esta carpeta está dentro de una de las carpetas que respaldas. Elige una ubicación fuera de ellas.",
-      "offsiteTip": "Una copia en el mismo disco que tus datos no sobrevive a un fallo del disco. Usa un segundo disco u otro equipo si puedes."
+      "offsiteTip": "Una copia en el mismo disco que tus datos no sobrevive a un fallo del disco. Usa un segundo disco u otro equipo si puedes.",
+      "ssh": "Otro servidor por SSH",
+      "sshDesc": "Un NAS o servidor remoto. Borg debe estar instalado allí.",
+      "sshLabel": "Servidor de copias",
+      "remotePathHint": "Una carpeta en {{machine}}. Borg UI la crea si no existe."
     },
     "protect": {
       "title": "Nombra y protege tus copias",
@@ -6677,7 +6685,9 @@
       "encrypted": "Activado ({{mode}})",
       "unencrypted": "Desactivado",
       "creates": "Crea",
-      "createsList": "Repositorio «{{name}}» y plan de copias «{{name}}»"
+      "createsList": "Repositorio «{{name}}» y plan de copias «{{name}}»",
+      "thisServer": "este servidor",
+      "onMachine": "en {{machine}}"
     },
     "customize": {
       "title": "Personalizar",
@@ -6716,6 +6726,25 @@
       }
     },
     "repositoryAlreadyCreated": "El repositorio ya se creó. Los cambios en su ubicación, frase de contraseña o cifrado no se aplicarán. Aún puedes cambiar el nombre del plan, las carpetas y la programación.",
-    "newBackup": "Nueva copia"
+    "newBackup": "Nueva copia",
+    "connect": {
+      "title": "Conectar con el otro equipo",
+      "hint": "Elige un equipo que Borg UI ya conoce o añade uno. Borg UI instala allí su clave SSH para que las copias funcionen sin contraseña.",
+      "label": "Equipo"
+    },
+    "ssh": {
+      "addMachine": "Añadir equipo",
+      "newMachine": "Añadir equipo",
+      "newMachineHint": "Introduce el acceso que usarías con SSH. La contraseña se usa una sola vez para instalar la clave de Borg UI y no se guarda.",
+      "host": "Nombre de host o dirección IP",
+      "port": "Puerto",
+      "username": "Usuario",
+      "password": "Contraseña",
+      "passwordHint": "Se usa una vez, no se guarda.",
+      "connect": "Conectar",
+      "connecting": "Conectando…",
+      "connectFailed": "No se pudo conectar: {{reason}}",
+      "noConnectionsNoPermission": "Aún no hay equipos configurados. Pide a un administrador que añada uno en Máquinas remotas."
+    }
   }
 }
