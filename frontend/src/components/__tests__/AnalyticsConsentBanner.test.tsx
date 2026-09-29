@@ -53,12 +53,9 @@ describe('AnalyticsConsentBanner', () => {
       ).toBeInTheDocument()
     })
 
-    it('renders link to analytics dashboard', () => {
+    it('does not link to the retired public analytics dashboard', () => {
       render(<AnalyticsConsentBanner onConsentGiven={mockOnConsentGiven} />)
-      const link = screen.getByText('View our public analytics dashboard')
-      expect(link).toBeInTheDocument()
-      expect(link).toHaveAttribute('href', 'https://analytics.nullcodeai.dev/')
-      expect(link).toHaveAttribute('target', '_blank')
+      expect(screen.queryByRole('link')).not.toBeInTheDocument()
     })
 
     it('renders analytics toggle switch', () => {

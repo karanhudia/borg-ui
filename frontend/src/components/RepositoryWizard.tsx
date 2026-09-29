@@ -223,7 +223,7 @@ const RepositoryWizard = ({
   canUseManagedAgents = true,
   canUseRclone = true,
 }: RepositoryWizardProps) => {
-  const { track, trackRepository, EventCategory, EventAction } = useAnalytics()
+  const { trackRepository, EventAction } = useAnalytics()
   const { trackFeatureUsed, trackFeatureBlocked } = useFeatureAnalytics()
   const { t } = useTranslation()
   const [activeStep, setActiveStep] = useState(0)
@@ -1030,22 +1030,14 @@ const RepositoryWizard = ({
       delete data.agent_machine_id
     }
 
-    track(
-      EventCategory.REPOSITORY,
-      mode === 'create'
-        ? EventAction.CREATE
-        : mode === 'import'
-          ? EventAction.UPLOAD
-          : EventAction.EDIT,
-      { source: 'wizard', mode }
-    )
     trackRepository(
       mode === 'create'
         ? EventAction.CREATE
         : mode === 'import'
           ? EventAction.UPLOAD
           : EventAction.EDIT,
-      { name: wizardState.name }
+      { name: wizardState.name },
+      { source: 'wizard', mode }
     )
 
     const submitOperation =
