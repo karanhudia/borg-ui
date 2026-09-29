@@ -61,6 +61,11 @@ export function useQuickStartAutoOpen({
 
   useEffect(() => {
     if (!active || !settled || repositoryCount !== 0 || planCount !== 0) return
+    // Another tab may have opened it since this one mounted.
+    if (isDismissed()) {
+      setDismissed(true)
+      return
+    }
     markDismissed()
     setDismissed(true)
     onOpen()

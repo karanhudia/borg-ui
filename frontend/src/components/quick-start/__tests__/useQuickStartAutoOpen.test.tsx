@@ -52,12 +52,15 @@ describe('useQuickStartAutoOpen', () => {
 
   it('stays closed when a repository already exists', async () => {
     mockCounts(1, 0)
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const onOpen = vi.fn()
     renderHook(() => useQuickStartAutoOpen({ enabled: true, onOpen }), {
-      wrapper: wrapperAt('/dashboard'),
+      wrapper: wrapperAt('/dashboard', client),
     })
-    await waitFor(() => expect(backupPlansAPI.list).toHaveBeenCalled())
-    await waitFor(() => expect(repositoriesAPI.getRepositories).toHaveBeenCalled())
+    // Wait for both answers to land, not just for the requests to start.
+    await waitFor(() => expect(client.getQueryState(['repositories'])?.status).toBe('success'))
+    await waitFor(() => expect(client.getQueryState(['backup-plans'])?.status).toBe('success'))
+    await waitFor(() => expect(client.isFetching()).toBe(0))
     expect(onOpen).not.toHaveBeenCalled()
   })
 
@@ -125,6 +128,25 @@ describe('useQuickStartAutoOpen', () => {
     })
     await waitFor(() => expect(repositoriesAPI.getRepositories).toHaveBeenCalled())
     await waitFor(() => expect(client.isFetching()).toBe(0))
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+  it('does not open when another tab already did', async () => {
+    mockCounts(0, 0)
+    let resolveRepositories: (value: unknown) => void = () => {}
+    vi.mocked(repositoriesAPI.getRepositories).mockReturnValue(
+      new Promise((resolve) => {
+        resolveRepositories = resolve
+      }) as never
+    )
+    const onOpen = vi.fn()
+    renderHook(() => useQuickStartAutoOpen({ enabled: true, onOpen }), {
+      wrapper: wrapperAt('/dashboard'),
+    })
+    await waitFor(() => expect(repositoriesAPI.getRepositories).toHaveBeenCalled())
+    // The other tab writes the flag while this one is still loading.
+    localStorage.setItem(QUICK_START_DISMISSED_KEY, '1')
+    resolveRepositories({ data: { repositories: [] } })
+    await new Promise((resolve) => setTimeout(resolve, 50))
     expect(onOpen).not.toHaveBeenCalled()
   })
 })
