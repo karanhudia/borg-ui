@@ -191,7 +191,10 @@ def test_store_target_by_scheme():
     assert store_target("rest://borg@host/repos/repo") == ("", None)
     assert store_target("rest://borg@host:2222/repos/repo") == ("", None)
     assert store_target("rest:///srv/store") == ("du", "/srv/store")
-    assert store_target("ssh://u@h/r") == ("du", "ssh://u@h/r")
+    # Borg 2 reads ssh://host/path as relative to the login directory: only
+    # the absolute form (second slash) names what du over ssh would measure
+    assert store_target("ssh://u@h//r") == ("du", "ssh://u@h//r")
+    assert store_target("ssh://u@h/r") == ("", None)
     assert store_target("/backups/repo") == ("du", "/backups/repo")
     assert store_target("s3:profile|k:s@endpoint/bucket") == ("", None)
     # schemes are case-insensitive, the target keeps the URL as written
@@ -727,3 +730,22 @@ async def test_redaction_never_leaks_or_raises_on_odd_urls(monkeypatch, url):
     assert not storage_usage.valid_target(url)
     assert await storage_usage.storage_used(url) is None
     assert await storage_usage.http_storage_used(url) is None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        # Borg 2: an absolute path carries a second slash; du over ssh can
+        # only measure that one, a relative path names a directory under the
+        # login directory, which the same text does not name for du
+        ("ssh://borg@repo.example:22//srv/backups/repo", "du"),
+        ("ssh://borg@repo.example:22/backups/repo", ""),
+        ("ssh://borg@repo.example/./backups/repo", ""),
+    ],
+)
+def test_store_target_measures_only_an_absolute_borg2_ssh_path(url, expected):
+    tool, target = storage_usage.store_target(url)
+
+    assert tool == expected
+    assert target == (url if expected else None)

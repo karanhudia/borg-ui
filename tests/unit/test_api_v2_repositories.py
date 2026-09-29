@@ -204,6 +204,32 @@ class TestV2RepositoryRoutes:
             response.json()["detail"]["key"] == "backend.errors.repo.invalidEncryption"
         )
 
+    def test_create_repository_rejects_the_removed_unencrypted_mode(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Borg 2.0.0b25 has no unencrypted mode; the request is refused
+        before any repo-create runs."""
+        _enable_borg_v2(test_db)
+
+        with patch(
+            "app.services.v2.repository_service.borg2._run", new=AsyncMock()
+        ) as mock_run:
+            response = test_client.post(
+                "/api/v2/repositories/",
+                json={
+                    "name": "Unencrypted Borg 2 Repo",
+                    "path": "/tmp/v2-none-repo",
+                    "encryption": "none",
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["key"] == "backend.errors.repo.invalidEncryption"
+        assert "none" not in detail["params"]["valid"]
+        mock_run.assert_not_awaited()
+
     def test_create_repository_requires_admin(
         self, test_client: TestClient, auth_headers, test_db
     ):
@@ -214,7 +240,7 @@ class TestV2RepositoryRoutes:
             json={
                 "name": "Viewer Repo",
                 "path": "/tmp/v2-viewer-repo",
-                "encryption": "none",
+                "encryption": "authenticated",
             },
             headers=auth_headers,
         )
@@ -289,7 +315,7 @@ class TestV2RepositoryRoutes:
                     json={
                         "name": "SSH Borg 2 Repo",
                         "path": "ssh://example.com/backups/repo",
-                        "encryption": "none",
+                        "encryption": "authenticated",
                         "connection_id": connection.id,
                     },
                     headers=admin_headers,
@@ -330,7 +356,7 @@ class TestV2RepositoryRoutes:
                 json={
                     "name": "Storage Box Borg 2 Repo",
                     "path": "/./borg-repository",
-                    "encryption": "none",
+                    "encryption": "authenticated",
                     "connection_id": connection.id,
                 },
                 headers=admin_headers,
@@ -371,7 +397,7 @@ class TestV2RepositoryRoutes:
                 json={
                     "name": "Init Fail Repo",
                     "path": "/tmp/v2-init-fail",
-                    "encryption": "none",
+                    "encryption": "authenticated",
                 },
                 headers=admin_headers,
             )
@@ -403,7 +429,7 @@ class TestV2RepositoryRoutes:
                 json={
                     "name": "Protocol Mismatch Repo",
                     "path": "/tmp/v2-protocol-mismatch",
-                    "encryption": "none",
+                    "encryption": "authenticated",
                 },
                 headers=admin_headers,
             )
@@ -424,7 +450,7 @@ class TestV2RepositoryRoutes:
             json={
                 "name": "Existing Repo",
                 "path": "/tmp/new-repo",
-                "encryption": "none",
+                "encryption": "authenticated",
             },
             headers=admin_headers,
         )
@@ -446,7 +472,7 @@ class TestV2RepositoryRoutes:
                 json={
                     "name": "Import Repo",
                     "path": "/tmp/v2-import-repo",
-                    "encryption": "none",
+                    "encryption": "authenticated",
                 },
                 headers=admin_headers,
             )
@@ -477,7 +503,7 @@ class TestV2RepositoryRoutes:
                 json={
                     "name": "Imported Repo",
                     "path": "/tmp/v2-import-success",
-                    "encryption": "none",
+                    "encryption": "authenticated",
                     "source_directories": ["/data/source"],
                     "source_connection_id": connection.id,
                     "custom_flags": "--stats",
@@ -529,7 +555,7 @@ class TestV2RepositoryRoutes:
                 json={
                     "name": "Imported Storage Box Borg 2 Repo",
                     "path": "/./borg-repository",
-                    "encryption": "none",
+                    "encryption": "authenticated",
                     "connection_id": connection.id,
                 },
                 headers=admin_headers,
@@ -607,7 +633,7 @@ class TestV2RepositoryRoutes:
             json={
                 "name": "Another Import",
                 "path": "/tmp/existing-import",
-                "encryption": "none",
+                "encryption": "authenticated",
             },
             headers=admin_headers,
         )

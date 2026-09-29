@@ -5932,7 +5932,10 @@
         "failedParseArchiveList": "Impossibile analizzare l'elenco degli archivi",
         "failedParseRepositoryInfo": "Impossibile analizzare le informazioni del repository",
         "failedParseArchiveInfo": "Impossibile analizzare le informazioni dell'archivio",
-        "failedExportKeyfile": "Impossibile esportare il file chiave"
+        "failedExportKeyfile": "Impossibile esportare il file chiave",
+        "borg2RepositoryNotReadable": "Borg 2 non lo riconosce come repository. Se è stato creato prima dell'aggiornamento a Borg 2.0.0b25, la causa è questa: 2.0.0b25 ha cambiato il formato del repository e non può leggere i repository scritti dalle beta precedenti di Borg 2. Il repository va creato di nuovo; le note di aggiornamento nella guida all'installazione descrivono i passaggi. Altrimenti, controlli il percorso del repository.",
+        "invalidEncryption": "La modalità di cifratura '{{mode}}' non è disponibile per i repository Borg 2.",
+        "invalidEncryptionMode": "La modalità di cifratura '{{mode}}' non è disponibile per questo repository."
       },
       "rclone": {
         "invalidRemoteName": "Il nome remoto può usare solo lettere, numeri, punti, trattini e underscore",
@@ -6008,7 +6011,8 @@
         "failedFetchArchives": "Impossibile recuperare gli archivi",
         "failedFetchArchiveContents": "Impossibile recuperare il contenuto dell'archivio",
         "destinationNotAllowed": "La destinazione del ripristino è al di fuori dei punti di montaggio locali consentiti: {{path}}",
-        "operatorAccessRequired": "È richiesto l'accesso come operatore o amministratore per ripristinare su una connessione SSH"
+        "operatorAccessRequired": "È richiesto l'accesso come operatore o amministratore per ripristinare su una connessione SSH",
+        "borg2DestinationNotEmpty": "Borg 2 non ripristina in una directory che contiene già dei file, e {{path}} non è vuota. Scelga una directory vuota come destinazione e sposti da lì i file ripristinati."
       },
       "schedule": {
         "adminAccessRequired": "Accesso amministratore richiesto",
@@ -6233,7 +6237,8 @@
         "restoreFailedZeroFilesNoOutput": "Ripristino fallito: 0 file estratti (codice uscita {{exitCode}}). Nessun output di errore da borg. I file potrebbero non esistere nell'archivio o permesso negato.",
         "restoreFailedExitCode": "Il processo di ripristino è uscito con codice {{exitCode}}",
         "restoreFailed": "Ripristino fallito",
-        "jobCompletedWithWarning": "Completato con avviso (codice di uscita {{exitCode}})"
+        "jobCompletedWithWarning": "Completato con avviso (codice di uscita {{exitCode}})",
+        "restoreFailedOnAgent": "Ripristino non riuscito sull'agente: {{error}}"
       },
       "dashboard": {
         "failedGetSystemMetrics": "Impossibile ottenere le metriche di sistema",

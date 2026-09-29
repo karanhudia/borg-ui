@@ -198,11 +198,10 @@ def test_borg2_diff_command_shape(monkeypatch):
         "/r",
         "diff",
         "--json-lines",
-        "--remote-path",
-        "/opt/borg2",
         "aid:1",
         "aid:2",
     ]
     assert captured["env"]["BORG_PASSPHRASE"] == "pw"
+    assert captured["env"]["BORG_REMOTE_PATH"] == "/opt/borg2"
     b.list_archive_lines("/r", "aid:1")
     assert captured["cmd"] == ["borg2", "-r", "/r", "list", "--json-lines", "aid:1"]

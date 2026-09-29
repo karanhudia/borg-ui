@@ -8,7 +8,7 @@ import json
 import os
 from typing import List, Optional
 
-from app.core.borg2 import borg2
+from app.core.borg2 import borg2, ensure_borg2_repository_url
 from app.database.models import Repository
 from app.utils.borg_env import effective_repository_remote_path
 from app.utils.borg_flags import parse_borg_flags
@@ -40,6 +40,7 @@ class BackupV2Service:
         custom_flags: List[str],
         upload_ratelimit_kib: Optional[int] = None,
     ) -> List[str]:
+        ensure_borg2_repository_url(repository_path, borg2.borg_cmd)
         cmd = [
             borg2.borg_cmd,
             "--progress",

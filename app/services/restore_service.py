@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 from app.database.models import Repository, SSHConnection
 from app.database.database import SessionLocal
-from app.core.borg_errors import is_borg_warning_exit_code
+from app.core.borg_errors import RestoreRefused, is_borg_warning_exit_code
 from app.core.borg_router import BorgRouter
 from app.services.operations.restore_facade import resolve_restore_job
 from app.services.notification_service import notification_service
@@ -543,6 +543,16 @@ class RestoreService:
         if agent_job.status == "failed":
             job.status = "failed"
             return_code = _agent_result_return_code(agent_job)
+            agent_message = getattr(agent_job, "error_message", None)
+            if return_code is None and agent_message:
+                # the agent gave up before Borg ran; its reason is the error
+                job.error_message = json.dumps(
+                    {
+                        "key": "backend.errors.service.restoreFailedOnAgent",
+                        "params": {"error": agent_message},
+                    }
+                )
+                return
             job.error_message = json.dumps(
                 {
                     "key": "backend.errors.service.restoreFailedExitCode",
@@ -697,6 +707,7 @@ class RestoreService:
                     ),
                     bypass_lock=repository.bypass_lock if repository else False,
                     strip_components=strip_components,
+                    destination=destination,
                 )
 
                 # Set up environment
@@ -1108,6 +1119,27 @@ class RestoreService:
 
                 db_session.commit()
 
+            except RestoreRefused as refused:
+                logger.warning(
+                    "Restore refused", job_id=job_id, reason=refused.detail.get("key")
+                )
+                job.status = "failed"
+                job.error_message = json.dumps(refused.detail)
+                job.completed_at = datetime.now(timezone.utc)
+                db_session.commit()
+                try:
+                    await notification_service.send_restore_failure(
+                        db_session,
+                        repository_path,
+                        archive_name,
+                        job.error_message,
+                        None,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Failed to send restore failure notification", error=str(e)
+                    )
+
             except Exception as e:
                 # Handle any unexpected errors during extraction
                 logger.error(
@@ -1420,6 +1452,7 @@ class RestoreService:
                 ),
                 bypass_lock=repository.bypass_lock if repository else False,
                 strip_components=strip_components,
+                destination=mount_path,
             )
 
             # Set up environment
@@ -1692,7 +1725,9 @@ class RestoreService:
                 if job:
                     job.status = "failed"
                     job.error_message = json.dumps(
-                        {"key": "backend.errors.service.restoreFailed"}
+                        e.detail
+                        if isinstance(e, RestoreRefused)
+                        else {"key": "backend.errors.service.restoreFailed"}
                     )
                     job.completed_at = datetime.now(timezone.utc)
                     db_session.commit()
@@ -1700,7 +1735,13 @@ class RestoreService:
                     # Send failure notification
                     try:
                         await notification_service.send_restore_failure(
-                            db_session, repository_path, archive_name, str(e), None
+                            db_session,
+                            repository_path,
+                            archive_name,
+                            job.error_message
+                            if isinstance(e, RestoreRefused)
+                            else str(e),
+                            None,
                         )
                     except Exception as notif_error:
                         logger.warning(

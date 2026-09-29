@@ -22,7 +22,7 @@ from app.services.process_cancel import (
     terminate_process,
     terminate_tracked_process,
 )
-from app.core.borg2 import _get_borg2_binary
+from app.core.borg2 import _get_borg2_binary, ensure_borg2_repository_url
 from app.core.borg_errors import is_borg_warning_exit_code
 from app.config import settings
 from app.utils.borg_flags import parse_borg_flags
@@ -30,7 +30,6 @@ from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import (
     build_repository_borg_env,
     cleanup_temp_key_file,
-    effective_repository_remote_path,
 )
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,  # noqa: F401
@@ -142,6 +141,7 @@ class CheckV2Service:
             )
 
             borg_cmd = _get_borg2_binary()
+            ensure_borg2_repository_url(repo.path, borg_cmd)
             cmd = [
                 borg_cmd,
                 "--info",
@@ -167,8 +167,7 @@ class CheckV2Service:
                     job_id=job_id,
                     extra_flags=extra_flags,
                 )
-            if remote_path := effective_repository_remote_path(repo):
-                cmd.extend(["--remote-path", remote_path])
+            # the remote Borg command is in env (BORG_REMOTE_PATH)
 
             logger.info(
                 "Starting borg2 check",

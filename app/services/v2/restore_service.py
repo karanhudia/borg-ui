@@ -6,7 +6,12 @@ and browse code does not hardcode Borg 1 archive addressing.
 
 from typing import List, Optional
 
-from app.core.borg2 import borg2
+from app.core.borg2 import (
+    borg2,
+    borg2_restore_target_refusal,
+    ensure_borg2_repository_url,
+)
+from app.core.borg_errors import RestoreRefused
 from app.database.models import Repository
 from app.utils.borg_env import effective_repository_remote_path
 
@@ -17,10 +22,19 @@ class RestoreV2Service:
         repository_path: str,
         archive_name: str,
         paths: Optional[List[str]] = None,
-        remote_path: Optional[str] = None,
+        remote_path: Optional[str] = None,  # noqa: ARG002 - BORG_REMOTE_PATH, see app/core/borg2.py
         bypass_lock: bool = False,  # noqa: ARG002 - Borg 1 only, see app/core/borg2.py
         strip_components: Optional[int] = None,
+        destination: Optional[str] = None,
     ) -> List[str]:
+        """`destination` is the directory the command will run in. Where it
+        holds anything the restore is refused (RestoreRefused, see
+        `borg2_restore_target_refusal`). A caller that extracts into a
+        directory of its own making leaves it out."""
+        ensure_borg2_repository_url(repository_path, borg2.borg_cmd)
+        refusal = borg2_restore_target_refusal(destination, borg2.borg_cmd)
+        if refusal:
+            raise RestoreRefused(refusal)
         cmd = [
             borg2.borg_cmd,
             "-r",
@@ -30,8 +44,6 @@ class RestoreV2Service:
             "--umask",
             "0022",
         ]
-        if remote_path:
-            cmd.extend(["--remote-path", remote_path])
         if strip_components:
             cmd.extend(["--strip-components", str(strip_components)])
         cmd.append(archive_name)

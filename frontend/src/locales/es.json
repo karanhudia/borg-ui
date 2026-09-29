@@ -5932,7 +5932,10 @@
         "failedParseArchiveList": "Error al analizar la lista de archivos",
         "failedParseRepositoryInfo": "Error al analizar la información del repositorio",
         "failedParseArchiveInfo": "Error al analizar la información del archivo",
-        "failedExportKeyfile": "Error al exportar el archivo de claves"
+        "failedExportKeyfile": "Error al exportar el archivo de claves",
+        "borg2RepositoryNotReadable": "Borg 2 no reconoce esto como un repositorio. Si se creó antes de la actualización a Borg 2.0.0b25, esa es la causa: 2.0.0b25 cambió el formato de repositorio y no puede leer los repositorios escritos por betas anteriores de Borg 2. Hay que crear el repositorio de nuevo; las notas de actualización de la guía de instalación describen los pasos. En caso contrario, compruebe la ruta del repositorio.",
+        "invalidEncryption": "El modo de cifrado '{{mode}}' no está disponible para repositorios Borg 2.",
+        "invalidEncryptionMode": "El modo de cifrado '{{mode}}' no está disponible para este repositorio."
       },
       "rclone": {
         "invalidRemoteName": "El nombre del remoto solo puede usar letras, números, puntos, guiones y guiones bajos",
@@ -6008,7 +6011,8 @@
         "failedFetchArchives": "Error al obtener los archivos",
         "failedFetchArchiveContents": "Error al obtener el contenido del archivo",
         "destinationNotAllowed": "El destino de restauración está fuera de los puntos de montaje locales permitidos: {{path}}",
-        "operatorAccessRequired": "Se requiere acceso de operador o administrador para restaurar en una conexión SSH"
+        "operatorAccessRequired": "Se requiere acceso de operador o administrador para restaurar en una conexión SSH",
+        "borg2DestinationNotEmpty": "Borg 2 no restaura en un directorio que ya contiene archivos, y {{path}} no está vacío. Elija un directorio vacío como destino y mueva desde allí los archivos restaurados."
       },
       "schedule": {
         "adminAccessRequired": "Se requiere acceso de administrador",
@@ -6233,7 +6237,8 @@
         "restoreFailedZeroFilesNoOutput": "Restauración fallida: 0 archivos extraídos (código de salida {{exitCode}}). Sin salida de error de Borg. Es posible que los archivos no existan en el archivo o que el acceso esté denegado.",
         "restoreFailedExitCode": "El proceso de restauración terminó con el código {{exitCode}}",
         "restoreFailed": "La restauración falló",
-        "jobCompletedWithWarning": "Completado con advertencia (código de salida {{exitCode}})"
+        "jobCompletedWithWarning": "Completado con advertencia (código de salida {{exitCode}})",
+        "restoreFailedOnAgent": "La restauración falló en el agente: {{error}}"
       },
       "dashboard": {
         "failedGetSystemMetrics": "Error al obtener las métricas del sistema",

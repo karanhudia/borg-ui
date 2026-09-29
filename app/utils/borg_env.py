@@ -209,6 +209,10 @@ def build_repository_borg_env(
     remote_path = effective_repository_remote_path(repository, db)
     if remote_path:
         env["BORG_REMOTE_PATH"] = remote_path
+    # imported here: the router imports this module
+    from app.core.borg_router import BorgRouter
+
+    BorgRouter(repository).prepare_env(env)
     return env, temp_key_file
 
 

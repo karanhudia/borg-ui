@@ -64,8 +64,8 @@ with open(src / "large.bin", "wb") as handle:
 env = os.environ.copy()
 env["BORG_BASE_DIR"] = str(base / "borg-base")
 Path(env["BORG_BASE_DIR"]).mkdir(parents=True, exist_ok=True)
-env["BORG_PASSPHRASE"] = ""
-subprocess.run(["borg2", "-r", str(repo), "repo-create", "--encryption", "none"], check=True, capture_output=True, text=True, env=env)
+env["BORG_PASSPHRASE"] = "borg2-test-passphrase"
+subprocess.run(["borg2", "-r", str(repo), "repo-create", "--encryption", "authenticated-sha256"], check=True, capture_output=True, text=True, env=env)
 result = subprocess.run(
     ["borg2", "-r", str(repo), "create", "--progress", "--stats", "--log-json", "--compression", "none", "contract-smoke", str(src)],
     check=True,
@@ -125,7 +125,7 @@ def main() -> int:
             )
             _write_incompressible_file(source_root / "large.bin", size_mb=128)
 
-            init_borg_repo(borg2, repo_path, env=env, encryption="none")
+            init_borg_repo(borg2, repo_path, env=env)
             result = run_borg(
                 borg2,
                 [

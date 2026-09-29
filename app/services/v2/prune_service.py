@@ -7,7 +7,7 @@ from pathlib import Path
 import structlog
 
 from app.config import settings
-from app.core.borg2 import _get_borg2_binary, borg2
+from app.core.borg2 import _get_borg2_binary, borg2, ensure_borg2_repository_url
 from app.database.database import SessionLocal
 from app.database.models import Repository
 from app.services.operations.job_facade import (
@@ -148,9 +148,9 @@ class PruneV2Service:
 
             env, temp_key_file = build_repository_borg_env(repo, db, keepalive=True)
             borg_cmd = _get_borg2_binary()
+            ensure_borg2_repository_url(repo.path, borg_cmd)
+            # the remote Borg command is in env (BORG_REMOTE_PATH)
             cmd = [borg_cmd, "-r", repo.path, "prune", "--list"]
-            if remote_path := effective_repository_remote_path(repo):
-                cmd.extend(["--remote-path", remote_path])
             if keep_hourly > 0:
                 cmd.extend(["--keep-hourly", str(keep_hourly)])
             if keep_daily > 0:
