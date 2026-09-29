@@ -12,7 +12,7 @@ import {
   suggestedAgentDestinationPath,
   useManagedAgent,
 } from '../quickStartAgent'
-import { sshBrowseConfig, useSshConnection } from '../quickStartSsh'
+import { sshBrowseConfig, useSshBasePath, useSshConnection } from '../quickStartSsh'
 import {
   destinationInsideSource,
   suggestedDestinationPath,
@@ -30,12 +30,14 @@ export default function QuickStartDestinationStep({
   const inside = destinationInsideSource(answers)
   const remote = answers.destinationKind === 'ssh'
   const connection = useSshConnection(remote ? answers.destinationConnectionId : '')
+  const basePath = useSshBasePath(connection)
   const name = answers.name || 'backup'
   const onAgent = answers.destinationKind === 'agent'
   const agent = useManagedAgent(onAgent ? answers.sourceAgentId : '')
 
-  // Suggest a path once per chosen connection, after it has loaded: a machine
-  // added in this step is not in the list until the refetch lands.
+  // Suggest a path once per chosen connection, once its base path is known: a
+  // machine added in this step is not in the list until the refetch lands, and
+  // without a saved default path the machine is asked for its home folder.
   const suggestedFor = useRef<number | null>(null)
   useEffect(() => {
     if (!connection) {
@@ -43,12 +45,12 @@ export default function QuickStartDestinationStep({
       suggestedFor.current = null
       return
     }
-    if (suggestedFor.current === connection.id) return
+    if (!basePath || suggestedFor.current === connection.id) return
     suggestedFor.current = connection.id
     if (!answers.destinationPath) {
-      onChange({ destinationPath: suggestedRemoteDestinationPath(name, connection) })
+      onChange({ destinationPath: suggestedRemoteDestinationPath(name, basePath) })
     }
-  }, [connection, answers.destinationPath, name, onChange])
+  }, [connection, basePath, answers.destinationPath, name, onChange])
 
   // Same for the agent: its default path is only known once it has loaded.
   const suggestedForAgent = useRef<number | null>(null)

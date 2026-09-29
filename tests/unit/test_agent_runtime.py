@@ -553,6 +553,7 @@ def test_repository_init_payload_builds_borg1_command():
         "init",
         "--encryption",
         "repokey",
+        "--make-parent-dirs",
         "/agent/repo",
     ]
 

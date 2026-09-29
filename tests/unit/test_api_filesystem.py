@@ -331,10 +331,63 @@ class TestFilesystemBrowseSSH:
             db=test_db,
         )
 
-        assert batch_commands[0] == "ls -la\n"
+        assert batch_commands[0] == "pwd\nls -la\n"
         assert [item.name for item in response.items] == ["backups"]
         assert response.items[0].path == "/backups"
         assert repo_checks == ["backups"]
+
+    @pytest.mark.asyncio
+    async def test_browse_ssh_filesystem_labels_sftp_root_with_login_directory(
+        self,
+        test_db,
+        monkeypatch,
+    ):
+        secret_key = "a" * 32
+        monkeypatch.setattr(
+            filesystem.settings, "secret_key", secret_key, raising=False
+        )
+        monkeypatch.setattr(
+            filesystem.settings.__class__, "get_local_mount_points", lambda self: []
+        )
+        ssh_key = _create_ssh_key_record(test_db, secret_key)
+
+        def run_side_effect(cmd, *args, **kwargs):
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    "sftp> pwd\n"
+                    "Remote working directory: /home/alex\n"
+                    "sftp> ls -la\n"
+                    "drwxr-xr-x    3 alex alex 4096 Aug 17 2023 borg-backups\n"
+                ),
+                stderr="",
+            )
+
+        repo_checks = []
+
+        def fake_is_borg_repository_ssh(host, username, key_file, remote_path, port):
+            repo_checks.append(remote_path)
+            return False
+
+        monkeypatch.setattr(filesystem.subprocess, "run", run_side_effect)
+        monkeypatch.setattr(
+            filesystem, "is_borg_repository_ssh", fake_is_borg_repository_ssh
+        )
+
+        response = await filesystem.browse_ssh_filesystem(
+            path="/",
+            ssh_key_id=ssh_key.id,
+            host="example.com",
+            username="alex",
+            port=22,
+            db=test_db,
+        )
+
+        assert response.current_path == "/home/alex"
+        assert response.parent_path == "/home"
+        assert [item.path for item in response.items] == ["/home/alex/borg-backups"]
+        # Borg checks still run relative to the login directory, as before.
+        assert repo_checks == ["borg-backups"]
 
     @pytest.mark.asyncio
     async def test_browse_ssh_filesystem_retries_non_root_sftp_path_relative_to_login_dir(
@@ -1080,3 +1133,62 @@ class TestFilesystemValidationAndCreateFolder:
             response.json()["detail"]["key"]
             == "backend.errors.filesystem.folderAlreadyExists"
         )
+
+
+@pytest.mark.unit
+class TestSshHomeDirectory:
+    def _call(self, test_client, admin_headers, test_db, monkeypatch, sftp_result):
+        # The app's own key: replacing it would also invalidate admin_headers.
+        ssh_key = _create_ssh_key_record(test_db, filesystem.settings.secret_key)
+        _create_ssh_connection_record(test_db, ssh_key, default_path="")
+        batches = []
+
+        def run_side_effect(cmd, *args, **kwargs):
+            batches.append(Path(cmd[cmd.index("-b") + 1]).read_text())
+            return sftp_result
+
+        monkeypatch.setattr(filesystem.subprocess, "run", run_side_effect)
+        response = test_client.get(
+            "/api/filesystem/ssh-home",
+            params={
+                "ssh_key_id": ssh_key.id,
+                "host": "example.com",
+                "username": "borg",
+            },
+            headers=admin_headers,
+        )
+        return response, batches
+
+    def test_returns_the_login_directory(
+        self, test_client, admin_headers, test_db, monkeypatch
+    ):
+        response, batches = self._call(
+            test_client,
+            admin_headers,
+            test_db,
+            monkeypatch,
+            SimpleNamespace(
+                returncode=0,
+                stdout="sftp> pwd\nRemote working directory: /home/borg\n",
+                stderr="",
+            ),
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"path": "/home/borg"}
+        # pwd only: no listing, so no per-folder repository checks.
+        assert batches == ["pwd\n"]
+
+    def test_returns_null_when_the_machine_does_not_answer(
+        self, test_client, admin_headers, test_db, monkeypatch
+    ):
+        response, _ = self._call(
+            test_client,
+            admin_headers,
+            test_db,
+            monkeypatch,
+            SimpleNamespace(returncode=255, stdout="", stderr="Connection refused"),
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"path": None}

@@ -204,15 +204,9 @@ export function suggestedDestinationPath(name: string): string {
   return `/local/borg-backups/${slugify(name)}`
 }
 
-/** Under the connection's default path, else the SSH user's home. */
-export function suggestedRemoteDestinationPath(
-  name: string,
-  connection: { username: string; default_path?: string | null }
-): string {
-  const base =
-    connection.default_path?.replace(/\/+$/, '') ||
-    (connection.username === 'root' ? '/root' : `/home/${connection.username}`)
-  return `${base}/borg-backups/${slugify(name)}`
+/** Under a base path the machine reported (see useSshBasePath). */
+export function suggestedRemoteDestinationPath(name: string, basePath: string): string {
+  return `${basePath.replace(/\/+$/, '')}/borg-backups/${slugify(name)}`
 }
 
 export interface QuickStartStepProps {

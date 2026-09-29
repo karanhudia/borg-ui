@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 
-import { sshKeysAPI } from '../../services/api'
+import api, { sshKeysAPI } from '../../services/api'
 import type { SshConnectionSummary } from '../shared/SshConnectionSelect'
 
 export interface NewSshMachine {
@@ -56,6 +56,24 @@ export function useSshConnections(enabled = true): SshConnectionSummary[] {
 export function useSshConnection(id: number | ''): SshConnectionSummary | undefined {
   const connections = useSshConnections(id !== '')
   return connections.find((connection) => connection.id === id)
+}
+
+/**
+ * Where a backup path should start on this machine: its saved default path,
+ * else the folder its SSH login lands in (asked, not guessed). Undefined while
+ * unknown, or when the machine does not say.
+ */
+export function useSshBasePath(connection: SshConnectionSummary | undefined): string | undefined {
+  const config = sshBrowseConfig(connection)
+  const savedPath = connection?.default_path?.replace(/\/+$/, '')
+  const { data } = useQuery({
+    queryKey: ['ssh-home', config],
+    queryFn: () => api.get<{ path: string | null }>('/filesystem/ssh-home', { params: config }),
+    enabled: Boolean(config) && !savedPath,
+    staleTime: Infinity,
+    retry: false,
+  })
+  return savedPath || data?.data?.path || undefined
 }
 
 /** What the file browser needs to list folders on a connection. */

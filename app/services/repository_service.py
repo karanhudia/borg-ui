@@ -112,7 +112,14 @@ class RepositoryService:
                 raise FileNotFoundError("borg command not found")
             logger.info("Borg version check passed", version=stdout.decode().strip())
 
-            cmd = [borg.borg_cmd, "init", "--encryption", encryption]
+            # A suggested path like ~/borg-backups/<name> may not exist yet.
+            cmd = [
+                borg.borg_cmd,
+                "init",
+                "--encryption",
+                encryption,
+                "--make-parent-dirs",
+            ]
             if remote_path:
                 cmd.extend(["--remote-path", remote_path])
             cmd.append(path)

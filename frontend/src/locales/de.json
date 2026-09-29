@@ -6731,7 +6731,6 @@
       }
     },
     "repositoryAlreadyCreated": "Das Repository wurde bereits erstellt. Änderungen an Speicherort, Passphrase oder Verschlüsselung werden nicht übernommen. Name, Ordner und Zeitplan des Plans kannst du weiterhin ändern.",
-    "newBackup": "Neues Backup",
     "connect": {
       "title": "Mit dem anderen Rechner verbinden",
       "hint": "Wähle einen Rechner, den Borg UI schon kennt, oder füge einen hinzu. Borg UI installiert dort seinen SSH-Schlüssel, damit Backups ohne Passwort laufen.",

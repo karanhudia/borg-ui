@@ -66,6 +66,8 @@ function StepHarness({
     const mock = new MockAdapter(api)
     mock.onGet('/ssh-keys/connections').reply(200, { connections })
     mock.onGet('/managed-machines/agents').reply(200, [laptop])
+    // A machine without a saved default path is asked where its login lands.
+    mock.onGet('/filesystem/ssh-home').reply(200, { path: '/home/backup' })
     setReady(true)
     return () => mock.restore()
   }, [connections])
@@ -81,12 +83,26 @@ function StepHarness({
   )
 }
 
-function ReviewHarness({ initial }: { initial: QuickStartAnswers }) {
+function ReviewHarness({
+  initial,
+  connections = NO_CONNECTIONS,
+}: {
+  initial: QuickStartAnswers
+  connections?: SshConnectionSummary[]
+}) {
   const [answers, setAnswers] = useState(initial)
+  const [ready, setReady] = useState(false)
   const onSettingsChange = useCallback<QuickStartSettingsChange>(
     (patch) => setAnswers((prev) => ({ ...prev, settings: { ...prev.settings, ...patch } })),
     []
   )
+  useEffect(() => {
+    const mock = new MockAdapter(api)
+    mock.onGet('/ssh-keys/connections').reply(200, { connections })
+    setReady(true)
+    return () => mock.restore()
+  }, [connections])
+  if (!ready) return null
   return (
     <Box sx={{ width: { xs: '100%', sm: 640 }, p: 2 }}>
       <QuickStartReviewStep answers={answers} onSettingsChange={onSettingsChange} canUseBorg2 />
@@ -166,6 +182,19 @@ export const DestinationSsh: Story = {
   },
 }
 
+export const DestinationSshNoDefaultPath: Story = {
+  args: {
+    step: QuickStartDestinationStep,
+    initial: {
+      ...filled,
+      destinationKind: 'ssh',
+      destinationConnectionId: 3,
+      destinationPath: '',
+    },
+    connections: [{ ...nas, default_path: null }],
+  },
+}
+
 export const DestinationAgent: Story = {
   args: {
     step: QuickStartDestinationStep,
@@ -208,6 +237,28 @@ export const ScheduleCustom: Story = {
 export const Review: Story = {
   args: { step: QuickStartReviewStep as never, initial: filled },
   render: (args) => <ReviewHarness initial={args.initial} />,
+}
+
+export const ReviewSshManualUnencrypted: Story = {
+  args: {
+    step: QuickStartReviewStep as never,
+    initial: {
+      ...filled,
+      destinationKind: 'ssh',
+      destinationConnectionId: 3,
+      destinationPath: '/volume1/borg-backups/alex',
+      settings: {
+        ...filled.settings,
+        encryption: 'none',
+        scheduleEnabled: false,
+        runPruneAfter: false,
+        runCompactAfter: false,
+        runCheckAfter: false,
+      },
+    },
+    connections: [nas],
+  },
+  render: (args) => <ReviewHarness initial={args.initial} connections={args.connections} />,
 }
 
 function WhatStepWithAgents(props: QuickStartStepProps) {
