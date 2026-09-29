@@ -428,8 +428,17 @@ async def ssh_home_directory(
         logger.warning("SSH home lookup failed", host=host, error=str(exc))
         return {"path": None}
     finally:
-        os.unlink(key_file)
+        try:
+            os.unlink(key_file)
+        except OSError as exc:
+            logger.warning("Failed to delete temporary SSH key file", error=str(exc))
     if result.returncode != 0:
+        logger.warning(
+            "SSH home lookup failed",
+            host=host,
+            returncode=result.returncode,
+            stderr=result.stderr[:500] if result.stderr else None,
+        )
         return {"path": None}
     return {"path": _sftp_working_directory(result.stdout)}
 
