@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import React from 'react'
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 
@@ -22,6 +22,12 @@ function wrapperAt(
       { client },
       React.createElement(MemoryRouter, { initialEntries: [path] }, children)
     )
+}
+
+// Flushes the effects React scheduled for the last render, so a negative
+// assertion runs after the hook has had its chance to open.
+async function settleEffects() {
+  await act(async () => {})
 }
 
 function mockCounts(repositories: number, plans: number) {
@@ -86,16 +92,18 @@ describe('useQuickStartAutoOpen', () => {
     const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('blocked')
     })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const onOpen = vi.fn()
     const { rerender } = renderHook(({ enabled }) => useQuickStartAutoOpen({ enabled, onOpen }), {
-      wrapper: wrapperAt('/dashboard'),
+      wrapper: wrapperAt('/dashboard', client),
       initialProps: { enabled: true },
     })
     await waitFor(() => expect(onOpen).toHaveBeenCalledTimes(1))
     // The provider disables the hook while the dialog is open, then enables it again.
     rerender({ enabled: false })
     rerender({ enabled: true })
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await waitFor(() => expect(client.isFetching()).toBe(0))
+    await settleEffects()
     expect(onOpen).toHaveBeenCalledTimes(1)
     setItem.mockRestore()
   })
@@ -138,15 +146,20 @@ describe('useQuickStartAutoOpen', () => {
         resolveRepositories = resolve
       }) as never
     )
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const onOpen = vi.fn()
     renderHook(() => useQuickStartAutoOpen({ enabled: true, onOpen }), {
-      wrapper: wrapperAt('/dashboard'),
+      wrapper: wrapperAt('/dashboard', client),
     })
     await waitFor(() => expect(repositoriesAPI.getRepositories).toHaveBeenCalled())
     // The other tab writes the flag while this one is still loading.
     localStorage.setItem(QUICK_START_DISMISSED_KEY, '1')
-    resolveRepositories({ data: { repositories: [] } })
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await act(async () => {
+      resolveRepositories({ data: { repositories: [] } })
+    })
+    await waitFor(() => expect(client.getQueryState(['repositories'])?.status).toBe('success'))
+    await waitFor(() => expect(client.isFetching()).toBe(0))
+    await settleEffects()
     expect(onOpen).not.toHaveBeenCalled()
   })
 })
