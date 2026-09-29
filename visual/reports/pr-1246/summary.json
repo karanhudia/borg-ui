@@ -1,39 +1,21 @@
 {
-  "generatedAt": "2026-09-29T05:12:02.394Z",
+  "generatedAt": "2026-09-29T05:51:39.724Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1246 visual report",
-    "commitSha": "c890f8b456ed",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36524890301"
+    "commitSha": "69863c17a80f",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36528036799"
   },
   "totals": {
-    "baseline": 1066,
+    "baseline": 1074,
     "actual": 1082,
-    "compared": 1066,
-    "changed": 11,
-    "added": 16,
+    "compared": 1074,
+    "changed": 10,
+    "added": 8,
     "removed": 0,
-    "unchanged": 1055
+    "unchanged": 1064
   },
   "changed": [
-    {
-      "fileName": "pages-dashboardv3-successdonutlegend--default--mobile.png",
-      "baselinePath": "images/baseline/pages-dashboardv3-successdonutlegend--default--mobile.png",
-      "actualPath": "images/actual/pages-dashboardv3-successdonutlegend--default--mobile.png",
-      "diffPath": "images/diff/pages-dashboardv3-successdonutlegend--default--mobile.png",
-      "diffPixels": 329160,
-      "totalPixels": 329160,
-      "diffRatio": 1,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
     {
       "fileName": "quick-start-dialog--first-step--mobile.png",
       "baselinePath": "images/baseline/quick-start-dialog--first-step--mobile.png",
@@ -216,38 +198,6 @@
     }
   ],
   "added": [
-    {
-      "fileName": "components-appsidebar--with-quick-start--mobile.png",
-      "actualPath": "images/actual/components-appsidebar--with-quick-start--mobile.png"
-    },
-    {
-      "fileName": "components-appsidebar--with-quick-start.png",
-      "actualPath": "images/actual/components-appsidebar--with-quick-start.png"
-    },
-    {
-      "fileName": "pages-backup-plans-content--empty-with-quick-start--mobile.png",
-      "actualPath": "images/actual/pages-backup-plans-content--empty-with-quick-start--mobile.png"
-    },
-    {
-      "fileName": "pages-backup-plans-content--empty-with-quick-start.png",
-      "actualPath": "images/actual/pages-backup-plans-content--empty-with-quick-start.png"
-    },
-    {
-      "fileName": "pages-repositories-groups--empty-with-quick-start--mobile.png",
-      "actualPath": "images/actual/pages-repositories-groups--empty-with-quick-start--mobile.png"
-    },
-    {
-      "fileName": "pages-repositories-groups--empty-with-quick-start.png",
-      "actualPath": "images/actual/pages-repositories-groups--empty-with-quick-start.png"
-    },
-    {
-      "fileName": "pages-repositories-groups--empty-without-quick-start--mobile.png",
-      "actualPath": "images/actual/pages-repositories-groups--empty-without-quick-start--mobile.png"
-    },
-    {
-      "fileName": "pages-repositories-groups--empty-without-quick-start.png",
-      "actualPath": "images/actual/pages-repositories-groups--empty-without-quick-start.png"
-    },
     {
       "fileName": "quick-start-steps--connect-existing-machine--mobile.png",
       "actualPath": "images/actual/quick-start-steps--connect-existing-machine--mobile.png"
@@ -1020,6 +970,12 @@
     },
     {
       "fileName": "components-appsidebar--viewer-settings.png"
+    },
+    {
+      "fileName": "components-appsidebar--with-quick-start--mobile.png"
+    },
+    {
+      "fileName": "components-appsidebar--with-quick-start.png"
     },
     {
       "fileName": "components-appsidebar--with-remote-clients--mobile.png"
@@ -2966,6 +2922,12 @@
       "fileName": "pages-backup-plans-content--community-locked-runs.png"
     },
     {
+      "fileName": "pages-backup-plans-content--empty-with-quick-start--mobile.png"
+    },
+    {
+      "fileName": "pages-backup-plans-content--empty-with-quick-start.png"
+    },
+    {
       "fileName": "pages-backup-plans-content--skipped-repository--mobile.png"
     },
     {
@@ -3084,6 +3046,9 @@
     },
     {
       "fileName": "pages-dashboardv3-spacesavingspanel--three-rows.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-successdonutlegend--default--mobile.png"
     },
     {
       "fileName": "pages-dashboardv3-successdonutlegend--default.png"
@@ -3237,6 +3202,18 @@
     },
     {
       "fileName": "pages-remoteclients--overview.png"
+    },
+    {
+      "fileName": "pages-repositories-groups--empty-with-quick-start--mobile.png"
+    },
+    {
+      "fileName": "pages-repositories-groups--empty-with-quick-start.png"
+    },
+    {
+      "fileName": "pages-repositories-groups--empty-without-quick-start--mobile.png"
+    },
+    {
+      "fileName": "pages-repositories-groups--empty-without-quick-start.png"
     },
     {
       "fileName": "quick-start-progress--done--mobile.png"
