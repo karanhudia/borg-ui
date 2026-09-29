@@ -7,6 +7,7 @@ import {
   type RemoteBackendState,
 } from './types'
 import { getLocalApiBaseUrl, getLocalWebBaseUrl, normalizeRemoteBackendUrl } from './url'
+import { randomUuid } from '../../utils/uuid'
 
 export { LOCAL_BACKEND_ID } from './types'
 
@@ -34,13 +35,6 @@ const listeners = new Set<(reason: RemoteBackendStorageChangeReason) => void>()
 
 function nowIso(): string {
   return new Date().toISOString()
-}
-
-function createId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID()
-  }
-  return `remote-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
 function emitChange(reason: RemoteBackendStorageChangeReason = 'clients'): void {
@@ -227,7 +221,7 @@ export function createRemoteBackendClient(input: RemoteBackendClientInput): Remo
 
   const timestamp = nowIso()
   const client: RemoteBackendClient = {
-    id: createId(),
+    id: randomUuid(),
     kind: 'remote',
     name,
     apiBaseUrl: normalized.apiBaseUrl,

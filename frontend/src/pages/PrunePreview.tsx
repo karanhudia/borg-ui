@@ -31,6 +31,7 @@ import {
 } from '@mui/material'
 import { Scissors } from 'lucide-react'
 import { formatRelativeTime } from '../utils/dateUtils'
+import { randomUuid } from '../utils/uuid'
 import { operationsAPI, repositoriesAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import ArchiveSeriesHeatmap from '../components/archives/ArchiveSeriesHeatmap'
@@ -171,7 +172,7 @@ export default function PrunePreview() {
   // Every dry run of this visit belongs to one run, so the timeline shows
   // the policies tried as steps under a single "Prune preview" instead of a
   // loose row each.
-  const previewRunId = useRef(crypto.randomUUID())
+  const previewRunId = useRef(randomUuid())
 
   // Which selection the page is showing. Clicking through the table starts
   // requests that finish out of order, and a slow dry run for a row left
@@ -304,7 +305,7 @@ export default function PrunePreview() {
     if (!initial) return
     ranForRepoRef.current = repositoryId
     previewCache.current.clear()
-    previewRunId.current = crypto.randomUUID()
+    previewRunId.current = randomUuid()
     setRetention(initial)
     // The comparison has usually already run this exact policy; reading its
     // stored verdicts beats running Borg again just to open the page. When

@@ -10,6 +10,7 @@
 
 import { authAPI } from '../services/api'
 import { fetchJsonForAuthMode } from '../services/authRequest'
+import { randomUuid } from './uuid'
 
 const UMAMI_WEBSITE_ID = '870dcd0c-2fa3-4f78-8180-d0d7895c5d8c'
 const UMAMI_SCRIPT_URL = 'https://cloud.umami.is/script.js'
@@ -268,51 +269,13 @@ export const resetUserId = (): void => {}
 
 const INSTALL_ID_KEY = 'borg_ui_install_id'
 
-const getCryptoApi = (): Crypto | undefined => {
-  if (typeof globalThis === 'undefined' || !('crypto' in globalThis)) {
-    return undefined
-  }
-
-  return globalThis.crypto
-}
-
-const createUuidFromRandomValues = (randomValues: Uint8Array): string => {
-  randomValues[6] = (randomValues[6] & 0x0f) | 0x40
-  randomValues[8] = (randomValues[8] & 0x3f) | 0x80
-
-  const hex = Array.from(randomValues, (value) => value.toString(16).padStart(2, '0'))
-  return [
-    hex.slice(0, 4).join(''),
-    hex.slice(4, 6).join(''),
-    hex.slice(6, 8).join(''),
-    hex.slice(8, 10).join(''),
-    hex.slice(10, 16).join(''),
-  ].join('-')
-}
-
-const generateInstallId = (): string => {
-  const cryptoApi = getCryptoApi()
-
-  if (cryptoApi?.randomUUID) {
-    return cryptoApi.randomUUID()
-  }
-
-  if (cryptoApi?.getRandomValues) {
-    return createUuidFromRandomValues(cryptoApi.getRandomValues(new Uint8Array(16)))
-  }
-
-  const timestamp = Date.now().toString(16).padStart(12, '0')
-  const random = Math.random().toString(16).slice(2).padEnd(20, '0').slice(0, 20)
-  return `${random.slice(0, 8)}-${random.slice(8, 12)}-4${random.slice(13, 16)}-a${random.slice(17, 20)}-${timestamp}`
-}
-
 /**
  * Get (or lazily create) a random UUID that uniquely identifies this browser/installation.
  */
 export const getOrCreateInstallId = (): string => {
   let id = localStorage.getItem(INSTALL_ID_KEY)
   if (!id) {
-    id = generateInstallId()
+    id = randomUuid()
     localStorage.setItem(INSTALL_ID_KEY, id)
   }
   return id
