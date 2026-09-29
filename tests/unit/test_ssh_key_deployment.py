@@ -2,6 +2,8 @@
 Unit tests for SSH key deployment functionality
 """
 
+import os
+
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from app.api.ssh_keys import (
@@ -115,10 +117,9 @@ class TestSSHKeyDeployment:
 
         # Verify command structure
         assert captured_cmd[0] == "sshpass", "Should start with sshpass"
-        assert captured_cmd[1] == "-p", "Should have password flag"
-        assert captured_cmd[2] == "testpass", "Should include password"
-        assert captured_cmd[3] == "ssh-copy-id", "Should call ssh-copy-id"
-        assert captured_cmd[4] == "-s", "Should include -s flag when use_sftp_mode=True"
+        assert captured_cmd[1] == "-e", "Should read the password from SSHPASS"
+        assert captured_cmd[2] == "ssh-copy-id", "Should call ssh-copy-id"
+        assert captured_cmd[3] == "-s", "Should include -s flag when use_sftp_mode=True"
         assert "-i" in captured_cmd, "Should include identity file flag"
         assert "-o" in captured_cmd, "Should include SSH options"
         assert "StrictHostKeyChecking=no" not in captured_cmd, (
@@ -228,12 +229,11 @@ class TestSSHKeyDeployment:
 
         # Verify command structure without -s flag
         assert captured_cmd[0] == "sshpass", "Should start with sshpass"
-        assert captured_cmd[1] == "-p", "Should have password flag"
-        assert captured_cmd[2] == "testpass", "Should include password"
-        assert captured_cmd[3] == "ssh-copy-id", "Should call ssh-copy-id"
+        assert captured_cmd[1] == "-e", "Should read the password from SSHPASS"
+        assert captured_cmd[2] == "ssh-copy-id", "Should call ssh-copy-id"
         # The 4th element should be -i, not -s
-        assert captured_cmd[4] == "-i", (
-            "Should have identity flag at position 4 (no -s flag)"
+        assert captured_cmd[3] == "-i", (
+            "Should have identity flag at position 3 (no -s flag)"
         )
         assert "-s" not in captured_cmd, (
             "Should NOT include -s flag when use_sftp_mode=False"
@@ -293,9 +293,44 @@ class TestSSHKeyDeployment:
         assert "-s" in captured_cmd, (
             "Should include -s flag by default for backward compatibility"
         )
-        assert captured_cmd[4] == "-s", (
-            "Position 4 should be -s flag when defaulting to True"
+        assert captured_cmd[3] == "-s", (
+            "Position 3 should be -s flag when defaulting to True"
         )
+
+    @pytest.mark.asyncio
+    async def test_deploy_ssh_key_passes_password_via_env_not_argv(self):
+        """The password must never be in argv, where ps and /proc expose it."""
+        mock_key = MagicMock(spec=SSHKey)
+        mock_key.id = 1
+        mock_key.public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItest test@test"
+
+        from app.config import settings
+
+        encryption_key = settings.secret_key.encode()[:32]
+        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+        fake_private_key = "-----BEGIN OPENSSH PRIVATE KEY-----\ntest\n-----END OPENSSH PRIVATE KEY-----\n"
+        mock_key.private_key = cipher.encrypt(fake_private_key.encode()).decode()
+
+        password = "s3cret-Pa55"
+        mock_process = AsyncMock()
+        mock_process.communicate = AsyncMock(return_value=(b"", b""))
+        mock_process.returncode = 0
+
+        with patch(
+            "app.api.ssh_keys.asyncio.create_subprocess_exec",
+            AsyncMock(return_value=mock_process),
+        ) as mock_exec:
+            result = await deploy_ssh_key_with_copy_id(
+                mock_key, "test.example.com", "testuser", password, 22
+            )
+
+        assert result["success"] is True
+        argv = mock_exec.call_args.args
+        assert argv[:3] == ("sshpass", "-e", "ssh-copy-id")
+        assert not any(password in arg for arg in argv)
+        env = mock_exec.call_args.kwargs["env"]
+        assert env["SSHPASS"] == password
+        assert env["PATH"] == os.environ["PATH"]
 
     @pytest.mark.asyncio
     async def test_deploy_ssh_key_classifies_dns_resolution_failures(self):
