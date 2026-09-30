@@ -28,6 +28,11 @@ export interface QuickStartAnswers {
   app: AppTemplate | null
   /** Folders under the app's root to skip, relative to it. */
   appExcludes: string[]
+  /**
+   * The app's own folder. Kept apart from sourcePaths so removing it from the
+   * backup (or reordering) never makes another folder "the app's folder".
+   */
+  appRoot: string
   sourceKind: QuickStartSourceKind
   /** SSH connection the files are pulled from (sourceKind 'ssh'). */
   sourceConnectionId: number | ''
@@ -61,6 +66,7 @@ export function createInitialQuickStartAnswers(): QuickStartAnswers {
     appChoice: 'folders',
     app: null,
     appExcludes: [],
+    appRoot: '',
     sourceKind: 'server',
     sourceConnectionId: '',
     sourceAgentId: '',
@@ -113,6 +119,7 @@ export function appPatch(
   return {
     app,
     appExcludes: app ? defaultAppExcludes(app) : [],
+    appRoot: '',
     sourcePaths: [],
     name: '',
     schedulePreset: app ? 'custom' : 'daily',
@@ -133,6 +140,7 @@ export function sourceKindPatch(
   return {
     sourceKind,
     sourcePaths: [],
+    appRoot: '',
     // An agent can only back up to its own disk (route planner).
     destinationKind: sourceKind === 'agent' ? 'agent' : 'server',
     destinationConnectionId: '',

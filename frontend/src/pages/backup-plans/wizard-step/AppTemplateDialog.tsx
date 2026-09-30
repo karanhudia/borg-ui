@@ -158,6 +158,8 @@ export function AppTemplateDialog({
               template={template}
               target={target}
               root={root}
+              rootIncluded
+              onRootIncludedChange={() => {}}
               extraPaths={extraPaths}
               onPathsChange={setPaths}
               excludes={excludes}

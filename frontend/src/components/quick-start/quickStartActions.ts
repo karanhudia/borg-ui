@@ -30,8 +30,9 @@ export function buildQuickStartActions(answers: QuickStartAnswers): QuickStartAc
     : ['create_repository', 'create_plan']
 }
 
+/** The app's folder while it is part of the backup, else ''. */
 function appRoot(answers: QuickStartAnswers): string {
-  return answers.sourcePaths.find((path) => path.trim()) ?? ''
+  return answers.sourcePaths.includes(answers.appRoot) ? answers.appRoot : ''
 }
 
 /**
@@ -125,7 +126,10 @@ export function buildPlanPayload(
     sourceDirectories: paths,
     sourceLocations: [sourceLocation(answers, paths)],
     repositoryIds: [repositoryId],
-    excludePatterns: answers.app ? appExcludePatterns(appRoot(answers), answers.appExcludes) : [],
+    excludePatterns:
+      answers.app && appRoot(answers)
+        ? appExcludePatterns(appRoot(answers), answers.appExcludes)
+        : [],
     preBackupScriptId: scriptId ?? null,
     compression: settings.compression,
     scheduleEnabled: settings.scheduleEnabled,

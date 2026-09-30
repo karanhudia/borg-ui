@@ -29,6 +29,9 @@ interface AppTemplateFolderPanelProps {
   target: AppScanTarget | null
   /** The app's folder. */
   root: string
+  /** Whether the app's folder is part of the backup; its rows show unticked when not. */
+  rootIncluded: boolean
+  onRootIncludedChange: (included: boolean) => void
   /** External folders (libraries) the user keeps in the backup. */
   extraPaths: string[]
   onPathsChange: (root: string, extraPaths: string[]) => void
@@ -45,6 +48,8 @@ export default function AppTemplateFolderPanel({
   template,
   target,
   root,
+  rootIncluded,
+  onRootIncludedChange,
   extraPaths,
   onPathsChange,
   excludes,
@@ -204,6 +209,8 @@ export default function AppTemplateFolderPanel({
       )}
       <AppFolderList
         template={template}
+        appFolderIncluded={rootIncluded}
+        onAppFolderIncludedChange={onRootIncludedChange}
         extras={detectedExtras}
         includedExtras={extraPaths}
         onIncludedExtrasChange={(paths) => onPathsChange(root, paths)}

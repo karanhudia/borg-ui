@@ -13,6 +13,9 @@ import { isStale } from './appTemplates'
 
 interface AppFolderListProps {
   template: AppTemplate
+  /** False when the user removed the app's folder: every app row is unticked. */
+  appFolderIncluded: boolean
+  onAppFolderIncludedChange: (included: boolean) => void
   /** Folders the container mounts besides the app's own (external libraries). */
   extras: AppExtraMount[]
   includedExtras: string[]
@@ -35,6 +38,8 @@ function FolderIcon({ folder }: { folder: AppTemplateFolder }) {
 /** What is inside the app's folder, in plain words, with sizes and what gets skipped. */
 export default function AppFolderList({
   template,
+  appFolderIncluded,
+  onAppFolderIncludedChange,
   extras,
   includedExtras,
   onIncludedExtrasChange,
@@ -59,7 +64,7 @@ export default function AppFolderList({
     : []
   const isExtra = (path: string) => path.startsWith('/')
   const isSkipped = (path: string) =>
-    isExtra(path) ? !includedExtras.includes(path) : skipped.includes(path)
+    isExtra(path) ? !includedExtras.includes(path) : !appFolderIncluded || skipped.includes(path)
   const rows = [...template.folders, ...extraRows]
   const kept = rows.filter((folder) => !isSkipped(folder.path))
   const keptSizes = kept.map((folder) => statsFor(folder.path)?.size_bytes)
@@ -73,6 +78,11 @@ export default function AppFolderList({
       onIncludedExtrasChange(
         skip ? includedExtras.filter((item) => item !== path) : [...includedExtras, path]
       )
+    } else if (!skip && !appFolderIncluded) {
+      // Ticking one part of a removed app folder brings the folder back with
+      // just that part, matching the unticked rows the user was looking at.
+      onAppFolderIncludedChange(true)
+      onSkippedChange(template.folders.map((folder) => folder.path).filter((item) => item !== path))
     } else {
       onSkippedChange(skip ? [...skipped, path] : skipped.filter((item) => item !== path))
     }

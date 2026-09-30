@@ -155,6 +155,8 @@ describe('quickStartState', () => {
     expect(sourceKindPatch(picked, 'server')).toEqual({
       sourceKind: 'server',
       sourcePaths: [],
+      // The app's folder was on the old machine too.
+      appRoot: '',
       destinationKind: 'server',
       destinationConnectionId: '',
       destinationPath: '',

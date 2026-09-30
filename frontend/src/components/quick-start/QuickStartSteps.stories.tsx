@@ -335,7 +335,13 @@ export const WhatAgentPro: Story = {
 export const ReviewImmich: Story = {
   args: {
     step: QuickStartReviewStep as never,
-    initial: { ...filled, ...immichAnswers, sourcePaths: ['/local/srv/immich'], name: 'Immich' },
+    initial: {
+      ...filled,
+      ...immichAnswers,
+      appRoot: '/local/srv/immich',
+      sourcePaths: ['/local/srv/immich'],
+      name: 'Immich',
+    },
   },
   render: (args) => <ReviewHarness initial={args.initial} />,
 }

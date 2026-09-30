@@ -111,11 +111,13 @@ export default function QuickStartReviewStep({
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
             {t('quickStart.review.onMachine', { machine: machine(sourceConnection) })}
           </Typography>
-          {answers.app && answers.appExcludes.length > 0 && (
-            <ReviewAttrRow label={t('quickStart.review.skips')}>
-              <Value>{answers.appExcludes.map((path) => `${path}/`).join(', ')}</Value>
-            </ReviewAttrRow>
-          )}
+          {answers.app &&
+            answers.sourcePaths.includes(answers.appRoot) &&
+            answers.appExcludes.length > 0 && (
+              <ReviewAttrRow label={t('quickStart.review.skips')}>
+                <Value>{answers.appExcludes.map((path) => `${path}/`).join(', ')}</Value>
+              </ReviewAttrRow>
+            )}
           {appScriptPayload(answers) && (
             <ReviewAttrRow label={t('quickStart.review.checksFirst')}>
               <Value>{answers.app?.pre_backup_script?.name}</Value>

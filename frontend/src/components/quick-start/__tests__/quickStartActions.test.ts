@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
+import { immichTemplate } from '../../app-templates/appTemplates.fixtures'
 import {
+  appScriptPayload,
   buildPlanPayload,
   buildQuickStartActions,
   buildRepositoryPayload,
@@ -141,5 +143,31 @@ describe('quickStartActions', () => {
     expect(plan.source_locations).toEqual([
       expect.objectContaining({ source_type: 'agent', agent_machine_id: 7, paths: ['/home/alex'] }),
     ])
+  })
+
+  describe('with an app', () => {
+    const immich = (overrides: Partial<QuickStartAnswers> = {}) =>
+      localAnswers({
+        appChoice: 'app',
+        app: immichTemplate,
+        appRoot: '/local/srv/immich',
+        appExcludes: ['thumbs'],
+        sourcePaths: ['/local/srv/immich', '/local/srv/photos'],
+        ...overrides,
+      })
+
+    it('builds excludes and the check from the app folder, wherever it sits in the list', () => {
+      const answers = immich({ sourcePaths: ['/local/srv/photos', '/local/srv/immich'] })
+      expect(buildPlanPayload(answers, 1, 3).exclude_patterns).toEqual(['/local/srv/immich/thumbs'])
+      expect(appScriptPayload(answers)?.content).toContain("'/local/srv/immich'")
+    })
+
+    it('drops excludes and the check once the app folder is removed', () => {
+      // Removing the app folder must not turn the next folder into "the app's folder".
+      const answers = immich({ sourcePaths: ['/local/srv/photos'] })
+      expect(buildPlanPayload(answers, 1).exclude_patterns).toEqual([])
+      expect(appScriptPayload(answers)).toBeNull()
+      expect(buildQuickStartActions(answers)).toEqual(['create_repository', 'create_plan'])
+    })
   })
 })

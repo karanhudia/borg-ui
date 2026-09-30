@@ -18,9 +18,12 @@ export default function QuickStartFoldersStep({ answers, onChange }: QuickStartS
   const onAgent = answers.sourceKind === 'agent'
   const agent = useManagedAgent(onAgent ? answers.sourceAgentId : '')
 
-  // The app's folder stays first: its excludes and check script are built from it.
+  const appRoot = answers.appRoot
+  const appRootIncluded = Boolean(appRoot) && answers.sourcePaths.includes(appRoot)
+  const otherPaths = answers.sourcePaths.filter((path) => path !== appRoot)
   const setAppPaths = useCallback(
-    (root: string, extraPaths: string[]) => onChange({ sourcePaths: [root, ...extraPaths] }),
+    (root: string, extraPaths: string[]) =>
+      onChange({ appRoot: root, sourcePaths: [root, ...extraPaths] }),
     [onChange]
   )
   const scanTarget: AppScanTarget | null =
@@ -35,7 +38,9 @@ export default function QuickStartFoldersStep({ answers, onChange }: QuickStartS
     for (const path of paths.map((value) => value.trim()).filter(Boolean)) {
       if (!next.includes(path)) next.push(path)
     }
-    onChange({ sourcePaths: next })
+    // Typed by hand for an app that wasn't found: the first folder is its folder.
+    const root = answers.app && !answers.appRoot ? (next[0] ?? '') : answers.appRoot
+    onChange({ sourcePaths: next, appRoot: root })
     setDraft('')
   }
 
@@ -62,8 +67,12 @@ export default function QuickStartFoldersStep({ answers, onChange }: QuickStartS
         <AppTemplateFolderPanel
           template={answers.app}
           target={scanTarget}
-          root={answers.sourcePaths[0] ?? ''}
-          extraPaths={answers.sourcePaths.slice(1)}
+          root={appRoot}
+          rootIncluded={appRootIncluded}
+          onRootIncludedChange={(included) =>
+            onChange({ sourcePaths: included ? [appRoot, ...otherPaths] : otherPaths })
+          }
+          extraPaths={otherPaths}
           onPathsChange={setAppPaths}
           excludes={answers.appExcludes}
           onExcludesChange={(appExcludes) => onChange({ appExcludes })}
