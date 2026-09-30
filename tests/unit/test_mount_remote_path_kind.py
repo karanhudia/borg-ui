@@ -231,8 +231,9 @@ async def test_a_check_that_is_cancelled_ends_its_child():
             await process.wait()
 
 
-def test_remote_path_candidates_keeps_an_empty_path_so_the_mount_fails_loudly():
-    service = MountService()
+def test_remote_path_candidates_keeps_an_empty_path_so_the_mount_fails_loudly(
+    service,
+):
     connection = SimpleNamespace(default_path=None)
 
     assert service._remote_path_candidates(connection, "") == [""]
