@@ -91,6 +91,32 @@ def _prepare_index_html() -> str | None:
 
 
 _cached_index_html = _prepare_index_html()
+
+
+class BasePathMiddleware:
+    """Make scope["path"] always carry BASE_PATH so Starlette route matching is consistent.
+
+    Reverse proxies strip the prefix before forwarding, so requests arrive as
+    ``/assets/x.css`` while ``root_path`` says ``/borg-ui``. Starlette mounts
+    (``StaticFiles``) then compute a child root_path the request path does not
+    start with and fail to match. Prepending the prefix here fixes that and
+    keeps direct access at ``/borg-ui/...`` working too.
+    """
+
+    def __init__(self, app, base_path: str):
+        self.app = app
+        self.base_path = base_path
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] in ("http", "websocket"):
+            path = scope["path"]
+            if path != self.base_path and not path.startswith(self.base_path + "/"):
+                scope["path"] = self.base_path + path
+                if "raw_path" in scope:
+                    scope["raw_path"] = self.base_path.encode() + scope["raw_path"]
+        await self.app(scope, receive, send)
+
+
 licensing_refresh_task: asyncio.Task | None = None
 
 
@@ -171,6 +197,9 @@ app = FastAPI(
     redoc_url="/api/redoc",
     root_path=BASE_PATH if BASE_PATH else None,
 )
+
+if BASE_PATH:
+    app.add_middleware(BasePathMiddleware, base_path=BASE_PATH)
 
 # Configure CORS
 app.add_middleware(
