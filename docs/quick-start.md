@@ -59,7 +59,9 @@ schedule.
 When you pick an app, Quick Start looks for its Docker container on the chosen
 machine and fills in its data folder. It also:
 
-- skips folders the app can rebuild by itself (you can untick them),
+- lists what is inside that folder in plain words, with the size of each
+  part and, for the app's database dumps, when the latest one was written,
+- skips folders the app can rebuild by itself (untick **Skip** to keep them),
 - schedules the backup after the app's own maintenance, and
 - adds a check that runs before each backup, where the app needs one.
 

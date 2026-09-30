@@ -46,7 +46,51 @@ export function appExcludePatterns(root: string, excludes: string[]): string[] {
 }
 
 export function defaultAppExcludes(template: AppTemplate): string[] {
-  return template.excludes.filter((exclude) => exclude.default).map((exclude) => exclude.path)
+  return template.folders
+    .filter((folder) => folder.role === 'rebuildable')
+    .map((folder) => folder.path)
+}
+
+/** Size and newest file of each folder the template describes, under the chosen root. */
+export function useAppInspection(
+  template: AppTemplate | null,
+  target: AppScanTarget | null,
+  root: string
+) {
+  const path = root.trim()
+  const query = useQuery({
+    queryKey: [
+      'app-inspect',
+      template?.id,
+      target?.source_type,
+      target?.source_ssh_connection_id,
+      path,
+    ],
+    queryFn: () =>
+      sourceDiscoveryAPI.inspectApp({
+        template_id: (template as AppTemplate).id,
+        ...(target as AppScanTarget),
+        path,
+      }),
+    enabled: Boolean(template && target && path.startsWith('/')),
+    staleTime: 60_000,
+    retry: false,
+  })
+  return {
+    stats: query.data?.data.folders ?? null,
+    measuring: query.isFetching,
+  }
+}
+
+/** True when the newest file is older than the folder allows, or there is none. */
+export function isStale(
+  latestModifiedAt: string | null,
+  staleAfterHours: number | null,
+  now: number = Date.now()
+): boolean {
+  if (staleAfterHours === null) return false
+  if (!latestModifiedAt) return true
+  return now - new Date(latestModifiedAt).getTime() > staleAfterHours * 3_600_000
 }
 
 function shellQuote(value: string): string {

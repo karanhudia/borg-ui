@@ -595,10 +595,28 @@ export interface AppTemplate {
   verified: { app_version: string; date: string; restore_tested: boolean }
   detect: { image_prefix: string; mount_destination: string }
   root_hint: string
-  excludes: { path: string; default: boolean; label: string }[]
+  folders: AppTemplateFolder[]
   pre_backup_script: SourceDiscoveryScriptDraft | null
   schedule_cron: string
   notes: string[]
+}
+
+export interface AppTemplateFolder {
+  /** Relative to the app's folder. */
+  path: string
+  label: string
+  description: string
+  /** rebuildable folders are skipped by default; database shows dump freshness. */
+  role: 'data' | 'database' | 'rebuildable'
+  stale_after_hours: number | null
+}
+
+export interface AppFolderStats {
+  path: string
+  exists: boolean
+  size_bytes: number | null
+  latest_name: string | null
+  latest_modified_at: string | null
 }
 
 export interface AppDetection {
@@ -1613,6 +1631,16 @@ export const sourceDiscoveryAPI = {
   filesystemSnapshots: () =>
     api.get<FilesystemSnapshotCapabilitiesResponse>('/source-discovery/filesystem-snapshots'),
   appTemplates: () => api.get<{ templates: AppTemplate[] }>('/source-discovery/apps'),
+  inspectApp: (body: {
+    template_id: string
+    source_type: 'local' | 'remote'
+    source_ssh_connection_id: number | null
+    path: string
+  }) =>
+    api.post<{ folders: AppFolderStats[]; warnings: DatabaseScanWarning[] }>(
+      '/source-discovery/apps/inspect',
+      body
+    ),
   detectApps: (body: {
     source_type: 'local' | 'remote'
     source_ssh_connection_id: number | null

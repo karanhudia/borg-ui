@@ -1,12 +1,10 @@
 import { useEffect } from 'react'
 import {
   Alert,
+  AlertTitle,
   Box,
   Button,
-  Checkbox,
   CircularProgress,
-  FormControlLabel,
-  FormGroup,
   Link,
   Stack,
   Typography,
@@ -15,7 +13,9 @@ import { RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import type { AppTemplate } from '../../services/api'
-import { mountHint, useAppDetection, type AppScanTarget } from './appTemplates'
+import AppFolderList from './AppFolderList'
+import AppLogo from './AppLogo'
+import { mountHint, useAppDetection, useAppInspection, type AppScanTarget } from './appTemplates'
 
 interface AppTemplateFolderPanelProps {
   template: AppTemplate
@@ -31,7 +31,7 @@ interface AppTemplateFolderPanelProps {
 const alertSx = { '& .MuiAlert-action': { alignItems: 'center', pt: 0, pl: 2 } }
 const actionSx = { whiteSpace: 'nowrap', flexShrink: 0 }
 
-/** Finds the app's folder on the chosen machine and lets the user skip what the app can rebuild. */
+/** Finds the app's folder on the chosen machine and shows what is in it: sizes, dump age, what is skipped. */
 export default function AppTemplateFolderPanel({
   template,
   target,
@@ -42,6 +42,8 @@ export default function AppTemplateFolderPanel({
 }: AppTemplateFolderPanelProps) {
   const { t } = useTranslation()
   const { detection, warning, scanning, rescan } = useAppDetection(template, target)
+  const unreadable = Boolean(detection && !detection.readable)
+  const { stats, measuring } = useAppInspection(template, unreadable ? null : target, root)
   const found = detection?.readable ? detection.path : null
 
   // Fill the folder in once when the app is found and nothing is picked yet.
@@ -100,6 +102,7 @@ export default function AppTemplateFolderPanel({
         <Alert
           severity="success"
           variant="outlined"
+          icon={<AppLogo app={template} size={22} />}
           sx={alertSx}
           action={
             root.trim() === detection.path ? undefined : (
@@ -114,11 +117,15 @@ export default function AppTemplateFolderPanel({
             )
           }
         >
-          {t('appTemplates.found', {
-            app: template.name,
-            container: detection.container_name,
-            path: detection.path,
-          })}
+          <AlertTitle sx={{ mb: 0.25 }}>
+            {t('appTemplates.found', { app: template.name, container: detection.container_name })}
+          </AlertTitle>
+          <Box
+            component="code"
+            sx={{ fontFamily: 'monospace', fontSize: '0.75rem', overflowWrap: 'anywhere' }}
+          >
+            {detection.path}
+          </Box>
         </Alert>
       )
     }
@@ -134,36 +141,16 @@ export default function AppTemplateFolderPanel({
     )
   }
 
-  const toggle = (path: string, checked: boolean) =>
-    onExcludesChange(checked ? [...excludes, path] : excludes.filter((item) => item !== path))
-
   return (
     <Stack spacing={1.5}>
       {renderDetection()}
-      {template.excludes.length > 0 && (
-        <FormGroup aria-label={t('appTemplates.skipTitle')}>
-          {template.excludes.map((exclude) => (
-            <FormControlLabel
-              key={exclude.path}
-              control={
-                <Checkbox
-                  size="small"
-                  checked={excludes.includes(exclude.path)}
-                  onChange={(event) => toggle(exclude.path, event.target.checked)}
-                />
-              }
-              label={
-                <Typography variant="body2">
-                  {exclude.label}{' '}
-                  <Box component="code" sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
-                    {exclude.path}/
-                  </Box>
-                </Typography>
-              }
-            />
-          ))}
-        </FormGroup>
-      )}
+      <AppFolderList
+        template={template}
+        stats={stats}
+        measuring={measuring}
+        skipped={excludes}
+        onSkippedChange={onExcludesChange}
+      />
       <Stack component="ul" spacing={0.5} sx={{ m: 0, pl: 2.5, color: 'text.secondary' }}>
         {template.notes.map((note) => (
           <Typography key={note} component="li" variant="caption">

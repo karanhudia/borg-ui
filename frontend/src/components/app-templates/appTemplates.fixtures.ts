@@ -1,4 +1,4 @@
-import type { AppDetection, AppTemplate } from '../../services/api'
+import type { AppDetection, AppFolderStats, AppTemplate } from '../../services/api'
 
 // Copy of app/app_templates/immich-logo.svg (Immich's official logo).
 const immichLogo =
@@ -15,12 +15,51 @@ export const immichTemplate: AppTemplate = {
   verified: { app_version: 'v3.2.4', date: '2026-09-30', restore_tested: false },
   detect: { image_prefix: 'ghcr.io/immich-app/immich-server', mount_destination: '/data' },
   root_hint: 'UPLOAD_LOCATION in your Immich .env file',
-  excludes: [
-    { path: 'thumbs', default: true, label: 'Skip previews (Immich rebuilds them)' },
+  folders: [
+    {
+      path: 'upload',
+      label: 'Uploads',
+      description:
+        'Your photos and videos as uploaded. This is where Immich keeps originals unless the storage template is on.',
+      role: 'data',
+      stale_after_hours: null,
+    },
+    {
+      path: 'library',
+      label: 'Library',
+      description: "Your photos and videos, when Immich's storage template is on.",
+      role: 'data',
+      stale_after_hours: null,
+    },
+    {
+      path: 'profile',
+      label: 'Profile pictures',
+      description: 'Pictures users set for their accounts.',
+      role: 'data',
+      stale_after_hours: null,
+    },
+    {
+      path: 'backups',
+      label: 'Database dumps',
+      description:
+        "Immich's nightly copy of its database: albums, people, faces, descriptions and settings.",
+      role: 'database',
+      stale_after_hours: 26,
+    },
+    {
+      path: 'thumbs',
+      label: 'Previews',
+      description: 'Thumbnails and preview images. Immich rebuilds them after a restore.',
+      role: 'rebuildable',
+      stale_after_hours: null,
+    },
     {
       path: 'encoded-video',
-      default: true,
-      label: 'Skip re-encoded videos (Immich rebuilds them)',
+      label: 'Re-encoded videos',
+      description:
+        'Smaller copies of your videos for streaming. Immich rebuilds them after a restore.',
+      role: 'rebuildable',
+      stale_after_hours: null,
     },
   ],
   pre_backup_script: {
@@ -32,7 +71,7 @@ export const immichTemplate: AppTemplate = {
   schedule_cron: '0 3 * * *',
   notes: [
     "Keep Administration > Settings > Backup turned on in Immich. This backup relies on Immich's own daily database dumps in the backups folder.",
-    'After restoring with previews skipped, run the Generate Thumbnails and Transcode Videos jobs for all assets.',
+    'After a restore with previews or re-encoded videos skipped, run the Generate Thumbnails and Transcode Videos jobs in Immich.',
   ],
 }
 
@@ -44,3 +83,44 @@ export const immichFound: AppDetection = {
   host_path: '/srv/immich',
   readable: true,
 }
+
+const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString()
+
+export const immichStats: AppFolderStats[] = [
+  {
+    path: 'upload',
+    exists: true,
+    size_bytes: 412_000_000_000,
+    latest_name: null,
+    latest_modified_at: null,
+  },
+  { path: 'library', exists: false, size_bytes: null, latest_name: null, latest_modified_at: null },
+  {
+    path: 'profile',
+    exists: true,
+    size_bytes: 3_400_000,
+    latest_name: null,
+    latest_modified_at: null,
+  },
+  {
+    path: 'backups',
+    exists: true,
+    size_bytes: 1_250_000_000,
+    latest_name: 'immich-db-backup-20260930T020000.sql.gz',
+    latest_modified_at: hoursAgo(9),
+  },
+  {
+    path: 'thumbs',
+    exists: true,
+    size_bytes: 38_000_000_000,
+    latest_name: null,
+    latest_modified_at: null,
+  },
+  {
+    path: 'encoded-video',
+    exists: true,
+    size_bytes: 21_000_000_000,
+    latest_name: null,
+    latest_modified_at: null,
+  },
+]

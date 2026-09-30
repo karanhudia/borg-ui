@@ -1,14 +1,21 @@
 import { describe, expect, it } from 'vitest'
 
 import type { AppTemplate } from '../../../services/api'
-import { appExcludePatterns, defaultAppExcludes, mountHint, renderAppScript } from '../appTemplates'
+import {
+  appExcludePatterns,
+  defaultAppExcludes,
+  isStale,
+  mountHint,
+  renderAppScript,
+} from '../appTemplates'
 
 const immich = {
   id: 'immich',
-  excludes: [
-    { path: 'thumbs', default: true, label: '' },
-    { path: 'encoded-video', default: true, label: '' },
-    { path: 'optional', default: false, label: '' },
+  folders: [
+    { path: 'upload', role: 'data' },
+    { path: 'backups', role: 'database' },
+    { path: 'thumbs', role: 'rebuildable' },
+    { path: 'encoded-video', role: 'rebuildable' },
   ],
   pre_backup_script: {
     name: 'check',
@@ -26,7 +33,7 @@ describe('app templates', () => {
     ])
   })
 
-  it('selects only default excludes', () => {
+  it('skips only rebuildable folders by default', () => {
     expect(defaultAppExcludes(immich)).toEqual(['thumbs', 'encoded-video'])
   })
 
@@ -42,5 +49,13 @@ describe('app templates', () => {
 
   it('suggests a read-only mount under /local', () => {
     expect(mountHint('/srv/immich')).toBe('- /srv/immich:/local/srv/immich:ro')
+  })
+
+  it('flags a dump older than the allowed age, or none at all', () => {
+    const now = Date.parse('2026-09-30T12:00:00Z')
+    expect(isStale('2026-09-30T02:00:00Z', 26, now)).toBe(false)
+    expect(isStale('2026-09-29T02:00:00Z', 26, now)).toBe(true)
+    expect(isStale(null, 26, now)).toBe(true)
+    expect(isStale(null, null, now)).toBe(false)
   })
 })

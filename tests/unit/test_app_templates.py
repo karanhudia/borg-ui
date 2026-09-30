@@ -1,4 +1,5 @@
 import json
+import shlex
 from types import SimpleNamespace
 
 import pytest
@@ -55,9 +56,12 @@ class TestAppTemplates:
 
     def test_immich_keeps_the_database_dumps_and_skips_rebuildable_folders(self):
         immich = next(t for t in load_app_templates() if t.id == "immich")
-        excluded = {exclude.path for exclude in immich.excludes}
-        assert excluded == {"thumbs", "encoded-video"}
-        assert "backups" not in excluded
+        roles = {folder.path: folder.role for folder in immich.folders}
+        assert roles["backups"] == "database"
+        assert {p for p, role in roles.items() if role == "rebuildable"} == {
+            "thumbs",
+            "encoded-video",
+        }
 
     def test_match_by_image_prefix(self):
         templates = load_app_templates()
@@ -155,3 +159,56 @@ class TestAppTemplates:
         assert response.status_code == 200
         assert body["detections"] == []
         assert body["warnings"][0]["code"] == "DOCKER_CLI_MISSING"
+
+
+@pytest.mark.unit
+class TestAppInspect:
+    def test_inspect_reports_size_and_newest_dump_per_folder(
+        self, test_client, admin_headers, tmp_path
+    ):
+        root = tmp_path / "immich"
+        (root / "upload").mkdir(parents=True)
+        (root / "upload" / "photo.jpg").write_bytes(b"x" * 5000)
+        (root / "backups").mkdir()
+        (root / "backups" / "immich-db-backup-1.sql.gz").write_bytes(b"db")
+
+        response = test_client.post(
+            "/api/source-discovery/apps/inspect",
+            json={"template_id": "immich", "source_type": "local", "path": str(root)},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        folders = {f["path"]: f for f in response.json()["folders"]}
+        assert folders["upload"]["exists"] is True
+        assert folders["upload"]["size_bytes"] >= 5000
+        assert folders["backups"]["latest_name"] == "immich-db-backup-1.sql.gz"
+        assert folders["backups"]["latest_modified_at"] is not None
+        assert folders["thumbs"] == {
+            "path": "thumbs",
+            "exists": False,
+            "size_bytes": None,
+            "latest_name": None,
+            "latest_modified_at": None,
+        }
+
+    def test_inspect_quotes_paths(self):
+        root = "/srv/it's; rm -rf /"
+        script = source_discovery._build_app_inspect_script(root, ["upload"])
+        assert f"ROOT={shlex.quote(root)}\n" in script
+
+    def test_inspect_rejects_unknown_template_and_relative_path(
+        self, test_client, admin_headers
+    ):
+        unknown = test_client.post(
+            "/api/source-discovery/apps/inspect",
+            json={"template_id": "nope", "source_type": "local", "path": "/srv"},
+            headers=admin_headers,
+        )
+        relative = test_client.post(
+            "/api/source-discovery/apps/inspect",
+            json={"template_id": "immich", "source_type": "local", "path": "srv"},
+            headers=admin_headers,
+        )
+        assert unknown.status_code == 404
+        assert relative.status_code == 400

@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import api from '../../../services/api'
 import {
   immichFound,
+  immichStats,
   immichTemplate,
 } from '../../../components/app-templates/appTemplates.fixtures'
 import { createInitialState } from '../state'
@@ -17,6 +18,7 @@ function DialogHarness({ readable }: { readable: boolean }) {
   useEffect(() => {
     const mock = new MockAdapter(api)
     mock.onGet('/source-discovery/apps').reply(200, { templates: [immichTemplate] })
+    mock.onPost('/source-discovery/apps/inspect').reply(200, { folders: immichStats, warnings: [] })
     mock.onPost('/source-discovery/apps/detect').reply(200, {
       detections: [readable ? immichFound : { ...immichFound, path: '/srv/immich', readable }],
       warnings: [],

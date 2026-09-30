@@ -15,16 +15,43 @@
     "mount_destination": "/data"
   },
   "root_hint": "UPLOAD_LOCATION in your Immich .env file",
-  "excludes": [
+  "folders": [
+    {
+      "path": "upload",
+      "label": "Uploads",
+      "description": "Your photos and videos as uploaded. This is where Immich keeps originals unless the storage template is on.",
+      "role": "data"
+    },
+    {
+      "path": "library",
+      "label": "Library",
+      "description": "Your photos and videos, when Immich's storage template is on.",
+      "role": "data"
+    },
+    {
+      "path": "profile",
+      "label": "Profile pictures",
+      "description": "Pictures users set for their accounts.",
+      "role": "data"
+    },
+    {
+      "path": "backups",
+      "label": "Database dumps",
+      "description": "Immich's nightly copy of its database: albums, people, faces, descriptions and settings.",
+      "role": "database",
+      "stale_after_hours": 26
+    },
     {
       "path": "thumbs",
-      "default": true,
-      "label": "Skip previews (Immich rebuilds them)"
+      "label": "Previews",
+      "description": "Thumbnails and preview images. Immich rebuilds them after a restore.",
+      "role": "rebuildable"
     },
     {
       "path": "encoded-video",
-      "default": true,
-      "label": "Skip re-encoded videos (Immich rebuilds them)"
+      "label": "Re-encoded videos",
+      "description": "Smaller copies of your videos for streaming. Immich rebuilds them after a restore.",
+      "role": "rebuildable"
     }
   ],
   "pre_backup_script": {
@@ -36,6 +63,6 @@
   "schedule_cron": "0 3 * * *",
   "notes": [
     "Keep Administration > Settings > Backup turned on in Immich. This backup relies on Immich's own daily database dumps in the backups folder.",
-    "After restoring with previews skipped, run the Generate Thumbnails and Transcode Videos jobs for all assets."
+    "After a restore with previews or re-encoded videos skipped, run the Generate Thumbnails and Transcode Videos jobs in Immich."
   ]
 }

@@ -4,7 +4,7 @@ import { Box } from '@mui/material'
 import MockAdapter from 'axios-mock-adapter'
 
 import api, { type AppDetection } from '../../services/api'
-import { immichFound, immichTemplate } from '../app-templates/appTemplates.fixtures'
+import { immichFound, immichStats, immichTemplate } from '../app-templates/appTemplates.fixtures'
 import type { SshConnectionSummary } from '../shared/SshConnectionSelect'
 import QuickStartAppStep from './steps/QuickStartAppStep'
 import QuickStartConnectStep from './steps/QuickStartConnectStep'
@@ -84,6 +84,7 @@ function StepHarness({
     mock.onGet('/filesystem/ssh-home').reply(200, { path: '/home/backup' })
     mock.onGet('/source-discovery/apps').reply(200, { templates: [immichTemplate] })
     mock.onPost('/source-discovery/apps/detect').reply(200, { detections, warnings: [] })
+    mock.onPost('/source-discovery/apps/inspect').reply(200, { folders: immichStats, warnings: [] })
     setReady(true)
     return () => mock.restore()
   }, [connections, detections])

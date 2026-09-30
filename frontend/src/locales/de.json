@@ -6783,9 +6783,8 @@
     "scanning": "Suche {{app}}…",
     "notReadable": "{{app}} gefunden, aber Borg UI kann {{path}} nicht lesen. Füge diese Zeile zu den Volumes von Borg UI in der docker-compose.yml hinzu, starte Borg UI neu und suche erneut:",
     "useFolder": "Diesen Ordner verwenden",
-    "found": "{{app}} ({{container}}) gefunden unter {{path}}.",
+    "found": "{{app}} gefunden (Container {{container}})",
     "notFound": "Hier läuft kein {{app}}. Wähle unten seinen Ordner. Das ist {{hint}}.",
-    "skipTitle": "Zu überspringende Ordner",
     "verified": "Geprüft mit {{app}} {{version}}.",
     "docs": "{{app}}-Backup-Doku",
     "dialog": {
@@ -6801,6 +6800,18 @@
       "search": "Apps durchsuchen",
       "noResults": "Keine passende App. Wähle „Etwas anderes“ und such die Ordner selbst aus.",
       "placeholder": "App auswählen"
+    },
+    "folders": {
+      "title": "Was gesichert wird",
+      "backedUp": "Wird gesichert",
+      "skip": "Überspringen",
+      "missing": "Noch leer",
+      "unmeasured": "Zu groß zum schnellen Messen",
+      "latestDump": "Letzter Dump {{when}}",
+      "staleDump": "Letzter Dump {{when}}. Älter als {{hours}} Stunden: Backups stoppen, bis Immich einen neuen schreibt.",
+      "noDump": "Noch kein Datenbank-Dump. Aktiviere in Immich Administration > Settings > Backup, sonst stoppt das Backup.",
+      "total": "Etwa {{size}} werden gesichert.",
+      "totalAtLeast": "Mindestens {{size}} werden gesichert."
     }
   }
 }

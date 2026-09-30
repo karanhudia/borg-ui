@@ -6783,9 +6783,8 @@
     "scanning": "Buscando {{app}}…",
     "notReadable": "{{app}} encontrado, pero Borg UI no puede leer {{path}}. Añade esta línea a los volúmenes de Borg UI en docker-compose.yml, reinicia Borg UI y busca de nuevo:",
     "useFolder": "Usar esta carpeta",
-    "found": "{{app}} ({{container}}) encontrado en {{path}}.",
+    "found": "{{app}} encontrado (contenedor {{container}})",
     "notFound": "No se encontró {{app}} en ejecución aquí. Elige su carpeta abajo. Es {{hint}}.",
-    "skipTitle": "Carpetas a omitir",
     "verified": "Comprobado con {{app}} {{version}}.",
     "docs": "Documentación de copias de {{app}}",
     "dialog": {
@@ -6801,6 +6800,18 @@
       "search": "Buscar apps",
       "noResults": "Ninguna app coincide. Elige «Otra cosa» y selecciona sus carpetas.",
       "placeholder": "Elige una app"
+    },
+    "folders": {
+      "title": "Qué se respalda",
+      "backedUp": "Se respalda",
+      "skip": "Omitir",
+      "missing": "Aún vacío",
+      "unmeasured": "Demasiado grande para medirlo rápido",
+      "latestDump": "Último volcado {{when}}",
+      "staleDump": "Último volcado {{when}}. Más de {{hours}} horas: las copias se detendrán hasta que Immich escriba uno nuevo.",
+      "noDump": "Aún no hay volcado de la base de datos. Activa Administration > Settings > Backup en Immich o la copia se detendrá.",
+      "total": "Se respaldarán unos {{size}}.",
+      "totalAtLeast": "Se respaldarán al menos {{size}}."
     }
   }
 }

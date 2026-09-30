@@ -6,6 +6,7 @@ import shlex
 import subprocess
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from shutil import which
 from textwrap import dedent
@@ -2200,3 +2201,174 @@ async def detect_apps(
         ),
         warnings=result.warnings,
     )
+
+
+APP_INSPECT_TIMEOUT_SECONDS = 60
+APP_FOLDER_SIZE_TIMEOUT_SECONDS = 20
+
+
+class AppInspectRequest(BaseModel):
+    template_id: str
+    source_type: str
+    source_ssh_connection_id: int | None = None
+    path: str
+
+
+class AppFolderStats(BaseModel):
+    path: str
+    exists: bool
+    # None when du failed or took longer than APP_FOLDER_SIZE_TIMEOUT_SECONDS.
+    size_bytes: int | None = None
+    # Newest entry in the folder, used to show how fresh a database dump is.
+    latest_name: str | None = None
+    latest_modified_at: datetime | None = None
+
+
+class AppInspectResponse(BaseModel):
+    folders: list[AppFolderStats]
+    warnings: list[ScanWarning]
+
+
+def _build_app_inspect_script(root: str, folders: list[str]) -> str:
+    # One pass, one line per folder: path, exists, bytes, newest entry, its mtime.
+    return "\n".join(
+        [
+            f"ROOT={shlex.quote(root)}",
+            f'T="timeout {APP_FOLDER_SIZE_TIMEOUT_SECONDS}"',
+            'command -v timeout >/dev/null 2>&1 || T=""',
+            f"for d in {' '.join(shlex.quote(folder) for folder in folders)}; do",
+            '  p="$ROOT/$d"',
+            '  if [ ! -d "$p" ]; then printf "%s\\t0\\t-\\t\\t-\\n" "$d"; continue; fi',
+            # POSIX du -k (KiB) works on GNU, BusyBox and macOS; -B1 is GNU only.
+            '  kib=$($T du -sk "$p" 2>/dev/null | cut -f1)',
+            '  size=-; case "$kib" in ""|*[!0-9]*) ;; *) size=$((kib * 1024));; esac',
+            '  latest=$(ls -1t "$p" 2>/dev/null | head -n 1)',
+            "  mtime=-",
+            '  if [ -n "$latest" ]; then mtime=$(stat -c %Y "$p/$latest" 2>/dev/null || stat -f %m "$p/$latest" 2>/dev/null || echo -); fi',
+            '  printf "%s\\t1\\t%s\\t%s\\t%s\\n" "$d" "$size" "$latest" "$mtime"',
+            "done",
+        ]
+    )
+
+
+def _parse_app_inspect_output(stdout: str) -> list[AppFolderStats]:
+    stats: list[AppFolderStats] = []
+    for line in stdout.splitlines():
+        parts = line.split("\t")
+        if len(parts) != 5:
+            continue
+        path, exists, size, latest, mtime = parts
+        stats.append(
+            AppFolderStats(
+                path=path,
+                exists=exists == "1",
+                size_bytes=int(size) if size.isdigit() else None,
+                latest_name=latest or None,
+                latest_modified_at=(
+                    datetime.fromtimestamp(int(mtime), tz=timezone.utc)
+                    if mtime.isdigit()
+                    else None
+                ),
+            )
+        )
+    return stats
+
+
+def _run_app_inspect(
+    script: str, *, connection: SSHConnection | None, key_file_path: str | None
+) -> subprocess.CompletedProcess[str]:
+    if connection is None:
+        command = ["sh", "-c", script]
+    else:
+        command = [
+            "ssh",
+            *ssh_key_auth_args(key_file_path),
+            "-p",
+            str(connection.port or 22),
+            *host_key_ssh_opts(connection),
+            "-o",
+            "ConnectTimeout=15",
+            "--",
+            ssh_destination(connection.username, connection.host),
+            f"sh -c {shlex.quote(script)}",
+        ]
+    return subprocess.run(
+        command, capture_output=True, text=True, timeout=APP_INSPECT_TIMEOUT_SECONDS
+    )
+
+
+@router.post("/apps/inspect", response_model=AppInspectResponse)
+async def inspect_app(
+    request: AppInspectRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AppInspectResponse:
+    """Size and freshness of each folder a template describes, so the UI can
+    say what is being backed up. Free, like detection."""
+    del current_user
+    template = next(
+        (t for t in load_app_templates() if t.id == request.template_id), None
+    )
+    if template is None:
+        raise HTTPException(status_code=404, detail="Unknown app template")
+    root = posixpath.normpath(request.path.strip())
+    if not root.startswith("/"):
+        raise HTTPException(status_code=400, detail="path must be absolute")
+    source_type = request.source_type.strip().lower()
+    if source_type not in {"local", "remote"}:
+        raise HTTPException(
+            status_code=400, detail="source_type must be 'local' or 'remote'"
+        )
+
+    connection: SSHConnection | None = None
+    key_file_path: str | None = None
+    if source_type == "remote":
+        connection = (
+            db.query(SSHConnection)
+            .filter(SSHConnection.id == request.source_ssh_connection_id)
+            .first()
+        )
+        ssh_key = (
+            db.query(SSHKey).filter(SSHKey.id == connection.ssh_key_id).first()
+            if connection and connection.ssh_key_id is not None
+            else None
+        )
+        if connection is None or ssh_key is None:
+            raise HTTPException(
+                status_code=400,
+                detail="source_ssh_connection_id must reference an SSH connection with a key",
+            )
+        key_file_path = write_ssh_key_to_tempfile(ssh_key)
+
+    script = _build_app_inspect_script(
+        root, [folder.path for folder in template.folders]
+    )
+    try:
+        result = await asyncio.to_thread(
+            _run_app_inspect, script, connection=connection, key_file_path=key_file_path
+        )
+    except subprocess.TimeoutExpired:
+        return AppInspectResponse(
+            folders=[],
+            warnings=[
+                ScanWarning(
+                    code="SCAN_TIMEOUT", message="Measuring the folders timed out"
+                )
+            ],
+        )
+    finally:
+        if key_file_path and os.path.exists(key_file_path):
+            os.unlink(key_file_path)
+
+    folders = _parse_app_inspect_output(result.stdout or "")
+    warnings = (
+        []
+        if folders
+        else [
+            ScanWarning(
+                code="INSPECT_FAILED",
+                message=(result.stderr or "Could not read the folder").strip(),
+            )
+        ]
+    )
+    return AppInspectResponse(folders=folders, warnings=warnings)

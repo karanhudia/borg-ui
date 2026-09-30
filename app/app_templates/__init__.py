@@ -7,6 +7,7 @@ next to it. Adding an app means adding files here, no code change.
 import json
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -25,11 +26,15 @@ class AppTemplateDetect(BaseModel):
     mount_destination: str
 
 
-class AppTemplateExclude(BaseModel):
-    # Relative to the app's root folder.
-    path: str = Field(pattern=r"^[^/].*")
-    default: bool = True
+class AppTemplateFolder(BaseModel):
+    # Relative to the app's root folder, one level deep.
+    path: str = Field(pattern=r"^[A-Za-z0-9._-]+$")
     label: str
+    description: str
+    # data: always backed up. database: backed up, and its newest file shows
+    # how fresh the app's own dump is. rebuildable: skipped by default.
+    role: Literal["data", "database", "rebuildable"]
+    stale_after_hours: int | None = None
 
 
 class AppTemplateScript(BaseModel):
@@ -50,7 +55,7 @@ class AppTemplate(BaseModel):
     verified: AppTemplateVerified
     detect: AppTemplateDetect
     root_hint: str
-    excludes: list[AppTemplateExclude]
+    folders: list[AppTemplateFolder]
     pre_backup_script: AppTemplateScript | None = None
     schedule_cron: str
     notes: list[str]

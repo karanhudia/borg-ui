@@ -15,6 +15,7 @@ vi.mock('../../../services/api', async (importOriginal) => {
       ...actual.sourceDiscoveryAPI,
       appTemplates: vi.fn(),
       detectApps: vi.fn(),
+      inspectApp: vi.fn(),
     },
   }
 })
@@ -28,9 +29,22 @@ const immich = {
   verified: { app_version: 'v3.2.4', date: '2026-09-30', restore_tested: false },
   detect: { image_prefix: 'ghcr.io/immich-app/immich-server', mount_destination: '/data' },
   root_hint: 'UPLOAD_LOCATION in your Immich .env file',
-  excludes: [
-    { path: 'thumbs', default: true, label: 'Skip previews' },
-    { path: 'encoded-video', default: true, label: 'Skip re-encoded videos' },
+  folders: [
+    { path: 'upload', label: 'Uploads', description: '', role: 'data', stale_after_hours: null },
+    {
+      path: 'thumbs',
+      label: 'Previews',
+      description: '',
+      role: 'rebuildable',
+      stale_after_hours: null,
+    },
+    {
+      path: 'encoded-video',
+      label: 'Re-encoded videos',
+      description: '',
+      role: 'rebuildable',
+      stale_after_hours: null,
+    },
   ],
   pre_backup_script: {
     name: 'Check Immich database dump',
@@ -52,6 +66,9 @@ describe('QuickStartDialog', () => {
     vi.mocked(scriptsAPI.create).mockResolvedValue({ data: { id: 12 } } as never)
     vi.mocked(sourceDiscoveryAPI.appTemplates).mockResolvedValue({
       data: { templates: [immich] },
+    } as never)
+    vi.mocked(sourceDiscoveryAPI.inspectApp).mockResolvedValue({
+      data: { folders: [], warnings: [] },
     } as never)
     vi.mocked(sourceDiscoveryAPI.detectApps).mockResolvedValue({
       data: {
@@ -132,8 +149,9 @@ describe('QuickStartDialog', () => {
     await next()
     await next() // files on this server
 
-    expect(await screen.findByText(/Found Immich \(immich_server\)/)).toBeInTheDocument()
-    await waitFor(() => expect(screen.getByText('/local/srv/immich')).toBeInTheDocument())
+    expect(await screen.findByText(/Found Immich \(container immich_server\)/)).toBeInTheDocument()
+    // Shown in the found message and, once filled in, as the folder chip.
+    await waitFor(() => expect(screen.getAllByText('/local/srv/immich')).toHaveLength(2))
     await next()
     await next()
 

@@ -6783,9 +6783,8 @@
     "scanning": "Looking for {{app}}…",
     "notReadable": "Found {{app}}, but Borg UI can't read {{path}}. Add this line to the volumes of Borg UI in docker-compose.yml, restart Borg UI, then scan again:",
     "useFolder": "Use this folder",
-    "found": "Found {{app}} ({{container}}) at {{path}}.",
+    "found": "Found {{app}} (container {{container}})",
     "notFound": "No running {{app}} found here. Pick its folder below. It is the {{hint}}.",
-    "skipTitle": "Folders to skip",
     "verified": "Checked against {{app}} {{version}}.",
     "docs": "{{app}} backup docs",
     "dialog": {
@@ -6801,6 +6800,18 @@
       "search": "Search apps",
       "noResults": "No app matches. Pick \"Something else\" and choose its folders.",
       "placeholder": "Choose an app"
+    },
+    "folders": {
+      "title": "What gets backed up",
+      "backedUp": "Backed up",
+      "skip": "Skip",
+      "missing": "Nothing here yet",
+      "unmeasured": "Too big to measure quickly",
+      "latestDump": "Latest dump {{when}}",
+      "staleDump": "Latest dump {{when}}. Older than {{hours}} hours: backups will stop until Immich writes a new one.",
+      "noDump": "No database dump yet. Turn on Administration > Settings > Backup in Immich, or the backup will stop.",
+      "total": "About {{size}} will be backed up.",
+      "totalAtLeast": "At least {{size}} will be backed up."
     }
   }
 }
