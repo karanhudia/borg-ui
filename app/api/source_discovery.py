@@ -6,6 +6,7 @@ import shlex
 import subprocess
 import time
 from dataclasses import dataclass
+from typing import Literal
 from datetime import datetime, timezone
 from pathlib import Path
 from shutil import which
@@ -2225,15 +2226,29 @@ class AppFolderStats(BaseModel):
 
 
 class AppInspectResponse(BaseModel):
+    # denied: the folder exists but this user can't open it, so Borg can't either.
+    root_status: Literal["ok", "missing", "denied", "unknown"] = "unknown"
+    # The user the check ran as (the SSH user for remote sources).
+    user: str | None = None
     folders: list[AppFolderStats]
     warnings: list[ScanWarning]
 
 
 def _build_app_inspect_script(root: str, folders: list[str]) -> str:
-    # One pass, one line per folder: path, exists, bytes, newest entry, its mtime.
+    # First a "#ROOT <status> <user>" line; then, if the folder can be opened,
+    # one line per folder: path, exists, bytes, newest entry, its mtime.
     return "\n".join(
         [
             f"ROOT={shlex.quote(root)}",
+            'USER_NAME=$(id -un 2>/dev/null || echo "")',
+            # A folder under an unreadable parent (Docker volumes are root-only)
+            # fails [ -d ] like a missing one; ls tells the two apart.
+            'err=$(ls -d "$ROOT" 2>&1 >/dev/null)',
+            'if [ -n "$err" ]; then case "$err" in *ermission*) st=denied;; *) st=missing;; esac',
+            'elif [ ! -r "$ROOT" ] || [ ! -x "$ROOT" ]; then st=denied',
+            "else st=ok; fi",
+            'printf "#ROOT\\t%s\\t%s\\n" "$st" "$USER_NAME"',
+            '[ "$st" = ok ] || exit 0',
             f'T="timeout {APP_FOLDER_SIZE_TIMEOUT_SECONDS}"',
             'command -v timeout >/dev/null 2>&1 || T=""',
             f"for d in {' '.join(shlex.quote(folder) for folder in folders)}; do",
@@ -2251,10 +2266,18 @@ def _build_app_inspect_script(root: str, folders: list[str]) -> str:
     )
 
 
-def _parse_app_inspect_output(stdout: str) -> list[AppFolderStats]:
+def _parse_app_inspect_output(
+    stdout: str,
+) -> tuple[str, str | None, list[AppFolderStats]]:
+    root_status, user = "unknown", None
     stats: list[AppFolderStats] = []
     for line in stdout.splitlines():
         parts = line.split("\t")
+        if parts[0] == "#ROOT" and len(parts) == 3:
+            if parts[1] in {"ok", "missing", "denied"}:
+                root_status = parts[1]
+            user = parts[2] or None
+            continue
         if len(parts) != 5:
             continue
         path, exists, size, latest, mtime = parts
@@ -2271,7 +2294,7 @@ def _parse_app_inspect_output(stdout: str) -> list[AppFolderStats]:
                 ),
             )
         )
-    return stats
+    return root_status, user, stats
 
 
 def _run_app_inspect(
@@ -2360,10 +2383,10 @@ async def inspect_app(
         if key_file_path and os.path.exists(key_file_path):
             os.unlink(key_file_path)
 
-    folders = _parse_app_inspect_output(result.stdout or "")
+    root_status, user, folders = _parse_app_inspect_output(result.stdout or "")
     warnings = (
         []
-        if folders
+        if root_status != "unknown"
         else [
             ScanWarning(
                 code="INSPECT_FAILED",
@@ -2371,4 +2394,6 @@ async def inspect_app(
             )
         ]
     )
-    return AppInspectResponse(folders=folders, warnings=warnings)
+    return AppInspectResponse(
+        root_status=root_status, user=user, folders=folders, warnings=warnings
+    )

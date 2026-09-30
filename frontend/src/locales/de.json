@@ -6812,6 +6812,13 @@
       "noDump": "Noch kein Datenbank-Dump. Aktiviere in Immich Administration > Settings > Backup, sonst stoppt das Backup.",
       "total": "Etwa {{size}} werden gesichert.",
       "totalAtLeast": "Mindestens {{size}} werden gesichert."
+    },
+    "missingRoot": "{{path}} gibt es auf diesem Rechner nicht. Wähle den Ordner mit den Immich-Dateien: {{hint}}.",
+    "denied": {
+      "title": "Borg UI kann {{path}} als {{user}} nicht öffnen",
+      "why": "Docker macht benannte Volumes nur für root lesbar. Borg verbindet sich als derselbe Benutzer, also würde auch das Backup scheitern.",
+      "fixFolder": "Einfachste Lösung: Lege die Immich-Dateien in einen normalen Ordner, wie es Immichs eigene Compose-Datei tut. Setze {{hint}} auf einen Ordner wie /srv/immich, verschiebe die Dateien dorthin und starte Immich neu.",
+      "fixAcl": "Oder erlaube {{user}}, dieses Volume zu lesen (braucht das Paket acl auf dem Rechner):"
     }
   }
 }

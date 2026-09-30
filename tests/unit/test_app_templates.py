@@ -1,4 +1,5 @@
 import json
+import os
 import shlex
 from types import SimpleNamespace
 
@@ -179,6 +180,7 @@ class TestAppInspect:
         )
 
         assert response.status_code == 200
+        assert response.json()["root_status"] == "ok"
         folders = {f["path"]: f for f in response.json()["folders"]}
         assert folders["upload"]["exists"] is True
         assert folders["upload"]["size_bytes"] >= 5000
@@ -212,3 +214,30 @@ class TestAppInspect:
         )
         assert unknown.status_code == 404
         assert relative.status_code == 400
+
+    def test_inspect_tells_missing_from_unreadable(
+        self, test_client, admin_headers, tmp_path
+    ):
+        def inspect(path):
+            return test_client.post(
+                "/api/source-discovery/apps/inspect",
+                json={"template_id": "immich", "source_type": "local", "path": path},
+                headers=admin_headers,
+            ).json()
+
+        missing = inspect(str(tmp_path / "nope"))
+        assert missing["root_status"] == "missing"
+        assert missing["folders"] == []
+
+        # Like Docker's volumes dir: the parent can't be entered.
+        locked = tmp_path / "volumes"
+        (locked / "abc" / "_data").mkdir(parents=True)
+        locked.chmod(0o000)
+        try:
+            denied = inspect(str(locked / "abc" / "_data"))
+        finally:
+            locked.chmod(0o755)
+        if os.geteuid() != 0:  # root reads anything
+            assert denied["root_status"] == "denied"
+            assert denied["folders"] == []
+        assert denied["user"]

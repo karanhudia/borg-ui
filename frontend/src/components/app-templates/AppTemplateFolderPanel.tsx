@@ -15,7 +15,13 @@ import { useTranslation } from 'react-i18next'
 import type { AppTemplate } from '../../services/api'
 import AppFolderList from './AppFolderList'
 import AppLogo from './AppLogo'
-import { mountHint, useAppDetection, useAppInspection, type AppScanTarget } from './appTemplates'
+import {
+  mountHint,
+  readAccessCommands,
+  useAppDetection,
+  useAppInspection,
+  type AppScanTarget,
+} from './appTemplates'
 
 interface AppTemplateFolderPanelProps {
   template: AppTemplate
@@ -43,7 +49,11 @@ export default function AppTemplateFolderPanel({
   const { t } = useTranslation()
   const { detection, warning, scanning, rescan } = useAppDetection(template, target)
   const unreadable = Boolean(detection && !detection.readable)
-  const { stats, measuring } = useAppInspection(template, unreadable ? null : target, root)
+  const { stats, rootStatus, user, measuring } = useAppInspection(
+    template,
+    unreadable ? null : target,
+    root
+  )
   const found = detection?.readable ? detection.path : null
 
   // Fill the folder in once when the app is found and nothing is picked yet.
@@ -144,6 +154,40 @@ export default function AppTemplateFolderPanel({
   return (
     <Stack spacing={1.5}>
       {renderDetection()}
+      {rootStatus === 'denied' && (
+        <Alert severity="warning" variant="outlined" role="alert">
+          <AlertTitle>
+            {t('appTemplates.denied.title', { path: root.trim(), user: user ?? '?' })}
+          </AlertTitle>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            {t('appTemplates.denied.why')}
+          </Typography>
+          <Typography variant="body2">
+            {t('appTemplates.denied.fixFolder', { hint: template.root_hint })}
+          </Typography>
+          <Typography variant="body2" sx={{ mt: 1 }}>
+            {t('appTemplates.denied.fixAcl', { user: user ?? '?' })}
+          </Typography>
+          <Box
+            component="pre"
+            sx={{
+              m: 0,
+              mt: 0.5,
+              fontFamily: 'monospace',
+              fontSize: '0.75rem',
+              whiteSpace: 'pre-wrap',
+              overflowWrap: 'anywhere',
+            }}
+          >
+            {readAccessCommands(user ?? 'USER', root)}
+          </Box>
+        </Alert>
+      )}
+      {rootStatus === 'missing' && (
+        <Alert severity="warning" variant="outlined" role="alert">
+          {t('appTemplates.missingRoot', { path: root.trim(), hint: template.root_hint })}
+        </Alert>
+      )}
       <AppFolderList
         template={template}
         stats={stats}

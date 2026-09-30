@@ -6,6 +6,7 @@ import {
   defaultAppExcludes,
   isStale,
   mountHint,
+  readAccessCommands,
   renderAppScript,
 } from '../appTemplates'
 
@@ -57,5 +58,14 @@ describe('app templates', () => {
     expect(isStale('2026-09-29T02:00:00Z', 26, now)).toBe(true)
     expect(isStale(null, 26, now)).toBe(true)
     expect(isStale(null, null, now)).toBe(false)
+  })
+
+  it('grants read on the folder and only traverse on its parents', () => {
+    expect(readAccessCommands('backup', '/home/docker/volumes/abc/_data/')).toBe(
+      [
+        "sudo setfacl -m u:backup:x '/home' '/home/docker' '/home/docker/volumes' '/home/docker/volumes/abc'",
+        "sudo setfacl -R -m u:backup:rX,d:u:backup:rX '/home/docker/volumes/abc/_data'",
+      ].join('\n')
+    )
   })
 })

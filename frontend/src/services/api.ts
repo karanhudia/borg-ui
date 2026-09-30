@@ -1637,10 +1637,12 @@ export const sourceDiscoveryAPI = {
     source_ssh_connection_id: number | null
     path: string
   }) =>
-    api.post<{ folders: AppFolderStats[]; warnings: DatabaseScanWarning[] }>(
-      '/source-discovery/apps/inspect',
-      body
-    ),
+    api.post<{
+      root_status: 'ok' | 'missing' | 'denied' | 'unknown'
+      user: string | null
+      folders: AppFolderStats[]
+      warnings: DatabaseScanWarning[]
+    }>('/source-discovery/apps/inspect', body),
   detectApps: (body: {
     source_type: 'local' | 'remote'
     source_ssh_connection_id: number | null

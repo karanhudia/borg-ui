@@ -76,8 +76,12 @@ export function useAppInspection(
     staleTime: 60_000,
     retry: false,
   })
+  const data = query.data?.data
   return {
-    stats: query.data?.data.folders ?? null,
+    // Sizes only mean something when the folder could be opened.
+    stats: data?.root_status === 'ok' ? data.folders : null,
+    rootStatus: data?.root_status ?? null,
+    user: data?.user ?? null,
     measuring: query.isFetching,
   }
 }
@@ -111,4 +115,18 @@ export function renderAppScript(template: AppTemplate, root: string): string | n
 export function mountHint(hostPath: string): string {
   const path = trimRoot(hostPath)
   return `- ${path}:/local${path}:ro`
+}
+
+/**
+ * Commands that let `user` read `path` and everything Immich adds to it later,
+ * plus traverse (not list) each parent folder.
+ */
+export function readAccessCommands(user: string, path: string): string {
+  const parts = trimRoot(path).split('/').filter(Boolean)
+  const parents = parts.slice(0, -1).map((_, index) => `/${parts.slice(0, index + 1).join('/')}`)
+  const quote = (value: string) => shellQuote(value)
+  return [
+    `sudo setfacl -m u:${user}:x ${parents.map(quote).join(' ')}`,
+    `sudo setfacl -R -m u:${user}:rX,d:u:${user}:rX ${quote(trimRoot(path))}`,
+  ].join('\n')
 }

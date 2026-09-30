@@ -53,6 +53,7 @@ const laptop = {
 
 const NO_CONNECTIONS: SshConnectionSummary[] = []
 const NO_DETECTIONS: AppDetection[] = []
+const INSPECT_OK = { root_status: 'ok', user: 'root', folders: immichStats, warnings: [] }
 
 const immichAnswers: QuickStartAnswers = {
   ...createInitialQuickStartAnswers(),
@@ -68,11 +69,13 @@ function StepHarness({
   initial,
   connections = NO_CONNECTIONS,
   detections = NO_DETECTIONS,
+  inspect = INSPECT_OK,
 }: {
   step: ComponentType<QuickStartStepProps>
   initial: QuickStartAnswers
   connections?: SshConnectionSummary[]
   detections?: AppDetection[]
+  inspect?: object
 }) {
   const [answers, setAnswers] = useState(initial)
   const [ready, setReady] = useState(false)
@@ -84,10 +87,10 @@ function StepHarness({
     mock.onGet('/filesystem/ssh-home').reply(200, { path: '/home/backup' })
     mock.onGet('/source-discovery/apps').reply(200, { templates: [immichTemplate] })
     mock.onPost('/source-discovery/apps/detect').reply(200, { detections, warnings: [] })
-    mock.onPost('/source-discovery/apps/inspect').reply(200, { folders: immichStats, warnings: [] })
+    mock.onPost('/source-discovery/apps/inspect').reply(200, inspect)
     setReady(true)
     return () => mock.restore()
-  }, [connections, detections])
+  }, [connections, detections, inspect])
   if (!ready) return null
   return (
     <Box sx={{ width: { xs: '100%', sm: 640 }, p: 2 }}>
@@ -153,6 +156,22 @@ export const FoldersImmichNotReadable: Story = {
     step: QuickStartFoldersStep,
     initial: immichAnswers,
     detections: [{ ...immichFound, path: '/srv/immich', readable: false }],
+  },
+}
+
+// A named Docker volume on an SSH machine: the SSH user can't open it.
+export const FoldersImmichNoPermission: Story = {
+  args: {
+    step: QuickStartFoldersStep,
+    initial: immichAnswers,
+    detections: [
+      {
+        ...immichFound,
+        path: '/home/docker-data/docker/volumes/f4eacb753d47/_data',
+        host_path: '/home/docker-data/docker/volumes/f4eacb753d47/_data',
+      },
+    ],
+    inspect: { root_status: 'denied', user: 'backup', folders: [], warnings: [] },
   },
 }
 
