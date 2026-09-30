@@ -176,6 +176,63 @@ def normalize_container_config(
     return normalized
 
 
+def normalize_app_config(
+    app: Any,
+    *,
+    source_paths: list[str],
+) -> Optional[dict[str, Any]]:
+    """An app template applied to this source (Immich and the like).
+
+    `root` is the app's own folder; `exclude_patterns` are the plan excludes the
+    app added, kept here so removing the app removes them too.
+    """
+    if not isinstance(app, dict):
+        return None
+
+    template_id = _clean_optional_string(app.get("template_id"))
+    if not template_id:
+        raise ValueError("App source locations require a template id")
+    root = _clean_optional_string(app.get("root")) or (
+        source_paths[0] if source_paths else None
+    )
+    if not root:
+        raise ValueError("App source locations require the app's folder")
+
+    script_execution_target = (
+        _clean_optional_string(app.get("script_execution_target")) or "source"
+    )
+    if script_execution_target not in {"source", "server"}:
+        raise ValueError("Invalid app script execution target")
+
+    raw_excludes = app.get("exclude_patterns")
+    normalized: dict[str, Any] = {
+        "template_id": template_id,
+        "template_version": _clean_optional_int(app.get("template_version")),
+        "display_name": _clean_optional_string(app.get("display_name")) or template_id,
+        "root": root,
+        "exclude_patterns": [
+            pattern.strip()
+            for pattern in (raw_excludes if isinstance(raw_excludes, list) else [])
+            if isinstance(pattern, str) and pattern.strip()
+        ],
+        "script_execution_target": script_execution_target,
+    }
+
+    for hook in ("pre", "post"):
+        script_id = _clean_optional_int(app.get(f"{hook}_backup_script_id"))
+        if script_id is not None:
+            normalized[f"{hook}_backup_script_id"] = script_id
+            normalized[f"{hook}_backup_script_parameters"] = _clean_parameter_values(
+                app.get(f"{hook}_backup_script_parameters")
+            )
+
+    execution_order = _clean_optional_int(app.get("script_execution_order"))
+    if execution_order is not None:
+        normalized["script_execution_order"] = execution_order
+
+    return normalized
+
+
 def normalize_source_locations(
     source_locations: Optional[list[dict[str, Any]]] = None,
     *,
@@ -259,6 +316,9 @@ def normalize_source_locations(
             )
             if container:
                 normalized_location["container"] = container
+            app = normalize_app_config(location.get("app"), source_paths=paths)
+            if app:
+                normalized_location["app"] = app
 
             normalized.append(normalized_location)
         return normalized

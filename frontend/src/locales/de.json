@@ -6787,14 +6787,6 @@
     "notFound": "Hier läuft kein {{app}}. Wähle unten seinen Ordner. Das ist {{hint}}.",
     "verified": "Geprüft mit {{app}} {{version}}.",
     "docs": "{{app}}-Backup-Doku",
-    "dialog": {
-      "open": "Mit einer App starten",
-      "title": "App hinzufügen",
-      "machine": "Läuft auf",
-      "thisServer": "Dieser Borg-UI-Server",
-      "folder": "App-Ordner",
-      "add": "Zum Plan hinzufügen"
-    },
     "select": {
       "label": "App",
       "search": "Apps durchsuchen",
@@ -6820,6 +6812,17 @@
       "fixFolder": "Einfachste Lösung: Lege die Immich-Dateien in einen normalen Ordner, wie es Immichs eigene Compose-Datei tut. Setze {{hint}} auf einen Ordner wie /srv/immich, verschiebe die Dateien dorthin und starte Immich neu.",
       "fixAcl": "Oder erlaube {{user}}, dieses Volume zu lesen (braucht das Paket acl auf dem Rechner):"
     },
-    "goodToKnow": "Gut zu wissen"
+    "goodToKnow": "Gut zu wissen",
+    "tab": {
+      "kind": "Apps",
+      "title": "Eine App sichern",
+      "runsOn": "Wo die App läuft",
+      "folder": "App-Ordner",
+      "add": "{{app}} hinzufügen",
+      "inPlan": "Apps in diesem Plan",
+      "folderCount_one": "{{count}} Ordner",
+      "folderCount_other": "{{count}} Ordner",
+      "remove": "{{app}} entfernen"
+    }
   }
 }

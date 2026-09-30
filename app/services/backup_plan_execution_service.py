@@ -204,16 +204,6 @@ def _database_source_location(
     )
 
 
-def _database_source_locations(
-    source_locations: list[dict[str, Any]],
-) -> list[tuple[int, dict[str, Any]]]:
-    return [
-        (index, location)
-        for index, location in enumerate(source_locations, start=1)
-        if isinstance(location.get("database"), dict)
-    ]
-
-
 def _container_source_location(
     source_locations: list[dict[str, Any]],
 ) -> Optional[dict[str, Any]]:
@@ -225,16 +215,6 @@ def _container_source_location(
         ),
         None,
     )
-
-
-def _container_source_locations(
-    source_locations: list[dict[str, Any]],
-) -> list[tuple[int, dict[str, Any]]]:
-    return [
-        (index, location)
-        for index, location in enumerate(source_locations, start=1)
-        if isinstance(location.get("container"), dict)
-    ]
 
 
 def _database_script_env_for_location(
@@ -351,43 +331,36 @@ def _container_remote_source_connection_id(
     return _container_remote_source_connection_id_for_location(location)
 
 
-def _database_source_script_assignments(
-    source_locations: list[dict[str, Any]], hook_type: str
+def _selection_script_assignments(
+    source_locations: list[dict[str, Any]], hook_type: str, kind: str
 ) -> list[dict[str, Any]]:
-    script_id_key = (
-        "pre_backup_script_id"
-        if hook_type == "source-pre-backup"
-        else "post_backup_script_id"
-    )
-    parameters_key = (
-        "pre_backup_script_parameters"
-        if hook_type == "source-pre-backup"
-        else "post_backup_script_parameters"
-    )
+    """Scripts attached to one kind of source selection (database, container,
+    app), in execution order."""
+    prefix = "pre" if hook_type == "source-pre-backup" else "post"
     assignments: list[dict[str, Any]] = []
-    for source_index, location in _database_source_locations(source_locations):
-        database = location.get("database") or {}
-        script_id = database.get(script_id_key)
-        if script_id in (None, ""):
+    for source_index, location in enumerate(source_locations, start=1):
+        selection = location.get(kind)
+        if not isinstance(selection, dict):
             continue
         try:
-            script_id_int = int(script_id)
+            script_id = int(selection.get(f"{prefix}_backup_script_id"))
         except (TypeError, ValueError):
             continue
-        if script_id_int <= 0:
+        if script_id <= 0:
             continue
-        execution_order = database.get("script_execution_order") or source_index
         try:
-            execution_order_int = int(execution_order)
+            execution_order = int(
+                selection.get("script_execution_order") or source_index
+            )
         except (TypeError, ValueError):
-            execution_order_int = source_index
+            execution_order = source_index
         assignments.append(
             {
                 "source_index": source_index,
-                "execution_order": execution_order_int,
+                "execution_order": execution_order,
                 "location": location,
-                "script_id": script_id_int,
-                "parameters": database.get(parameters_key) or {},
+                "script_id": script_id,
+                "parameters": selection.get(f"{prefix}_backup_script_parameters") or {},
             }
         )
 
@@ -398,55 +371,33 @@ def _database_source_script_assignments(
             assignment["source_index"],
         ),
     )
+
+
+def _database_source_script_assignments(
+    source_locations: list[dict[str, Any]], hook_type: str
+) -> list[dict[str, Any]]:
+    return _selection_script_assignments(source_locations, hook_type, "database")
 
 
 def _container_source_script_assignments(
     source_locations: list[dict[str, Any]], hook_type: str
 ) -> list[dict[str, Any]]:
-    script_id_key = (
-        "pre_backup_script_id"
-        if hook_type == "source-pre-backup"
-        else "post_backup_script_id"
-    )
-    parameters_key = (
-        "pre_backup_script_parameters"
-        if hook_type == "source-pre-backup"
-        else "post_backup_script_parameters"
-    )
-    assignments: list[dict[str, Any]] = []
-    for source_index, location in _container_source_locations(source_locations):
-        container = location.get("container") or {}
-        script_id = container.get(script_id_key)
-        if script_id in (None, ""):
-            continue
-        try:
-            script_id_int = int(script_id)
-        except (TypeError, ValueError):
-            continue
-        if script_id_int <= 0:
-            continue
-        execution_order = container.get("script_execution_order") or source_index
-        try:
-            execution_order_int = int(execution_order)
-        except (TypeError, ValueError):
-            execution_order_int = source_index
-        assignments.append(
-            {
-                "source_index": source_index,
-                "execution_order": execution_order_int,
-                "location": location,
-                "script_id": script_id_int,
-                "parameters": container.get(parameters_key) or {},
-            }
-        )
+    return _selection_script_assignments(source_locations, hook_type, "container")
 
-    return sorted(
-        assignments,
-        key=lambda assignment: (
-            assignment["execution_order"],
-            assignment["source_index"],
-        ),
-    )
+
+def _app_remote_source_connection_id_for_location(
+    location: Optional[dict[str, Any]],
+) -> Optional[int]:
+    # An app's check runs where the app is: on the SSH machine for remote sources.
+    if not location:
+        return None
+    app = location.get("app") or {}
+    if app.get("script_execution_target") != "source":
+        return None
+    if location.get("source_type") != "remote":
+        return None
+    connection_id = location.get("source_ssh_connection_id")
+    return int(connection_id) if connection_id not in (None, "") else None
 
 
 def _source_script_assignments(
@@ -456,6 +407,7 @@ def _source_script_assignments(
         [
             *_database_source_script_assignments(source_locations, hook_type),
             *_container_source_script_assignments(source_locations, hook_type),
+            *_selection_script_assignments(source_locations, hook_type, "app"),
         ],
         key=lambda assignment: (
             assignment["execution_order"],
@@ -1700,9 +1652,13 @@ class BackupPlanExecutionService:
                 if source_location is not None
                 else _container_remote_source_connection_id(context.source_locations)
             )
+            app_remote_connection_id = _app_remote_source_connection_id_for_location(
+                source_location
+            )
             source_connection_id = (
                 database_remote_connection_id
                 or container_remote_connection_id
+                or app_remote_connection_id
                 or (
                     context.source_ssh_connection_id
                     if context.source_type == "remote"
@@ -1769,7 +1725,9 @@ class BackupPlanExecutionService:
             if source_location is not None:
                 execution_context = f"{execution_context}:source:{source_index or ''}"
             if (
-                database_remote_connection_id or container_remote_connection_id
+                database_remote_connection_id
+                or container_remote_connection_id
+                or app_remote_connection_id
             ) and source_connection:
                 result = await self._execute_remote_source_script(
                     source_connection=source_connection,

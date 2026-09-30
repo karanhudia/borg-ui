@@ -30,6 +30,7 @@ import {
   alpha,
 } from '@mui/material'
 import {
+  AppWindow,
   ChevronRight,
   Container as ContainerIcon,
   Database as DatabaseIcon,
@@ -52,6 +53,7 @@ import DestinationSelect, {
   type DestinationOption,
 } from '../../../components/shared/DestinationSelect'
 import ManagedAgentSelect from '../../../components/shared/ManagedAgentSelect'
+import AppSourcePanel from './AppSourcePanel'
 import PathSelectorField from '../../../components/shared/PathSelectorField'
 import ResponsiveDialog from '../../../components/shared/ResponsiveDialog'
 import SshConnectionSelect from '../../../components/shared/SshConnectionSelect'
@@ -86,7 +88,7 @@ import {
   type ScanTargetState,
 } from './DatabaseScanDialog'
 
-type SourceChoiceView = 'paths' | 'database' | 'database-detail' | 'container'
+type SourceChoiceView = 'paths' | 'database' | 'database-detail' | 'container' | 'app'
 type ScriptMode = 'create' | 'reuse' | 'skip'
 type SourceKey = 'local' | `remote:${number}` | `agent:${number}`
 type SnapshotProviderDraft = 'none' | 'btrfs' | 'zfs'
@@ -590,6 +592,9 @@ function cleanLocations(locations: SourceLocation[]): SourceLocation[] {
       if (container) {
         cleaned.container = container
       }
+      if (location.app) {
+        cleaned.app = location.app
+      }
       return cleaned
     })
     .filter((location) => location.paths.length > 0)
@@ -635,6 +640,9 @@ function locationKey(location: SourceLocation): SourceKey {
 
 function draftLocationKey(location: SourceLocation) {
   const baseKey = locationKey(location)
+  if (location.app) {
+    return `${baseKey}:app:${JSON.stringify([location.app.template_id, location.app.root])}`
+  }
   if (location.container) {
     return `${baseKey}:container:${JSON.stringify([
       location.container.container_name,
@@ -832,6 +840,10 @@ export function SourceSelectionDialog({
   const [containerExportPath, setContainerExportPath] = useState(DEFAULT_CONTAINER_EXPORT_ROOT)
   const [queuedContainerScriptDrafts, setQueuedContainerScriptDrafts] = useState<
     Record<string, QueuedContainerScriptDraft>
+  >({})
+  // App checks to create on Apply, keyed like the draft location they belong to.
+  const [queuedAppScriptDrafts, setQueuedAppScriptDrafts] = useState<
+    Record<string, SourceScriptCreateInput>
   >({})
   const [containerScanLoading, setContainerScanLoading] = useState(false)
   const [containerScanResults, setContainerScanResults] = useState<SourceDiscoveryContainer[]>([])
@@ -1199,7 +1211,10 @@ export function SourceSelectionDialog({
     setDraftSourceLocations((current) => {
       const existingIndex = current.findIndex(
         (location) =>
-          locationKey(location) === sourceKey && !location.database && !location.container
+          locationKey(location) === sourceKey &&
+          !location.database &&
+          !location.container &&
+          !location.app
       )
       if (existingIndex === -1) {
         const snapshot = sourceKey === 'local' ? snapshotFromDraft(snapshotDraft) : undefined
@@ -1480,6 +1495,28 @@ export function SourceSelectionDialog({
         continue
       }
 
+      if (location.app) {
+        sourceScriptOrder += 1
+        const draft = queuedAppScriptDrafts[draftLocationKey(location)]
+        resolvedLocations.push({
+          ...location,
+          app: {
+            ...location.app,
+            ...(draft
+              ? {
+                  pre_backup_script_id: await createReusableScript(
+                    `app:${location.app.template_id}:${location.app.root}`,
+                    'pre',
+                    draft
+                  ),
+                }
+              : {}),
+            script_execution_order: sourceScriptOrder,
+          },
+        })
+        continue
+      }
+
       resolvedLocations.push(location)
     }
 
@@ -1508,7 +1545,20 @@ export function SourceSelectionDialog({
     try {
       const sourceLocationsWithScripts = await resolveSourceScripts(sourceLocations)
       const databaseLocation = sourceLocationsWithScripts.find((location) => location.database)
+      // Each app's excludes live on its source; swap the old set for the new
+      // so removing an app takes its excludes with it.
+      const appExcludes = (locations: SourceLocation[]) =>
+        new Set(locations.flatMap((location) => location.app?.exclude_patterns ?? []))
+      const previousAppExcludes = appExcludes(wizardState.sourceLocations || [])
+      const nextAppExcludes = appExcludes(sourceLocationsWithScripts)
+      const keptExcludes = wizardState.excludePatterns.filter(
+        (pattern) => !previousAppExcludes.has(pattern) || nextAppExcludes.has(pattern)
+      )
       updateState({
+        excludePatterns: [
+          ...keptExcludes,
+          ...[...nextAppExcludes].filter((pattern) => !keptExcludes.includes(pattern)),
+        ],
         sourceType: sourceTypeFromLocations(sourceLocationsWithScripts),
         sourceSshConnectionId: sourceConnectionFromLocations(sourceLocationsWithScripts),
         sourceDirectories: sourceLocationsWithScripts.flatMap((location) => location.paths),
@@ -1581,7 +1631,7 @@ export function SourceSelectionDialog({
     const zfsMountpointMissing =
       sourceKind === 'local' && snapshotDraft.provider === 'zfs' && !snapshotDraft.mountpoint.trim()
     const fileDraftSourceLocations = draftSourceLocations.filter(
-      (location) => !location.database && !location.container
+      (location) => !location.database && !location.container && !location.app
     )
 
     const lockedByAgentRepo = !!agentRepoConstraint
@@ -3889,10 +3939,36 @@ export function SourceSelectionDialog({
     )
   }
 
+  const renderApps = () => (
+    <AppSourcePanel
+      sshConnections={sshConnections}
+      sourceKey={selectedSourceKey.startsWith('remote:') ? selectedSourceKey : 'local'}
+      onSourceKeyChange={(key) => selectSourceKey(key)}
+      appLocations={draftSourceLocations.filter((location) => location.app)}
+      onAdd={(location, script) => {
+        const key = draftLocationKey(location)
+        setDraftSourceLocations((current) => [
+          ...current.filter((item) => draftLocationKey(item) !== key),
+          location,
+        ])
+        setQueuedAppScriptDrafts((current) => {
+          const next = { ...current }
+          if (script) next[key] = script
+          else delete next[key]
+          return next
+        })
+      }}
+      onRemove={(location) => removeSourceLocation(draftLocationKey(location))}
+      machineLabel={(location) => sourceLocationLabel(location, sshConnections, agentMachines, t)}
+      t={t}
+    />
+  )
+
   const content = (() => {
     if (view === 'database') return renderDatabaseList()
     if (view === 'database-detail') return renderDatabaseDetail()
     if (view === 'container') return renderContainer()
+    if (view === 'app') return renderApps()
     return renderPaths()
   })()
 
@@ -3918,7 +3994,7 @@ export function SourceSelectionDialog({
               surface the same button on both so the user can quick-add a
               detected SQLite from the database tab and apply without
               bouncing to the files tab. */}
-          {(view === 'paths' || view === 'database' || view === 'container') && (
+          {(view === 'paths' || view === 'database' || view === 'container' || view === 'app') && (
             <Button
               variant="contained"
               onClick={applyPaths}
@@ -3977,6 +4053,7 @@ export function SourceSelectionDialog({
             {view === 'database' && t('backupPlans.sourceChooser.databaseBackupTitle')}
             {view === 'database-detail' && databaseDisplayTitle(selectedDatabase, t)}
             {view === 'container' && t('backupPlans.sourceChooser.containerBackupTitle')}
+            {view === 'app' && t('appTemplates.tab.title')}
             {view === 'paths' && t('backupPlans.sourceChooser.title')}
           </Typography>
         </Stack>
@@ -3993,10 +4070,11 @@ export function SourceSelectionDialog({
               }}
               counts={{
                 files: draftSourceLocations
-                  .filter((location) => !location.database && !location.container)
+                  .filter((location) => !location.database && !location.container && !location.app)
                   .reduce((sum, location) => sum + location.paths.length, 0),
                 database: draftSourceLocations.filter((location) => location.database).length,
                 container: draftSourceLocations.filter((location) => location.container).length,
+                app: draftSourceLocations.filter((location) => location.app).length,
               }}
               t={t}
             />
@@ -4020,7 +4098,7 @@ export function SourceSelectionDialog({
   )
 }
 
-type SourceKindCounts = { files: number; database: number; container: number }
+type SourceKindCounts = { files: number; database: number; container: number; app: number }
 
 interface SourceKindPivotProps {
   view: SourceChoiceView
@@ -4032,7 +4110,7 @@ interface SourceKindPivotProps {
 
 function SourceKindPivot({ view, onChange, counts, disabled = {}, t }: SourceKindPivotProps) {
   const segments: {
-    key: 'files' | 'database' | 'container'
+    key: 'files' | 'database' | 'container' | 'app'
     target: SourceChoiceView
     labelKey: string
     Icon: typeof FileText
@@ -4042,6 +4120,12 @@ function SourceKindPivot({ view, onChange, counts, disabled = {}, t }: SourceKin
       target: 'paths',
       labelKey: 'backupPlans.sourceChooser.kindFiles',
       Icon: FileText,
+    },
+    {
+      key: 'app',
+      target: 'app',
+      labelKey: 'appTemplates.tab.kind',
+      Icon: AppWindow,
     },
     {
       key: 'database',
@@ -4057,12 +4141,14 @@ function SourceKindPivot({ view, onChange, counts, disabled = {}, t }: SourceKin
     },
   ]
 
-  const activeKey: 'files' | 'database' | 'container' =
+  const activeKey: 'files' | 'database' | 'container' | 'app' =
     view === 'database' || view === 'database-detail'
       ? 'database'
       : view === 'container'
         ? 'container'
-        : 'files'
+        : view === 'app'
+          ? 'app'
+          : 'files'
 
   return (
     <Box

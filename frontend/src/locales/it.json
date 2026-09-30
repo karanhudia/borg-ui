@@ -6787,14 +6787,6 @@
     "notFound": "Nessun {{app}} in esecuzione qui. Scegli sotto la sua cartella. È {{hint}}.",
     "verified": "Verificato con {{app}} {{version}}.",
     "docs": "Documentazione backup di {{app}}",
-    "dialog": {
-      "open": "Inizia da un'app",
-      "title": "Aggiungi un'app",
-      "machine": "Gira su",
-      "thisServer": "Questo server Borg UI",
-      "folder": "Cartella dell'app",
-      "add": "Aggiungi al piano"
-    },
     "select": {
       "label": "App",
       "search": "Cerca app",
@@ -6820,6 +6812,17 @@
       "fixFolder": "Soluzione più semplice: tieni i file di Immich in una cartella normale, come fa il compose ufficiale di Immich. Imposta {{hint}} su una cartella come /srv/immich, sposta lì i file e riavvia Immich.",
       "fixAcl": "Oppure consenti a {{user}} di leggere questo volume (serve il pacchetto acl su quella macchina):"
     },
-    "goodToKnow": "Da sapere"
+    "goodToKnow": "Da sapere",
+    "tab": {
+      "kind": "App",
+      "title": "Salva un'app",
+      "runsOn": "Dove gira l'app",
+      "folder": "Cartella dell'app",
+      "add": "Aggiungi {{app}}",
+      "inPlan": "App in questo piano",
+      "folderCount_one": "{{count}} cartella",
+      "folderCount_other": "{{count}} cartelle",
+      "remove": "Rimuovi {{app}}"
+    }
   }
 }

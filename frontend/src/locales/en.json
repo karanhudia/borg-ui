@@ -6787,14 +6787,6 @@
     "notFound": "No running {{app}} found here. Pick its folder below. It is the {{hint}}.",
     "verified": "Checked against {{app}} {{version}}.",
     "docs": "{{app}} backup docs",
-    "dialog": {
-      "open": "Start from an app",
-      "title": "Add an app",
-      "machine": "Runs on",
-      "thisServer": "This Borg UI server",
-      "folder": "App folder",
-      "add": "Add to plan"
-    },
     "select": {
       "label": "App",
       "search": "Search apps",
@@ -6820,6 +6812,17 @@
       "fixFolder": "Easiest fix: keep Immich's files in a normal folder, as Immich's own compose file does. Set the {{hint}} to a folder such as /srv/immich, move the files there, and restart Immich.",
       "fixAcl": "Or let {{user}} read this volume (needs the acl package on that machine):"
     },
-    "goodToKnow": "Good to know"
+    "goodToKnow": "Good to know",
+    "tab": {
+      "kind": "Apps",
+      "title": "Back up an app",
+      "runsOn": "Where the app runs",
+      "folder": "App folder",
+      "add": "Add {{app}}",
+      "inPlan": "Apps in this plan",
+      "folderCount_one": "{{count}} folder",
+      "folderCount_other": "{{count}} folders",
+      "remove": "Remove {{app}}"
+    }
   }
 }

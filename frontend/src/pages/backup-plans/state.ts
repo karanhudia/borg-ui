@@ -202,6 +202,7 @@ function normalizePlanSourceLocations(plan: BackupPlan): SourceLocation[] {
           paths,
           ...(database ? { database } : {}),
           ...(container ? { container } : {}),
+          ...(location.app ? { app: location.app } : {}),
         }
       }
       if (location.source_type === 'agent') {
@@ -216,6 +217,7 @@ function normalizePlanSourceLocations(plan: BackupPlan): SourceLocation[] {
           paths,
           ...(database ? { database } : {}),
           ...(container ? { container } : {}),
+          ...(location.app ? { app: location.app } : {}),
         }
       }
       const database = normalizeDatabase(location, paths)
@@ -227,6 +229,7 @@ function normalizePlanSourceLocations(plan: BackupPlan): SourceLocation[] {
         paths,
         ...(database ? { database } : {}),
         ...(container ? { container } : {}),
+        ...(location.app ? { app: location.app } : {}),
       }
     })
     .filter((location): location is SourceLocation => location !== null)

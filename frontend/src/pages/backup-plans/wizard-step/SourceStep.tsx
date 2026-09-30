@@ -13,7 +13,6 @@ import {
 } from 'lucide-react'
 
 import ExcludePatternInput from '../../../components/ExcludePatternInput'
-import { AppTemplateDialog } from './AppTemplateDialog'
 import { SourceSelectionDialog } from './SourceSelectionDialog'
 import type { SourceLocation } from '../../../types'
 import type { BackupPlanWizardStepProps } from './types'
@@ -57,13 +56,13 @@ export function SourceStep({
   t,
 }: SourceStepProps) {
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false)
-  const [appDialogOpen, setAppDialogOpen] = useState(false)
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const sourceLocations = getWizardSourceLocations(wizardState)
   const sourcePaths = sourceLocations.flatMap((location) => location.paths)
   const hasSources = sourcePaths.length > 0
   const hasDatabaseSource = sourceLocations.some((location) => Boolean(location.database))
   const hasContainerSource = sourceLocations.some((location) => Boolean(location.container))
+  const hasAppSource = sourceLocations.some((location) => Boolean(location.app))
   const isLegacyDatabaseSource =
     !hasDatabaseSource &&
     !hasContainerSource &&
@@ -73,14 +72,18 @@ export function SourceStep({
     (location) =>
       !location.database &&
       !location.container &&
+      !location.app &&
       !(isLegacyDatabaseSource && location.paths.every(isDatabaseDumpPath))
   )
   const isDatabaseSource =
     (hasDatabaseSource && !hasFileSource && !hasContainerSource) || isLegacyDatabaseSource
-  const isContainerSource = hasContainerSource && !hasDatabaseSource && !hasFileSource
+  const isContainerSource =
+    hasContainerSource && !hasDatabaseSource && !hasFileSource && !hasAppSource
+  const isAppSource = hasAppSource && !hasDatabaseSource && !hasContainerSource && !hasFileSource
   const sourceKindCount = [
     hasDatabaseSource || isLegacyDatabaseSource,
     hasContainerSource,
+    hasAppSource,
     hasFileSource,
   ].filter(Boolean).length
   const sourceKindLabel =
@@ -90,7 +93,9 @@ export function SourceStep({
         ? t('backupPlans.sourceChooser.databaseTitle')
         : isContainerSource
           ? t('backupPlans.sourceChooser.containerTitle')
-          : t('backupPlans.sourceChooser.filesTitle')
+          : isAppSource
+            ? t('appTemplates.tab.kind')
+            : t('backupPlans.sourceChooser.filesTitle')
 
   return (
     <Stack spacing={3}>
@@ -158,6 +163,8 @@ export function SourceStep({
                   <Database size={18} />
                 ) : isContainerSource ? (
                   <ContainerIcon size={18} />
+                ) : isAppSource ? (
+                  <AppWindow size={18} />
                 ) : (
                   <FolderOpen size={18} />
                 )}
@@ -197,27 +204,16 @@ export function SourceStep({
                 )}
               </Stack>
             </Stack>
-            <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
-              <Button
-                variant="text"
-                size="small"
-                startIcon={<AppWindow size={14} />}
-                onClick={() => setAppDialogOpen(true)}
-                sx={{ textTransform: 'none', fontWeight: 500 }}
-              >
-                {t('appTemplates.dialog.open')}
-              </Button>
-              <Button
-                variant="text"
-                size="small"
-                onClick={() => setSourceDialogOpen(true)}
-                sx={{ textTransform: 'none', fontWeight: 500 }}
-              >
-                {hasSources
-                  ? t('backupPlans.sourceChooser.edit')
-                  : t('backupPlans.sourceChooser.chooseSource')}
-              </Button>
-            </Stack>
+            <Button
+              variant="text"
+              size="small"
+              onClick={() => setSourceDialogOpen(true)}
+              sx={{ flexShrink: 0, textTransform: 'none', fontWeight: 500 }}
+            >
+              {hasSources
+                ? t('backupPlans.sourceChooser.edit')
+                : t('backupPlans.sourceChooser.chooseSource')}
+            </Button>
           </Stack>
           {hasSources && (
             <Stack spacing={1}>
@@ -300,6 +296,14 @@ export function SourceStep({
                           size="small"
                           variant="outlined"
                           label={location.container.display_name}
+                          sx={{ height: 20, flexShrink: 0 }}
+                        />
+                      )}
+                      {location.app && (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={location.app.display_name}
                           sx={{ height: 20, flexShrink: 0 }}
                         />
                       )}
@@ -427,17 +431,6 @@ export function SourceStep({
         onClose={() => setSourceDialogOpen(false)}
         t={t}
       />
-      {appDialogOpen && (
-        <AppTemplateDialog
-          open
-          onClose={() => setAppDialogOpen(false)}
-          wizardState={wizardState}
-          sshConnections={sshConnections}
-          updateState={updateState}
-          onCreateScript={onCreateScript}
-          t={t}
-        />
-      )}
     </Stack>
   )
 }
