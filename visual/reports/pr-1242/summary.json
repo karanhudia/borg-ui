@@ -1,21 +1,75 @@
 {
-  "generatedAt": "2026-09-29T12:52:12.935Z",
+  "generatedAt": "2026-09-30T13:03:17.169Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1242 visual report",
-    "commitSha": "7f69508dcbfc",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36570859489"
+    "commitSha": "6041441879fa",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36718677873"
   },
   "totals": {
-    "baseline": 1088,
-    "actual": 1100,
-    "compared": 1088,
-    "changed": 10,
+    "baseline": 1100,
+    "actual": 1112,
+    "compared": 1100,
+    "changed": 16,
     "added": 12,
     "removed": 0,
-    "unchanged": 1078
+    "unchanged": 1084
   },
   "changed": [
+    {
+      "fileName": "components-destinationselect--disabled-control.png",
+      "baselinePath": "images/baseline/components-destinationselect--disabled-control.png",
+      "actualPath": "images/actual/components-destinationselect--disabled-control.png",
+      "diffPath": "images/diff/components-destinationselect--disabled-control.png",
+      "diffPixels": 1024000,
+      "totalPixels": 1024000,
+      "diffRatio": 1,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-install-command-step--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--add-agent-install-command-step--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--add-agent-install-command-step--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--add-agent-install-command-step--mobile.png",
+      "diffPixels": 194174,
+      "totalPixels": 329160,
+      "diffRatio": 0.5899076436991129,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-install-command-step.png",
+      "baselinePath": "images/baseline/pages-managedagents--add-agent-install-command-step.png",
+      "actualPath": "images/actual/pages-managedagents--add-agent-install-command-step.png",
+      "diffPath": "images/diff/pages-managedagents--add-agent-install-command-step.png",
+      "diffPixels": 89705,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0876025390625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
     {
       "fileName": "pages-managedagents--add-agent-localhost-warning--mobile.png",
       "baselinePath": "images/baseline/pages-managedagents--add-agent-localhost-warning--mobile.png",
@@ -89,13 +143,49 @@
       }
     },
     {
+      "fileName": "pages-managedagents--add-agent-waiting-for-connection--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--add-agent-waiting-for-connection--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--add-agent-waiting-for-connection--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--add-agent-waiting-for-connection--mobile.png",
+      "diffPixels": 86125,
+      "totalPixels": 329160,
+      "diffRatio": 0.26165086887835703,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-waiting-for-connection.png",
+      "baselinePath": "images/baseline/pages-managedagents--add-agent-waiting-for-connection.png",
+      "actualPath": "images/actual/pages-managedagents--add-agent-waiting-for-connection.png",
+      "diffPath": "images/diff/pages-managedagents--add-agent-waiting-for-connection.png",
+      "diffPixels": 108387,
+      "totalPixels": 1024000,
+      "diffRatio": 0.1058466796875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
       "fileName": "pages-managedagents--fleet-overview--mobile.png",
       "baselinePath": "images/baseline/pages-managedagents--fleet-overview--mobile.png",
       "actualPath": "images/actual/pages-managedagents--fleet-overview--mobile.png",
       "diffPath": "images/diff/pages-managedagents--fleet-overview--mobile.png",
-      "diffPixels": 117384,
+      "diffPixels": 125751,
       "totalPixels": 329160,
-      "diffRatio": 0.35661684287276707,
+      "diffRatio": 0.3820360918702151,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -111,9 +201,9 @@
       "baselinePath": "images/baseline/pages-managedagents--fleet-overview.png",
       "actualPath": "images/actual/pages-managedagents--fleet-overview.png",
       "diffPath": "images/diff/pages-managedagents--fleet-overview.png",
-      "diffPixels": 570126,
+      "diffPixels": 570309,
       "totalPixels": 1024000,
-      "diffRatio": 0.556763671875,
+      "diffRatio": 0.5569423828125,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -129,9 +219,9 @@
       "baselinePath": "images/baseline/pages-managedagents--locked-community--mobile.png",
       "actualPath": "images/actual/pages-managedagents--locked-community--mobile.png",
       "diffPath": "images/diff/pages-managedagents--locked-community--mobile.png",
-      "diffPixels": 109424,
+      "diffPixels": 122106,
       "totalPixels": 329160,
-      "diffRatio": 0.3324340746141694,
+      "diffRatio": 0.37096244987240246,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -165,9 +255,9 @@
       "baselinePath": "images/baseline/pages-managedagents--setup-help-details--mobile.png",
       "actualPath": "images/actual/pages-managedagents--setup-help-details--mobile.png",
       "diffPath": "images/diff/pages-managedagents--setup-help-details--mobile.png",
-      "diffPixels": 46616,
+      "diffPixels": 49997,
       "totalPixels": 329160,
-      "diffRatio": 0.1416210961234658,
+      "diffRatio": 0.151892696560943,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -183,9 +273,9 @@
       "baselinePath": "images/baseline/pages-managedagents--setup-help-details.png",
       "actualPath": "images/actual/pages-managedagents--setup-help-details.png",
       "diffPath": "images/diff/pages-managedagents--setup-help-details.png",
-      "diffPixels": 243051,
+      "diffPixels": 242016,
       "totalPixels": 1024000,
-      "diffRatio": 0.2373544921875,
+      "diffRatio": 0.23634375,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -194,6 +284,24 @@
       "actual": {
         "width": 1280,
         "height": 800
+      }
+    },
+    {
+      "fileName": "quick-start-steps--destination-ssh-no-default-path--mobile.png",
+      "baselinePath": "images/baseline/quick-start-steps--destination-ssh-no-default-path--mobile.png",
+      "actualPath": "images/actual/quick-start-steps--destination-ssh-no-default-path--mobile.png",
+      "diffPath": "images/diff/quick-start-steps--destination-ssh-no-default-path--mobile.png",
+      "diffPixels": 2803,
+      "totalPixels": 329160,
+      "diffRatio": 0.008515615506136833,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
       }
     }
   ],
@@ -937,6 +1045,12 @@
       "fileName": "components-activebackupplanruncard--backup-in-progress--mobile.png"
     },
     {
+      "fileName": "components-activebackupplanruncard--backup-in-progress-with-known-total--mobile.png"
+    },
+    {
+      "fileName": "components-activebackupplanruncard--backup-in-progress-with-known-total.png"
+    },
+    {
       "fileName": "components-activebackupplanruncard--backup-in-progress.png"
     },
     {
@@ -988,12 +1102,6 @@
       "fileName": "components-appsidebar--viewer-settings.png"
     },
     {
-      "fileName": "components-appsidebar--with-quick-start--mobile.png"
-    },
-    {
-      "fileName": "components-appsidebar--with-quick-start.png"
-    },
-    {
       "fileName": "components-appsidebar--with-remote-clients--mobile.png"
     },
     {
@@ -1004,6 +1112,12 @@
     },
     {
       "fileName": "components-archivecard--actions-only.png"
+    },
+    {
+      "fileName": "components-archivecard--deleting--mobile.png"
+    },
+    {
+      "fileName": "components-archivecard--deleting.png"
     },
     {
       "fileName": "components-archivecard--openable--mobile.png"
@@ -1591,9 +1705,6 @@
       "fileName": "components-destinationselect--disabled-control--mobile.png"
     },
     {
-      "fileName": "components-destinationselect--disabled-control.png"
-    },
-    {
       "fileName": "components-destinationselect--remote-unavailable--mobile.png"
     },
     {
@@ -1918,6 +2029,12 @@
       "fileName": "components-prune-prunecandidatesranked--default.png"
     },
     {
+      "fileName": "components-prune-prunecandidatesranked--long-list--mobile.png"
+    },
+    {
+      "fileName": "components-prune-prunecandidatesranked--long-list.png"
+    },
+    {
       "fileName": "components-prune-prunecandidatesranked--partial-and-stale--mobile.png"
     },
     {
@@ -2084,6 +2201,12 @@
     },
     {
       "fileName": "components-repositorycard--default.png"
+    },
+    {
+      "fileName": "components-repositorycard--deleting--mobile.png"
+    },
+    {
+      "fileName": "components-repositorycard--deleting.png"
     },
     {
       "fileName": "components-repositorycard--enable-cloud-mirror--mobile.png"
@@ -2938,6 +3061,12 @@
       "fileName": "pages-backup-plans-content--community-locked-runs.png"
     },
     {
+      "fileName": "pages-backup-plans-content--deleting-plan--mobile.png"
+    },
+    {
+      "fileName": "pages-backup-plans-content--deleting-plan.png"
+    },
+    {
       "fileName": "pages-backup-plans-content--empty-with-quick-start--mobile.png"
     },
     {
@@ -3082,22 +3211,10 @@
       "fileName": "pages-managedagents--add-agent-details-step.png"
     },
     {
-      "fileName": "pages-managedagents--add-agent-install-command-step--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--add-agent-install-command-step.png"
-    },
-    {
       "fileName": "pages-managedagents--add-agent-root-service-user-warning--mobile.png"
     },
     {
       "fileName": "pages-managedagents--add-agent-root-service-user-warning.png"
-    },
-    {
-      "fileName": "pages-managedagents--add-agent-waiting-for-connection--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--add-agent-waiting-for-connection.png"
     },
     {
       "fileName": "pages-managedagents--agent-diagnostics-partial-failure--mobile.png"
@@ -3262,6 +3379,9 @@
       "fileName": "quick-start-steps--destination-ssh--mobile.png"
     },
     {
+      "fileName": "quick-start-steps--destination-ssh-no-default-path.png"
+    },
+    {
       "fileName": "quick-start-steps--destination-ssh.png"
     },
     {
@@ -3287,6 +3407,12 @@
     },
     {
       "fileName": "quick-start-steps--review--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--review-ssh-manual-unencrypted--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--review-ssh-manual-unencrypted.png"
     },
     {
       "fileName": "quick-start-steps--review.png"
