@@ -645,9 +645,7 @@ async def api_info():
 async def log_requests(request: Request, call_next):
     """Log all requests (except static assets and SSE streams)"""
     # Skip logging for static assets and SSE streams to reduce noise
-    skip_paths = [
-        BASE_PATH + path for path in ("/assets/", "/static/", "/api/events/stream")
-    ]
+    skip_paths = ["/assets/", "/static/", "/api/events/stream"]
     should_log = not any(request.url.path.startswith(path) for path in skip_paths)
 
     if should_log:
