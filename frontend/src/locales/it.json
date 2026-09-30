@@ -6594,6 +6594,7 @@
     "subtitle": "Rispondi a poche domande e Borg UI configura per te un backup pianificato che si mantiene da solo.",
     "create": "Crea backup",
     "steps": {
+      "app": "App",
       "what": "Cosa",
       "connect": "Connetti",
       "folders": "Cartelle",
@@ -6696,7 +6697,9 @@
       "creates": "Crea",
       "createsList": "Repository «{{name}}» e piano di backup «{{name}}»",
       "thisServer": "questo server",
-      "onMachine": "su {{machine}}"
+      "onMachine": "su {{machine}}",
+      "skips": "Salta",
+      "checksFirst": "Controlla prima"
     },
     "customize": {
       "title": "Personalizza",
@@ -6725,6 +6728,7 @@
       "backupStarted": "Primo backup avviato",
       "actions": {
         "create_repository": "Crea il repository",
+        "create_script": "Crea il controllo pre-backup",
         "create_plan": "Crea il piano di backup con la sua pianificazione"
       },
       "status": {
@@ -6762,6 +6766,33 @@
       "noAgentsNoPermission": "Nessun computer esegue ancora l'agente. Chiedi a un amministratore di aggiungerne uno in Agenti gestiti.",
       "loadFailed": "Impossibile caricare i computer. Riprova tra poco.",
       "offlineBrowse": "{{machine}} è offline, quindi non è possibile sfogliarne le cartelle. Scrivi il percorso o attendi che l'agente si connetta."
+    },
+    "app": {
+      "title": "Quale app vuoi salvare?",
+      "other": "Qualcos'altro",
+      "otherDesc": "Scegli tu le cartelle: documenti, dati delle app, qualsiasi cosa sul disco.",
+      "hint": "Scegliendo un'app viene inserita la sua cartella, si salta ciò che può rigenerare e si aggiungono i controlli necessari."
+    }
+  },
+  "appTemplates": {
+    "scanAgain": "Cerca di nuovo",
+    "pickManually": "Scegli sotto la cartella di {{app}}. È {{hint}}.",
+    "scanning": "Ricerca di {{app}}…",
+    "notReadable": "{{app}} trovato, ma Borg UI non può leggere {{path}}. Aggiungi questa riga ai volumi di Borg UI in docker-compose.yml, riavvia Borg UI e cerca di nuovo:",
+    "useFolder": "Usa questa cartella",
+    "found": "{{app}} ({{container}}) trovato in {{path}}.",
+    "notFound": "Nessun {{app}} in esecuzione qui. Scegli sotto la sua cartella. È {{hint}}.",
+    "skipTitle": "Cartelle da saltare",
+    "verified": "Verificato con {{app}} {{version}}.",
+    "docs": "Documentazione backup di {{app}}",
+    "dialog": {
+      "open": "Inizia da un'app",
+      "title": "Aggiungi un'app",
+      "app": "App",
+      "machine": "Gira su",
+      "thisServer": "Questo server Borg UI",
+      "folder": "Cartella dell'app",
+      "add": "Aggiungi al piano"
     }
   }
 }

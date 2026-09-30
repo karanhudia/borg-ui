@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Box, Button, Chip, Stack, Typography } from '@mui/material'
 import { Folder } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import AppTemplateFolderPanel from '../../app-templates/AppTemplateFolderPanel'
+import type { AppScanTarget } from '../../app-templates/appTemplates'
 import PathSelectorField from '../../shared/PathSelectorField'
 import type { QuickStartStepProps } from '../quickStartState'
 import { agentIsOnline, agentLabel, useManagedAgent } from '../quickStartAgent'
@@ -15,6 +17,14 @@ export default function QuickStartFoldersStep({ answers, onChange }: QuickStartS
   const connection = useSshConnection(remote ? answers.sourceConnectionId : '')
   const onAgent = answers.sourceKind === 'agent'
   const agent = useManagedAgent(onAgent ? answers.sourceAgentId : '')
+
+  const useAppRoot = useCallback((path: string) => onChange({ sourcePaths: [path] }), [onChange])
+  const scanTarget: AppScanTarget | null =
+    answers.sourceKind === 'server'
+      ? { source_type: 'local', source_ssh_connection_id: null }
+      : answers.sourceKind === 'ssh' && answers.sourceConnectionId !== ''
+        ? { source_type: 'remote', source_ssh_connection_id: answers.sourceConnectionId }
+        : null
 
   const addPaths = (paths: string[]) => {
     const next = [...answers.sourcePaths]
@@ -43,6 +53,17 @@ export default function QuickStartFoldersStep({ answers, onChange }: QuickStartS
               : t('quickStart.folders.hint')}
         </Typography>
       </Box>
+
+      {answers.app && (
+        <AppTemplateFolderPanel
+          template={answers.app}
+          target={scanTarget}
+          root={answers.sourcePaths[0] ?? ''}
+          onUseRoot={useAppRoot}
+          excludes={answers.appExcludes}
+          onExcludesChange={(appExcludes) => onChange({ appExcludes })}
+        />
+      )}
 
       <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
         <PathSelectorField

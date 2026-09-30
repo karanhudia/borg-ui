@@ -2,11 +2,12 @@ import { useCallback, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 
 import { getCreatedRepositoryId } from '../../pages/backup-plans/state'
-import { backupPlansAPI } from '../../services/api'
+import { backupPlansAPI, scriptsAPI } from '../../services/api'
 import { BorgApiClient } from '../../services/borgApi'
 import { getApiErrorDetail } from '../../utils/apiErrors'
 import { translateBackendKey } from '../../utils/translateBackendKey'
 import {
+  appScriptPayload,
   buildPlanPayload,
   buildQuickStartActions,
   buildRepositoryPayload,
@@ -44,9 +45,15 @@ async function executeAction(
       if (!repositoryId) throw new Error('missing repository id in response')
       return { repositoryId }
     }
+    case 'create_script': {
+      const payload = appScriptPayload(answers)
+      if (!payload) throw new Error('no app script to create')
+      const response = await scriptsAPI.create(payload)
+      return { scriptId: createdId(response) }
+    }
     case 'create_plan': {
       const response = await backupPlansAPI.create(
-        buildPlanPayload(answers, results.repositoryId as number)
+        buildPlanPayload(answers, results.repositoryId as number, results.scriptId)
       )
       return { planId: createdId(response) }
     }

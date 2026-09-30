@@ -1,4 +1,6 @@
 import type { PruneSettings } from '../PruneSettingsInput'
+import type { AppTemplate } from '../../services/api'
+import { defaultAppExcludes } from '../app-templates/appTemplates'
 import { getDefaultRepositoryEncryption } from '../wizard/repositoryEncryption'
 import { getBrowserTimeZone } from '../../utils/dateUtils'
 
@@ -6,7 +8,7 @@ export type QuickStartSourceKind = 'server' | 'ssh' | 'agent'
 export type QuickStartDestinationKind = 'server' | 'ssh' | 'agent'
 export type QuickStartSchedulePreset = 'daily' | 'every6h' | 'weekly' | 'custom'
 export type QuickStartStepKey =
-  'what' | 'connect' | 'folders' | 'destination' | 'protect' | 'schedule' | 'review'
+  'app' | 'what' | 'connect' | 'folders' | 'destination' | 'protect' | 'schedule' | 'review'
 
 export interface QuickStartSettings {
   borgVersion: 1 | 2
@@ -20,6 +22,10 @@ export interface QuickStartSettings {
 }
 
 export interface QuickStartAnswers {
+  /** The app being backed up, or null for plain folders. */
+  app: AppTemplate | null
+  /** Folders under the app's root to skip, relative to it. */
+  appExcludes: string[]
   sourceKind: QuickStartSourceKind
   /** SSH connection the files are pulled from (sourceKind 'ssh'). */
   sourceConnectionId: number | ''
@@ -50,6 +56,8 @@ export const SCHEDULE_PRESET_CRON: Record<Exclude<QuickStartSchedulePreset, 'cus
 
 export function createInitialQuickStartAnswers(): QuickStartAnswers {
   return {
+    app: null,
+    appExcludes: [],
     sourceKind: 'server',
     sourceConnectionId: '',
     sourceAgentId: '',
@@ -86,10 +94,27 @@ export function createInitialQuickStartAnswers(): QuickStartAnswers {
 }
 
 export function visibleSteps(answers: QuickStartAnswers): QuickStartStepKey[] {
-  const steps: QuickStartStepKey[] = ['what']
+  const steps: QuickStartStepKey[] = ['app', 'what']
   if (answers.sourceKind !== 'server') steps.push('connect')
   steps.push('folders', 'destination', 'protect', 'schedule', 'review')
   return steps
+}
+
+/** The patch for picking an app: its excludes, its schedule, and a fresh folder list. */
+export function appPatch(
+  answers: QuickStartAnswers,
+  app: AppTemplate | null
+): Partial<QuickStartAnswers> {
+  // Re-picking the same app keeps what the user already set up.
+  if ((answers.app?.id ?? null) === (app?.id ?? null)) return {}
+  return {
+    app,
+    appExcludes: app ? defaultAppExcludes(app) : [],
+    sourcePaths: [],
+    name: '',
+    schedulePreset: app ? 'custom' : 'daily',
+    cronExpression: app ? app.schedule_cron : SCHEDULE_PRESET_CRON.daily,
+  }
 }
 
 /**
@@ -158,6 +183,7 @@ export function destinationInsideSource(answers: QuickStartAnswers): boolean {
 
 export function isStepValid(step: QuickStartStepKey, answers: QuickStartAnswers): boolean {
   switch (step) {
+    case 'app':
     case 'what':
     case 'review':
       return true
@@ -184,6 +210,7 @@ export function isStepValid(step: QuickStartStepKey, answers: QuickStartAnswers)
 
 // Last path segment of the first folder, used to prefill the name ("home", "etc").
 export function suggestedName(answers: QuickStartAnswers): string {
+  if (answers.app) return answers.app.name
   const first = answers.sourcePaths.find((path) => path.trim())
   if (!first) return ''
   return first.trim().replace(/\/+$/, '').split('/').pop() || 'root'

@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
+from app.app_templates import AppTemplate, load_app_templates, match_app_template
 from app.utils.ssh_host_validation import ssh_destination
 from app.config import settings
 from app.core.features import require_feature_access
@@ -1871,6 +1872,8 @@ async def _scan_remote_database_paths(
 
 async def _scan_local_containers(
     request: ContainerScanRequest,
+    *,
+    with_sizes: bool = True,
 ) -> ContainerScanResponse | JSONResponse:
     scan_target = _scan_target("local")
     timeout_seconds = (
@@ -1903,11 +1906,14 @@ async def _scan_local_containers(
         )
 
     containers = _parse_container_scan_output(result.stdout or "")
-    await asyncio.to_thread(
-        _enrich_local_container_mount_sizes,
-        containers,
-        scan_timeout_seconds=timeout_seconds,
-    )
+    if with_sizes:
+        await asyncio.to_thread(
+            _enrich_local_container_mount_sizes,
+            containers,
+            scan_timeout_seconds=timeout_seconds,
+        )
+    else:
+        _enrich_local_container_mount_backup_sources(containers)
     return ContainerScanResponse(
         scan_target=scan_target,
         containers=containers,
@@ -1918,6 +1924,8 @@ async def _scan_local_containers(
 async def _scan_remote_containers(
     request: ContainerScanRequest,
     db: Session,
+    *,
+    with_sizes: bool = True,
 ) -> ContainerScanResponse | JSONResponse:
     connection = (
         db.query(SSHConnection)
@@ -1992,13 +2000,14 @@ async def _scan_remote_containers(
             )
 
         containers = _parse_container_scan_output(result.stdout or "")
-        await asyncio.to_thread(
-            _enrich_remote_container_mount_sizes,
-            containers,
-            connection=connection,
-            key_file_path=key_file_path,
-            scan_timeout_seconds=timeout_seconds,
-        )
+        if with_sizes:
+            await asyncio.to_thread(
+                _enrich_remote_container_mount_sizes,
+                containers,
+                connection=connection,
+                key_file_path=key_file_path,
+                scan_timeout_seconds=timeout_seconds,
+            )
         return ContainerScanResponse(
             scan_target=scan_target,
             containers=containers,
@@ -2095,4 +2104,99 @@ async def discover_databases(
         source_types=_source_types(),
         detections=detections,
         templates=templates,
+    )
+
+
+class AppTemplateListResponse(BaseModel):
+    templates: list[AppTemplate]
+
+
+class AppDetection(BaseModel):
+    template_id: str
+    container_name: str
+    state: str | None = None
+    # The app's root folder as Borg UI reads it (host path, mapped through the
+    # local mount points when Borg UI runs in Docker).
+    path: str
+    host_path: str
+    # False when Borg UI cannot see the folder: it runs in Docker and the host
+    # path is not mounted into it.
+    readable: bool
+
+
+class AppDetectResponse(BaseModel):
+    scan_target: DatabaseScanTarget
+    detections: list[AppDetection]
+    warnings: list[ScanWarning]
+
+
+def _app_detections(
+    containers: list[ContainerCandidate], *, local: bool
+) -> list[AppDetection]:
+    templates = load_app_templates()
+    detections: list[AppDetection] = []
+    for container in containers:
+        template = match_app_template(container.image, templates)
+        if template is None:
+            continue
+        mount = next(
+            (
+                mount
+                for mount in container.mounts
+                if mount.destination == template.detect.mount_destination
+                and mount.source
+            ),
+            None,
+        )
+        if mount is None:
+            continue
+        path = (mount.backup_source or mount.source or "").strip()
+        detections.append(
+            AppDetection(
+                template_id=template.id,
+                container_name=container.name,
+                state=container.state,
+                path=path,
+                host_path=(mount.source or "").strip(),
+                # Remote paths are read over SSH, where the host path is the path.
+                readable=os.path.isdir(path) if local else True,
+            )
+        )
+    return detections
+
+
+@router.get("/apps", response_model=AppTemplateListResponse)
+async def list_app_templates(
+    current_user: User = Depends(get_current_user),
+) -> AppTemplateListResponse:
+    del current_user
+    return AppTemplateListResponse(templates=list(load_app_templates()))
+
+
+@router.post("/apps/detect", response_model=AppDetectResponse)
+async def detect_apps(
+    request: ContainerScanRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AppDetectResponse:
+    """Find known apps on a machine. Free on every plan: it only reports
+    containers that match an app template, unlike the full container scan."""
+    del current_user
+    _validate_container_scan_request(request)
+    if request.source_type == "remote":
+        result = await _scan_remote_containers(request, db, with_sizes=False)
+    else:
+        result = await _scan_local_containers(request, with_sizes=False)
+
+    if isinstance(result, JSONResponse):
+        failed = ContainerScanResponse.model_validate_json(result.body)
+        return AppDetectResponse(
+            scan_target=failed.scan_target, detections=[], warnings=failed.warnings
+        )
+    return AppDetectResponse(
+        scan_target=result.scan_target,
+        detections=_app_detections(
+            result.containers, local=request.source_type == "local"
+        ),
+        warnings=result.warnings,
     )

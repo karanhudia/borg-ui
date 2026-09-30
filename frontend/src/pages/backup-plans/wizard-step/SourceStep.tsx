@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { alpha, Box, Button, Chip, Stack, TextField, Typography } from '@mui/material'
 import {
+  AppWindow,
   ChevronDown,
   ChevronUp,
   Container as ContainerIcon,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react'
 
 import ExcludePatternInput from '../../../components/ExcludePatternInput'
+import { AppTemplateDialog } from './AppTemplateDialog'
 import { SourceSelectionDialog } from './SourceSelectionDialog'
 import type { SourceLocation } from '../../../types'
 import type { BackupPlanWizardStepProps } from './types'
@@ -55,6 +57,7 @@ export function SourceStep({
   t,
 }: SourceStepProps) {
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false)
+  const [appDialogOpen, setAppDialogOpen] = useState(false)
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const sourceLocations = getWizardSourceLocations(wizardState)
   const sourcePaths = sourceLocations.flatMap((location) => location.paths)
@@ -194,16 +197,27 @@ export function SourceStep({
                 )}
               </Stack>
             </Stack>
-            <Button
-              variant="text"
-              size="small"
-              onClick={() => setSourceDialogOpen(true)}
-              sx={{ flexShrink: 0, textTransform: 'none', fontWeight: 500 }}
-            >
-              {hasSources
-                ? t('backupPlans.sourceChooser.edit')
-                : t('backupPlans.sourceChooser.chooseSource')}
-            </Button>
+            <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+              <Button
+                variant="text"
+                size="small"
+                startIcon={<AppWindow size={14} />}
+                onClick={() => setAppDialogOpen(true)}
+                sx={{ textTransform: 'none', fontWeight: 500 }}
+              >
+                {t('appTemplates.dialog.open')}
+              </Button>
+              <Button
+                variant="text"
+                size="small"
+                onClick={() => setSourceDialogOpen(true)}
+                sx={{ textTransform: 'none', fontWeight: 500 }}
+              >
+                {hasSources
+                  ? t('backupPlans.sourceChooser.edit')
+                  : t('backupPlans.sourceChooser.chooseSource')}
+              </Button>
+            </Stack>
           </Stack>
           {hasSources && (
             <Stack spacing={1}>
@@ -413,6 +427,17 @@ export function SourceStep({
         onClose={() => setSourceDialogOpen(false)}
         t={t}
       />
+      {appDialogOpen && (
+        <AppTemplateDialog
+          open
+          onClose={() => setAppDialogOpen(false)}
+          wizardState={wizardState}
+          sshConnections={sshConnections}
+          updateState={updateState}
+          onCreateScript={onCreateScript}
+          t={t}
+        />
+      )}
     </Stack>
   )
 }

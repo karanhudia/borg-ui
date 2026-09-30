@@ -31,6 +31,7 @@ describe('quickStartState', () => {
 
   it('skips the connect step for files on this server', () => {
     expect(visibleSteps(answers())).toEqual([
+      'app',
       'what',
       'folders',
       'destination',

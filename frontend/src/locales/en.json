@@ -6594,6 +6594,7 @@
     "subtitle": "Answer a few questions and Borg UI sets up a scheduled, self-maintaining backup for you.",
     "create": "Create backup",
     "steps": {
+      "app": "App",
       "what": "What",
       "connect": "Connect",
       "folders": "Folders",
@@ -6696,7 +6697,9 @@
       "creates": "Creates",
       "createsList": "Repository \"{{name}}\" and backup plan \"{{name}}\"",
       "thisServer": "this server",
-      "onMachine": "on {{machine}}"
+      "onMachine": "on {{machine}}",
+      "skips": "Skips",
+      "checksFirst": "Checks first"
     },
     "customize": {
       "title": "Customize",
@@ -6725,6 +6728,7 @@
       "backupStarted": "First backup started",
       "actions": {
         "create_repository": "Create the repository",
+        "create_script": "Create the pre-backup check",
         "create_plan": "Create the backup plan with its schedule"
       },
       "status": {
@@ -6762,6 +6766,33 @@
       "noAgentsNoPermission": "No computers run the agent yet. Ask an admin to add one under Managed Agents.",
       "loadFailed": "Could not load the computers. Try again in a moment.",
       "offlineBrowse": "{{machine}} is offline, so its folders cannot be browsed. Type the path, or wait until the agent connects."
+    },
+    "app": {
+      "title": "Which app are you backing up?",
+      "other": "Something else",
+      "otherDesc": "Pick the folders yourself: documents, app data, anything on disk.",
+      "hint": "Picking an app fills in its folder, skips what it can rebuild and adds the safety checks it needs."
+    }
+  },
+  "appTemplates": {
+    "scanAgain": "Scan again",
+    "pickManually": "Pick the {{app}} folder below. It is the {{hint}}.",
+    "scanning": "Looking for {{app}}…",
+    "notReadable": "Found {{app}}, but Borg UI can't read {{path}}. Add this line to the volumes of Borg UI in docker-compose.yml, restart Borg UI, then scan again:",
+    "useFolder": "Use this folder",
+    "found": "Found {{app}} ({{container}}) at {{path}}.",
+    "notFound": "No running {{app}} found here. Pick its folder below. It is the {{hint}}.",
+    "skipTitle": "Folders to skip",
+    "verified": "Checked against {{app}} {{version}}.",
+    "docs": "{{app}} backup docs",
+    "dialog": {
+      "open": "Start from an app",
+      "title": "Add an app",
+      "app": "App",
+      "machine": "Runs on",
+      "thisServer": "This Borg UI server",
+      "folder": "App folder",
+      "add": "Add to plan"
     }
   }
 }

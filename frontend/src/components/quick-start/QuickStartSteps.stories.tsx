@@ -3,8 +3,10 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Box } from '@mui/material'
 import MockAdapter from 'axios-mock-adapter'
 
-import api from '../../services/api'
+import api, { type AppDetection } from '../../services/api'
+import { immichFound, immichTemplate } from '../app-templates/appTemplates.fixtures'
 import type { SshConnectionSummary } from '../shared/SshConnectionSelect'
+import QuickStartAppStep from './steps/QuickStartAppStep'
 import QuickStartConnectStep from './steps/QuickStartConnectStep'
 
 import {
@@ -50,15 +52,26 @@ const laptop = {
 }
 
 const NO_CONNECTIONS: SshConnectionSummary[] = []
+const NO_DETECTIONS: AppDetection[] = []
+
+const immichAnswers: QuickStartAnswers = {
+  ...createInitialQuickStartAnswers(),
+  app: immichTemplate,
+  appExcludes: ['thumbs', 'encoded-video'],
+  schedulePreset: 'custom',
+  cronExpression: immichTemplate.schedule_cron,
+}
 
 function StepHarness({
   step: Step,
   initial,
   connections = NO_CONNECTIONS,
+  detections = NO_DETECTIONS,
 }: {
   step: ComponentType<QuickStartStepProps>
   initial: QuickStartAnswers
   connections?: SshConnectionSummary[]
+  detections?: AppDetection[]
 }) {
   const [answers, setAnswers] = useState(initial)
   const [ready, setReady] = useState(false)
@@ -68,9 +81,11 @@ function StepHarness({
     mock.onGet('/managed-machines/agents').reply(200, [laptop])
     // A machine without a saved default path is asked where its login lands.
     mock.onGet('/filesystem/ssh-home').reply(200, { path: '/home/backup' })
+    mock.onGet('/source-discovery/apps').reply(200, { templates: [immichTemplate] })
+    mock.onPost('/source-discovery/apps/detect').reply(200, { detections, warnings: [] })
     setReady(true)
     return () => mock.restore()
-  }, [connections])
+  }, [connections, detections])
   if (!ready) return null
   return (
     <Box sx={{ width: { xs: '100%', sm: 640 }, p: 2 }}>
@@ -118,6 +133,26 @@ const meta = {
 
 export default meta
 type Story = StoryObj<typeof meta>
+
+export const App: Story = {
+  args: { step: QuickStartAppStep, initial: createInitialQuickStartAnswers() },
+}
+
+export const FoldersImmichFound: Story = {
+  args: { step: QuickStartFoldersStep, initial: immichAnswers, detections: [immichFound] },
+}
+
+export const FoldersImmichNotReadable: Story = {
+  args: {
+    step: QuickStartFoldersStep,
+    initial: immichAnswers,
+    detections: [{ ...immichFound, path: '/srv/immich', readable: false }],
+  },
+}
+
+export const FoldersImmichNotFound: Story = {
+  args: { step: QuickStartFoldersStep, initial: immichAnswers },
+}
 
 export const What: Story = {
   args: { step: QuickStartWhatStep, initial: createInitialQuickStartAnswers() },
@@ -270,4 +305,12 @@ export const WhatAgentPro: Story = {
     step: WhatStepWithAgents,
     initial: { ...createInitialQuickStartAnswers(), sourceKind: 'agent', destinationKind: 'agent' },
   },
+}
+
+export const ReviewImmich: Story = {
+  args: {
+    step: QuickStartReviewStep as never,
+    initial: { ...filled, ...immichAnswers, sourcePaths: ['/local/srv/immich'], name: 'Immich' },
+  },
+  render: (args) => <ReviewHarness initial={args.initial} />,
 }

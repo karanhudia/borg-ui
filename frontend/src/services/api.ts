@@ -584,6 +584,37 @@ export interface SourceDiscoveryContainer {
   mounts: SourceDiscoveryContainerMount[]
 }
 
+export interface AppTemplate {
+  id: string
+  version: number
+  name: string
+  description: string
+  docs_url: string
+  verified: { app_version: string; date: string; restore_tested: boolean }
+  detect: { image_prefix: string; mount_destination: string }
+  root_hint: string
+  excludes: { path: string; default: boolean; label: string }[]
+  pre_backup_script: SourceDiscoveryScriptDraft | null
+  schedule_cron: string
+  notes: string[]
+}
+
+export interface AppDetection {
+  template_id: string
+  container_name: string
+  state: string | null
+  /** The app's root folder as Borg UI reads it. */
+  path: string
+  host_path: string
+  /** False when Borg UI runs in Docker and this folder is not mounted into it. */
+  readable: boolean
+}
+
+export interface AppDetectResponse {
+  detections: AppDetection[]
+  warnings: DatabaseScanWarning[]
+}
+
 export interface ContainerScanResponse {
   scan_target: {
     source_type: 'local' | 'remote'
@@ -1579,6 +1610,11 @@ export const sourceDiscoveryAPI = {
     api.post<ContainerScanResponse>('/source-discovery/containers/scan', body),
   filesystemSnapshots: () =>
     api.get<FilesystemSnapshotCapabilitiesResponse>('/source-discovery/filesystem-snapshots'),
+  appTemplates: () => api.get<{ templates: AppTemplate[] }>('/source-discovery/apps'),
+  detectApps: (body: {
+    source_type: 'local' | 'remote'
+    source_ssh_connection_id: number | null
+  }) => api.post<AppDetectResponse>('/source-discovery/apps/detect', body),
 }
 
 export const mountsAPI = {

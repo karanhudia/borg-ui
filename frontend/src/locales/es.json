@@ -6594,6 +6594,7 @@
     "subtitle": "Responde unas pocas preguntas y Borg UI configura por ti una copia de seguridad programada que se mantiene sola.",
     "create": "Crear copia de seguridad",
     "steps": {
+      "app": "App",
       "what": "Qué",
       "connect": "Conectar",
       "folders": "Carpetas",
@@ -6696,7 +6697,9 @@
       "creates": "Crea",
       "createsList": "Repositorio «{{name}}» y plan de copias «{{name}}»",
       "thisServer": "este servidor",
-      "onMachine": "en {{machine}}"
+      "onMachine": "en {{machine}}",
+      "skips": "Omite",
+      "checksFirst": "Comprueba antes"
     },
     "customize": {
       "title": "Personalizar",
@@ -6725,6 +6728,7 @@
       "backupStarted": "Primera copia iniciada",
       "actions": {
         "create_repository": "Crear el repositorio",
+        "create_script": "Crear la comprobación previa",
         "create_plan": "Crear el plan de copias con su programación"
       },
       "status": {
@@ -6762,6 +6766,33 @@
       "noAgentsNoPermission": "Ningún equipo ejecuta el agente todavía. Pide a un administrador que añada uno en Agentes gestionados.",
       "loadFailed": "No se pudieron cargar los equipos. Inténtalo de nuevo en un momento.",
       "offlineBrowse": "{{machine}} está sin conexión, así que no se pueden explorar sus carpetas. Escribe la ruta o espera a que el agente se conecte."
+    },
+    "app": {
+      "title": "¿Qué app quieres respaldar?",
+      "other": "Otra cosa",
+      "otherDesc": "Elige tú las carpetas: documentos, datos de apps, cualquier cosa en disco.",
+      "hint": "Al elegir una app se rellena su carpeta, se omite lo que puede regenerar y se añaden las comprobaciones que necesita."
+    }
+  },
+  "appTemplates": {
+    "scanAgain": "Buscar de nuevo",
+    "pickManually": "Elige abajo la carpeta de {{app}}. Es {{hint}}.",
+    "scanning": "Buscando {{app}}…",
+    "notReadable": "{{app}} encontrado, pero Borg UI no puede leer {{path}}. Añade esta línea a los volúmenes de Borg UI en docker-compose.yml, reinicia Borg UI y busca de nuevo:",
+    "useFolder": "Usar esta carpeta",
+    "found": "{{app}} ({{container}}) encontrado en {{path}}.",
+    "notFound": "No se encontró {{app}} en ejecución aquí. Elige su carpeta abajo. Es {{hint}}.",
+    "skipTitle": "Carpetas a omitir",
+    "verified": "Comprobado con {{app}} {{version}}.",
+    "docs": "Documentación de copias de {{app}}",
+    "dialog": {
+      "open": "Empezar desde una app",
+      "title": "Añadir una app",
+      "app": "App",
+      "machine": "Se ejecuta en",
+      "thisServer": "Este servidor de Borg UI",
+      "folder": "Carpeta de la app",
+      "add": "Añadir al plan"
     }
   }
 }

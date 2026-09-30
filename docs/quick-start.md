@@ -20,37 +20,74 @@ that permission do not see the button.
 
 ## The steps
 
-1. **What**: choose what to back up. Pick **Files on this server** for folders
+1. **App**: pick the app you are backing up, such as Immich, or **Something
+   else** for plain folders. See [Backing up an app](#backing-up-an-app).
+2. **What**: choose where the data lives. Pick **Files on this server** for folders
    on the machine running Borg UI, **Files on another computer** for a
    server, NAS or PC that Borg UI can reach over SSH, or **Another computer
    with the Borg UI agent** (Pro or Enterprise) for a machine that runs the
    [agent](managed-agents) and connects out to Borg UI, for example a laptop
    behind a firewall.
-2. **Connect** (another computer only): for SSH, pick a computer Borg UI
+3. **Connect** (another computer only): for SSH, pick a computer Borg UI
    already knows, or add one with its host name, username and password. Borg UI installs its
    SSH key there with that password once; the password is not saved. Adding a
    computer needs an account that can manage SSH; otherwise you can only pick
    an existing one. For the agent, pick an enrolled computer or choose **Add a
    computer**, which shows the install command; Quick Start selects the
    computer as soon as its agent connects.
-3. **Folders**: add one or more folders. In Docker, your server's disk usually
+4. **Folders**: add one or more folders. In Docker, your server's disk usually
    appears under `/local` (see
    [Understand Container Paths](usage-guide#understand-container-paths)).
    For another computer, the folder button browses that computer.
-4. **Where**: a disk on this server, or another server over SSH (Borg must be
+5. **Where**: a disk on this server, or another server over SSH (Borg must be
    installed there; see [Remote Machines](ssh-keys)). With the agent, backups
    go to a disk on that same computer. Borg UI suggests a
    folder, `/local/borg-backups/<name>` on this server. The location cannot
    be inside a folder you are backing up.
-5. **Protect**: name the backup and set a passphrase. Save the passphrase
+6. **Protect**: name the backup and set a passphrase. Save the passphrase
    somewhere outside this server (the **Download** button gives you a text
    file). Without it, the backups cannot be restored.
-6. **When**: every day at 02:00 by default, or every 6 hours, weekly, or a
+7. **When**: every day at 02:00 by default (an app brings its own time), or every 6 hours, weekly, or a
    custom schedule.
-7. **Review**: check the summary and press **Create backup**.
+8. **Review**: check the summary and press **Create backup**.
 
 When it finishes you can run the first backup right away or leave it to the
 schedule.
+
+## Backing up an app
+
+When you pick an app, Quick Start looks for its Docker container on the chosen
+machine and fills in its data folder. It also:
+
+- skips folders the app can rebuild by itself (you can untick them),
+- schedules the backup after the app's own maintenance, and
+- adds a check that runs before each backup, where the app needs one.
+
+Each app lists what it does, and the app version it was checked against, on
+the **Folders** step.
+
+If Borg UI runs in Docker and cannot see the app's folder, Quick Start shows
+the line to add to the `volumes` of Borg UI in `docker-compose.yml`. Add it,
+restart Borg UI, and press **Scan again**. If the container is not found, for
+example on an agent, type the folder yourself.
+
+Checks run on the Borg UI server, so they are only added when the app runs on
+this server.
+
+### Immich
+
+Borg UI backs up Immich's `UPLOAD_LOCATION` folder, which holds your photos and
+the database dumps Immich writes every night at 02:00. The backup runs at
+03:00. It skips `thumbs` and `encoded-video`; after a restore, run the
+**Generate Thumbnails** and **Transcode Videos** jobs in Immich to rebuild them.
+
+Keep **Administration > Settings > Backup** turned on in Immich. The check
+stops the backup when no database dump is newer than 26 hours, so an archive
+never holds your photos without the database that organizes them. See
+[Immich's backup guide](https://docs.immich.app/administration/backup-and-restore).
+
+In the Backup Plans wizard, **Start from an app** on the **Source** step adds
+an app to a plan the same way.
 
 ## What it sets up
 
