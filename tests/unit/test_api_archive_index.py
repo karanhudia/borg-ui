@@ -2215,7 +2215,7 @@ class TestPrunePreview:
         lost = body["lost_files"]
         assert lost["available"] is True and lost["capability"] == "available"
         assert lost["detail_locked"] is True
-        assert "top" not in lost and "by_folder" not in lost
+        assert "top" not in lost
         assert lost["total_count"] == 0
 
     def test_stored_candidate_reads_back_without_borg(
@@ -2309,7 +2309,6 @@ class TestPrunePreview:
                     "total_count": 0,
                     "total_size": 0,
                     "top": [],
-                    "by_folder": [],
                 },
             ) as lost,
         ):

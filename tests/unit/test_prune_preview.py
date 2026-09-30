@@ -302,7 +302,6 @@ class TestLostFiles:
         assert out["top"][0]["path"] == "docs/x.txt"
         assert out["top"][0]["last_held_archive_id"] == a1.id
         assert out["top"][0]["last_held_archive_name"] == "a1"
-        assert out["by_folder"] == [{"folder": "docs", "count": 1, "size": 10}]
         assert out["incomplete"] is False and out["unindexed_archive_ids"] == []
 
     def test_path_still_present_at_a_survivor_is_not_lost(self, test_db):

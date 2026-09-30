@@ -95,7 +95,6 @@ export default function PruneLostFilesPanel({ repositoryId, lost }: PruneLostFil
   const totalCount = lost.total_count ?? 0
   const totalSize = lost.total_size ?? 0
   const top = lost.top ?? []
-  const byFolder = lost.by_folder ?? []
   // The count is the last warning before an irreversible delete, so every
   // plan reads it. Which files they are is the Pro part.
   const locked = lost.detail_locked === true
@@ -145,19 +144,6 @@ export default function PruneLostFilesPanel({ repositoryId, lost }: PruneLostFil
               message={t('prunePreview.lostLocked', { count: totalCount })}
               feature="archive_history"
             />
-          )}
-
-          {!locked && byFolder.length > 0 && (
-            <Stack direction="row" spacing={1} sx={{ mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
-              {byFolder.map((f) => (
-                <Chip
-                  key={f.folder}
-                  size="small"
-                  sx={{ ...tintChipSx(theme, 'warning'), fontFamily: 'monospace' }}
-                  label={`${f.folder} (${f.count}, ${formatBytes(f.size)})`}
-                />
-              ))}
-            </Stack>
           )}
 
           {!locked && (

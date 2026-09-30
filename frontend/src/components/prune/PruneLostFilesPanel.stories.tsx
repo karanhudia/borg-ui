@@ -35,7 +35,6 @@ export const Available: Story = {
           last_held_archive_name: 'nas-2026-08-30',
         },
       ],
-      by_folder: [{ folder: 'srv/media/raw', count: 2, size: 30_000_000 }],
     },
   },
 }
@@ -51,7 +50,6 @@ export const Incomplete: Story = {
       total_count: 0,
       total_size: 0,
       top: [],
-      by_folder: [],
     },
   },
 }
@@ -90,7 +88,6 @@ export const Empty: Story = {
       total_count: 0,
       total_size: 0,
       top: [],
-      by_folder: [],
     },
   },
 }

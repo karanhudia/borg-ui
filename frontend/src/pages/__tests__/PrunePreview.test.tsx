@@ -226,7 +226,6 @@ describe('PrunePreview page', () => {
           total_count: 1,
           total_size: 400,
           top: [],
-          by_folder: [],
         },
       },
     } as never)
@@ -248,7 +247,6 @@ describe('PrunePreview page', () => {
           total_count: 1,
           total_size: 400,
           top: [],
-          by_folder: [],
         },
       },
     } as never)

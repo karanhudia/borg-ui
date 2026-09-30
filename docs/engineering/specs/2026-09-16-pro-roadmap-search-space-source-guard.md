@@ -204,7 +204,7 @@ the existing prune route (`keep_*`, `keep_within`). It:
    newest archive when any keep rule matches, so a path never removed is
    never lost. The result carries `total_count`, `total_size` (from
    `size_before` of the removing row), the largest N (200) with the archive
-   that last held each, and a per-top-level-folder rollup. `incomplete`
+   that last held each. `incomplete`
    and `unindexed_archive_ids` follow the changes endpoint's rule for the
    series' archives. A path the walk reports lost is then checked against
    the surviving archives of every other series (a renamed plan leaves the
@@ -223,7 +223,7 @@ Response: `{archives: [{id, name, series, start, verdict: "kept"|"deleted",
 rule, deduplicated_size, stats_measured_at}], freed_at_least,
 partial_measure, footprint_before, footprint_after_at_most, lost_files:
 {available, incomplete, unindexed_archive_ids, total_count, total_size,
-top: [...], by_folder: [...]}, log}`. `footprint_before` is the
+top: [...]}, log}`. `footprint_before` is the
 repository's stored storage size (the `storage` payload from #1030);
 `footprint_after_at_most` is `footprint_before - freed_at_least`. The
 lost-file total is logical file data, not stored bytes: it bounds the
@@ -240,7 +240,7 @@ last manual prune; the series heatmap re-used with a verdict per block
 (kept green with the rule in the tooltip, deleted red, size-weighted
 intensity), a numbers row (archives deleted, freed at least, footprint
 before and after at most), deleted archives ranked by contribution with
-bars, the lost-files panel behind `PlanGate` with the folder rollup and the
+bars, the lost-files panel behind `PlanGate` with the
 top list, warnings (index incomplete, partial measure, cross-series
 limitation), the raw Borg log behind a disclosure, and "Run prune now" which
 posts to the existing prune route with the same fields and then navigates

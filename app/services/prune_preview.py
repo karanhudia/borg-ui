@@ -281,15 +281,6 @@ from app.database.models import ArchiveChange
 from app.services.operations.executors.history import SIZE_LOOKUP_CHUNK
 
 TOP_LOST = 200
-TOP_FOLDERS = 20
-_FOLDER_DEPTH = 3
-
-
-def _folder_of(path: str) -> str:
-    """The rollup key: the parent directory, at most _FOLDER_DEPTH deep.
-    Borg paths have no leading slash."""
-    parts = path.split("/")[:-1]
-    return "/".join(parts[:_FOLDER_DEPTH]) or "/"
 
 
 def _candidate_paths(db: Session, ids: list[int], removed_only: bool) -> set[str]:
@@ -537,22 +528,12 @@ def lost_files(
     unindexed = sorted(set(unindexed))
     by_size = lambda f: (-(f["size"] or 0), f["path"])  # noqa: E731
     found.sort(key=by_size)
-    folders: dict[str, list[int]] = defaultdict(lambda: [0, 0])
-    for f in found:
-        entry = folders[_folder_of(f["path"])]
-        entry[0] += 1
-        entry[1] += f["size"] or 0
-    by_folder = sorted(
-        ({"folder": k, "count": v[0], "size": v[1]} for k, v in folders.items()),
-        key=lambda x: (-x["size"], x["folder"]),
-    )[:TOP_FOLDERS]
     return {
         "incomplete": bool(unindexed),
         "unindexed_archive_ids": unindexed,
         "total_count": len(found),
         "total_size": sum(f["size"] or 0 for f in found),
         "top": found[:TOP_LOST],
-        "by_folder": by_folder,
         "moved_count": len(moved),
         "moved_size": sum(f["size"] or 0 for f in moved),
     }
@@ -705,7 +686,7 @@ def assemble_preview(
             # is the warning that belongs in front of an irreversible
             # delete. Which files they are is Pro (spec
             # 2026-09-21-community-teasers-and-feature-trials, section 1).
-            lost = {k: v for k, v in lost.items() if k not in ("top", "by_folder")}
+            lost = {k: v for k, v in lost.items() if k != "top"}
             lost["detail_locked"] = True
     joined.sort(key=lambda p: (p.start is None, p.start or datetime.min, p.id or 0))
     return {

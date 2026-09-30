@@ -31,7 +31,6 @@ describe('PruneLostFilesPanel', () => {
               last_held_archive_name: 'a4',
             },
           ],
-          by_folder: [{ folder: 'docs', count: 2, size: 30 }],
         }}
       />
     )
@@ -94,7 +93,6 @@ describe('PruneLostFilesPanel', () => {
           total_count: 0,
           total_size: 0,
           top: [],
-          by_folder: [],
         }}
       />
     )

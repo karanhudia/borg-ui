@@ -50,3 +50,13 @@ export const PartialAndStale: Story = {
     onOpen: () => {},
   },
 }
+
+export const LongList: Story = {
+  args: {
+    archives: Array.from({ length: 60 }, (_, i) =>
+      archive(i + 1, `nas-2026-${String(i + 1).padStart(2, '0')}`, (60 - i) * 500_000_000)
+    ),
+    partialMeasure: false,
+    onOpen: () => {},
+  },
+}

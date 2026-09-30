@@ -263,7 +263,6 @@ export interface PruneLostFiles {
   total_count?: number
   total_size?: number
   top?: PruneLostFile[]
-  by_folder?: { folder: string; count: number; size: number }[]
   /** Community reads the count and the weight; which files they are is Pro. */
   detail_locked?: boolean
   /** Paths that go, whose file (same name and size) a kept archive holds
