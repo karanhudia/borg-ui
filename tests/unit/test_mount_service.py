@@ -1000,6 +1000,90 @@ class TestMountService:
         assert second_cmd[1] == "alex@192.168.1.150:test-backup-source"
 
     @pytest.mark.asyncio
+    async def test_execute_sshfs_mount_retries_without_synology_volume_prefix(
+        self, mount_service
+    ):
+        connection = Mock(spec=SSHConnection)
+        connection.host = "nas.example.invalid"
+        connection.username = "alex"
+        connection.port = 22
+        connection.use_sudo = False
+        connection.default_path = "/"
+
+        def missing(path):
+            process = AsyncMock()
+            process.returncode = 1
+            process.communicate = AsyncMock(
+                return_value=(
+                    b"",
+                    f"alex@nas.example.invalid:{path}: No such file or directory\n".encode(),
+                )
+            )
+            return process
+
+        mounted = AsyncMock()
+        mounted.returncode = 0
+        mounted.communicate = AsyncMock(return_value=(b"", b""))
+
+        with (
+            patch(
+                "app.services.mount_service.asyncio.create_subprocess_exec",
+                new=AsyncMock(
+                    side_effect=[
+                        missing("/volume1/backups/x"),
+                        missing("volume1/backups/x"),
+                        mounted,
+                    ]
+                ),
+            ) as mock_exec,
+            patch("app.services.mount_service.asyncio.sleep", new=AsyncMock()),
+        ):
+            await mount_service._execute_sshfs_mount(
+                connection=connection,
+                remote_path="/volume1/backups/x",
+                mount_point="/tmp/sshfs_mount_378/x",
+                temp_key_file="/tmp/test.key",
+            )
+
+        assert [call.args[1] for call in mock_exec.await_args_list] == [
+            "alex@nas.example.invalid:/volume1/backups/x",
+            "alex@nas.example.invalid:volume1/backups/x",
+            "alex@nas.example.invalid:/backups/x",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_execute_sshfs_mount_stops_retrying_on_other_errors(
+        self, mount_service
+    ):
+        connection = Mock(spec=SSHConnection)
+        connection.host = "nas.example.invalid"
+        connection.username = "alex"
+        connection.port = 22
+        connection.use_sudo = False
+        connection.default_path = "/"
+
+        denied = AsyncMock()
+        denied.returncode = 1
+        denied.communicate = AsyncMock(return_value=(b"", b"Permission denied\n"))
+
+        with (
+            patch(
+                "app.services.mount_service.asyncio.create_subprocess_exec",
+                new=AsyncMock(return_value=denied),
+            ) as mock_exec,
+            patch("app.services.mount_service.asyncio.sleep", new=AsyncMock()),
+            pytest.raises(Exception, match="SSHFS mount failed"),
+        ):
+            await mount_service._execute_sshfs_mount(
+                connection=connection,
+                remote_path="/volume1/backups/x",
+                mount_point="/tmp/sshfs_mount_378/x",
+                temp_key_file="/tmp/test.key",
+            )
+
+        assert mock_exec.await_count == 1
+
+    @pytest.mark.asyncio
     async def test_execute_sshfs_mount_does_not_retry_relative_path_for_explicit_default_path(
         self, mount_service
     ):

@@ -54,6 +54,28 @@ class TestRemotePathCandidates:
         assert service._remote_path_candidates(_connection(), "/") == ["/"]
         assert service._remote_path_candidates(_connection(), "a/b") == ["a/b"]
 
+    def test_synology_volume_prefix_is_dropped_last(self, service):
+        # DSM chroots SFTP at the shared-folder root (#1280).
+        assert service._remote_path_candidates(_connection(), "/volume1/backups/x") == [
+            "/volume1/backups/x",
+            "volume1/backups/x",
+            "/backups/x",
+        ]
+        assert service._remote_path_candidates(
+            _connection("/backups"), "/volume2/backups/x"
+        ) == ["/volume2/backups/x", "/backups/x"]
+
+    def test_volume_prefix_needs_digits_and_a_subpath(self, service):
+        assert service._remote_path_candidates(_connection("/srv"), "/volume/x") == [
+            "/volume/x"
+        ]
+        assert service._remote_path_candidates(_connection("/srv"), "/volume1") == [
+            "/volume1"
+        ]
+        assert service._remote_path_candidates(_connection("/srv"), "/volume1/") == [
+            "/volume1/"
+        ]
+
 
 @pytest.mark.unit
 class TestSftpQuote:

@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 import uuid
 import platform
+import re
 import json
 import shlex
 from datetime import datetime, timezone
@@ -177,6 +178,19 @@ def _sshfs_login_relative_candidate(
 
     relative_path = normalized.lstrip("/")
     return relative_path or None
+
+
+_SYNOLOGY_VOLUME_PREFIX = re.compile(r"^/volume\d+/(?=.)")
+
+
+def _sshfs_volume_stripped_candidate(remote_path: str) -> Optional[str]:
+    """`/volume1/backups/x` -> `/backups/x`.
+
+    Synology DSM chroots SFTP at the shared-folder root, so the path Borg
+    uses over SSH is not the one SSHFS can mount (#1280).
+    """
+    stripped = _SYNOLOGY_VOLUME_PREFIX.sub("/", (remote_path or "").strip(), count=1)
+    return stripped if stripped != remote_path else None
 
 
 async def _communicate_or_kill(
@@ -1471,18 +1485,20 @@ class MountService:
     ) -> list[str]:
         """The paths the SSHFS mount tries for `remote_path`, in order.
 
-        A missing absolute path is retried relative to the login directory
-        (see `_mount_sshfs`), so anything that inspects the path first has to
-        resolve it the same way or it judges a different path than the one
-        that gets mounted.
+        A missing absolute path is retried relative to the login directory,
+        then without a Synology `/volumeN` prefix (see `_mount_sshfs`), so
+        anything that inspects the path first has to resolve it the same way
+        or it judges a different path than the one that gets mounted.
         """
         default_path = getattr(connection, "default_path", None)
-        login_relative_path = _sshfs_login_relative_candidate(
-            remote_path, default_path if isinstance(default_path, str) else None
-        )
-        if login_relative_path and login_relative_path != remote_path:
-            return [remote_path, login_relative_path]
-        return [remote_path]
+        candidates = [
+            remote_path,
+            _sshfs_login_relative_candidate(
+                remote_path, default_path if isinstance(default_path, str) else None
+            ),
+            _sshfs_volume_stripped_candidate(remote_path),
+        ]
+        return [c for i, c in enumerate(candidates) if c and c not in candidates[:i]]
 
     async def _check_remote_is_file(
         self, connection: SSHConnection, remote_path: str, temp_key_file: str
@@ -1793,7 +1809,6 @@ class MountService:
             )
 
         mount_attempts = self._remote_path_candidates(connection, remote_path)
-        login_relative_path = mount_attempts[1] if len(mount_attempts) > 1 else None
 
         for attempt_index, path_to_mount in enumerate(mount_attempts):
             cmd = build_sshfs_command(path_to_mount)
@@ -1825,15 +1840,14 @@ class MountService:
                     error_msg = (
                         stderr.decode(errors="replace") if stderr else "Unknown error"
                     )
-                    if (
-                        attempt_index == 0
-                        and login_relative_path
-                        and _sshfs_missing_remote_path(error_msg)
-                    ):
+                    next_attempt = mount_attempts[attempt_index + 1 :][:1]
+                    if next_attempt and _sshfs_missing_remote_path(error_msg):
                         logger.warning(
-                            "SSHFS absolute path missing, retrying relative to login directory",
-                            remote_path=remote_path,
-                            retry_remote_path=login_relative_path,
+                            "SSHFS remote path missing, retrying with next candidate",
+                            remote_path=path_to_mount,
+                            retry_remote_path=next_attempt[0],
+                            attempt=attempt_index + 1,
+                            attempts=len(mount_attempts),
                             error=error_msg.strip(),
                         )
                         continue
