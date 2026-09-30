@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
+import truststore
+
 from agent.borg_ui_agent import __version__
 from agent.borg_ui_agent.borg import detect_borg_binaries, detect_platform
 from agent.borg_ui_agent.client import AgentClient, AgentClientError
@@ -196,6 +198,12 @@ def _service_check(args: argparse.Namespace) -> int:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    # requests verifies against certifi's bundle, so a self-signed server
+    # certificate installed in the machine's trust store satisfied curl and the
+    # websocket session but not registration or any other HTTP call (#1272).
+    # Route every ssl context through the system store instead, before the
+    # first request is made. certifi's bundle stays loaded on top.
+    truststore.inject_into_ssl()
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
