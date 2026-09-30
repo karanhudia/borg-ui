@@ -25,6 +25,7 @@ import SettingsSectionsCard from './system-settings/SettingsSectionsCard'
 import { formatAuthEventType, formatAuthSource } from './system-settings/authFormatters'
 import type { AuthEventFilter, CacheStats } from './system-settings/types'
 import { getSystemSettingsValidationError } from './system-settings/validation'
+import { copyText } from '../utils/clipboard'
 
 type SystemSettingsQueryData = {
   settings?: Record<string, unknown>
@@ -620,7 +621,10 @@ const SystemSettingsTab: React.FC = () => {
 
   const handleCopyMetricsToken = async () => {
     if (!newMetricsToken) return
-    await navigator.clipboard.writeText(newMetricsToken)
+    if (!(await copyText(newMetricsToken))) {
+      toast.error(t('common.errors.copyFailed'))
+      return
+    }
     setMetricsTokenCopied(true)
     setTimeout(() => setMetricsTokenCopied(false), 2000)
   }

@@ -35,6 +35,7 @@ import UpgradePrompt from './UpgradePrompt'
 import type { Repository, RepositoryStorage } from '../types'
 import { isV2Repo } from '../utils/repoCapabilities'
 import { generateBorgInitCommand } from '../utils/borgUtils'
+import { copyText } from '../utils/clipboard'
 
 interface RepositoryInfoDialogProps {
   open: boolean
@@ -148,20 +149,19 @@ function RecoveryCommandBox({ command }: { command: RecoveryCommand }) {
     : t('repositoryInfoDialog.recovery.copyCommand', { label: command.label })
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(command.command)
-      setCopied(true)
-      toast.success(t('repositoryInfoDialog.recovery.commandCopied'))
-      if (resetCopiedTimeoutRef.current !== null) {
-        window.clearTimeout(resetCopiedTimeoutRef.current)
-      }
-      resetCopiedTimeoutRef.current = window.setTimeout(() => {
-        setCopied(false)
-        resetCopiedTimeoutRef.current = null
-      }, 2000)
-    } catch {
+    if (!(await copyText(command.command))) {
       toast.error(t('repositoryInfoDialog.recovery.copyFailed'))
+      return
     }
+    setCopied(true)
+    toast.success(t('repositoryInfoDialog.recovery.commandCopied'))
+    if (resetCopiedTimeoutRef.current !== null) {
+      window.clearTimeout(resetCopiedTimeoutRef.current)
+    }
+    resetCopiedTimeoutRef.current = window.setTimeout(() => {
+      setCopied(false)
+      resetCopiedTimeoutRef.current = null
+    }, 2000)
   }
 
   return (

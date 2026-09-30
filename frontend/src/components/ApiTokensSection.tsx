@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next'
 import { tokensAPI } from '../services/api'
 import { formatDateShort } from '../utils/dateUtils'
 import EmptyStateCard from './EmptyStateCard'
+import { copyText } from '../utils/clipboard'
 
 interface Token {
   id: number
@@ -71,7 +72,10 @@ export default function ApiTokensSection() {
 
   const handleCopy = async () => {
     if (!newToken) return
-    await navigator.clipboard.writeText(newToken)
+    if (!(await copyText(newToken))) {
+      toast.error(t('common.errors.copyFailed'))
+      return
+    }
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }

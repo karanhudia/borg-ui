@@ -65,7 +65,8 @@
     "undoneWarning": "Questa azione non può essere annullata.",
     "version": "Versione",
     "errors": {
-      "unexpectedError": "Si è verificato un errore imprevisto"
+      "unexpectedError": "Si è verificato un errore imprevisto",
+      "copyFailed": "Impossibile copiare negli appunti"
     }
   },
   "login": {

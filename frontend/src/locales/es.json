@@ -65,7 +65,8 @@
     "undoneWarning": "Esta acción no se puede deshacer.",
     "version": "Versión",
     "errors": {
-      "unexpectedError": "Se produjo un error inesperado"
+      "unexpectedError": "Se produjo un error inesperado",
+      "copyFailed": "No se pudo copiar al portapapeles"
     }
   },
   "login": {

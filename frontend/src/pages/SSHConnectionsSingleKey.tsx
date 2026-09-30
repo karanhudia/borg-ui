@@ -31,6 +31,7 @@ import type {
   TestConnectionPayload,
   UpdateConnectionPayload,
 } from './ssh-connections-single-key/types'
+import { copyText } from '../utils/clipboard'
 
 export default function SSHConnectionsSingleKey() {
   const { t } = useTranslation()
@@ -408,9 +409,12 @@ export default function SSHConnectionsSingleKey() {
     importKeyMutation.mutate(importForm)
   }
 
-  const handleCopyPublicKey = () => {
+  const handleCopyPublicKey = async () => {
     if (systemKey?.public_key) {
-      navigator.clipboard.writeText(systemKey.public_key)
+      if (!(await copyText(systemKey.public_key))) {
+        toast.error(t('common.errors.copyFailed'))
+        return
+      }
       toast.success(t('sshConnections.toasts.publicKeyCopied'))
     }
   }

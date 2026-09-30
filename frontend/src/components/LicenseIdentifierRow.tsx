@@ -1,7 +1,9 @@
 import { IconButton, Stack, Tooltip, Typography } from '@mui/material'
+import { toast } from 'react-hot-toast'
 import { Check, Copy } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { copyText } from '../utils/clipboard'
 
 const MONO = '"JetBrains Mono","Fira Code",ui-monospace,monospace'
 
@@ -23,13 +25,12 @@ export default function LicenseIdentifierRow({
   const [copied, setCopied] = useState(false)
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(value)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch {
-      // Clipboard is unavailable over plain http; the value stays selectable.
+    if (!(await copyText(value))) {
+      toast.error(t('common.errors.copyFailed'))
+      return
     }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
   }
 
   return (

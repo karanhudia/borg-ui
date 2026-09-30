@@ -65,7 +65,8 @@
     "undoneWarning": "This action cannot be undone.",
     "version": "Version",
     "errors": {
-      "unexpectedError": "An unexpected error occurred"
+      "unexpectedError": "An unexpected error occurred",
+      "copyFailed": "Failed to copy to clipboard"
     }
   },
   "login": {
