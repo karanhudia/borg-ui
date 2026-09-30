@@ -21,6 +21,17 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # A database whose version pointer was rewound (the 2.3.0 repair in
+    # test_db_upgrade does that) already carries the column: skip, do not
+    # fail. The earlier migrations on this stretch survive a re-run only
+    # because SQLite recreates their tables; a plain nullable column is an
+    # ALTER TABLE ADD COLUMN and would raise on the duplicate.
+    columns = {
+        column["name"]
+        for column in sa.inspect(op.get_bind()).get_columns("operation_backup_details")
+    }
+    if "archive_id" in columns:
+        return
     with op.batch_alter_table("operation_backup_details") as batch_op:
         batch_op.add_column(sa.Column("archive_id", sa.String(), nullable=True))
 
