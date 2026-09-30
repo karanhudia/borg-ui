@@ -251,7 +251,10 @@ download_release() {
   local tmp
   install -d -m 0755 "${PREFIX}/releases"
   tmp="$(mktemp -d "${PREFIX}/releases/.staging.XXXXXX")"
-  trap 'rm -rf "${tmp}"' RETURN
+  # Self-clearing: a RETURN trap outlives the function and would fire again on
+  # main's next return (the versions.env source), where the local is gone and
+  # set -u aborts the install.
+  trap 'rm -rf "${tmp:-}"; trap - RETURN' RETURN
 
   log "Downloading Borg UI ${VERSION}"
   url="${base}/${tarball}"

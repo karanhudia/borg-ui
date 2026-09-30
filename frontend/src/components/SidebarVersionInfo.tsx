@@ -63,7 +63,7 @@ export default function SidebarVersionInfo({ systemInfo }: SidebarVersionInfoPro
           {systemInfo.borg2_version && (
             <VersionChip
               label="B2"
-              version={systemInfo.borg2_version.replace(/^borg2\s*/i, '')}
+              version={systemInfo.borg2_version.replace(/^borg2?\s*/i, '')}
               accent
             />
           )}
