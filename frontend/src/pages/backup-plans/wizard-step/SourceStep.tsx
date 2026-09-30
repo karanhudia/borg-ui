@@ -442,7 +442,9 @@ function sourceLocationKey(location: SourceLocation) {
     ? `:container:${location.container.container_name}:${location.container.export_path}`
     : location.database
       ? `:database:${location.database.template_id}`
-      : ''
+      : location.app
+        ? `:app:${location.app.template_id}:${location.app.root}`
+        : ''
   if (location.source_type === 'agent') {
     return `agent:${location.agent_machine_id || 'agent'}${suffix}`
   }
