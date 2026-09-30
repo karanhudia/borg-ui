@@ -65,3 +65,16 @@ def test_an_agent_from_before_the_borg_flag_allowlist_is_offered_an_upgrade():
         )
         == "outdated"
     )
+
+
+def test_an_agent_from_before_the_system_trust_store_change_is_offered_an_upgrade():
+    """From 0.1.13 the agent verifies TLS against the machine's trust store, so
+    a self-signed server certificate installed there works (#1272). A server
+    built from this tree must offer 0.1.12 agents the upgrade.
+    """
+    assert (
+        compute_agent_upgrade_status(
+            reported="0.1.12", desired=None, available=_pyproject_version()
+        )
+        == "outdated"
+    )

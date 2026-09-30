@@ -26,6 +26,7 @@ import {
 import { BorgApiClient } from '../services/borgApi'
 import { usePlan } from '../hooks/usePlan'
 import { usePermissions } from '../hooks/usePermissions'
+import { usePendingDeletes } from '../hooks/usePendingDeletes'
 import { useQuickStart } from '../components/quick-start/quickStartContext'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useFeatureAnalytics } from '../hooks/useFeatureAnalytics'
@@ -399,11 +400,13 @@ export default function BackupPlans() {
     },
   })
 
+  const deletingPlans = usePendingDeletes()
   const deleteMutation = useMutation({
     mutationFn: (id: number) => backupPlansAPI.delete(id),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(t('backupPlans.toasts.deleted'))
-      queryClient.invalidateQueries({ queryKey: ['backup-plans'] })
+      // Awaited so the card stays disabled until the list no longer has it.
+      await queryClient.invalidateQueries({ queryKey: ['backup-plans'] })
     },
     onError: (error: unknown) => {
       toast.error(errorMessage(error, t('backupPlans.toasts.deleteFailed')))
@@ -858,7 +861,8 @@ export default function BackupPlans() {
   const cancelRunMutate = cancelRunMutation.mutate
   const retryRunMutate = retryRunMutation.mutate
   const toggleMutate = toggleMutation.mutate
-  const deleteMutate = deleteMutation.mutate
+  const deleteMutateAsync = deleteMutation.mutateAsync
+  const runDelete = deletingPlans.run
   const handleRunPlan = useCallback((planId: number) => runMutate(planId), [runMutate])
   const handleCancelRun = useCallback((runId: number) => cancelRunMutate(runId), [cancelRunMutate])
   const handleRetryRun = useCallback((runId: number) => retryRunMutate(runId), [retryRunMutate])
@@ -868,7 +872,12 @@ export default function BackupPlans() {
     (planId: number, repositoryId: number) => toggleRepositoryMutate({ planId, repositoryId }),
     [toggleRepositoryMutate]
   )
-  const handleDeletePlan = useCallback((planId: number) => deleteMutate(planId), [deleteMutate])
+  const handleDeletePlan = useCallback(
+    // onError already reports the failure.
+    (planId: number) =>
+      void runDelete(planId, () => deleteMutateAsync(planId).catch(() => undefined)),
+    [runDelete, deleteMutateAsync]
+  )
   const handleViewRepositories = useCallback(
     (planId: number) => navigate(`/repositories?backupPlanId=${planId}`),
     [navigate]
@@ -919,6 +928,7 @@ export default function BackupPlans() {
         }
         onEditPlan={openEditWizard}
         onDeletePlan={handleDeletePlan}
+        deletingPlanIds={deletingPlans.pending}
         onViewHistory={setHistoryPlanId}
         onViewRepositories={handleViewRepositories}
         formatStatusLabel={formatStatusLabel}

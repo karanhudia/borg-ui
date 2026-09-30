@@ -18,6 +18,8 @@ import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey, type BackendDetail } from '../utils/translateBackendKey'
 import { downloadArchiveFile, downloadArchiveFolder } from '../utils/downloadArchiveFile'
 import { invalidateStoredArchives, resyncStoredArchives } from '../utils/archiveResync'
+import { waitForArchiveDeleteJob } from '../utils/archiveDeleteJob'
+import { usePendingDeletes } from '../hooks/usePendingDeletes'
 import { useOperationEvents } from '../hooks/useOperationEvents'
 import { SUCCESS_OPERATION_STATUSES } from '../utils/operationStatus'
 import RepositorySelectorCard from '../components/RepositorySelectorCard'
@@ -301,14 +303,17 @@ const Archives: React.FC = () => {
     refetchInterval: 3000, // Refresh every 3 seconds for live progress
   })
 
-  // Delete archive mutation
+  // Delete archive mutation. The row is marked as deleting from the click
+  // until the queued job has finished and the stored list was asked to
+  // reconcile (#1197), so a second delete of the same archive cannot start.
+  const deletingArchives = usePendingDeletes<string>()
   const deleteArchiveMutation = useMutation({
     mutationFn: ({ archive }: { repository: string; archive: string }) =>
       new BorgApiClient(selectedRepository!).deleteArchive(archive),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       // Backend returns a job_id for background deletion. The delete runs
       // asynchronously (agent-delegated deletes take several seconds), so poll
-      // the job until it finishes and only then refresh the list — a fixed
+      // the job until it finishes and only then refresh the list: a fixed
       // delay refetched before the archive was actually gone, leaving it in the
       // list until a manual page reload.
       const jobId = data.data.job_id
@@ -317,32 +322,14 @@ const Archives: React.FC = () => {
       trackArchive(EventAction.DELETE, selectedRepository || undefined)
 
       const repoId = selectedRepositoryId
-      const statusClient = new BorgApiClient(selectedRepository!)
-      const terminal = new Set(['completed', 'completed_with_warnings', 'failed', 'cancelled'])
-      const deadline = Date.now() + 5 * 60 * 1000
+      const status = await waitForArchiveDeleteJob(new BorgApiClient(selectedRepository!), jobId)
+      if (status === 'failed') {
+        toast.error(t('archives.toasts.deleteFailed'))
+      }
       // The list is the stored one now, so a refetch alone would return the
       // deleted archive again: ask for a reconcile run and let the event
       // stream refresh the page when archive_sync has caught up.
-      const refresh = () => {
-        void resyncStoredArchives(queryClient, repoId)
-      }
-      const poll = async () => {
-        let status: string | undefined
-        try {
-          status = (await statusClient.getDeleteJobStatus(jobId)).data?.status
-        } catch {
-          // Transient error — the deadline below bounds the retries.
-        }
-        if (status === 'failed') {
-          toast.error(t('archives.toasts.deleteFailed'))
-        }
-        if ((status && terminal.has(status)) || Date.now() >= deadline) {
-          refresh()
-          return
-        }
-        setTimeout(poll, 1500)
-      }
-      setTimeout(poll, 1000)
+      await resyncStoredArchives(queryClient, repoId)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -482,10 +469,12 @@ const Archives: React.FC = () => {
     if (selectedRepository) {
       const archiveRef =
         getBorgVersion(selectedRepository) === 2 && archive.id ? archive.id : archive.name
-      deleteArchiveMutation.mutate({
-        repository: selectedRepository.path,
-        archive: archiveRef,
-      })
+      // onError already reports the failure.
+      void deletingArchives.run(archive.id, () =>
+        deleteArchiveMutation
+          .mutateAsync({ repository: selectedRepository.path, archive: archiveRef })
+          .catch(() => undefined)
+      )
     }
   }
 
@@ -943,6 +932,7 @@ const Archives: React.FC = () => {
               onRestoreArchive={canRestore ? handleRestoreArchive : undefined}
               onMountArchive={openMountDialog}
               onDeleteArchive={(archive) => setShowDeleteConfirm(archive)}
+              deletingArchiveIds={deletingArchives.pending}
               mountDisabled={mountArchiveMutation.isPending}
               canDelete={
                 getRepoCapabilities({ mode: selectedRepository?.mode }).canDeleteArchive &&
@@ -1009,7 +999,7 @@ const Archives: React.FC = () => {
         archiveName={showDeleteConfirm?.name ?? null}
         onClose={() => setShowDeleteConfirm(null)}
         onConfirm={() => showDeleteConfirm && handleDeleteArchive(showDeleteConfirm)}
-        deleting={deleteArchiveMutation.isPending}
+        deleting={showDeleteConfirm ? deletingArchives.isDeleting(showDeleteConfirm.id) : false}
       />
 
       {/* Lock Error Dialog */}

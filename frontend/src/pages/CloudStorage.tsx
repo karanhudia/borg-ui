@@ -1356,10 +1356,11 @@ export default function CloudStorage() {
       }
       return rcloneAPI.deleteRemote(deleteRemote.id)
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(t('cloudStorage.remoteDeleteSucceeded'))
+      // The dialog stays open until the list no longer has the row (#1197).
+      await queryClient.invalidateQueries({ queryKey: ['rclone-remotes'] })
       setDeleteRemote(null)
-      queryClient.invalidateQueries({ queryKey: ['rclone-remotes'] })
     },
     onError: (error: unknown) => {
       toast.error(getApiMessage(error, t('cloudStorage.remoteDeleteFailed')))

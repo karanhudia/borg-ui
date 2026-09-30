@@ -56,6 +56,8 @@ interface BackupPlansContentProps {
   togglingRepository: { planId: number; repositoryId: number } | null
   onEditPlan: (plan: BackupPlan) => void
   onDeletePlan: (planId: number) => void
+  /** Plans whose delete is still out: their delete action is disabled. */
+  deletingPlanIds?: ReadonlySet<number>
   onViewHistory: (planId: number) => void
   onViewRepositories: (planId: number) => void
   formatStatusLabel: (status?: string) => string
@@ -176,6 +178,7 @@ function BackupPlansContentImpl({
   togglingRepository,
   onEditPlan,
   onDeletePlan,
+  deletingPlanIds,
   onViewHistory,
   onViewRepositories,
   formatStatusLabel,
@@ -649,7 +652,9 @@ function BackupPlansContentImpl({
                         })
                         onEditPlan(plan)
                       }}
+                      planIsDeleting={deletingPlanIds?.has(plan.id) ?? false}
                       onDelete={() => {
+                        if (deletingPlanIds?.has(plan.id)) return
                         if (
                           window.confirm(
                             t('backupPlans.actions.deleteConfirm', { name: plan.name })

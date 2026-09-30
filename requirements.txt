@@ -25,6 +25,7 @@ requests==2.34.2
 ruff==0.16.9
 sqlalchemy==2.1.0
 structlog==26.1.0
+truststore==0.10.4
 tzdata==2026.4
 uvicorn[standard]==0.54.0
 paho-mqtt==2.1.0

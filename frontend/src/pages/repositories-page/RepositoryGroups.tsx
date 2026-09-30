@@ -33,6 +33,8 @@ interface RepositoryGroupsProps {
   onBreakLock: (repository: Repository) => void
   onEdit: (repository: Repository) => void
   onDelete: (repository: Repository) => void
+  /** Repositories whose delete is still out: their delete action is disabled. */
+  deletingRepositoryIds?: ReadonlySet<number>
   onPermanentDelete: (repository: Repository) => void
   onBackupNow: (repository: Repository) => void
   onViewArchives: (repository: Repository) => void
@@ -66,6 +68,7 @@ export function RepositoryGroups({
   onBreakLock,
   onEdit,
   onDelete,
+  deletingRepositoryIds,
   onPermanentDelete,
   onBackupNow,
   onViewArchives,
@@ -207,6 +210,7 @@ export function RepositoryGroups({
                 onBreakLock={() => onBreakLock(repository)}
                 onEdit={() => onEdit(repository)}
                 onDelete={() => onDelete(repository)}
+                isDeleting={deletingRepositoryIds?.has(repository.id) ?? false}
                 onPermanentDelete={() => onPermanentDelete(repository)}
                 onBackupNow={() => onBackupNow(repository)}
                 onViewArchives={() => onViewArchives(repository)}

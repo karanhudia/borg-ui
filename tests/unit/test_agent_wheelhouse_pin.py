@@ -79,8 +79,8 @@ def test_every_constraint_is_an_exact_pin():
 
 
 def test_the_pinned_closure_is_exactly_the_agents_dependency_closure():
-    """requests and websocket-client are the agent's declared deps; together with
-    the transitive closure requests pulls in, the pinned set is exactly these six.
+    """requests, truststore and websocket-client are the agent's declared deps; with
+    the transitive closure requests pulls in, the pinned set is exactly these seven.
     Equality (not containment) means adding or removing a pin without updating this
     list fails the guard, so constraints.txt and the documented closure cannot
     drift apart unnoticed."""
@@ -94,6 +94,7 @@ def test_the_pinned_closure_is_exactly_the_agents_dependency_closure():
     pinned = set(pinned_names)
     expected = {
         "requests",
+        "truststore",
         "websocket-client",
         "urllib3",
         "idna",

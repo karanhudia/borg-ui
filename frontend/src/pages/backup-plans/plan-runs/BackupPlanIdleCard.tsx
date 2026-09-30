@@ -51,6 +51,8 @@ interface BackupPlanIdleCardProps {
   onToggle: () => void
   onEdit: () => void
   onDelete: () => void
+  /** The delete is out (#1197): the delete action is disabled and shows it. */
+  planIsDeleting?: boolean
   onViewHistory: () => void
   onViewRepositories: () => void
   onToggleRepository: (repositoryId: number) => void
@@ -75,6 +77,7 @@ export function BackupPlanIdleCard({
   onToggle,
   onEdit,
   onDelete,
+  planIsDeleting = false,
   onViewHistory,
   onViewRepositories,
   onToggleRepository,
@@ -654,22 +657,34 @@ export function BackupPlanIdleCard({
                 flexShrink: 0,
               }}
             />
-            <Tooltip title={t('backupPlans.actions.delete')} arrow>
-              <IconButton
-                size="small"
-                onClick={onDelete}
-                aria-label={t('backupPlans.actions.delete')}
-                sx={{
-                  ...iconBtnSx,
-                  color: alpha(theme.palette.error.main, 0.75),
-                  '&:hover': {
-                    color: theme.palette.error.main,
-                    bgcolor: alpha(theme.palette.error.main, 0.1),
-                  },
-                }}
-              >
-                <Trash2 size={16} />
-              </IconButton>
+            <Tooltip
+              title={
+                planIsDeleting ? t('common.buttons.deleting') : t('backupPlans.actions.delete')
+              }
+              arrow
+            >
+              <span>
+                <IconButton
+                  size="small"
+                  onClick={onDelete}
+                  disabled={planIsDeleting}
+                  aria-label={t('backupPlans.actions.delete')}
+                  sx={{
+                    ...iconBtnSx,
+                    color: alpha(theme.palette.error.main, 0.75),
+                    '&:hover': {
+                      color: theme.palette.error.main,
+                      bgcolor: alpha(theme.palette.error.main, 0.1),
+                    },
+                  }}
+                >
+                  {planIsDeleting ? (
+                    <CircularProgress size={14} color="inherit" />
+                  ) : (
+                    <Trash2 size={16} />
+                  )}
+                </IconButton>
+              </span>
             </Tooltip>
           </Box>
 

@@ -161,6 +161,13 @@ export const Default: Story = {
   ),
 }
 
+/** The delete is out (#1197): the delete action is disabled and shows a
+ * spinner until the list no longer has the repository. */
+export const Deleting: Story = {
+  args: { ...defaultArgs, isDeleting: true },
+  render: Default.render,
+}
+
 export const Borg2StoredSize: Story = {
   args: {
     ...defaultArgs,

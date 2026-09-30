@@ -725,3 +725,53 @@ def test_agent_installer_removes_the_upgrade_artifacts_when_declined(
     ):
         assert f'"${{{path}}}"' in removal
     assert "NO_REMOTE_UPGRADE_MARKER" in script
+
+
+def _resolve_agent_pip_args(script: str, server: str) -> list[str]:
+    """Run the installer's package-source resolution alone, with the server URL
+    and pin it would have at that point, and return the pip arguments."""
+    function = re.search(
+        r"^resolve_agent_package_source\(\) \{\n.*?^\}\n", script, re.M | re.S
+    ).group(0)
+    harness = "\n".join(
+        [
+            "set -euo pipefail",
+            function,
+            'AGENT_SOURCE="server"',
+            f'SERVER="{server}"',
+            'PINNED_AGENT_VERSION="0.1.2"',
+            "AGENT_PIP_ARGS=()",
+            "resolve_agent_package_source",
+            'printf "%s\\n" "${AGENT_PIP_ARGS[@]}"',
+        ]
+    )
+    result = subprocess.run(
+        ["bash", "-c", harness], capture_output=True, text=True, check=True
+    )
+    return result.stdout.splitlines()
+
+
+def test_agent_installer_trusts_a_plain_http_server_for_pip(test_client: TestClient):
+    """pip ignores an http find-links host unless it is named as trusted, and
+    then fails with "no matching distribution" (#1272). The whole authority is
+    passed, which pip accepts and which keeps a bracketed IPv6 host intact."""
+    script = test_client.get("/agent/install.sh").text
+
+    args = _resolve_agent_pip_args(script, "http://10.0.10.29:8082")
+    assert args[args.index("--trusted-host") + 1] == "10.0.10.29:8082"
+
+    args = _resolve_agent_pip_args(script, "http://[fd00::29]/borg")
+    assert args[args.index("--trusted-host") + 1] == "[fd00::29]"
+
+
+def test_agent_installer_keeps_verifying_an_https_server(test_client: TestClient):
+    """Over https nothing is relaxed: --trusted-host would switch certificate
+    verification off for a properly certified server too. A self-signed
+    certificate is handled by trusting it on the machine, which Debian-family
+    pip honours (#1272)."""
+    script = test_client.get("/agent/install.sh").text
+
+    args = _resolve_agent_pip_args(script, "https://borg.example.com:8083")
+
+    assert "--trusted-host" not in args
+    assert "--cert" not in args

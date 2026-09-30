@@ -774,6 +774,18 @@ resolve_agent_package_source() {
     --find-links "${SERVER%/}/agent/dist/"
     "borg-ui-agent==${PINNED_AGENT_VERSION}"
   )
+
+  # pip ignores an http find-links host unless it is named as trusted, and
+  # then reports only "no matching distribution" (#1272). The whole authority
+  # goes in, port and all: pip takes host:port, and it spares parsing a
+  # bracketed IPv6 address. Over https nothing is added: verification stays
+  # on, against the system trust store on Debian-family pip, so a self-signed
+  # server certificate installed with update-ca-certificates satisfies pip as
+  # it does curl and the agent.
+  if [[ "${SERVER}" == http://* ]]; then
+    local authority="${SERVER#http://}"
+    AGENT_PIP_ARGS+=(--trusted-host "${authority%%/*}")
+  fi
 }
 
 AGENT_PIP_ARGS=()
