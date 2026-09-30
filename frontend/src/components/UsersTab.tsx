@@ -119,11 +119,12 @@ const UsersTab: React.FC = () => {
 
   const deleteUserMutation = useMutation({
     mutationFn: settingsAPI.deleteUser,
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(t('settings.toasts.userDeleted'))
-      queryClient.invalidateQueries({ queryKey: ['users'] })
-      setDeleteConfirmUser(null)
       trackSettings(EventAction.DELETE, { section: 'users' })
+      // The dialog stays open until the list no longer has the row (#1197).
+      await queryClient.invalidateQueries({ queryKey: ['users'] })
+      setDeleteConfirmUser(null)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {

@@ -26,6 +26,7 @@ import CodeEditor from '../components/shared/CodeEditor'
 import ScriptParameterInputs, { ScriptParameter } from '../components/ScriptParameterInputs'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
+import { usePendingDeletes } from '../hooks/usePendingDeletes'
 import DataTable, { ActionButton, Column } from '../components/DataTable'
 
 interface Script {
@@ -76,6 +77,7 @@ export default function Scripts() {
   const { trackScripts, EventAction } = useAnalytics()
   const [scripts, setScripts] = useState<Script[]>([])
   const [loading, setLoading] = useState(true)
+  const deletingScripts = usePendingDeletes()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [testDialogOpen, setTestDialogOpen] = useState(false)
   const [editingScript, setEditingScript] = useState<ScriptDetail | null>(null)
@@ -243,15 +245,21 @@ export default function Scripts() {
   }
 
   const handleDelete = async (script: Script) => {
+    if (deletingScripts.isDeleting(script.id)) return
     if (!confirm(t('scripts.confirmDelete', { name: script.name }))) {
       return
     }
 
+    await deletingScripts.run(script.id, () => deleteScript(script))
+  }
+
+  const deleteScript = async (script: Script) => {
     try {
       await api.delete(`/scripts/${script.id}`)
       toast.success(t('scripts.toasts.scriptDeleted'))
       trackScripts(EventAction.DELETE, script.name, { category: script.category })
-      fetchScripts()
+      // Awaited so the row stays disabled until the list no longer has it.
+      await fetchScripts()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to delete script:', error)
@@ -444,14 +452,16 @@ export default function Scripts() {
       label: t('scripts.actions.delete'),
       icon: <Trash2 size={18} />,
       onClick: handleDelete,
-      disabled: (script) => script.is_template,
+      disabled: (script) => script.is_template || deletingScripts.isDeleting(script.id),
       color: 'error',
       tooltip: (script) =>
-        script.is_template
-          ? t('scripts.actions.cannotDeleteTemplates')
-          : script.usage_count > 0
-            ? t('scripts.usedInCount', { count: script.usage_count })
-            : t('scripts.actions.delete'),
+        deletingScripts.isDeleting(script.id)
+          ? t('common.buttons.deleting')
+          : script.is_template
+            ? t('scripts.actions.cannotDeleteTemplates')
+            : script.usage_count > 0
+              ? t('scripts.usedInCount', { count: script.usage_count })
+              : t('scripts.actions.delete'),
     },
   ]
 

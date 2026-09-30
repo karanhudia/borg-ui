@@ -304,12 +304,13 @@ const Schedule: React.FC = () => {
   // Delete job mutation
   const deleteJobMutation = useMutation({
     mutationFn: scheduleAPI.deleteScheduledJob,
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(t('schedule.toasts.jobDeleted'))
-      queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
-      queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
-      setDeleteConfirmJob(null)
       track(EventCategory.BACKUP, EventAction.DELETE, { entity: 'schedule' })
+      queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
+      // The dialog stays open until the list no longer has the row (#1197).
+      await queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
+      setDeleteConfirmJob(null)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {

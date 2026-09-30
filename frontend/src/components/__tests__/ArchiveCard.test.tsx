@@ -31,6 +31,16 @@ describe('ArchiveCard', () => {
     expect(screen.getAllByText(/2024/)).toHaveLength(2) // Archive name + formatted date
   })
 
+  it('disables delete and says so while the delete job runs (#1197)', () => {
+    render(<ArchiveCard archive={mockArchive} {...mockHandlers} isDeleting />)
+
+    const deleteButton = screen.getByRole('button', { name: /delete/i })
+    expect(deleteButton).toBeDisabled()
+    fireEvent.click(deleteButton)
+    expect(mockHandlers.onDelete).not.toHaveBeenCalled()
+    expect(screen.getByText(/deleting/i)).toBeInTheDocument()
+  })
+
   it('renders all action buttons', () => {
     render(<ArchiveCard archive={mockArchive} {...mockHandlers} />)
 

@@ -562,3 +562,30 @@ def test_the_native_install_sets_what_the_image_sets():
         "the image sets these but the native install does not, so the two "
         f"behave differently: {missing}"
     )
+
+
+def test_a_return_trap_does_not_outlive_its_function():
+    """A RETURN trap set inside a function stays armed after it returns and
+    fires again on the caller's next return, which in main is the `source` of
+    versions.env. There the trapped local is out of scope and `set -u` killed
+    every release-download install with "tmp: unbound variable" (#860).
+
+    Exercises the real download_release trap lines under the same shell
+    options the installer runs with, followed by a `source`, as main does."""
+    text = INSTALLER.read_text()
+    match = re.search(r"^\s*trap '.*' RETURN$", text, re.MULTILINE)
+    assert match, "download_release lost its cleanup trap"
+    trap_line = match.group(0)
+
+    script = f"""
+set -euo pipefail
+f() {{ local tmp; tmp="$(mktemp -d)"; {trap_line}; :; }}
+f
+source /dev/null
+echo survived
+"""
+    result = subprocess.run(
+        ["bash", "-c", script], capture_output=True, text=True, timeout=10
+    )
+    assert result.returncode == 0, result.stderr
+    assert "survived" in result.stdout

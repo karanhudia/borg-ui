@@ -67,6 +67,27 @@ Advanced service-user modes are available:
 The machine appears in Managed Agents after registration and its first live
 session. The wizard waits for that connection while the command is displayed.
 
+### Plain HTTP and self-signed certificates
+
+A server URL on plain `http` works as it is. The installer names the server as
+a trusted host for pip, since pip otherwise ignores a cleartext package source,
+and the agent talks to it in the clear. Remote upgrade is the one feature that
+needs `https` (see below).
+
+A server behind a self-signed or private-CA certificate works once that
+certificate is trusted by the machine. Install it into the system trust store
+before running the installer:
+
+```bash
+sudo cp borg-ui-ca.crt /usr/local/share/ca-certificates/
+sudo update-ca-certificates
+```
+
+Every step then verifies against that store: `curl` fetching the installer,
+pip fetching the agent package, and the agent itself, which checks TLS against
+the machine's trust store rather than only the bundle it ships with. There is
+no flag to skip certificate verification.
+
 ## Reinstall or Update an Existing Agent
 
 Use the **Reinstall agent** action on an existing agent card when you want to
