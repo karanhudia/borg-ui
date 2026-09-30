@@ -1,0 +1,8 @@
+# CodeRabbit configuration. Schema: https://coderabbit.ai/integrations/schema.v2.json
+reviews:
+  pre_merge_checks:
+    # Coverage is measured over every function the diff touches, tests included,
+    # so almost every PR failed the default 80% threshold. Docstrings are
+    # reviewed like any other code instead. See issue #929.
+    docstrings:
+      mode: off
