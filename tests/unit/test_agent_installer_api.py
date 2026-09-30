@@ -753,15 +753,15 @@ def _resolve_agent_pip_args(script: str, server: str) -> list[str]:
 
 def test_agent_installer_trusts_a_plain_http_server_for_pip(test_client: TestClient):
     """pip ignores an http find-links host unless it is named as trusted, and
-    then fails with "no matching distribution" (#1272). The host is passed
-    without its port so any port the server answers on matches."""
+    then fails with "no matching distribution" (#1272). The whole authority is
+    passed, which pip accepts and which keeps a bracketed IPv6 host intact."""
     script = test_client.get("/agent/install.sh").text
 
     args = _resolve_agent_pip_args(script, "http://10.0.10.29:8082")
+    assert args[args.index("--trusted-host") + 1] == "10.0.10.29:8082"
 
-    assert "--trusted-host" in args
-    assert args[args.index("--trusted-host") + 1] == "10.0.10.29"
-    assert "--cert" not in args
+    args = _resolve_agent_pip_args(script, "http://[fd00::29]/borg")
+    assert args[args.index("--trusted-host") + 1] == "[fd00::29]"
 
 
 def test_agent_installer_keeps_verifying_an_https_server(test_client: TestClient):

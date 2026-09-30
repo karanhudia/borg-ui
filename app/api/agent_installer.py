@@ -776,15 +776,15 @@ resolve_agent_package_source() {
   )
 
   # pip ignores an http find-links host unless it is named as trusted, and
-  # then reports only "no matching distribution" (#1272). The host goes in
-  # without its port so it matches whatever port the server answers on. Over
-  # https nothing is added: verification stays on, against the system trust
-  # store on Debian-family pip, so a self-signed server certificate installed
-  # with update-ca-certificates satisfies pip as it does curl and the agent.
+  # then reports only "no matching distribution" (#1272). The whole authority
+  # goes in, port and all: pip takes host:port, and it spares parsing a
+  # bracketed IPv6 address. Over https nothing is added: verification stays
+  # on, against the system trust store on Debian-family pip, so a self-signed
+  # server certificate installed with update-ca-certificates satisfies pip as
+  # it does curl and the agent.
   if [[ "${SERVER}" == http://* ]]; then
-    local host="${SERVER#http://}"
-    host="${host%%/*}"
-    AGENT_PIP_ARGS+=(--trusted-host "${host%:*}")
+    local authority="${SERVER#http://}"
+    AGENT_PIP_ARGS+=(--trusted-host "${authority%%/*}")
   fi
 }
 
