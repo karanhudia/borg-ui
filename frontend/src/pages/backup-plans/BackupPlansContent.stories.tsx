@@ -170,7 +170,11 @@ const skippedRepositoryPlan: BackupPlan = {
   ],
 }
 
-function SkippedRepositoryBackupPlans() {
+function SkippedRepositoryBackupPlans({
+  deletingPlanIds,
+}: {
+  deletingPlanIds?: ReadonlySet<number>
+} = {}) {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState('name-asc')
   const [groupBy, setGroupBy] = useState('none')
@@ -211,6 +215,7 @@ function SkippedRepositoryBackupPlans() {
         togglingRepository={null}
         onEditPlan={noop}
         onDeletePlan={noop}
+        deletingPlanIds={deletingPlanIds}
         onViewHistory={noop}
         onViewRepositories={noop}
         formatStatusLabel={(status) => status ?? t('backupPlans.statuses.unknown')}
@@ -336,6 +341,14 @@ export const CommunityLockedRuns: Story = {
 
 export const SkippedRepository: Story = {
   render: () => <SkippedRepositoryBackupPlans />,
+}
+
+/** A plan whose delete is out (#1197): its delete action is disabled and
+ * shows a spinner until the list no longer has it. */
+export const DeletingPlan: Story = {
+  render: () => (
+    <SkippedRepositoryBackupPlans deletingPlanIds={new Set([skippedRepositoryPlan.id])} />
+  ),
 }
 
 export const SkippedRepositoryDark: Story = {

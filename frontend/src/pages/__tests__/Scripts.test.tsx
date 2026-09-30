@@ -244,6 +244,31 @@ describe('Scripts page', () => {
     expect(trackScripts).toHaveBeenCalledWith('Delete', 'Cleanup', { category: 'custom' })
   })
 
+  it('sends one DELETE for a second click while the first is out (#1197)', async () => {
+    const user = userEvent.setup()
+    let finishDelete!: () => void
+    vi.spyOn(api, 'delete').mockImplementation(
+      () => new Promise((resolve) => (finishDelete = () => resolve({ data: {} } as never)))
+    )
+
+    renderWithProviders(<Scripts />)
+    expect(await screen.findByText('Cleanup')).toBeInTheDocument()
+
+    const row = screen.getByText('Cleanup').closest('tr')
+    const deleteButton = Array.from(row?.querySelectorAll('button') ?? [])[2]
+    expect(deleteButton).toBeTruthy()
+    await user.click(deleteButton!)
+    await waitFor(() => expect(api.delete).toHaveBeenCalledTimes(1))
+
+    // The row's delete is disabled while the request is out.
+    await waitFor(() => expect(deleteButton).toBeDisabled())
+    fireEvent.click(deleteButton!)
+    expect(api.delete).toHaveBeenCalledTimes(1)
+
+    finishDelete()
+    await waitFor(() => expect(deleteButton).not.toBeDisabled())
+  })
+
   it('detects custom parameters, ignores borg-ui reserved variables, and preserves secret toggles', async () => {
     const user = userEvent.setup()
 

@@ -167,11 +167,12 @@ const NotificationsTab: React.FC = () => {
   // Delete notification
   const deleteMutation = useMutation({
     mutationFn: notificationsAPI.delete,
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(t('notifications.serviceDeletedSuccessfully'))
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
-      setDeleteConfirm(null)
       trackNotifications(EventAction.DELETE, {})
+      // The dialog stays open until the list no longer has the row (#1197).
+      await queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      setDeleteConfirm(null)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {

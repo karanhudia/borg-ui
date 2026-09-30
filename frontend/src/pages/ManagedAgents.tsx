@@ -497,8 +497,10 @@ export default function ManagedAgents() {
 
   const deleteAgentMutation = useMutation({
     mutationFn: managedAgentsAPI.deleteAgent,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['managed-agents'] })
+    onSuccess: async () => {
+      // Awaited so the row's delete stays disabled until the list no longer
+      // has it (#1197).
+      await queryClient.invalidateQueries({ queryKey: ['managed-agents'] })
       trackSystem(EventAction.DELETE, {
         section: MANAGED_AGENTS_ANALYTICS_SECTION,
         operation: 'delete_agent',
