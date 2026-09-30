@@ -1,29 +1,29 @@
 {
-  "generatedAt": "2026-09-30T13:18:51.001Z",
+  "generatedAt": "2026-09-30T13:30:29.370Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1242 visual report",
     "commitSha": "30a3c6dd4558",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36720398247"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36721905474"
   },
   "totals": {
     "baseline": 1100,
     "actual": 1112,
     "compared": 1100,
-    "changed": 16,
+    "changed": 15,
     "added": 12,
     "removed": 0,
-    "unchanged": 1084
+    "unchanged": 1085
   },
   "changed": [
     {
-      "fileName": "backup-plans-schedulestep--check-flag-conflict--mobile.png",
-      "baselinePath": "images/baseline/backup-plans-schedulestep--check-flag-conflict--mobile.png",
-      "actualPath": "images/actual/backup-plans-schedulestep--check-flag-conflict--mobile.png",
-      "diffPath": "images/diff/backup-plans-schedulestep--check-flag-conflict--mobile.png",
-      "diffPixels": 328892,
+      "fileName": "components-repositorycard--size-unknown--mobile.png",
+      "baselinePath": "images/baseline/components-repositorycard--size-unknown--mobile.png",
+      "actualPath": "images/actual/components-repositorycard--size-unknown--mobile.png",
+      "diffPath": "images/diff/components-repositorycard--size-unknown--mobile.png",
+      "diffPixels": 228104,
       "totalPixels": 329160,
-      "diffRatio": 0.999185806294811,
+      "diffRatio": 0.692988212419492,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -276,24 +276,6 @@
       "diffPixels": 242016,
       "totalPixels": 1024000,
       "diffRatio": 0.23634375,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "quick-start-steps--destination-ssh-no-default-path.png",
-      "baselinePath": "images/baseline/quick-start-steps--destination-ssh-no-default-path.png",
-      "actualPath": "images/actual/quick-start-steps--destination-ssh-no-default-path.png",
-      "diffPath": "images/diff/quick-start-steps--destination-ssh-no-default-path.png",
-      "diffPixels": 2782,
-      "totalPixels": 1024000,
-      "diffRatio": 0.002716796875,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -806,6 +788,9 @@
     },
     {
       "fileName": "backup-plans-reviewstep--unsupported-server-source-to-agent-repo.png"
+    },
+    {
+      "fileName": "backup-plans-schedulestep--check-flag-conflict--mobile.png"
     },
     {
       "fileName": "backup-plans-schedulestep--check-flag-conflict.png"
@@ -2275,9 +2260,6 @@
       "fileName": "components-repositorycard--size-still-measuring.png"
     },
     {
-      "fileName": "components-repositorycard--size-unknown--mobile.png"
-    },
-    {
       "fileName": "components-repositorycard--size-unknown.png"
     },
     {
@@ -3380,6 +3362,9 @@
     },
     {
       "fileName": "quick-start-steps--destination-ssh-no-default-path--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--destination-ssh-no-default-path.png"
     },
     {
       "fileName": "quick-start-steps--destination-ssh.png"
