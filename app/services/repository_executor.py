@@ -21,6 +21,7 @@ from app.core.borg_errors import (
 from app.database.models import AgentJob, AgentJobLog, AgentMachine, Repository
 from app.services.agent_job_dispatcher import dispatch_agent_cancel_if_connected
 from app.services.job_admission import (
+    BACKUP_AGENT_JOB_TYPE,
     OPERATION_BACKUP,
     ensure_repository_admission,
     ignore_active_job,
@@ -872,13 +873,6 @@ async def wait_for_agent_repository_operation_job(
         status_code=status.HTTP_504_GATEWAY_TIMEOUT,
         detail={"key": "backend.errors.agents.repositoryOperationTimeout"},
     )
-
-
-# `agent_jobs.job_type` of the row that carries a backup to its agent. Named
-# once: the writers set it and `get_agent_job_for_backup` reads it, and a
-# mismatch between them fails silently — the cancel route would find no job
-# and refuse, the log endpoints would serve nothing.
-BACKUP_AGENT_JOB_TYPE = "backup"
 
 
 def queue_agent_backup_job(
