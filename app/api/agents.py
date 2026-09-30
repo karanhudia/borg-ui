@@ -782,6 +782,9 @@ def _finish_linked_backup_job(
         archive_name = (agent_job.result or {}).get("archive_name")
         if archive_name:
             backup_job.archive_name = archive_name
+        archive_id = (agent_job.result or {}).get("archive_id")
+        if isinstance(archive_id, str) and archive_id:
+            backup_job.archive_id = archive_id
 
         repository = None
         if backup_job.repository_id:

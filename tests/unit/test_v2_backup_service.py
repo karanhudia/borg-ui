@@ -45,6 +45,7 @@ def test_build_backup_create_command_uses_borg2_shape():
         "/repos/v2",
         "create",
         "--stats",
+        "--json",
         "--compression",
         "zstd",
         "--exclude",

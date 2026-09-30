@@ -144,3 +144,21 @@ def test_no_counters_no_key(monkeypatch, stdout):
     client = _run(monkeypatch, stdout)
 
     assert "archive_stats" not in client.completed[0]
+
+
+def test_the_completion_carries_the_archive_id(monkeypatch):
+    """The server's post-backup restore check targets the archive this
+    backup made, by id (#1232); Borg 2 archives in a series share a name."""
+    document = json.dumps(
+        {"archive": {"name": "plan-daily", "id": "ab12cd34ef56ab12", "stats": {}}}
+    )
+
+    client = _run(monkeypatch, document)
+
+    assert client.completed[0]["archive_id"] == "ab12cd34ef56ab12"
+
+
+def test_a_document_without_an_id_carries_none(monkeypatch):
+    client = _run(monkeypatch, _document({"nfiles": 2}))
+
+    assert "archive_id" not in client.completed[0]

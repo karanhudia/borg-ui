@@ -1,3 +1,4 @@
+from contextlib import ExitStack
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -930,3 +931,219 @@ def test_select_latest_archive_targets_a_named_archive():
     assert _select_latest_archive(archives)["id"] == "3"
     assert _select_latest_archive(archives, "plan-a")["id"] == "2"
     assert _select_latest_archive(archives, "gone") is None
+
+
+def test_select_latest_archive_targets_the_recorded_archive_id():
+    """Two plans writing the same Borg 2 series: the check picks the archive
+    its own backup made, not the newer one the other plan wrote (#1232),
+    and picks nothing when that archive is gone."""
+    archives = [
+        {"name": "shared-series", "id": "1", "start": "2026-09-28T10:00:00"},
+        {"name": "shared-series", "id": "2", "start": "2026-09-28T11:00:00"},
+    ]
+
+    assert _select_latest_archive(archives, "shared-series", "1")["id"] == "1"
+    assert _select_latest_archive(archives, "shared-series", "gone") is None
+    # Without a recorded id the newest of the name still wins.
+    assert _select_latest_archive(archives, "shared-series")["id"] == "2"
+
+
+def _borg2_repo(db_session, path: str, **columns) -> Repository:
+    repo = Repository(
+        name=path.rsplit("/", 1)[-1],
+        path=path,
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        bypass_lock=True,
+        borg_version=2,
+        **columns,
+    )
+    db_session.add(repo)
+    db_session.commit()
+    db_session.refresh(repo)
+    return repo
+
+
+def contextlib_exit_stack(patches):
+    stack = ExitStack()
+    for entry in patches:
+        stack.enter_context(entry)
+    return stack
+
+
+def _local_borg2_patches(testing_session_local, process):
+    return (
+        patch("app.services.restore_check_service.SessionLocal", testing_session_local),
+        patch("app.services.restore_check_service.BorgRouter", FakeBorg2SeriesRouter),
+        patch(
+            "app.services.restore_check_service.build_repository_borg_env",
+            return_value=({}, None),
+        ),
+        patch("app.services.restore_check_service.cleanup_temp_key_file"),
+        patch(
+            "app.services.restore_check_service.get_process_start_time",
+            return_value=123456,
+        ),
+        patch(
+            "app.services.restore_check_service.asyncio.create_subprocess_exec",
+            return_value=process,
+        ),
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_post_backup_check_extracts_the_archive_its_backup_made(
+    db_session, testing_session_local
+):
+    """Two plans share the series "myplan-daily"; the other plan's newer
+    archive is listed, but the check extracts the one this backup recorded."""
+    repo = _borg2_repo(db_session, "/tmp/restore-check-b2-own")
+    job = seed_job_operation(
+        db_session,
+        "restore_check",
+        repository_id=repo.id,
+        repository_path=repo.path,
+        status="pending",
+        full_archive=True,
+        archive_name="myplan-daily",
+        archive_id="ab12cd34ef56ab12",
+    )
+    db_session.commit()
+    db_session.refresh(job)
+    FakeBorg2SeriesRouter.captured_extract_archives = []
+
+    with contextlib_exit_stack(
+        _local_borg2_patches(testing_session_local, FakeRestoreCheckProcess(0))
+    ):
+        await RestoreCheckService().execute_restore_check(job.id, repo.id)
+
+    verification = testing_session_local()
+    refreshed = resolve_maintenance_job(verification, job.id, "restore_check")
+    assert FakeBorg2SeriesRouter.captured_extract_archives == ["aid:ab12cd34ef56ab12"]
+    assert refreshed.status == "completed"
+    assert refreshed.archive_name == "myplan-daily"
+    verification.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_post_backup_check_fails_when_its_archive_is_gone(
+    db_session, testing_session_local
+):
+    """The recorded archive is not listed: the check fails and names it;
+    the newest archive of the series is never verified in its place."""
+    repo = _borg2_repo(db_session, "/tmp/restore-check-b2-gone")
+    job = seed_job_operation(
+        db_session,
+        "restore_check",
+        repository_id=repo.id,
+        repository_path=repo.path,
+        status="pending",
+        full_archive=True,
+        archive_name="myplan-daily",
+        archive_id="0000000000000000",
+    )
+    db_session.commit()
+    db_session.refresh(job)
+    FakeBorg2SeriesRouter.captured_extract_archives = []
+
+    with contextlib_exit_stack(
+        _local_borg2_patches(testing_session_local, FakeRestoreCheckProcess(0))
+    ):
+        await RestoreCheckService().execute_restore_check(job.id, repo.id)
+
+    verification = testing_session_local()
+    refreshed = resolve_maintenance_job(verification, job.id, "restore_check")
+    assert FakeBorg2SeriesRouter.captured_extract_archives == []
+    assert refreshed.status == "failed"
+    assert "0000000000000000" in refreshed.error_message
+    assert "No other archive was verified" in refreshed.error_message
+    verification.close()
+
+
+def _agent_series_listing():
+    return [
+        {
+            "name": "myplan-daily",
+            "id": "ab12cd34ef56ab12",
+            "time": "2026-01-01T00:00:00",
+        },
+        {
+            "name": "myplan-daily",
+            "id": "ef56gh78ab12cd34",
+            "time": "2026-01-02T00:00:00",
+        },
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "archive_id, want_selector, want_status",
+    [
+        ("ab12cd34ef56ab12", "aid:ab12cd34ef56ab12", "completed"),
+        ("0000000000000000", None, "failed"),
+    ],
+)
+async def test_an_agent_post_backup_check_targets_the_recorded_archive(
+    db_session, testing_session_local, archive_id, want_selector, want_status
+):
+    """The agent path selects by the recorded id too: it restores that
+    archive on the node, or fails without restoring another one."""
+    from app.services.restore_check_service import RestoreCheckService as Service
+
+    repo = _borg2_repo(db_session, "/tmp/restore-check-b2-agent", executor_type="agent")
+    job = seed_job_operation(
+        db_session,
+        "restore_check",
+        repository_id=repo.id,
+        repository_path=repo.path,
+        status="pending",
+        full_archive=True,
+        archive_name="myplan-daily",
+        archive_id=archive_id,
+    )
+    db_session.commit()
+    db_session.refresh(job)
+
+    queued: list[dict] = []
+
+    def fake_queue(db, repository, *, job_kind, operation=None, **kwargs):
+        queued.append(operation)
+        return type("AgentJobStub", (), {"id": 4242})()
+
+    with (
+        patch("app.services.restore_check_service.SessionLocal", testing_session_local),
+        patch.object(
+            Service,
+            "_agent_list_archives",
+            AsyncMock(return_value=_agent_series_listing()),
+        ),
+        patch.object(
+            Service,
+            "_await_agent_operation",
+            AsyncMock(return_value={"verified": True}),
+        ),
+        patch.object(Service, "_append_agent_logs"),
+        patch(
+            "app.services.repository_executor.queue_agent_repository_operation_job",
+            fake_queue,
+        ),
+        patch(
+            "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+            AsyncMock(),
+        ),
+    ):
+        await Service().execute_restore_check(job.id, repo.id)
+
+    verification = testing_session_local()
+    refreshed = resolve_maintenance_job(verification, job.id, "restore_check")
+    assert [op["archive"] for op in queued] == (
+        [want_selector] if want_selector else []
+    )
+    assert refreshed.status == want_status
+    if want_status == "failed":
+        assert archive_id in refreshed.error_message
+    verification.close()

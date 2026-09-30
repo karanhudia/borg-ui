@@ -5516,6 +5516,7 @@ class TestBackupPlanRoutes:
         async def fake_execute_backup(job_id, repository, db, **kwargs):
             job = resolve_backup_job(db, job_id)
             job.status = "completed"
+            job.archive_id = "ab12cd34ef56ab12"
             job.completed_at = datetime.utcnow()
             db.commit()
 
@@ -5573,6 +5574,9 @@ class TestBackupPlanRoutes:
         assert restore_check.params["archive_name"].startswith(
             "Plan-execution-Primary-"
         )
+        # The id the backup recorded, so a Borg 2 series name shared with
+        # another plan cannot make the check verify that plan's archive.
+        assert restore_check.params["archive_id"] == "ab12cd34ef56ab12"
         assert restore_check.params["probe_paths"] == repo.restore_check_paths
         assert restore_check.params["full_archive"] is False
         assert backup_job.maintenance_status == (

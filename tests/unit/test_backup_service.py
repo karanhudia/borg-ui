@@ -2574,3 +2574,36 @@ class TestBackupServicePeriodicSync:
             "etc/komodo",
             ".borg-ui/restore-canaries/repository-1/.borgui-canary",
         ]
+
+
+class TestParseCreatedArchiveId:
+    """The archive id in the tail of `borg create --json` output (#1232)."""
+
+    def test_reads_the_id_from_the_trailing_document(self):
+        from app.services.backup_service import _parse_created_archive_id
+
+        lines = [
+            '{"type": "archive_progress", "finished": true}',
+            "{",
+            '    "archive": {',
+            '        "id": "ab12cd34ef56ab12",',
+            '        "name": "plan-daily",',
+            '        "stats": {',
+            '            "nfiles": 3',
+            "        }",
+            "    },",
+            '    "repository": {',
+            '        "id": "repo"',
+            "    }",
+            "}",
+            '{"type": "log_message", "message": "terminating with success status, rc 0"}',
+        ]
+
+        assert _parse_created_archive_id(lines) == "ab12cd34ef56ab12"
+
+    def test_output_without_a_document_has_no_id(self):
+        from app.services.backup_service import _parse_created_archive_id
+
+        assert _parse_created_archive_id([]) is None
+        assert _parse_created_archive_id(["Archive name: x", "{", "broken"]) is None
+        assert _parse_created_archive_id(["{", '    "archive": {}', "}"]) is None
