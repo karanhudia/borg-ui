@@ -154,6 +154,13 @@ A Backup Plan is the backup workflow. It defines what to back up, which reposito
 
 Community plans can use one repository. Pro plans can use multiple repositories, such as one local target and one off-site target, and can run them one after another or in parallel.
 
+Some settings, such as compression, exist on both. The Backup Plan value is
+the one its backups use. The repository value applies to backups started from
+the repository itself (Backup Now on a repository, legacy repository
+schedules) and is the default copied into a plan created from that
+repository. Only one value ever reaches Borg, so if the two differ, the plan
+wins for plan runs.
+
 ## Choose Backup Sources
 
 Use paths that exist inside the container.
