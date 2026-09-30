@@ -1,29 +1,29 @@
 {
-  "generatedAt": "2026-09-30T16:31:33.614Z",
+  "generatedAt": "2026-09-30T17:02:45.707Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1288 visual report",
-    "commitSha": "8035ca6b08b4",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36744640053"
+    "commitSha": "6ee79d88a719",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36748363305"
   },
   "totals": {
     "baseline": 1112,
     "actual": 1122,
     "compared": 1100,
-    "changed": 33,
+    "changed": 49,
     "added": 22,
     "removed": 12,
-    "unchanged": 1067
+    "unchanged": 1051
   },
   "changed": [
     {
-      "fileName": "backup-plans-sourcestep--btrfs-snapshot-source--mobile.png",
-      "baselinePath": "images/baseline/backup-plans-sourcestep--btrfs-snapshot-source--mobile.png",
-      "actualPath": "images/actual/backup-plans-sourcestep--btrfs-snapshot-source--mobile.png",
-      "diffPath": "images/diff/backup-plans-sourcestep--btrfs-snapshot-source--mobile.png",
-      "diffPixels": 59562,
+      "fileName": "backup-plans-sourceselectiondialog--community-mixed-sources-locked--mobile.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--community-mixed-sources-locked--mobile.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--community-mixed-sources-locked--mobile.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--community-mixed-sources-locked--mobile.png",
+      "diffPixels": 2846,
       "totalPixels": 329160,
-      "diffRatio": 0.18095151294203426,
+      "diffRatio": 0.008646251063312675,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -35,13 +35,481 @@
       }
     },
     {
-      "fileName": "backup-plans-sourcestep--btrfs-snapshot-source.png",
-      "baselinePath": "images/baseline/backup-plans-sourcestep--btrfs-snapshot-source.png",
-      "actualPath": "images/actual/backup-plans-sourcestep--btrfs-snapshot-source.png",
-      "diffPath": "images/diff/backup-plans-sourcestep--btrfs-snapshot-source.png",
-      "diffPixels": 1363,
+      "fileName": "backup-plans-sourceselectiondialog--community-mixed-sources-locked.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--community-mixed-sources-locked.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--community-mixed-sources-locked.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--community-mixed-sources-locked.png",
+      "diffPixels": 9804,
       "totalPixels": 1024000,
-      "diffRatio": 0.0013310546875,
+      "diffRatio": 0.00957421875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--community-pro-source-kinds-locked--mobile.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--community-pro-source-kinds-locked--mobile.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--community-pro-source-kinds-locked--mobile.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--community-pro-source-kinds-locked--mobile.png",
+      "diffPixels": 4012,
+      "totalPixels": 329160,
+      "diffRatio": 0.012188601288127354,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--community-pro-source-kinds-locked.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--community-pro-source-kinds-locked.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--community-pro-source-kinds-locked.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--community-pro-source-kinds-locked.png",
+      "diffPixels": 9774,
+      "totalPixels": 1024000,
+      "diffRatio": 0.009544921875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--container-picker-detected--mobile.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--container-picker-detected--mobile.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--container-picker-detected--mobile.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--container-picker-detected--mobile.png",
+      "diffPixels": 8284,
+      "totalPixels": 329160,
+      "diffRatio": 0.025167091991736543,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--container-picker-detected.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--container-picker-detected.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--container-picker-detected.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--container-picker-detected.png",
+      "diffPixels": 10474,
+      "totalPixels": 1024000,
+      "diffRatio": 0.010228515625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--container-picker-empty--mobile.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--container-picker-empty--mobile.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--container-picker-empty--mobile.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--container-picker-empty--mobile.png",
+      "diffPixels": 8284,
+      "totalPixels": 329160,
+      "diffRatio": 0.025167091991736543,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--container-picker-empty.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--container-picker-empty.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--container-picker-empty.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--container-picker-empty.png",
+      "diffPixels": 10474,
+      "totalPixels": 1024000,
+      "diffRatio": 0.010228515625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--container-picker-queued-edit-mode--mobile.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--container-picker-queued-edit-mode--mobile.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--container-picker-queued-edit-mode--mobile.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--container-picker-queued-edit-mode--mobile.png",
+      "diffPixels": 8237,
+      "totalPixels": 329160,
+      "diffRatio": 0.025024304289707134,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--container-picker-queued-edit-mode.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--container-picker-queued-edit-mode.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--container-picker-queued-edit-mode.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--container-picker-queued-edit-mode.png",
+      "diffPixels": 10935,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0106787109375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-queued-multiple-selection--mobile.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--database-queued-multiple-selection--mobile.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--database-queued-multiple-selection--mobile.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--database-queued-multiple-selection--mobile.png",
+      "diffPixels": 9594,
+      "totalPixels": 329160,
+      "diffRatio": 0.02914691943127962,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-queued-multiple-selection.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--database-queued-multiple-selection.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--database-queued-multiple-selection.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--database-queued-multiple-selection.png",
+      "diffPixels": 15488,
+      "totalPixels": 1024000,
+      "diffRatio": 0.015125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-queued-multiple-sqlite-selection--mobile.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--database-queued-multiple-sqlite-selection--mobile.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--database-queued-multiple-sqlite-selection--mobile.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--database-queued-multiple-sqlite-selection--mobile.png",
+      "diffPixels": 9594,
+      "totalPixels": 329160,
+      "diffRatio": 0.02914691943127962,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-queued-multiple-sqlite-selection.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--database-queued-multiple-sqlite-selection.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--database-queued-multiple-sqlite-selection.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--database-queued-multiple-sqlite-selection.png",
+      "diffPixels": 15488,
+      "totalPixels": 1024000,
+      "diffRatio": 0.015125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-queued-selection--mobile.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--database-queued-selection--mobile.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--database-queued-selection--mobile.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--database-queued-selection--mobile.png",
+      "diffPixels": 9594,
+      "totalPixels": 329160,
+      "diffRatio": 0.02914691943127962,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-queued-selection.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--database-queued-selection.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--database-queued-selection.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--database-queued-selection.png",
+      "diffPixels": 15482,
+      "totalPixels": 1024000,
+      "diffRatio": 0.015119140625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-capture-mode-expanded--mobile.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-capture-mode-expanded--mobile.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-capture-mode-expanded--mobile.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-capture-mode-expanded--mobile.png",
+      "diffPixels": 4042,
+      "totalPixels": 329160,
+      "diffRatio": 0.012279742374529104,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-capture-mode-expanded.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-capture-mode-expanded.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-capture-mode-expanded.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-capture-mode-expanded.png",
+      "diffPixels": 9802,
+      "totalPixels": 1024000,
+      "diffRatio": 0.009572265625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-empty--mobile.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-empty--mobile.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-empty--mobile.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-empty--mobile.png",
+      "diffPixels": 4042,
+      "totalPixels": 329160,
+      "diffRatio": 0.012279742374529104,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-empty.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-empty.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-empty.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-empty.png",
+      "diffPixels": 9802,
+      "totalPixels": 1024000,
+      "diffRatio": 0.009572265625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png",
+      "diffPixels": 2846,
+      "totalPixels": 329160,
+      "diffRatio": 0.008646251063312675,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups.png",
+      "diffPixels": 9804,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00957421875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png",
+      "diffPixels": 2846,
+      "totalPixels": 329160,
+      "diffRatio": 0.008646251063312675,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot.png",
+      "diffPixels": 9804,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00957421875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-incomplete-zfs-snapshot--mobile.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-with-incomplete-zfs-snapshot--mobile.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-with-incomplete-zfs-snapshot--mobile.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-with-incomplete-zfs-snapshot--mobile.png",
+      "diffPixels": 2846,
+      "totalPixels": 329160,
+      "diffRatio": 0.008646251063312675,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-incomplete-zfs-snapshot.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-with-incomplete-zfs-snapshot.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-with-incomplete-zfs-snapshot.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-with-incomplete-zfs-snapshot.png",
+      "diffPixels": 9804,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00957421875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
+      "diffPixels": 2846,
+      "totalPixels": 329160,
+      "diffRatio": 0.008646251063312675,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-local-selections.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-with-local-selections.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-with-local-selections.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-with-local-selections.png",
+      "diffPixels": 9804,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00957421875,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -57,9 +525,9 @@
       "baselinePath": "images/baseline/backup-plans-sourcestep--community-mixed-sources-locked--mobile.png",
       "actualPath": "images/actual/backup-plans-sourcestep--community-mixed-sources-locked--mobile.png",
       "diffPath": "images/diff/backup-plans-sourcestep--community-mixed-sources-locked--mobile.png",
-      "diffPixels": 86126,
+      "diffPixels": 73348,
       "totalPixels": 329160,
-      "diffRatio": 0.2616539069145704,
+      "diffRatio": 0.22283388017985176,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -75,117 +543,9 @@
       "baselinePath": "images/baseline/backup-plans-sourcestep--community-mixed-sources-locked.png",
       "actualPath": "images/actual/backup-plans-sourcestep--community-mixed-sources-locked.png",
       "diffPath": "images/diff/backup-plans-sourcestep--community-mixed-sources-locked.png",
-      "diffPixels": 108385,
+      "diffPixels": 107022,
       "totalPixels": 1024000,
-      "diffRatio": 0.1058447265625,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "backup-plans-sourcestep--database-dump-source--mobile.png",
-      "baselinePath": "images/baseline/backup-plans-sourcestep--database-dump-source--mobile.png",
-      "actualPath": "images/actual/backup-plans-sourcestep--database-dump-source--mobile.png",
-      "diffPath": "images/diff/backup-plans-sourcestep--database-dump-source--mobile.png",
-      "diffPixels": 59704,
-      "totalPixels": 329160,
-      "diffRatio": 0.18138291408433588,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "backup-plans-sourcestep--database-dump-source.png",
-      "baselinePath": "images/baseline/backup-plans-sourcestep--database-dump-source.png",
-      "actualPath": "images/actual/backup-plans-sourcestep--database-dump-source.png",
-      "diffPath": "images/diff/backup-plans-sourcestep--database-dump-source.png",
-      "diffPixels": 1363,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0013310546875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "backup-plans-sourcestep--docker-container-source--mobile.png",
-      "baselinePath": "images/baseline/backup-plans-sourcestep--docker-container-source--mobile.png",
-      "actualPath": "images/actual/backup-plans-sourcestep--docker-container-source--mobile.png",
-      "diffPath": "images/diff/backup-plans-sourcestep--docker-container-source--mobile.png",
-      "diffPixels": 60091,
-      "totalPixels": 329160,
-      "diffRatio": 0.18255863409891845,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "backup-plans-sourcestep--docker-container-source.png",
-      "baselinePath": "images/baseline/backup-plans-sourcestep--docker-container-source.png",
-      "actualPath": "images/actual/backup-plans-sourcestep--docker-container-source.png",
-      "diffPath": "images/diff/backup-plans-sourcestep--docker-container-source.png",
-      "diffPixels": 1363,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0013310546875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "backup-plans-sourcestep--empty-state--mobile.png",
-      "baselinePath": "images/baseline/backup-plans-sourcestep--empty-state--mobile.png",
-      "actualPath": "images/actual/backup-plans-sourcestep--empty-state--mobile.png",
-      "diffPath": "images/diff/backup-plans-sourcestep--empty-state--mobile.png",
-      "diffPixels": 46454,
-      "totalPixels": 329160,
-      "diffRatio": 0.14112893425689635,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "backup-plans-sourcestep--empty-state.png",
-      "baselinePath": "images/baseline/backup-plans-sourcestep--empty-state.png",
-      "actualPath": "images/actual/backup-plans-sourcestep--empty-state.png",
-      "diffPath": "images/diff/backup-plans-sourcestep--empty-state.png",
-      "diffPixels": 1367,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0013349609375,
+      "diffRatio": 0.104513671875,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -201,9 +561,9 @@
       "baselinePath": "images/baseline/backup-plans-sourcestep--mixed-source-groups--mobile.png",
       "actualPath": "images/actual/backup-plans-sourcestep--mixed-source-groups--mobile.png",
       "diffPath": "images/diff/backup-plans-sourcestep--mixed-source-groups--mobile.png",
-      "diffPixels": 86126,
+      "diffPixels": 73348,
       "totalPixels": 329160,
-      "diffRatio": 0.2616539069145704,
+      "diffRatio": 0.22283388017985176,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -219,45 +579,9 @@
       "baselinePath": "images/baseline/backup-plans-sourcestep--mixed-source-groups.png",
       "actualPath": "images/actual/backup-plans-sourcestep--mixed-source-groups.png",
       "diffPath": "images/diff/backup-plans-sourcestep--mixed-source-groups.png",
-      "diffPixels": 108385,
+      "diffPixels": 107022,
       "totalPixels": 1024000,
-      "diffRatio": 0.1058447265625,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "backup-plans-sourcestep--single-local-group--mobile.png",
-      "baselinePath": "images/baseline/backup-plans-sourcestep--single-local-group--mobile.png",
-      "actualPath": "images/actual/backup-plans-sourcestep--single-local-group--mobile.png",
-      "diffPath": "images/diff/backup-plans-sourcestep--single-local-group--mobile.png",
-      "diffPixels": 59041,
-      "totalPixels": 329160,
-      "diffRatio": 0.17936869607485723,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "backup-plans-sourcestep--single-local-group.png",
-      "baselinePath": "images/baseline/backup-plans-sourcestep--single-local-group.png",
-      "actualPath": "images/actual/backup-plans-sourcestep--single-local-group.png",
-      "diffPath": "images/diff/backup-plans-sourcestep--single-local-group.png",
-      "diffPixels": 1363,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0013310546875,
+      "diffRatio": 0.104513671875,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -573,60 +897,24 @@
         "width": 1280,
         "height": 800
       }
-    },
-    {
-      "fileName": "quick-start-steps--destination-ssh-no-default-path.png",
-      "baselinePath": "images/baseline/quick-start-steps--destination-ssh-no-default-path.png",
-      "actualPath": "images/actual/quick-start-steps--destination-ssh-no-default-path.png",
-      "diffPath": "images/diff/quick-start-steps--destination-ssh-no-default-path.png",
-      "diffPixels": 2782,
-      "totalPixels": 1024000,
-      "diffRatio": 0.002716796875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "quick-start-steps--folders-empty.png",
-      "baselinePath": "images/baseline/quick-start-steps--folders-empty.png",
-      "actualPath": "images/actual/quick-start-steps--folders-empty.png",
-      "diffPath": "images/diff/quick-start-steps--folders-empty.png",
-      "diffPixels": 9803,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0095732421875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
     }
   ],
   "added": [
     {
-      "fileName": "backup-plans-apptemplatedialog--immich-found--mobile.png",
-      "actualPath": "images/actual/backup-plans-apptemplatedialog--immich-found--mobile.png"
+      "fileName": "backup-plans-appsourcepanel--empty--mobile.png",
+      "actualPath": "images/actual/backup-plans-appsourcepanel--empty--mobile.png"
     },
     {
-      "fileName": "backup-plans-apptemplatedialog--immich-found.png",
-      "actualPath": "images/actual/backup-plans-apptemplatedialog--immich-found.png"
+      "fileName": "backup-plans-appsourcepanel--empty.png",
+      "actualPath": "images/actual/backup-plans-appsourcepanel--empty.png"
     },
     {
-      "fileName": "backup-plans-apptemplatedialog--immich-not-readable--mobile.png",
-      "actualPath": "images/actual/backup-plans-apptemplatedialog--immich-not-readable--mobile.png"
+      "fileName": "backup-plans-appsourcepanel--with-app-in-plan--mobile.png",
+      "actualPath": "images/actual/backup-plans-appsourcepanel--with-app-in-plan--mobile.png"
     },
     {
-      "fileName": "backup-plans-apptemplatedialog--immich-not-readable.png",
-      "actualPath": "images/actual/backup-plans-apptemplatedialog--immich-not-readable.png"
+      "fileName": "backup-plans-appsourcepanel--with-app-in-plan.png",
+      "actualPath": "images/actual/backup-plans-appsourcepanel--with-app-in-plan.png"
     },
     {
       "fileName": "components-excludepatterninput--long-paths--mobile.png",
@@ -1227,64 +1515,16 @@
       "fileName": "backup-plans-scriptsstep--plan-script-chains.png"
     },
     {
-      "fileName": "backup-plans-sourceselectiondialog--community-mixed-sources-locked--mobile.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--community-mixed-sources-locked.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--community-pro-source-kinds-locked--mobile.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--community-pro-source-kinds-locked.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--container-picker-detected--mobile.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--container-picker-detected.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--container-picker-empty--mobile.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--container-picker-empty.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--container-picker-queued-edit-mode--mobile.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--container-picker-queued-edit-mode.png"
-    },
-    {
       "fileName": "backup-plans-sourceselectiondialog--database-detected-sqlite-detail--mobile.png"
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--database-detected-sqlite-detail.png"
     },
     {
-      "fileName": "backup-plans-sourceselectiondialog--database-queued-multiple-selection--mobile.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--database-queued-multiple-selection.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--database-queued-multiple-sqlite-selection--mobile.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--database-queued-multiple-sqlite-selection.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--database-queued-selection--mobile.png"
-    },
-    {
       "fileName": "backup-plans-sourceselectiondialog--database-queued-selection-with-scan-open--mobile.png"
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--database-queued-selection-with-scan-open.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--database-queued-selection.png"
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--database-scan-detected--mobile.png"
@@ -1347,40 +1587,34 @@
       "fileName": "backup-plans-sourceselectiondialog--database-template-detail.png"
     },
     {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-capture-mode-expanded--mobile.png"
+      "fileName": "backup-plans-sourcestep--btrfs-snapshot-source--mobile.png"
     },
     {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-capture-mode-expanded.png"
+      "fileName": "backup-plans-sourcestep--btrfs-snapshot-source.png"
     },
     {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-empty--mobile.png"
+      "fileName": "backup-plans-sourcestep--database-dump-source--mobile.png"
     },
     {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-empty.png"
+      "fileName": "backup-plans-sourcestep--database-dump-source.png"
     },
     {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png"
+      "fileName": "backup-plans-sourcestep--docker-container-source--mobile.png"
     },
     {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups.png"
+      "fileName": "backup-plans-sourcestep--docker-container-source.png"
     },
     {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png"
+      "fileName": "backup-plans-sourcestep--empty-state--mobile.png"
     },
     {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot.png"
+      "fileName": "backup-plans-sourcestep--empty-state.png"
     },
     {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-incomplete-zfs-snapshot--mobile.png"
+      "fileName": "backup-plans-sourcestep--single-local-group--mobile.png"
     },
     {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-incomplete-zfs-snapshot.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-local-selections.png"
+      "fileName": "backup-plans-sourcestep--single-local-group.png"
     },
     {
       "fileName": "components-accountprofilesection--admin-with-security-badges--mobile.png"
@@ -3729,6 +3963,9 @@
       "fileName": "quick-start-steps--destination-ssh-no-default-path--mobile.png"
     },
     {
+      "fileName": "quick-start-steps--destination-ssh-no-default-path.png"
+    },
+    {
       "fileName": "quick-start-steps--destination-ssh.png"
     },
     {
@@ -3736,6 +3973,9 @@
     },
     {
       "fileName": "quick-start-steps--folders-empty--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--folders-empty.png"
     },
     {
       "fileName": "quick-start-steps--folders-picked--mobile.png"
