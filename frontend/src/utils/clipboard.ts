@@ -15,7 +15,10 @@ export async function copyText(text: string): Promise<boolean> {
   textarea.setAttribute('readonly', '')
   textarea.style.position = 'fixed'
   textarea.style.opacity = '0'
-  document.body.appendChild(textarea)
+  // Sit next to the focused control so a focus trap (MUI Dialog, Drawer, Menu)
+  // does not pull focus away and drop the selection before the copy.
+  const host = document.activeElement?.parentElement ?? document.body
+  host.appendChild(textarea)
   textarea.focus()
   textarea.select()
   try {

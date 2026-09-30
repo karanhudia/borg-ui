@@ -32,6 +32,34 @@ describe('copyText', () => {
     expect(document.querySelector('textarea')).toBeNull()
   })
 
+  it('keeps the fallback inside a focus trap such as an MUI dialog', async () => {
+    setClipboard(undefined)
+    const dialog = document.createElement('div')
+    dialog.tabIndex = -1
+    const button = document.createElement('button')
+    dialog.appendChild(button)
+    document.body.appendChild(dialog)
+    button.focus()
+    // Mimic MUI FocusTrap: pull focus back when it lands outside the dialog.
+    const contain = () => {
+      if (!dialog.contains(document.activeElement)) dialog.focus()
+    }
+    document.addEventListener('focusin', contain)
+    let copied: string | undefined
+    document.execCommand = vi.fn(() => {
+      copied = (document.activeElement as HTMLTextAreaElement).value
+      return true
+    })
+
+    try {
+      expect(await copyText('token in a dialog')).toBe(true)
+      expect(copied).toBe('token in a dialog')
+    } finally {
+      document.removeEventListener('focusin', contain)
+      dialog.remove()
+    }
+  })
+
   it('returns false when no copy method works', async () => {
     setClipboard({ writeText: vi.fn().mockRejectedValue(new Error('denied')) })
     document.execCommand = vi.fn(() => false)
