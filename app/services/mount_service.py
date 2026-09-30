@@ -1498,7 +1498,11 @@ class MountService:
             ),
             _sshfs_volume_stripped_candidate(remote_path),
         ]
-        return [c for i, c in enumerate(candidates) if c and c not in candidates[:i]]
+        return [
+            c
+            for i, c in enumerate(candidates)
+            if c is not None and c not in candidates[:i]
+        ]
 
     async def _check_remote_is_file(
         self, connection: SSHConnection, remote_path: str, temp_key_file: str

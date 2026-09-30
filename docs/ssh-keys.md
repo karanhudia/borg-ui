@@ -265,12 +265,12 @@ with the full path needed by Borg over SSH. Put only the missing leading
 segment, such as `/volume1`, in SSH path prefix. Do not include that prefix
 again in the repository path, or the generated SSH path may be wrong.
 
-Cloud sync works the other way round. Borg needs the full `/volume1/...` path
-over SSH, but DSM's SFTP service is chrooted at the shared-folder root, so the
-same folder mounts over SSHFS as `/backups/x`. Keep `/volume1` in the
-repository path: when the SSHFS mount reports "No such file or directory",
-Borg UI retries it relative to the login directory and then without the
-`/volumeN` prefix automatically.
+Cloud sync mounts the repository over SSHFS, which sees the same chrooted
+namespace as SFTP browsing. With `SSH path prefix` set as above, the stored
+repository path is already the SFTP-visible one, so the mount works as is. If
+a repository was instead stored with the full `/volume1/...` path, Borg UI
+retries a failed SSHFS mount relative to the login directory and then without
+the `/volumeN` prefix, so cloud sync works there too.
 
 ## Import an Existing Key
 
