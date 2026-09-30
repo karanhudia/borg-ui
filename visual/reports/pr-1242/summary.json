@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-09-30T13:03:17.169Z",
+  "generatedAt": "2026-09-30T13:18:51.001Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1242 visual report",
-    "commitSha": "6041441879fa",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36718677873"
+    "commitSha": "30a3c6dd4558",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36720398247"
   },
   "totals": {
     "baseline": 1100,
@@ -17,21 +17,21 @@
   },
   "changed": [
     {
-      "fileName": "components-destinationselect--disabled-control.png",
-      "baselinePath": "images/baseline/components-destinationselect--disabled-control.png",
-      "actualPath": "images/actual/components-destinationselect--disabled-control.png",
-      "diffPath": "images/diff/components-destinationselect--disabled-control.png",
-      "diffPixels": 1024000,
-      "totalPixels": 1024000,
-      "diffRatio": 1,
+      "fileName": "backup-plans-schedulestep--check-flag-conflict--mobile.png",
+      "baselinePath": "images/baseline/backup-plans-schedulestep--check-flag-conflict--mobile.png",
+      "actualPath": "images/actual/backup-plans-schedulestep--check-flag-conflict--mobile.png",
+      "diffPath": "images/diff/backup-plans-schedulestep--check-flag-conflict--mobile.png",
+      "diffPixels": 328892,
+      "totalPixels": 329160,
+      "diffRatio": 0.999185806294811,
       "dimensionsChanged": false,
       "baseline": {
-        "width": 1280,
-        "height": 800
+        "width": 390,
+        "height": 844
       },
       "actual": {
-        "width": 1280,
-        "height": 800
+        "width": 390,
+        "height": 844
       }
     },
     {
@@ -287,21 +287,21 @@
       }
     },
     {
-      "fileName": "quick-start-steps--destination-ssh-no-default-path--mobile.png",
-      "baselinePath": "images/baseline/quick-start-steps--destination-ssh-no-default-path--mobile.png",
-      "actualPath": "images/actual/quick-start-steps--destination-ssh-no-default-path--mobile.png",
-      "diffPath": "images/diff/quick-start-steps--destination-ssh-no-default-path--mobile.png",
-      "diffPixels": 2803,
-      "totalPixels": 329160,
-      "diffRatio": 0.008515615506136833,
+      "fileName": "quick-start-steps--destination-ssh-no-default-path.png",
+      "baselinePath": "images/baseline/quick-start-steps--destination-ssh-no-default-path.png",
+      "actualPath": "images/actual/quick-start-steps--destination-ssh-no-default-path.png",
+      "diffPath": "images/diff/quick-start-steps--destination-ssh-no-default-path.png",
+      "diffPixels": 2782,
+      "totalPixels": 1024000,
+      "diffRatio": 0.002716796875,
       "dimensionsChanged": false,
       "baseline": {
-        "width": 390,
-        "height": 844
+        "width": 1280,
+        "height": 800
       },
       "actual": {
-        "width": 390,
-        "height": 844
+        "width": 1280,
+        "height": 800
       }
     }
   ],
@@ -806,9 +806,6 @@
     },
     {
       "fileName": "backup-plans-reviewstep--unsupported-server-source-to-agent-repo.png"
-    },
-    {
-      "fileName": "backup-plans-schedulestep--check-flag-conflict--mobile.png"
     },
     {
       "fileName": "backup-plans-schedulestep--check-flag-conflict.png"
@@ -1703,6 +1700,9 @@
     },
     {
       "fileName": "components-destinationselect--disabled-control--mobile.png"
+    },
+    {
+      "fileName": "components-destinationselect--disabled-control.png"
     },
     {
       "fileName": "components-destinationselect--remote-unavailable--mobile.png"
@@ -3379,7 +3379,7 @@
       "fileName": "quick-start-steps--destination-ssh--mobile.png"
     },
     {
-      "fileName": "quick-start-steps--destination-ssh-no-default-path.png"
+      "fileName": "quick-start-steps--destination-ssh-no-default-path--mobile.png"
     },
     {
       "fileName": "quick-start-steps--destination-ssh.png"
