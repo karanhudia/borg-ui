@@ -397,6 +397,8 @@ def parts(value):
 
 best = None
 for row in manifest["binaries"].get(version, []):
+    if row.get("platform", "linux") != "linux":
+        continue
     if row["arch"] != arch or parts(row["min_glibc"]) > parts(glibc):
         continue
     if best is None or parts(row["min_glibc"]) > parts(best["min_glibc"]):

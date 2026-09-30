@@ -359,6 +359,8 @@
         "description": "Führen Sie dies auf dem registrierten Rechner aus, um das Borg-UI-Agent-Paket zu aktualisieren und den systemd-Dienst neu zu starten. Kein Registrierungstoken oder Registrierungsschritt erforderlich.",
         "configPreserved": "Das Skript behält die vorhandene Agent-Konfiguration unter",
         "serviceUserPreserved": "Der Dienst läuft außerdem weiter unter dem in seiner systemd-Unit hinterlegten Benutzer. Führen Sie den Befehl von einem beliebigen sudo-fähigen Konto aus.",
+        "descriptionMacos": "Führen Sie dies auf dem Mac aus, um das Borg-UI-Agent-Paket zu aktualisieren und den launchd-Job neu zu starten. Kein Enrollment-Token und keine Registrierung erforderlich.",
+        "runAsAgentUser": "Führen Sie ihn als der Benutzer aus, unter dem der Agent läuft, ohne sudo.",
         "borgInstallation": "Borg-Installation",
         "borgSelectionHint": "Eine Borg-Auswahl aktualisiert diese Binaries auf dem Agenten auf die Versionen dieses Servers. Lassen Sie die Auswahl auf Überspringen, sofern kein Borg-Upgrade beabsichtigt ist.",
         "borgOptions": {
@@ -492,6 +494,7 @@
         "removesVenv": "Die virtuelle Umgebung unter /opt/borg-ui-agent",
         "removesConfig": "Die Konfiguration unter /etc/borg-ui-agent, einschließlich der Zugangsdaten",
         "removesUser": "Der dedizierte Dienstbenutzer borg-ui-agent, sofern die Installation einen angelegt hat",
+        "removesUserDirectory": "Das Agent-Verzeichnis unter ~/Library/Application Support, seine Logs und seine launchd-Jobs",
         "keepsBorg": "Ihre eigene Borg-Installation bleibt unangetastet. Entfernt werden nur Binärdateien, die dieses Installationsprogramm abgelegt hat.",
         "keepsRepositories": "Ihre Backup-Repositories bleiben unangetastet.",
         "copyCommand": "Befehl kopieren"
@@ -502,6 +505,8 @@
       "title": "Installationsbefehl",
       "copy": "Installationsbefehl kopieren",
       "description": "Führen Sie den Befehl auf dem Linux-Rechner aus. Das Installationsprogramm registriert den Agenten und aktiviert standardmäßig den systemd-Dienst.",
+      "descriptionMacos": "Führen Sie den Befehl auf dem Mac als der Benutzer aus, dessen Daten gesichert werden, ohne sudo. Das Installationsprogramm lädt eine Python-Laufzeit und Borg, registriert den Agenten und lädt ihn als launchd-Benutzeragent.",
+      "repositoryPlaceholder": "Ersetzen Sie {{placeholder}} durch das Repository, in das dieser Rechner sichert, zum Beispiel ssh://user@host:23/./repo. Borg UI füllt das Repository-Formular damit vor. Entfernen Sie --borg-repo, wenn es noch keines gibt.",
       "connected": "{{name}} verbunden",
       "waiting": "Warte auf die Verbindung des Agenten…",
       "connectedDescription": "Sie können diesen Dialog schließen; der Agent läuft weiter.",
@@ -515,10 +520,16 @@
       "copyInstallCommands": "Installationsbefehle kopieren",
       "copyStatusCommand": "Statusbefehl kopieren",
       "copySystemdCommands": "systemd-Befehle kopieren",
+      "copyMacosSetupCommand": "macOS-Einrichtungsbefehl kopieren",
+      "copyMacosStatusCommand": "launchd-Statusbefehl kopieren",
+      "copyLaunchdCommands": "launchd-Befehle kopieren",
+      "linuxLabel": "Linux",
+      "macosLabel": "macOS",
       "steps": {
         "install": {
-          "title": "1. Linux-Installationsprogramm ausführen",
-          "description": "Führen Sie dies auf dem Linux-Rechner aus, der die zu sichernden Dateien besitzt. Das Installationsprogramm installiert Abhängigkeiten, registriert den Agenten und aktiviert den systemd-Dienst. Standardmäßig läuft der Dienst als Benutzer, der sudo aufgerufen hat. Repository- und Quellpfade müssen für diesen Benutzer zugänglich sein."
+          "title": "1. Installationsprogramm ausführen",
+          "description": "Führen Sie dies auf dem Linux-Rechner aus, der die zu sichernden Dateien besitzt. Das Installationsprogramm installiert Abhängigkeiten, registriert den Agenten und aktiviert den systemd-Dienst. Standardmäßig läuft der Dienst als Benutzer, der sudo aufgerufen hat. Repository- und Quellpfade müssen für diesen Benutzer zugänglich sein.",
+          "descriptionMacos": "Auf einem Mac führen Sie dies als der Benutzer aus, dessen Daten gesichert werden, ohne sudo. Das Installationsprogramm lädt eine Python-Laufzeit und die Borg-Version dieses Servers, registriert den Agenten und lädt ihn als launchd-Benutzeragent, der läuft, solange dieser Benutzer angemeldet ist."
         },
         "server": {
           "title": "2. Server-URL und Token",
@@ -531,7 +542,8 @@
         },
         "service": {
           "title": "4. Dienstprüfungen",
-          "description": "Das Installationsprogramm aktiviert systemd standardmäßig, damit der Agent Neustarts übersteht. Verwenden Sie diese Befehle nur zum Prüfen oder Reparieren einer manuellen Installation."
+          "description": "Das Installationsprogramm aktiviert systemd standardmäßig, damit der Agent Neustarts übersteht. Verwenden Sie diese Befehle nur zum Prüfen oder Reparieren einer manuellen Installation.",
+          "descriptionMacos": "Auf einem Mac ist der Agent ein launchd-Benutzeragent in der Domain des angemeldeten Benutzers. Mit dem ersten Befehl prüfen Sie ihn. Der zweite Block passt die Vorlage an Ihr Home-Verzeichnis an und lädt sie; die Vorlage erwartet den Agent unter ~/Library/Application Support/borg-ui-agent, wo ihn der Installer ablegt."
         }
       }
     },
@@ -553,6 +565,8 @@
       },
       "selected": "Ausgewählt",
       "comingLater": "Demnächst verfügbar",
+      "select": "Auswählen",
+      "macosHint": "Der Agent läuft als angemeldeter Benutzer unter launchd und nur, solange dieser Benutzer angemeldet ist. Nichts wird systemweit installiert.",
       "serverUrl": "Server-URL",
       "localhostWarning": "localhost funktioniert nur, wenn Agent und Borg UI auf demselben Rechner laufen. Entfernte Rechner benötigen einen erreichbaren Hostnamen, eine IP-Adresse oder HTTPS-URL.",
       "serverUrlHelper": "Diese URL muss vom Agentenrechner erreichbar sein.",
@@ -6166,6 +6180,7 @@
         "mountNotFound": "Mount {{mountId}} nicht gefunden",
         "unmountFailed": "Aushängen von {{mountId}} fehlgeschlagen",
         "failedMountArchive": "Fehler beim Einbinden des Archivs",
+        "agentRepository": "Dieses Repository wird von einem Agenten ausgeführt, der Server kann es nicht einbinden",
         "mountUnavailable": "Das Einhängen von Archiven ist in dieser Umgebung nicht verfügbar",
         "failedUnmount": "Fehler beim Auswerfen",
         "failedListMounts": "Fehler beim Auflisten der Einhängepunkte",

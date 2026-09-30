@@ -89,6 +89,7 @@ import { resolveAgentServerUrl } from './managed-agents/agentServerUrl'
 import {
   buildAgentInstallCommand,
   buildAgentReinstallCommand,
+  platformFromAgentOs,
   type BorgInstallMode,
 } from './managed-agents/agentInstallCommandText'
 import {
@@ -254,6 +255,14 @@ export function ManagedAgentsPreview({
     '<enrollment-token>',
     '<machine-name>'
   )
+  const macosSetupCommand = buildAgentInstallCommand(
+    defaultAgentServerUrl,
+    '<enrollment-token>',
+    '<machine-name>',
+    'borg1',
+    'current',
+    'macos'
+  )
   const agentsById = useMemo(() => {
     return new Map(agents.map((agent) => [agent.id, agent]))
   }, [agents])
@@ -278,7 +287,7 @@ export function ManagedAgentsPreview({
         }
       />
 
-      <AgentSetupGuide command={setupCommand} onCopy={() => {}} />
+      <AgentSetupGuide command={setupCommand} macosCommand={macosSetupCommand} onCopy={() => {}} />
 
       <PageTabs value={activeTab} onChange={() => {}}>
         <Tab label={t('managedAgents.page.tabs.agents')} value="agents" />
@@ -610,6 +619,14 @@ export default function ManagedAgents() {
     '<enrollment-token>',
     '<machine-name>'
   )
+  const macosSetupCommand = buildAgentInstallCommand(
+    defaultAgentServerUrl,
+    '<enrollment-token>',
+    '<machine-name>',
+    'borg1',
+    'current',
+    'macos'
+  )
 
   return (
     <Box>
@@ -656,7 +673,11 @@ export default function ManagedAgents() {
         }
       />
 
-      <AgentSetupGuide command={setupCommand} onCopy={handleCopy} />
+      <AgentSetupGuide
+        command={setupCommand}
+        macosCommand={macosSetupCommand}
+        onCopy={handleCopy}
+      />
 
       <PageTabs
         value={activeTab}
@@ -783,9 +804,11 @@ export default function ManagedAgents() {
 
 export function AgentSetupGuide({
   command,
+  macosCommand,
   onCopy,
 }: {
   command: string
+  macosCommand?: string
   onCopy: (value: string) => void
 }) {
   const { t } = useTranslation()
@@ -823,11 +846,26 @@ export function AgentSetupGuide({
         </Button>
       </Stack>
 
+      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+        {t('managedAgents.setupGuide.linuxLabel')}
+      </Typography>
       <CopyableCodeBlock
         value={command}
         copyLabel={t('managedAgents.setupGuide.copySetupCommand')}
         onCopy={() => onCopy(command)}
       />
+      {macosCommand ? (
+        <Box sx={{ mt: 1 }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            {t('managedAgents.setupGuide.macosLabel')}
+          </Typography>
+          <CopyableCodeBlock
+            value={macosCommand}
+            copyLabel={t('managedAgents.setupGuide.copyMacosSetupCommand')}
+            onCopy={() => onCopy(macosCommand)}
+          />
+        </Box>
+      ) : null}
 
       <ResponsiveDialog
         open={helpOpen}
@@ -842,7 +880,7 @@ export function AgentSetupGuide({
       >
         <DialogTitle>{t('managedAgents.setupGuide.title')}</DialogTitle>
         <DialogContent>
-          <AgentSetupHelpContent command={command} onCopy={onCopy} />
+          <AgentSetupHelpContent command={command} macosCommand={macosCommand} onCopy={onCopy} />
         </DialogContent>
       </ResponsiveDialog>
     </Box>
@@ -851,9 +889,11 @@ export function AgentSetupGuide({
 
 export function AgentSetupHelpContent({
   command,
+  macosCommand,
   onCopy,
 }: {
   command: string
+  macosCommand?: string
   onCopy: (value: string) => void
 }) {
   const { t } = useTranslation()
@@ -869,6 +909,16 @@ export function AgentSetupHelpContent({
     'sudo cp agent/install/systemd/borg-ui-agent.service /etc/systemd/system/',
     'sudo systemctl daemon-reload',
     'sudo systemctl enable --now borg-ui-agent',
+  ].join('\n')
+  // A macOS agent is a launchd user agent: its user's domain, no sudo.
+  const macosRunCommand = 'launchctl print gui/$(id -u)/com.borg-ui.agent'
+  // The template names /Users/alex and launchd expands no ~, so it is rendered
+  // for the real home directory instead of copied.
+  const macosStartupCommand = [
+    'mkdir -p ~/Library/LaunchAgents ~/Library/Logs/borg-ui-agent',
+    'sed "s#/Users/alex/#$HOME/#g" agent/install/launchd/com.borg-ui.agent.plist \\',
+    '  > ~/Library/LaunchAgents/com.borg-ui.agent.plist',
+    'launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.borg-ui.agent.plist',
   ].join('\n')
 
   return (
@@ -896,6 +946,23 @@ export function AgentSetupHelpContent({
           copyLabel={t('managedAgents.installCommand.copy')}
           onCopy={() => onCopy(command)}
         />
+        {macosCommand ? (
+          <Box sx={{ mt: 1.5 }}>
+            <Typography
+              sx={{
+                color: 'text.secondary',
+                mb: 1,
+              }}
+            >
+              {t('managedAgents.setupGuide.steps.install.descriptionMacos')}
+            </Typography>
+            <CopyableCodeBlock
+              value={macosCommand}
+              copyLabel={t('managedAgents.setupGuide.copyMacosSetupCommand')}
+              onCopy={() => onCopy(macosCommand)}
+            />
+          </Box>
+        ) : null}
       </Box>
 
       <Box>
@@ -979,6 +1046,27 @@ export function AgentSetupHelpContent({
             value={linuxStartupCommand}
             copyLabel={t('managedAgents.setupGuide.copySystemdCommands')}
             onCopy={() => onCopy(linuxStartupCommand)}
+          />
+        </Box>
+        <Typography
+          sx={{
+            color: 'text.secondary',
+            mt: 1.5,
+            mb: 1,
+          }}
+        >
+          {t('managedAgents.setupGuide.steps.service.descriptionMacos')}
+        </Typography>
+        <CopyableCodeBlock
+          value={macosRunCommand}
+          copyLabel={t('managedAgents.setupGuide.copyMacosStatusCommand')}
+          onCopy={() => onCopy(macosRunCommand)}
+        />
+        <Box sx={{ mt: 1 }}>
+          <CopyableCodeBlock
+            value={macosStartupCommand}
+            copyLabel={t('managedAgents.setupGuide.copyLaunchdCommands')}
+            onCopy={() => onCopy(macosStartupCommand)}
           />
         </Box>
       </Box>
@@ -1493,7 +1581,8 @@ export function AgentReinstallDialog({
   useEffect(() => {
     setBorgInstallMode('skip')
   }, [agent])
-  const command = buildAgentReinstallCommand(serverUrl, borgInstallMode)
+  const platform = platformFromAgentOs(agent?.os)
+  const command = buildAgentReinstallCommand(serverUrl, borgInstallMode, platform)
 
   return (
     <ResponsiveDialog
@@ -1524,7 +1613,9 @@ export function AgentReinstallDialog({
                 mt: 0.5,
               }}
             >
-              {t('managedAgents.page.reinstallDialog.description')}
+              {platform === 'macos'
+                ? t('managedAgents.page.reinstallDialog.descriptionMacos')
+                : t('managedAgents.page.reinstallDialog.description')}
             </Typography>
           </Box>
           <Box>
@@ -1551,8 +1642,15 @@ export function AgentReinstallDialog({
           />
           <Alert severity="info" sx={{ borderRadius: 1.5 }}>
             {t('managedAgents.page.reinstallDialog.configPreserved')}{' '}
-            <Box component="code">/etc/borg-ui-agent/config.toml</Box>.{' '}
-            {t('managedAgents.page.reinstallDialog.serviceUserPreserved')}
+            <Box component="code">
+              {platform === 'macos'
+                ? '~/Library/Application Support/borg-ui-agent/config.toml'
+                : '/etc/borg-ui-agent/config.toml'}
+            </Box>
+            .{' '}
+            {platform === 'macos'
+              ? t('managedAgents.page.reinstallDialog.runAsAgentUser')
+              : t('managedAgents.page.reinstallDialog.serviceUserPreserved')}
           </Alert>
         </Stack>
       </DialogContent>

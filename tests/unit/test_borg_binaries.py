@@ -41,12 +41,17 @@ def test_manifest_matches_the_version_the_image_builds(major: str):
 
 
 @pytest.mark.parametrize("major", ["1", "2"])
-def test_both_supported_architectures_are_covered(major: str):
+@pytest.mark.parametrize("platform", ["linux", "darwin"])
+def test_both_supported_architectures_are_covered(major: str, platform: str):
     """A missing architecture only shows up when someone enrols a node on it."""
     version = CURRENT_VERSIONS[major]
 
-    arches = {binary.arch for binary in BORG_BINARIES[version]}
-    assert {"x86_64", "aarch64"} <= arches, f"Borg {version} covers only {arches}"
+    arches = {
+        binary.arch for binary in BORG_BINARIES[version] if binary.platform == platform
+    }
+    assert {"x86_64", "aarch64"} <= arches, (
+        f"Borg {version} covers only {arches} on {platform}"
+    )
 
 
 def test_checksums_are_well_formed():
@@ -64,10 +69,13 @@ def test_binary_table_renders_one_row_per_binary():
     assert len(rows) == sum(
         len(BORG_BINARIES[version]) for version in CURRENT_VERSIONS.values()
     )
-    for major, arch, min_glibc, sha256, url in rows:
+    for major, platform, arch, floor, sha256, url in rows:
         assert major in {"1", "2"}
+        assert platform in {"linux", "darwin"}
         assert arch in {"x86_64", "aarch64"}
-        assert re.fullmatch(r"\d+\.\d+", min_glibc)
+        # A glibc version on Linux, a macOS major on Darwin: both compare as
+        # version numbers in the installer.
+        assert re.fullmatch(r"\d+\.\d+" if platform == "linux" else r"\d+", floor)
         assert re.fullmatch(r"[0-9a-f]{64}", sha256)
         assert url.startswith("https://github.com/borgbackup/borg/releases/download/")
 

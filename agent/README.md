@@ -15,7 +15,9 @@ temporary enrollment token and shows a command like:
 curl -fsSL http://borg-ui-host:8083/agent/install.sh | sudo bash -s -- \
   --server http://borg-ui-host:8083 \
   --token borgui_enroll_example \
-  --name media-node
+  --name media-node \
+  --borg-repo "<BORG_REPO_URL>" \
+  --no-prompt
 ```
 
 Run it on the Linux machine that owns the files Borg should back up. The
@@ -35,6 +37,29 @@ permissions, so paths under that user's home directory work as expected. Use
 `--service-user borg-ui-agent` for the older dedicated service account model,
 `--service-user root` only when the agent must back up root-owned paths, or
 `--service-user USERNAME` to run as another existing local user.
+
+The agent owns the URL of the repository it backs up to: it reports
+`BORG_REPO` (and `BORG_REMOTE_PATH`, the Borg executable on a host that
+offers several) from its environment, and Borg UI pre-fills the repository
+form with them. The command the dialog shows carries `--borg-repo
+"<BORG_REPO_URL>"`: replace the placeholder with the repository (the installer
+refuses it left in place), or remove the flag when there is none yet. Pass
+`--borg-remote-path P` as well if needed. The values are recorded in the
+service's environment and in `agent.env` beside the config, and a reinstall
+keeps them; a flag given on a reinstall replaces that one value, an empty one
+clears it. A Linux install never asks for them: it is scripted over `ssh -t`
+or by configuration management as often as it is typed, and a question would
+hang it. A first-time macOS install run from a terminal without these flags
+asks, and for an `ssh://` or `rest://` repository offers to open one SSH
+connection as the user, so the host key and the login are confirmed while
+someone is there to answer; a service cannot do that later. `--no-prompt`
+skips the questions. That check covers the one repository given
+there. For the command the dialog shows (which passes `--no-prompt`), for a
+Linux install and for every SSH repository added later, accept the host key
+once as the user the agent runs as before the first job, for example
+`ssh -p 23 user@host exit` (on Linux through `sudo -u <service user>`). The
+passphrase is never asked for or stored on the machine: Borg UI keeps it and
+sends it with each job.
 
 Use the Borg UI URL that the client machine can reach. `localhost` is only
 correct when the agent runs on the same machine as Borg UI. For a remote client,
@@ -188,17 +213,109 @@ a message like:
 borg-ui-agent: Service user 'borg-ui-agent' does not exist. Create it with: sudo useradd --system --user-group --home-dir /var/lib/borg-ui-agent --create-home --shell /usr/sbin/nologin borg-ui-agent
 ```
 
-### macOS launchd
+### macOS
 
-macOS launchd example:
+On macOS the agent runs as the user whose data it backs up, under launchd, and
+only while that user is logged in. Nothing is installed system-wide: no service
+user, no root-owned file, no `/usr/local/bin` symlink. The Add Agent dialog
+prints the install command for macOS; it is the Linux one without `sudo` and
+without `--service-user`:
 
 ```bash
-sudo cp agent/install/launchd/com.borg-ui.agent.plist /Library/LaunchDaemons/
-sudo launchctl bootstrap system /Library/LaunchDaemons/com.borg-ui.agent.plist
+curl -fsSL https://SERVER/agent/install.sh | bash -s -- \
+  --server https://SERVER --token TOKEN --name AGENT_NAME --borg-version 1 \
+  --borg-repo "<BORG_REPO_URL>" --no-prompt
 ```
 
-Review the template before enabling it. The current one-command installer is
-Linux only; macOS and Windows installers are not included in this phase.
+"Logged in" means a login session at the Mac, at its screen or through Screen
+Sharing: launchd keeps the user's `gui/<uid>` domain only for that. An ssh
+session alone has none, so the installer stops before installing anything when
+it finds no such session, and after a restart the agent (and with it remote
+upgrade) is offline until the user logs in. With FileVault that happens anyway,
+since unlocking the disk at boot logs the user in; without it, automatic login
+does the same for a Mac nobody sits at.
+
+The installer downloads a relocatable Python build and the Borg version the
+server runs from their published releases, verifies both against the digests
+the server pins, and lays everything out under
+`~/Library/Application Support/borg-ui-agent/`: `config.toml`, `scripts.d/`,
+`python/`, `.venv/`, `borg1/<version>/borg`, `bin/` (forwarders and the
+upgrade helper), `upgrade.conf`. Logs go to `~/Library/Logs/borg-ui-agent/`.
+The job `com.borg-ui.agent` is bootstrapped into the user's launchd domain
+with an `EnvironmentVariables` `PATH` that leads with `bin/`, which is how the
+agent resolves the pinned Borg: launchd sources no shell profile. `BORG_REPO`
+and `BORG_REMOTE_PATH` go into the same block when given or answered. SSH
+needs nothing of its own: the job runs as the user, so `~/.ssh` applies, and
+the host key has to be in `known_hosts` before the first job: the
+interactive install's SSH check adds it for the repository given there, and
+any other repository needs one connection as the user first (see
+One-Command Linux Install above). Of the ssh-agents, the job sees macOS's
+own (`com.openssh.ssh-agent`), whose socket launchd hands to every job in the
+login session as `SSH_AUTH_SOCK`, and one named by `IdentityAgent` in
+`~/.ssh/config`. An agent started in a terminal (`eval $(ssh-agent)`) is not
+visible to it: use a key without a passphrase, the macOS agent, or
+`IdentityAgent`.
+
+Protected user data (`~/Library/Mail`, `Messages`, `Containers` and the rest
+of TCC's list; `~/Desktop` is not among them in practice) is refused to the
+job until it has Full Disk Access, and Borg then reports each such path as
+a warning. macOS shows no dialog for a background job and adds nothing to
+its lists: grant it by hand under Privacy & Security → Full Disk Access →
+"+" (Cmd+Shift+G) for the interpreter the job runs,
+`~/Library/Application Support/borg-ui-agent/python/bin/python3.12`. The
+grant is bound to that file, so a Python change on upgrade needs it again.
+A warning of the form `[Errno 13] Permission denied` is ordinary file
+permissions, not TCC, and no grant changes it.
+
+The job reads what its user reads: the user's own home directory (macOS keeps
+`Desktop`, `Documents`, `Downloads`, `Library`, `Movies`, `Music` and
+`Pictures` readable by their owner alone) and what is world-readable on the
+machine, never another user's private folders, `/var/root` or root-only
+state. Admin-group membership changes nothing there, since the job runs as
+the user; it is needed only to grant Full Disk Access, so a user without it
+backs up the home directory except what TCC protects. Several users on one
+machine each install their own agent in their own session; the layout, the
+jobs and the config are per user, and each agent is a separate endpoint with
+the same hostname. A root-level, whole-machine backup is deliberately not
+offered: the job executes code the user can write.
+
+Remote upgrade works the same way as on Linux: the agent creates
+`upgrade-requested`, the job `com.borg-ui.agent-upgrade` (kept alive by
+launchd's `PathState` while the file exists) runs the helper, which fetches
+the installer from the enrolled server, verifies its checksum and reinstalls.
+`borg-ui-agent service-check` and `--service-user` are Linux-only.
+
+For a manual install, `agent/install/launchd/com.borg-ui.agent.plist` is the
+job the installer renders, so the manual layout has to be the installer's:
+the virtualenv at `~/Library/Application Support/borg-ui-agent/.venv`, the
+config at the default path in that directory, logs under
+`~/Library/Logs/borg-ui-agent/`. From a checkout of this repository:
+
+```bash
+AGENT_ROOT="$HOME/Library/Application Support/borg-ui-agent"
+mkdir -p "$AGENT_ROOT" ~/Library/Logs/borg-ui-agent ~/Library/LaunchAgents
+python3.11 -m venv "$AGENT_ROOT/.venv"
+"$AGENT_ROOT/.venv/bin/pip" install .
+"$AGENT_ROOT/.venv/bin/borg-ui-agent" register \
+  --server http://borg-ui-host:8083 \
+  --token borgui_enroll_example \
+  --name laptop
+sed "s#/Users/alex/#${HOME}/#g" agent/install/launchd/com.borg-ui.agent.plist \
+  > ~/Library/LaunchAgents/com.borg-ui.agent.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.borg-ui.agent.plist
+```
+
+The `sed` puts the real home directory in place of `/Users/alex`, since launchd
+expands no `~`. Borg has to be on the `PATH` the template sets (Homebrew,
+MacPorts and `/usr/local/bin` are on it; the `bin/` forwarders exist only
+after the installer ran).
+
+This loads the agent job only. The remote-upgrade job
+(`com.borg-ui.agent-upgrade`) and its `upgrade.conf` are rendered by the
+installer and have no template, so an agent set up by hand takes no remote
+upgrades until the install command has been run once.
+
+Windows is not supported yet.
 
 ## Current Job Support
 
@@ -245,6 +362,11 @@ The first implementation supports:
   `truststore`) as well as certifi's bundle, so a self-signed server
   certificate installed with `update-ca-certificates` (or the platform
   equivalent) is accepted (#1272)
+- from 0.1.14 the agent runs on macOS: `du` measures a local repository with `-A -sk` where
+  there is no GNU `-b`, the scripts allow-list and the installer root sit in
+  the user's Application Support directory, a Homebrew or MacPorts Borg
+  reports its install source, and the self-upgrade readiness reads the
+  launchd job instead of the systemd units
 - cancellation through heartbeat; from 0.1.7 (`jobs.cancel`) a running
   backup, check, prune, compact, restore or archive delete stops as well,
   even while Borg prints nothing

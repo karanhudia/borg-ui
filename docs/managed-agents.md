@@ -12,14 +12,15 @@ locally, and streams progress and logs back to the server.
 
 Open Managed Agents from the Infrastructure navigation group.
 
-## Add a Linux Agent
+## Add an Agent
 
 In Managed Agents, choose **Add Agent**. The wizard asks for:
 
-- platform: Linux
+- platform: Linux or macOS
 - agent name
 - enrollment token expiry: 1 hour, 24 hours, 7 days, 30 days, or Never
-- service user: Installing user, dedicated `borg-ui-agent` user, or Root
+- service user (Linux only): Installing user, dedicated `borg-ui-agent` user,
+  or Root
 - server URL reachable by the client machine
 
 The final step shows a one-line installer command:
@@ -28,8 +29,15 @@ The final step shows a one-line installer command:
 curl -fsSL http://borg-ui-host:8083/agent/install.sh | sudo bash -s -- \
   --server http://borg-ui-host:8083 \
   --token borgui_enroll_example \
-  --name laptop
+  --name laptop \
+  --borg-repo "<BORG_REPO_URL>" \
+  --no-prompt
 ```
+
+Replace `<BORG_REPO_URL>` with the repository the machine backs up to (see
+[Repository defaults](#repository-defaults-and-unattended-installs)), or remove
+`--borg-repo` when there is none yet; the installer refuses the placeholder
+left in place.
 
 Run it on the machine that owns the files you want Borg to back up. The
 installer requires root or sudo, installs system dependencies, registers
@@ -63,6 +71,93 @@ Advanced service-user modes are available:
 - `--service-user root` runs root-level Borg operations. Use it only when the
   agent must back up root-owned paths.
 - `--service-user USERNAME` runs as another existing local user.
+
+### macOS
+
+For a macOS endpoint the dialog shows the same command without `sudo`:
+
+```bash
+curl -fsSL http://borg-ui-host:8083/agent/install.sh | bash -s -- \
+  --server http://borg-ui-host:8083 \
+  --token borgui_enroll_example \
+  --name laptop \
+  --borg-repo "<BORG_REPO_URL>" \
+  --no-prompt
+```
+
+Run it as the user whose data is backed up; the installer refuses root. It
+installs nothing system-wide and needs no package manager: the Borg versions
+the server runs and a Python runtime come from the server's manifests as
+checksummed release builds, unpacked under
+`~/Library/Application Support/borg-ui-agent/`, and the agent is loaded as a
+launchd user agent (`com.borg-ui.agent`) that starts at login. Locations macOS
+protects (`~/Library/Mail`, `~/Library/Containers`, and so on) stay unreadable
+to the job until its interpreter is granted Full Disk Access by hand; until
+then Borg reports each such path as a warning. The service-user options and
+`--borg-source distro` are Linux-only. Details, including what a grant binds
+to, are in the macOS section of `agent/README.md`.
+
+The agent runs in the user's login session at the Mac, at its screen or
+through Screen Sharing; an ssh session alone has none. The installer stops
+before installing anything when there is no such session, and after a restart
+the agent, remote upgrade included, is offline until the user logs in. With
+FileVault that happens anyway, since unlocking the disk at boot logs the user
+in; without it, automatic login does the same for a Mac nobody sits at.
+
+The job reads what its user reads. macOS keeps each user's private folders
+(`Desktop`, `Documents`, `Downloads`, `Library`, `Movies`, `Music`,
+`Pictures`) readable by that user alone, so an agent installed by one user
+backs up that user's data and what is world-readable on the machine
+(`/Applications`, most of `/Library`, `/usr/local`, `/etc`), and never
+another user's private folders, `/var/root` or root-only system state.
+Membership in the admin group changes none of that, because the job runs as
+the user, not as root; it matters only for granting Full Disk Access, which
+System Settings requires an administrator for. A user without admin rights
+can install the agent and back up the home directory except what TCC
+protects. To back up several users' data, each user installs an agent in
+their own session: files, launchd jobs and config are per user, each agent is
+its own endpoint (give them distinct names; they share the hostname), and
+each runs while its user is logged in. A whole-machine backup as root is not
+what this install does: the job executes code the user can write, so it is
+never loaded as a system daemon.
+
+### Repository defaults and unattended installs
+
+The agent reports the repository it backs up to, `BORG_REPO` (and
+`BORG_REMOTE_PATH`, the Borg executable on a host that offers several), from
+its environment, and Borg UI pre-fills the repository form with them. The
+command the Add Agent dialog shows passes them as flags, with a
+`<BORG_REPO_URL>` placeholder to replace, and `--no-prompt`, so it asks nothing
+on the terminal and also runs over `ssh -t`.
+
+A Linux install never asks for the values: it is scripted over `ssh -t` or by
+configuration management as often as it is typed, and a question would hang
+it. A first-time macOS install run from a terminal without the flags asks for
+both, and for an `ssh://` or `rest://` repository offers to open one SSH
+connection as the user, so the host key and the login are confirmed while
+someone is there to answer; a service cannot do that later. Empty answers skip
+them, and `--no-prompt` skips the questions. That check covers the one repository given
+there. For the command the dialog shows (which passes `--no-prompt`), for a
+Linux install and for every SSH repository added later, accept the host key
+once as the user the agent runs as before the first job, for example
+`ssh -p 23 user@host exit` (on Linux through `sudo -u <service user>`).
+
+```bash
+curl -fsSL http://borg-ui-host:8083/agent/install.sh | sudo bash -s -- \
+  --server http://borg-ui-host:8083 \
+  --token borgui_enroll_example \
+  --name laptop \
+  --borg-repo ssh://u123456@u123456.your-storagebox.de:23/./borg-repository \
+  --borg-remote-path borg-1.4
+```
+
+The values are recorded in `agent.env` next to the agent config on both
+platforms (`/etc/borg-ui-agent/agent.env` on Linux, which the systemd unit
+reads; `~/Library/Application Support/borg-ui-agent/agent.env` on macOS,
+rendered into the launchd job's environment) and survive a reinstall. On a
+reinstall a flag replaces that one value, and an empty value (`--borg-repo ""`)
+clears it. The repository passphrase is never asked for or stored on the
+machine: Borg UI keeps it and sends it with each job.
 
 The machine appears in Managed Agents after registration and its first live
 session. The wizard waits for that connection while the command is displayed.
@@ -99,10 +194,12 @@ curl -fsSL http://borg-ui-host:8083/agent/install.sh | sudo bash -s -- --reinsta
 ```
 
 Run it on that enrolled machine. Reinstall mode requires the existing
-`/etc/borg-ui-agent/config.toml`, preserves the stored agent credential, skips
-the registration step, refreshes the installed package and systemd unit, and
-restarts `borg-ui-agent`. You do not need a new enrollment token unless you are
-enrolling a different machine or recreating a missing local agent config.
+`/etc/borg-ui-agent/config.toml`, preserves the stored agent credential and the
+recorded repository values, skips the registration step, refreshes the
+installed package and systemd unit, and restarts `borg-ui-agent`. You do not
+need a new enrollment token unless you are enrolling a different machine or
+recreating a missing local agent config. On macOS the command runs without
+`sudo`, as the agent's user, and reloads the launchd job.
 
 ## Remote Upgrade and What It Grants
 
@@ -119,6 +216,15 @@ refuse anyway under `NoNewPrivileges=true`.
 | `/opt/borg-ui-agent/bin/borg-ui-agent-upgrade` | The helper. Takes no arguments and reads only `upgrade.conf`. |
 | `/etc/systemd/system/borg-ui-agent-upgrade.service` | A oneshot unit that runs the helper. Never enabled. |
 | `/etc/systemd/system/borg-ui-agent-upgrade.path` | Watches for `/etc/borg-ui-agent/upgrade-requested` and starts that one unit when it appears. |
+
+On macOS the agent runs as its user, so there is no privilege to bound and the
+same three pieces live in that user's directories:
+
+| File | Purpose |
+| --- | --- |
+| `~/Library/Application Support/borg-ui-agent/upgrade.conf` | The reinstall parameters. |
+| `~/Library/Application Support/borg-ui-agent/bin/borg-ui-agent-upgrade` | The helper, unchanged: no arguments, reads only the conf. |
+| `~/Library/LaunchAgents/com.borg-ui.agent-upgrade.plist` | One launchd job that runs the helper and, through `KeepAlive` → `PathState`, starts it while `upgrade-requested` exists. |
 
 Be clear about the trade. Before this, a compromised Borg UI server could
 already run code as the agent's service user on every endpoint and read any
@@ -490,15 +596,42 @@ sudo /opt/borg-ui-agent/.venv/bin/borg-ui-agent service-check \
   --config /etc/borg-ui-agent/config.toml
 ```
 
-For macOS, edit `agent/install/launchd/com.borg-ui.agent.plist` so the binary,
-config, and log paths match the client machine. Then install it:
+On macOS the install command from the Add Agent dialog does all of this as the
+user whose data is backed up, without sudo, and loads the agent as a launchd
+user agent (see `agent/README.md`). A manual install uses the installer's
+layout, because `agent/install/launchd/com.borg-ui.agent.plist` is the job the
+installer renders: the virtualenv at
+`~/Library/Application Support/borg-ui-agent/.venv`, the config at the
+agent's default path in that directory, logs under
+`~/Library/Logs/borg-ui-agent/`. From a checkout of this repository, as the
+user whose data is backed up and never as root, since the job executes code
+the user can write:
 
 ```bash
-sudo cp agent/install/launchd/com.borg-ui.agent.plist /Library/LaunchDaemons/
-sudo launchctl bootstrap system /Library/LaunchDaemons/com.borg-ui.agent.plist
+AGENT_ROOT="$HOME/Library/Application Support/borg-ui-agent"
+mkdir -p "$AGENT_ROOT" ~/Library/Logs/borg-ui-agent ~/Library/LaunchAgents
+python3.11 -m venv "$AGENT_ROOT/.venv"
+"$AGENT_ROOT/.venv/bin/pip" install .
+"$AGENT_ROOT/.venv/bin/borg-ui-agent" register \
+  --server http://borg-ui-host:8083 \
+  --token borgui_enroll_example \
+  --name laptop
+sed "s#/Users/alex/#${HOME}/#g" agent/install/launchd/com.borg-ui.agent.plist \
+  > ~/Library/LaunchAgents/com.borg-ui.agent.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.borg-ui.agent.plist
 ```
+
+The `sed` puts the real home directory in place of `/Users/alex`, since launchd
+expands no `~`. Borg has to be on the `PATH` the template sets (Homebrew,
+MacPorts and `/usr/local/bin` are on it; the `bin/` forwarders exist only
+after the installer ran).
+
+This loads the agent job only. The remote-upgrade job
+(`com.borg-ui.agent-upgrade`) and its `upgrade.conf` are rendered by the
+installer and have no template, so an agent set up by hand takes no remote
+upgrades until the install command has been run once.
 
 Keep the agent config file readable only by the service user or local admin. It
 contains the agent credential used to authenticate with Borg UI.
 
-macOS and Windows one-command installers are not available yet.
+A Windows installer is not available yet.

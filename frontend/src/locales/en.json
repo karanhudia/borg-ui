@@ -359,6 +359,8 @@
         "description": "Run this on the enrolled machine to update the Borg UI agent package and restart the systemd service. No enrollment token or registration step is required.",
         "configPreserved": "The script preserves the existing agent config at",
         "serviceUserPreserved": "The service also keeps running as the user recorded in its systemd unit — run the command from any account that can sudo.",
+        "descriptionMacos": "Run this on the Mac to update the Borg UI agent package and restart the launchd job. No enrollment token or registration step is required.",
+        "runAsAgentUser": "Run it as the user the agent runs as, without sudo.",
         "borgInstallation": "Borg installation",
         "borgSelectionHint": "Selecting Borg versions upgrades those binaries on the agent to the versions this server provides. Leave this on Skip unless a Borg upgrade is intended.",
         "borgOptions": {
@@ -492,6 +494,7 @@
         "removesVenv": "The virtualenv at /opt/borg-ui-agent",
         "removesConfig": "The configuration at /etc/borg-ui-agent, including the credential",
         "removesUser": "The dedicated borg-ui-agent service user, if the install created one",
+        "removesUserDirectory": "The agent's directory under ~/Library/Application Support, its logs and its launchd jobs",
         "keepsBorg": "Your own Borg installation is not touched. Only binaries this installer placed are removed.",
         "keepsRepositories": "Your backup repositories are not touched.",
         "copyCommand": "Copy command"
@@ -502,6 +505,8 @@
       "title": "Install command",
       "copy": "Copy install command",
       "description": "Run the command on the Linux machine. The installer registers the agent and enables the systemd service by default.",
+      "descriptionMacos": "Run the command on the Mac as the user whose data is backed up, without sudo. The installer downloads a Python runtime and Borg, registers the agent and loads it as a launchd user agent.",
+      "repositoryPlaceholder": "Replace {{placeholder}} with the repository this machine backs up to, for example ssh://user@host:23/./repo. Borg UI pre-fills the repository form with it. Remove --borg-repo if there is none yet.",
       "connected": "{{name}} connected",
       "waiting": "Waiting for agent to connect…",
       "connectedDescription": "You can close this dialog; the agent will keep running.",
@@ -515,10 +520,16 @@
       "copyInstallCommands": "Copy install commands",
       "copyStatusCommand": "Copy status command",
       "copySystemdCommands": "Copy systemd commands",
+      "copyMacosSetupCommand": "Copy macOS setup command",
+      "copyMacosStatusCommand": "Copy launchd status command",
+      "copyLaunchdCommands": "Copy launchd commands",
+      "linuxLabel": "Linux",
+      "macosLabel": "macOS",
       "steps": {
         "install": {
-          "title": "1. Run the Linux installer",
-          "description": "Run this on the Linux machine that owns the files Borg should back up. The installer installs dependencies, registers the agent, and enables the systemd service. By default, the service runs as the user who invoked sudo, so repository and source paths must be accessible to that user."
+          "title": "1. Run the installer",
+          "description": "Run this on the Linux machine that owns the files Borg should back up. The installer installs dependencies, registers the agent, and enables the systemd service. By default, the service runs as the user who invoked sudo, so repository and source paths must be accessible to that user.",
+          "descriptionMacos": "On a Mac, run this as the user whose data is backed up, without sudo. The installer downloads a Python runtime and the Borg version this server runs, registers the agent, and loads it as a launchd user agent that runs while that user is logged in."
         },
         "server": {
           "title": "2. Server URL and token",
@@ -531,7 +542,8 @@
         },
         "service": {
           "title": "4. Service checks",
-          "description": "The installer enables systemd by default so the agent survives reboot. Use these commands only when inspecting or repairing a manual installation."
+          "description": "The installer enables systemd by default so the agent survives reboot. Use these commands only when inspecting or repairing a manual installation.",
+          "descriptionMacos": "On a Mac the agent is a launchd user agent in the signed-in user's domain. Check it with the first command. The second block renders the template for your home directory and loads it; the template expects the agent under ~/Library/Application Support/borg-ui-agent, where the installer puts it."
         }
       }
     },
@@ -553,6 +565,8 @@
       },
       "selected": "Selected",
       "comingLater": "Coming later",
+      "select": "Select",
+      "macosHint": "The agent runs as the signed-in user under launchd and only while that user is logged in. Nothing is installed system-wide.",
       "serverUrl": "Server URL",
       "localhostWarning": "localhost only works when the agent runs on the same machine as Borg UI. Remote machines need a reachable host name, IP, or HTTPS URL.",
       "serverUrlHelper": "This URL must be reachable from the agent machine.",
@@ -6166,6 +6180,7 @@
         "mountNotFound": "Mount {{mountId}} not found",
         "unmountFailed": "Failed to unmount {{mountId}}",
         "failedMountArchive": "Failed to mount archive",
+        "agentRepository": "This repository is executed by an agent, so the server cannot mount it",
         "mountUnavailable": "Archive mounting is unavailable in this environment",
         "failedUnmount": "Failed to unmount",
         "failedListMounts": "Failed to list mounts",

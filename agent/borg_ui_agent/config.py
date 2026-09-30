@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import os
-import platform
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+
+from agent.borg_ui_agent.paths import default_config_dir
 
 
 @dataclass(frozen=True)
@@ -17,19 +18,7 @@ class AgentConfig:
 
 
 def default_config_path() -> Path:
-    system = platform.system().lower()
-    if system == "darwin":
-        return (
-            Path.home()
-            / "Library"
-            / "Application Support"
-            / "borg-ui-agent"
-            / "config.toml"
-        )
-    if system == "windows":
-        root = os.environ.get("ProgramData", r"C:\ProgramData")
-        return Path(root) / "borg-ui-agent" / "config.toml"
-    return Path.home() / ".config" / "borg-ui-agent" / "config.toml"
+    return default_config_dir() / "config.toml"
 
 
 def load_config(path: Optional[Path] = None) -> AgentConfig:

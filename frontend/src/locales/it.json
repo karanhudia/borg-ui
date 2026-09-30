@@ -359,6 +359,8 @@
         "description": "Esegui questo comando sulla macchina registrata per aggiornare il pacchetto dell'agente Borg UI e riavviare il servizio systemd. Non sono richiesti token o passaggi di registrazione.",
         "configPreserved": "Lo script conserva la configurazione dell'agente esistente in",
         "serviceUserPreserved": "Il servizio continua inoltre a essere eseguito con l'utente registrato nella sua unità systemd: esegui il comando da qualsiasi account con sudo.",
+        "descriptionMacos": "Esegui questo sul Mac per aggiornare il pacchetto dell'agente Borg UI e riavviare il job di launchd. Non sono richiesti token di iscrizione né registrazione.",
+        "runAsAgentUser": "Eseguilo come l'utente con cui viene eseguito l'agente, senza sudo.",
         "borgInstallation": "Installazione di Borg",
         "borgSelectionHint": "Selezionando le versioni di Borg quei binari sull'agente vengono aggiornati alle versioni offerte da questo server. Lascia la selezione su Salta se non intendi eseguire un upgrade di Borg.",
         "borgOptions": {
@@ -492,6 +494,7 @@
         "removesVenv": "L'ambiente virtuale in /opt/borg-ui-agent",
         "removesConfig": "La configurazione in /etc/borg-ui-agent, credenziale inclusa",
         "removesUser": "L'utente di servizio dedicato borg-ui-agent, se l'installazione ne ha creato uno",
+        "removesUserDirectory": "La directory dell'agente in ~/Library/Application Support, i suoi log e i suoi job di launchd",
         "keepsBorg": "La tua installazione di Borg non viene toccata. Vengono rimossi solo i binari collocati da questo programma di installazione.",
         "keepsRepositories": "I tuoi repository di backup non vengono toccati.",
         "copyCommand": "Copia comando"
@@ -502,6 +505,8 @@
       "title": "Comando di installazione",
       "copy": "Copia comando di installazione",
       "description": "Esegui il comando sul computer Linux. Il programma di installazione registra l'agente e abilita il servizio systemd per impostazione predefinita.",
+      "descriptionMacos": "Esegui il comando sul Mac come l'utente i cui dati vengono salvati, senza sudo. Il programma di installazione scarica un runtime Python e Borg, registra l'agente e lo carica come agente utente di launchd.",
+      "repositoryPlaceholder": "Sostituisci {{placeholder}} con il repository in cui questo computer esegue i backup, ad esempio ssh://user@host:23/./repo. Borg UI precompila con esso il modulo del repository. Rimuovi --borg-repo se non ne esiste ancora uno.",
       "connected": "{{name}} connesso",
       "waiting": "In attesa della connessione dell'agente…",
       "connectedDescription": "Puoi chiudere questa finestra; l'agente continuerà a funzionare.",
@@ -515,10 +520,16 @@
       "copyInstallCommands": "Copia comandi di installazione",
       "copyStatusCommand": "Copia comando di stato",
       "copySystemdCommands": "Copia comandi systemd",
+      "copyMacosSetupCommand": "Copia comando di configurazione macOS",
+      "copyMacosStatusCommand": "Copia comando di stato launchd",
+      "copyLaunchdCommands": "Copia comandi launchd",
+      "linuxLabel": "Linux",
+      "macosLabel": "macOS",
       "steps": {
         "install": {
-          "title": "1. Esegui il programma di installazione Linux",
-          "description": "Esegui questa operazione sul computer Linux che possiede i file di cui Borg deve eseguire il backup. Il programma di installazione installa le dipendenze, registra l'agente e abilita il servizio systemd. Per impostazione predefinita, il servizio viene eseguito come l'utente che ha invocato sudo, quindi i percorsi del repository e delle origini devono essere accessibili a tale utente."
+          "title": "1. Esegui il programma di installazione",
+          "description": "Esegui questa operazione sul computer Linux che possiede i file di cui Borg deve eseguire il backup. Il programma di installazione installa le dipendenze, registra l'agente e abilita il servizio systemd. Per impostazione predefinita, il servizio viene eseguito come l'utente che ha invocato sudo, quindi i percorsi del repository e delle origini devono essere accessibili a tale utente.",
+          "descriptionMacos": "Su un Mac, esegui questa operazione come l'utente i cui dati vengono salvati, senza sudo. Il programma di installazione scarica un runtime Python e la versione di Borg eseguita da questo server, registra l'agente e lo carica come agente utente di launchd, in esecuzione finché quell'utente è connesso."
         },
         "server": {
           "title": "2. URL del server e token",
@@ -531,7 +542,8 @@
         },
         "service": {
           "title": "4. Controlli del servizio",
-          "description": "Il programma di installazione abilita systemd per impostazione predefinita, così l'agente sopravvive al riavvio. Usa questi comandi solo quando controlli o ripari un'installazione manuale."
+          "description": "Il programma di installazione abilita systemd per impostazione predefinita, così l'agente sopravvive al riavvio. Usa questi comandi solo quando controlli o ripari un'installazione manuale.",
+          "descriptionMacos": "Su un Mac l'agente è un agente utente di launchd nel dominio dell'utente connesso. Controllalo con il primo comando. Il secondo blocco adatta il modello alla tua cartella home e lo carica; il modello si aspetta l'agente in ~/Library/Application Support/borg-ui-agent, dove lo colloca il programma di installazione."
         }
       }
     },
@@ -553,6 +565,8 @@
       },
       "selected": "Selezionato",
       "comingLater": "Disponibile in seguito",
+      "select": "Seleziona",
+      "macosHint": "L'agente viene eseguito come l'utente connesso sotto launchd e solo finché quell'utente è connesso. Nulla viene installato a livello di sistema.",
       "serverUrl": "URL del server",
       "localhostWarning": "localhost funziona solo quando l'agente e Borg UI sono sullo stesso computer. I computer remoti richiedono un nome host, un indirizzo IP o un URL HTTPS raggiungibile.",
       "serverUrlHelper": "Questo URL deve essere raggiungibile dal computer dell'agente.",
@@ -6166,6 +6180,7 @@
         "mountNotFound": "Mount {{mountId}} non trovato",
         "unmountFailed": "Impossibile smontare {{mountId}}",
         "failedMountArchive": "Impossibile montare l'archivio",
+        "agentRepository": "Questo repository è eseguito da un agente, quindi il server non può montarlo",
         "mountUnavailable": "Il montaggio degli archivi non è disponibile in questo ambiente",
         "failedUnmount": "Impossibile smontare",
         "failedListMounts": "Impossibile elencare i mount",

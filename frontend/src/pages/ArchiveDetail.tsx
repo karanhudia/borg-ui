@@ -411,16 +411,18 @@ export default function ArchiveDetail() {
               {t('archives.detail.restore')}
             </Button>
           )}
-          <Button
-            variant="outlined"
-            startIcon={<HardDrive size={16} />}
-            onClick={() => {
-              setCustomMountPoint(getDefaultMountPoint(archive.name))
-              setShowMountDialog(true)
-            }}
-          >
-            {t('archives.detail.mount')}
-          </Button>
+          {repository && repository.executor_type !== 'agent' && (
+            <Button
+              variant="outlined"
+              startIcon={<HardDrive size={16} />}
+              onClick={() => {
+                setCustomMountPoint(getDefaultMountPoint(archive.name))
+                setShowMountDialog(true)
+              }}
+            >
+              {t('archives.detail.mount')}
+            </Button>
+          )}
           <Button
             variant="outlined"
             color="error"

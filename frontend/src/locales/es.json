@@ -359,6 +359,8 @@
         "description": "Ejecute esto en la máquina registrada para actualizar el paquete del agente Borg UI y reiniciar el servicio systemd. No se requiere token ni paso de registro.",
         "configPreserved": "El script conserva la configuración existente del agente en",
         "serviceUserPreserved": "El servicio también sigue ejecutándose con el usuario registrado en su unidad de systemd; ejecute el comando desde cualquier cuenta con sudo.",
+        "descriptionMacos": "Ejecuta esto en el Mac para actualizar el paquete del agente de Borg UI y reiniciar el job de launchd. No se requiere token de inscripción ni registro.",
+        "runAsAgentUser": "Ejecútalo como el usuario con el que se ejecuta el agente, sin sudo.",
         "borgInstallation": "Instalación de Borg",
         "borgSelectionHint": "Seleccionar versiones de Borg actualiza esos binarios en el agente a las versiones que ofrece este servidor. Deje la opción en Omitir salvo que desee un upgrade de Borg.",
         "borgOptions": {
@@ -492,6 +494,7 @@
         "removesVenv": "El entorno virtual en /opt/borg-ui-agent",
         "removesConfig": "La configuración en /etc/borg-ui-agent, incluida la credencial",
         "removesUser": "El usuario de servicio dedicado borg-ui-agent, si la instalación creó uno",
+        "removesUserDirectory": "El directorio del agente en ~/Library/Application Support, sus registros y sus jobs de launchd",
         "keepsBorg": "Su propia instalación de Borg no se toca. Solo se eliminan los binarios que colocó este instalador.",
         "keepsRepositories": "Sus repositorios de copia de seguridad no se tocan.",
         "copyCommand": "Copiar comando"
@@ -502,6 +505,8 @@
       "title": "Comando de instalación",
       "copy": "Copiar comando de instalación",
       "description": "Ejecuta el comando en el equipo Linux. El instalador registra el agente y habilita el servicio systemd de forma predeterminada.",
+      "descriptionMacos": "Ejecuta el comando en el Mac como el usuario cuyos datos se respaldan, sin sudo. El instalador descarga un runtime de Python y Borg, registra el agente y lo carga como agente de usuario de launchd.",
+      "repositoryPlaceholder": "Sustituye {{placeholder}} por el repositorio en el que este equipo hace sus copias, por ejemplo ssh://user@host:23/./repo. Borg UI rellena con él el formulario del repositorio. Quita --borg-repo si aún no existe ninguno.",
       "connected": "{{name}} conectado",
       "waiting": "Esperando a que el agente se conecte…",
       "connectedDescription": "Puedes cerrar este diálogo; el agente seguirá funcionando.",
@@ -515,10 +520,16 @@
       "copyInstallCommands": "Copiar comandos de instalación",
       "copyStatusCommand": "Copiar comando de estado",
       "copySystemdCommands": "Copiar comandos systemd",
+      "copyMacosSetupCommand": "Copiar comando de configuración de macOS",
+      "copyMacosStatusCommand": "Copiar comando de estado de launchd",
+      "copyLaunchdCommands": "Copiar comandos de launchd",
+      "linuxLabel": "Linux",
+      "macosLabel": "macOS",
       "steps": {
         "install": {
-          "title": "1. Ejecutar el instalador de Linux",
-          "description": "Ejecuta esto en el equipo Linux que posee los archivos que Borg debe respaldar. El instalador instala dependencias, registra el agente y habilita el servicio systemd. De forma predeterminada, el servicio se ejecuta como el usuario que invocó sudo, por lo que las rutas del repositorio y del origen deben ser accesibles para ese usuario."
+          "title": "1. Ejecutar el instalador",
+          "description": "Ejecuta esto en el equipo Linux que posee los archivos que Borg debe respaldar. El instalador instala dependencias, registra el agente y habilita el servicio systemd. De forma predeterminada, el servicio se ejecuta como el usuario que invocó sudo, por lo que las rutas del repositorio y del origen deben ser accesibles para ese usuario.",
+          "descriptionMacos": "En un Mac, ejecuta esto como el usuario cuyos datos se respaldan, sin sudo. El instalador descarga un runtime de Python y la versión de Borg que ejecuta este servidor, registra el agente y lo carga como agente de usuario de launchd que se ejecuta mientras ese usuario tiene la sesión iniciada."
         },
         "server": {
           "title": "2. URL del servidor y token",
@@ -531,7 +542,8 @@
         },
         "service": {
           "title": "4. Comprobaciones del servicio",
-          "description": "El instalador habilita systemd de forma predeterminada para que el agente sobreviva a los reinicios. Usa estos comandos solo al inspeccionar o reparar una instalación manual."
+          "description": "El instalador habilita systemd de forma predeterminada para que el agente sobreviva a los reinicios. Usa estos comandos solo al inspeccionar o reparar una instalación manual.",
+          "descriptionMacos": "En un Mac el agente es un agente de usuario de launchd en el dominio del usuario con sesión iniciada. Compruébalo con el primer comando. El segundo bloque adapta la plantilla a tu directorio de inicio y la carga; la plantilla espera el agente en ~/Library/Application Support/borg-ui-agent, donde lo coloca el instalador."
         }
       }
     },
@@ -553,6 +565,8 @@
       },
       "selected": "Seleccionado",
       "comingLater": "Próximamente",
+      "select": "Seleccionar",
+      "macosHint": "El agente se ejecuta como el usuario con sesión iniciada bajo launchd y solo mientras ese usuario tenga la sesión iniciada. No se instala nada a nivel de sistema.",
       "serverUrl": "URL del servidor",
       "localhostWarning": "localhost solo funciona cuando el agente y Borg UI se ejecutan en el mismo equipo. Los equipos remotos necesitan un nombre de host, una dirección IP o una URL HTTPS accesible.",
       "serverUrlHelper": "Esta URL debe ser accesible desde el equipo del agente.",
@@ -6166,6 +6180,7 @@
         "mountNotFound": "Montaje {{mountId}} no encontrado",
         "unmountFailed": "Error al desmontar {{mountId}}",
         "failedMountArchive": "Error al montar el archivo",
+        "agentRepository": "Este repositorio lo ejecuta un agente, por lo que el servidor no puede montarlo",
         "mountUnavailable": "El montaje de archivos no está disponible en este entorno",
         "failedUnmount": "Error al desmontar",
         "failedListMounts": "Error al listar los puntos de montaje",

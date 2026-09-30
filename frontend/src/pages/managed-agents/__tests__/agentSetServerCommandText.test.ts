@@ -10,6 +10,14 @@ describe('buildSetServerCommand', () => {
     )
   })
 
+  it('runs the subcommand as the user and restarts the launchd job on macOS', () => {
+    expect(buildSetServerCommand(URL, '0.1.12', 'macos')).toBe(
+      `"$HOME/Library/Application Support/borg-ui-agent/.venv/bin/borg-ui-agent" set-server "${URL}" && launchctl kickstart -k "gui/$(id -u)/com.borg-ui.agent"`
+    )
+    expect(buildSetServerCommand(URL, null, 'macos')).not.toContain('sed -i')
+    expect(buildSetServerCommand(URL, null, 'macos')).not.toContain('sudo')
+  })
+
   it('uses the subcommand on an agent newer than the floor', () => {
     expect(buildSetServerCommand(URL, '0.2.0')).toContain('borg-ui-agent set-server')
   })

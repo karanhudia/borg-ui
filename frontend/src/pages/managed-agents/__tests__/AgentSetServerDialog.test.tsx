@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import AgentSetServerDialog from '../AgentSetServerDialog'
 import type { AgentMachineResponse } from '../../../services/api'
 
-const agent = (agentVersion: string | null) =>
+const agent = (agentVersion: string | null, os?: string) =>
   ({
     id: 1,
     agent_id: 'agt_1',
@@ -12,13 +12,14 @@ const agent = (agentVersion: string | null) =>
     hostname: 'db-01.internal',
     status: 'offline',
     agent_version: agentVersion,
+    os,
   }) as AgentMachineResponse
 
-const renderDialog = (agentVersion: string | null) => {
+const renderDialog = (agentVersion: string | null, os?: string) => {
   const onCopy = vi.fn()
   render(
     <AgentSetServerDialog
-      agent={agent(agentVersion)}
+      agent={agent(agentVersion, os)}
       open
       defaultServerUrl="http://192.168.1.82:8083"
       onCopy={onCopy}
@@ -58,6 +59,18 @@ describe('AgentSetServerDialog', () => {
     const { onCopy } = renderDialog('0.1.5')
     await userEvent.click(screen.getByRole('button', { name: /copy/i }))
     expect(onCopy).toHaveBeenCalledWith(expect.stringContaining('set-server'))
+  })
+
+  it('tells a Linux operator to run the command with sudo', () => {
+    renderDialog('0.1.5', 'Linux')
+    expect(screen.getByText(/as a user who can sudo/)).toBeInTheDocument()
+    expect(screen.queryByText(/without sudo/)).not.toBeInTheDocument()
+  })
+
+  it('tells a macOS operator to run the command as the agent user, without sudo', () => {
+    renderDialog('0.1.12', 'Darwin')
+    expect(screen.getByText(/without sudo/)).toBeInTheDocument()
+    expect(screen.queryByText(/who can sudo/)).not.toBeInTheDocument()
   })
 
   it('names borg-ui-agent status as the way to read the current URL', () => {

@@ -545,6 +545,32 @@ id() { echo 0; }
 """
 
 
+# The inventory paths the whole script takes from its environment, each read
+# as BORG_UI_UNINSTALL_<NAME>. The function-level harnesses above set the
+# script's own variables directly, so only a whole run needs the prefix.
+_SEAMS = frozenset(
+    {
+        "AGENT_ROOT",
+        "CONFIG_DIR",
+        "CONFIG_FILE",
+        "UPGRADE_TRIGGER",
+        "SERVICE_UNIT",
+        "UPGRADE_UNIT",
+        "UPGRADE_PATH_UNIT",
+        "UPGRADE_CONF",
+        "UPGRADE_HELPER",
+        "LEGACY_SUDOERS",
+        "NO_REMOTE_UPGRADE_MARKER",
+        "STATE_DIR",
+        "BORG1_LINK",
+        "BORG2_LINK",
+        "LOG_DIR",
+        "DEDICATED_USER",
+        "UNREGISTER_TIMEOUT",
+    }
+)
+
+
 def _run_whole_script(
     script: str, *, env: dict[str, str], args: tuple[str, ...] = ()
 ) -> subprocess.CompletedProcess:
@@ -555,14 +581,27 @@ def _run_whole_script(
     silently turns the dedicated-account removal into a no-op. A test that
     calls the functions in an order of its own choosing cannot see that.
     """
+    seamed = {
+        (f"BORG_UI_UNINSTALL_{key}" if key in _SEAMS else key): value
+        for key, value in env.items()
+    }
     return subprocess.run(
         ["bash", "-s", "--", *args],
         input=_FULL_RUN_STUBS + script,
         capture_output=True,
         text=True,
         check=False,
-        env={"PATH": "/usr/bin:/bin", **env},
+        env={"PATH": "/usr/bin:/bin", **seamed},
     )
+
+
+def test_every_overridable_path_is_namespaced(script: str):
+    """Each seam the script reads from its environment carries the prefix, and
+    the set the harness maps is exactly that set."""
+    read = set(re.findall(r'^([A-Z0-9_]+)="\$\{BORG_UI_UNINSTALL_\1:-', script, re.M))
+    assert read == _SEAMS
+    plain = re.findall(r'^([A-Z0-9_]+)="\$\{\1:-', script, re.M)
+    assert plain == []
 
 
 def _installed_machine(tmp_path: Path, *, unit_user: str) -> dict[str, str]:
@@ -577,6 +616,8 @@ def _installed_machine(tmp_path: Path, *, unit_user: str) -> dict[str, str]:
     state.mkdir(parents=True)
 
     return {
+        # A Linux inventory, wherever the test runs.
+        "BORG_UI_AGENT_PLATFORM": "Linux",
         "AGENT_ROOT": str(agent_root),
         "CONFIG_DIR": str(config_dir),
         "CONFIG_FILE": str(config_dir / "config.toml"),

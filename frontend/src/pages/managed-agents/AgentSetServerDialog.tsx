@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next'
 import ResponsiveDialog from '../../components/shared/ResponsiveDialog'
 import type { AgentMachineResponse } from '../../services/api'
 import CopyableCodeBlock from './CopyableCodeBlock'
+import { platformFromAgentOs } from './agentInstallCommandText'
 import { buildSetServerCommand, isSafeServerUrlForCommand } from './agentSetServerCommandText'
 
 /**
@@ -47,7 +48,8 @@ export default function AgentSetServerDialog({
   }, [agent, defaultServerUrl])
 
   const valid = isSafeServerUrlForCommand(serverUrl)
-  const command = buildSetServerCommand(serverUrl, agent?.agent_version)
+  const platform = platformFromAgentOs(agent?.os)
+  const command = buildSetServerCommand(serverUrl, agent?.agent_version, platform)
 
   return (
     <ResponsiveDialog
@@ -93,7 +95,9 @@ export default function AgentSetServerDialog({
                 onCopy={() => onCopy(command)}
               />
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                {t('managedAgents.page.setServerDialog.runHint')}
+                {platform === 'macos'
+                  ? t('managedAgents.page.reinstallDialog.runAsAgentUser')
+                  : t('managedAgents.page.setServerDialog.runHint')}
               </Typography>
             </>
           ) : null}

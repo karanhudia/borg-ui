@@ -64,7 +64,12 @@ def helper_env(tmp_path: Path, test_client: TestClient):
         path.write_text(f"#!/bin/bash\n{body}\n", encoding="utf-8")
         path.chmod(0o755)
 
-    def run() -> subprocess.CompletedProcess:
+    def run(*, requested: bool = True) -> subprocess.CompletedProcess:
+        # The helper is only ever started for an existing trigger; a run
+        # without one is what a speculatively started launchd job looks like.
+        trigger = tmp_path / "upgrade-requested"
+        if requested:
+            trigger.write_text("", encoding="utf-8")
         env = dict(os.environ)
         env["PATH"] = f"{bin_dir}:{env['PATH']}"
         env["BORG_UI_UPGRADE_ETC"] = str(etc)
@@ -98,6 +103,10 @@ def helper_env(tmp_path: Path, test_client: TestClient):
         f'echo "${{url}}" >>"{tmp_path}/curl.log"',
     )
 
+    # These tests describe a Linux endpoint wherever they run; the helper
+    # reads the platform from uname to decide whether to pass the service user.
+    stub("uname", "echo Linux")
+
     return {
         "run": run,
         "stub": stub,
@@ -105,6 +114,17 @@ def helper_env(tmp_path: Path, test_client: TestClient):
         "tmp_path": tmp_path,
         "etc": etc,
     }
+
+
+def test_the_helper_does_nothing_without_a_request(helper_env):
+    """launchd may start a KeepAlive job when it is loaded; only the trigger
+    means an upgrade was asked for. Nothing is fetched and nothing runs."""
+    helper_env["write_conf"]()
+
+    result = helper_env["run"](requested=False)
+
+    assert result.returncode == 0, result.stderr
+    assert "No upgrade requested" in result.stdout
 
 
 def test_the_helper_refuses_a_non_https_server(helper_env):
