@@ -6033,6 +6033,7 @@
         "privateKeyFileNotFound": "File chiave privata non trovato: {{path}}",
         "publicKeyFileNotFound": "File chiave pubblica non trovato: {{path}}",
         "sshConnectionNotFound": "Connessione SSH non trovata",
+        "sshConnectionUsedByBackupPlans": "Questa connessione è la sorgente di questi piani di backup: {{plans}}. Cambia prima la loro sorgente, poi eliminala.",
         "sshKeyNotFound": "Chiave SSH non trovata",
         "systemKeyAlreadyExists": "Chiave SSH di sistema già esistente",
         "failedRetrieveSystemSshKey": "Impossibile recuperare la chiave SSH di sistema: {{error}}",

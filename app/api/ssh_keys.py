@@ -17,6 +17,7 @@ import time
 from app.database.database import get_db
 from app.database.models import (
     User,
+    BackupPlan,
     SSHKey,
     SSHConnection,
     Repository,
@@ -2471,6 +2472,22 @@ async def delete_ssh_connection(
             )
 
         host = connection.host
+
+        # A plan can't lose its source host silently; make the user repoint it first
+        plan_names = [
+            name
+            for (name,) in db.query(BackupPlan.name)
+            .filter(BackupPlan.source_ssh_connection_id == connection_id)
+            .order_by(BackupPlan.name)
+        ]
+        if plan_names:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "key": "backend.errors.ssh.sshConnectionUsedByBackupPlans",
+                    "params": {"plans": ", ".join(plan_names)},
+                },
+            )
 
         # Null out FK references so child records are preserved after deletion
         db.query(Repository).filter(Repository.connection_id == connection_id).update(

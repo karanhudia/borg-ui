@@ -1481,6 +1481,36 @@ class TestSSHConnectionDelete:
         assert scheduled_after is not None
         assert scheduled_after.source_ssh_connection_id is None
 
+    def test_delete_connection_used_by_backup_plan_is_refused(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """A plan's source connection can't be nulled out; refuse and name the plan"""
+        from app.database.models import BackupPlan
+
+        conn = SSHConnection(host="plan-src.example", username="root", port=22)
+        test_db.add(conn)
+        test_db.flush()
+        test_db.add(
+            BackupPlan(
+                name="nightly-nas",
+                source_type="remote",
+                source_ssh_connection_id=conn.id,
+                source_directories='["/srv"]',
+            )
+        )
+        test_db.commit()
+
+        response = test_client.delete(
+            f"/api/ssh-keys/connections/{conn.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 409
+        detail = response.json()["detail"]
+        assert detail["key"] == "backend.errors.ssh.sshConnectionUsedByBackupPlans"
+        assert detail["params"]["plans"] == "nightly-nas"
+        test_db.expire_all()
+        assert test_db.get(SSHConnection, conn.id) is not None
+
     def test_delete_connection_not_found(self, test_client: TestClient, admin_headers):
         """Deleting a non-existent connection returns 404"""
         response = test_client.delete(
