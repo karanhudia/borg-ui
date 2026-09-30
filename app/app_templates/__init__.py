@@ -23,7 +23,16 @@ class AppTemplateVerified(BaseModel):
 
 class AppTemplateDetect(BaseModel):
     image_prefix: str
-    mount_destination: str
+    # Where the app keeps its files inside the container, preferred first.
+    # Older installs may still mount an earlier path.
+    mount_destinations: list[str] = Field(min_length=1)
+
+
+class AppTemplateExtraMounts(BaseModel):
+    # Any other folder the container mounts (external libraries and the like)
+    # is listed and backed up by default under this label.
+    label: str
+    description: str
 
 
 class AppTemplateFolder(BaseModel):
@@ -55,6 +64,7 @@ class AppTemplate(BaseModel):
     verified: AppTemplateVerified
     detect: AppTemplateDetect
     root_hint: str
+    extra_mounts: AppTemplateExtraMounts | None = None
     folders: list[AppTemplateFolder]
     pre_backup_script: AppTemplateScript | None = None
     schedule_cron: str

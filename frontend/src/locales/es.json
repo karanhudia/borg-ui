@@ -6811,7 +6811,8 @@
       "staleDump": "Último volcado {{when}}. Más de {{hours}} horas: las copias se detendrán hasta que Immich escriba uno nuevo.",
       "noDump": "Aún no hay volcado de la base de datos. Activa Administration > Settings > Backup en Immich o la copia se detendrá.",
       "total": "Se respaldarán unos {{size}}.",
-      "totalAtLeast": "Se respaldarán al menos {{size}}."
+      "totalAtLeast": "Se respaldarán al menos {{size}}.",
+      "noAccess": "{{user}} no puede abrir esto"
     },
     "missingRoot": "{{path}} no existe en esa máquina. Elige la carpeta con los archivos de Immich: {{hint}}.",
     "denied": {

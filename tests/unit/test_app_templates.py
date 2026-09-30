@@ -117,6 +117,7 @@ class TestAppTemplates:
                 "path": str(library),
                 "host_path": str(library),
                 "readable": True,
+                "extra_mounts": [],
             }
         ]
 
@@ -189,6 +190,7 @@ class TestAppInspect:
         assert folders["thumbs"] == {
             "path": "thumbs",
             "exists": False,
+            "readable": False,
             "size_bytes": None,
             "latest_name": None,
             "latest_modified_at": None,
@@ -241,3 +243,109 @@ class TestAppInspect:
             assert denied["root_status"] == "denied"
             assert denied["folders"] == []
         assert denied["user"]
+
+
+def _mount(type_, source, destination, name=None):
+    return {"Type": type_, "Source": source, "Destination": destination, "Name": name}
+
+
+@pytest.mark.unit
+class TestAppDetectMounts:
+    def _detect(self, test_client, admin_headers, monkeypatch, mounts):
+        container = json.dumps(
+            {
+                "Id": "b" * 64,
+                "Name": "/immich_server",
+                "Config": {"Image": "ghcr.io/immich-app/immich-server:release"},
+                "State": {"Status": "running"},
+                "Mounts": mounts,
+            }
+        )
+        monkeypatch.setattr(
+            source_discovery, "_run_local_container_scan", _fake_scan(container)
+        )
+        response = test_client.post(
+            "/api/source-discovery/apps/detect",
+            json={"source_type": "local"},
+            headers=admin_headers,
+        )
+        [detection] = response.json()["detections"]
+        return detection
+
+    def test_legacy_upload_mount_beats_anonymous_data_volume(
+        self, test_client, admin_headers, monkeypatch
+    ):
+        # An install upgraded from before /data: its media is still mounted at
+        # /usr/src/app/upload and the image gets an empty anonymous /data.
+        anonymous = "f4" * 32
+        detection = self._detect(
+            test_client,
+            admin_headers,
+            monkeypatch,
+            [
+                _mount("bind", "/srv/photos-lib", "/srv/photos-lib"),
+                _mount("bind", "/srv/immich-media", "/usr/src/app/upload"),
+                _mount(
+                    "volume",
+                    f"/var/lib/docker/volumes/{anonymous}/_data",
+                    "/data",
+                    anonymous,
+                ),
+                _mount("bind", "/etc/localtime", "/etc/localtime"),
+            ],
+        )
+
+        assert detection["host_path"] == "/srv/immich-media"
+        assert [extra["host_path"] for extra in detection["extra_mounts"]] == [
+            "/srv/photos-lib"
+        ]
+
+    def test_data_mount_preferred_when_both_are_real(
+        self, test_client, admin_headers, monkeypatch
+    ):
+        detection = self._detect(
+            test_client,
+            admin_headers,
+            monkeypatch,
+            [
+                _mount("bind", "/srv/old", "/usr/src/app/upload"),
+                _mount("bind", "/srv/new", "/data"),
+            ],
+        )
+        assert detection["host_path"] == "/srv/new"
+        assert detection["extra_mounts"] == []
+
+
+@pytest.mark.unit
+class TestAppInspectExtras:
+    def test_extra_paths_are_measured_and_permission_checked(
+        self, test_client, admin_headers, tmp_path
+    ):
+        root = tmp_path / "immich"
+        root.mkdir()
+        library = tmp_path / "library"
+        library.mkdir()
+        (library / "a.jpg").write_bytes(b"x" * 3000)
+        locked = tmp_path / "locked"
+        (locked / "inner").mkdir(parents=True)
+        locked.chmod(0o000)
+        try:
+            body = test_client.post(
+                "/api/source-discovery/apps/inspect",
+                json={
+                    "template_id": "immich",
+                    "source_type": "local",
+                    "path": str(root),
+                    "extra_paths": [str(library), str(locked / "inner")],
+                },
+                headers=admin_headers,
+            ).json()
+        finally:
+            locked.chmod(0o755)
+
+        stats = {item["path"]: item for item in body["folders"]}
+        assert stats[str(library)]["readable"] is True
+        assert stats[str(library)]["size_bytes"] >= 3000
+        if os.geteuid() != 0:
+            assert stats[str(locked / "inner")]["exists"] is True
+            assert stats[str(locked / "inner")]["readable"] is False

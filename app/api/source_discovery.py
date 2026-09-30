@@ -2113,6 +2113,15 @@ class AppTemplateListResponse(BaseModel):
     templates: list[AppTemplate]
 
 
+class AppExtraMount(BaseModel):
+    # As Borg UI reads it, and as the host sees it.
+    path: str
+    host_path: str
+    # Where the container sees it, e.g. /mnt/photos.
+    destination: str
+    readable: bool
+
+
 class AppDetection(BaseModel):
     template_id: str
     container_name: str
@@ -2124,12 +2133,65 @@ class AppDetection(BaseModel):
     # False when Borg UI cannot see the folder: it runs in Docker and the host
     # path is not mounted into it.
     readable: bool
+    # The container's other folder mounts, for templates that back them up.
+    extra_mounts: list[AppExtraMount] = []
 
 
 class AppDetectResponse(BaseModel):
     scan_target: DatabaseScanTarget
     detections: list[AppDetection]
     warnings: list[ScanWarning]
+
+
+# Mounts every container has that are never app data.
+_SYSTEM_MOUNT_PREFIXES = ("/etc/", "/dev", "/proc", "/sys", "/run", "/var/run", "/tmp")
+
+
+def _is_anonymous_volume(mount: ContainerMount) -> bool:
+    # Docker names volumes it creates itself (for an image's VOLUME with nothing
+    # mounted there) with 64 hex characters; they hold nothing the user put there.
+    name = mount.name or ""
+    return (
+        mount.type == "volume"
+        and len(name) == 64
+        and all(c in "0123456789abcdef" for c in name)
+    )
+
+
+def _is_system_mount(mount: ContainerMount) -> bool:
+    paths = [(mount.source or ""), (mount.destination or "")]
+    return any(
+        path == prefix.rstrip("/") or path.startswith(prefix)
+        for path in paths
+        for prefix in _SYSTEM_MOUNT_PREFIXES
+    )
+
+
+def _mount_readable(path: str, *, local: bool) -> bool:
+    # Remote paths are read over SSH, where the host path is the path; inspect
+    # checks permissions there.
+    return os.path.isdir(path) if local else True
+
+
+def _app_root_mount(
+    container: ContainerCandidate, template: AppTemplate
+) -> ContainerMount | None:
+    destinations = template.detect.mount_destinations
+    candidates = [
+        mount
+        for mount in container.mounts
+        if mount.destination in destinations and mount.source
+    ]
+    # A folder the user mounted beats an anonymous volume Docker made up; then
+    # the template's order. An old install can mount its media at the legacy
+    # path while the image still gets an empty anonymous volume at the new one.
+    candidates.sort(
+        key=lambda mount: (
+            _is_anonymous_volume(mount),
+            destinations.index(mount.destination or ""),
+        )
+    )
+    return candidates[0] if candidates else None
 
 
 def _app_detections(
@@ -2141,18 +2203,31 @@ def _app_detections(
         template = match_app_template(container.image, templates)
         if template is None:
             continue
-        mount = next(
-            (
-                mount
-                for mount in container.mounts
-                if mount.destination == template.detect.mount_destination
-                and mount.source
-            ),
-            None,
-        )
+        mount = _app_root_mount(container, template)
         if mount is None:
             continue
         path = (mount.backup_source or mount.source or "").strip()
+        extras = (
+            [
+                AppExtraMount(
+                    path=(other.backup_source or other.source or "").strip(),
+                    host_path=(other.source or "").strip(),
+                    destination=other.destination or "",
+                    readable=_mount_readable(
+                        (other.backup_source or other.source or "").strip(),
+                        local=local,
+                    ),
+                )
+                for other in container.mounts
+                if other is not mount
+                and other.source
+                and other.destination not in template.detect.mount_destinations
+                and not _is_anonymous_volume(other)
+                and not _is_system_mount(other)
+            ]
+            if template.extra_mounts
+            else []
+        )
         detections.append(
             AppDetection(
                 template_id=template.id,
@@ -2160,8 +2235,8 @@ def _app_detections(
                 state=container.state,
                 path=path,
                 host_path=(mount.source or "").strip(),
-                # Remote paths are read over SSH, where the host path is the path.
-                readable=os.path.isdir(path) if local else True,
+                readable=_mount_readable(path, local=local),
+                extra_mounts=extras,
             )
         )
     return detections
@@ -2213,11 +2288,16 @@ class AppInspectRequest(BaseModel):
     source_type: str
     source_ssh_connection_id: int | None = None
     path: str
+    # Absolute folders outside the app's folder (external libraries).
+    extra_paths: list[str] = []
 
 
 class AppFolderStats(BaseModel):
+    # Relative to the app's folder, or absolute for an extra path.
     path: str
     exists: bool
+    # False when it exists but this user can't open it.
+    readable: bool = True
     # None when du failed or took longer than APP_FOLDER_SIZE_TIMEOUT_SECONDS.
     size_bytes: int | None = None
     # Newest entry in the folder, used to show how fresh a database dump is.
@@ -2234,33 +2314,45 @@ class AppInspectResponse(BaseModel):
     warnings: list[ScanWarning]
 
 
-def _build_app_inspect_script(root: str, folders: list[str]) -> str:
+def _build_app_inspect_script(
+    root: str, folders: list[str], extra_paths: list[str] | None = None
+) -> str:
     # First a "#ROOT <status> <user>" line; then, if the folder can be opened,
-    # one line per folder: path, exists, bytes, newest entry, its mtime.
+    # one line per folder: path, ok|missing|denied, bytes, newest entry, its mtime.
+    extras = " ".join(shlex.quote(path) for path in extra_paths or [])
     return "\n".join(
         [
             f"ROOT={shlex.quote(root)}",
             'USER_NAME=$(id -un 2>/dev/null || echo "")',
-            # A folder under an unreadable parent (Docker volumes are root-only)
-            # fails [ -d ] like a missing one; ls tells the two apart.
-            'err=$(ls -d "$ROOT" 2>&1 >/dev/null)',
-            'if [ -n "$err" ]; then case "$err" in *ermission*) st=denied;; *) st=missing;; esac',
-            'elif [ ! -r "$ROOT" ] || [ ! -x "$ROOT" ]; then st=denied',
-            "else st=ok; fi",
-            'printf "#ROOT\\t%s\\t%s\\n" "$st" "$USER_NAME"',
-            '[ "$st" = ok ] || exit 0',
             f'T="timeout {APP_FOLDER_SIZE_TIMEOUT_SECONDS}"',
             'command -v timeout >/dev/null 2>&1 || T=""',
-            f"for d in {' '.join(shlex.quote(folder) for folder in folders)}; do",
-            '  p="$ROOT/$d"',
-            '  if [ ! -d "$p" ]; then printf "%s\\t0\\t-\\t\\t-\\n" "$d"; continue; fi',
+            # A folder under an unreadable parent (Docker volumes are root-only)
+            # fails [ -d ] like a missing one; ls tells the two apart.
+            "access() {",
+            '  err=$(ls -d "$1" 2>&1 >/dev/null)',
+            '  if [ -n "$err" ]; then case "$err" in *ermission*) echo denied;; *) echo missing;; esac',
+            '  elif [ ! -r "$1" ] || [ ! -x "$1" ]; then echo denied',
+            "  else echo ok; fi",
+            "}",
+            "probe() {",
+            '  st=$(access "$2")',
+            '  if [ "$st" != ok ]; then printf "%s\\t%s\\t-\\t\\t-\\n" "$1" "$st"; return; fi',
             # POSIX du -k (KiB) works on GNU, BusyBox and macOS; -B1 is GNU only.
-            '  kib=$($T du -sk "$p" 2>/dev/null | cut -f1)',
+            '  kib=$($T du -sk "$2" 2>/dev/null | cut -f1)',
             '  size=-; case "$kib" in ""|*[!0-9]*) ;; *) size=$((kib * 1024));; esac',
-            '  latest=$(ls -1t "$p" 2>/dev/null | head -n 1)',
+            '  latest=$(ls -1t "$2" 2>/dev/null | head -n 1)',
             "  mtime=-",
-            '  if [ -n "$latest" ]; then mtime=$(stat -c %Y "$p/$latest" 2>/dev/null || stat -f %m "$p/$latest" 2>/dev/null || echo -); fi',
-            '  printf "%s\\t1\\t%s\\t%s\\t%s\\n" "$d" "$size" "$latest" "$mtime"',
+            '  if [ -n "$latest" ]; then mtime=$(stat -c %Y "$2/$latest" 2>/dev/null || stat -f %m "$2/$latest" 2>/dev/null || echo -); fi',
+            '  printf "%s\\tok\\t%s\\t%s\\t%s\\n" "$1" "$size" "$latest" "$mtime"',
+            "}",
+            'st=$(access "$ROOT")',
+            'printf "#ROOT\\t%s\\t%s\\n" "$st" "$USER_NAME"',
+            '[ "$st" = ok ] || exit 0',
+            f"for d in {' '.join(shlex.quote(folder) for folder in folders)}; do",
+            '  probe "$d" "$ROOT/$d"',
+            "done",
+            f"for p in {extras}; do",
+            '  probe "$p" "$p"',
             "done",
         ]
     )
@@ -2280,11 +2372,12 @@ def _parse_app_inspect_output(
             continue
         if len(parts) != 5:
             continue
-        path, exists, size, latest, mtime = parts
+        path, status, size, latest, mtime = parts
         stats.append(
             AppFolderStats(
                 path=path,
-                exists=exists == "1",
+                exists=status != "missing",
+                readable=status == "ok",
                 size_bytes=int(size) if size.isdigit() else None,
                 latest_name=latest or None,
                 latest_modified_at=(
@@ -2363,8 +2456,11 @@ async def inspect_app(
             )
         key_file_path = write_ssh_key_to_tempfile(ssh_key)
 
+    extra_paths = [posixpath.normpath(path.strip()) for path in request.extra_paths]
+    if any(not path.startswith("/") for path in extra_paths):
+        raise HTTPException(status_code=400, detail="extra_paths must be absolute")
     script = _build_app_inspect_script(
-        root, [folder.path for folder in template.folders]
+        root, [folder.path for folder in template.folders], extra_paths
     )
     try:
         result = await asyncio.to_thread(

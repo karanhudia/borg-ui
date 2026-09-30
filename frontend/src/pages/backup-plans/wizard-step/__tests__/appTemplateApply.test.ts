@@ -80,4 +80,18 @@ describe('applyAppTemplate', () => {
     })
     expect(patch.scriptHooks).toBeUndefined()
   })
+
+  it('adds external folders next to the app folder, excludes only under the app folder', () => {
+    const patch = applyAppTemplate(createInitialState(), {
+      template: immich,
+      sshConnectionId: 5,
+      root: '/srv/immich',
+      extraPaths: ['/srv/photos'],
+      excludes: ['thumbs'],
+      scriptId: null,
+    })
+
+    expect(patch.sourceLocations?.[0].paths).toEqual(['/srv/immich', '/srv/photos'])
+    expect(patch.excludePatterns).toEqual(['/srv/immich/thumbs'])
+  })
 })

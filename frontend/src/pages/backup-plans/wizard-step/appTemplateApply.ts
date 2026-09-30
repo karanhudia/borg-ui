@@ -8,6 +8,8 @@ export interface AppTemplateChoice {
   /** Null for this server, otherwise the SSH connection the app runs on. */
   sshConnectionId: number | null
   root: string
+  /** External folders (libraries) backed up alongside the app's folder. */
+  extraPaths?: string[]
   excludes: string[]
   /** The created pre-backup check, when there is one. */
   scriptId: number | null
@@ -58,20 +60,21 @@ export function applyAppTemplate(
   choice: AppTemplateChoice
 ): Partial<WizardState> {
   const root = choice.root.trim()
+  const added = [root, ...(choice.extraPaths ?? [])]
   const locations = [...(state.sourceLocations || [])]
   const index = locations.findIndex((location) => sameMachine(location, choice.sshConnectionId))
   if (index >= 0) {
     const paths = locations[index].paths
     locations[index] = {
       ...locations[index],
-      paths: paths.includes(root) ? paths : [...paths, root],
+      paths: [...paths, ...added.filter((path) => !paths.includes(path))],
     }
   } else {
     locations.push({
       source_type: choice.sshConnectionId === null ? 'local' : 'remote',
       source_ssh_connection_id: choice.sshConnectionId,
       agent_machine_id: null,
-      paths: [root],
+      paths: added,
     })
   }
 

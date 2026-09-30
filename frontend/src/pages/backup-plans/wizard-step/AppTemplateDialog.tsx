@@ -49,6 +49,7 @@ export function AppTemplateDialog({
   const [templateId, setTemplateId] = useState('')
   const [machine, setMachine] = useState<'local' | number>('local')
   const [root, setRoot] = useState('')
+  const [extraPaths, setExtraPaths] = useState<string[]>([])
   const [excludes, setExcludes] = useState<string[]>([])
   const [applying, setApplying] = useState(false)
 
@@ -68,7 +69,10 @@ export function AppTemplateDialog({
   // Defaults for the first template, before the user picks one.
   if (template && !templateId) pickTemplate(template)
 
-  const useRoot = useCallback((path: string) => setRoot(path), [])
+  const setPaths = useCallback((nextRoot: string, nextExtras: string[]) => {
+    setRoot(nextRoot)
+    setExtraPaths(nextExtras)
+  }, [])
 
   const apply = async () => {
     if (!template || !root.trim()) return
@@ -91,6 +95,7 @@ export function AppTemplateDialog({
           template,
           sshConnectionId: machine === 'local' ? null : machine,
           root,
+          extraPaths,
           excludes,
           scriptId: script?.id ?? null,
         })
@@ -149,7 +154,8 @@ export function AppTemplateDialog({
               template={template}
               target={target}
               root={root}
-              onUseRoot={useRoot}
+              extraPaths={extraPaths}
+              onPathsChange={setPaths}
               excludes={excludes}
               onExcludesChange={setExcludes}
             />

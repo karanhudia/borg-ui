@@ -55,7 +55,8 @@ export function defaultAppExcludes(template: AppTemplate): string[] {
 export function useAppInspection(
   template: AppTemplate | null,
   target: AppScanTarget | null,
-  root: string
+  root: string,
+  extraPaths: string[] = []
 ) {
   const path = root.trim()
   const query = useQuery({
@@ -65,12 +66,14 @@ export function useAppInspection(
       target?.source_type,
       target?.source_ssh_connection_id,
       path,
+      extraPaths,
     ],
     queryFn: () =>
       sourceDiscoveryAPI.inspectApp({
         template_id: (template as AppTemplate).id,
         ...(target as AppScanTarget),
         path,
+        extra_paths: extraPaths,
       }),
     enabled: Boolean(template && target && path.startsWith('/')),
     staleTime: 60_000,

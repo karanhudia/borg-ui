@@ -18,7 +18,11 @@ export default function QuickStartFoldersStep({ answers, onChange }: QuickStartS
   const onAgent = answers.sourceKind === 'agent'
   const agent = useManagedAgent(onAgent ? answers.sourceAgentId : '')
 
-  const useAppRoot = useCallback((path: string) => onChange({ sourcePaths: [path] }), [onChange])
+  // The app's folder stays first: its excludes and check script are built from it.
+  const setAppPaths = useCallback(
+    (root: string, extraPaths: string[]) => onChange({ sourcePaths: [root, ...extraPaths] }),
+    [onChange]
+  )
   const scanTarget: AppScanTarget | null =
     answers.sourceKind === 'server'
       ? { source_type: 'local', source_ssh_connection_id: null }
@@ -59,7 +63,8 @@ export default function QuickStartFoldersStep({ answers, onChange }: QuickStartS
           template={answers.app}
           target={scanTarget}
           root={answers.sourcePaths[0] ?? ''}
-          onUseRoot={useAppRoot}
+          extraPaths={answers.sourcePaths.slice(1)}
+          onPathsChange={setAppPaths}
           excludes={answers.appExcludes}
           onExcludesChange={(appExcludes) => onChange({ appExcludes })}
         />

@@ -80,6 +80,14 @@ describe('QuickStartDialog', () => {
             path: '/local/srv/immich',
             host_path: '/srv/immich',
             readable: true,
+            extra_mounts: [
+              {
+                path: '/local/srv/photos',
+                host_path: '/srv/photos',
+                destination: '/mnt/photos',
+                readable: true,
+              },
+            ],
           },
         ],
         warnings: [],
@@ -171,7 +179,8 @@ describe('QuickStartDialog', () => {
     )
     expect(backupPlansAPI.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        source_directories: ['/local/srv/immich'],
+        // The external library rides along; excludes stay under Immich's folder.
+        source_directories: ['/local/srv/immich', '/local/srv/photos'],
         exclude_patterns: ['/local/srv/immich/thumbs', '/local/srv/immich/encoded-video'],
         cron_expression: '0 3 * * *',
         pre_backup_script_id: 12,

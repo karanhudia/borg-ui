@@ -6811,7 +6811,8 @@
       "staleDump": "Letzter Dump {{when}}. Älter als {{hours}} Stunden: Backups stoppen, bis Immich einen neuen schreibt.",
       "noDump": "Noch kein Datenbank-Dump. Aktiviere in Immich Administration > Settings > Backup, sonst stoppt das Backup.",
       "total": "Etwa {{size}} werden gesichert.",
-      "totalAtLeast": "Mindestens {{size}} werden gesichert."
+      "totalAtLeast": "Mindestens {{size}} werden gesichert.",
+      "noAccess": "{{user}} kann das nicht öffnen"
     },
     "missingRoot": "{{path}} gibt es auf diesem Rechner nicht. Wähle den Ordner mit den Immich-Dateien: {{hint}}.",
     "denied": {

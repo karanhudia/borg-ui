@@ -83,6 +83,11 @@ the database dumps Immich writes every night at 02:00. The backup runs at
 03:00. It skips `thumbs` and `encoded-video`; after a restore, run the
 **Generate Thumbnails** and **Transcode Videos** jobs in Immich to rebuild them.
 
+Older installs that still mount their media at `/usr/src/app/upload` are
+found too. Folders the container mounts as external libraries are listed as
+**External library** and backed up by default; Immich only indexes those, so
+they are not in its own folder.
+
 Keep **Administration > Settings > Backup** turned on in Immich. The check
 stops the backup when no database dump is newer than 26 hours, so an archive
 never holds your photos without the database that organizes them. See

@@ -13,8 +13,16 @@ export const immichTemplate: AppTemplate = {
   logo_svg: immichLogo,
   docs_url: 'https://docs.immich.app/administration/backup-and-restore',
   verified: { app_version: 'v3.2.4', date: '2026-09-30', restore_tested: false },
-  detect: { image_prefix: 'ghcr.io/immich-app/immich-server', mount_destination: '/data' },
+  detect: {
+    image_prefix: 'ghcr.io/immich-app/immich-server',
+    mount_destinations: ['/data', '/usr/src/app/upload'],
+  },
   root_hint: 'UPLOAD_LOCATION in your Immich .env file',
+  extra_mounts: {
+    label: 'External library',
+    description:
+      'Photos and videos Immich reads from a folder you added as an external library. Immich only indexes them; they are not in its own folder.',
+  },
   folders: [
     {
       path: 'upload',
@@ -82,45 +90,41 @@ export const immichFound: AppDetection = {
   path: '/local/srv/immich',
   host_path: '/srv/immich',
   readable: true,
+  extra_mounts: [
+    {
+      path: '/local/srv/photos',
+      host_path: '/srv/photos',
+      destination: '/mnt/photos',
+      readable: true,
+    },
+  ],
 }
 
 const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString()
 
+const folder = (
+  path: string,
+  size_bytes: number | null,
+  extra: Partial<AppFolderStats> = {}
+): AppFolderStats => ({
+  path,
+  exists: true,
+  readable: true,
+  size_bytes,
+  latest_name: null,
+  latest_modified_at: null,
+  ...extra,
+})
+
 export const immichStats: AppFolderStats[] = [
-  {
-    path: 'upload',
-    exists: true,
-    size_bytes: 412_000_000_000,
-    latest_name: null,
-    latest_modified_at: null,
-  },
-  { path: 'library', exists: false, size_bytes: null, latest_name: null, latest_modified_at: null },
-  {
-    path: 'profile',
-    exists: true,
-    size_bytes: 3_400_000,
-    latest_name: null,
-    latest_modified_at: null,
-  },
-  {
-    path: 'backups',
-    exists: true,
-    size_bytes: 1_250_000_000,
+  folder('upload', 412_000_000_000),
+  folder('library', null, { exists: false, readable: false }),
+  folder('profile', 3_400_000),
+  folder('backups', 1_250_000_000, {
     latest_name: 'immich-db-backup-20260930T020000.sql.gz',
     latest_modified_at: hoursAgo(9),
-  },
-  {
-    path: 'thumbs',
-    exists: true,
-    size_bytes: 38_000_000_000,
-    latest_name: null,
-    latest_modified_at: null,
-  },
-  {
-    path: 'encoded-video',
-    exists: true,
-    size_bytes: 21_000_000_000,
-    latest_name: null,
-    latest_modified_at: null,
-  },
+  }),
+  folder('thumbs', 38_000_000_000),
+  folder('encoded-video', 21_000_000_000),
+  folder('/local/srv/photos', 96_000_000_000),
 ]

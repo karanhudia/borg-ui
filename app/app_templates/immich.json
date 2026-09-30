@@ -12,9 +12,16 @@
   },
   "detect": {
     "image_prefix": "ghcr.io/immich-app/immich-server",
-    "mount_destination": "/data"
+    "mount_destinations": [
+      "/data",
+      "/usr/src/app/upload"
+    ]
   },
   "root_hint": "UPLOAD_LOCATION in your Immich .env file",
+  "extra_mounts": {
+    "label": "External library",
+    "description": "Photos and videos Immich reads from a folder you added as an external library. Immich only indexes them; they are not in its own folder."
+  },
   "folders": [
     {
       "path": "upload",

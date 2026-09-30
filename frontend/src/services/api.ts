@@ -593,8 +593,10 @@ export interface AppTemplate {
   logo_svg: string | null
   docs_url: string
   verified: { app_version: string; date: string; restore_tested: boolean }
-  detect: { image_prefix: string; mount_destination: string }
+  detect: { image_prefix: string; mount_destinations: string[] }
   root_hint: string
+  /** Other folders the container mounts (external libraries), backed up by default. */
+  extra_mounts: { label: string; description: string } | null
   folders: AppTemplateFolder[]
   pre_backup_script: SourceDiscoveryScriptDraft | null
   schedule_cron: string
@@ -612,8 +614,11 @@ export interface AppTemplateFolder {
 }
 
 export interface AppFolderStats {
+  /** Relative to the app's folder, or absolute for an external folder. */
   path: string
   exists: boolean
+  /** False when it exists but the user Borg runs as can't open it. */
+  readable: boolean
   size_bytes: number | null
   latest_name: string | null
   latest_modified_at: string | null
@@ -627,6 +632,15 @@ export interface AppDetection {
   path: string
   host_path: string
   /** False when Borg UI runs in Docker and this folder is not mounted into it. */
+  readable: boolean
+  extra_mounts: AppExtraMount[]
+}
+
+export interface AppExtraMount {
+  path: string
+  host_path: string
+  /** Where the container sees it. */
+  destination: string
   readable: boolean
 }
 
@@ -1636,6 +1650,7 @@ export const sourceDiscoveryAPI = {
     source_type: 'local' | 'remote'
     source_ssh_connection_id: number | null
     path: string
+    extra_paths: string[]
   }) =>
     api.post<{
       root_status: 'ok' | 'missing' | 'denied' | 'unknown'

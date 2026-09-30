@@ -6811,7 +6811,8 @@
       "staleDump": "Ultimo dump {{when}}. Più vecchio di {{hours}} ore: i backup si fermano finché Immich non ne scrive uno nuovo.",
       "noDump": "Ancora nessun dump del database. Attiva Administration > Settings > Backup in Immich, altrimenti il backup si ferma.",
       "total": "Verranno salvati circa {{size}}.",
-      "totalAtLeast": "Verranno salvati almeno {{size}}."
+      "totalAtLeast": "Verranno salvati almeno {{size}}.",
+      "noAccess": "{{user}} non può aprirlo"
     },
     "missingRoot": "{{path}} non esiste su quella macchina. Scegli la cartella con i file di Immich: {{hint}}.",
     "denied": {

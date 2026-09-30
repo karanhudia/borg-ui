@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import {
   Alert,
   AlertTitle,
@@ -27,8 +27,11 @@ interface AppTemplateFolderPanelProps {
   template: AppTemplate
   /** Null when the machine can't be scanned (agents); the panel then only explains where to look. */
   target: AppScanTarget | null
+  /** The app's folder. */
   root: string
-  onUseRoot: (path: string) => void
+  /** External folders (libraries) the user keeps in the backup. */
+  extraPaths: string[]
+  onPathsChange: (root: string, extraPaths: string[]) => void
   excludes: string[]
   onExcludesChange: (excludes: string[]) => void
 }
@@ -42,24 +45,35 @@ export default function AppTemplateFolderPanel({
   template,
   target,
   root,
-  onUseRoot,
+  extraPaths,
+  onPathsChange,
   excludes,
   onExcludesChange,
 }: AppTemplateFolderPanelProps) {
   const { t } = useTranslation()
   const { detection, warning, scanning, rescan } = useAppDetection(template, target)
   const unreadable = Boolean(detection && !detection.readable)
+  // Only folders Borg UI can reach; one not mounted into its container is no use.
+  const detectedExtras = useMemo(
+    () => (detection?.extra_mounts ?? []).filter((extra) => extra.readable),
+    [detection]
+  )
+  const detectedExtraPaths = useMemo(
+    () => detectedExtras.map((extra) => extra.path),
+    [detectedExtras]
+  )
   const { stats, rootStatus, user, measuring } = useAppInspection(
     template,
     unreadable ? null : target,
-    root
+    root,
+    detectedExtraPaths
   )
   const found = detection?.readable ? detection.path : null
 
-  // Fill the folder in once when the app is found and nothing is picked yet.
+  // Fill the folders in once when the app is found and nothing is picked yet.
   useEffect(() => {
-    if (found && !root.trim()) onUseRoot(found)
-  }, [found, root, onUseRoot])
+    if (found && !root.trim()) onPathsChange(found, detectedExtraPaths)
+  }, [found, root, detectedExtraPaths, onPathsChange])
 
   const rescanButton = (
     <Button
@@ -119,7 +133,7 @@ export default function AppTemplateFolderPanel({
               <Button
                 size="small"
                 color="inherit"
-                onClick={() => onUseRoot(detection.path)}
+                onClick={() => onPathsChange(detection.path, detectedExtraPaths)}
                 sx={actionSx}
               >
                 {t('appTemplates.useFolder')}
@@ -190,6 +204,10 @@ export default function AppTemplateFolderPanel({
       )}
       <AppFolderList
         template={template}
+        extras={detectedExtras}
+        includedExtras={extraPaths}
+        onIncludedExtrasChange={(paths) => onPathsChange(root, paths)}
+        user={user}
         stats={stats}
         measuring={measuring}
         skipped={excludes}

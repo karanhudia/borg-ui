@@ -6811,7 +6811,8 @@
       "staleDump": "Latest dump {{when}}. Older than {{hours}} hours: backups will stop until Immich writes a new one.",
       "noDump": "No database dump yet. Turn on Administration > Settings > Backup in Immich, or the backup will stop.",
       "total": "About {{size}} will be backed up.",
-      "totalAtLeast": "At least {{size}} will be backed up."
+      "totalAtLeast": "At least {{size}} will be backed up.",
+      "noAccess": "{{user}} can't open this"
     },
     "missingRoot": "{{path}} does not exist on that machine. Pick the folder that holds Immich's files: the {{hint}}.",
     "denied": {
