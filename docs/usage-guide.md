@@ -159,7 +159,8 @@ the one its backups use. The repository value applies to backups started from
 the repository itself (Backup Now on a repository, legacy repository
 schedules) and is the default copied into a plan created from that
 repository. Only one value ever reaches Borg, so if the two differ, the plan
-wins for plan runs.
+wins for plan runs. (The API can also set a plan-to-repository link to use
+the repository value or a custom one; the UI does not expose that yet.)
 
 ## Choose Backup Sources
 
