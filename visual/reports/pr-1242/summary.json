@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-09-30T13:30:29.370Z",
+  "generatedAt": "2026-09-30T15:43:47.934Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1242 visual report",
-    "commitSha": "30a3c6dd4558",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36721905474"
+    "commitSha": "47dfb3ea502e",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36738797437"
   },
   "totals": {
     "baseline": 1100,
@@ -16,24 +16,6 @@
     "unchanged": 1085
   },
   "changed": [
-    {
-      "fileName": "components-repositorycard--size-unknown--mobile.png",
-      "baselinePath": "images/baseline/components-repositorycard--size-unknown--mobile.png",
-      "actualPath": "images/actual/components-repositorycard--size-unknown--mobile.png",
-      "diffPath": "images/diff/components-repositorycard--size-unknown--mobile.png",
-      "diffPixels": 228104,
-      "totalPixels": 329160,
-      "diffRatio": 0.692988212419492,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
     {
       "fileName": "pages-managedagents--add-agent-install-command-step--mobile.png",
       "baselinePath": "images/baseline/pages-managedagents--add-agent-install-command-step--mobile.png",
@@ -276,6 +258,24 @@
       "diffPixels": 242016,
       "totalPixels": 1024000,
       "diffRatio": 0.23634375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "quick-start-steps--destination-ssh-no-default-path.png",
+      "baselinePath": "images/baseline/quick-start-steps--destination-ssh-no-default-path.png",
+      "actualPath": "images/actual/quick-start-steps--destination-ssh-no-default-path.png",
+      "diffPath": "images/diff/quick-start-steps--destination-ssh-no-default-path.png",
+      "diffPixels": 2782,
+      "totalPixels": 1024000,
+      "diffRatio": 0.002716796875,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -2260,6 +2260,9 @@
       "fileName": "components-repositorycard--size-still-measuring.png"
     },
     {
+      "fileName": "components-repositorycard--size-unknown--mobile.png"
+    },
+    {
       "fileName": "components-repositorycard--size-unknown.png"
     },
     {
@@ -3362,9 +3365,6 @@
     },
     {
       "fileName": "quick-start-steps--destination-ssh-no-default-path--mobile.png"
-    },
-    {
-      "fileName": "quick-start-steps--destination-ssh-no-default-path.png"
     },
     {
       "fileName": "quick-start-steps--destination-ssh.png"
