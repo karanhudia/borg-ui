@@ -73,8 +73,9 @@ the line to add to the `volumes` of Borg UI in `docker-compose.yml`. Add it,
 restart Borg UI, and press **Scan again**. If the container is not found, for
 example on an agent, type the folder yourself.
 
-Checks run on the Borg UI server, so they are only added when the app runs on
-this server.
+In Quick Start the check runs on the Borg UI server, so it is only added when
+the app runs on this server. The Backup Plans **Apps** tab runs it on the
+app's own machine.
 
 ### Immich
 
@@ -93,8 +94,10 @@ stops the backup when no database dump is newer than 26 hours, so an archive
 never holds your photos without the database that organizes them. See
 [Immich's backup guide](https://docs.immich.app/administration/backup-and-restore).
 
-In the Backup Plans wizard, **Start from an app** on the **Source** step adds
-an app to a plan the same way.
+In the Backup Plans wizard, the **Apps** tab of the source chooser adds an app
+to a plan the same way, on this server or an SSH machine. A plan can hold
+several apps. Each app's check runs on the machine the app is on, and removing
+the app from the plan removes its excludes and check too.
 
 ## What it sets up
 

@@ -46,7 +46,8 @@
       "label": "Database dumps",
       "description": "Immich's nightly copy of its database: albums, people, faces, descriptions and settings.",
       "role": "database",
-      "stale_after_hours": 26
+      "stale_after_hours": 26,
+      "dump_pattern": "immich-db-backup-*"
     },
     {
       "path": "thumbs",

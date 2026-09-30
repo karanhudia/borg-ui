@@ -349,3 +349,85 @@ class TestAppInspectExtras:
         if os.geteuid() != 0:
             assert stats[str(locked / "inner")]["exists"] is True
             assert stats[str(locked / "inner")]["readable"] is False
+
+
+@pytest.mark.unit
+class TestAppAccessAndMatching:
+    def test_viewers_cannot_detect_or_inspect(self, test_client, auth_headers):
+        detect = test_client.post(
+            "/api/source-discovery/apps/detect",
+            json={"source_type": "local"},
+            headers=auth_headers,
+        )
+        inspect = test_client.post(
+            "/api/source-discovery/apps/inspect",
+            json={"template_id": "immich", "source_type": "local", "path": "/srv"},
+            headers=auth_headers,
+        )
+        assert detect.status_code == 403
+        assert inspect.status_code == 403
+
+    def test_operators_stay_inside_local_mount_points(
+        self, test_client, operator_headers, tmp_path, monkeypatch
+    ):
+        mount = tmp_path / "local"
+        (mount / "immich").mkdir(parents=True)
+        outside = tmp_path / "elsewhere"
+        outside.mkdir()
+        monkeypatch.setattr(
+            source_discovery.settings, "local_mount_points", str(mount), raising=False
+        )
+
+        def inspect(path, extra_paths=()):
+            return test_client.post(
+                "/api/source-discovery/apps/inspect",
+                json={
+                    "template_id": "immich",
+                    "source_type": "local",
+                    "path": path,
+                    "extra_paths": list(extra_paths),
+                },
+                headers=operator_headers,
+            )
+
+        assert inspect(str(mount / "immich")).status_code == 200
+        assert inspect(str(outside)).status_code == 403
+        assert inspect(str(mount / "immich"), [str(outside)]).status_code == 403
+
+    def test_a_newer_unrelated_file_does_not_pass_for_a_fresh_dump(
+        self, test_client, admin_headers, tmp_path
+    ):
+        backups = tmp_path / "immich" / "backups"
+        backups.mkdir(parents=True)
+        dump = backups / "immich-db-backup-1 old.sql.gz"
+        dump.write_bytes(b"db")
+        os.utime(dump, (1_000_000_000, 1_000_000_000))
+        (backups / "notes.txt").write_text("newer, but not a dump")
+        (backups / "immich-db-backup-dir").mkdir()  # matches the name, not a file
+
+        body = test_client.post(
+            "/api/source-discovery/apps/inspect",
+            json={
+                "template_id": "immich",
+                "source_type": "local",
+                "path": str(tmp_path / "immich"),
+            },
+            headers=admin_headers,
+        ).json()
+
+        backups_stats = next(f for f in body["folders"] if f["path"] == "backups")
+        assert backups_stats["latest_name"] == "immich-db-backup-1 old.sql.gz"
+        assert backups_stats["latest_modified_at"].startswith("2001-09-09")
+
+    def test_image_matches_by_repository_not_prefix(self):
+        templates = load_app_templates()
+        for image in [
+            "ghcr.io/immich-app/immich-server",
+            "ghcr.io/immich-app/immich-server:v3.2.4",
+            "ghcr.io/immich-app/immich-server:release@sha256:abc",
+        ]:
+            assert match_app_template(image, templates).id == "immich"
+        assert (
+            match_app_template("ghcr.io/immich-app/immich-server-foo:1", templates)
+            is None
+        )

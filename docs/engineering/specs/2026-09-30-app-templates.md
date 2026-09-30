@@ -23,16 +23,19 @@ work out the data folder, the database, and what is safe to skip.
   (fills the folder once), found but unreadable (compose line
   `- <host>:/local<host>:ro`), not found (manual hint). A `create_script`
   action creates the pre-backup check before the plan.
-- **Backup Plans wizard.** "Start from an app" on the Source step opens
-  `AppTemplateDialog`; `applyAppTemplate` merges the folder into the matching
-  source location, unions excludes, sets the schedule only if none is on, and
-  appends the check as a pre-backup script hook.
+- **Backup Plans wizard.** An **Apps** tab in the source chooser
+  (`AppSourcePanel`). Each app is a source location with an `app` selection:
+  template id and version, its folder (`root`), the plan excludes it added,
+  and its check as a source-level pre-backup script (run on the SSH machine for
+  remote sources, like database scripts). On Apply the dialog swaps the old
+  apps' excludes for the new ones, so removing an app removes its excludes.
+- **Access.** Detect and inspect need the operator or admin role; operators
+  inspecting local folders stay inside `LOCAL_MOUNT_POINTS`.
 
 ## Limits
 
-- Plan-level scripts run on the Borg UI server, so the check is only added
-  for apps on this server. SSH and agent sources would need per-source hooks
-  like database sources have.
+- Quick Start still attaches the check as a plan-level script, so there it
+  is only added for apps on this server.
 - One folder per app (`detect.mount_destination`). Apps with data in several
   mounts need a `sources` list.
 - Agents cannot be scanned; the user types the folder.

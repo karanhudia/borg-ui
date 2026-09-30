@@ -15,6 +15,8 @@ export type QuickStartAction = 'create_repository' | 'create_script' | 'create_p
 export interface QuickStartResults {
   repositoryId?: number
   scriptId?: number
+  /** The script payload scriptId was created from, to tell when answers moved on. */
+  scriptKey?: string
   planId?: number
 }
 
@@ -22,6 +24,27 @@ const RESULT_KEY: Record<QuickStartAction, keyof QuickStartResults> = {
   create_repository: 'repositoryId',
   create_script: 'scriptId',
   create_plan: 'planId',
+}
+
+export function appScriptKey(answers: QuickStartAnswers): string | undefined {
+  const payload = appScriptPayload(answers)
+  return payload ? JSON.stringify(payload) : undefined
+}
+
+/**
+ * Before a retry: a check created for earlier answers (another folder, or no
+ * longer wanted) is dropped so the plan gets the right one or none. Returns
+ * the dropped script id so the caller can delete it.
+ */
+export function reconcileScriptResult(
+  results: QuickStartResults,
+  answers: QuickStartAnswers
+): { results: QuickStartResults; staleScriptId?: number } {
+  if (results.scriptId === undefined || results.scriptKey === appScriptKey(answers)) {
+    return { results }
+  }
+  const { scriptId, ...rest } = results
+  return { results: { ...rest, scriptKey: undefined }, staleScriptId: scriptId }
 }
 
 export function buildQuickStartActions(answers: QuickStartAnswers): QuickStartAction[] {

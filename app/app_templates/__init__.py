@@ -44,6 +44,9 @@ class AppTemplateFolder(BaseModel):
     # how fresh the app's own dump is. rebuildable: skipped by default.
     role: Literal["data", "database", "rebuildable"]
     stale_after_hours: int | None = None
+    # For a database folder: which files are the app's dumps (shell glob), so
+    # an unrelated newer file can't pass for a fresh dump.
+    dump_pattern: str | None = Field(default=None, pattern=r"^[A-Za-z0-9._*?\[\]-]+$")
 
 
 class AppTemplateScript(BaseModel):
@@ -87,12 +90,22 @@ def load_app_templates() -> tuple[AppTemplate, ...]:
     return tuple(_load(path) for path in sorted(TEMPLATES_DIR.glob("*.json")))
 
 
+def image_repository(image: str) -> str:
+    """`ghcr.io/org/app:tag@sha256:…` → `ghcr.io/org/app`. A colon only starts a
+    tag after the last slash; before it, it is a registry port."""
+    name = image.split("@", 1)[0]
+    slash = name.rfind("/")
+    colon = name.rfind(":")
+    return name[:colon] if colon > slash else name
+
+
 def match_app_template(
     image: str | None, templates: tuple[AppTemplate, ...]
 ) -> AppTemplate | None:
     if not image:
         return None
+    repository = image_repository(image)
     for template in templates:
-        if image.startswith(template.detect.image_prefix):
+        if repository == template.detect.image_prefix:
             return template
     return None

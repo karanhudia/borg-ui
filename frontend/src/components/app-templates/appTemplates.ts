@@ -129,7 +129,8 @@ export function readAccessCommands(user: string, path: string): string {
   const parents = parts.slice(0, -1).map((_, index) => `/${parts.slice(0, index + 1).join('/')}`)
   const quote = (value: string) => shellQuote(value)
   return [
-    `sudo setfacl -m u:${user}:x ${parents.map(quote).join(' ')}`,
+    // A folder right under / has no parents to open up.
+    ...(parents.length ? [`sudo setfacl -m u:${user}:x ${parents.map(quote).join(' ')}`] : []),
     `sudo setfacl -R -m u:${user}:rX,d:u:${user}:rX ${quote(trimRoot(path))}`,
   ].join('\n')
 }

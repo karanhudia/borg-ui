@@ -74,4 +74,10 @@ describe('app templates', () => {
     expect(checksBackedUpDumps(immich, ['thumbs'])).toBe(true)
     expect(checksBackedUpDumps(immich, ['backups'])).toBe(false)
   })
+
+  it('leaves out the parent grant for a folder right under /', () => {
+    expect(readAccessCommands('backup', '/data')).toBe(
+      "sudo setfacl -R -m u:backup:rX,d:u:backup:rX '/data'"
+    )
+  })
 })

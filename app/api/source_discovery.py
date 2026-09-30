@@ -19,10 +19,11 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from app.app_templates import AppTemplate, load_app_templates, match_app_template
+from app.utils.local_paths import is_within_local_mount
 from app.utils.ssh_host_validation import ssh_destination
 from app.config import settings
 from app.core.features import require_feature_access
-from app.core.security import get_current_user
+from app.core.security import get_current_user, require_role_dependency
 from app.database.database import get_db
 from app.database.models import SSHConnection, SSHKey, User
 from app.services.filesystem_snapshot_service import DEFAULT_SNAPSHOT_STAGING_ROOT
@@ -2242,6 +2243,13 @@ def _app_detections(
     return detections
 
 
+# Detecting and inspecting apps runs commands on a machine and reads its
+# folders, so it takes the same roles as the file browser.
+_APP_SOURCE_ROLES = require_role_dependency(
+    "admin", "operator", detail_key="backend.errors.filesystem.operatorAccessRequired"
+)
+
+
 @router.get("/apps", response_model=AppTemplateListResponse)
 async def list_app_templates(
     current_user: User = Depends(get_current_user),
@@ -2253,7 +2261,7 @@ async def list_app_templates(
 @router.post("/apps/detect", response_model=AppDetectResponse)
 async def detect_apps(
     request: ContainerScanRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_APP_SOURCE_ROLES),
     db: Session = Depends(get_db),
 ) -> AppDetectResponse:
     """Find known apps on a machine. Free on every plan: it only reports
@@ -2315,11 +2323,20 @@ class AppInspectResponse(BaseModel):
 
 
 def _build_app_inspect_script(
-    root: str, folders: list[str], extra_paths: list[str] | None = None
+    root: str,
+    folders: list[str],
+    extra_paths: list[str] | None = None,
+    dump_patterns: dict[str, str] | None = None,
 ) -> str:
     # First a "#ROOT <status> <user>" line; then, if the folder can be opened,
     # one line per folder: path, ok|missing|denied, bytes, newest entry, its mtime.
     extras = " ".join(shlex.quote(path) for path in extra_paths or [])
+    patterns = dump_patterns or {}
+    probes = [
+        f'probe {shlex.quote(folder)} "$ROOT"/{shlex.quote(folder)} '
+        f"{shlex.quote(patterns.get(folder, ''))}"
+        for folder in folders
+    ]
     return "\n".join(
         [
             f"ROOT={shlex.quote(root)}",
@@ -2334,13 +2351,21 @@ def _build_app_inspect_script(
             '  elif [ ! -r "$1" ] || [ ! -x "$1" ]; then echo denied',
             "  else echo ok; fi",
             "}",
+            # Newest entry, or with a pattern ($1) the newest regular file matching
+            # it; read line by line so names with spaces survive.
+            "newest() {",
+            '  ls -1t "$2" 2>/dev/null | while IFS= read -r f; do',
+            '    if [ -z "$1" ]; then printf "%s" "$f"; break; fi',
+            '    case "$f" in $1) [ -f "$2/$f" ] && { printf "%s" "$f"; break; } ;; esac',
+            "  done",
+            "}",
             "probe() {",
             '  st=$(access "$2")',
             '  if [ "$st" != ok ]; then printf "%s\\t%s\\t-\\t\\t-\\n" "$1" "$st"; return; fi',
             # POSIX du -k (KiB) works on GNU, BusyBox and macOS; -B1 is GNU only.
             '  kib=$($T du -sk "$2" 2>/dev/null | cut -f1)',
             '  size=-; case "$kib" in ""|*[!0-9]*) ;; *) size=$((kib * 1024));; esac',
-            '  latest=$(ls -1t "$2" 2>/dev/null | head -n 1)',
+            '  latest=$(newest "$3" "$2")',
             "  mtime=-",
             '  if [ -n "$latest" ]; then mtime=$(stat -c %Y "$2/$latest" 2>/dev/null || stat -f %m "$2/$latest" 2>/dev/null || echo -); fi',
             '  printf "%s\\tok\\t%s\\t%s\\t%s\\n" "$1" "$size" "$latest" "$mtime"',
@@ -2348,11 +2373,9 @@ def _build_app_inspect_script(
             'st=$(access "$ROOT")',
             'printf "#ROOT\\t%s\\t%s\\n" "$st" "$USER_NAME"',
             '[ "$st" = ok ] || exit 0',
-            f"for d in {' '.join(shlex.quote(folder) for folder in folders)}; do",
-            '  probe "$d" "$ROOT/$d"',
-            "done",
+            *probes,
             f"for p in {extras}; do",
-            '  probe "$p" "$p"',
+            '  probe "$p" "$p" ""',
             "done",
         ]
     )
@@ -2416,12 +2439,12 @@ def _run_app_inspect(
 @router.post("/apps/inspect", response_model=AppInspectResponse)
 async def inspect_app(
     request: AppInspectRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_APP_SOURCE_ROLES),
     db: Session = Depends(get_db),
 ) -> AppInspectResponse:
     """Size and freshness of each folder a template describes, so the UI can
-    say what is being backed up. Free, like detection."""
-    del current_user
+    say what is being backed up. Free, like detection; operators and admins
+    only, as reading another machine's folders is."""
     template = next(
         (t for t in load_app_templates() if t.id == request.template_id), None
     )
@@ -2459,8 +2482,23 @@ async def inspect_app(
     extra_paths = [posixpath.normpath(path.strip()) for path in request.extra_paths]
     if any(not path.startswith("/") for path in extra_paths):
         raise HTTPException(status_code=400, detail="extra_paths must be absolute")
+    if source_type == "local" and current_user.role != "admin":
+        # Operators stay inside LOCAL_MOUNT_POINTS, as in the file browser.
+        for path in [root, *extra_paths]:
+            if not is_within_local_mount(os.path.realpath(path)):
+                raise HTTPException(
+                    status_code=403,
+                    detail={"key": "backend.errors.filesystem.permissionDenied"},
+                )
     script = _build_app_inspect_script(
-        root, [folder.path for folder in template.folders], extra_paths
+        root,
+        [folder.path for folder in template.folders],
+        extra_paths,
+        {
+            folder.path: folder.dump_pattern
+            for folder in template.folders
+            if folder.dump_pattern
+        },
     )
     try:
         result = await asyncio.to_thread(
