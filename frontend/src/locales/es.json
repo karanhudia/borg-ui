@@ -6770,7 +6770,11 @@
     },
     "app": {
       "title": "¿Qué app quieres respaldar?",
-      "hint": "Al elegir una app se rellena su carpeta, se omite lo que puede regenerar y se añaden las comprobaciones que necesita."
+      "hint": "Al elegir una app se rellena su carpeta, se omite lo que puede regenerar y se añaden las comprobaciones que necesita.",
+      "pickApp": "Una app",
+      "pickAppDesc": "Una app autoalojada como Immich. Borg UI encuentra su carpeta y añade las comprobaciones necesarias.",
+      "other": "Otra cosa",
+      "otherDesc": "Elige tú las carpetas: documentos, datos de apps, cualquier cosa en disco."
     }
   },
   "appTemplates": {
@@ -6796,9 +6800,7 @@
       "label": "App",
       "search": "Buscar apps",
       "noResults": "Ninguna app coincide. Elige «Otra cosa» y selecciona sus carpetas.",
-      "none": "Otra cosa",
-      "noneDesc": "Elige tú las carpetas",
-      "apps": "Apps"
+      "placeholder": "Elige una app"
     }
   }
 }

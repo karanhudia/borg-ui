@@ -6770,7 +6770,11 @@
     },
     "app": {
       "title": "Quale app vuoi salvare?",
-      "hint": "Scegliendo un'app viene inserita la sua cartella, si salta ciò che può rigenerare e si aggiungono i controlli necessari."
+      "hint": "Scegliendo un'app viene inserita la sua cartella, si salta ciò che può rigenerare e si aggiungono i controlli necessari.",
+      "pickApp": "Un'app",
+      "pickAppDesc": "Un'app self-hosted come Immich. Borg UI trova la sua cartella e aggiunge i controlli necessari.",
+      "other": "Qualcos'altro",
+      "otherDesc": "Scegli tu le cartelle: documenti, dati delle app, qualsiasi cosa sul disco."
     }
   },
   "appTemplates": {
@@ -6796,9 +6800,7 @@
       "label": "App",
       "search": "Cerca app",
       "noResults": "Nessuna app corrisponde. Scegli «Qualcos'altro» e seleziona le cartelle.",
-      "none": "Qualcos'altro",
-      "noneDesc": "Scegli tu le cartelle",
-      "apps": "App"
+      "placeholder": "Scegli un'app"
     }
   }
 }

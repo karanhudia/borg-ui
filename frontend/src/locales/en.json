@@ -6770,7 +6770,11 @@
     },
     "app": {
       "title": "Which app are you backing up?",
-      "hint": "Picking an app fills in its folder, skips what it can rebuild and adds the safety checks it needs."
+      "hint": "Picking an app fills in its folder, skips what it can rebuild and adds the safety checks it needs.",
+      "pickApp": "An app",
+      "pickAppDesc": "A self-hosted app such as Immich. Borg UI finds its folder and adds the checks it needs.",
+      "other": "Something else",
+      "otherDesc": "Pick the folders yourself: documents, app data, anything on disk."
     }
   },
   "appTemplates": {
@@ -6796,9 +6800,7 @@
       "label": "App",
       "search": "Search apps",
       "noResults": "No app matches. Pick \"Something else\" and choose its folders.",
-      "none": "Something else",
-      "noneDesc": "Pick the folders yourself",
-      "apps": "Apps"
+      "placeholder": "Choose an app"
     }
   }
 }

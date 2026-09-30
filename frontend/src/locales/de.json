@@ -6770,7 +6770,11 @@
     },
     "app": {
       "title": "Welche App möchtest du sichern?",
-      "hint": "Mit einer App wird ihr Ordner eingetragen, Wiederherstellbares übersprungen und die nötigen Sicherheitsprüfungen ergänzt."
+      "hint": "Mit einer App wird ihr Ordner eingetragen, Wiederherstellbares übersprungen und die nötigen Sicherheitsprüfungen ergänzt.",
+      "pickApp": "Eine App",
+      "pickAppDesc": "Eine selbst gehostete App wie Immich. Borg UI findet ihren Ordner und ergänzt die nötigen Prüfungen.",
+      "other": "Etwas anderes",
+      "otherDesc": "Wähle die Ordner selbst: Dokumente, App-Daten, alles auf der Festplatte."
     }
   },
   "appTemplates": {
@@ -6796,9 +6800,7 @@
       "label": "App",
       "search": "Apps durchsuchen",
       "noResults": "Keine passende App. Wähle „Etwas anderes“ und such die Ordner selbst aus.",
-      "none": "Etwas anderes",
-      "noneDesc": "Ordner selbst auswählen",
-      "apps": "Apps"
+      "placeholder": "App auswählen"
     }
   }
 }

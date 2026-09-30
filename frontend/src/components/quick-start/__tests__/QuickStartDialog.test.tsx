@@ -76,7 +76,7 @@ describe('QuickStartDialog', () => {
 
     const next = () => user.click(screen.getByRole('button', { name: 'Next' }))
 
-    expect(await screen.findByRole('combobox', { name: 'App' })).toHaveTextContent('Something else')
+    expect(screen.getByRole('radio', { name: /Something else/ })).toBeChecked()
     await next()
 
     expect(screen.getByRole('radio', { name: /Files on this server/ })).toBeChecked()
@@ -124,6 +124,9 @@ describe('QuickStartDialog', () => {
     renderWithProviders(<QuickStartDialog open onClose={() => {}} />)
     const next = () => user.click(screen.getByRole('button', { name: 'Next' }))
 
+    await user.click(screen.getByRole('radio', { name: /An app/ }))
+    // No app picked yet, so there is nothing to go on with.
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
     await user.click(await screen.findByRole('combobox', { name: 'App' }))
     await user.click(screen.getByRole('option', { name: /Immich/ }))
     await next()

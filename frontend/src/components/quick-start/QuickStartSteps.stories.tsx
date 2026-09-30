@@ -56,6 +56,7 @@ const NO_DETECTIONS: AppDetection[] = []
 
 const immichAnswers: QuickStartAnswers = {
   ...createInitialQuickStartAnswers(),
+  appChoice: 'app',
   app: immichTemplate,
   appExcludes: ['thumbs', 'encoded-video'],
   schedulePreset: 'custom',
@@ -136,6 +137,10 @@ type Story = StoryObj<typeof meta>
 
 export const App: Story = {
   args: { step: QuickStartAppStep, initial: createInitialQuickStartAnswers() },
+}
+
+export const AppChosen: Story = {
+  args: { step: QuickStartAppStep, initial: immichAnswers },
 }
 
 export const FoldersImmichFound: Story = {

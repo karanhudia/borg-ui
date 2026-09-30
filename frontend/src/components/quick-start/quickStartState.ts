@@ -22,7 +22,9 @@ export interface QuickStartSettings {
 }
 
 export interface QuickStartAnswers {
-  /** The app being backed up, or null for plain folders. */
+  /** Backing up a known app, or folders the user picks. */
+  appChoice: 'folders' | 'app'
+  /** The app being backed up; null until one is picked. */
   app: AppTemplate | null
   /** Folders under the app's root to skip, relative to it. */
   appExcludes: string[]
@@ -56,6 +58,7 @@ export const SCHEDULE_PRESET_CRON: Record<Exclude<QuickStartSchedulePreset, 'cus
 
 export function createInitialQuickStartAnswers(): QuickStartAnswers {
   return {
+    appChoice: 'folders',
     app: null,
     appExcludes: [],
     sourceKind: 'server',
@@ -184,6 +187,7 @@ export function destinationInsideSource(answers: QuickStartAnswers): boolean {
 export function isStepValid(step: QuickStartStepKey, answers: QuickStartAnswers): boolean {
   switch (step) {
     case 'app':
+      return answers.appChoice === 'folders' || answers.app !== null
     case 'what':
     case 'review':
       return true
