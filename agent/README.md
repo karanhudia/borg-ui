@@ -241,6 +241,10 @@ The first implementation supports:
 - from 0.1.12 custom `borg create` flags and extra `borg check` flags in a
   job are checked against an allowlist of safe options before Borg runs;
   a job carrying any other option or a positional argument fails
+- from 0.1.13 TLS is verified against the machine's trust store (via
+  `truststore`) as well as certifi's bundle, so a self-signed server
+  certificate installed with `update-ca-certificates` (or the platform
+  equivalent) is accepted (#1272)
 - cancellation through heartbeat; from 0.1.7 (`jobs.cancel`) a running
   backup, check, prune, compact, restore or archive delete stops as well,
   even while Borg prints nothing
