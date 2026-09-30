@@ -44,6 +44,8 @@ class AppTemplate(BaseModel):
     version: int
     name: str
     description: str
+    # The app's official logo as SVG markup, shown in the app pickers.
+    logo_svg: str | None = None
     docs_url: str
     verified: AppTemplateVerified
     detect: AppTemplateDetect
@@ -56,6 +58,9 @@ class AppTemplate(BaseModel):
 
 def _load(path: Path) -> AppTemplate:
     raw = json.loads(path.read_text())
+    logo = raw.pop("logo", None)
+    if logo:
+        raw["logo_svg"] = (TEMPLATES_DIR / logo).read_text()
     script = raw.get("pre_backup_script")
     if script:
         script["content"] = (TEMPLATES_DIR / script.pop("file")).read_text()

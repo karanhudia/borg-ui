@@ -11,6 +11,7 @@ import {
 import type { TFunction } from 'i18next'
 
 import AppTemplateFolderPanel from '../../../components/app-templates/AppTemplateFolderPanel'
+import AppTemplateSelect from '../../../components/app-templates/AppTemplateSelect'
 import {
   defaultAppExcludes,
   renderAppScript,
@@ -121,21 +122,11 @@ export function AppTemplateDialog({
       <DialogTitle>{t('appTemplates.dialog.title')}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
-          <TextField
-            select
-            label={t('appTemplates.dialog.app')}
-            value={template?.id ?? ''}
-            onChange={(event) => {
-              const next = templates.find((item) => item.id === event.target.value)
-              if (next) pickTemplate(next)
-            }}
-          >
-            {templates.map((item) => (
-              <MenuItem key={item.id} value={item.id}>
-                {item.name}
-              </MenuItem>
-            ))}
-          </TextField>
+          <AppTemplateSelect
+            templates={templates}
+            value={template}
+            onChange={(next) => next && pickTemplate(next)}
+          />
           <TextField
             select
             label={t('appTemplates.dialog.machine')}

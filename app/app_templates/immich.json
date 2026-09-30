@@ -3,6 +3,7 @@
   "version": 1,
   "name": "Immich",
   "description": "Photos, videos and Immich's own database dumps.",
+  "logo": "immich-logo.svg",
   "docs_url": "https://docs.immich.app/administration/backup-and-restore",
   "verified": {
     "app_version": "v3.2.4",

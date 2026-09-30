@@ -4255,7 +4255,8 @@
     "hint": "Muster zum Ausschluss von der Sicherung angeben (z.B. *.log, *.tmp, __pycache__, node_modules)",
     "placeholder": "*.log oder /pfad/zum/ausschluss",
     "browseToExclude": "Zum Ausschließen durchsuchen",
-    "add": "Hinzufügen"
+    "add": "Hinzufügen",
+    "remove": "{{pattern}} entfernen"
   },
   "pruneSettings": {
     "keepHourly": "Stündlich behalten",
@@ -6769,8 +6770,6 @@
     },
     "app": {
       "title": "Welche App möchtest du sichern?",
-      "other": "Etwas anderes",
-      "otherDesc": "Wähle die Ordner selbst: Dokumente, App-Daten, alles auf der Festplatte.",
       "hint": "Mit einer App wird ihr Ordner eingetragen, Wiederherstellbares übersprungen und die nötigen Sicherheitsprüfungen ergänzt."
     }
   },
@@ -6788,11 +6787,18 @@
     "dialog": {
       "open": "Mit einer App starten",
       "title": "App hinzufügen",
-      "app": "App",
       "machine": "Läuft auf",
       "thisServer": "Dieser Borg-UI-Server",
       "folder": "App-Ordner",
       "add": "Zum Plan hinzufügen"
+    },
+    "select": {
+      "label": "App",
+      "search": "Apps durchsuchen",
+      "noResults": "Keine passende App. Wähle „Etwas anderes“ und such die Ordner selbst aus.",
+      "none": "Etwas anderes",
+      "noneDesc": "Ordner selbst auswählen",
+      "apps": "Apps"
     }
   }
 }

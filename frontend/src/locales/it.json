@@ -4255,7 +4255,8 @@
     "hint": "Specifica pattern da escludere dal backup (es., *.log, *.tmp, __pycache__, node_modules)",
     "placeholder": "*.log o /percorso/da/escludere",
     "browseToExclude": "Sfoglia per escludere",
-    "add": "Aggiungi"
+    "add": "Aggiungi",
+    "remove": "Rimuovi {{pattern}}"
   },
   "pruneSettings": {
     "keepHourly": "Mantieni Orari",
@@ -6769,8 +6770,6 @@
     },
     "app": {
       "title": "Quale app vuoi salvare?",
-      "other": "Qualcos'altro",
-      "otherDesc": "Scegli tu le cartelle: documenti, dati delle app, qualsiasi cosa sul disco.",
       "hint": "Scegliendo un'app viene inserita la sua cartella, si salta ciò che può rigenerare e si aggiungono i controlli necessari."
     }
   },
@@ -6788,11 +6787,18 @@
     "dialog": {
       "open": "Inizia da un'app",
       "title": "Aggiungi un'app",
-      "app": "App",
       "machine": "Gira su",
       "thisServer": "Questo server Borg UI",
       "folder": "Cartella dell'app",
       "add": "Aggiungi al piano"
+    },
+    "select": {
+      "label": "App",
+      "search": "Cerca app",
+      "noResults": "Nessuna app corrisponde. Scegli «Qualcos'altro» e seleziona le cartelle.",
+      "none": "Qualcos'altro",
+      "noneDesc": "Scegli tu le cartelle",
+      "apps": "App"
     }
   }
 }

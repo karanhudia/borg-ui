@@ -4255,7 +4255,8 @@
     "hint": "Especifica patrones para excluir de la copia de seguridad (ej., *.log, *.tmp, __pycache__, node_modules)",
     "placeholder": "*.log o /ruta/a/excluir",
     "browseToExclude": "Explorar para excluir",
-    "add": "Agregar"
+    "add": "Agregar",
+    "remove": "Quitar {{pattern}}"
   },
   "pruneSettings": {
     "keepHourly": "Mantener por hora",
@@ -6769,8 +6770,6 @@
     },
     "app": {
       "title": "¿Qué app quieres respaldar?",
-      "other": "Otra cosa",
-      "otherDesc": "Elige tú las carpetas: documentos, datos de apps, cualquier cosa en disco.",
       "hint": "Al elegir una app se rellena su carpeta, se omite lo que puede regenerar y se añaden las comprobaciones que necesita."
     }
   },
@@ -6788,11 +6787,18 @@
     "dialog": {
       "open": "Empezar desde una app",
       "title": "Añadir una app",
-      "app": "App",
       "machine": "Se ejecuta en",
       "thisServer": "Este servidor de Borg UI",
       "folder": "Carpeta de la app",
       "add": "Añadir al plan"
+    },
+    "select": {
+      "label": "App",
+      "search": "Buscar apps",
+      "noResults": "Ninguna app coincide. Elige «Otra cosa» y selecciona sus carpetas.",
+      "none": "Otra cosa",
+      "noneDesc": "Elige tú las carpetas",
+      "apps": "Apps"
     }
   }
 }

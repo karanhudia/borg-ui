@@ -589,6 +589,8 @@ export interface AppTemplate {
   version: number
   name: string
   description: string
+  /** Official logo, SVG markup. */
+  logo_svg: string | null
   docs_url: string
   verified: { app_version: string; date: string; restore_tested: boolean }
   detect: { image_prefix: string; mount_destination: string }

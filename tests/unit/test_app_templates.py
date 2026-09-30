@@ -84,6 +84,7 @@ class TestAppTemplates:
         assert response.status_code == 200
         immich = next(t for t in response.json()["templates"] if t["id"] == "immich")
         assert immich["pre_backup_script"]["content"].startswith("#!/usr/bin/env bash")
+        assert "<svg" in immich["logo_svg"]
 
     def test_detect_finds_immich_and_reports_readable_folder(
         self, test_client, admin_headers, monkeypatch, tmp_path

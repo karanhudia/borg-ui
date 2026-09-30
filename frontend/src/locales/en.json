@@ -4255,7 +4255,8 @@
     "hint": "Specify patterns to exclude from backup (e.g., *.log, *.tmp, __pycache__, node_modules)",
     "placeholder": "*.log or /path/to/exclude",
     "browseToExclude": "Browse to exclude",
-    "add": "Add"
+    "add": "Add",
+    "remove": "Remove {{pattern}}"
   },
   "pruneSettings": {
     "keepHourly": "Keep Hourly",
@@ -6769,8 +6770,6 @@
     },
     "app": {
       "title": "Which app are you backing up?",
-      "other": "Something else",
-      "otherDesc": "Pick the folders yourself: documents, app data, anything on disk.",
       "hint": "Picking an app fills in its folder, skips what it can rebuild and adds the safety checks it needs."
     }
   },
@@ -6788,11 +6787,18 @@
     "dialog": {
       "open": "Start from an app",
       "title": "Add an app",
-      "app": "App",
       "machine": "Runs on",
       "thisServer": "This Borg UI server",
       "folder": "App folder",
       "add": "Add to plan"
+    },
+    "select": {
+      "label": "App",
+      "search": "Search apps",
+      "noResults": "No app matches. Pick \"Something else\" and choose its folders.",
+      "none": "Something else",
+      "noneDesc": "Pick the folders yourself",
+      "apps": "Apps"
     }
   }
 }
