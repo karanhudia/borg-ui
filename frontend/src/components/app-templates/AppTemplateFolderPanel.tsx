@@ -27,6 +27,10 @@ interface AppTemplateFolderPanelProps {
   onExcludesChange: (excludes: string[]) => void
 }
 
+// Alert actions sit at the top by default; center them against multi-line messages.
+const alertSx = { '& .MuiAlert-action': { alignItems: 'center', pt: 0, pl: 2 } }
+const actionSx = { whiteSpace: 'nowrap', flexShrink: 0 }
+
 /** Finds the app's folder on the chosen machine and lets the user skip what the app can rebuild. */
 export default function AppTemplateFolderPanel({
   template,
@@ -52,6 +56,7 @@ export default function AppTemplateFolderPanel({
       startIcon={<RefreshCw size={14} />}
       onClick={rescan}
       disabled={scanning}
+      sx={actionSx}
     >
       {t('appTemplates.scanAgain')}
     </Button>
@@ -77,7 +82,7 @@ export default function AppTemplateFolderPanel({
     }
     if (detection && !detection.readable) {
       return (
-        <Alert severity="warning" variant="outlined" action={rescanButton}>
+        <Alert severity="warning" variant="outlined" action={rescanButton} sx={alertSx}>
           <Typography variant="body2">
             {t('appTemplates.notReadable', { app: template.name, path: detection.host_path })}
           </Typography>
@@ -95,9 +100,15 @@ export default function AppTemplateFolderPanel({
         <Alert
           severity="success"
           variant="outlined"
+          sx={alertSx}
           action={
             root.trim() === detection.path ? undefined : (
-              <Button size="small" color="inherit" onClick={() => onUseRoot(detection.path)}>
+              <Button
+                size="small"
+                color="inherit"
+                onClick={() => onUseRoot(detection.path)}
+                sx={actionSx}
+              >
                 {t('appTemplates.useFolder')}
               </Button>
             )
@@ -112,7 +123,7 @@ export default function AppTemplateFolderPanel({
       )
     }
     return (
-      <Alert severity="info" variant="outlined" action={rescanButton}>
+      <Alert severity="info" variant="outlined" action={rescanButton} sx={alertSx}>
         {t('appTemplates.notFound', { app: template.name, hint: template.root_hint })}
         {warning && (
           <Typography variant="caption" component="p" sx={{ mt: 0.5 }}>
