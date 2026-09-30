@@ -1,5 +1,5 @@
 import type { MouseEvent as ReactMouseEvent } from 'react'
-import { Box, IconButton, Tooltip, Chip, useTheme, alpha } from '@mui/material'
+import { Box, IconButton, Tooltip, Chip, CircularProgress, useTheme, alpha } from '@mui/material'
 import { Link as RouterLink } from 'react-router-dom'
 import { FolderOpen, RotateCcw, HardDrive, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -18,6 +18,8 @@ interface ArchiveCardProps {
   onRestore?: (archive: Archive) => void
   onMount: (archive: Archive) => void
   onDelete: (archive: Archive) => void
+  /** The delete job is queued or running (#1197): the row says so and its delete is disabled. */
+  isDeleting?: boolean
   mountDisabled?: boolean
   canDelete?: boolean
 }
@@ -30,6 +32,7 @@ export default function ArchiveCard({
   onRestore,
   onMount,
   onDelete,
+  isDeleting = false,
   mountDisabled = false,
   canDelete = true,
 }: ArchiveCardProps) {
@@ -137,6 +140,24 @@ export default function ArchiveCard({
           },
         }}
       >
+        {isDeleting && (
+          <Chip
+            icon={<CircularProgress size={10} color="inherit" />}
+            label={t('common.buttons.deleting')}
+            size="small"
+            sx={{
+              height: 18,
+              fontSize: '0.6rem',
+              fontWeight: 700,
+              bgcolor: alpha(theme.palette.error.main, isDark ? 0.18 : 0.1),
+              color: 'error.main',
+              border: '1px solid',
+              borderColor: alpha(theme.palette.error.main, isDark ? 0.3 : 0.2),
+              '& .MuiChip-label': { px: 0.75 },
+              '& .MuiChip-icon': { ml: 0.75, color: 'inherit' },
+            }}
+          />
+        )}
         <Chip
           label={
             isManual ? t('archivesList.manualAbbr', 'MAN') : t('archivesList.scheduledAbbr', 'SCH')
@@ -230,15 +251,21 @@ export default function ArchiveCard({
         </Tooltip>
 
         {canDelete && (
-          <Tooltip title={t('archiveCard.delete')} arrow>
-            <IconButton
-              size="small"
-              onClick={() => onDelete(archive)}
-              aria-label={t('archiveCard.delete')}
-              sx={iconBtnSx(theme.palette.error.main)}
-            >
-              <Trash2 size={15} />
-            </IconButton>
+          <Tooltip
+            title={isDeleting ? t('common.buttons.deleting') : t('archiveCard.delete')}
+            arrow
+          >
+            <span>
+              <IconButton
+                size="small"
+                onClick={() => onDelete(archive)}
+                disabled={isDeleting}
+                aria-label={t('archiveCard.delete')}
+                sx={iconBtnSx(theme.palette.error.main)}
+              >
+                <Trash2 size={15} />
+              </IconButton>
+            </span>
           </Tooltip>
         )}
       </Box>

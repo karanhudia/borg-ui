@@ -1,7 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Box, Typography, Button, IconButton, Tooltip, Chip, useTheme, alpha } from '@mui/material'
+import {
+  Box,
+  Typography,
+  Button,
+  IconButton,
+  Tooltip,
+  Chip,
+  CircularProgress,
+  useTheme,
+  alpha,
+} from '@mui/material'
 import { format, isTomorrow, isToday, isThisYear } from 'date-fns'
 import {
   Info,
@@ -59,6 +69,8 @@ interface RepositoryCardProps {
   onBreakLock: () => void
   onEdit: () => void
   onDelete: () => void
+  /** The delete is out (#1197): the delete action is disabled and shows it. */
+  isDeleting?: boolean
   onPermanentDelete?: () => void
   onBackupNow: () => void
   onViewArchives: () => void
@@ -98,6 +110,7 @@ export default function RepositoryCard({
   onBreakLock,
   onEdit,
   onDelete,
+  isDeleting = false,
   onPermanentDelete,
   onBackupNow,
   onViewArchives,
@@ -1284,22 +1297,36 @@ export default function RepositoryCard({
                         <Eraser size={16} />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title={t('repositoryCard.buttons.delete')} arrow>
-                      <IconButton
-                        size="small"
-                        onClick={onDelete}
-                        aria-label={t('repositoryCard.buttons.delete')}
-                        sx={{
-                          ...iconBtnSx,
-                          color: alpha(theme.palette.error.main, 0.75),
-                          '&:hover': {
-                            color: theme.palette.error.main,
-                            bgcolor: alpha(theme.palette.error.main, 0.1),
-                          },
-                        }}
-                      >
-                        <Trash2 size={16} />
-                      </IconButton>
+                    <Tooltip
+                      title={
+                        isDeleting
+                          ? t('common.buttons.deleting')
+                          : t('repositoryCard.buttons.delete')
+                      }
+                      arrow
+                    >
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={onDelete}
+                          disabled={isDeleting}
+                          aria-label={t('repositoryCard.buttons.delete')}
+                          sx={{
+                            ...iconBtnSx,
+                            color: alpha(theme.palette.error.main, 0.75),
+                            '&:hover': {
+                              color: theme.palette.error.main,
+                              bgcolor: alpha(theme.palette.error.main, 0.1),
+                            },
+                          }}
+                        >
+                          {isDeleting ? (
+                            <CircularProgress size={14} color="inherit" />
+                          ) : (
+                            <Trash2 size={16} />
+                          )}
+                        </IconButton>
+                      </span>
                     </Tooltip>
                     {canPermanentDeleteRepository && onPermanentDelete && (
                       <Tooltip title={t('repositoryCard.buttons.permanentDelete')} arrow>

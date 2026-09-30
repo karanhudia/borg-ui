@@ -229,11 +229,12 @@ export default function PackagesTab() {
       const response = await api.delete(`/packages/${packageId}`)
       return response.data
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(t('packages.toasts.removedSuccessfully'))
-      queryClient.invalidateQueries({ queryKey: ['packages'] })
-      setDeleteConfirmPackage(null)
       trackPackage(EventAction.DELETE, deleteConfirmPackage?.name)
+      // The dialog stays open until the list no longer has the row (#1197).
+      await queryClient.invalidateQueries({ queryKey: ['packages'] })
+      setDeleteConfirmPackage(null)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {

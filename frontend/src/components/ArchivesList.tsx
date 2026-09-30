@@ -45,6 +45,8 @@ interface ArchivesListProps {
   onRestoreArchive?: (archive: Archive) => void
   onMountArchive: (archive: Archive) => void
   onDeleteArchive: (archive: Archive) => void
+  /** Archives whose delete job is still running: their delete action is disabled. */
+  deletingArchiveIds?: ReadonlySet<string>
   mountDisabled?: boolean
   canDelete?: boolean
   defaultRowsPerPage?: number
@@ -60,6 +62,7 @@ export default function ArchivesList({
   onRestoreArchive,
   onMountArchive,
   onDeleteArchive,
+  deletingArchiveIds,
   mountDisabled = false,
   canDelete = true,
   defaultRowsPerPage = 10,
@@ -651,6 +654,7 @@ export default function ArchivesList({
                     onRestore={onRestoreArchive}
                     onMount={onMountArchive}
                     onDelete={onDeleteArchive}
+                    isDeleting={deletingArchiveIds?.has(archive.id) ?? false}
                     mountDisabled={mountDisabled}
                     canDelete={canDelete}
                   />
@@ -683,6 +687,7 @@ export default function ArchivesList({
                   onRestore={onRestoreArchive}
                   onMount={onMountArchive}
                   onDelete={onDeleteArchive}
+                  isDeleting={deletingArchiveIds?.has(archive.id) ?? false}
                   mountDisabled={mountDisabled}
                   canDelete={canDelete}
                 />

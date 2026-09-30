@@ -40,6 +40,7 @@ import api from '../services/api'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import ScriptParameterInputs, { ScriptParameter } from './ScriptParameterInputs'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { usePendingDeletes } from '../hooks/usePendingDeletes'
 
 interface Script {
   id: number
@@ -88,6 +89,7 @@ export default function RepositoryScriptsTab({
   const { t } = useTranslation()
   const { trackScripts, EventAction } = useAnalytics()
   const [scripts, setScripts] = useState<RepositoryScript[]>([])
+  const removingScripts = usePendingDeletes()
   const [availableScripts, setAvailableScripts] = useState<Script[]>([])
   const [loading, setLoading] = useState(true)
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -192,13 +194,19 @@ export default function RepositoryScriptsTab({
   }
 
   const handleRemoveScript = async (scriptAssignmentId: number) => {
+    if (removingScripts.isDeleting(scriptAssignmentId)) return
     if (!confirm(t('repositoryScripts.confirmRemove'))) return
+    await removingScripts.run(scriptAssignmentId, () => removeScript(scriptAssignmentId))
+  }
+
+  const removeScript = async (scriptAssignmentId: number) => {
     const removedScript = scripts.find((s) => s.id === scriptAssignmentId)
 
     try {
       await api.delete(`/repositories/${repositoryId}/scripts/${scriptAssignmentId}`)
       toast.success(t('repositoryScriptsTab.removedSuccessfully'))
-      fetchAssignedScripts()
+      // Awaited so the row stays disabled until the list no longer has it.
+      await fetchAssignedScripts()
       if (onUpdate) onUpdate()
       trackScripts(EventAction.DELETE, removedScript?.script_name, {
         source: 'repository_assignment',
@@ -464,15 +472,28 @@ export default function RepositoryScriptsTab({
                     </IconButton>
                   </Tooltip>
                 )}
-                <Tooltip title={t('repositoryScripts.tooltips.remove')}>
-                  <IconButton
-                    size="small"
-                    onClick={() => handleRemoveScript(script.id)}
-                    color="error"
-                    sx={{ p: 0.5 }}
-                  >
-                    <Trash2 size={16} />
-                  </IconButton>
+                <Tooltip
+                  title={
+                    removingScripts.isDeleting(script.id)
+                      ? t('common.buttons.deleting')
+                      : t('repositoryScripts.tooltips.remove')
+                  }
+                >
+                  <span>
+                    <IconButton
+                      size="small"
+                      onClick={() => handleRemoveScript(script.id)}
+                      disabled={removingScripts.isDeleting(script.id)}
+                      color="error"
+                      sx={{ p: 0.5 }}
+                    >
+                      {removingScripts.isDeleting(script.id) ? (
+                        <CircularProgress size={14} color="inherit" />
+                      ) : (
+                        <Trash2 size={16} />
+                      )}
+                    </IconButton>
+                  </span>
                 </Tooltip>
               </Box>
             </Box>
