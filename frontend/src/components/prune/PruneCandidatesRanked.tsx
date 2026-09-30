@@ -10,7 +10,7 @@ export interface PruneCandidatesRankedProps {
   onOpen: (archiveId: number) => void
 }
 
-const VISIBLE_CAP = 25
+const VISIBLE_CAP = 5
 
 const rowSx = { display: 'flex', alignItems: 'center', gap: 1.5, width: '100%', px: 0.5 }
 

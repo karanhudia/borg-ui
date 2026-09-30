@@ -35,4 +35,14 @@ describe('PruneCandidatesRanked', () => {
     expect(onOpen).toHaveBeenCalledWith(1)
     expect(screen.queryByRole('button', { name: /unknown/ })).not.toBeInTheDocument()
   })
+
+  it('shows five rows and a Show all button for the rest', async () => {
+    const archives = Array.from({ length: 8 }, (_, i) => archive(i + 1, `a${i + 1}`))
+    renderWithProviders(
+      <PruneCandidatesRanked archives={archives} partialMeasure={false} onOpen={() => {}} />
+    )
+    expect(screen.getAllByRole('button', { name: /\ba\d+\b/ })).toHaveLength(5)
+    await userEvent.click(screen.getByRole('button', { name: /show all 8/i }))
+    expect(screen.getAllByRole('button', { name: /\ba\d+\b/ })).toHaveLength(8)
+  })
 })
