@@ -105,6 +105,27 @@ const runWithBackupInProgress: BackupPlanRun = {
   script_executions: [],
 }
 
+// Borg reported the total expected size, so the progress row renders: the
+// percentage on the left and "Total Source Size: <formatted bytes>" on the right.
+const runWithKnownTotal: BackupPlanRun = {
+  ...runWithBackupInProgress,
+  id: 354,
+  repositories: [
+    {
+      ...runWithBackupInProgress.repositories[0],
+      backup_job: {
+        ...runWithBackupInProgress.repositories[0].backup_job!,
+        progress_details: {
+          original_size: 148_707_246_080,
+          total_expected_size: 232_000_000_000,
+          nfiles: 12_004,
+          current_file: '/srv/accounting/ledgers/2026/invoices-2026-05.sqlite',
+        },
+      },
+    },
+  ],
+}
+
 const meta = {
   title: 'Components/ActiveBackupPlanRunCard',
   component: ActiveBackupPlanRunCard,
@@ -133,8 +154,17 @@ type Story = StoryObj<typeof meta>
 export const LiveHookActivity: Story = {}
 
 // The other branch: a running borg job supplies the current file for the ticker.
+// No total_expected_size, so the progress row (and its "Total Source Size" label)
+// is hidden.
 export const BackupInProgress: Story = {
   args: {
     run: runWithBackupInProgress,
+  },
+}
+
+// Total known: the progress row shows the percentage and the formatted total.
+export const BackupInProgressWithKnownTotal: Story = {
+  args: {
+    run: runWithKnownTotal,
   },
 }

@@ -380,7 +380,7 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
                 {progress.pct.toFixed(1)}%
               </Typography>
               <Typography sx={{ fontSize: '0.65rem', color: 'text.disabled' }}>
-                {t('backup.runningJobs.progress.totalSourceSize')}
+                {t('backup.runningJobs.progress.totalSourceSize')} {formatBytes(progress.total)}
               </Typography>
             </Stack>
             <LinearProgress
