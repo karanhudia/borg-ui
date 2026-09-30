@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-09-30T11:36:21.746Z",
+  "generatedAt": "2026-09-30T15:31:52.700Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1288 visual report",
-    "commitSha": "6041441879fa",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36709415375"
+    "commitSha": "47dfb3ea502e",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36737208176"
   },
   "totals": {
     "baseline": 1100,
-    "actual": 1114,
+    "actual": 1122,
     "compared": 1100,
-    "changed": 19,
-    "added": 14,
+    "changed": 18,
+    "added": 22,
     "removed": 0,
-    "unchanged": 1081
+    "unchanged": 1082
   },
   "changed": [
     {
@@ -57,9 +57,9 @@
       "baselinePath": "images/baseline/backup-plans-sourcestep--community-mixed-sources-locked--mobile.png",
       "actualPath": "images/actual/backup-plans-sourcestep--community-mixed-sources-locked--mobile.png",
       "diffPath": "images/diff/backup-plans-sourcestep--community-mixed-sources-locked--mobile.png",
-      "diffPixels": 76729,
+      "diffPixels": 86126,
       "totalPixels": 329160,
-      "diffRatio": 0.23310548061732897,
+      "diffRatio": 0.2616539069145704,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -75,9 +75,9 @@
       "baselinePath": "images/baseline/backup-plans-sourcestep--community-mixed-sources-locked.png",
       "actualPath": "images/actual/backup-plans-sourcestep--community-mixed-sources-locked.png",
       "diffPath": "images/diff/backup-plans-sourcestep--community-mixed-sources-locked.png",
-      "diffPixels": 1363,
+      "diffPixels": 108385,
       "totalPixels": 1024000,
-      "diffRatio": 0.0013310546875,
+      "diffRatio": 0.1058447265625,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -201,9 +201,9 @@
       "baselinePath": "images/baseline/backup-plans-sourcestep--mixed-source-groups--mobile.png",
       "actualPath": "images/actual/backup-plans-sourcestep--mixed-source-groups--mobile.png",
       "diffPath": "images/diff/backup-plans-sourcestep--mixed-source-groups--mobile.png",
-      "diffPixels": 76729,
+      "diffPixels": 86126,
       "totalPixels": 329160,
-      "diffRatio": 0.23310548061732897,
+      "diffRatio": 0.2616539069145704,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -219,9 +219,9 @@
       "baselinePath": "images/baseline/backup-plans-sourcestep--mixed-source-groups.png",
       "actualPath": "images/actual/backup-plans-sourcestep--mixed-source-groups.png",
       "diffPath": "images/diff/backup-plans-sourcestep--mixed-source-groups.png",
-      "diffPixels": 1363,
+      "diffPixels": 108385,
       "totalPixels": 1024000,
-      "diffRatio": 0.0013310546875,
+      "diffRatio": 0.1058447265625,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -273,9 +273,9 @@
       "baselinePath": "images/baseline/quick-start-dialog--first-step--mobile.png",
       "actualPath": "images/actual/quick-start-dialog--first-step--mobile.png",
       "diffPath": "images/diff/quick-start-dialog--first-step--mobile.png",
-      "diffPixels": 206303,
+      "diffPixels": 180013,
       "totalPixels": 329160,
-      "diffRatio": 0.6267559849313403,
+      "diffRatio": 0.5468860128812736,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -291,9 +291,9 @@
       "baselinePath": "images/baseline/quick-start-dialog--first-step.png",
       "actualPath": "images/actual/quick-start-dialog--first-step.png",
       "diffPath": "images/diff/quick-start-dialog--first-step.png",
-      "diffPixels": 45959,
+      "diffPixels": 45448,
       "totalPixels": 1024000,
-      "diffRatio": 0.0448818359375,
+      "diffRatio": 0.0443828125,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -320,24 +320,6 @@
       "actual": {
         "width": 1280,
         "height": 800
-      }
-    },
-    {
-      "fileName": "quick-start-steps--destination-ssh-no-default-path--mobile.png",
-      "baselinePath": "images/baseline/quick-start-steps--destination-ssh-no-default-path--mobile.png",
-      "actualPath": "images/actual/quick-start-steps--destination-ssh-no-default-path--mobile.png",
-      "diffPath": "images/diff/quick-start-steps--destination-ssh-no-default-path--mobile.png",
-      "diffPixels": 2782,
-      "totalPixels": 329160,
-      "diffRatio": 0.008451816745655608,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
       }
     },
     {
@@ -377,8 +359,32 @@
       "actualPath": "images/actual/backup-plans-apptemplatedialog--immich-not-readable.png"
     },
     {
+      "fileName": "components-excludepatterninput--long-paths--mobile.png",
+      "actualPath": "images/actual/components-excludepatterninput--long-paths--mobile.png"
+    },
+    {
+      "fileName": "components-excludepatterninput--long-paths.png",
+      "actualPath": "images/actual/components-excludepatterninput--long-paths.png"
+    },
+    {
+      "fileName": "components-excludepatterninput--short--mobile.png",
+      "actualPath": "images/actual/components-excludepatterninput--short--mobile.png"
+    },
+    {
+      "fileName": "components-excludepatterninput--short.png",
+      "actualPath": "images/actual/components-excludepatterninput--short.png"
+    },
+    {
       "fileName": "quick-start-steps--app--mobile.png",
       "actualPath": "images/actual/quick-start-steps--app--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--app-chosen--mobile.png",
+      "actualPath": "images/actual/quick-start-steps--app-chosen--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--app-chosen.png",
+      "actualPath": "images/actual/quick-start-steps--app-chosen.png"
     },
     {
       "fileName": "quick-start-steps--app.png",
@@ -391,6 +397,14 @@
     {
       "fileName": "quick-start-steps--folders-immich-found.png",
       "actualPath": "images/actual/quick-start-steps--folders-immich-found.png"
+    },
+    {
+      "fileName": "quick-start-steps--folders-immich-no-permission--mobile.png",
+      "actualPath": "images/actual/quick-start-steps--folders-immich-no-permission--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--folders-immich-no-permission.png",
+      "actualPath": "images/actual/quick-start-steps--folders-immich-no-permission.png"
     },
     {
       "fileName": "quick-start-steps--folders-immich-not-found--mobile.png",
@@ -3433,6 +3447,9 @@
     },
     {
       "fileName": "quick-start-steps--destination-ssh--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--destination-ssh-no-default-path--mobile.png"
     },
     {
       "fileName": "quick-start-steps--destination-ssh.png"
