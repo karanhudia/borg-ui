@@ -373,6 +373,53 @@ describe('RepositoryInfoDialog', () => {
       expect(screen.getByText('borg2 -r /repo/test check')).toBeInTheDocument()
     })
 
+    it('shows the remote path of a Borg 2 repository as BORG_REMOTE_PATH', () => {
+      mockCanUseFeature.mockReturnValue(false)
+
+      render(
+        <RepositoryInfoDialog
+          open={true}
+          repository={{
+            ...mockRepository,
+            encryption: 'repokey-aes-ocb',
+            borg_version: 2,
+            remote_path: '/opt/borg2',
+          }}
+          refreshFailed
+          onClose={vi.fn()}
+        />
+      )
+
+      expect(
+        screen.getByText('BORG_REMOTE_PATH=/opt/borg2 borg2 -r /repo/test check')
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText('BORG_REMOTE_PATH=/opt/borg2 borg2 -r /repo/test check --repair')
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          'BORG_REMOTE_PATH=/opt/borg2 borg2 -r /repo/test repo-create --encryption aes256-ocb --key-location repokey'
+        )
+      ).toBeInTheDocument()
+    })
+
+    it('leaves out the init command for a Borg 2 repository stored with none', () => {
+      // Borg 2 has no none; repo-create with it fails, so it is not offered
+      mockCanUseFeature.mockReturnValue(false)
+
+      render(
+        <RepositoryInfoDialog
+          open={true}
+          repository={{ ...mockRepository, encryption: 'none', borg_version: 2 }}
+          refreshFailed
+          onClose={vi.fn()}
+        />
+      )
+
+      expect(screen.getByText('borg2 -r /repo/test check')).toBeInTheDocument()
+      expect(screen.queryByText(/repo-create/)).not.toBeInTheDocument()
+    })
+
     it('copies a recovery command to the clipboard', async () => {
       const user = userEvent.setup()
       const writeText = vi.fn().mockResolvedValue(undefined)

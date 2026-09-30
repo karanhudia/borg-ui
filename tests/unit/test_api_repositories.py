@@ -43,6 +43,7 @@ from app.database.models import (
     SystemSettings,
 )
 from app.api.repositories import _build_repository_path_from_connection
+from app.utils.borg_env import REQUEST_LOCK_WAIT
 from app.services.operations.job_facade import resolve_maintenance_job
 from tests.utils.agent_jobs import agent_maintenance_job
 from tests.utils.operations import seed_job_operation
@@ -2588,6 +2589,81 @@ class TestRepositoriesUpdate:
             {"id": repo.id},
         ).scalar_one()
         assert raw != "new-passphrase"
+
+    @pytest.mark.parametrize(
+        ("borg_version", "expected_cmd"),
+        [
+            # Borg 1 takes the remote Borg command on the command line
+            (
+                1,
+                [
+                    "borg",
+                    "--lock-wait",
+                    REQUEST_LOCK_WAIT,
+                    "info",
+                    "--json",
+                    "/tmp/passphrase-repo",
+                    "--remote-path",
+                    "/opt/borg",
+                ],
+            ),
+            # Borg 2 reads it from BORG_REMOTE_PATH only; it has no
+            # --remote-path, which would fail the check
+            (2, ["borg2", "-r", "/tmp/passphrase-repo", "info", "--json"]),
+        ],
+    )
+    def test_update_repository_verifies_passphrase_with_the_options_of_its_borg(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        borg_version,
+        expected_cmd,
+    ):
+        _enable_borg_v2(test_db)
+        repo = self._encrypted_repository(
+            test_db,
+            borg_version=borg_version,
+            remote_path="/opt/borg",
+            encryption="repokey-aes-ocb" if borg_version == 2 else "repokey",
+        )
+        process = SimpleNamespace(
+            communicate=AsyncMock(return_value=(b"{}", b"")), returncode=0
+        )
+
+        async def serialize(repo_id, operation, **kwargs):
+            return await operation()
+
+        # Stopped at the process, so the command runs in the environment the
+        # route prepares for it
+        with (
+            patch(
+                "app.api.repositories.SessionLocal",
+                new=sessionmaker(bind=test_db.get_bind()),
+            ),
+            patch(
+                "app.api.repositories.asyncio.create_subprocess_exec",
+                new=AsyncMock(return_value=process),
+            ) as spawn,
+            patch(
+                "app.api.repositories.run_serialized_repository_command",
+                new=serialize,
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+            patch("app.core.borg2.borg2.borg_cmd", "borg2"),
+        ):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"passphrase": "new-passphrase"},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200, response.text
+        assert spawn.call_count == 1
+        assert list(spawn.call_args.args) == expected_cmd
+        env = spawn.call_args.kwargs["env"]
+        assert env["BORG_REMOTE_PATH"] == "/opt/borg"
+        assert env["BORG_PASSPHRASE"] == "new-passphrase"
 
     @pytest.mark.parametrize(
         "payload",

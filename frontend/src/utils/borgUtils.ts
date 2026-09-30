@@ -20,7 +20,36 @@ export interface BorgInitCommandOptions {
   remotePathFlag?: string
 }
 
+const SAFE_SHELL_ARG_PATTERN = /^[A-Za-z0-9_@%+=:,./-]+$/
+
+/** A value as one shell word, quoted only when it needs it. */
+export function shellQuote(value: string): string {
+  if (value && SAFE_SHELL_ARG_PATTERN.test(value)) {
+    return value
+  }
+
+  return `'${value.replace(/'/g, "'\\''")}'`
+}
+
 const getBorgBinary = (borgVersion: 1 | 2 = 1): string => (borgVersion === 2 ? 'borg2' : 'borg')
+
+/**
+ * How the remote Borg command reaches a command shown to the user. Borg 1
+ * takes `--remote-path` on the command line; Borg 2 has no such option and
+ * reads BORG_REMOTE_PATH from the environment, so the command gets the
+ * variable in front of the binary. The value is quoted here: a
+ * remote command such as `sudo -n -H /opt/borg2` holds spaces. Empty means no
+ * remote path.
+ */
+export const remotePathParts = (
+  borgVersion: 1 | 2,
+  remotePath: string
+): { flag: string; envPrefix: string } => {
+  if (!remotePath) return { flag: '', envPrefix: '' }
+  const quoted = shellQuote(remotePath)
+  if (borgVersion === 2) return { flag: '', envPrefix: `BORG_REMOTE_PATH=${quoted} ` }
+  return { flag: `--remote-path ${quoted} `, envPrefix: '' }
+}
 
 /**
  * Borg 2.0.0b22 split repo-create's single --encryption value into the cipher
@@ -42,6 +71,13 @@ const BORG2_ENCRYPTION_FLAGS: Record<string, string> = {
   // exactly what `authenticated` produced before. b25 removed `none`.
   authenticated: '--encryption authenticated-sha256',
 }
+
+/**
+ * Whether Borg 2 can create a repository with a stored mode. Borg 2 has no
+ * `none`; a repository recorded with it was created before the update to the
+ * current Borg 2, which cannot read it (unknown modes pass through, see above).
+ */
+export const borg2CanCreateWith = (encryption: string): boolean => encryption !== 'none'
 
 export const generateBorgInitCommand = (options: BorgInitCommandOptions): string => {
   const {
@@ -85,6 +121,13 @@ export const generateBorgCreateCommand = (options: BorgCommandOptions): string =
   // Build source directories string
   const sourceDirsStr = sourceDirs.join(' ')
 
-  // Construct the full command
-  return `${getBorgBinary(borgVersion)} create ${remotePathFlag}--progress --stats --compression ${compression} ${excludeStr}${customFlagsStr}${repositoryPath}::${archiveName} ${sourceDirsStr}`
+  const commonOptions = `--progress --stats --compression ${compression} ${excludeStr}${customFlagsStr}`
+
+  // Borg 2 takes the repository as -r and the archive name on its own;
+  // repo::archive is Borg 1 syntax
+  if (borgVersion === 2) {
+    return `${getBorgBinary(2)} -r ${repositoryPath} create ${remotePathFlag}${commonOptions}${archiveName} ${sourceDirsStr}`
+  }
+
+  return `${getBorgBinary(1)} create ${remotePathFlag}${commonOptions}${repositoryPath}::${archiveName} ${sourceDirsStr}`
 }
