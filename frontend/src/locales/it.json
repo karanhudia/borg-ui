@@ -6803,8 +6803,6 @@
     },
     "folders": {
       "title": "Cosa viene salvato",
-      "backedUp": "Salvato",
-      "skip": "Salta",
       "missing": "Ancora vuoto",
       "unmeasured": "Troppo grande per misurarlo in fretta",
       "latestDump": "Ultimo dump {{when}}",
@@ -6812,7 +6810,8 @@
       "noDump": "Ancora nessun dump del database. Attiva Administration > Settings > Backup in Immich, altrimenti il backup si ferma.",
       "total": "Verranno salvati circa {{size}}.",
       "totalAtLeast": "Verranno salvati almeno {{size}}.",
-      "noAccess": "{{user}} non può aprirlo"
+      "noAccess": "{{user}} non può aprirlo",
+      "backUp": "Salva"
     },
     "missingRoot": "{{path}} non esiste su quella macchina. Scegli la cartella con i file di Immich: {{hint}}.",
     "denied": {
@@ -6820,6 +6819,7 @@
       "why": "Docker rende i volumi con nome leggibili solo da root. Borg si collega con lo stesso utente, quindi anche il backup fallirebbe.",
       "fixFolder": "Soluzione più semplice: tieni i file di Immich in una cartella normale, come fa il compose ufficiale di Immich. Imposta {{hint}} su una cartella come /srv/immich, sposta lì i file e riavvia Immich.",
       "fixAcl": "Oppure consenti a {{user}} di leggere questo volume (serve il pacchetto acl su quella macchina):"
-    }
+    },
+    "goodToKnow": "Da sapere"
   }
 }

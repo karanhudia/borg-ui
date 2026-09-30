@@ -61,7 +61,7 @@ machine and fills in its data folder. It also:
 
 - lists what is inside that folder in plain words, with the size of each
   part and, for the app's database dumps, when the latest one was written,
-- skips folders the app can rebuild by itself (untick **Skip** to keep them),
+- gives every folder a **Back up** box: ticked, except folders the app can rebuild by itself (untick the database dumps and the dump check is dropped too),
 - schedules the backup after the app's own maintenance, and
 - adds a check that runs before each backup, where the app needs one.
 

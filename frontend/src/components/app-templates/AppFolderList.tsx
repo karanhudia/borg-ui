@@ -1,5 +1,5 @@
 import { Box, Checkbox, FormControlLabel, Skeleton, Stack, Typography } from '@mui/material'
-import { AlertTriangle, CheckCircle2, Database, Folder, RotateCcw } from 'lucide-react'
+import { AlertTriangle, Database, Folder, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import type {
@@ -95,34 +95,29 @@ export default function AppFolderList({
     return formatBytes(folderStats.size_bytes)
   }
 
+  // Every folder is the user's call: one "Back up" box per row, ticked unless
+  // the app can rebuild it.
   const renderStatus = (folder: AppTemplateFolder) => {
-    // Nothing to back up or skip in a folder that isn't there.
+    // Nothing to back up in a folder that isn't there.
     if (statsFor(folder.path)?.exists === false) return null
-    if (folder.role === 'rebuildable' || isExtra(folder.path)) {
-      return (
-        <FormControlLabel
-          sx={{ mr: 0 }}
-          control={
-            <Checkbox
-              size="small"
-              checked={isSkipped(folder.path)}
-              onChange={(event) => toggle(folder.path, event.target.checked)}
-            />
-          }
-          label={<Typography variant="body2">{t('appTemplates.folders.skip')}</Typography>}
-        />
-      )
-    }
     return (
-      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', color: 'success.main' }}>
-        <CheckCircle2 size={14} />
-        <Typography variant="caption">{t('appTemplates.folders.backedUp')}</Typography>
-      </Stack>
+      <FormControlLabel
+        sx={{ mr: 0 }}
+        control={
+          <Checkbox
+            size="small"
+            checked={!isSkipped(folder.path)}
+            onChange={(event) => toggle(folder.path, !event.target.checked)}
+          />
+        }
+        label={<Typography variant="body2">{t('appTemplates.folders.backUp')}</Typography>}
+      />
     )
   }
 
   const renderDumpFreshness = (folder: AppTemplateFolder) => {
-    if (folder.role !== 'database' || measuring || !stats) return null
+    // A dump the user chose not to back up needs no warning.
+    if (folder.role !== 'database' || measuring || !stats || isSkipped(folder.path)) return null
     const folderStats = statsFor(folder.path)
     const latest = folderStats?.latest_modified_at ?? null
     if (!isStale(latest, folder.stale_after_hours)) {

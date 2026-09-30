@@ -133,3 +133,13 @@ export function readAccessCommands(user: string, path: string): string {
     `sudo setfacl -R -m u:${user}:rX,d:u:${user}:rX ${quote(trimRoot(path))}`,
   ].join('\n')
 }
+
+/**
+ * The template's pre-backup check guards its database dumps; with those not
+ * backed up it would only stop backups for a folder the user left out.
+ */
+export function checksBackedUpDumps(template: AppTemplate, excludes: string[]): boolean {
+  return template.folders
+    .filter((folder) => folder.role === 'database')
+    .every((folder) => !excludes.includes(folder.path))
+}

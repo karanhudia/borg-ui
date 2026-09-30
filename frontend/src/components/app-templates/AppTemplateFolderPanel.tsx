@@ -9,7 +9,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material'
-import { RefreshCw } from 'lucide-react'
+import { Info, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import type { AppTemplate } from '../../services/api'
@@ -213,19 +213,25 @@ export default function AppTemplateFolderPanel({
         skipped={excludes}
         onSkippedChange={onExcludesChange}
       />
-      <Stack component="ul" spacing={0.5} sx={{ m: 0, pl: 2.5, color: 'text.secondary' }}>
-        {template.notes.map((note) => (
-          <Typography key={note} component="li" variant="caption">
-            {note}
-          </Typography>
-        ))}
-      </Stack>
-      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-        {t('appTemplates.verified', { app: template.name, version: template.verified.app_version })}{' '}
-        <Link href={template.docs_url} target="_blank" rel="noreferrer">
-          {t('appTemplates.docs', { app: template.name })}
-        </Link>
-      </Typography>
+      <Alert severity="info" variant="outlined" icon={<Info size={20} />}>
+        <AlertTitle>{t('appTemplates.goodToKnow')}</AlertTitle>
+        <Stack spacing={0.75}>
+          {template.notes.map((note) => (
+            <Typography key={note} variant="body2">
+              {note}
+            </Typography>
+          ))}
+        </Stack>
+        <Typography variant="caption" component="p" sx={{ mt: 1, color: 'text.secondary' }}>
+          {t('appTemplates.verified', {
+            app: template.name,
+            version: template.verified.app_version,
+          })}{' '}
+          <Link href={template.docs_url} target="_blank" rel="noreferrer">
+            {t('appTemplates.docs', { app: template.name })}
+          </Link>
+        </Typography>
+      </Alert>
     </Stack>
   )
 }

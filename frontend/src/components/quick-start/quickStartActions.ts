@@ -2,7 +2,11 @@ import { createInitialState } from '../../pages/backup-plans/state'
 import type { RepositoryData } from '../../services/api'
 import type { BackupPlanData, SourceLocation } from '../../types'
 import { buildBackupPlanPayload } from '../../utils/backupPlanPayload'
-import { appExcludePatterns, renderAppScript } from '../app-templates/appTemplates'
+import {
+  appExcludePatterns,
+  checksBackedUpDumps,
+  renderAppScript,
+} from '../app-templates/appTemplates'
 import { usesEncryption, type QuickStartAnswers } from './quickStartState'
 
 export type QuickStartAction = 'create_repository' | 'create_script' | 'create_plan'
@@ -38,6 +42,7 @@ function appRoot(answers: QuickStartAnswers): string {
 export function appScriptPayload(answers: QuickStartAnswers) {
   const script = answers.app?.pre_backup_script
   if (!answers.app || !script || answers.sourceKind !== 'server' || !appRoot(answers)) return null
+  if (!checksBackedUpDumps(answers.app, answers.appExcludes)) return null
   return {
     name: `${script.name}: ${answers.name.trim() || answers.app.name}`,
     description: script.description,

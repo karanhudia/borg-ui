@@ -6803,8 +6803,6 @@
     },
     "folders": {
       "title": "What gets backed up",
-      "backedUp": "Backed up",
-      "skip": "Skip",
       "missing": "Nothing here yet",
       "unmeasured": "Too big to measure quickly",
       "latestDump": "Latest dump {{when}}",
@@ -6812,7 +6810,8 @@
       "noDump": "No database dump yet. Turn on Administration > Settings > Backup in Immich, or the backup will stop.",
       "total": "About {{size}} will be backed up.",
       "totalAtLeast": "At least {{size}} will be backed up.",
-      "noAccess": "{{user}} can't open this"
+      "noAccess": "{{user}} can't open this",
+      "backUp": "Back up"
     },
     "missingRoot": "{{path}} does not exist on that machine. Pick the folder that holds Immich's files: the {{hint}}.",
     "denied": {
@@ -6820,6 +6819,7 @@
       "why": "Docker keeps named volumes readable only by root. Borg connects as the same user, so the backup would fail too.",
       "fixFolder": "Easiest fix: keep Immich's files in a normal folder, as Immich's own compose file does. Set the {{hint}} to a folder such as /srv/immich, move the files there, and restart Immich.",
       "fixAcl": "Or let {{user}} read this volume (needs the acl package on that machine):"
-    }
+    },
+    "goodToKnow": "Good to know"
   }
 }

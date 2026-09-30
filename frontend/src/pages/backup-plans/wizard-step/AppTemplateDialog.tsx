@@ -13,6 +13,7 @@ import type { TFunction } from 'i18next'
 import AppTemplateFolderPanel from '../../../components/app-templates/AppTemplateFolderPanel'
 import AppTemplateSelect from '../../../components/app-templates/AppTemplateSelect'
 import {
+  checksBackedUpDumps,
   defaultAppExcludes,
   renderAppScript,
   useAppTemplates,
@@ -78,7 +79,10 @@ export function AppTemplateDialog({
     if (!template || !root.trim()) return
     setApplying(true)
     try {
-      const content = machine === 'local' ? renderAppScript(template, root) : null
+      const content =
+        machine === 'local' && checksBackedUpDumps(template, excludes)
+          ? renderAppScript(template, root)
+          : null
       const script =
         content && template.pre_backup_script
           ? await onCreateScript({

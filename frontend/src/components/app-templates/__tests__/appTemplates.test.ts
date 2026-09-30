@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { AppTemplate } from '../../../services/api'
 import {
   appExcludePatterns,
+  checksBackedUpDumps,
   defaultAppExcludes,
   isStale,
   mountHint,
@@ -67,5 +68,10 @@ describe('app templates', () => {
         "sudo setfacl -R -m u:backup:rX,d:u:backup:rX '/home/docker/volumes/abc/_data'",
       ].join('\n')
     )
+  })
+
+  it('drops the dump check when the dumps are not backed up', () => {
+    expect(checksBackedUpDumps(immich, ['thumbs'])).toBe(true)
+    expect(checksBackedUpDumps(immich, ['backups'])).toBe(false)
   })
 })
