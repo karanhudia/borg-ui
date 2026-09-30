@@ -2373,6 +2373,9 @@ class BackupPlanExecutionService:
                     "archive_name": (backup_job.operation.params or {}).get(
                         "archive_name"
                     ),
+                    # The id Borg reported for it, when the backup recorded
+                    # one: a Borg 2 series shares the name (#1232).
+                    "archive_id": backup_job.archive_id,
                     "probe_paths": repo.restore_check_paths,
                     "full_archive": bool(repo.restore_check_full_archive),
                     "scheduled_restore_check": False,

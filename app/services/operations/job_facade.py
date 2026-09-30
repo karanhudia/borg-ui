@@ -49,6 +49,7 @@ PARAM_FIELDS: dict[str, tuple[str, ...]] = {
     "delete_archive": ("archive_name",),
     "restore_check": (
         "archive_name",
+        "archive_id",
         "probe_paths",
         "full_archive",
         "scheduled_restore_check",

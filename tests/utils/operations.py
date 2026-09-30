@@ -169,6 +169,7 @@ def seed_operation(
 _DETAIL_COLUMNS = {
     "backup": (
         "archive_name",
+        "archive_id",
         "archive_pruned_at",
         "original_size",
         "compressed_size",
@@ -233,6 +234,7 @@ _PARAM_COLUMNS = {
     "check": ("max_duration", "extra_flags", "scheduled_check"),
     "restore_check": (
         "archive_name",
+        "archive_id",
         "probe_paths",
         "full_archive",
         "scheduled_restore_check",

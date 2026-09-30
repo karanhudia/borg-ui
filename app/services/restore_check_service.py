@@ -77,16 +77,33 @@ def _coerce_archive_timestamp(archive: dict | str) -> str:
 
 
 def _select_latest_archive(
-    archives: list[dict | str], name: str | None = None
+    archives: list[dict | str],
+    name: str | None = None,
+    archive_id: str | None = None,
 ) -> dict | str | None:
-    """The newest archive, or the newest one called `name` when given (a
-    plan's post-backup restore check targets the archive it just wrote; a
-    Borg 2 series shares one name, so the newest of the series is it)."""
+    """The newest archive, or the newest one called `name` when given, or
+    the one with `archive_id` when given (a plan's post-backup restore check
+    targets the archive its backup created; a Borg 2 series shares one
+    name, so the newest of the name can be another plan's backup, #1232).
+    None when the id is not listed: never a different archive."""
+    if archive_id:
+        for archive in archives:
+            if isinstance(archive, dict) and archive.get("id") == archive_id:
+                return archive
+        return None
     if name:
         archives = [a for a in archives if _get_archive_name(a) == name]
     if not archives:
         return None
     return max(archives, key=_coerce_archive_timestamp)
+
+
+def _recorded_archive_missing(archive_id: str) -> str:
+    return (
+        f"The archive this backup created (id {archive_id}) is not in the "
+        "repository, so its restore check cannot run; it may have been deleted "
+        "or pruned. No other archive was verified in its place."
+    )
 
 
 def _get_archive_name(archive: dict | str | None) -> str:
@@ -284,19 +301,24 @@ class RestoreCheckService:
             )
             use_canary = not full_archive and not probe_paths
             archives = await BorgRouter(repository).list_archives(env=env)
-            archive = _select_latest_archive(archives, job.archive_name)
+            archive = _select_latest_archive(archives, job.archive_name, job.archive_id)
             archive_name = _get_archive_name(archive)
             archive_selector = _get_archive_selector(archive, repository)
             if not archive_name:
-                job.status = "needs_backup" if use_canary else "failed"
-                job.error_message = (
-                    "Canary mode needs a backup that contains the Borg UI canary file. "
-                    "Run a backup, then run this restore check again."
-                    if use_canary
-                    else "No archives available for restore verification. Run a backup, then run this restore check again."
-                )
+                if job.archive_id:
+                    job.status = "failed"
+                    job.error_message = _recorded_archive_missing(job.archive_id)
+                    job.progress_message = "Recorded archive not found"
+                else:
+                    job.status = "needs_backup" if use_canary else "failed"
+                    job.error_message = (
+                        "Canary mode needs a backup that contains the Borg UI canary file. "
+                        "Run a backup, then run this restore check again."
+                        if use_canary
+                        else "No archives available for restore verification. Run a backup, then run this restore check again."
+                    )
+                    job.progress_message = "Restore verification needs a backup first"
                 job.progress = 100
-                job.progress_message = "Restore verification needs a backup first"
                 job.completed_at = datetime.utcnow()
                 raw_logs.extend(
                     [
@@ -586,20 +608,25 @@ class RestoreCheckService:
             )
             return
 
-        archive = _select_latest_archive(archives, job.archive_name)
+        archive = _select_latest_archive(archives, job.archive_name, job.archive_id)
         archive_name = _get_archive_name(archive)
         archive_selector = _get_archive_selector(archive, repository)
         if not archive_name:
-            job.status = "needs_backup" if use_canary else "failed"
-            job.error_message = (
-                "Canary mode needs a backup that contains the Borg UI canary file. "
-                "Run a backup, then run this restore check again."
-                if use_canary
-                else "No archives available for restore verification. "
-                "Run a backup, then run this restore check again."
-            )
+            if job.archive_id:
+                job.status = "failed"
+                job.error_message = _recorded_archive_missing(job.archive_id)
+                job.progress_message = "Recorded archive not found"
+            else:
+                job.status = "needs_backup" if use_canary else "failed"
+                job.error_message = (
+                    "Canary mode needs a backup that contains the Borg UI canary file. "
+                    "Run a backup, then run this restore check again."
+                    if use_canary
+                    else "No archives available for restore verification. "
+                    "Run a backup, then run this restore check again."
+                )
+                job.progress_message = "Restore verification needs a backup first"
             job.progress = 100
-            job.progress_message = "Restore verification needs a backup first"
             job.completed_at = datetime.utcnow()
             raw_logs.append(job.error_message)
             self._save_job_logs(job, job_id, raw_logs)

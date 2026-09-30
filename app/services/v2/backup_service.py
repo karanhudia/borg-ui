@@ -49,6 +49,10 @@ class BackupV2Service:
             repository_path,
             "create",
             "--stats",
+            # The result document names the archive Borg made (its id): a
+            # series shares the name, and the post-backup restore check
+            # targets that exact archive (#1232).
+            "--json",
             "--compression",
             compression,
         ]

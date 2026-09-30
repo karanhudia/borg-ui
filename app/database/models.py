@@ -1371,6 +1371,10 @@ class OperationBackupDetails(Base):
         primary_key=True,
     )
     archive_name = Column(String, nullable=True)
+    # The id Borg reported for the archive this backup created (`archive.id`
+    # of `borg create --json`). A Borg 2 series shares one name, so the
+    # post-backup restore check targets this id, not the newest of the name.
+    archive_id = Column(String, nullable=True)
     archive_pruned_at = Column(DateTime, nullable=True)
     original_size = Column(BigInteger, default=0)
     compressed_size = Column(BigInteger, default=0)
