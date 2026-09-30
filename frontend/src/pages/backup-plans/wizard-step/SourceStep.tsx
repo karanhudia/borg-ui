@@ -76,7 +76,8 @@ export function SourceStep({
       !(isLegacyDatabaseSource && location.paths.every(isDatabaseDumpPath))
   )
   const isDatabaseSource =
-    (hasDatabaseSource && !hasFileSource && !hasContainerSource) || isLegacyDatabaseSource
+    (hasDatabaseSource && !hasFileSource && !hasContainerSource && !hasAppSource) ||
+    isLegacyDatabaseSource
   const isContainerSource =
     hasContainerSource && !hasDatabaseSource && !hasFileSource && !hasAppSource
   const isAppSource = hasAppSource && !hasDatabaseSource && !hasContainerSource && !hasFileSource
