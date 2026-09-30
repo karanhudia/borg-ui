@@ -65,7 +65,8 @@
     "undoneWarning": "Diese Aktion kann nicht rückgängig gemacht werden.",
     "version": "Version",
     "errors": {
-      "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten"
+      "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten",
+      "copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen"
     }
   },
   "login": {

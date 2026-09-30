@@ -5,6 +5,7 @@ import Download from '@mui/icons-material/Download'
 import { PlayCircle } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
+import { copyText } from '../../utils/clipboard'
 
 export interface LogLine {
   line_number: number
@@ -232,9 +233,12 @@ export const TerminalLogViewer = React.forwardRef<TerminalLogViewerHandle, Termi
     }
 
     // Copy logs to clipboard
-    const handleCopyLogs = () => {
+    const handleCopyLogs = async () => {
       const logText = logs.map((log) => log.content).join('\n')
-      navigator.clipboard.writeText(logText)
+      if (!(await copyText(logText))) {
+        toast.error(t('common.errors.copyFailed'))
+        return
+      }
       toast.success(t('terminalLogViewer.toasts.logsCopied'))
     }
 

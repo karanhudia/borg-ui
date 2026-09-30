@@ -10,6 +10,7 @@ import { translateBackendKey } from '../utils/translateBackendKey'
 import { formatDate } from '../utils/dateUtils'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
+import { copyText } from '../utils/clipboard'
 
 interface Mount {
   mount_id: string
@@ -321,10 +322,13 @@ export default function MountsManagementTab() {
     unmountMutation.mutate({ mountId, force })
   }
 
-  const copyToClipboard = (mount: Mount) => {
+  const copyToClipboard = async (mount: Mount) => {
     const containerName = 'borg-web-ui'
     const command = `docker exec -it ${containerName} bash -c "cd ${mount.mount_point} && bash"`
-    navigator.clipboard.writeText(command)
+    if (!(await copyText(command))) {
+      toast.error(t('common.errors.copyFailed'))
+      return
+    }
     toast.success(t('mounts.copiedToClipboard', { label: t('mounts.actions.accessCommand') }))
     track(EventCategory.MOUNT, EventAction.VIEW, { operation: 'copy_access_command' })
   }

@@ -97,6 +97,7 @@ import {
 } from './managed-agents/logViewerAdapters'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useFeatureAnalytics } from '../hooks/useFeatureAnalytics'
+import { copyText } from '../utils/clipboard'
 
 type PageTab = 'agents' | 'jobs' | 'tokens'
 
@@ -585,7 +586,10 @@ export default function ManagedAgents() {
   }
 
   const handleCopy = async (value: string, source = 'unknown') => {
-    await navigator.clipboard.writeText(value)
+    if (!(await copyText(value))) {
+      toast.error(t('common.errors.copyFailed'))
+      return
+    }
     trackSystem(EventAction.VIEW, {
       section: MANAGED_AGENTS_ANALYTICS_SECTION,
       operation: 'copy_command',

@@ -5,6 +5,7 @@ import CheckIcon from '@mui/icons-material/Check'
 import { generateBorgCreateCommand, generateBorgInitCommand } from '../utils/borgUtils'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'react-hot-toast'
+import { copyText } from '../utils/clipboard'
 
 interface SourceSshConnection {
   username: string
@@ -54,17 +55,16 @@ const CopyableCommandBox = ({ command }: CopyableCommandBoxProps) => {
   }, [])
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(command)
-      setCopied(true)
-      toast.success(t('commandPreview.commandCopied'))
-      if (resetCopiedTimeoutRef.current !== null) {
-        window.clearTimeout(resetCopiedTimeoutRef.current)
-      }
-      resetCopiedTimeoutRef.current = window.setTimeout(() => setCopied(false), 2000)
-    } catch {
+    if (!(await copyText(command))) {
       toast.error(t('commandPreview.copyFailed'))
+      return
     }
+    setCopied(true)
+    toast.success(t('commandPreview.commandCopied'))
+    if (resetCopiedTimeoutRef.current !== null) {
+      window.clearTimeout(resetCopiedTimeoutRef.current)
+    }
+    resetCopiedTimeoutRef.current = window.setTimeout(() => setCopied(false), 2000)
   }
 
   const copyLabel = copied ? t('commandPreview.copied') : t('commandPreview.copyToClipboard')

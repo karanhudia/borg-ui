@@ -3,6 +3,7 @@ import { Box, Typography, IconButton, alpha, useTheme } from '@mui/material'
 import { HardDrive, Copy, Check, X } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
+import { copyText } from '../utils/clipboard'
 
 interface MountSuccessToastProps {
   toastId: string
@@ -18,11 +19,13 @@ export default function MountSuccessToast({ toastId, command }: MountSuccessToas
   const borderColor = isDark ? alpha('#fff', 0.1) : alpha('#000', 0.1)
   const surface = isDark ? '#1e2124' : '#ffffff'
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(command).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
+  const handleCopy = async () => {
+    if (!(await copyText(command))) {
+      toast.error(t('common.errors.copyFailed'))
+      return
+    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   return (
