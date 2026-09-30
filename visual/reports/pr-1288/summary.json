@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-09-30T15:31:52.700Z",
+  "generatedAt": "2026-09-30T16:31:33.614Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1288 visual report",
-    "commitSha": "47dfb3ea502e",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36737208176"
+    "commitSha": "8035ca6b08b4",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36744640053"
   },
   "totals": {
-    "baseline": 1100,
+    "baseline": 1112,
     "actual": 1122,
     "compared": 1100,
-    "changed": 18,
+    "changed": 33,
     "added": 22,
-    "removed": 0,
-    "unchanged": 1082
+    "removed": 12,
+    "unchanged": 1067
   },
   "changed": [
     {
@@ -269,6 +269,258 @@
       }
     },
     {
+      "fileName": "pages-managedagents--add-agent-install-command-step--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--add-agent-install-command-step--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--add-agent-install-command-step--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--add-agent-install-command-step--mobile.png",
+      "diffPixels": 194174,
+      "totalPixels": 329160,
+      "diffRatio": 0.5899076436991129,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-install-command-step.png",
+      "baselinePath": "images/baseline/pages-managedagents--add-agent-install-command-step.png",
+      "actualPath": "images/actual/pages-managedagents--add-agent-install-command-step.png",
+      "diffPath": "images/diff/pages-managedagents--add-agent-install-command-step.png",
+      "diffPixels": 89705,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0876025390625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-localhost-warning--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--add-agent-localhost-warning--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--add-agent-localhost-warning--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--add-agent-localhost-warning--mobile.png",
+      "diffPixels": 3497,
+      "totalPixels": 329160,
+      "diffRatio": 0.010624012638230648,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-localhost-warning.png",
+      "baselinePath": "images/baseline/pages-managedagents--add-agent-localhost-warning.png",
+      "actualPath": "images/actual/pages-managedagents--add-agent-localhost-warning.png",
+      "diffPath": "images/diff/pages-managedagents--add-agent-localhost-warning.png",
+      "diffPixels": 3356,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00327734375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-platform-step--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--add-agent-platform-step--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--add-agent-platform-step--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--add-agent-platform-step--mobile.png",
+      "diffPixels": 3497,
+      "totalPixels": 329160,
+      "diffRatio": 0.010624012638230648,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-platform-step.png",
+      "baselinePath": "images/baseline/pages-managedagents--add-agent-platform-step.png",
+      "actualPath": "images/actual/pages-managedagents--add-agent-platform-step.png",
+      "diffPath": "images/diff/pages-managedagents--add-agent-platform-step.png",
+      "diffPixels": 3356,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00327734375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-waiting-for-connection--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--add-agent-waiting-for-connection--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--add-agent-waiting-for-connection--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--add-agent-waiting-for-connection--mobile.png",
+      "diffPixels": 86125,
+      "totalPixels": 329160,
+      "diffRatio": 0.26165086887835703,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-waiting-for-connection.png",
+      "baselinePath": "images/baseline/pages-managedagents--add-agent-waiting-for-connection.png",
+      "actualPath": "images/actual/pages-managedagents--add-agent-waiting-for-connection.png",
+      "diffPath": "images/diff/pages-managedagents--add-agent-waiting-for-connection.png",
+      "diffPixels": 108387,
+      "totalPixels": 1024000,
+      "diffRatio": 0.1058466796875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-managedagents--fleet-overview--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--fleet-overview--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--fleet-overview--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--fleet-overview--mobile.png",
+      "diffPixels": 125751,
+      "totalPixels": 329160,
+      "diffRatio": 0.3820360918702151,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-managedagents--fleet-overview.png",
+      "baselinePath": "images/baseline/pages-managedagents--fleet-overview.png",
+      "actualPath": "images/actual/pages-managedagents--fleet-overview.png",
+      "diffPath": "images/diff/pages-managedagents--fleet-overview.png",
+      "diffPixels": 570309,
+      "totalPixels": 1024000,
+      "diffRatio": 0.5569423828125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-managedagents--locked-community--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--locked-community--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--locked-community--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--locked-community--mobile.png",
+      "diffPixels": 122106,
+      "totalPixels": 329160,
+      "diffRatio": 0.37096244987240246,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-managedagents--locked-community.png",
+      "baselinePath": "images/baseline/pages-managedagents--locked-community.png",
+      "actualPath": "images/actual/pages-managedagents--locked-community.png",
+      "diffPath": "images/diff/pages-managedagents--locked-community.png",
+      "diffPixels": 545083,
+      "totalPixels": 1024000,
+      "diffRatio": 0.5323076171875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-managedagents--setup-help-details--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--setup-help-details--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--setup-help-details--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--setup-help-details--mobile.png",
+      "diffPixels": 49997,
+      "totalPixels": 329160,
+      "diffRatio": 0.151892696560943,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-managedagents--setup-help-details.png",
+      "baselinePath": "images/baseline/pages-managedagents--setup-help-details.png",
+      "actualPath": "images/actual/pages-managedagents--setup-help-details.png",
+      "diffPath": "images/diff/pages-managedagents--setup-help-details.png",
+      "diffPixels": 242016,
+      "totalPixels": 1024000,
+      "diffRatio": 0.23634375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
       "fileName": "quick-start-dialog--first-step--mobile.png",
       "baselinePath": "images/baseline/quick-start-dialog--first-step--mobile.png",
       "actualPath": "images/actual/quick-start-dialog--first-step--mobile.png",
@@ -327,9 +579,27 @@
       "baselinePath": "images/baseline/quick-start-steps--destination-ssh-no-default-path.png",
       "actualPath": "images/actual/quick-start-steps--destination-ssh-no-default-path.png",
       "diffPath": "images/diff/quick-start-steps--destination-ssh-no-default-path.png",
-      "diffPixels": 2785,
+      "diffPixels": 2782,
       "totalPixels": 1024000,
-      "diffRatio": 0.0027197265625,
+      "diffRatio": 0.002716796875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "quick-start-steps--folders-empty.png",
+      "baselinePath": "images/baseline/quick-start-steps--folders-empty.png",
+      "actualPath": "images/actual/quick-start-steps--folders-empty.png",
+      "diffPath": "images/diff/quick-start-steps--folders-empty.png",
+      "diffPixels": 9803,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0095732421875,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -431,7 +701,56 @@
       "actualPath": "images/actual/quick-start-steps--review-immich.png"
     }
   ],
-  "removed": [],
+  "removed": [
+    {
+      "fileName": "components-archivecard--agent-repository--mobile.png",
+      "baselinePath": "images/baseline/components-archivecard--agent-repository--mobile.png"
+    },
+    {
+      "fileName": "components-archivecard--agent-repository.png",
+      "baselinePath": "images/baseline/components-archivecard--agent-repository.png"
+    },
+    {
+      "fileName": "managed-agents-agentsetserverdialog--macos-agent--mobile.png",
+      "baselinePath": "images/baseline/managed-agents-agentsetserverdialog--macos-agent--mobile.png"
+    },
+    {
+      "fileName": "managed-agents-agentsetserverdialog--macos-agent.png",
+      "baselinePath": "images/baseline/managed-agents-agentsetserverdialog--macos-agent.png"
+    },
+    {
+      "fileName": "managed-agents-agentuninstalldialog--macos-agent--mobile.png",
+      "baselinePath": "images/baseline/managed-agents-agentuninstalldialog--macos-agent--mobile.png"
+    },
+    {
+      "fileName": "managed-agents-agentuninstalldialog--macos-agent.png",
+      "baselinePath": "images/baseline/managed-agents-agentuninstalldialog--macos-agent.png"
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-macos-details-step--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--add-agent-macos-details-step--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-macos-details-step.png",
+      "baselinePath": "images/baseline/pages-managedagents--add-agent-macos-details-step.png"
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-macos-install-command-step--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--add-agent-macos-install-command-step--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-macos-install-command-step.png",
+      "baselinePath": "images/baseline/pages-managedagents--add-agent-macos-install-command-step.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-reinstall-dialog-macos--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-reinstall-dialog-macos--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-reinstall-dialog-macos.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-reinstall-dialog-macos.png"
+    }
+  ],
   "unchanged": [
     {
       "fileName": "activity-activitytimeline--dark--mobile.png"
@@ -3248,34 +3567,10 @@
       "fileName": "pages-managedagents--add-agent-details-step.png"
     },
     {
-      "fileName": "pages-managedagents--add-agent-install-command-step--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--add-agent-install-command-step.png"
-    },
-    {
-      "fileName": "pages-managedagents--add-agent-localhost-warning--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--add-agent-localhost-warning.png"
-    },
-    {
-      "fileName": "pages-managedagents--add-agent-platform-step--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--add-agent-platform-step.png"
-    },
-    {
       "fileName": "pages-managedagents--add-agent-root-service-user-warning--mobile.png"
     },
     {
       "fileName": "pages-managedagents--add-agent-root-service-user-warning.png"
-    },
-    {
-      "fileName": "pages-managedagents--add-agent-waiting-for-connection--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--add-agent-waiting-for-connection.png"
     },
     {
       "fileName": "pages-managedagents--agent-diagnostics-partial-failure--mobile.png"
@@ -3342,24 +3637,6 @@
     },
     {
       "fileName": "pages-managedagents--delete-confirmation.png"
-    },
-    {
-      "fileName": "pages-managedagents--fleet-overview--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--fleet-overview.png"
-    },
-    {
-      "fileName": "pages-managedagents--locked-community--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--locked-community.png"
-    },
-    {
-      "fileName": "pages-managedagents--setup-help-details--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--setup-help-details.png"
     },
     {
       "fileName": "pages-remoteclients--active-remote--mobile.png"
@@ -3459,9 +3736,6 @@
     },
     {
       "fileName": "quick-start-steps--folders-empty--mobile.png"
-    },
-    {
-      "fileName": "quick-start-steps--folders-empty.png"
     },
     {
       "fileName": "quick-start-steps--folders-picked--mobile.png"
