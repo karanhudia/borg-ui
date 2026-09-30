@@ -18,6 +18,8 @@ const repositoryErrorKeys = [
   'backend.errors.repo.listFailed',
   'backend.errors.repo.failedToInitializeRepository',
   'backend.errors.repo.remoteBorg2Incompatible',
+  'backend.errors.repo.borg2OnlyUrl',
+  'backend.errors.repo.borg2OnlyUrlOrSshHost',
 ] as const
 
 const backupPlanErrorKeys = ['backend.errors.backupPlans.nameExists'] as const
@@ -59,6 +61,32 @@ describe('backend repository translations', () => {
 
     expect(translateBackendKey({ key: 'backend.errors.backupPlans.nameExists' })).toBe(
       'A backup plan with this name already exists.'
+    )
+  })
+
+  it('names the scheme of a repository URL only Borg 2 can open', async () => {
+    await i18n.changeLanguage('en')
+
+    expect(
+      translateBackendKey({
+        key: 'backend.errors.repo.borg2OnlyUrl',
+        params: { scheme: 'sftp://' },
+      })
+    ).toBe(
+      "A sftp:// repository URL needs Borg 2; Borg 1 can't open it. Pick Borg 2 for this repository."
+    )
+  })
+
+  it('says how to write an SSH host named like a Borg 2 store', async () => {
+    await i18n.changeLanguage('en')
+
+    expect(
+      translateBackendKey({
+        key: 'backend.errors.repo.borg2OnlyUrlOrSshHost',
+        params: { scheme: 's3:', host: 's3' },
+      })
+    ).toBe(
+      'A s3: repository URL needs Borg 2; Borg 1 reads it as an SSH host named s3. Pick Borg 2 for this repository, or write the SSH host as ssh://s3/path (ssh://s3/./path for a path relative to the login directory).'
     )
   })
 

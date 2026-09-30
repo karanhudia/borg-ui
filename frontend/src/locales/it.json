@@ -5837,6 +5837,8 @@
         "encryptedPassphraseRequired": "La passphrase è richiesta per la modalità di crittografia '{{mode}}'",
         "agentBorg2Unavailable": "Questo endpoint non ha Borg 2 installato, quindi non è possibile creare o aprire un repository Borg 2. Installa Borg 2 sull'endpoint oppure scegli Borg 1.",
         "agentBorg2TooOld": "Il Borg 2 di questo endpoint è {{version}}; borg-ui richiede {{minimum}} o successivo per un repository Borg 2. Aggiorna Borg 2 sull'endpoint oppure scegli Borg 1.",
+        "borg2OnlyUrl": "Un URL di repository {{scheme}} richiede Borg 2; Borg 1 non può aprirlo. Scegli Borg 2 per questo repository.",
+        "borg2OnlyUrlOrSshHost": "Un URL di repository {{scheme}} richiede Borg 2; Borg 1 lo legge come un host SSH chiamato {{host}}. Scegli Borg 2 per questo repository oppure scrivi l'host SSH come ssh://{{host}}/percorso (ssh://{{host}}/./percorso per un percorso relativo alla directory di login).",
         "agentPassphraseUnavailable": "Questo agent gestito non ha segnalato una BORG_PASSPHRASE, quindi non può aprire un repository crittografato. Imposta BORG_PASSPHRASE nell'ambiente dell'agent oppure inserisci qui una passphrase.",
         "encryptedPassphraseIncorrect": "Il repository è crittografato ma la passphrase non è corretta o mancante. Fornisci la passphrase corretta.",
         "encryptionKeyfileNotRequired": "Il repository usa la crittografia '{{mode}}', che non richiede un file chiave. Il caricamento del file chiave è necessario solo per le modalità di crittografia 'keyfile' o 'keyfile-blake2'.",
