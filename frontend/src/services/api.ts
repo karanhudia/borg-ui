@@ -584,6 +584,71 @@ export interface SourceDiscoveryContainer {
   mounts: SourceDiscoveryContainerMount[]
 }
 
+export interface AppTemplate {
+  id: string
+  version: number
+  name: string
+  description: string
+  /** Official logo, SVG markup. */
+  logo_svg: string | null
+  docs_url: string
+  verified: { app_version: string; date: string; restore_tested: boolean }
+  detect: { image_prefix: string; mount_destinations: string[] }
+  root_hint: string
+  /** Other folders the container mounts (external libraries), backed up by default. */
+  extra_mounts: { label: string; description: string } | null
+  folders: AppTemplateFolder[]
+  pre_backup_script: SourceDiscoveryScriptDraft | null
+  schedule_cron: string
+  notes: string[]
+}
+
+export interface AppTemplateFolder {
+  /** Relative to the app's folder. */
+  path: string
+  label: string
+  description: string
+  /** rebuildable folders are skipped by default; database shows dump freshness. */
+  role: 'data' | 'database' | 'rebuildable'
+  stale_after_hours: number | null
+}
+
+export interface AppFolderStats {
+  /** Relative to the app's folder, or absolute for an external folder. */
+  path: string
+  exists: boolean
+  /** False when it exists but the user Borg runs as can't open it. */
+  readable: boolean
+  size_bytes: number | null
+  latest_name: string | null
+  latest_modified_at: string | null
+}
+
+export interface AppDetection {
+  template_id: string
+  container_name: string
+  state: string | null
+  /** The app's root folder as Borg UI reads it. */
+  path: string
+  host_path: string
+  /** False when Borg UI runs in Docker and this folder is not mounted into it. */
+  readable: boolean
+  extra_mounts: AppExtraMount[]
+}
+
+export interface AppExtraMount {
+  path: string
+  host_path: string
+  /** Where the container sees it. */
+  destination: string
+  readable: boolean
+}
+
+export interface AppDetectResponse {
+  detections: AppDetection[]
+  warnings: DatabaseScanWarning[]
+}
+
 export interface ContainerScanResponse {
   scan_target: {
     source_type: 'local' | 'remote'
@@ -1579,6 +1644,24 @@ export const sourceDiscoveryAPI = {
     api.post<ContainerScanResponse>('/source-discovery/containers/scan', body),
   filesystemSnapshots: () =>
     api.get<FilesystemSnapshotCapabilitiesResponse>('/source-discovery/filesystem-snapshots'),
+  appTemplates: () => api.get<{ templates: AppTemplate[] }>('/source-discovery/apps'),
+  inspectApp: (body: {
+    template_id: string
+    source_type: 'local' | 'remote'
+    source_ssh_connection_id: number | null
+    path: string
+    extra_paths: string[]
+  }) =>
+    api.post<{
+      root_status: 'ok' | 'missing' | 'denied' | 'unknown'
+      user: string | null
+      folders: AppFolderStats[]
+      warnings: DatabaseScanWarning[]
+    }>('/source-discovery/apps/inspect', body),
+  detectApps: (body: {
+    source_type: 'local' | 'remote'
+    source_ssh_connection_id: number | null
+  }) => api.post<AppDetectResponse>('/source-discovery/apps/detect', body),
 }
 
 export const mountsAPI = {

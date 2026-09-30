@@ -20,6 +20,7 @@ import {
   type QuickStartAnswers,
   type QuickStartSettingsChange,
 } from './quickStartState'
+import QuickStartAppStep from './steps/QuickStartAppStep'
 import QuickStartConnectStep from './steps/QuickStartConnectStep'
 import QuickStartDestinationStep from './steps/QuickStartDestinationStep'
 import QuickStartFoldersStep from './steps/QuickStartFoldersStep'
@@ -117,6 +118,8 @@ export default function QuickStartDialog({
 
   const renderStep = () => {
     switch (step) {
+      case 'app':
+        return <QuickStartAppStep answers={answers} onChange={update} />
       case 'what':
         return (
           <QuickStartWhatStep

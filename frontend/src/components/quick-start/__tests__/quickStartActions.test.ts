@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
+import { immichTemplate } from '../../app-templates/appTemplates.fixtures'
 import {
+  appScriptKey,
+  appScriptPayload,
   buildPlanPayload,
+  reconcileScriptResult,
   buildQuickStartActions,
   buildRepositoryPayload,
   pendingActions,
@@ -141,5 +145,47 @@ describe('quickStartActions', () => {
     expect(plan.source_locations).toEqual([
       expect.objectContaining({ source_type: 'agent', agent_machine_id: 7, paths: ['/home/alex'] }),
     ])
+  })
+
+  describe('with an app', () => {
+    const immich = (overrides: Partial<QuickStartAnswers> = {}) =>
+      localAnswers({
+        appChoice: 'app',
+        app: immichTemplate,
+        appRoot: '/local/srv/immich',
+        appExcludes: ['thumbs'],
+        sourcePaths: ['/local/srv/immich', '/local/srv/photos'],
+        ...overrides,
+      })
+
+    it('builds excludes and the check from the app folder, wherever it sits in the list', () => {
+      const answers = immich({ sourcePaths: ['/local/srv/photos', '/local/srv/immich'] })
+      expect(buildPlanPayload(answers, 1, 3).exclude_patterns).toEqual(['/local/srv/immich/thumbs'])
+      expect(appScriptPayload(answers)?.content).toContain("'/local/srv/immich'")
+    })
+
+    it('keeps a created check on retry only while the answers still call for it', () => {
+      const answers = immich()
+      const created = { repositoryId: 1, scriptId: 9, scriptKey: appScriptKey(answers) }
+
+      expect(reconcileScriptResult(created, answers)).toEqual({ results: created })
+
+      const moved = immich({ appRoot: '/local/srv/other', sourcePaths: ['/local/srv/other'] })
+      expect(reconcileScriptResult(created, moved)).toEqual({
+        results: { repositoryId: 1, scriptKey: undefined },
+        staleScriptId: 9,
+      })
+
+      const foldersOnly = immich({ sourceKind: 'ssh', sourceConnectionId: 3 })
+      expect(reconcileScriptResult(created, foldersOnly).staleScriptId).toBe(9)
+    })
+
+    it('drops excludes and the check once the app folder is removed', () => {
+      // Removing the app folder must not turn the next folder into "the app's folder".
+      const answers = immich({ sourcePaths: ['/local/srv/photos'] })
+      expect(buildPlanPayload(answers, 1).exclude_patterns).toEqual([])
+      expect(appScriptPayload(answers)).toBeNull()
+      expect(buildQuickStartActions(answers)).toEqual(['create_repository', 'create_plan'])
+    })
   })
 })

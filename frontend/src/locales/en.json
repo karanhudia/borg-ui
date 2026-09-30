@@ -4269,7 +4269,8 @@
     "hint": "Specify patterns to exclude from backup (e.g., *.log, *.tmp, __pycache__, node_modules)",
     "placeholder": "*.log or /path/to/exclude",
     "browseToExclude": "Browse to exclude",
-    "add": "Add"
+    "add": "Add",
+    "remove": "Remove {{pattern}}"
   },
   "pruneSettings": {
     "keepHourly": "Keep Hourly",
@@ -6610,6 +6611,7 @@
     "subtitle": "Answer a few questions and Borg UI sets up a scheduled, self-maintaining backup for you.",
     "create": "Create backup",
     "steps": {
+      "app": "App",
       "what": "What",
       "connect": "Connect",
       "folders": "Folders",
@@ -6712,7 +6714,9 @@
       "creates": "Creates",
       "createsList": "Repository \"{{name}}\" and backup plan \"{{name}}\"",
       "thisServer": "this server",
-      "onMachine": "on {{machine}}"
+      "onMachine": "on {{machine}}",
+      "skips": "Skips",
+      "checksFirst": "Checks first"
     },
     "customize": {
       "title": "Customize",
@@ -6741,6 +6745,7 @@
       "backupStarted": "First backup started",
       "actions": {
         "create_repository": "Create the repository",
+        "create_script": "Create the pre-backup check",
         "create_plan": "Create the backup plan with its schedule"
       },
       "status": {
@@ -6778,6 +6783,62 @@
       "noAgentsNoPermission": "No computers run the agent yet. Ask an admin to add one under Managed Agents.",
       "loadFailed": "Could not load the computers. Try again in a moment.",
       "offlineBrowse": "{{machine}} is offline, so its folders cannot be browsed. Type the path, or wait until the agent connects."
+    },
+    "app": {
+      "title": "Which app are you backing up?",
+      "hint": "Picking an app fills in its folder, skips what it can rebuild and adds the safety checks it needs.",
+      "pickApp": "An app",
+      "pickAppDesc": "A self-hosted app such as Immich. Borg UI finds its folder and adds the checks it needs.",
+      "other": "Something else",
+      "otherDesc": "Pick the folders yourself: documents, app data, anything on disk."
+    }
+  },
+  "appTemplates": {
+    "scanAgain": "Scan again",
+    "pickManually": "Pick the {{app}} folder below. It is the {{hint}}.",
+    "scanning": "Looking for {{app}}…",
+    "notReadable": "Found {{app}}, but Borg UI can't read {{path}}. Add this line to the volumes of Borg UI in docker-compose.yml, restart Borg UI, then scan again:",
+    "useFolder": "Use this folder",
+    "found": "Found {{app}} (container {{container}})",
+    "notFound": "No running {{app}} found here. Pick its folder below. It is the {{hint}}.",
+    "verified": "Checked against {{app}} {{version}}.",
+    "docs": "{{app}} backup docs",
+    "select": {
+      "label": "App",
+      "search": "Search apps",
+      "noResults": "No app matches. Pick \"Something else\" and choose its folders.",
+      "placeholder": "Choose an app"
+    },
+    "folders": {
+      "title": "What gets backed up",
+      "missing": "Nothing here yet",
+      "unmeasured": "Too big to measure quickly",
+      "latestDump": "Latest dump {{when}}",
+      "staleDump": "Latest dump {{when}}. Older than {{hours}} hours: backups will stop until Immich writes a new one.",
+      "noDump": "No database dump yet. Turn on Administration > Settings > Backup in Immich, or the backup will stop.",
+      "total": "About {{size}} will be backed up.",
+      "totalAtLeast": "At least {{size}} will be backed up.",
+      "noAccess": "{{user}} can't open this",
+      "backUp": "Back up"
+    },
+    "missingRoot": "{{path}} does not exist on that machine. Pick the folder that holds Immich's files: the {{hint}}.",
+    "denied": {
+      "title": "Borg UI can't open {{path}} as {{user}}",
+      "why": "Docker keeps named volumes readable only by root. Borg connects as the same user, so the backup would fail too.",
+      "fixFolder": "Easiest fix: keep Immich's files in a normal folder, as Immich's own compose file does. Set the {{hint}} to a folder such as /srv/immich, move the files there, and restart Immich.",
+      "fixAcl": "Or let {{user}} read this volume (needs the acl package on that machine):"
+    },
+    "goodToKnow": "Good to know",
+    "tab": {
+      "kind": "Apps",
+      "title": "Back up an app",
+      "runsOn": "Where the app runs",
+      "folder": "App folder",
+      "add": "Add {{app}}",
+      "inPlan": "Apps in this plan",
+      "folderCount_one": "{{count}} folder",
+      "folderCount_other": "{{count}} folders",
+      "remove": "Remove {{app}}"
     }
   }
 }

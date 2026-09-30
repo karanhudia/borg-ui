@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Box, Button, Chip, Stack, Typography } from '@mui/material'
 import { Folder } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import AppTemplateFolderPanel from '../../app-templates/AppTemplateFolderPanel'
+import type { AppScanTarget } from '../../app-templates/appTemplates'
 import PathSelectorField from '../../shared/PathSelectorField'
 import type { QuickStartStepProps } from '../quickStartState'
 import { agentIsOnline, agentLabel, useManagedAgent } from '../quickStartAgent'
@@ -16,12 +18,29 @@ export default function QuickStartFoldersStep({ answers, onChange }: QuickStartS
   const onAgent = answers.sourceKind === 'agent'
   const agent = useManagedAgent(onAgent ? answers.sourceAgentId : '')
 
+  const appRoot = answers.appRoot
+  const appRootIncluded = Boolean(appRoot) && answers.sourcePaths.includes(appRoot)
+  const otherPaths = answers.sourcePaths.filter((path) => path !== appRoot)
+  const setAppPaths = useCallback(
+    (root: string, extraPaths: string[]) =>
+      onChange({ appRoot: root, sourcePaths: [root, ...extraPaths] }),
+    [onChange]
+  )
+  const scanTarget: AppScanTarget | null =
+    answers.sourceKind === 'server'
+      ? { source_type: 'local', source_ssh_connection_id: null }
+      : answers.sourceKind === 'ssh' && answers.sourceConnectionId !== ''
+        ? { source_type: 'remote', source_ssh_connection_id: answers.sourceConnectionId }
+        : null
+
   const addPaths = (paths: string[]) => {
     const next = [...answers.sourcePaths]
     for (const path of paths.map((value) => value.trim()).filter(Boolean)) {
       if (!next.includes(path)) next.push(path)
     }
-    onChange({ sourcePaths: next })
+    // Typed by hand for an app that wasn't found: the first folder is its folder.
+    const root = answers.app && !answers.appRoot ? (next[0] ?? '') : answers.appRoot
+    onChange({ sourcePaths: next, appRoot: root })
     setDraft('')
   }
 
@@ -43,6 +62,22 @@ export default function QuickStartFoldersStep({ answers, onChange }: QuickStartS
               : t('quickStart.folders.hint')}
         </Typography>
       </Box>
+
+      {answers.app && (
+        <AppTemplateFolderPanel
+          template={answers.app}
+          target={scanTarget}
+          root={appRoot}
+          rootIncluded={appRootIncluded}
+          onRootIncludedChange={(included) =>
+            onChange({ sourcePaths: included ? [appRoot, ...otherPaths] : otherPaths })
+          }
+          extraPaths={otherPaths}
+          onPathsChange={setAppPaths}
+          excludes={answers.appExcludes}
+          onExcludesChange={(appExcludes) => onChange({ appExcludes })}
+        />
+      )}
 
       <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
         <PathSelectorField

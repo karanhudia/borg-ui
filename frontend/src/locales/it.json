@@ -4269,7 +4269,8 @@
     "hint": "Specifica pattern da escludere dal backup (es., *.log, *.tmp, __pycache__, node_modules)",
     "placeholder": "*.log o /percorso/da/escludere",
     "browseToExclude": "Sfoglia per escludere",
-    "add": "Aggiungi"
+    "add": "Aggiungi",
+    "remove": "Rimuovi {{pattern}}"
   },
   "pruneSettings": {
     "keepHourly": "Mantieni Orari",
@@ -6610,6 +6611,7 @@
     "subtitle": "Rispondi a poche domande e Borg UI configura per te un backup pianificato che si mantiene da solo.",
     "create": "Crea backup",
     "steps": {
+      "app": "App",
       "what": "Cosa",
       "connect": "Connetti",
       "folders": "Cartelle",
@@ -6712,7 +6714,9 @@
       "creates": "Crea",
       "createsList": "Repository «{{name}}» e piano di backup «{{name}}»",
       "thisServer": "questo server",
-      "onMachine": "su {{machine}}"
+      "onMachine": "su {{machine}}",
+      "skips": "Salta",
+      "checksFirst": "Controlla prima"
     },
     "customize": {
       "title": "Personalizza",
@@ -6741,6 +6745,7 @@
       "backupStarted": "Primo backup avviato",
       "actions": {
         "create_repository": "Crea il repository",
+        "create_script": "Crea il controllo pre-backup",
         "create_plan": "Crea il piano di backup con la sua pianificazione"
       },
       "status": {
@@ -6778,6 +6783,62 @@
       "noAgentsNoPermission": "Nessun computer esegue ancora l'agente. Chiedi a un amministratore di aggiungerne uno in Agenti gestiti.",
       "loadFailed": "Impossibile caricare i computer. Riprova tra poco.",
       "offlineBrowse": "{{machine}} è offline, quindi non è possibile sfogliarne le cartelle. Scrivi il percorso o attendi che l'agente si connetta."
+    },
+    "app": {
+      "title": "Quale app vuoi salvare?",
+      "hint": "Scegliendo un'app viene inserita la sua cartella, si salta ciò che può rigenerare e si aggiungono i controlli necessari.",
+      "pickApp": "Un'app",
+      "pickAppDesc": "Un'app self-hosted come Immich. Borg UI trova la sua cartella e aggiunge i controlli necessari.",
+      "other": "Qualcos'altro",
+      "otherDesc": "Scegli tu le cartelle: documenti, dati delle app, qualsiasi cosa sul disco."
+    }
+  },
+  "appTemplates": {
+    "scanAgain": "Cerca di nuovo",
+    "pickManually": "Scegli sotto la cartella di {{app}}. È {{hint}}.",
+    "scanning": "Ricerca di {{app}}…",
+    "notReadable": "{{app}} trovato, ma Borg UI non può leggere {{path}}. Aggiungi questa riga ai volumi di Borg UI in docker-compose.yml, riavvia Borg UI e cerca di nuovo:",
+    "useFolder": "Usa questa cartella",
+    "found": "{{app}} trovato (container {{container}})",
+    "notFound": "Nessun {{app}} in esecuzione qui. Scegli sotto la sua cartella. È {{hint}}.",
+    "verified": "Verificato con {{app}} {{version}}.",
+    "docs": "Documentazione backup di {{app}}",
+    "select": {
+      "label": "App",
+      "search": "Cerca app",
+      "noResults": "Nessuna app corrisponde. Scegli «Qualcos'altro» e seleziona le cartelle.",
+      "placeholder": "Scegli un'app"
+    },
+    "folders": {
+      "title": "Cosa viene salvato",
+      "missing": "Ancora vuoto",
+      "unmeasured": "Troppo grande per misurarlo in fretta",
+      "latestDump": "Ultimo dump {{when}}",
+      "staleDump": "Ultimo dump {{when}}. Più vecchio di {{hours}} ore: i backup si fermano finché Immich non ne scrive uno nuovo.",
+      "noDump": "Ancora nessun dump del database. Attiva Administration > Settings > Backup in Immich, altrimenti il backup si ferma.",
+      "total": "Verranno salvati circa {{size}}.",
+      "totalAtLeast": "Verranno salvati almeno {{size}}.",
+      "noAccess": "{{user}} non può aprirlo",
+      "backUp": "Salva"
+    },
+    "missingRoot": "{{path}} non esiste su quella macchina. Scegli la cartella con i file di Immich: {{hint}}.",
+    "denied": {
+      "title": "Borg UI non può aprire {{path}} come {{user}}",
+      "why": "Docker rende i volumi con nome leggibili solo da root. Borg si collega con lo stesso utente, quindi anche il backup fallirebbe.",
+      "fixFolder": "Soluzione più semplice: tieni i file di Immich in una cartella normale, come fa il compose ufficiale di Immich. Imposta {{hint}} su una cartella come /srv/immich, sposta lì i file e riavvia Immich.",
+      "fixAcl": "Oppure consenti a {{user}} di leggere questo volume (serve il pacchetto acl su quella macchina):"
+    },
+    "goodToKnow": "Da sapere",
+    "tab": {
+      "kind": "App",
+      "title": "Salva un'app",
+      "runsOn": "Dove gira l'app",
+      "folder": "Cartella dell'app",
+      "add": "Aggiungi {{app}}",
+      "inPlan": "App in questo piano",
+      "folderCount_one": "{{count}} cartella",
+      "folderCount_other": "{{count}} cartelle",
+      "remove": "Rimuovi {{app}}"
     }
   }
 }

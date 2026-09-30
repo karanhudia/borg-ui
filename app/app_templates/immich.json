@@ -1,0 +1,76 @@
+{
+  "id": "immich",
+  "version": 1,
+  "name": "Immich",
+  "description": "Photos, videos and Immich's own database dumps.",
+  "logo": "immich-logo.svg",
+  "docs_url": "https://docs.immich.app/administration/backup-and-restore",
+  "verified": {
+    "app_version": "v3.2.4",
+    "date": "2026-09-30",
+    "restore_tested": false
+  },
+  "detect": {
+    "image_prefix": "ghcr.io/immich-app/immich-server",
+    "mount_destinations": [
+      "/data",
+      "/usr/src/app/upload"
+    ]
+  },
+  "root_hint": "UPLOAD_LOCATION in your Immich .env file",
+  "extra_mounts": {
+    "label": "External library",
+    "description": "Photos and videos Immich reads from a folder you added as an external library. Immich only indexes them; they are not in its own folder."
+  },
+  "folders": [
+    {
+      "path": "upload",
+      "label": "Uploads",
+      "description": "Your photos and videos as uploaded. This is where Immich keeps originals unless the storage template is on.",
+      "role": "data"
+    },
+    {
+      "path": "library",
+      "label": "Library",
+      "description": "Your photos and videos, when Immich's storage template is on.",
+      "role": "data"
+    },
+    {
+      "path": "profile",
+      "label": "Profile pictures",
+      "description": "Pictures users set for their accounts.",
+      "role": "data"
+    },
+    {
+      "path": "backups",
+      "label": "Database dumps",
+      "description": "Immich's nightly copy of its database: albums, people, faces, descriptions and settings.",
+      "role": "database",
+      "stale_after_hours": 26,
+      "dump_pattern": "immich-db-backup-*"
+    },
+    {
+      "path": "thumbs",
+      "label": "Previews",
+      "description": "Thumbnails and preview images. Immich rebuilds them after a restore.",
+      "role": "rebuildable"
+    },
+    {
+      "path": "encoded-video",
+      "label": "Re-encoded videos",
+      "description": "Smaller copies of your videos for streaming. Immich rebuilds them after a restore.",
+      "role": "rebuildable"
+    }
+  ],
+  "pre_backup_script": {
+    "file": "immich-check-db-dump.sh",
+    "name": "Check Immich database dump",
+    "description": "Stop the backup if Immich has not written a database dump in the last 26 hours.",
+    "timeout": 60
+  },
+  "schedule_cron": "0 3 * * *",
+  "notes": [
+    "Keep Administration > Settings > Backup turned on in Immich. This backup relies on Immich's own daily database dumps in the backups folder.",
+    "After a restore with previews or re-encoded videos skipped, run the Generate Thumbnails and Transcode Videos jobs in Immich."
+  ]
+}

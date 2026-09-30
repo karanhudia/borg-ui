@@ -4269,7 +4269,8 @@
     "hint": "Muster zum Ausschluss von der Sicherung angeben (z.B. *.log, *.tmp, __pycache__, node_modules)",
     "placeholder": "*.log oder /pfad/zum/ausschluss",
     "browseToExclude": "Zum Ausschließen durchsuchen",
-    "add": "Hinzufügen"
+    "add": "Hinzufügen",
+    "remove": "{{pattern}} entfernen"
   },
   "pruneSettings": {
     "keepHourly": "Stündlich behalten",
@@ -6610,6 +6611,7 @@
     "subtitle": "Beantworte ein paar Fragen und Borg UI richtet ein geplantes, sich selbst pflegendes Backup für dich ein.",
     "create": "Backup erstellen",
     "steps": {
+      "app": "App",
       "what": "Was",
       "connect": "Verbinden",
       "folders": "Ordner",
@@ -6712,7 +6714,9 @@
       "creates": "Erstellt",
       "createsList": "Repository „{{name}}“ und Backup-Plan „{{name}}“",
       "thisServer": "diesem Server",
-      "onMachine": "auf {{machine}}"
+      "onMachine": "auf {{machine}}",
+      "skips": "Überspringt",
+      "checksFirst": "Prüft vorher"
     },
     "customize": {
       "title": "Anpassen",
@@ -6741,6 +6745,7 @@
       "backupStarted": "Erstes Backup gestartet",
       "actions": {
         "create_repository": "Repository erstellen",
+        "create_script": "Prüfung vor dem Backup anlegen",
         "create_plan": "Backup-Plan mit Zeitplan erstellen"
       },
       "status": {
@@ -6778,6 +6783,62 @@
       "noAgentsNoPermission": "Auf noch keinem Rechner läuft der Agent. Bitte eine Admin-Person, unter Managed Agents einen hinzuzufügen.",
       "loadFailed": "Die Rechner konnten nicht geladen werden. Versuche es gleich noch einmal.",
       "offlineBrowse": "{{machine}} ist offline, daher lassen sich die Ordner nicht durchsuchen. Gib den Pfad ein oder warte, bis sich der Agent verbindet."
+    },
+    "app": {
+      "title": "Welche App möchtest du sichern?",
+      "hint": "Mit einer App wird ihr Ordner eingetragen, Wiederherstellbares übersprungen und die nötigen Sicherheitsprüfungen ergänzt.",
+      "pickApp": "Eine App",
+      "pickAppDesc": "Eine selbst gehostete App wie Immich. Borg UI findet ihren Ordner und ergänzt die nötigen Prüfungen.",
+      "other": "Etwas anderes",
+      "otherDesc": "Wähle die Ordner selbst: Dokumente, App-Daten, alles auf der Festplatte."
+    }
+  },
+  "appTemplates": {
+    "scanAgain": "Erneut suchen",
+    "pickManually": "Wähle unten den {{app}}-Ordner. Das ist {{hint}}.",
+    "scanning": "Suche {{app}}…",
+    "notReadable": "{{app}} gefunden, aber Borg UI kann {{path}} nicht lesen. Füge diese Zeile zu den Volumes von Borg UI in der docker-compose.yml hinzu, starte Borg UI neu und suche erneut:",
+    "useFolder": "Diesen Ordner verwenden",
+    "found": "{{app}} gefunden (Container {{container}})",
+    "notFound": "Hier läuft kein {{app}}. Wähle unten seinen Ordner. Das ist {{hint}}.",
+    "verified": "Geprüft mit {{app}} {{version}}.",
+    "docs": "{{app}}-Backup-Doku",
+    "select": {
+      "label": "App",
+      "search": "Apps durchsuchen",
+      "noResults": "Keine passende App. Wähle „Etwas anderes“ und such die Ordner selbst aus.",
+      "placeholder": "App auswählen"
+    },
+    "folders": {
+      "title": "Was gesichert wird",
+      "missing": "Noch leer",
+      "unmeasured": "Zu groß zum schnellen Messen",
+      "latestDump": "Letzter Dump {{when}}",
+      "staleDump": "Letzter Dump {{when}}. Älter als {{hours}} Stunden: Backups stoppen, bis Immich einen neuen schreibt.",
+      "noDump": "Noch kein Datenbank-Dump. Aktiviere in Immich Administration > Settings > Backup, sonst stoppt das Backup.",
+      "total": "Etwa {{size}} werden gesichert.",
+      "totalAtLeast": "Mindestens {{size}} werden gesichert.",
+      "noAccess": "{{user}} kann das nicht öffnen",
+      "backUp": "Sichern"
+    },
+    "missingRoot": "{{path}} gibt es auf diesem Rechner nicht. Wähle den Ordner mit den Immich-Dateien: {{hint}}.",
+    "denied": {
+      "title": "Borg UI kann {{path}} als {{user}} nicht öffnen",
+      "why": "Docker macht benannte Volumes nur für root lesbar. Borg verbindet sich als derselbe Benutzer, also würde auch das Backup scheitern.",
+      "fixFolder": "Einfachste Lösung: Lege die Immich-Dateien in einen normalen Ordner, wie es Immichs eigene Compose-Datei tut. Setze {{hint}} auf einen Ordner wie /srv/immich, verschiebe die Dateien dorthin und starte Immich neu.",
+      "fixAcl": "Oder erlaube {{user}}, dieses Volume zu lesen (braucht das Paket acl auf dem Rechner):"
+    },
+    "goodToKnow": "Gut zu wissen",
+    "tab": {
+      "kind": "Apps",
+      "title": "Eine App sichern",
+      "runsOn": "Wo die App läuft",
+      "folder": "App-Ordner",
+      "add": "{{app}} hinzufügen",
+      "inPlan": "Apps in diesem Plan",
+      "folderCount_one": "{{count}} Ordner",
+      "folderCount_other": "{{count}} Ordner",
+      "remove": "{{app}} entfernen"
     }
   }
 }

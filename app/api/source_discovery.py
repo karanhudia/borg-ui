@@ -6,6 +6,8 @@ import shlex
 import subprocess
 import time
 from dataclasses import dataclass
+from typing import Literal
+from datetime import datetime, timezone
 from pathlib import Path
 from shutil import which
 from textwrap import dedent
@@ -16,10 +18,12 @@ from pydantic import BaseModel
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
+from app.app_templates import AppTemplate, load_app_templates, match_app_template
+from app.utils.local_paths import is_within_local_mount
 from app.utils.ssh_host_validation import ssh_destination
 from app.config import settings
 from app.core.features import require_feature_access
-from app.core.security import get_current_user
+from app.core.security import get_current_user, require_role_dependency
 from app.database.database import get_db
 from app.database.models import SSHConnection, SSHKey, User
 from app.services.filesystem_snapshot_service import DEFAULT_SNAPSHOT_STAGING_ROOT
@@ -1871,6 +1875,8 @@ async def _scan_remote_database_paths(
 
 async def _scan_local_containers(
     request: ContainerScanRequest,
+    *,
+    with_sizes: bool = True,
 ) -> ContainerScanResponse | JSONResponse:
     scan_target = _scan_target("local")
     timeout_seconds = (
@@ -1903,11 +1909,14 @@ async def _scan_local_containers(
         )
 
     containers = _parse_container_scan_output(result.stdout or "")
-    await asyncio.to_thread(
-        _enrich_local_container_mount_sizes,
-        containers,
-        scan_timeout_seconds=timeout_seconds,
-    )
+    if with_sizes:
+        await asyncio.to_thread(
+            _enrich_local_container_mount_sizes,
+            containers,
+            scan_timeout_seconds=timeout_seconds,
+        )
+    else:
+        _enrich_local_container_mount_backup_sources(containers)
     return ContainerScanResponse(
         scan_target=scan_target,
         containers=containers,
@@ -1918,6 +1927,8 @@ async def _scan_local_containers(
 async def _scan_remote_containers(
     request: ContainerScanRequest,
     db: Session,
+    *,
+    with_sizes: bool = True,
 ) -> ContainerScanResponse | JSONResponse:
     connection = (
         db.query(SSHConnection)
@@ -1992,13 +2003,14 @@ async def _scan_remote_containers(
             )
 
         containers = _parse_container_scan_output(result.stdout or "")
-        await asyncio.to_thread(
-            _enrich_remote_container_mount_sizes,
-            containers,
-            connection=connection,
-            key_file_path=key_file_path,
-            scan_timeout_seconds=timeout_seconds,
-        )
+        if with_sizes:
+            await asyncio.to_thread(
+                _enrich_remote_container_mount_sizes,
+                containers,
+                connection=connection,
+                key_file_path=key_file_path,
+                scan_timeout_seconds=timeout_seconds,
+            )
         return ContainerScanResponse(
             scan_target=scan_target,
             containers=containers,
@@ -2095,4 +2107,427 @@ async def discover_databases(
         source_types=_source_types(),
         detections=detections,
         templates=templates,
+    )
+
+
+class AppTemplateListResponse(BaseModel):
+    templates: list[AppTemplate]
+
+
+class AppExtraMount(BaseModel):
+    # As Borg UI reads it, and as the host sees it.
+    path: str
+    host_path: str
+    # Where the container sees it, e.g. /mnt/photos.
+    destination: str
+    readable: bool
+
+
+class AppDetection(BaseModel):
+    template_id: str
+    container_name: str
+    state: str | None = None
+    # The app's root folder as Borg UI reads it (host path, mapped through the
+    # local mount points when Borg UI runs in Docker).
+    path: str
+    host_path: str
+    # False when Borg UI cannot see the folder: it runs in Docker and the host
+    # path is not mounted into it.
+    readable: bool
+    # The container's other folder mounts, for templates that back them up.
+    extra_mounts: list[AppExtraMount] = []
+
+
+class AppDetectResponse(BaseModel):
+    scan_target: DatabaseScanTarget
+    detections: list[AppDetection]
+    warnings: list[ScanWarning]
+
+
+# Mounts every container has that are never app data.
+_SYSTEM_MOUNT_PREFIXES = ("/etc/", "/dev", "/proc", "/sys", "/run", "/var/run", "/tmp")
+
+
+def _is_anonymous_volume(mount: ContainerMount) -> bool:
+    # Docker names volumes it creates itself (for an image's VOLUME with nothing
+    # mounted there) with 64 hex characters; they hold nothing the user put there.
+    name = mount.name or ""
+    return (
+        mount.type == "volume"
+        and len(name) == 64
+        and all(c in "0123456789abcdef" for c in name)
+    )
+
+
+def _is_system_mount(mount: ContainerMount) -> bool:
+    paths = [(mount.source or ""), (mount.destination or "")]
+    return any(
+        path == prefix.rstrip("/") or path.startswith(prefix)
+        for path in paths
+        for prefix in _SYSTEM_MOUNT_PREFIXES
+    )
+
+
+def _mount_readable(path: str, *, local: bool) -> bool:
+    # Remote paths are read over SSH, where the host path is the path; inspect
+    # checks permissions there.
+    return os.path.isdir(path) if local else True
+
+
+def _app_root_mount(
+    container: ContainerCandidate, template: AppTemplate
+) -> ContainerMount | None:
+    destinations = template.detect.mount_destinations
+    candidates = [
+        mount
+        for mount in container.mounts
+        if mount.destination in destinations and mount.source
+    ]
+    # A folder the user mounted beats an anonymous volume Docker made up; then
+    # the template's order. An old install can mount its media at the legacy
+    # path while the image still gets an empty anonymous volume at the new one.
+    candidates.sort(
+        key=lambda mount: (
+            _is_anonymous_volume(mount),
+            destinations.index(mount.destination or ""),
+        )
+    )
+    return candidates[0] if candidates else None
+
+
+def _app_detections(
+    containers: list[ContainerCandidate], *, local: bool
+) -> list[AppDetection]:
+    templates = load_app_templates()
+    detections: list[AppDetection] = []
+    for container in containers:
+        template = match_app_template(container.image, templates)
+        if template is None:
+            continue
+        mount = _app_root_mount(container, template)
+        if mount is None:
+            continue
+        path = (mount.backup_source or mount.source or "").strip()
+        extras = (
+            [
+                AppExtraMount(
+                    path=(other.backup_source or other.source or "").strip(),
+                    host_path=(other.source or "").strip(),
+                    destination=other.destination or "",
+                    readable=_mount_readable(
+                        (other.backup_source or other.source or "").strip(),
+                        local=local,
+                    ),
+                )
+                for other in container.mounts
+                if other is not mount
+                and other.source
+                and other.destination not in template.detect.mount_destinations
+                and not _is_anonymous_volume(other)
+                and not _is_system_mount(other)
+            ]
+            if template.extra_mounts
+            else []
+        )
+        detections.append(
+            AppDetection(
+                template_id=template.id,
+                container_name=container.name,
+                state=container.state,
+                path=path,
+                host_path=(mount.source or "").strip(),
+                readable=_mount_readable(path, local=local),
+                extra_mounts=extras,
+            )
+        )
+    return detections
+
+
+# Detecting and inspecting apps runs commands on a machine and reads its
+# folders, so it takes the same roles as the file browser.
+_APP_SOURCE_ROLES = require_role_dependency(
+    "admin", "operator", detail_key="backend.errors.filesystem.operatorAccessRequired"
+)
+
+
+@router.get("/apps", response_model=AppTemplateListResponse)
+async def list_app_templates(
+    current_user: User = Depends(get_current_user),
+) -> AppTemplateListResponse:
+    del current_user
+    return AppTemplateListResponse(templates=list(load_app_templates()))
+
+
+@router.post("/apps/detect", response_model=AppDetectResponse)
+async def detect_apps(
+    request: ContainerScanRequest,
+    current_user: User = Depends(_APP_SOURCE_ROLES),
+    db: Session = Depends(get_db),
+) -> AppDetectResponse:
+    """Find known apps on a machine. Free on every plan: it only reports
+    containers that match an app template, unlike the full container scan."""
+    del current_user
+    _validate_container_scan_request(request)
+    if request.source_type == "remote":
+        result = await _scan_remote_containers(request, db, with_sizes=False)
+    else:
+        result = await _scan_local_containers(request, with_sizes=False)
+
+    if isinstance(result, JSONResponse):
+        failed = ContainerScanResponse.model_validate_json(result.body)
+        return AppDetectResponse(
+            scan_target=failed.scan_target, detections=[], warnings=failed.warnings
+        )
+    return AppDetectResponse(
+        scan_target=result.scan_target,
+        detections=_app_detections(
+            result.containers, local=request.source_type == "local"
+        ),
+        warnings=result.warnings,
+    )
+
+
+APP_INSPECT_TIMEOUT_SECONDS = 60
+APP_FOLDER_SIZE_TIMEOUT_SECONDS = 20
+
+
+class AppInspectRequest(BaseModel):
+    template_id: str
+    source_type: str
+    source_ssh_connection_id: int | None = None
+    path: str
+    # Absolute folders outside the app's folder (external libraries).
+    extra_paths: list[str] = []
+
+
+class AppFolderStats(BaseModel):
+    # Relative to the app's folder, or absolute for an extra path.
+    path: str
+    exists: bool
+    # False when it exists but this user can't open it.
+    readable: bool = True
+    # None when du failed or took longer than APP_FOLDER_SIZE_TIMEOUT_SECONDS.
+    size_bytes: int | None = None
+    # Newest entry in the folder, used to show how fresh a database dump is.
+    latest_name: str | None = None
+    latest_modified_at: datetime | None = None
+
+
+class AppInspectResponse(BaseModel):
+    # denied: the folder exists but this user can't open it, so Borg can't either.
+    root_status: Literal["ok", "missing", "denied", "unknown"] = "unknown"
+    # The user the check ran as (the SSH user for remote sources).
+    user: str | None = None
+    folders: list[AppFolderStats]
+    warnings: list[ScanWarning]
+
+
+def _build_app_inspect_script(
+    root: str,
+    folders: list[str],
+    extra_paths: list[str] | None = None,
+    dump_patterns: dict[str, str] | None = None,
+) -> str:
+    # First a "#ROOT <status> <user>" line; then, if the folder can be opened,
+    # one line per folder: path, ok|missing|denied, bytes, newest entry, its mtime.
+    extras = " ".join(shlex.quote(path) for path in extra_paths or [])
+    patterns = dump_patterns or {}
+    probes = [
+        f'probe {shlex.quote(folder)} "$ROOT"/{shlex.quote(folder)} '
+        f"{shlex.quote(patterns.get(folder, ''))}"
+        for folder in folders
+    ]
+    return "\n".join(
+        [
+            f"ROOT={shlex.quote(root)}",
+            'USER_NAME=$(id -un 2>/dev/null || echo "")',
+            f'T="timeout {APP_FOLDER_SIZE_TIMEOUT_SECONDS}"',
+            'command -v timeout >/dev/null 2>&1 || T=""',
+            # A folder under an unreadable parent (Docker volumes are root-only)
+            # fails [ -d ] like a missing one; ls tells the two apart.
+            "access() {",
+            '  err=$(ls -d "$1" 2>&1 >/dev/null)',
+            '  if [ -n "$err" ]; then case "$err" in *ermission*) echo denied;; *) echo missing;; esac',
+            '  elif [ ! -r "$1" ] || [ ! -x "$1" ]; then echo denied',
+            "  else echo ok; fi",
+            "}",
+            # Newest entry, or with a pattern ($1) the newest regular file matching
+            # it; read line by line so names with spaces survive.
+            "newest() {",
+            '  ls -1t "$2" 2>/dev/null | while IFS= read -r f; do',
+            '    if [ -z "$1" ]; then printf "%s" "$f"; break; fi',
+            '    case "$f" in $1) [ -f "$2/$f" ] && { printf "%s" "$f"; break; } ;; esac',
+            "  done",
+            "}",
+            "probe() {",
+            '  st=$(access "$2")',
+            '  if [ "$st" != ok ]; then printf "%s\\t%s\\t-\\t\\t-\\n" "$1" "$st"; return; fi',
+            # POSIX du -k (KiB) works on GNU, BusyBox and macOS; -B1 is GNU only.
+            '  kib=$($T du -sk "$2" 2>/dev/null | cut -f1)',
+            '  size=-; case "$kib" in ""|*[!0-9]*) ;; *) size=$((kib * 1024));; esac',
+            '  latest=$(newest "$3" "$2")',
+            "  mtime=-",
+            '  if [ -n "$latest" ]; then mtime=$(stat -c %Y "$2/$latest" 2>/dev/null || stat -f %m "$2/$latest" 2>/dev/null || echo -); fi',
+            '  printf "%s\\tok\\t%s\\t%s\\t%s\\n" "$1" "$size" "$latest" "$mtime"',
+            "}",
+            'st=$(access "$ROOT")',
+            'printf "#ROOT\\t%s\\t%s\\n" "$st" "$USER_NAME"',
+            '[ "$st" = ok ] || exit 0',
+            *probes,
+            f"for p in {extras}; do",
+            '  probe "$p" "$p" ""',
+            "done",
+        ]
+    )
+
+
+def _parse_app_inspect_output(
+    stdout: str,
+) -> tuple[str, str | None, list[AppFolderStats]]:
+    root_status, user = "unknown", None
+    stats: list[AppFolderStats] = []
+    for line in stdout.splitlines():
+        parts = line.split("\t")
+        if parts[0] == "#ROOT" and len(parts) == 3:
+            if parts[1] in {"ok", "missing", "denied"}:
+                root_status = parts[1]
+            user = parts[2] or None
+            continue
+        if len(parts) != 5:
+            continue
+        path, status, size, latest, mtime = parts
+        stats.append(
+            AppFolderStats(
+                path=path,
+                exists=status != "missing",
+                readable=status == "ok",
+                size_bytes=int(size) if size.isdigit() else None,
+                latest_name=latest or None,
+                latest_modified_at=(
+                    datetime.fromtimestamp(int(mtime), tz=timezone.utc)
+                    if mtime.isdigit()
+                    else None
+                ),
+            )
+        )
+    return root_status, user, stats
+
+
+def _run_app_inspect(
+    script: str, *, connection: SSHConnection | None, key_file_path: str | None
+) -> subprocess.CompletedProcess[str]:
+    if connection is None:
+        command = ["sh", "-c", script]
+    else:
+        command = [
+            "ssh",
+            *ssh_key_auth_args(key_file_path),
+            "-p",
+            str(connection.port or 22),
+            *host_key_ssh_opts(connection),
+            "-o",
+            "ConnectTimeout=15",
+            "--",
+            ssh_destination(connection.username, connection.host),
+            f"sh -c {shlex.quote(script)}",
+        ]
+    return subprocess.run(
+        command, capture_output=True, text=True, timeout=APP_INSPECT_TIMEOUT_SECONDS
+    )
+
+
+@router.post("/apps/inspect", response_model=AppInspectResponse)
+async def inspect_app(
+    request: AppInspectRequest,
+    current_user: User = Depends(_APP_SOURCE_ROLES),
+    db: Session = Depends(get_db),
+) -> AppInspectResponse:
+    """Size and freshness of each folder a template describes, so the UI can
+    say what is being backed up. Free, like detection; operators and admins
+    only, as reading another machine's folders is."""
+    template = next(
+        (t for t in load_app_templates() if t.id == request.template_id), None
+    )
+    if template is None:
+        raise HTTPException(status_code=404, detail="Unknown app template")
+    root = posixpath.normpath(request.path.strip())
+    if not root.startswith("/"):
+        raise HTTPException(status_code=400, detail="path must be absolute")
+    source_type = request.source_type.strip().lower()
+    if source_type not in {"local", "remote"}:
+        raise HTTPException(
+            status_code=400, detail="source_type must be 'local' or 'remote'"
+        )
+
+    connection: SSHConnection | None = None
+    key_file_path: str | None = None
+    if source_type == "remote":
+        connection = (
+            db.query(SSHConnection)
+            .filter(SSHConnection.id == request.source_ssh_connection_id)
+            .first()
+        )
+        ssh_key = (
+            db.query(SSHKey).filter(SSHKey.id == connection.ssh_key_id).first()
+            if connection and connection.ssh_key_id is not None
+            else None
+        )
+        if connection is None or ssh_key is None:
+            raise HTTPException(
+                status_code=400,
+                detail="source_ssh_connection_id must reference an SSH connection with a key",
+            )
+        key_file_path = write_ssh_key_to_tempfile(ssh_key)
+
+    extra_paths = [posixpath.normpath(path.strip()) for path in request.extra_paths]
+    if any(not path.startswith("/") for path in extra_paths):
+        raise HTTPException(status_code=400, detail="extra_paths must be absolute")
+    if source_type == "local" and current_user.role != "admin":
+        # Operators stay inside LOCAL_MOUNT_POINTS, as in the file browser.
+        for path in [root, *extra_paths]:
+            if not is_within_local_mount(os.path.realpath(path)):
+                raise HTTPException(
+                    status_code=403,
+                    detail={"key": "backend.errors.filesystem.permissionDenied"},
+                )
+    script = _build_app_inspect_script(
+        root,
+        [folder.path for folder in template.folders],
+        extra_paths,
+        {
+            folder.path: folder.dump_pattern
+            for folder in template.folders
+            if folder.dump_pattern
+        },
+    )
+    try:
+        result = await asyncio.to_thread(
+            _run_app_inspect, script, connection=connection, key_file_path=key_file_path
+        )
+    except subprocess.TimeoutExpired:
+        return AppInspectResponse(
+            folders=[],
+            warnings=[
+                ScanWarning(
+                    code="SCAN_TIMEOUT", message="Measuring the folders timed out"
+                )
+            ],
+        )
+    finally:
+        if key_file_path and os.path.exists(key_file_path):
+            os.unlink(key_file_path)
+
+    root_status, user, folders = _parse_app_inspect_output(result.stdout or "")
+    warnings = (
+        []
+        if root_status != "unknown"
+        else [
+            ScanWarning(
+                code="INSPECT_FAILED",
+                message=(result.stderr or "Could not read the folder").strip(),
+            )
+        ]
+    )
+    return AppInspectResponse(
+        root_status=root_status, user=user, folders=folders, warnings=warnings
     )

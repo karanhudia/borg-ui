@@ -65,11 +65,41 @@ export default function ExcludePatternInput({
       {patterns.length > 0 && (
         <Stack spacing={0.5} sx={{ mb: 1.5 }}>
           {patterns.map((pattern, index) => (
-            <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1 }}>
+            <Box
+              key={index}
+              sx={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 1,
+                minWidth: 0,
+                py: 0.5,
+                pl: 1.5,
+                pr: 0.5,
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 1,
+              }}
+            >
+              {/* Long paths (Docker volumes) have no spaces; let them wrap instead of widening the dialog. */}
+              <Typography
+                variant="body2"
+                sx={{
+                  fontFamily: 'monospace',
+                  flex: 1,
+                  minWidth: 0,
+                  overflowWrap: 'anywhere',
+                  py: 0.5,
+                }}
+              >
                 {pattern}
               </Typography>
-              <IconButton size="small" onClick={() => handleRemove(index)} disabled={disabled}>
+              <IconButton
+                size="small"
+                onClick={() => handleRemove(index)}
+                disabled={disabled}
+                aria-label={t('excludePatterns.remove', { pattern })}
+                sx={{ flexShrink: 0 }}
+              >
                 <DeleteIcon fontSize="small" />
               </IconButton>
             </Box>

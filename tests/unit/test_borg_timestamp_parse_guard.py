@@ -26,6 +26,7 @@ ALLOWED = {
     "app/services/licensing_service.py",  # license validity timestamps
     "app/services/mount_service.py",  # mount bookkeeping timestamps
     "app/api/filesystem.py",  # local file stat mtimes
+    "app/api/source_discovery.py",  # app folder stat mtimes (epoch seconds)
     "app/services/log_manager.py",  # log file stat mtimes
 }
 

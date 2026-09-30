@@ -2,12 +2,15 @@ import { useCallback, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 
 import { getCreatedRepositoryId } from '../../pages/backup-plans/state'
-import { backupPlansAPI } from '../../services/api'
+import { backupPlansAPI, scriptsAPI } from '../../services/api'
 import { BorgApiClient } from '../../services/borgApi'
 import { getApiErrorDetail } from '../../utils/apiErrors'
 import { translateBackendKey } from '../../utils/translateBackendKey'
 import {
+  appScriptKey,
+  appScriptPayload,
   buildPlanPayload,
+  reconcileScriptResult,
   buildQuickStartActions,
   buildRepositoryPayload,
   pendingActions,
@@ -44,9 +47,20 @@ async function executeAction(
       if (!repositoryId) throw new Error('missing repository id in response')
       return { repositoryId }
     }
+    case 'create_script': {
+      const payload = appScriptPayload(answers)
+      if (!payload) throw new Error('no app script to create')
+      const response = await scriptsAPI.create(payload)
+      return { scriptId: createdId(response), scriptKey: JSON.stringify(payload) }
+    }
     case 'create_plan': {
       const response = await backupPlansAPI.create(
-        buildPlanPayload(answers, results.repositoryId as number)
+        buildPlanPayload(
+          answers,
+          results.repositoryId as number,
+          // Only a check made for these answers; none when they need none.
+          appScriptKey(answers) ? results.scriptId : undefined
+        )
       )
       return { planId: createdId(response) }
     }
@@ -73,6 +87,12 @@ export function useQuickStartRunner() {
         for (const key of ['repositories', 'app-repositories', 'backup-plans', 'upcoming-jobs']) {
           queryClient.invalidateQueries({ queryKey: [key] })
         }
+      }
+      const reconciled = reconcileScriptResult(resultsRef.current, answers)
+      resultsRef.current = reconciled.results
+      if (reconciled.staleScriptId !== undefined) {
+        // Nothing uses it: the plan that would have was never created.
+        scriptsAPI.delete(reconciled.staleScriptId).catch(() => {})
       }
       const actions = buildQuickStartActions(answers)
       const statuses: QuickStartRunState['statuses'] = {}

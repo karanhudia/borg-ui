@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { alpha, Box, Button, Chip, Stack, TextField, Typography } from '@mui/material'
 import {
+  AppWindow,
   ChevronDown,
   ChevronUp,
   Container as ContainerIcon,
@@ -61,23 +62,30 @@ export function SourceStep({
   const hasSources = sourcePaths.length > 0
   const hasDatabaseSource = sourceLocations.some((location) => Boolean(location.database))
   const hasContainerSource = sourceLocations.some((location) => Boolean(location.container))
+  const hasAppSource = sourceLocations.some((location) => Boolean(location.app))
   const isLegacyDatabaseSource =
     !hasDatabaseSource &&
     !hasContainerSource &&
+    !hasAppSource &&
     sourcePaths.length > 0 &&
     sourcePaths.every(isDatabaseDumpPath)
   const hasFileSource = sourceLocations.some(
     (location) =>
       !location.database &&
       !location.container &&
+      !location.app &&
       !(isLegacyDatabaseSource && location.paths.every(isDatabaseDumpPath))
   )
   const isDatabaseSource =
-    (hasDatabaseSource && !hasFileSource && !hasContainerSource) || isLegacyDatabaseSource
-  const isContainerSource = hasContainerSource && !hasDatabaseSource && !hasFileSource
+    (hasDatabaseSource && !hasFileSource && !hasContainerSource && !hasAppSource) ||
+    isLegacyDatabaseSource
+  const isContainerSource =
+    hasContainerSource && !hasDatabaseSource && !hasFileSource && !hasAppSource
+  const isAppSource = hasAppSource && !hasDatabaseSource && !hasContainerSource && !hasFileSource
   const sourceKindCount = [
     hasDatabaseSource || isLegacyDatabaseSource,
     hasContainerSource,
+    hasAppSource,
     hasFileSource,
   ].filter(Boolean).length
   const sourceKindLabel =
@@ -87,7 +95,9 @@ export function SourceStep({
         ? t('backupPlans.sourceChooser.databaseTitle')
         : isContainerSource
           ? t('backupPlans.sourceChooser.containerTitle')
-          : t('backupPlans.sourceChooser.filesTitle')
+          : isAppSource
+            ? t('appTemplates.tab.kind')
+            : t('backupPlans.sourceChooser.filesTitle')
 
   return (
     <Stack spacing={3}>
@@ -155,6 +165,8 @@ export function SourceStep({
                   <Database size={18} />
                 ) : isContainerSource ? (
                   <ContainerIcon size={18} />
+                ) : isAppSource ? (
+                  <AppWindow size={18} />
                 ) : (
                   <FolderOpen size={18} />
                 )}
@@ -286,6 +298,14 @@ export function SourceStep({
                           size="small"
                           variant="outlined"
                           label={location.container.display_name}
+                          sx={{ height: 20, flexShrink: 0 }}
+                        />
+                      )}
+                      {location.app && (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={location.app.display_name}
                           sx={{ height: 20, flexShrink: 0 }}
                         />
                       )}
@@ -422,7 +442,9 @@ function sourceLocationKey(location: SourceLocation) {
     ? `:container:${location.container.container_name}:${location.container.export_path}`
     : location.database
       ? `:database:${location.database.template_id}`
-      : ''
+      : location.app
+        ? `:app:${location.app.template_id}:${location.app.root}`
+        : ''
   if (location.source_type === 'agent') {
     return `agent:${location.agent_machine_id || 'agent'}${suffix}`
   }

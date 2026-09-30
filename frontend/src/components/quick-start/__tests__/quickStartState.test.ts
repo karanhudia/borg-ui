@@ -31,6 +31,7 @@ describe('quickStartState', () => {
 
   it('skips the connect step for files on this server', () => {
     expect(visibleSteps(answers())).toEqual([
+      'app',
       'what',
       'folders',
       'destination',
@@ -154,6 +155,8 @@ describe('quickStartState', () => {
     expect(sourceKindPatch(picked, 'server')).toEqual({
       sourceKind: 'server',
       sourcePaths: [],
+      // The app's folder was on the old machine too.
+      appRoot: '',
       destinationKind: 'server',
       destinationConnectionId: '',
       destinationPath: '',

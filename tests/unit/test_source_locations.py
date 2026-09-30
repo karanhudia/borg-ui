@@ -352,3 +352,43 @@ def test_agent_source_location_requires_agent_machine_id():
 def test_source_location_rejects_conflicting_endpoint_ids(location):
     with pytest.raises(ValueError, match="source locations"):
         normalize_source_locations([location])
+
+
+def test_normalize_source_location_preserves_app_selection():
+    [location] = normalize_source_locations(
+        [
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": 4,
+                "paths": ["/srv/immich", "/srv/photos"],
+                "app": {
+                    "template_id": "immich",
+                    "template_version": 1,
+                    "display_name": "Immich",
+                    "root": "/srv/immich",
+                    "exclude_patterns": ["/srv/immich/thumbs", " ", 3],
+                    "pre_backup_script_id": "12",
+                    "script_execution_order": 2,
+                },
+            }
+        ]
+    )
+
+    assert location["app"] == {
+        "template_id": "immich",
+        "template_version": 1,
+        "display_name": "Immich",
+        "root": "/srv/immich",
+        "exclude_patterns": ["/srv/immich/thumbs"],
+        "script_execution_target": "source",
+        "pre_backup_script_id": 12,
+        "pre_backup_script_parameters": {},
+        "script_execution_order": 2,
+    }
+
+
+def test_app_source_location_requires_template_id():
+    with pytest.raises(ValueError, match="template id"):
+        normalize_source_locations(
+            [{"source_type": "local", "paths": ["/srv/immich"], "app": {"root": "/x"}}]
+        )

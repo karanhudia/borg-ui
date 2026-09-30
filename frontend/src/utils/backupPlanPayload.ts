@@ -296,6 +296,7 @@ function normalizeSourceLocations(state: BackupPlanPayloadState): SourceLocation
           paths,
           ...(database ? { database } : {}),
           ...(container ? { container } : {}),
+          ...(location.app ? { app: location.app } : {}),
         }
       }
       if (location.source_type === 'agent') {
@@ -310,6 +311,7 @@ function normalizeSourceLocations(state: BackupPlanPayloadState): SourceLocation
           paths,
           ...(database ? { database } : {}),
           ...(container ? { container } : {}),
+          ...(location.app ? { app: location.app } : {}),
         }
       }
       const snapshot = normalizeSnapshot(location)
@@ -323,6 +325,7 @@ function normalizeSourceLocations(state: BackupPlanPayloadState): SourceLocation
         ...(snapshot ? { snapshot } : {}),
         ...(database ? { database } : {}),
         ...(container ? { container } : {}),
+        ...(location.app ? { app: location.app } : {}),
       }
     })
     .filter((location): location is SourceLocation => location !== null)
