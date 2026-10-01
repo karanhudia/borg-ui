@@ -12,10 +12,17 @@ were emptied; `backup_plan_runs` and `script_executions` had their plan set
 to NULL. The upgrade keeps the old database next to the new one as the
 rollback, and that file still has the rows, so they are read back from it.
 
+Restored only where the rollback proves the cascade ran: a run or hook
+execution whose plan is NULL here but named in the rollback, with that plan
+still present under the same name. An empty plan alone is no proof; an
+operator may have emptied it on purpose after a clean upgrade. The plan name
+is checked on every id, because SQLite reuses the id of a deleted plan.
+
 Only what is still missing is restored. A plan that has any repository link
-or hook again was repaired by hand and is left exactly as it is; a run or
-execution that already names a plan is left alone. Without a rollback file,
-or on an install that never took the hit, this does nothing.
+or hook again was repaired by hand and is left exactly as it is; rows get
+fresh ids, since links added by hand after the cascade reused the old ones.
+Without a rollback file, or on an install that never took the hit, this
+does nothing.
 """
 
 import logging
@@ -23,7 +30,6 @@ from pathlib import Path
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy import inspect
 
 revision = "c8e1f4a7b2d9"
 down_revision = "b7d2e9f4a1c3"
@@ -35,7 +41,8 @@ log = logging.getLogger("alembic.runtime.migration")
 # The children emptied by the cascade, each keyed by the plan they belong to.
 # A plan that still has rows in the table was repaired by hand: skipped.
 _EMPTIED = ("backup_plan_repositories", "backup_plan_scripts")
-# The children whose plan was set to NULL. Restored row by row, by id.
+# The children whose plan was set to NULL. Restored row by row, by id, and
+# the evidence that the cascade ran at all.
 _UNLINKED = ("backup_plan_runs", "script_executions")
 
 
@@ -63,6 +70,10 @@ def _ids(conn, table: str, where: str = "") -> set:
     return {r[0] for r in conn.execute(sa.text(f"SELECT id FROM {table} {where}"))}
 
 
+def _plans(conn, table) -> dict:
+    return {r.id: r.name for r in conn.execute(sa.select(table.c.id, table.c.name))}
+
+
 def upgrade() -> None:
     rollback = _rollback_path()
     if rollback is None or not rollback.is_file():
@@ -75,15 +86,68 @@ def upgrade() -> None:
     try:
         old_meta = sa.MetaData()
         old_meta.reflect(bind=old_engine)
+        if "backup_plans" not in old_meta.tables:
+            return
+        live_meta = sa.MetaData()
+        live_meta.reflect(bind=bind)
         with old_engine.connect() as old:
-            plans = _ids(bind, "backup_plans")
+            old_plans = _plans(old, old_meta.tables["backup_plans"])
+            live_plans = _plans(bind, live_meta.tables["backup_plans"])
+            # The same plan on both sides: same id and same name. An id alone
+            # is not enough, SQLite hands a deleted plan's id to the next one.
+            same = {
+                pid for pid, name in live_plans.items() if old_plans.get(pid) == name
+            }
+
+            relink: dict[str, list[dict]] = {}
+            for name in _UNLINKED:
+                source = old_meta.tables.get(name)
+                if (
+                    source is None
+                    or "backup_plan_id" not in source.columns
+                    or name not in live_meta.tables
+                ):
+                    continue
+                unlinked = _ids(bind, name, "WHERE backup_plan_id IS NULL")
+                if not unlinked:
+                    continue
+                relink[name] = [
+                    {"id": r.id, "plan": r.backup_plan_id}
+                    for r in old.execute(
+                        sa.select(source.c.id, source.c.backup_plan_id).where(
+                            source.c.backup_plan_id.is_not(None)
+                        )
+                    )
+                    if r.id in unlinked and r.backup_plan_id in same
+                ]
+
+            if not any(relink.values()):
+                # Nothing lost its plan while the plan stayed: the cascade did
+                # not run here. An empty plan is then the operator's doing.
+                return
+
+            for name, fixes in relink.items():
+                if fixes:
+                    bind.execute(
+                        sa.text(
+                            f"UPDATE {name} SET backup_plan_id = :plan WHERE id = :id"
+                        ),
+                        fixes,
+                    )
+                    log.info("%s: relinked %d rows to their plan", name, len(fixes))
 
             for name in _EMPTIED:
                 source = old_meta.tables.get(name)
-                if source is None:
+                table = live_meta.tables.get(name)
+                if source is None or table is None:
                     continue
-                table = sa.Table(name, sa.MetaData(), autoload_with=bind)
-                common = [c.name for c in table.columns if c.name in source.columns]
+                # Fresh ids: links added by hand after the cascade reused the
+                # old ones, and the id is not referenced by anything.
+                common = [
+                    c.name
+                    for c in table.columns
+                    if c.name in source.columns and c.name != "id"
+                ]
                 # Parents the row points at other than the plan; a row whose
                 # parent is gone would have been dropped by the transfer too.
                 present = {
@@ -103,7 +167,7 @@ def upgrade() -> None:
                 restore = [
                     dict(zip(common, r))
                     for r in rows
-                    if r._mapping["backup_plan_id"] in plans
+                    if r._mapping["backup_plan_id"] in same
                     and r._mapping["backup_plan_id"] not in touched
                     and all(
                         r._mapping[col] is None or r._mapping[col] in ids
@@ -115,35 +179,6 @@ def upgrade() -> None:
                     log.info(
                         "%s: restored %d rows from %s", name, len(restore), rollback
                     )
-
-            for name in _UNLINKED:
-                source = old_meta.tables.get(name)
-                if (
-                    source is None
-                    or "backup_plan_id" not in source.columns
-                    or not inspect(bind).has_table(name)
-                ):
-                    continue
-                unlinked = _ids(bind, name, "WHERE backup_plan_id IS NULL")
-                if not unlinked:
-                    continue
-                fixes = [
-                    {"id": r.id, "plan": r.backup_plan_id}
-                    for r in old.execute(
-                        sa.select(source.c.id, source.c.backup_plan_id).where(
-                            source.c.backup_plan_id.is_not(None)
-                        )
-                    )
-                    if r.id in unlinked and r.backup_plan_id in plans
-                ]
-                if fixes:
-                    bind.execute(
-                        sa.text(
-                            f"UPDATE {name} SET backup_plan_id = :plan WHERE id = :id"
-                        ),
-                        fixes,
-                    )
-                    log.info("%s: relinked %d rows to their plan", name, len(fixes))
     finally:
         old_engine.dispose()
 
