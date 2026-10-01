@@ -1856,9 +1856,9 @@
       "settings": {
         "archiveNameHelper": "Unterstützt {plan_name}, {repo_name}, {now}, {date}, {time} und {timestamp}.",
         "extraBorgFlagsHelper": "Benutzerdefinierte Befehlszeilen-Flags für borg create (z.B. --stats, --progress, --list). Wird auf jeden Repository-Lauf in diesem Plan angewendet.",
-        "uploadSpeedHelper": "MB/s. Leer bedeutet unbegrenzt.",
+        "uploadSpeedHelper": "MB/s. Leer bedeutet unbegrenzt. Gilt nur für Borg-1-Repositories; Borg 2 kennt kein Upload-Limit.",
         "uploadPoliciesTitle": "Geplante Upload-Limits",
-        "uploadPoliciesHelper": "Zeitfenster überschreiben das konstante Upload-Limit. Ein leeres Limit bedeutet unbegrenzt.",
+        "uploadPoliciesHelper": "Zeitfenster überschreiben das konstante Upload-Limit. Ein leeres Limit bedeutet unbegrenzt. Wie das konstante Limit gelten sie nur für Borg-1-Repositories.",
         "addUploadPolicy": "Upload-Regel hinzufügen",
         "removeUploadPolicy": "Upload-Regel entfernen",
         "daytimePolicyLabel": "Tageslimit",
@@ -4889,7 +4889,18 @@
       "restorePath": "Ziel",
       "contentsOnlyMarker": "(Inhalt)",
       "andMoreItems_one": "... und {{count}} weiteres Element",
-      "andMoreItems_other": "... und {{count}} weitere Elemente"
+      "andMoreItems_other": "... und {{count}} weitere Elemente",
+      "existingFiles": {
+        "title": "Vorhandene Dateien",
+        "exact": "Exakte Wiederherstellung (leeres Verzeichnis)",
+        "exactDesc": "Borg 2 stellt nur in ein leeres Verzeichnis wieder her. Jede Datei wird aus dem Archiv geschrieben. Wähle einen neuen oder leeren Ordner.",
+        "exactUnavailable": "Der ursprüngliche Ort enthält immer Dateien, eine exakte Wiederherstellung ist dort nicht möglich. Wähle dafür einen eigenen Ort.",
+        "continue": "In vorhandene Dateien wiederherstellen",
+        "continueDesc": "In ein Verzeichnis schreiben, das bereits Dateien enthält.",
+        "continueWarning": "Dateien, die bereits mit dem archivierten Typ, denselben Rechten, derselben Größe und Änderungszeit vorhanden sind, werden übersprungen. Eine Datei, die beschädigt wurde, ohne dass sich Größe oder Zeit geändert haben, wird also nicht repariert. Abweichende Dateien werden ersetzt; Dateien, die das Archiv nicht enthält, bleiben liegen. Auf einem frisch formatierten Datenträger (nur lost+found) ist das Ergebnis dasselbe wie bei einer exakten Wiederherstellung.",
+        "originalNeedsChoice": "Um an den ursprünglichen Ort wiederherzustellen, wähle „In vorhandene Dateien wiederherstellen“.",
+        "borg1": "Dateien mit gleichem Pfad werden überschrieben, andere Dateien im Ziel bleiben liegen."
+      }
     },
     "restoreFiles": {
       "title": "Wiederherzustellende Dateien auswählen",
@@ -4950,7 +4961,11 @@
       "files_one": "{{count}} Datei",
       "files_other": "{{count}} Dateien",
       "entireArchiveNote": "Das gesamte Archiv wird mit allen Dateien und Verzeichnissen wiederhergestellt.",
-      "everythingLooksGood": "Alles sieht gut aus! Klicke auf \"Dateien wiederherstellen\", um den Wiederherstellungsvorgang zu starten."
+      "everythingLooksGood": "Alles sieht gut aus! Klicke auf \"Dateien wiederherstellen\", um den Wiederherstellungsvorgang zu starten.",
+      "existingFiles": "Vorhandene Dateien",
+      "existingFilesExact": "Exakte Wiederherstellung",
+      "existingFilesContinue": "In vorhandene Dateien wiederherstellen",
+      "existingFilesBorg1": "Bei gleichem Pfad überschrieben"
     },
     "review": {
       "configurationSummary": "Konfigurationsübersicht",
@@ -5199,6 +5214,7 @@
     "customFlagsHint": "Benutzerdefinierte Befehlszeilen-Flags für borg create (z.B. --stats, --progress, --list)",
     "uploadSpeedLimit": "Upload-Geschwindigkeitslimit",
     "uploadSpeedLimitHint": "MB/s. Leer bedeutet unbegrenzt. Backup-Plan-Einstellungen können diesen Standard überschreiben.",
+    "uploadSpeedLimitBorg2": "Borg 2 kennt kein Upload-Limit. Diese Einstellung gilt nur für Borg-1-Repositories.",
     "scripts": "Skripte",
     "scriptsOptional": "(Optional)",
     "scriptsHint": "Inline-Skripte konfigurieren oder wiederverwendbare Skripte aus der Skriptbibliothek zuweisen.",
@@ -6012,7 +6028,8 @@
         "failedFetchArchiveContents": "Fehler beim Abrufen des Archivinhalts",
         "destinationNotAllowed": "Das Wiederherstellungsziel liegt außerhalb der erlaubten lokalen Einhängepunkte: {{path}}",
         "operatorAccessRequired": "Für die Wiederherstellung auf eine SSH-Verbindung ist Operator- oder Administratorzugriff erforderlich",
-        "borg2DestinationNotEmpty": "Borg 2 stellt nicht in ein Verzeichnis wieder her, das bereits Dateien enthält, und {{path}} ist nicht leer. Wähle ein leeres Verzeichnis als Ziel und verschiebe die wiederhergestellten Dateien von dort."
+        "borg2DestinationNotEmpty": "Borg 2 stellt nicht in ein Verzeichnis wieder her, das bereits Dateien enthält, und {{path}} ist nicht leer. Wähle ein leeres Verzeichnis als Ziel oder im Wiederherstellungsdialog „In vorhandene Dateien wiederherstellen“.",
+        "agentCannotRestoreIntoExisting": "Der Agent dieses Repositorys ist zu alt, um in vorhandene Dateien wiederherzustellen. Aktualisiere den Agent auf 0.1.17 oder neuer, oder stelle in ein leeres Verzeichnis wieder her."
       },
       "schedule": {
         "adminAccessRequired": "Administratorzugriff erforderlich",

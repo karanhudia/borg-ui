@@ -128,6 +128,9 @@ class RestoreRequest(BaseModel):
     )
     restore_layout: Literal["preserve_path", "contents_only"] = "preserve_path"
     path_metadata: List[RestorePathMetadata] = Field(default_factory=list)
+    # "refuse": exact restore, a Borg 2 destination that holds anything is
+    # refused; "continue": write into it (Borg 2's --continue, #1261)
+    existing_files: Literal["refuse", "continue"] = "refuse"
 
 
 def _restore_path_metadata_to_dict(item: RestorePathMetadata) -> dict:
@@ -255,6 +258,7 @@ async def start_restore(
                 "archive_name": restore_request.archive,
                 "paths": list(restore_request.paths),
                 "restore_layout": restore_request.restore_layout,
+                "existing_files": restore_request.existing_files,
                 "path_metadata": [
                     _restore_path_metadata_to_dict(item)
                     for item in restore_request.path_metadata

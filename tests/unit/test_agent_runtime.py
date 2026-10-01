@@ -323,8 +323,7 @@ def test_backup_create_payload_builds_borg2_command_from_flat_payload():
         "--json",
         "--compression",
         "none",
-        "--upload-ratelimit",
-        "1536",
+        # no --upload-ratelimit: Borg 2.0.0b22 removed it (#1263)
         "--list",
         "laptop",
         "/src",

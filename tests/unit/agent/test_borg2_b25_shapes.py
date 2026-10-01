@@ -539,23 +539,6 @@ def test_borg2_restore_into_an_occupied_directory_is_refused(
 
 
 @pytest.mark.unit
-def test_an_older_borg2_restores_into_an_occupied_directory(monkeypatch, tmp_path):
-    """A machine that manages its own Borg keeps its binary across an agent
-    upgrade. A Borg 2 before 2.0.0b25 extracts into a directory that holds
-    files, so the agent does not take that away from it."""
-    monkeypatch.setattr(
-        "agent.borg_ui_agent.backup.borg2_binary_version", lambda _binary: "2.0.0b24"
-    )
-    (tmp_path / "existing.txt").write_text("x")
-
-    cmd, client = _run_restore(monkeypatch, _restore_job(str(tmp_path)))
-
-    assert cmd is not None and cmd[3] == "extract"
-    assert "--continue" not in cmd
-    assert not [call for call in client.calls if call[0] == "fail_job"]
-
-
-@pytest.mark.unit
 def test_borg2_restore_into_an_empty_directory_is_a_plain_extract(
     monkeypatch, tmp_path
 ):
@@ -666,7 +649,7 @@ def test_the_refusal_reads_the_subcommand_not_a_word_that_reads_like_it(
 
     monkeypatch.setattr("agent.borg_ui_agent.backup.borg2_binary_version", _B25)
     (tmp_path / "existing.txt").write_text("x")
-    payload = types.SimpleNamespace(borg_version=2, borg_cmd="borg2")
+    payload = types.SimpleNamespace(borg_version=2, borg_cmd="borg2", operation={})
 
     assert _restore_target_refusal(
         ["borg2", "-r", "extract", "extract", "aid:1"], payload, str(tmp_path)

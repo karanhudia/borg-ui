@@ -1856,9 +1856,9 @@
       "settings": {
         "archiveNameHelper": "Supporta {plan_name}, {repo_name}, {now}, {date}, {time} e {timestamp}.",
         "extraBorgFlagsHelper": "Flag da riga di comando personalizzati per borg create (es., --stats, --progress, --list). Applicato a ogni esecuzione repository in questo piano.",
-        "uploadSpeedHelper": "MB/s. Vuoto significa senza limite.",
+        "uploadSpeedHelper": "MB/s. Vuoto significa senza limite. Vale solo per i repository Borg 1; Borg 2 non ha un limite di upload.",
         "uploadPoliciesTitle": "Limiti di upload pianificati",
-        "uploadPoliciesHelper": "Le finestre orarie sostituiscono il limite di upload costante. Lascia il campo del limite vuoto per non applicare alcun limite.",
+        "uploadPoliciesHelper": "Le finestre orarie sostituiscono il limite di upload costante. Lascia il campo del limite vuoto per non applicare alcun limite. Come il limite costante, valgono solo per i repository Borg 1.",
         "addUploadPolicy": "Aggiungi policy di upload",
         "removeUploadPolicy": "Rimuovi policy di upload",
         "daytimePolicyLabel": "Limite diurno",
@@ -4889,7 +4889,18 @@
       "restorePath": "Destinazione",
       "contentsOnlyMarker": "(contenuto)",
       "andMoreItems_one": "... e {{count}} altro elemento",
-      "andMoreItems_other": "... e {{count}} altri elementi"
+      "andMoreItems_other": "... e {{count}} altri elementi",
+      "existingFiles": {
+        "title": "File esistenti",
+        "exact": "Ripristino esatto (directory vuota)",
+        "exactDesc": "Borg 2 ripristina solo in una directory vuota. Ogni file viene scritto dall'archivio. Scegli una cartella nuova o vuota.",
+        "exactUnavailable": "La posizione originale contiene sempre dei file, quindi lì non è possibile un ripristino esatto. Scegli una posizione personalizzata per farlo.",
+        "continue": "Ripristina sui file esistenti",
+        "continueDesc": "Scrivi in una directory che contiene già dei file.",
+        "continueWarning": "I file che hanno già il tipo, i permessi, la dimensione e la data di modifica archiviati vengono saltati, quindi un file danneggiato senza variazioni di dimensione o data non viene riparato. I file diversi vengono sostituiti; quelli che l'archivio non contiene restano dove sono. Su un disco appena formattato (solo lost+found) il risultato è lo stesso di un ripristino esatto.",
+        "originalNeedsChoice": "Per ripristinare nella posizione originale, scegli «Ripristina sui file esistenti».",
+        "borg1": "I file con lo stesso percorso vengono sovrascritti; gli altri file nella destinazione restano dove sono."
+      }
     },
     "restoreFiles": {
       "title": "Seleziona file da ripristinare",
@@ -4950,7 +4961,11 @@
       "files_one": "{{count}} file",
       "files_other": "{{count}} file",
       "entireArchiveNote": "L'intero archivio verrà ripristinato con tutti i file e le directory.",
-      "everythingLooksGood": "Tutto a posto! Clicca \"Ripristina File\" per iniziare l'operazione di ripristino."
+      "everythingLooksGood": "Tutto a posto! Clicca \"Ripristina File\" per iniziare l'operazione di ripristino.",
+      "existingFiles": "File esistenti",
+      "existingFilesExact": "Ripristino esatto",
+      "existingFilesContinue": "Ripristina sui file esistenti",
+      "existingFilesBorg1": "Sovrascritti nello stesso percorso"
     },
     "review": {
       "configurationSummary": "Riepilogo Configurazione",
@@ -5199,6 +5214,7 @@
     "customFlagsHint": "Flag da riga di comando personalizzati per borg create (es., --stats, --progress, --list)",
     "uploadSpeedLimit": "Limite velocità upload",
     "uploadSpeedLimitHint": "MB/s. Vuoto significa senza limite. Le impostazioni del piano di backup possono sovrascrivere questo valore predefinito.",
+    "uploadSpeedLimitBorg2": "Borg 2 non ha un limite di upload. Questa impostazione vale solo per i repository Borg 1.",
     "scripts": "Script",
     "scriptsOptional": "(Opzionale)",
     "scriptsHint": "Configura script inline o assegna script riutilizzabili dalla tua Libreria Script.",
@@ -6012,7 +6028,8 @@
         "failedFetchArchiveContents": "Impossibile recuperare il contenuto dell'archivio",
         "destinationNotAllowed": "La destinazione del ripristino è al di fuori dei punti di montaggio locali consentiti: {{path}}",
         "operatorAccessRequired": "È richiesto l'accesso come operatore o amministratore per ripristinare su una connessione SSH",
-        "borg2DestinationNotEmpty": "Borg 2 non ripristina in una directory che contiene già dei file, e {{path}} non è vuota. Scelga una directory vuota come destinazione e sposti da lì i file ripristinati."
+        "borg2DestinationNotEmpty": "Borg 2 non ripristina in una directory che contiene già dei file, e {{path}} non è vuota. Scelga una directory vuota come destinazione, oppure scelga «Ripristina sui file esistenti» nella finestra di ripristino.",
+        "agentCannotRestoreIntoExisting": "L'agente di questo repository è troppo vecchio per ripristinare sui file esistenti. Aggiorni l'agente alla versione 0.1.17 o successiva, oppure ripristini in una directory vuota."
       },
       "schedule": {
         "adminAccessRequired": "Accesso amministratore richiesto",

@@ -691,13 +691,16 @@ Removing Borg UI never touches your repositories.
 >    (`none`): 2.0.0b25 has no unencrypted mode. The API also accepts
 >    `authenticated`, which stores the data unencrypted but protects it with
 >    a key and its passphrase.
-> 4. Restore Borg 2 archives into an empty directory. 2.0.0b25 refuses to
->    extract into a directory that holds anything, the original location
->    included, and Borg UI refuses such a restore with a message before
->    Borg runs. Restore into an empty directory and move the files from
->    there. Borg's own way around (`--continue`) is not used: it skips a
->    file that has the archived type, mode, size and modification time, so
->    a file damaged in place would not be replaced.
+> 4. Restore Borg 2 archives into an empty directory, or choose to write
+>    into existing files. 2.0.0b25 refuses to extract into a directory that
+>    holds anything, the original location included. The restore dialog
+>    therefore starts a Borg 2 restore on a custom path with an exact
+>    restore, which Borg UI refuses with a message before Borg runs when the
+>    directory is not empty. "Restore into existing files" (Borg's
+>    `--continue`) writes into such a directory, the original location
+>    included, but has to be chosen: it skips a file that has the archived
+>    type, mode, size and modification time, so a file damaged in place
+>    is not replaced. A managed agent does this from 0.1.17.
 > 5. Upgrade the managed agents. An agent upgrade installs the server's
 >    Borg 2 along with the agent, and from then on that machine cannot read
 >    its old Borg 2 repositories either. A machine that manages its own Borg

@@ -1856,9 +1856,9 @@
       "settings": {
         "archiveNameHelper": "Supports {plan_name}, {repo_name}, {now}, {date}, {time}, and {timestamp}.",
         "extraBorgFlagsHelper": "Custom command-line flags for borg create (e.g., --stats, --progress, --list). Applied to every repository run in this plan.",
-        "uploadSpeedHelper": "MB/s. Empty means unlimited.",
+        "uploadSpeedHelper": "MB/s. Empty means unlimited. Applies to Borg 1 repositories only; Borg 2 has no upload limit.",
         "uploadPoliciesTitle": "Scheduled upload limits",
-        "uploadPoliciesHelper": "Time windows override the constant upload limit. Leave a policy limit empty for unlimited.",
+        "uploadPoliciesHelper": "Time windows override the constant upload limit. Leave a policy limit empty for unlimited. Like the constant limit, they apply to Borg 1 repositories only.",
         "addUploadPolicy": "Add upload policy",
         "removeUploadPolicy": "Remove upload policy",
         "daytimePolicyLabel": "Daytime cap",
@@ -4889,7 +4889,18 @@
       "restorePath": "Restore",
       "contentsOnlyMarker": "(contents)",
       "andMoreItems_one": "... and {{count}} more item",
-      "andMoreItems_other": "... and {{count}} more items"
+      "andMoreItems_other": "... and {{count}} more items",
+      "existingFiles": {
+        "title": "Existing files",
+        "exact": "Exact restore (empty directory)",
+        "exactDesc": "Borg 2 restores only into an empty directory. Every file is written from the archive. Choose a new or empty folder.",
+        "exactUnavailable": "The original location always holds files, so an exact restore is not possible there. Choose a custom location for one.",
+        "continue": "Restore into existing files",
+        "continueDesc": "Write into a directory that already holds files.",
+        "continueWarning": "Files that already have the archived type, permissions, size and modification time are skipped, so a file that was damaged without a change in size or time is not repaired. Files that differ are replaced; files the archive does not have are left alone. On a freshly formatted disk (only lost+found) the result is the same as an exact restore.",
+        "originalNeedsChoice": "To restore to the original location, choose “Restore into existing files”.",
+        "borg1": "Files at the same path are overwritten; other files in the destination are left alone."
+      }
     },
     "restoreFiles": {
       "title": "Select files to restore",
@@ -4950,7 +4961,11 @@
       "files_one": "{{count}} file",
       "files_other": "{{count}} files",
       "entireArchiveNote": "The entire archive will be restored with all files and directories.",
-      "everythingLooksGood": "Everything looks good! Click \"Restore Files\" to begin the restore operation."
+      "everythingLooksGood": "Everything looks good! Click \"Restore Files\" to begin the restore operation.",
+      "existingFiles": "Existing files",
+      "existingFilesExact": "Exact restore",
+      "existingFilesContinue": "Restore into existing files",
+      "existingFilesBorg1": "Overwritten at the same path"
     },
     "review": {
       "configurationSummary": "Configuration Summary",
@@ -5199,6 +5214,7 @@
     "customFlagsHint": "Custom command-line flags for borg create (e.g., --stats, --progress, --list)",
     "uploadSpeedLimit": "Upload speed limit",
     "uploadSpeedLimitHint": "MB/s. Empty means unlimited. Backup plan settings can override this default.",
+    "uploadSpeedLimitBorg2": "Borg 2 has no upload limit. This setting applies to Borg 1 repositories only.",
     "scripts": "Scripts",
     "scriptsOptional": "(Optional)",
     "scriptsHint": "Configure inline scripts or assign reusable scripts from your Script Library.",
@@ -6012,7 +6028,8 @@
         "failedFetchArchiveContents": "Failed to fetch archive contents",
         "destinationNotAllowed": "Restore destination is outside the allowed local mount points: {{path}}",
         "operatorAccessRequired": "Operator or admin access required to restore to an SSH connection",
-        "borg2DestinationNotEmpty": "Borg 2 does not restore into a directory that already holds files, and {{path}} is not empty. Choose an empty directory as the destination and move the restored files from there."
+        "borg2DestinationNotEmpty": "Borg 2 does not restore into a directory that already holds files, and {{path}} is not empty. Choose an empty directory as the destination, or choose “Restore into existing files” in the restore dialog.",
+        "agentCannotRestoreIntoExisting": "The agent of this repository is too old to restore into existing files. Update the agent to 0.1.17 or later, or restore into an empty directory."
       },
       "schedule": {
         "adminAccessRequired": "Admin access required",

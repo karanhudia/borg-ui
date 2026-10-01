@@ -779,39 +779,20 @@ def test_a_restore_into_an_occupied_directory_is_refused(
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize(
-    ("version", "refused"),
-    [
-        ("2.0.0b25", True),
-        ("2.0.0b26", True),
-        # extracts into a directory that holds files, as it always did
-        ("2.0.0b24", False),
-        ("2.0.0b22", False),
-        # a version that cannot be read is not evidence of an old binary
-        (None, True),
-    ],
-)
-def test_the_refusal_follows_what_the_binary_reports(
-    monkeypatch, tmp_path, version, refused
-):
+def test_a_restore_into_existing_files_is_not_refused(tmp_path):
     from app.core.borg2 import borg2_restore_target_refusal
 
-    monkeypatch.setattr("app.core.borg2.borg2_binary_version", lambda _: version)
     (tmp_path / "existing.txt").write_text("x")
 
-    assert (borg2_restore_target_refusal(str(tmp_path), "borg2") is not None) is refused
+    assert borg2_restore_target_refusal(str(tmp_path)) is not None
+    assert borg2_restore_target_refusal(str(tmp_path), "continue") is None
 
 
 @pytest.mark.unit
-def test_an_empty_destination_does_not_probe_the_binary(monkeypatch, tmp_path):
+def test_an_empty_destination_is_not_refused(tmp_path):
     from app.core.borg2 import borg2_restore_target_refusal
 
-    def no_probe(_binary):
-        raise AssertionError("no probe for a directory that holds nothing")
-
-    monkeypatch.setattr("app.core.borg2.borg2_binary_version", no_probe)
-
-    assert borg2_restore_target_refusal(str(tmp_path), "borg2") is None
+    assert borg2_restore_target_refusal(str(tmp_path)) is None
 
 
 @pytest.mark.unit
