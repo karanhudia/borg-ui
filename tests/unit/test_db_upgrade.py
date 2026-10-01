@@ -743,3 +743,35 @@ def test_an_install_stuck_on_2_3_0_with_a_plaintext_passphrase_is_repaired(tmp_p
     session = _open(db)
     assert session.query(Repository).one().passphrase == "plain secret"
     session.close()
+
+
+@pytest.mark.unit
+def test_a_batch_rebuild_after_the_transfer_keeps_the_rows_that_cascade(tmp_path):
+    """The target enforces foreign keys, and a later revision rebuilds
+    backup_plans in batch mode: copy, DROP TABLE, rename. With the pragma on,
+    that DROP cascaded into backup_plan_repositories and every plan came out
+    of a 2.2.x upgrade with no repositories (#860). env.py turns the pragma off
+    for the migration run."""
+    from app.database.models import BackupPlan, BackupPlanRepository
+
+    db = tmp_path / "borg.db"
+
+    def populate(s):
+        repo = Repository(name="r", path="/srv/r")
+        plan = BackupPlan(name="nightly", source_directories='["/data"]')
+        s.add_all([repo, plan])
+        s.flush()
+        s.add(
+            BackupPlanRepository(
+                backup_plan_id=plan.id, repository_id=repo.id, execution_order=1
+            )
+        )
+
+    _legacy_db(db, populate)
+    assert alembic_init(db).action == "transferred"
+
+    session = _open(db)
+    links = session.query(BackupPlanRepository).all()
+    assert [(l.backup_plan_id, l.repository_id, l.enabled) for l in links] == [
+        (1, 1, True)
+    ]
