@@ -2,9 +2,9 @@ name: Tests
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, borg2-b25]
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, borg2-b25]
   workflow_dispatch:
   schedule:
     - cron: "0 3 * * *"

@@ -2,7 +2,7 @@ name: Capture Storybook Visual Snapshots
 
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, borg2-b25]
     types: [opened, synchronize, reopened]
     paths:
       - "frontend/.storybook/**"
