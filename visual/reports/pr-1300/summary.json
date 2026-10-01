@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-10-01T08:12:56.816Z",
+  "generatedAt": "2026-10-01T10:26:16.303Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1300 visual report",
-    "commitSha": "15dfbf742b49",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36834772905"
+    "commitSha": "73ebe5e279cb",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36848869805"
   },
   "totals": {
     "baseline": 1134,
     "actual": 1134,
     "compared": 1134,
-    "changed": 1,
+    "changed": 2,
     "added": 0,
     "removed": 0,
-    "unchanged": 1133
+    "unchanged": 1132
   },
   "changed": [
     {
@@ -24,6 +24,24 @@
       "diffPixels": 1024000,
       "totalPixels": 1024000,
       "diffRatio": 1,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "quick-start-steps--destination-ssh-no-default-path.png",
+      "baselinePath": "images/baseline/quick-start-steps--destination-ssh-no-default-path.png",
+      "actualPath": "images/actual/quick-start-steps--destination-ssh-no-default-path.png",
+      "diffPath": "images/diff/quick-start-steps--destination-ssh-no-default-path.png",
+      "diffPixels": 2785,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0027197265625,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -3175,9 +3193,6 @@
     },
     {
       "fileName": "quick-start-steps--destination-ssh-no-default-path--mobile.png"
-    },
-    {
-      "fileName": "quick-start-steps--destination-ssh-no-default-path.png"
     },
     {
       "fileName": "quick-start-steps--destination-ssh.png"
