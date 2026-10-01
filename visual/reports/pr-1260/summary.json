@@ -1,37 +1,37 @@
 {
-  "generatedAt": "2026-09-30T17:26:52.422Z",
+  "generatedAt": "2026-10-01T11:24:46.854Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1260 visual report",
-    "commitSha": "6ee79d88a719",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36751232642"
+    "commitSha": "a3eb40cbeb59",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36855029426"
   },
   "totals": {
-    "baseline": 1112,
-    "actual": 1112,
-    "compared": 1112,
+    "baseline": 1134,
+    "actual": 1134,
+    "compared": 1134,
     "changed": 1,
     "added": 0,
     "removed": 0,
-    "unchanged": 1111
+    "unchanged": 1133
   },
   "changed": [
     {
-      "fileName": "quick-start-steps--destination-ssh-no-default-path--mobile.png",
-      "baselinePath": "images/baseline/quick-start-steps--destination-ssh-no-default-path--mobile.png",
-      "actualPath": "images/actual/quick-start-steps--destination-ssh-no-default-path--mobile.png",
-      "diffPath": "images/diff/quick-start-steps--destination-ssh-no-default-path--mobile.png",
-      "diffPixels": 2803,
-      "totalPixels": 329160,
-      "diffRatio": 0.008515615506136833,
+      "fileName": "components-rcloneproviderselect--provider-search.png",
+      "baselinePath": "images/baseline/components-rcloneproviderselect--provider-search.png",
+      "actualPath": "images/actual/components-rcloneproviderselect--provider-search.png",
+      "diffPath": "images/diff/components-rcloneproviderselect--provider-search.png",
+      "diffPixels": 1024000,
+      "totalPixels": 1024000,
+      "diffRatio": 1,
       "dimensionsChanged": false,
       "baseline": {
-        "width": 390,
-        "height": 844
+        "width": 1280,
+        "height": 800
       },
       "actual": {
-        "width": 390,
-        "height": 844
+        "width": 1280,
+        "height": 800
       }
     }
   ],
@@ -439,6 +439,18 @@
     },
     {
       "fileName": "backgroundwork-stagestrip--selected.png"
+    },
+    {
+      "fileName": "backup-plans-appsourcepanel--empty--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-appsourcepanel--empty.png"
+    },
+    {
+      "fileName": "backup-plans-appsourcepanel--with-app-in-plan--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-appsourcepanel--with-app-in-plan.png"
     },
     {
       "fileName": "backup-plans-reviewstep--agent-source-to-same-agent-repo--mobile.png"
@@ -1449,6 +1461,18 @@
       "fileName": "components-emptystatecard--inline-api-tokens.png"
     },
     {
+      "fileName": "components-excludepatterninput--long-paths--mobile.png"
+    },
+    {
+      "fileName": "components-excludepatterninput--long-paths.png"
+    },
+    {
+      "fileName": "components-excludepatterninput--short--mobile.png"
+    },
+    {
+      "fileName": "components-excludepatterninput--short.png"
+    },
+    {
       "fileName": "components-fileexplorerdialog--managed-agent-browser--mobile.png"
     },
     {
@@ -1834,9 +1858,6 @@
     },
     {
       "fileName": "components-rcloneproviderselect--provider-search--mobile.png"
-    },
-    {
-      "fileName": "components-rcloneproviderselect--provider-search.png"
     },
     {
       "fileName": "components-rcloneremoteselect--configured-remote--mobile.png"
@@ -3105,6 +3126,18 @@
       "fileName": "quick-start-progress--running.png"
     },
     {
+      "fileName": "quick-start-steps--app--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--app-chosen--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--app-chosen.png"
+    },
+    {
+      "fileName": "quick-start-steps--app.png"
+    },
+    {
       "fileName": "quick-start-steps--connect-agent--mobile.png"
     },
     {
@@ -3141,6 +3174,9 @@
       "fileName": "quick-start-steps--destination-ssh--mobile.png"
     },
     {
+      "fileName": "quick-start-steps--destination-ssh-no-default-path--mobile.png"
+    },
+    {
       "fileName": "quick-start-steps--destination-ssh-no-default-path.png"
     },
     {
@@ -3156,6 +3192,30 @@
       "fileName": "quick-start-steps--folders-empty.png"
     },
     {
+      "fileName": "quick-start-steps--folders-immich-found--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--folders-immich-found.png"
+    },
+    {
+      "fileName": "quick-start-steps--folders-immich-no-permission--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--folders-immich-no-permission.png"
+    },
+    {
+      "fileName": "quick-start-steps--folders-immich-not-found--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--folders-immich-not-found.png"
+    },
+    {
+      "fileName": "quick-start-steps--folders-immich-not-readable--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--folders-immich-not-readable.png"
+    },
+    {
       "fileName": "quick-start-steps--folders-picked--mobile.png"
     },
     {
@@ -3169,6 +3229,12 @@
     },
     {
       "fileName": "quick-start-steps--review--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--review-immich--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--review-immich.png"
     },
     {
       "fileName": "quick-start-steps--review-ssh-manual-unencrypted--mobile.png"
