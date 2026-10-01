@@ -7,3 +7,7 @@ reviews:
     # reviewed like any other code instead. See issue #929.
     docstrings:
       mode: off
+  auto_review:
+    # Review PRs into the Borg 2.0.0b25 integration branch too (#1252).
+    base_branches:
+      - "^borg2-b25$"
