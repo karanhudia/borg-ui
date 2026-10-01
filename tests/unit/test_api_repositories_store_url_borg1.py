@@ -501,6 +501,11 @@ def _put(test_client: TestClient, admin_headers, repository_id: int, payload: di
         router.return_value.initialize_repository = AsyncMock(
             return_value={"success": True}
         )
+        # The route asks the router for the URL it saves. These repositories
+        # are Borg 1, for which the router hands back the URL the route built.
+        router.return_value.ssh_repository_url.side_effect = (
+            lambda raw_path, connection_details, borg1_url=None: borg1_url
+        )
         response = test_client.put(
             f"/api/repositories/{repository_id}", json=payload, headers=admin_headers
         )

@@ -21,7 +21,11 @@ import structlog
 
 from app.database.models import Repository
 from app.database.database import SessionLocal
-from app.core.borg2 import _get_borg2_binary, compact_stats_supported
+from app.core.borg2 import (
+    _get_borg2_binary,
+    compact_stats_supported,
+    ensure_borg2_repository_url,
+)
 from app.config import settings
 from app.services.borg2_compact_stats import is_stats_line, parse_compact_stats
 from app.services.maintenance_state import apply_compact_completion
@@ -38,7 +42,6 @@ from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import (
     build_repository_borg_env,
     cleanup_temp_key_file,
-    effective_repository_remote_path,
 )
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,  # noqa: F401
@@ -196,12 +199,12 @@ class CompactV2Service:
                 # Exact byte counts in the statistics lines instead of the
                 # rounded, BORG_UNITS-dependent human form.
                 env["BORG_UNITS"] = "raw"
+            ensure_borg2_repository_url(repository.path, borg_cmd)
             cmd = [borg_cmd, "-r", repository.path, "compact"]
             if with_stats:
                 cmd.extend(["--stats", "--info"])
+            # the remote Borg command is in env (BORG_REMOTE_PATH)
             cmd.extend(["--progress", "--log-json"])
-            if remote_path := effective_repository_remote_path(repository):
-                cmd.extend(["--remote-path", remote_path])
 
             logger.info(
                 "Starting borg2 compact",

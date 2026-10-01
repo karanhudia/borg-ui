@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import shutil
 import signal
 import subprocess
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Optional
+from urllib.parse import urlsplit
 
 from agent.borg_ui_agent.borg import is_warning_return_code
 from agent.borg_ui_agent.borg_flags import parse_borg_flags
@@ -18,7 +20,91 @@ from agent.borg_ui_agent.cancel import (
     start_keepalive,
 )
 from agent.borg_ui_agent.client import AgentClient
+from agent.borg_ui_agent.compact_stats import borg2_beta_at_least, parse_borg_version
 from agent.borg_ui_agent.failure_report import FailureTail, failure_report
+
+
+# Borg 2.0.0b25 replaced rest:// by ssh:// (REST over ssh, same path rules)
+# and does not reject the old scheme: a URL it does not know is read as a
+# local path, so `rest://user@host/repo` names the directory
+# `./rest:/user@host/repo` under the working directory. repo-create and
+# create succeed there, and the backup never leaves the machine. Stated on
+# the server as well (app/core/borg2.py); the two share no imports.
+#
+# An endpoint that manages its own Borg keeps its binary across an agent
+# upgrade, and a Borg 2 before 2.0.0b25 still speaks rest://: the URL is
+# refused only for a binary that does not read as one of those.
+REMOVED_REPOSITORY_URL_MESSAGE = (
+    "rest:// repository URLs were removed in Borg 2.0.0b25, which reads one as "
+    "a local directory. Use ssh://[user@]host[:port]/path instead (the path "
+    "rules are the same), and create the repository anew: 2.0.0b25 cannot "
+    "read a repository written by an earlier Borg 2 beta."
+)
+
+
+REST_URLS_REMOVED_IN_BETA = 25
+
+# The version a Borg 2 binary reports, by binary file (path, mtime, size):
+# probed once per file, again when the file changes under a long-lived agent.
+_BINARY_VERSIONS: dict[tuple, str] = {}
+
+
+def _binary_key(binary: str) -> tuple:
+    path = shutil.which(binary) or binary
+    try:
+        stat = os.stat(path)
+    except OSError:
+        return (path, None, None)
+    return (path, stat.st_mtime_ns, stat.st_size)
+
+
+def borg2_binary_version(binary: str) -> Optional[str]:
+    """The version `binary --version` reports, or None when it cannot be
+    read this time; only a read version is remembered."""
+    key = _binary_key(binary)
+    known = _BINARY_VERSIONS.get(key)
+    if known is not None:
+        return known
+    try:
+        probe = subprocess.run(
+            [binary, "--version"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        version = parse_borg_version(f"{probe.stdout}\n{probe.stderr}")
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        version = None
+    if version is not None:
+        _BINARY_VERSIONS[key] = version
+    return version
+
+
+def borg2_before_beta(binary: str, beta: int) -> bool:
+    """Whether `binary` reads as a Borg 2 before 2.0.0b<beta>. An unreadable
+    version is not evidence of an old binary."""
+    version = borg2_binary_version(binary)
+    if version is None or not version.startswith("2."):
+        return False
+    return not borg2_beta_at_least(version, beta)
+
+
+def borg2_still_speaks_rest_urls(binary: str) -> bool:
+    """Whether `binary` reads as a Borg 2 before 2.0.0b25. An unreadable
+    version is not evidence of an old binary: the URL is then refused, which
+    costs a failed job, where running it could cost the backup."""
+    return borg2_before_beta(binary, REST_URLS_REMOVED_IN_BETA)
+
+
+def ensure_borg2_repository_url(repository: Optional[str], binary: str) -> None:
+    """Raise ValueError for a repository URL this Borg 2 would misread. The
+    binary is probed only for a rest:// URL."""
+    if not (repository or "").strip().lower().startswith("rest://"):
+        return
+    if borg2_still_speaks_rest_urls(binary):
+        return
+    raise ValueError(REMOVED_REPOSITORY_URL_MESSAGE)
 
 
 @dataclass(frozen=True)
@@ -76,6 +162,11 @@ class BackupCreatePayload:
         borg_version = int(
             repository.get("borg_version") or payload.get("borg_version") or 1
         )
+        if borg_version == 2:
+            ensure_borg2_repository_url(
+                repository_path,
+                repository.get("borg_binary") or payload.get("borg_binary") or "borg2",
+            )
         upload_ratelimit_kib = backup.get(
             "upload_ratelimit_kib", payload.get("upload_ratelimit_kib")
         )
@@ -225,6 +316,43 @@ _BORG_NONINTERACTIVE_ACCESS_DEFAULTS = {
     # the variable and gets it as a flag (borg1_lock_wait_args).
     "BORG_LOCK_WAIT": "180",
 }
+
+
+def env_with_repository_port(
+    env: dict[str, str], repository_path: Optional[str]
+) -> dict[str, str]:
+    """`env` with the port of an ssh:// repository URL in the remote shell
+    it names (BORG_RSH, BORGSTORE_RSH), in place.
+
+    Borg 2 hands a remote shell it was given to the store as it is and adds
+    the URL's port only to the ssh command it builds itself, so with
+    BORG_RSH set `ssh://host:2222/path` connects to port 22. Borg 1 adds the
+    port to either; the same port twice does no harm. A remote shell that
+    names a port keeps it, and an environment without one needs nothing.
+    """
+    if not (repository_path or "").startswith("ssh://"):
+        return env
+    try:
+        port = urlsplit(repository_path).port
+    except ValueError:
+        return env
+    if port is None:
+        return env
+    for name in ("BORG_RSH", "BORGSTORE_RSH"):
+        rsh = env.get(name)
+        if not rsh:
+            continue
+        try:
+            words = shlex.split(rsh)
+        except ValueError:
+            continue
+        if any(
+            word == "-p" or (word.startswith("-p") and word[2:].isdigit())
+            for word in words
+        ):
+            continue
+        env[name] = f"{rsh} -p {port}"
+    return env
 
 
 def build_borg_env(overrides: Optional[dict[str, str]] = None) -> dict[str, str]:
@@ -414,6 +542,10 @@ def execute_backup_create_job(
 
     cmd = payload.build_command()
     env = build_borg_env(payload.environment)
+    env_with_repository_port(env, payload.repository_path)
+    if payload.borg_version == 2 and payload.remote_path:
+        # Borg 2 has no --remote-path (removed in 2.0.0b22).
+        env["BORG_REMOTE_PATH"] = payload.remote_path
 
     sequence = 0
     client.send_log(

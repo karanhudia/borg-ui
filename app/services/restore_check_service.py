@@ -434,6 +434,10 @@ class RestoreCheckService:
                         "Retrying restore canary using legacy archive path: "
                         f"{', '.join(attempt_paths)}"
                     )
+                    # Borg 2.0.0b25 refuses to extract into a directory that
+                    # is not empty, and the first attempt may have left files.
+                    shutil.rmtree(temp_restore_dir, ignore_errors=True)
+                    Path(temp_restore_dir).mkdir(parents=True, exist_ok=True)
 
                 returncode = await run_extract(attempt_paths)
                 warning_exit = is_borg_warning_exit_code(returncode)

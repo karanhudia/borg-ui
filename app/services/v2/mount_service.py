@@ -2,7 +2,7 @@
 
 from typing import List, Optional
 
-from app.core.borg2 import borg2
+from app.core.borg2 import borg2, ensure_borg2_repository_url
 
 
 class MountV2Service:
@@ -13,13 +13,11 @@ class MountV2Service:
         repository_path: str,
         archive_name: Optional[str] = None,
         mount_point: Optional[str] = None,
-        remote_path: Optional[str] = None,
-        bypass_lock: bool = False,
+        remote_path: Optional[str] = None,  # noqa: ARG002 - BORG_REMOTE_PATH, see app/core/borg2.py
+        bypass_lock: bool = False,  # noqa: ARG002 - Borg 1 only, see app/core/borg2.py
     ) -> List[str]:
-        cmd = [borg2.borg_cmd]
-        if remote_path:
-            cmd.extend(["--remote-path", remote_path])
-        cmd.extend(["-r", repository_path, "mount"])
+        ensure_borg2_repository_url(repository_path, borg2.borg_cmd)
+        cmd = [borg2.borg_cmd, "-r", repository_path, "mount"]
         if archive_name:
             # Borg 2 mounts a single archive by filtering the repository target
             # down to exactly one archive; a trailing positional argument would

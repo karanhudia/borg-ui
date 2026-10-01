@@ -5932,7 +5932,10 @@
         "failedParseArchiveList": "Failed to parse archive list",
         "failedParseRepositoryInfo": "Failed to parse repository info",
         "failedParseArchiveInfo": "Failed to parse archive info",
-        "failedExportKeyfile": "Failed to export keyfile"
+        "failedExportKeyfile": "Failed to export keyfile",
+        "borg2RepositoryNotReadable": "Borg 2 does not recognise this as a repository. If it was created before the upgrade to Borg 2.0.0b25, that is the cause: 2.0.0b25 changed the repository format and cannot read repositories written by earlier Borg 2 betas. The repository has to be created anew; the upgrade notes in the installation guide describe the steps. Otherwise, check the repository path.",
+        "invalidEncryption": "Encryption mode '{{mode}}' is not available for Borg 2 repositories.",
+        "invalidEncryptionMode": "Encryption mode '{{mode}}' is not available for this repository."
       },
       "rclone": {
         "invalidRemoteName": "Remote name can only use letters, numbers, dots, dashes, and underscores",
@@ -6008,7 +6011,8 @@
         "failedFetchArchives": "Failed to fetch archives",
         "failedFetchArchiveContents": "Failed to fetch archive contents",
         "destinationNotAllowed": "Restore destination is outside the allowed local mount points: {{path}}",
-        "operatorAccessRequired": "Operator or admin access required to restore to an SSH connection"
+        "operatorAccessRequired": "Operator or admin access required to restore to an SSH connection",
+        "borg2DestinationNotEmpty": "Borg 2 does not restore into a directory that already holds files, and {{path}} is not empty. Choose an empty directory as the destination and move the restored files from there."
       },
       "schedule": {
         "adminAccessRequired": "Admin access required",
@@ -6233,7 +6237,8 @@
         "restoreFailedZeroFilesNoOutput": "Restore failed: 0 files extracted (exit code {{exitCode}}). No error output from borg. Files may not exist in archive or permission denied.",
         "restoreFailedExitCode": "Restore process exited with code {{exitCode}}",
         "restoreFailed": "Restore failed",
-        "jobCompletedWithWarning": "Completed with warning (exit code {{exitCode}})"
+        "jobCompletedWithWarning": "Completed with warning (exit code {{exitCode}})",
+        "restoreFailedOnAgent": "Restore failed on the agent: {{error}}"
       },
       "dashboard": {
         "failedGetSystemMetrics": "Failed to get system metrics",

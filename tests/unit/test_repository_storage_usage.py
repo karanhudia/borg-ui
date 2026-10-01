@@ -47,9 +47,9 @@ def test_storage_usage_is_advertised_handled_and_admitted():
 @pytest.mark.unit
 def test_borg2_compact_runs_with_stats():
     cmd = RepositoryOperationPayload(
-        job_kind="repository.compact", repository_path="rest://borg@h/r", borg_version=2
+        job_kind="repository.compact", repository_path="ssh://borg@h/r", borg_version=2
     ).build_command()
-    assert cmd[:3] == ["borg2", "-r", "rest://borg@h/r"]
+    assert cmd[:3] == ["borg2", "-r", "ssh://borg@h/r"]
     assert "--stats" in cmd and "--verbose" in cmd and "--log-json" in cmd
 
 

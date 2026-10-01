@@ -133,7 +133,8 @@ on the terminal and also runs over `ssh -t`.
 A Linux install never asks for the values: it is scripted over `ssh -t` or by
 configuration management as often as it is typed, and a question would hang
 it. A first-time macOS install run from a terminal without the flags asks for
-both, and for an `ssh://` or `rest://` repository offers to open one SSH
+both, and for an `ssh://` repository (`rest://` with a Borg 2 before
+2.0.0b25) offers to open one SSH
 connection as the user, so the host key and the login are confirmed while
 someone is there to answer; a service cannot do that later. Empty answers skip
 them, and `--no-prompt` skips the questions. That check covers the one repository given

@@ -5,7 +5,7 @@ Order for Borg 2, which reports no size through any command:
 1. the chunk-index sum through Borg's own Python API, run with the
    interpreter next to the configured Borg 2 binary (a venv install): the
    bytes of every indexed object, no lock, no pack access, works while a
-   backup holds the lock;
+   backup holds the lock (from 2.0.0b25 it needs the repository key);
 2. a store-level measurement per URL scheme, which counts file bytes
    including pack headers and the index ("storage used");
 3. nothing: the caller leaves the stored size alone, which a Borg 2
@@ -16,15 +16,16 @@ These are different quantities, which is why the caller records the source
 next to the value. `compact --stats` reports pack file bytes, which include
 data no index entry covers (an interrupted write, before compact); on a
 repository whose packs are fully indexed the index sum matched it byte for
-byte in every measurement taken (b23, b24), but the two are not identical
-by definition. Storage used adds the index and other store files on top.
+byte in every measurement taken (b23, b24, b25), but the two are not
+identical by definition. Storage used adds the index and other store files on top.
 
 Borg 1 keeps `info --json` `cache.stats.unique_csize`. The same payload
 also reports the source data size of every archive
 (`cache.stats.total_size`), which the caller carries alongside: one
 repository-level figure, where Borg 2 reports it through `compact
---stats`. Both versions also report `repository.last_modified` (the last
-manifest write), which the caller persists.
+--stats`. Borg 1 and Borg 2 up to 2.0.0b24 also report
+`repository.last_modified` (the last manifest write), which the caller
+persists; 2.0.0b25 dropped the field with the manifest timestamp.
 """
 
 import asyncio
@@ -190,8 +191,11 @@ def _host_port(parts) -> str:
 
 
 # Sums Repository.list() storage sizes; lock=False reads while another borg
-# holds the exclusive lock (like --bypass-lock). Needs no key: the index is
-# not encrypted. Prints one JSON object. The URL arrives in the environment
+# holds the exclusive lock (like --bypass-lock). From Borg 2.0.0b25 the index
+# is sealed with the repository key, which an unlocked open does not load:
+# the script loads it (the passphrase is in the environment) where the
+# repository object has a key to set; older betas read the index without.
+# Prints one JSON object. The URL arrives in the environment
 # (REPOSITORY_URL_ENV), never on the command line: it may carry credentials
 # and a process list shows arguments.
 REPOSITORY_URL_ENV = "BORG_UI_REPOSITORY_URL"
@@ -204,6 +208,9 @@ from borg.helpers import Location
 total = objects = 0
 marker = None
 with Repository(Location(os.environ["BORG_UI_REPOSITORY_URL"]), exclusive=False, lock=False) as repo:
+    if getattr(repo, "key", False) is None:
+        from borg.crypto.key import key_factory
+        key_factory(repo)
     while True:
         batch = repo.list(limit=100000, marker=marker)
         if not batch:
@@ -532,7 +539,11 @@ def store_target(repository_path: str) -> tuple[str, Optional[str]]:
             return "", None
         return "du", parts.path
     if lowered.startswith("ssh://"):
-        return "du", repository_path
+        # Borg 2 reads ssh://host/path as relative to the login directory
+        # and ssh://host//path as absolute. du over ssh measures an absolute
+        # path, so only that form names the same directory for both.
+        parts = urlsplit(repository_path)
+        return ("du", repository_path) if parts.path.startswith("//") else ("", None)
     if "://" not in repository_path and not lowered.startswith(("s3:", "b2:")):
         return "du", repository_path
     return "", None

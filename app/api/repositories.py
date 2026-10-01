@@ -63,7 +63,9 @@ from app.core.borg import BorgInterface
 from app.core.borg_router import BorgRouter
 from app.core.borg_errors import is_lock_error, is_repository_exists_failure
 from app.core.borg2 import (
+    BORG2_ENCRYPTION_MODES,
     ENCRYPTION_FLAGS_SINCE_BETA,
+    borg2_unreadable_repository_detail,
     borg2_speaks_encryption_flags,
     normalize_repo_info_encryption,
 )
@@ -2875,7 +2877,10 @@ async def _create_rclone_repository_record(
     if repo_data.encryption not in valid_encryption_modes:
         raise HTTPException(
             status_code=400,
-            detail={"key": "backend.errors.repo.invalidEncryptionMode"},
+            detail={
+                "key": "backend.errors.repo.invalidEncryptionMode",
+                "params": {"mode": repo_data.encryption},
+            },
         )
     if repo_data.encryption != "none" and not (repo_data.passphrase or "").strip():
         raise HTTPException(
@@ -2988,13 +2993,17 @@ async def _create_direct_rclone_repository_record(
     repo_path = _validate_direct_rclone_payload(repo_data, db)
     _validate_repository_name_available(repo_data.name, db)
 
-    valid_encryption_modes = V2_ONLY_ENCRYPTION_MODES | {"none"}
-    if repo_data.encryption not in valid_encryption_modes:
+    # Borg 2 only: the modes repo-create is built from (no `none` since
+    # 2.0.0b25, and every mode has a key that wants a passphrase).
+    if repo_data.encryption not in BORG2_ENCRYPTION_MODES:
         raise HTTPException(
             status_code=400,
-            detail={"key": "backend.errors.repo.invalidEncryptionMode"},
+            detail={
+                "key": "backend.errors.repo.invalidEncryptionMode",
+                "params": {"mode": repo_data.encryption},
+            },
         )
-    if repo_data.encryption != "none" and not (repo_data.passphrase or "").strip():
+    if not (repo_data.passphrase or "").strip():
         raise HTTPException(
             status_code=400,
             detail={
@@ -3256,14 +3265,9 @@ async def _import_direct_rclone_repository_record(
                 status_code=400,
                 detail={"key": "backend.errors.repo.encryptedPassphraseIncorrect"},
             )
-        if "not a valid repository" in error_msg.lower():
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "key": "backend.errors.repo.notValidBorgRepository",
-                    "params": {"path": repo_path},
-                },
-            )
+        # Borg 2 only: not a repository, or one another beta wrote
+        if unreadable := borg2_unreadable_repository_detail(error_msg):
+            raise HTTPException(status_code=400, detail=unreadable)
         raise HTTPException(
             status_code=500,
             detail={"key": "backend.errors.repo.failedToVerifyRepository"},
@@ -3595,7 +3599,10 @@ async def create_repository(
         if repo_data.encryption not in valid_encryption_modes:
             raise HTTPException(
                 status_code=400,
-                detail={"key": "backend.errors.repo.invalidEncryptionMode"},
+                detail={
+                    "key": "backend.errors.repo.invalidEncryptionMode",
+                    "params": {"mode": repo_data.encryption},
+                },
             )
 
         # Validate passphrase for encrypted repositories
@@ -5352,6 +5359,13 @@ async def update_repository(
 
                 # Reconstruct SSH URL
                 final_path = f"ssh://{connection_details['username']}@{connection_details['host']}:{connection_details['port']}/{path_to_use.lstrip('/')}"
+                # Borg 2 tells a relative path from an absolute one by the
+                # second slash, which the text above cannot carry.
+                final_path = BorgRouter(repository).ssh_repository_url(
+                    raw_path if raw_path is not None else repository.path,
+                    connection_details,
+                    borg1_url=final_path,
+                )
 
                 # Check if path already exists (for a different repository)
                 existing_path = (
@@ -6501,8 +6515,9 @@ async def list_repository_archives(
         )
         router = BorgRouter(repository)
         cmd = router.build_repo_list_command(repository.path)
-        if remote_path := effective_repository_remote_path(repository):
-            cmd.extend(["--remote-path", remote_path])
+        cmd.extend(
+            router.remote_command_options(effective_repository_remote_path(repository))
+        )
         # BorgRouter returns a Borg 2 command for a Borg 2 repository, and Borg 2
         # has no --bypass-lock (see app/core/borg2.py), so the flag goes on only
         # where it exists.
@@ -6610,8 +6625,9 @@ async def get_repository_info(
         )
         router = BorgRouter(repository)
         cmd = router.build_repo_info_command(repository.path)
-        if remote_path := effective_repository_remote_path(repository):
-            cmd.extend(["--remote-path", remote_path])
+        cmd.extend(
+            router.remote_command_options(effective_repository_remote_path(repository))
+        )
         # BorgRouter returns a Borg 2 command for a Borg 2 repository, and Borg 2
         # has no --bypass-lock (see app/core/borg2.py), so the flag goes on only
         # where it exists.
@@ -6746,10 +6762,11 @@ async def get_repository_stats(
 
         router = BorgRouter(repository)
         cmd = router.build_repo_info_command(repository.path)
-        if bypass_lock:
-            cmd.append("--bypass-lock")
-        if remote_path := effective_repository_remote_path(repository):
-            cmd.extend(["--remote-path", remote_path])
+        cmd.extend(
+            router.remote_command_options(
+                effective_repository_remote_path(repository), bypass_lock=bypass_lock
+            )
+        )
         # machine-parsed: render timestamps in UTC (Borg 1 prints them naive)
         info_env = dict(env or {})
         info_env["TZ"] = "UTC"

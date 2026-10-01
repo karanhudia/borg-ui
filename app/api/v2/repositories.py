@@ -21,6 +21,8 @@ from app.core.features import require_feature
 from app.core.borg2 import (
     borg2,
     BORG2_ENCRYPTION_MODES,
+    borg2_ssh_repository_url,
+    borg2_unreadable_repository_detail,
     normalize_repo_info_encryption,
 )
 from app.core.borg_errors import is_lock_error, is_repository_exists_failure
@@ -36,7 +38,6 @@ from app.services.v2.repository_service import repository_v2_service
 from app.utils.borg_env import effective_repository_remote_path, repository_borg_env
 from app.utils.archive_job_metadata import enrich_archives_with_backup_metadata
 from app.utils.borg_flags import borg_flags_validator
-from app.utils.repository_paths import build_ssh_repository_path
 from app.utils.source_locations import legacy_source_fields, normalize_source_locations
 
 logger = structlog.get_logger()
@@ -150,6 +151,9 @@ def _borg2_failure_detail(result: dict, fallback_key: str) -> dict[str, Any]:
         return {"key": "backend.errors.repo.remoteBorg2Incompatible"}
 
     error = result.get("stderr") or result.get("error") or result.get("stdout") or ""
+    unreadable = borg2_unreadable_repository_detail(error)
+    if unreadable:
+        return unreadable
     return {
         "key": fallback_key,
         "params": {"error": error},
@@ -199,7 +203,7 @@ def _resolve_repository_target(
         )
 
     return (
-        build_ssh_repository_path(
+        borg2_ssh_repository_url(
             repo_path,
             {
                 "host": conn.host,

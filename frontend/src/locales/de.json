@@ -5932,7 +5932,10 @@
         "failedParseArchiveList": "Fehler beim Parsen der Archivliste",
         "failedParseRepositoryInfo": "Fehler beim Parsen der Repository-Informationen",
         "failedParseArchiveInfo": "Fehler beim Parsen der Archiv-Informationen",
-        "failedExportKeyfile": "Fehler beim Exportieren der Schlüsseldatei"
+        "failedExportKeyfile": "Fehler beim Exportieren der Schlüsseldatei",
+        "borg2RepositoryNotReadable": "Borg 2 erkennt dies nicht als Repository. Wurde es vor dem Upgrade auf Borg 2.0.0b25 angelegt, ist das die Ursache: 2.0.0b25 hat das Repository-Format geändert und kann Repositories früherer Borg-2-Betas nicht lesen. Das Repository muss neu angelegt werden; die Upgrade-Hinweise in der Installationsanleitung beschreiben die Schritte. Andernfalls den Repository-Pfad prüfen.",
+        "invalidEncryption": "Der Verschlüsselungsmodus '{{mode}}' ist für Borg-2-Repositories nicht verfügbar.",
+        "invalidEncryptionMode": "Der Verschlüsselungsmodus '{{mode}}' ist für dieses Repository nicht verfügbar."
       },
       "rclone": {
         "invalidRemoteName": "Remote-Name darf nur Buchstaben, Zahlen, Punkte, Bindestriche und Unterstriche enthalten",
@@ -6008,7 +6011,8 @@
         "failedFetchArchives": "Fehler beim Abrufen der Archive",
         "failedFetchArchiveContents": "Fehler beim Abrufen des Archivinhalts",
         "destinationNotAllowed": "Das Wiederherstellungsziel liegt außerhalb der erlaubten lokalen Einhängepunkte: {{path}}",
-        "operatorAccessRequired": "Für die Wiederherstellung auf eine SSH-Verbindung ist Operator- oder Administratorzugriff erforderlich"
+        "operatorAccessRequired": "Für die Wiederherstellung auf eine SSH-Verbindung ist Operator- oder Administratorzugriff erforderlich",
+        "borg2DestinationNotEmpty": "Borg 2 stellt nicht in ein Verzeichnis wieder her, das bereits Dateien enthält, und {{path}} ist nicht leer. Wähle ein leeres Verzeichnis als Ziel und verschiebe die wiederhergestellten Dateien von dort."
       },
       "schedule": {
         "adminAccessRequired": "Administratorzugriff erforderlich",
@@ -6233,7 +6237,8 @@
         "restoreFailedZeroFilesNoOutput": "Wiederherstellung fehlgeschlagen: 0 Dateien extrahiert (Exitcode {{exitCode}}). Keine Fehlerausgabe von Borg. Dateien existieren möglicherweise nicht im Archiv oder der Zugriff wurde verweigert.",
         "restoreFailedExitCode": "Der Wiederherstellungsprozess wurde mit Code {{exitCode}} beendet",
         "restoreFailed": "Wiederherstellung fehlgeschlagen",
-        "jobCompletedWithWarning": "Mit Warnung abgeschlossen (Exitcode {{exitCode}})"
+        "jobCompletedWithWarning": "Mit Warnung abgeschlossen (Exitcode {{exitCode}})",
+        "restoreFailedOnAgent": "Wiederherstellung auf dem Agent fehlgeschlagen: {{error}}"
       },
       "dashboard": {
         "failedGetSystemMetrics": "Fehler beim Abrufen der Systemmetriken",

@@ -82,7 +82,6 @@ def main() -> int:
             name="Borg2 Contract Smoke Repo",
             repo_path=client.temp_dir / "borg2-contract-repo",
             source_dirs=[source_root],
-            encryption="none",
         )
 
         result_queue: queue.Queue = queue.Queue()

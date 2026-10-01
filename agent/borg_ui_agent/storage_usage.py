@@ -68,6 +68,9 @@ from borg.helpers import Location
 total = objects = 0
 marker = None
 with Repository(Location(os.environ["BORG_UI_REPOSITORY_URL"]), exclusive=False, lock=False) as repo:
+    if getattr(repo, "key", False) is None:
+        from borg.crypto.key import key_factory
+        key_factory(repo)
     while True:
         batch = repo.list(limit=100000, marker=marker)
         if not batch:

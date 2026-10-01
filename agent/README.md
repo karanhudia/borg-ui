@@ -367,6 +367,17 @@ The first implementation supports:
   the user's Application Support directory, a Homebrew or MacPorts Borg
   reports its install source, and the self-upgrade readiness reads the
   launchd job instead of the systemd units
+- from 0.1.15 the agent speaks Borg 2.0.0b25: the remote Borg command
+  travels in `BORG_REMOTE_PATH` instead of `--remote-path` (an option Borg 2
+  removed in 2.0.0b22), the repository size is read with the repository
+  key (2.0.0b25 seals the chunk index with it), a Borg 2 job on a `rest://`
+  repository is refused where the machine's Borg 2 is 2.0.0b25 or later
+  (it would read the URL as a local directory; the scheme is `ssh://` now;
+  an older Borg 2 keeps its `rest://` repositories) and so is creating a
+  Borg 2 repository with the encryption mode `none`, which 2.0.0b25 removed;
+  a Borg 2 restore into a directory that holds anything is refused with a
+  message before Borg runs, where the machine's Borg 2 is 2.0.0b25 or later
+  (which does not extract into one)
 - cancellation through heartbeat; from 0.1.7 (`jobs.cancel`) a running
   backup, check, prune, compact, restore or archive delete stops as well,
   even while Borg prints nothing

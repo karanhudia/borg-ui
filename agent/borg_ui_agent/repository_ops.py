@@ -22,7 +22,10 @@ from typing import Any, Optional
 from agent.borg_ui_agent.backup import (
     _extract_environment,
     borg1_lock_wait_args,
+    borg2_before_beta,
     build_borg_env,
+    ensure_borg2_repository_url,
+    env_with_repository_port,
     parse_borg_progress,
     progress_replaces_log_line,
 )
@@ -87,8 +90,9 @@ MACHINE_PARSED_JOB_KINDS = {
 # missing here is rejected up front with the mode name, mirroring the server —
 # passing it to repo-create would fail with an argument-parsing error that
 # does not name the actual problem. b23 folded the id hash into the mode name
-# for the unencrypted modes (no alias for the plain b22 names); the sha256
-# variants keep exactly what `authenticated`/`none` produced before.
+# (no alias for the plain b22 name); the sha256 variant keeps exactly what
+# `authenticated` produced before. b25 removed the unencrypted modes, so
+# `none` is refused by name rather than mapped to something else.
 BORG2_ENCRYPTION_FLAGS = {
     "repokey-aes-ocb": ["--encryption", "aes256-ocb", "--key-location", "repokey"],
     "repokey-chacha20-poly1305": [
@@ -105,7 +109,14 @@ BORG2_ENCRYPTION_FLAGS = {
         "keyfile",
     ],
     "authenticated": ["--encryption", "authenticated-sha256"],
-    "none": ["--encryption", "none-sha256"],
+}
+
+BORG2_REMOVED_ENCRYPTION_MODES = {
+    "none": (
+        "Borg 2 has no unencrypted repositories since 2.0.0b25; use "
+        "'authenticated' (data is not encrypted, but protected by a key and "
+        "its passphrase) or an encrypted mode"
+    ),
 }
 
 # Kill a streaming extract only when no bytes have flowed for this long — a
@@ -193,10 +204,15 @@ class RepositoryOperationPayload:
         return cmd
 
     def _base_borg2(self, subcommand: str) -> list[str]:
-        cmd = [self.borg_cmd, "-r", self.repository_path, subcommand]
-        if self.remote_path:
-            cmd.extend(["--remote-path", self.remote_path])
-        return cmd
+        ensure_borg2_repository_url(self.repository_path, self.borg_cmd)
+        # No --remote-path: Borg 2.0.0b22 removed the option, the remote Borg
+        # command travels in BORG_REMOTE_PATH (`remote_path_env`).
+        return [self.borg_cmd, "-r", self.repository_path, subcommand]
+
+    def remote_path_env(self) -> dict[str, str]:
+        if self.borg_version == 2 and self.remote_path:
+            return {"BORG_REMOTE_PATH": self.remote_path}
+        return {}
 
     def build_command(
         self, *, rclone_config_path: Optional[str] = None, compact_stats: bool = True
@@ -242,6 +258,8 @@ class RepositoryOperationPayload:
                 raise ValueError("repository.init requires operation.encryption")
             encryption = encryption.strip()
             if self.borg_version == 2:
+                if encryption in BORG2_REMOVED_ENCRYPTION_MODES:
+                    raise ValueError(BORG2_REMOVED_ENCRYPTION_MODES[encryption])
                 encryption_flags = BORG2_ENCRYPTION_FLAGS.get(encryption)
                 if encryption_flags is None:
                     raise ValueError(
@@ -735,6 +753,8 @@ def execute_repository_operation_job(
         )
 
     env = build_borg_env(payload.environment)
+    env.update(payload.remote_path_env())
+    env_with_repository_port(env, payload.repository_path)
     if payload.job_kind in MACHINE_PARSED_JOB_KINDS:
         # The server parses timestamps out of these outputs; pin the render
         # zone so they come out UTC. Applied after the server-sent overrides:
@@ -1802,6 +1822,48 @@ def compact_stats_supported(binary: str) -> bool:
     return supported
 
 
+# The first beta whose extract refuses a directory that is not empty.
+EXTRACT_REFUSES_OCCUPIED_DIRECTORY_SINCE_BETA = 25
+
+
+def _restore_target_refusal(
+    cmd: list[str], payload: RepositoryOperationPayload, target_dir: str
+) -> str | None:
+    """Why a Borg 2 restore into `target_dir` is refused, or None.
+
+    Borg 2.0.0b25 refuses to extract into a directory that is not empty
+    ("Extraction directory ... is not empty", exit 33), the original location
+    and a fresh filesystem with its lost+found included. Its way around,
+    --continue, skips a file that already has the archived type, mode, size
+    and modification time, so a file damaged in place would stay damaged
+    behind a restore that reports success. The agent does not pass the
+    option; it refuses the restore before Borg runs and says what to do.
+    Borg 1, a Borg 2 before 2.0.0b25 (which extracts into such a directory)
+    and an empty, missing or unreadable directory are left to Borg.
+    """
+    # the subcommand by its place in `_base_borg2`, not by the first word
+    # that reads "extract": a repository or a binary may be named that
+    subcommand = 3
+    if payload.borg_version != 2 or cmd[subcommand : subcommand + 1] != ["extract"]:
+        return None
+    try:
+        with os.scandir(target_dir) as entries:
+            occupied = next(entries, None) is not None
+    except OSError:
+        return None
+    if not occupied:
+        return None
+    if borg2_before_beta(
+        payload.borg_cmd, EXTRACT_REFUSES_OCCUPIED_DIRECTORY_SINCE_BETA
+    ):
+        return None
+    return (
+        "Borg 2 does not restore into a directory that already holds files, "
+        f"and {target_dir} is not empty. Choose an empty directory as the "
+        "destination and move the restored files from there."
+    )
+
+
 def _resolve_restore_target(operation: dict[str, Any]) -> tuple[str, bool]:
     """Return (target_dir, is_temp) for a repository.restore job.
 
@@ -1855,6 +1917,16 @@ def _execute_restore_operation(
         client.fail_job(job_id, error_message=error_message)
         return RepositoryOperationResult(
             job_id=job_id, status="failed", message=error_message
+        )
+
+    refusal = _restore_target_refusal(cmd, payload, target_dir)
+    if refusal:
+        client.send_log(
+            job_id, sequence=initial_sequence, stream="stderr", message=refusal
+        )
+        client.fail_job(job_id, error_message=refusal)
+        return RepositoryOperationResult(
+            job_id=job_id, status="failed", message=refusal
         )
 
     try:
@@ -2105,10 +2177,11 @@ def execute_storage_usage_job(
             job_id=job_id, status="failed", message=error_message
         )
     env = build_borg_env(payload.environment)
+    env_with_repository_port(env, payload.repository_path)
     if payload.remote_path:
         # The index step runs through Borg's Python API, where the remote
         # path travels in the environment: the payload's value must win over
-        # an inherited one, unlike --remote-path on the other handlers' argv.
+        # an inherited one.
         env["BORG_REMOTE_PATH"] = payload.remote_path
     # The server stops waiting after its info timeout; a measurement that
     # outlives it would hold the job open and refuse the next refresh.

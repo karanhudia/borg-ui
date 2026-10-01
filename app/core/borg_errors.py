@@ -120,6 +120,15 @@ REPOSITORY_EXISTS_EXIT_CODE = 10
 _REPOSITORY_EXISTS_LINE = _re.compile(r"a repository already exists at .+\.", _re.I)
 
 
+class RestoreRefused(Exception):
+    """A restore the repository's Borg will not run as asked. `detail` is
+    the translatable reason, shaped like an HTTP error detail."""
+
+    def __init__(self, detail: dict):
+        super().__init__(detail.get("key", "restore refused"))
+        self.detail = detail
+
+
 def is_repository_exists_failure(result: dict) -> bool:
     """Whether a failed repository create failed only because the repository
     was already there, the one outcome a caller may treat as success.

@@ -49,6 +49,8 @@ def _create_borg2_repo_with_archives(test_db, tmp_path):
     from tests.utils.borg import (
         create_archive,
         create_source_tree,
+        BORG2_TEST_ENCRYPTION,
+        BORG2_TEST_PASSPHRASE,
         init_borg_repo,
         make_borg_test_env,
     )
@@ -68,7 +70,7 @@ def _create_borg2_repo_with_archives(test_db, tmp_path):
     )
 
     env = make_borg_test_env(str(tmp_path))
-    init_borg_repo(borg2_binary, repo_path, env=env, encryption="none")
+    init_borg_repo(borg2_binary, repo_path, env=env)
     create_archive(borg2_binary, repo_path, "test-archive-1", [source_path], env=env)
 
     (source_path / "file1.txt").write_text("restore file 1 updated\n", encoding="utf-8")
@@ -78,7 +80,8 @@ def _create_borg2_repo_with_archives(test_db, tmp_path):
     repo = Repository(
         name="Test Borg2 Restore Repo",
         path=str(repo_path),
-        encryption="none",
+        encryption=BORG2_TEST_ENCRYPTION,
+        passphrase=BORG2_TEST_PASSPHRASE,
         compression="lz4",
         repository_type="local",
         borg_version=2,
