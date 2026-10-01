@@ -216,6 +216,27 @@ class PlanRoutesSmoke:
                 )
             time.sleep(0.5)
 
+    def wait_repository_idle(self, repository_id: int, *, timeout: float = 120):
+        """Wait out the work a finished run leaves behind. A run reads
+        completed once its own steps are done; its follow-ups (archive
+        listing, stats, the retention comparison's dry-run prunes) run
+        after, and a dry-run prune refuses the next backup with "prune is
+        active on the repository"."""
+        deadline = time.monotonic() + timeout
+        while True:
+            active = self._get(
+                f"/api/operations/?repository_id={repository_id}"
+                "&status=queued&status=running"
+            )["items"]
+            if not active:
+                return
+            if time.monotonic() > deadline:
+                raise SmokeFailure(
+                    f"Repository {repository_id} still busy after {timeout}s: "
+                    f"{[(op['kind'], op['status']) for op in active]}"
+                )
+            time.sleep(0.5)
+
     def wait_backup_running(self, run_id: int, *, timeout: float = 60) -> dict:
         deadline = time.monotonic() + timeout
         while True:
@@ -323,6 +344,7 @@ class PlanRoutesSmoke:
             connection_id=other_machine["id"],
             path=login_relative_file,
         )
+        self.wait_repository_idle(repo["id"])
         blocker_run = self.start_run(blocker_plan)
         self.wait_backup_running(blocker_run)
         refused_started = time.monotonic()
@@ -351,6 +373,7 @@ class PlanRoutesSmoke:
         )
 
         # 3. The file, on another machine, through the login-relative path.
+        self.wait_repository_idle(repo["id"])
         run = self.wait_run(self.start_run(file_plan), timeout=180)
         archive = self.expect_completed(run, route="server_sshfs_pull_then_borg_ssh")
         self.expect_archived(
@@ -371,6 +394,7 @@ class PlanRoutesSmoke:
             connection_id=sftp_machine["id"],
             path=absolute_file,
         )
+        self.wait_repository_idle(repo["id"])
         run = self.wait_run(self.start_run(sftp_plan), timeout=180)
         archive = self.expect_completed(run, route="server_sshfs_pull_then_borg_ssh")
         self.expect_archived(repo_path, archive, absolute_file.lstrip("/"), file_body)
