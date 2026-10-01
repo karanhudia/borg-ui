@@ -80,7 +80,7 @@ def _create_borg2_repo_with_archives(test_db, tmp_path):
     test_db.commit()
     test_db.refresh(repo)
 
-    # Borg 2 prunes per series (archives sharing a name, b23+), and borg-ui
+    # Borg 2 prunes per series (archives sharing a name), and borg-ui
     # gives Borg 2 archives a stable series name, so both share one here.
     return repo, repo_path, source_path, ["test-archive", "test-archive"]
 

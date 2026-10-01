@@ -40,10 +40,10 @@ class BackupV2Service:
         custom_flags: List[str],
         upload_ratelimit_kib: Optional[int] = None,  # noqa: ARG002 - Borg 1 only
     ) -> List[str]:
-        """Borg 2.0.0b22 removed --upload-ratelimit, so a repository's upload
+        """Borg 2 has no --upload-ratelimit, so a repository's upload
         limit does not reach the command; the Borg 1 options among the custom
         flags are refused (ValueError) before Borg runs."""
-        ensure_borg2_repository_url(repository_path, borg2.borg_cmd)
+        ensure_borg2_repository_url(repository_path)
         cmd = [
             borg2.borg_cmd,
             "--progress",

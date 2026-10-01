@@ -13,7 +13,11 @@ import structlog
 from app.api.agent_installer import agent_package_version
 from app.api.agents import FINAL_AGENT_JOB_STATUSES, _cancel_agent_job
 from app.core.agent_auth import AGENT_TOKEN_PREFIX_LENGTH
-from app.core.agent_versions import compute_agent_upgrade_status
+from app.core.agent_versions import (
+    agent_borg2_version,
+    compute_agent_upgrade_status,
+)
+from app.core.borg2 import borg2_below_minimum, borg2_minimum_version
 from app.core.agent_constants import (
     AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS,
 )
@@ -117,6 +121,10 @@ class AgentMachineResponse(BaseModel):
     desired_borg_version: Optional[str] = None
     available_agent_version: Optional[str] = None
     upgrade_status: str = "unknown"
+    # The oldest Borg 2 an endpoint may run (the server's own), and whether
+    # the Borg 2 this one reports is older: its Borg 2 jobs are refused.
+    borg2_minimum_version: Optional[str] = None
+    borg2_below_minimum: bool = False
     # None until the agent has reported its capabilities at least once. An
     # endpoint that has never checked in has not said it cannot upgrade
     # itself, and must not be labelled manual-only for it.
@@ -519,6 +527,10 @@ def _agent_machine_response(
     response.self_upgrade_supported = (
         None if agent.capabilities is None else "self_upgrade" in agent.capabilities
     )
+    response.borg2_minimum_version = borg2_minimum_version()
+    response.borg2_below_minimum = borg2_below_minimum(
+        agent_borg2_version(agent.borg_versions)
+    )
     return response
 
 
@@ -761,9 +773,15 @@ async def create_agent_backup_job(
             detail={"key": "backend.errors.agents.agentNotQueueable"},
         )
 
-    now = _now_utc()
-    from app.services.repository_executor import BACKUP_AGENT_JOB_TYPE
+    from app.services.repository_executor import (
+        BACKUP_AGENT_JOB_TYPE,
+        require_agent_borg2,
+    )
 
+    if payload.borg_version == 2:
+        require_agent_borg2(agent, (payload.borg_binary or "").strip() or None)
+
+    now = _now_utc()
     job = AgentJob(
         agent_machine_id=agent.id,
         job_type=BACKUP_AGENT_JOB_TYPE,

@@ -32,7 +32,7 @@ describe('AgentBorgVersionChip', () => {
         desiredBorgVersion="2"
         borgVersions={[
           { major: 1, version: '1.4.0' },
-          { major: 2, version: '2.0.0b14' },
+          { major: 2, version: '2.0.0b25' },
         ]}
       />
     )

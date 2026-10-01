@@ -64,9 +64,7 @@ from app.core.borg_router import BorgRouter
 from app.core.borg_errors import is_lock_error, is_repository_exists_failure
 from app.core.borg2 import (
     BORG2_ENCRYPTION_MODES,
-    ENCRYPTION_FLAGS_SINCE_BETA,
     borg2_unreadable_repository_detail,
-    borg2_speaks_encryption_flags,
     normalize_repo_info_encryption,
 )
 from app.core.features import (
@@ -93,6 +91,7 @@ from app.services.repository_executor import (
     normalize_executor_type,
     queue_agent_repository_operation_job,
     repository_executor_type,
+    require_agent_borg2,
     wait_for_agent_repository_operation_job,
 )
 from app.services.check_flag_validation import (
@@ -109,7 +108,6 @@ from app.services.agent_connection_manager import (
     AgentCommandError,
 )
 from app.core.agent_constants import AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS
-from app.core.agent_versions import agent_borg_version_for_major
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.repository_info_sync import sync_archive_stats_from_info
 from app.services.storage_usage import (
@@ -1029,9 +1027,9 @@ async def _update_agent_repository_stats(
             rinfo_result = await wait(rinfo_job, timeouts["info_timeout"])
             rinfo = json.loads((rinfo_result or {}).get("stdout") or "{}")
             # Deliberately NOT normalize_repo_info_encryption() here. That fills
-            # `mode` with the bare cipher for Borg 2.0.0b22, which is right for
+            # `mode` with the bare cipher for Borg 2, which is right for
             # display but wrong for this column: the stored value is the combined
-            # name the repository was created with (repokey-aes-ocb), and b22's
+            # name the repository was created with (repokey-aes-ocb), and Borg 2's
             # repo-info does not report the key location, so writing its cipher
             # back would drop that half for good. No mode, no write — the stored
             # name stands.
@@ -2545,34 +2543,6 @@ def _reject_agent_repository_ssh_target(
         )
 
 
-def _require_agent_borg2(agent: AgentMachine) -> None:
-    """Refuse a Borg 2 repository on an endpoint that cannot run one.
-
-    Both failures are otherwise invisible until the init job reaches the
-    endpoint and dies there: no `borg2` on PATH is "No such file or directory",
-    and a pre-b22 one rejects every encryption mode the server emits. Neither
-    exit code names the real problem, so decide it here, where the answer is
-    already known.
-    """
-    version = agent_borg_version_for_major(agent.borg_versions, 2)
-    if version is None:
-        raise HTTPException(
-            status_code=400,
-            detail={"key": "backend.errors.repo.agentBorg2Unavailable"},
-        )
-    if not borg2_speaks_encryption_flags(version):
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "key": "backend.errors.repo.agentBorg2TooOld",
-                "params": {
-                    "version": version,
-                    "minimum": f"2.0.0b{ENCRYPTION_FLAGS_SINCE_BETA}",
-                },
-            },
-        )
-
-
 async def _validate_agent_repository_payload(
     repo_data: Union[RepositoryCreate, RepositoryImport], db: Session
 ) -> AgentMachine:
@@ -2584,7 +2554,7 @@ async def _validate_agent_repository_payload(
     agent = _require_queueable_agent(repo_data.agent_machine_id, db)
 
     if _uses_borg2_payload(repo_data):
-        _require_agent_borg2(agent)
+        require_agent_borg2(agent)
 
     encrypted = repo_data.encryption in [
         "repokey",

@@ -3,7 +3,7 @@ against real binaries.
 
 borg 1 renders archive times in the local zone of the listing process with no
 UTC offset - the reason parse_borg_archive_time needs to know the render zone.
-borg 2 (measured on 2.0.0b22 and 2.0.0b23) renders them WITH an explicit UTC
+borg 2 (measured on 2.0.0b25) renders them WITH an explicit UTC
 offset, both in the bare ``repo-list --json`` and in the key-restricted
 ``--json --format`` fast path the agent uses - those values are
 self-describing and take the parser's offset branch regardless of any zone

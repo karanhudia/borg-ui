@@ -14,6 +14,8 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import SingletonThreadPool, StaticPool
 
+from app.core.agent_versions import agent_borg2_version, agent_borg_version_for_major
+from app.core.borg2 import borg2_below_minimum, borg2_minimum_version
 from app.core.borg_router import BorgRouter
 from app.core.borg_errors import (
     LOCK_CONTENTION_DETAIL_KEY,
@@ -64,6 +66,11 @@ REPOSITORY_OPERATION_CAPABILITIES = {
     "repository.storage_usage",
     "repository.diff",
 }
+# Repository jobs that run no Borg on the endpoint (an rclone copy, a `du`),
+# so the endpoint's Borg 2 is no condition for them.
+BORGLESS_REPOSITORY_JOB_KINDS = frozenset(
+    {"repository.rclone_sync", "repository.disk_usage"}
+)
 # Kinds whose output the server parses. The agent reports the raw JSON as
 # `stdout` and its own parse of it as `data` (its MACHINE_PARSED_JOB_KINDS;
 # the two packages share no imports, so the set is stated twice). The reader
@@ -330,6 +337,56 @@ def build_agent_repository_operation_payload(
     }
 
 
+def agent_borg2_reinstall_flags(agent: AgentMachine) -> str:
+    """The installer flags that put this server's Borg 2 on the endpoint,
+    keeping a Borg 1 it reports."""
+    borg_version = (
+        "both"
+        if agent_borg_version_for_major(agent.borg_versions, 1) is not None
+        else "2"
+    )
+    return f"--reinstall --borg-version {borg_version} --borg-source server"
+
+
+def require_agent_borg2(agent: AgentMachine, binary: Optional[str] = None) -> None:
+    """Refuse Borg 2 work on an endpoint whose Borg 2 cannot do it (#1306).
+
+    The endpoint must run at least the Borg 2 this server ships: Borg 2
+    betas change the repository format and the command line at short
+    intervals, so an older one fails on the endpoint with an exit code that
+    does not name the problem, or misreads a repository. No `borg2` at all
+    is "No such file or directory" there. The agent reports its binaries
+    when it registers and at every session start, so the answer is known
+    here, before anything is queued; a Borg 2 replaced by hand counts from
+    the agent's next start. `binary` is the one a job names instead of
+    `borg2` (the raw backup route); the agent reports only `borg` and
+    `borg2`, so a named binary it did not report is not checked: an unknown
+    version is not evidence of an old one.
+    """
+    if binary == "borg2":
+        binary = None  # the default, named
+    version = agent_borg2_version(agent.borg_versions, binary)
+    if version is None and binary:
+        return
+    if version is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.repo.agentBorg2Unavailable"},
+        )
+    if borg2_below_minimum(version):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "key": "backend.errors.repo.agentBorg2TooOld",
+                "params": {
+                    "version": version,
+                    "minimum": borg2_minimum_version(),
+                    "flags": agent_borg2_reinstall_flags(agent),
+                },
+            },
+        )
+
+
 def validate_agent_backup_repository(
     db: Session, repository: Repository, *, source_paths: Optional[list[str]] = None
 ) -> AgentMachine:
@@ -363,6 +420,8 @@ def validate_agent_backup_repository(
             status_code=status.HTTP_409_CONFLICT,
             detail={"key": "backend.errors.agents.agentNotQueueable"},
         )
+    if (repository.borg_version or 1) == 2:
+        require_agent_borg2(agent)
     using_repository_sources = source_paths is None
     if using_repository_sources:
         source_paths = decode_json_list(repository.source_directories)
@@ -426,6 +485,10 @@ def validate_agent_repository_operation(
                 "params": {"capability": job_kind},
             },
         )
+    if (
+        repository.borg_version or 1
+    ) == 2 and job_kind not in BORGLESS_REPOSITORY_JOB_KINDS:
+        require_agent_borg2(agent)
     return agent
 
 

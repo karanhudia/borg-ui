@@ -90,7 +90,7 @@ def _agent(test_db) -> AgentMachine:
         capabilities=["repository.init"],
         borg_versions=[
             {"major": 1, "version": "1.4.5", "path": "/usr/local/bin/borg"},
-            {"major": 2, "version": "2.0.0b24", "path": "/usr/local/bin/borg2"},
+            {"major": 2, "version": "2.0.0b25", "path": "/usr/local/bin/borg2"},
         ],
     )
     test_db.add(agent)
