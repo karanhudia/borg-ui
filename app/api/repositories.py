@@ -1039,8 +1039,9 @@ async def _update_agent_repository_stats(
             # The same payload carries the repository's source data size,
             # which the caller files with the operation for the stats strip.
             original_size = borg1_original_size(rinfo)
-            # Both versions report the last manifest write; the agent renders
-            # it in its reported zone (UTC since #889).
+            # Borg 1 reports the last manifest write (Borg 2 reports none; the
+            # storage summary derives it); the agent renders it in its
+            # reported zone (UTC since #889).
             borg_last_modified = _parse_borg_archive_time(
                 (rinfo.get("repository") or {}).get("last_modified"),
                 timezone_name=agent_zone,
@@ -6738,6 +6739,18 @@ async def break_repository_lock(
         )
 
 
+def _stats_last_modified(
+    db: Session, repository: Repository, reported: Optional[datetime]
+) -> Optional[datetime]:
+    """Borg 1's `last_modified` as the info call just reported it, else the
+    stored column; for Borg 2, which reports none, the last write the
+    storage summary derives (#1262)."""
+    if (repository.borg_version or 1) == 2:
+        summary = _storage_summary_or_none(db, repository)
+        return summary.last_modified if summary else None
+    return reported or repository.borg_last_modified
+
+
 async def get_repository_stats(
     repository: Repository, db: Session, bypass_lock: bool = False
 ) -> Dict[str, Any]:
@@ -6748,7 +6761,9 @@ async def get_repository_stats(
             "compressed_size": "Unknown",
             "deduplicated_size": "Unknown",
             "archive_count": repository.archive_count or 0,
-            "last_modified": format_datetime(repository.borg_last_modified),
+            "last_modified": format_datetime(
+                _stats_last_modified(db, repository, None)
+            ),
             "total_size_source": repository.total_size_source,
             "encryption": repository.encryption or "Unknown",
             "executor": "agent",
@@ -6778,20 +6793,17 @@ async def get_repository_stats(
                 "details": info_result["stderr"],
             }
 
-        # The info call just made carries Borg's own last_modified; the stored
-        # column is the fallback for a payload without one.
-        last_modified = repository.borg_last_modified
+        # The info call just made carries Borg 1's own last_modified.
+        reported = None
         try:
             payload = json.loads(info_result.get("stdout") or "{}")
-            last_modified = (
-                _parse_borg_archive_time(
-                    (payload.get("repository") or {}).get("last_modified"),
-                    timezone_name="UTC",
-                )
-                or last_modified
+            reported = _parse_borg_archive_time(
+                (payload.get("repository") or {}).get("last_modified"),
+                timezone_name="UTC",
             )
         except (json.JSONDecodeError, ValueError, AttributeError):
             pass
+        last_modified = _stats_last_modified(db, repository, reported)
 
         # Parse repository info (basic implementation)
         # In a real implementation, you would parse the borg info output
