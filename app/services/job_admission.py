@@ -27,6 +27,10 @@ OPERATION_RESTORE = "restore"
 OPERATION_RESTORE_CHECK = "restore_check"
 OPERATION_COMPACT = "compact"
 OPERATION_PRUNE = "prune"
+# `prune --dry-run`: the retention comparison's and the preview page's. It
+# holds the exclusive repository lock like a real prune, so it is a write,
+# but a backup does not conflict with it (see `ensure_repository_admission`).
+OPERATION_PRUNE_DRY_RUN = "prune.dry_run"
 OPERATION_DELETE_ARCHIVE = "delete_archive"
 OPERATION_REPOSITORY_WIPE = "repository_wipe"
 OPERATION_REPOSITORY_INIT = "repository.init"
@@ -85,6 +89,7 @@ WRITE_OPERATIONS = {
     OPERATION_BACKUP,
     OPERATION_COMPACT,
     OPERATION_PRUNE,
+    OPERATION_PRUNE_DRY_RUN,
     OPERATION_DELETE_ARCHIVE,
     OPERATION_REPOSITORY_WIPE,
     OPERATION_REPOSITORY_INIT,
@@ -205,6 +210,10 @@ def _carries_ignored_operation(
     )
 
 
+def _is_dry_run(params: Any) -> bool:
+    return isinstance(params, dict) and bool(params.get("dry_run"))
+
+
 def _dialect_name(db: Session) -> str:
     try:
         return db.get_bind().dialect.name
@@ -301,10 +310,13 @@ def list_active_repository_work(
         )
         .all()
     ):
+        operation = MIGRATED_OPERATION_KINDS[op.kind]
+        if operation == OPERATION_PRUNE and _is_dry_run(op.params):
+            operation = OPERATION_PRUNE_DRY_RUN
         active.append(
             _active_work(
                 repository,
-                MIGRATED_OPERATION_KINDS[op.kind],
+                operation,
                 Operation.__tablename__,
                 op,
                 status=legacy_status(op.status),
@@ -343,6 +355,8 @@ def list_active_repository_work(
             # a borg lock, so count it as (write-class) conflicting work rather
             # than ignoring it -- otherwise break_lock could run alongside it.
             operation = OPERATION_UNKNOWN_REPOSITORY
+        if operation == OPERATION_PRUNE and _is_dry_run(payload.get("operation")):
+            operation = OPERATION_PRUNE_DRY_RUN
         active.append(_active_work(repository, operation, AgentJob.__tablename__, job))
 
     return [work for work in active if not _is_ignored(work, ignore)]
@@ -422,6 +436,16 @@ def ensure_repository_admission(
         if OPERATION_CLASS_REPOSITORY_OBSERVE in (
             requested_class,
             active.operation_class,
+        ):
+            continue
+        # A dry run yields to a backup. Both are exclusive on the runner's
+        # repository lane, so the backup's row stays queued until the dry
+        # run's own row (or the comparison carrying it) ends; refusing it
+        # instead failed the backup over derived data. Should the backup
+        # still meet the lock, Borg waits it out (BORG_LOCK_WAIT, 180s).
+        if (
+            operation == OPERATION_BACKUP
+            and active.operation == OPERATION_PRUNE_DRY_RUN
         ):
             continue
         conflicts = requested_class == OPERATION_CLASS_REPOSITORY_WRITE or (

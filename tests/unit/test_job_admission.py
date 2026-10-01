@@ -220,3 +220,86 @@ def test_a_running_wipe_operation_is_active_repository_work(db_session):
     work = list_active_repository_work(db_session, repo)
 
     assert [(w.operation, w.status) for w in work] == [("repository_wipe", "running")]
+
+
+def _running_prune(db_session, repo, *, dry_run):
+    from app.database.models import Operation
+
+    db_session.add(
+        Operation(
+            repository_id=repo.id,
+            kind="prune",
+            category="maintenance",
+            status="running",
+            trigger="followup",
+            priority=0,
+            run_id="run-prune",
+            params={"dry_run": dry_run},
+        )
+    )
+    db_session.commit()
+
+
+def _local_repo(db_session, path):
+    repo = Repository(
+        name="Repo", path=path, encryption="none", repository_type="local"
+    )
+    db_session.add(repo)
+    db_session.flush()
+    return repo
+
+
+def test_a_backup_is_admitted_while_a_prune_dry_run_runs(db_session):
+    """The retention comparison's dry runs (main CI run 36777725734) must not
+    fail a backup: it queues behind them on the repository lane."""
+    repo = _local_repo(db_session, "/repos/dry-run-backup")
+    _running_prune(db_session, repo, dry_run=True)
+
+    ensure_repository_admission(db_session, repo, OPERATION_BACKUP)
+
+
+def test_a_backup_is_admitted_while_an_agent_prune_dry_run_runs(db_session):
+    agent = AgentMachine(
+        name="Agent",
+        agent_id="agt_dry_run",
+        token_hash=get_password_hash("agent-secret"),
+        token_prefix="agent-secret",
+        status="online",
+    )
+    db_session.add(agent)
+    repo = _local_repo(db_session, "/repos/agent-dry-run")
+    db_session.add(
+        AgentJob(
+            agent_machine_id=agent.id,
+            job_type="repository",
+            status="running",
+            payload={
+                "schema_version": 1,
+                "job_kind": "repository.prune",
+                "repository": {"id": repo.id, "path": repo.path},
+                "operation": {"dry_run": True},
+            },
+        )
+    )
+    db_session.commit()
+
+    ensure_repository_admission(db_session, repo, OPERATION_BACKUP)
+
+
+def test_a_real_prune_still_refuses_a_backup(db_session):
+    repo = _local_repo(db_session, "/repos/real-prune-backup")
+    _running_prune(db_session, repo, dry_run=False)
+
+    with pytest.raises(HTTPException) as exc:
+        ensure_repository_admission(db_session, repo, OPERATION_BACKUP)
+
+    assert exc.value.detail["params"]["active_operation"] == "prune"
+
+
+def test_a_prune_dry_run_still_refuses_break_lock(db_session):
+    # it holds the exclusive repository lock all the same
+    repo = _local_repo(db_session, "/repos/dry-run-break-lock")
+    _running_prune(db_session, repo, dry_run=True)
+
+    with pytest.raises(HTTPException):
+        ensure_repository_admission(db_session, repo, OPERATION_BREAK_LOCK)
