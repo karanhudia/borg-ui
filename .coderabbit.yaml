@@ -1,4 +1,5 @@
 # CodeRabbit configuration. Schema: https://coderabbit.ai/integrations/schema.v2.json
+inheritance: true
 reviews:
   pre_merge_checks:
     # Coverage is measured over every function the diff touches, tests included,
