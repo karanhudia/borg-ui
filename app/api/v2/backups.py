@@ -80,7 +80,7 @@ class CheckV2Request(BaseModel):
     repository_id: int
     max_duration: Optional[int] = None
     check_extra_flags: Optional[str] = None
-    _validate_check_extra_flags = borg_flags_validator("check_extra_flags", "check")
+    _validate_check_extra_flags = borg_flags_validator("check_extra_flags", "check", 2)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

@@ -885,6 +885,7 @@ def test_build_restore_extract_command_delegates_strip_components_for_v2():
         bypass_lock=False,
         strip_components=3,
         destination="/restore/here",
+        existing_files="refuse",
     )
 
 

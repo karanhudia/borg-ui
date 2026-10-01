@@ -170,6 +170,7 @@ class TestRestoreServiceRouting:
             None,
             restore_layout="preserve_path",
             path_metadata=None,
+            existing_files="refuse",
         )
 
     @pytest.mark.unit
@@ -224,6 +225,7 @@ class TestRestoreServiceRouting:
             9,
             restore_layout="preserve_path",
             path_metadata=None,
+            existing_files="refuse",
         )
 
     @pytest.mark.unit

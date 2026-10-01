@@ -21,6 +21,7 @@ export interface BackupConfigStepData {
 
 interface WizardStepBackupConfigProps {
   repositoryId?: number | null
+  borgVersion?: 1 | 2
   dataSource: 'local' | 'remote'
   repositoryMode: 'full' | 'observe'
   data: BackupConfigStepData
@@ -31,6 +32,7 @@ interface WizardStepBackupConfigProps {
 
 export default function WizardStepBackupConfig({
   repositoryId,
+  borgVersion,
   dataSource,
   repositoryMode,
   data,
@@ -72,6 +74,7 @@ export default function WizardStepBackupConfig({
         <AdvancedRepositoryOptions
           repositoryId={repositoryId}
           mode={repositoryMode}
+          borgVersion={borgVersion}
           remotePath={data.remotePath}
           preBackupScript={data.preBackupScript}
           postBackupScript={data.postBackupScript}

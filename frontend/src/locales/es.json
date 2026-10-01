@@ -1856,9 +1856,9 @@
       "settings": {
         "archiveNameHelper": "Admite {plan_name}, {repo_name}, {now}, {date}, {time} y {timestamp}.",
         "extraBorgFlagsHelper": "Indicadores de línea de comandos personalizados para borg create (ej., --stats, --progress, --list). Se aplica a cada ejecución de repositorio en este plan.",
-        "uploadSpeedHelper": "MB/s. Vacío significa sin límite.",
+        "uploadSpeedHelper": "MB/s. Vacío significa sin límite. Solo se aplica a repositorios Borg 1; Borg 2 no tiene límite de subida.",
         "uploadPoliciesTitle": "Límites de subida programados",
-        "uploadPoliciesHelper": "Las ventanas horarias sustituyen el límite de subida constante. Deja el límite vacío para no limitar.",
+        "uploadPoliciesHelper": "Las ventanas horarias sustituyen el límite de subida constante. Deja el límite vacío para no limitar. Como el límite constante, solo se aplican a repositorios Borg 1.",
         "addUploadPolicy": "Añadir política de subida",
         "removeUploadPolicy": "Eliminar política de subida",
         "daytimePolicyLabel": "Límite diurno",
@@ -4889,7 +4889,18 @@
       "restorePath": "Destino",
       "contentsOnlyMarker": "(contenido)",
       "andMoreItems_one": "... y {{count}} elemento más",
-      "andMoreItems_other": "... y {{count}} elementos más"
+      "andMoreItems_other": "... y {{count}} elementos más",
+      "existingFiles": {
+        "title": "Archivos existentes",
+        "exact": "Restauración exacta (directorio vacío)",
+        "exactDesc": "Borg 2 solo restaura en un directorio vacío. Cada archivo se escribe desde el archivo de copia. Elige una carpeta nueva o vacía.",
+        "exactUnavailable": "La ubicación original siempre contiene archivos, así que allí no es posible una restauración exacta. Elige una ubicación personalizada para ello.",
+        "continue": "Restaurar sobre archivos existentes",
+        "continueDesc": "Escribir en un directorio que ya contiene archivos.",
+        "continueWarning": "Se omiten los archivos que ya tienen el tipo, los permisos, el tamaño y la fecha de modificación archivados, de modo que un archivo dañado sin cambio de tamaño ni de fecha no se repara. Los archivos que difieren se reemplazan; los que el archivo de copia no contiene se dejan como están. En un disco recién formateado (solo lost+found) el resultado es el mismo que con una restauración exacta.",
+        "originalNeedsChoice": "Para restaurar en la ubicación original, elige «Restaurar sobre archivos existentes».",
+        "borg1": "Los archivos con la misma ruta se sobrescriben; los demás archivos del destino se dejan como están."
+      }
     },
     "restoreFiles": {
       "title": "Seleccionar archivos a restaurar",
@@ -4950,7 +4961,11 @@
       "files_one": "{{count}} archivo",
       "files_other": "{{count}} archivos",
       "entireArchiveNote": "El archivo completo se restaurará con todos los archivos y directorios.",
-      "everythingLooksGood": "¡Todo parece correcto! Haz clic en \"Restaurar archivos\" para comenzar la operación de restauración."
+      "everythingLooksGood": "¡Todo parece correcto! Haz clic en \"Restaurar archivos\" para comenzar la operación de restauración.",
+      "existingFiles": "Archivos existentes",
+      "existingFilesExact": "Restauración exacta",
+      "existingFilesContinue": "Restaurar sobre archivos existentes",
+      "existingFilesBorg1": "Sobrescritos en la misma ruta"
     },
     "review": {
       "configurationSummary": "Resumen de configuración",
@@ -5199,6 +5214,7 @@
     "customFlagsHint": "Indicadores de línea de comandos personalizados para borg create (ej., --stats, --progress, --list)",
     "uploadSpeedLimit": "Límite de velocidad de subida",
     "uploadSpeedLimitHint": "MB/s. Vacío significa sin límite. La configuración del plan de copia puede sobrescribir este valor predeterminado.",
+    "uploadSpeedLimitBorg2": "Borg 2 no tiene límite de subida. Este ajuste solo se aplica a repositorios Borg 1.",
     "scripts": "Scripts",
     "scriptsOptional": "(Opcional)",
     "scriptsHint": "Configura scripts en línea o asigna scripts reutilizables de tu Biblioteca de Scripts.",
@@ -6012,7 +6028,8 @@
         "failedFetchArchiveContents": "Error al obtener el contenido del archivo",
         "destinationNotAllowed": "El destino de restauración está fuera de los puntos de montaje locales permitidos: {{path}}",
         "operatorAccessRequired": "Se requiere acceso de operador o administrador para restaurar en una conexión SSH",
-        "borg2DestinationNotEmpty": "Borg 2 no restaura en un directorio que ya contiene archivos, y {{path}} no está vacío. Elija un directorio vacío como destino y mueva desde allí los archivos restaurados."
+        "borg2DestinationNotEmpty": "Borg 2 no restaura en un directorio que ya contiene archivos, y {{path}} no está vacío. Elija un directorio vacío como destino, o elija «Restaurar sobre archivos existentes» en el diálogo de restauración.",
+        "agentCannotRestoreIntoExisting": "El agente de este repositorio es demasiado antiguo para restaurar sobre archivos existentes. Actualice el agente a 0.1.17 o posterior, o restaure en un directorio vacío."
       },
       "schedule": {
         "adminAccessRequired": "Se requiere acceso de administrador",
