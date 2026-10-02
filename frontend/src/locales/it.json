@@ -6814,18 +6814,19 @@
       "missing": "Ancora vuoto",
       "unmeasured": "Troppo grande per misurarlo in fretta",
       "latestDump": "Ultimo dump {{when}}",
-      "staleDump": "Ultimo dump {{when}}. Più vecchio di {{hours}} ore: i backup si fermano finché Immich non ne scrive uno nuovo.",
-      "noDump": "Ancora nessun dump del database. Attiva Administration > Settings > Backup in Immich, altrimenti il backup si ferma.",
+      "staleDump": "Ultimo dump {{when}}. Più vecchio di {{hours}} ore: i backup si fermano finché {{app}} non ne scrive uno nuovo.",
+      "noDump": "Ancora nessun dump del database di {{app}}: i backup si fermano finché non ce n'è uno. Le note sotto spiegano come attivarlo.",
+      "madeBeforeBackup": "Borg UI fa una copia nuova prima di ogni backup.",
       "total": "Verranno salvati circa {{size}}.",
       "totalAtLeast": "Verranno salvati almeno {{size}}.",
       "noAccess": "{{user}} non può aprirlo",
       "backUp": "Salva"
     },
-    "missingRoot": "{{path}} non esiste su quella macchina. Scegli la cartella con i file di Immich: {{hint}}.",
+    "missingRoot": "{{path}} non esiste su quella macchina. Scegli la cartella con i file di {{app}}: {{hint}}.",
     "denied": {
       "title": "Borg UI non può aprire {{path}} come {{user}}",
       "why": "Docker rende i volumi con nome leggibili solo da root. Borg si collega con lo stesso utente, quindi anche il backup fallirebbe.",
-      "fixFolder": "Soluzione più semplice: tieni i file di Immich in una cartella normale, come fa il compose ufficiale di Immich. Imposta {{hint}} su una cartella come /srv/immich, sposta lì i file e riavvia Immich.",
+      "fixFolder": "Soluzione più semplice: tieni i file di {{app}} in una cartella normale. Imposta {{hint}} su una cartella come /srv/{{id}}, sposta lì i file e riavvia {{app}}.",
       "fixAcl": "Oppure consenti a {{user}} di leggere questo volume (serve il pacchetto acl su quella macchina):"
     },
     "goodToKnow": "Da sapere",

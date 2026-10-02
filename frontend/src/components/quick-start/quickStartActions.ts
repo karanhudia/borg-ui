@@ -70,7 +70,7 @@ export function appScriptPayload(answers: QuickStartAnswers) {
   return {
     name: `${script.name}: ${answers.name.trim() || answers.app.name}`,
     description: script.description,
-    content: renderAppScript(answers.app, appRoot(answers)) as string,
+    content: renderAppScript(answers.app, appRoot(answers), answers.appContainer) as string,
     timeout: script.timeout,
     run_on: 'always',
     category: 'template',

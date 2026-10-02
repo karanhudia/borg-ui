@@ -1,0 +1,73 @@
+{
+  "id": "plex",
+  "version": 1,
+  "name": "Plex",
+  "description": "Watch history, metadata, settings and Plex's own database backups.",
+  "logo": "plex-logo.svg",
+  "docs_url": "https://support.plex.tv/articles/201539237-backing-up-plex-media-server-data/",
+  "verified": {
+    "app_version": "1.43.4",
+    "date": "2026-10-01",
+    "restore_tested": false
+  },
+  "detect": {
+    "images": [
+      "plexinc/pms-docker",
+      "lscr.io/linuxserver/plex",
+      "linuxserver/plex",
+      "ghcr.io/linuxserver/plex",
+      "ghcr.io/hotio/plex",
+      "hotio/plex"
+    ],
+    "mount_destinations": [
+      "/config"
+    ],
+    "root_subpaths": {
+      "plexinc/pms-docker": "Library/Application Support/Plex Media Server",
+      "lscr.io/linuxserver/plex": "Library/Application Support/Plex Media Server",
+      "linuxserver/plex": "Library/Application Support/Plex Media Server",
+      "ghcr.io/linuxserver/plex": "Library/Application Support/Plex Media Server"
+    }
+  },
+  "root_hint": "Plex Media Server folder: /config in your Plex compose file (official and linuxserver images keep it under Library/Application Support/Plex Media Server there)",
+  "folders": [
+    {
+      "path": "Plug-in Support/Databases",
+      "label": "Database and its backups",
+      "description": "Plex's database (watch history, libraries, settings) and the copies Plex makes of it every three days.",
+      "role": "database",
+      "stale_after_hours": 100,
+      "dump_pattern": "com.plexapp.plugins.library.db-[0-9]*"
+    },
+    {
+      "path": "Metadata",
+      "label": "Metadata",
+      "description": "Posters, artwork and details Plex downloaded for your media.",
+      "role": "data"
+    },
+    {
+      "path": "Media",
+      "label": "Generated media",
+      "description": "Video preview thumbnails and other files Plex generated from your media.",
+      "role": "data"
+    },
+    {
+      "path": "Cache",
+      "label": "Cache",
+      "description": "Temporary files. Plex's own backup guide says you can leave it out.",
+      "role": "rebuildable"
+    }
+  ],
+  "pre_backup_script": {
+    "file": "plex-check-db-backup.sh",
+    "name": "Check Plex database backup",
+    "description": "Stop the backup if Plex has not made a database backup in the last 100 hours.",
+    "timeout": 60
+  },
+  "schedule_cron": "0 6 * * *",
+  "notes": [
+    "Keep Settings > Scheduled Tasks > Backup database every three days turned on in Plex. The live database can change while it is read; these dated copies are the ones to restore from.",
+    "Your movies and shows are not in this folder. Back up your media folders separately if you need to.",
+    "To restore a database copy, follow Plex's guide: https://support.plex.tv/articles/202485658-restore-a-database-backed-up-via-scheduled-tasks/"
+  ]
+}

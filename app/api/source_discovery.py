@@ -18,7 +18,12 @@ from pydantic import BaseModel
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
-from app.app_templates import AppTemplate, load_app_templates, match_app_template
+from app.app_templates import (
+    AppTemplate,
+    image_repository,
+    load_app_templates,
+    match_app_template,
+)
 from app.utils.local_paths import is_within_local_mount
 from app.utils.ssh_host_validation import ssh_destination
 from app.config import settings
@@ -2160,10 +2165,11 @@ def _is_anonymous_volume(mount: ContainerMount) -> bool:
 
 
 def _is_system_mount(mount: ContainerMount) -> bool:
-    paths = [(mount.source or ""), (mount.destination or "")]
+    # By where it comes from on the host: /etc/localtime is never app data, but
+    # a folder mounted at /etc/letsencrypt (Nginx Proxy Manager) is.
+    path = mount.source or ""
     return any(
         path == prefix.rstrip("/") or path.startswith(prefix)
-        for path in paths
         for prefix in _SYSTEM_MOUNT_PREFIXES
     )
 
@@ -2207,7 +2213,13 @@ def _app_detections(
         mount = _app_root_mount(container, template)
         if mount is None:
             continue
-        path = (mount.backup_source or mount.source or "").strip()
+        subpath = template.detect.root_subpath(image_repository(container.image or ""))
+
+        def _under(base: str | None) -> str:
+            base = (base or "").strip()
+            return f"{base.rstrip('/')}/{subpath}" if base and subpath else base
+
+        path = _under(mount.backup_source or mount.source)
         extras = (
             [
                 AppExtraMount(
@@ -2235,7 +2247,7 @@ def _app_detections(
                 container_name=container.name,
                 state=container.state,
                 path=path,
-                host_path=(mount.source or "").strip(),
+                host_path=_under(mount.source),
                 readable=_mount_readable(path, local=local),
                 extra_mounts=extras,
             )

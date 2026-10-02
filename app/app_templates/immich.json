@@ -11,7 +11,7 @@
     "restore_tested": false
   },
   "detect": {
-    "image_prefix": "ghcr.io/immich-app/immich-server",
+    "images": ["ghcr.io/immich-app/immich-server"],
     "mount_destinations": [
       "/data",
       "/usr/src/app/upload"

@@ -157,6 +157,7 @@ describe('quickStartState', () => {
       sourcePaths: [],
       // The app's folder was on the old machine too.
       appRoot: '',
+      appContainer: '',
       destinationKind: 'server',
       destinationConnectionId: '',
       destinationPath: '',
