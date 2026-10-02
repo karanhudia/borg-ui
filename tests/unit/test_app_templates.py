@@ -87,11 +87,10 @@ class TestAppTemplates:
                 AppTemplateFolder(path=bad, label="", description="", role="data")
 
     def test_npm_certificates_mounted_under_etc_count_as_extra_mount(
-        self, test_client, admin_headers, monkeypatch, tmp_path
+        self, test_client, admin_headers, monkeypatch
     ):
-        data, certs = tmp_path / "data", tmp_path / "letsencrypt"
-        data.mkdir()
-        certs.mkdir()
+        # Host paths outside the system prefixes (pytest's tmp is /tmp on Linux).
+        data, certs = "/srv/npm/data", "/srv/npm/letsencrypt"
         container = {
             "Id": "b" * 64,
             "Name": "/npm",
@@ -103,10 +102,10 @@ class TestAppTemplates:
                     "Source": "/etc/localtime",
                     "Destination": "/etc/localtime",
                 },
-                {"Type": "bind", "Source": str(data), "Destination": "/data"},
+                {"Type": "bind", "Source": data, "Destination": "/data"},
                 {
                     "Type": "bind",
-                    "Source": str(certs),
+                    "Source": certs,
                     "Destination": "/etc/letsencrypt",
                 },
             ],
@@ -627,3 +626,51 @@ def test_jellyfin_is_started_again_when_the_copy_fails(tmp_path):
 
     assert result.returncode != 0
     assert calls.read_text().split() == ["stop", "cp", "start"]
+
+
+@pytest.mark.unit
+def test_vaultwarden_prunes_only_its_own_dated_copies(tmp_path):
+    import subprocess
+
+    root = tmp_path / "data"
+    root.mkdir()
+    for index, name in enumerate(
+        [
+            "db_manual.sqlite3",
+            "db_20260901_030000.sqlite3",
+            "db_20260902_030000.sqlite3",
+            "db_20260903_030000.sqlite3",
+            "db_20260904_030000.sqlite3",
+        ]
+    ):
+        path = root / name
+        path.touch()
+        os.utime(path, (1_700_000_000 + index, 1_700_000_000 + index))
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    # `docker exec C /vaultwarden backup` writes a new copy; `docker exec C sh
+    # -c CMD` runs CMD here with the container's /data mapped to the folder.
+    fake_docker = bin_dir / "docker"
+    fake_docker.write_text(
+        "#!/bin/sh\n"
+        f"ROOT={shlex.quote(str(root))}\n"
+        'if [ "$3" = /vaultwarden ]; then touch "$ROOT/db_20261001_030000.sqlite3"; exit 0; fi\n'
+        'if [ "$3" = sh ]; then exec sh -c "$(printf %s "$5" | sed "s#/data#$ROOT#g")"; fi\n'
+    )
+    fake_docker.chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+    result = subprocess.run(
+        ["bash", "-c", _render("vaultwarden", root, "vaultwarden")],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert sorted(p.name for p in root.iterdir()) == [
+        "db_20260903_030000.sqlite3",
+        "db_20260904_030000.sqlite3",
+        "db_20261001_030000.sqlite3",
+        "db_manual.sqlite3",
+    ]

@@ -36,7 +36,7 @@ export function useAppDetection(template: AppTemplate | null, target: AppScanTar
   }
 }
 
-function trimRoot(root: string): string {
+export function trimRoot(root: string): string {
   return root.trim().replace(/\/+$/, '') || '/'
 }
 

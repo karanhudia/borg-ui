@@ -18,6 +18,7 @@ import AppLogo from './AppLogo'
 import {
   mountHint,
   readAccessCommands,
+  trimRoot,
   useAppDetection,
   useAppInspection,
   type AppScanTarget,
@@ -83,7 +84,10 @@ export default function AppTemplateFolderPanel({
     if (found && !root.trim()) onPathsChange(found, detectedExtraPaths)
   }, [found, root, detectedExtraPaths, onPathsChange])
 
-  const container = detection?.container_name ?? ''
+  // Only for the folder Borg UI found: a script must never stop or exec into
+  // that container on behalf of a folder the user picked elsewhere.
+  const container =
+    detection && trimRoot(root) === trimRoot(detection.path) ? detection.container_name : ''
   useEffect(() => onContainerChange(container), [container, onContainerChange])
 
   const rescanButton = (
