@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-10-02T05:37:56.130Z",
+  "generatedAt": "2026-10-02T16:33:08.458Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1310 visual report",
     "commitSha": "0151aecf8c0c",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36969649022"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/37034527009"
   },
   "totals": {
     "baseline": 1134,
@@ -21,9 +21,9 @@
       "baselinePath": "images/baseline/quick-start-steps--folders-immich-no-permission--mobile.png",
       "actualPath": "images/actual/quick-start-steps--folders-immich-no-permission--mobile.png",
       "diffPath": "images/diff/quick-start-steps--folders-immich-no-permission--mobile.png",
-      "diffPixels": 72682,
+      "diffPixels": 71314,
       "totalPixels": 329160,
-      "diffRatio": 0.2208105480617329,
+      "diffRatio": 0.2166545145218131,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
