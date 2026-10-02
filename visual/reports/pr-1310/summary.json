@@ -1,75 +1,21 @@
 {
-  "generatedAt": "2026-10-02T04:33:24.005Z",
+  "generatedAt": "2026-10-02T05:37:56.130Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1310 visual report",
     "commitSha": "0151aecf8c0c",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36964974361"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/36969649022"
   },
   "totals": {
     "baseline": 1134,
     "actual": 1134,
     "compared": 1134,
-    "changed": 7,
+    "changed": 4,
     "added": 0,
     "removed": 0,
-    "unchanged": 1127
+    "unchanged": 1130
   },
   "changed": [
-    {
-      "fileName": "backup-plans-scriptsstep--database-source-scripts.png",
-      "baselinePath": "images/baseline/backup-plans-scriptsstep--database-source-scripts.png",
-      "actualPath": "images/actual/backup-plans-scriptsstep--database-source-scripts.png",
-      "diffPath": "images/diff/backup-plans-scriptsstep--database-source-scripts.png",
-      "diffPixels": 815189,
-      "totalPixels": 1024000,
-      "diffRatio": 0.7960830078125,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-advancedrepositoryoptions--default.png",
-      "baselinePath": "images/baseline/components-advancedrepositoryoptions--default.png",
-      "actualPath": "images/actual/components-advancedrepositoryoptions--default.png",
-      "diffPath": "images/diff/components-advancedrepositoryoptions--default.png",
-      "diffPixels": 1024000,
-      "totalPixels": 1024000,
-      "diffRatio": 1,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-sidebarupdatenotice--dark.png",
-      "baselinePath": "images/baseline/components-sidebarupdatenotice--dark.png",
-      "actualPath": "images/actual/components-sidebarupdatenotice--dark.png",
-      "diffPath": "images/diff/components-sidebarupdatenotice--dark.png",
-      "diffPixels": 1024000,
-      "totalPixels": 1024000,
-      "diffRatio": 1,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
     {
       "fileName": "quick-start-steps--folders-immich-no-permission--mobile.png",
       "baselinePath": "images/baseline/quick-start-steps--folders-immich-no-permission--mobile.png",
@@ -624,6 +570,9 @@
       "fileName": "backup-plans-scriptsstep--database-source-scripts--mobile.png"
     },
     {
+      "fileName": "backup-plans-scriptsstep--database-source-scripts.png"
+    },
+    {
       "fileName": "backup-plans-scriptsstep--plan-script-chains--mobile.png"
     },
     {
@@ -859,6 +808,9 @@
     },
     {
       "fileName": "components-advancedrepositoryoptions--default--mobile.png"
+    },
+    {
+      "fileName": "components-advancedrepositoryoptions--default.png"
     },
     {
       "fileName": "components-advancedrepositoryoptions--with-upload-limit--mobile.png"
@@ -2314,6 +2266,9 @@
     },
     {
       "fileName": "components-sidebarupdatenotice--dark--mobile.png"
+    },
+    {
+      "fileName": "components-sidebarupdatenotice--dark.png"
     },
     {
       "fileName": "components-sidebarupdatenotice--light--mobile.png"
