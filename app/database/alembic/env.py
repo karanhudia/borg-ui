@@ -69,6 +69,17 @@ def _run(connection) -> None:
         compare_server_default=True,
     )
 
+    # SQLite enforces foreign keys per connection, and the upgrade runner turns
+    # them on for the connection it hands in. A batch rebuild is copy, DROP
+    # TABLE, rename, and with the pragma on the DROP deletes through every ON
+    # DELETE CASCADE that points at the table: the rebuild of backup_plans in
+    # a4b5c6d7e8f9 emptied backup_plan_repositories on every pre-Alembic
+    # upgrade (#860). Off for the whole run, as alembic's batch mode asks; the
+    # transfer and the application turn it on for their own connections. Set
+    # before the transaction opens, because inside one the pragma is a no-op.
+    if connection.dialect.name == "sqlite":
+        connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+
     with context.begin_transaction():
         context.run_migrations()
 
