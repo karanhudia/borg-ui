@@ -1,0 +1,51 @@
+{
+  "id": "nginx-proxy-manager",
+  "version": 1,
+  "name": "Nginx Proxy Manager",
+  "description": "Proxy hosts, settings and your Let's Encrypt certificates.",
+  "logo": "nginx-proxy-manager-logo.svg",
+  "docs_url": "https://nginxproxymanager.com/setup/",
+  "verified": {
+    "app_version": "v2.16.0",
+    "date": "2026-10-01",
+    "restore_tested": false
+  },
+  "detect": {
+    "images": [
+      "jc21/nginx-proxy-manager"
+    ],
+    "mount_destinations": [
+      "/data"
+    ]
+  },
+  "root_hint": "folder mounted at /data in your Nginx Proxy Manager compose file",
+  "extra_mounts": {
+    "label": "Certificates",
+    "description": "Your Let's Encrypt certificates and account keys (mounted at /etc/letsencrypt). Without them, every certificate has to be requested again."
+  },
+  "folders": [
+    {
+      "path": "nginx",
+      "label": "Nginx config",
+      "description": "The nginx config Nginx Proxy Manager generated for your hosts.",
+      "role": "data"
+    },
+    {
+      "path": "custom_ssl",
+      "label": "Uploaded certificates",
+      "description": "Certificates you uploaded yourself instead of using Let's Encrypt.",
+      "role": "data"
+    },
+    {
+      "path": "access",
+      "label": "Access lists",
+      "description": "Password files for your access lists.",
+      "role": "data"
+    }
+  ],
+  "schedule_cron": "0 3 * * *",
+  "notes": [
+    "Your proxy hosts and users are in database.sqlite in this folder. It only changes when you edit hosts or a certificate renews, so it is copied as is; avoid editing hosts at backup time.",
+    "If you set Nginx Proxy Manager up with MySQL or MariaDB, back that database up too: use Scan for databases in the plan's sources."
+  ]
+}

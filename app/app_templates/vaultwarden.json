@@ -1,0 +1,54 @@
+{
+  "id": "vaultwarden",
+  "version": 1,
+  "name": "Vaultwarden",
+  "description": "Your password vault: a fresh copy of its database, attachments and keys.",
+  "logo": "vaultwarden-logo.svg",
+  "docs_url": "https://github.com/dani-garcia/vaultwarden/wiki/Backing-up-your-vault",
+  "verified": {
+    "app_version": "1.37.3",
+    "date": "2026-10-01",
+    "restore_tested": false
+  },
+  "detect": {
+    "images": [
+      "vaultwarden/server",
+      "ghcr.io/dani-garcia/vaultwarden",
+      "quay.io/vaultwarden/server"
+    ],
+    "mount_destinations": ["/data"]
+  },
+  "root_hint": "folder mounted at /data in your Vaultwarden compose file",
+  "folders": [
+    {
+      "path": "attachments",
+      "label": "Attachments",
+      "description": "Files attached to vault items. The only data that is not in the database.",
+      "role": "data"
+    },
+    {
+      "path": "sends",
+      "label": "Sends",
+      "description": "Files shared with Bitwarden Send. They expire on their own.",
+      "role": "data"
+    },
+    {
+      "path": "icon_cache",
+      "label": "Website icons",
+      "description": "Icons of the websites in your vault. Vaultwarden fetches them again.",
+      "role": "rebuildable"
+    }
+  ],
+  "pre_backup_script": {
+    "file": "vaultwarden-db-backup.sh",
+    "name": "Copy the Vaultwarden database",
+    "description": "Ask Vaultwarden for a consistent copy of its database, keep the newest three, and stop the backup if no copy from the last hour exists.",
+    "timeout": 300
+  },
+  "schedule_cron": "0 3 * * *",
+  "notes": [
+    "Before each backup, Borg UI runs `/vaultwarden backup` in the Vaultwarden container. It writes db_<date>.sqlite3 next to db.sqlite3; the live file is not safe to copy while Vaultwarden runs. Needs Vaultwarden 1.32.1 or newer and SQLite (the default).",
+    "To restore, stop Vaultwarden, rename the newest db_<date>.sqlite3 to db.sqlite3, and delete any db.sqlite3-wal next to it.",
+    "If Borg UI talks to Docker through a socket proxy, it needs exec allowed. Without the container, schedule `docker exec vaultwarden /vaultwarden backup` yourself: the check only looks for a copy from the last hour."
+  ]
+}

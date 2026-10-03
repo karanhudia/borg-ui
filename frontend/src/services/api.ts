@@ -593,7 +593,7 @@ export interface AppTemplate {
   logo_svg: string | null
   docs_url: string
   verified: { app_version: string; date: string; restore_tested: boolean }
-  detect: { image_prefix: string; mount_destinations: string[] }
+  detect: { images: string[]; mount_destinations: string[] }
   root_hint: string
   /** Other folders the container mounts (external libraries), backed up by default. */
   extra_mounts: { label: string; description: string } | null
@@ -611,6 +611,8 @@ export interface AppTemplateFolder {
   /** rebuildable folders are skipped by default; database shows dump freshness. */
   role: 'data' | 'database' | 'rebuildable'
   stale_after_hours: number | null
+  /** The template's script writes this folder's dumps before each backup. */
+  made_before_backup?: boolean
 }
 
 export interface AppFolderStats {

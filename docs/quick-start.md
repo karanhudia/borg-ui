@@ -77,6 +77,18 @@ In Quick Start the check runs on the Borg UI server, so it is only added when
 the app runs on this server. The Backup Plans **Apps** tab runs it on the
 app's own machine.
 
+In the Backup Plans wizard, the **Apps** tab of the source chooser adds an app
+to a plan the same way, on this server or an SSH machine. A plan can hold
+several apps. Each app's check runs on the machine the app is on, and removing
+the app from the plan removes its excludes and check too.
+
+Some apps need to write their own database copy before the backup
+(Vaultwarden, Paperless-ngx, Jellyfin). Their check runs `docker exec` in the
+app's container, so it needs the container Quick Start found. If Borg UI
+reaches Docker through a socket proxy, allow exec (and, for Jellyfin, stop and
+start) there. If you typed the folder yourself, make the copy on your own
+schedule: the check only looks for a fresh one.
+
 ### Immich
 
 Borg UI backs up Immich's `UPLOAD_LOCATION` folder, which holds your photos and
@@ -94,10 +106,54 @@ stops the backup when no database dump is newer than 26 hours, so an archive
 never holds your photos without the database that organizes them. See
 [Immich's backup guide](https://docs.immich.app/administration/backup-and-restore).
 
-In the Backup Plans wizard, the **Apps** tab of the source chooser adds an app
-to a plan the same way, on this server or an SSH machine. A plan can hold
-several apps. Each app's check runs on the machine the app is on, and removing
-the app from the plan removes its excludes and check too.
+### Vaultwarden
+
+Borg UI backs up the folder mounted at `/data`. Before each backup it runs
+`/vaultwarden backup` in the container (Vaultwarden 1.32.1 or newer, SQLite),
+which writes a consistent `db_<date>.sqlite3` next to the live database, and
+keeps the newest three. `icon_cache` is skipped; Vaultwarden fetches the icons
+again. To restore, stop Vaultwarden, rename the newest copy to `db.sqlite3`,
+and delete any `db.sqlite3-wal` next to it. See
+[Vaultwarden's backup guide](https://github.com/dani-garcia/vaultwarden/wiki/Backing-up-your-vault).
+
+### Plex
+
+Borg UI backs up the Plex Media Server folder (`/config`; the official and
+linuxserver images keep it under `Library/Application Support/Plex Media
+Server`) and skips `Cache`. Plex copies its own database every three days into
+`Plug-in Support/Databases`; the check stops the backup when no copy is newer
+than 100 hours, so keep **Settings > Scheduled Tasks > Backup database every
+three days** turned on. Your media folders are not included. See
+[restoring a Plex database backup](https://support.plex.tv/articles/202485658-restore-a-database-backed-up-via-scheduled-tasks/).
+
+### Paperless-ngx
+
+Borg UI backs up the export folder (`/usr/src/paperless/export`, `./export` in
+the official compose file). Before each backup it runs Paperless's
+`document_exporter` there, which writes your documents and database as one
+set, whichever database Paperless uses. The exporter deletes files in that
+folder that are not part of the export, so use it only for this. Restore with
+`document_importer` into the same Paperless version. See
+[Paperless's backup docs](https://docs.paperless-ngx.com/administration/#backup).
+
+### Nginx Proxy Manager
+
+Borg UI backs up `/data` and offers your Let's Encrypt folder
+(`/etc/letsencrypt`) as an extra folder, ticked by default. The SQLite
+database is copied as is: it only changes when you edit hosts or a certificate
+renews. If you use MySQL or MariaDB instead, add that database with **Scan for
+databases**.
+
+### Jellyfin
+
+Borg UI backs up `/config` (not `/cache`). Jellyfin's docs say to stop the
+server before copying its database, so before each backup Borg UI stops the
+container, copies `data/jellyfin.db`, starts it again (even if the copy fails)
+and stores the copy in `borg-ui-db-backup/`, keeping the newest three. Anyone
+watching at that moment is interrupted for a few seconds. To restore, stop
+Jellyfin, put the newest copy back as `data/jellyfin.db`, and delete any
+`jellyfin.db-wal`. See
+[Jellyfin's backup guide](https://jellyfin.org/docs/general/administration/backup-and-restore/).
 
 ## What it sets up
 

@@ -1,0 +1,77 @@
+{
+  "id": "jellyfin",
+  "version": 1,
+  "name": "Jellyfin",
+  "description": "Users, watch history, libraries and settings, with a database copy taken while Jellyfin is stopped.",
+  "logo": "jellyfin-logo.svg",
+  "docs_url": "https://jellyfin.org/docs/general/administration/backup-and-restore/",
+  "verified": {
+    "app_version": "10.11.11",
+    "date": "2026-10-02",
+    "restore_tested": false
+  },
+  "detect": {
+    "images": [
+      "jellyfin/jellyfin",
+      "ghcr.io/jellyfin/jellyfin"
+    ],
+    "mount_destinations": [
+      "/config"
+    ]
+  },
+  "root_hint": "folder mounted at /config in your Jellyfin compose file",
+  "folders": [
+    {
+      "path": "borg-ui-db-backup",
+      "label": "Database copies",
+      "description": "Copies of Jellyfin's database that Borg UI takes before each backup, while Jellyfin is stopped. These are the ones to restore.",
+      "role": "database",
+      "stale_after_hours": 26,
+      "dump_pattern": "jellyfin-*.db",
+      "made_before_backup": true
+    },
+    {
+      "path": "data",
+      "label": "Data",
+      "description": "The live database, playlists and downloaded subtitles.",
+      "role": "data"
+    },
+    {
+      "path": "metadata",
+      "label": "Metadata",
+      "description": "Posters, artwork and details Jellyfin downloaded for your media.",
+      "role": "data"
+    },
+    {
+      "path": "config",
+      "label": "Settings",
+      "description": "Server settings, such as network, encoding and branding.",
+      "role": "data"
+    },
+    {
+      "path": "root",
+      "label": "Libraries",
+      "description": "Which folders make up each of your libraries.",
+      "role": "data"
+    },
+    {
+      "path": "plugins",
+      "label": "Plugins",
+      "description": "Installed plugins and their settings.",
+      "role": "data"
+    }
+  ],
+  "pre_backup_script": {
+    "file": "jellyfin-db-backup.sh",
+    "name": "Copy the Jellyfin database",
+    "description": "Stop Jellyfin for the few seconds it takes to copy its database, start it again whatever happens, and keep the newest three copies.",
+    "timeout": 300
+  },
+  "schedule_cron": "0 4 * * *",
+  "notes": [
+    "Jellyfin's docs say to stop the server before copying its database, or the copy may not restore. Before each backup, Borg UI stops the Jellyfin container, copies jellyfin.db, and starts it again, even if the copy fails. Anyone watching at that moment is interrupted for a few seconds.",
+    "To restore, stop Jellyfin, put the newest borg-ui-db-backup/jellyfin-<date>.db back as data/jellyfin.db, and delete any jellyfin.db-wal next to it.",
+    "The cache folder (/cache) is not backed up. Jellyfin rebuilds it.",
+    "If Borg UI talks to Docker through a socket proxy, it needs container stop, start and exec allowed."
+  ]
+}

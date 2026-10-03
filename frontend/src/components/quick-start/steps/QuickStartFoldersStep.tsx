@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { Box, Button, Chip, Stack, Typography } from '@mui/material'
-import { Folder } from 'lucide-react'
+import { Folder, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import AppTemplateFolderPanel from '../../app-templates/AppTemplateFolderPanel'
@@ -25,6 +25,13 @@ export default function QuickStartFoldersStep({ answers, onChange }: QuickStartS
     (root: string, extraPaths: string[]) =>
       onChange({ appRoot: root, sourcePaths: [root, ...extraPaths] }),
     [onChange]
+  )
+  // Called from an effect: only patch on a real change, or it loops.
+  const setAppContainer = useCallback(
+    (container: string) => {
+      if (container !== answers.appContainer) onChange({ appContainer: container })
+    },
+    [onChange, answers.appContainer]
   )
   const scanTarget: AppScanTarget | null =
     answers.sourceKind === 'server'
@@ -74,6 +81,7 @@ export default function QuickStartFoldersStep({ answers, onChange }: QuickStartS
           }
           extraPaths={otherPaths}
           onPathsChange={setAppPaths}
+          onContainerChange={setAppContainer}
           excludes={answers.appExcludes}
           onExcludesChange={(appExcludes) => onChange({ appExcludes })}
         />
@@ -121,12 +129,21 @@ export default function QuickStartFoldersStep({ answers, onChange }: QuickStartS
           {answers.sourcePaths.map((path) => (
             <Chip
               key={path}
+              size="small"
               icon={<Folder size={14} />}
               label={path}
+              title={path}
               onDelete={() =>
                 onChange({ sourcePaths: answers.sourcePaths.filter((item) => item !== path) })
               }
-              sx={{ maxWidth: '100%', fontFamily: 'monospace' }}
+              deleteIcon={<X size={14} />}
+              // Same look as the path chips in the database scan dialog.
+              sx={{
+                maxWidth: '100%',
+                fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
+                fontSize: '0.75rem',
+                '& .MuiChip-icon': { ml: 0.75 },
+              }}
             />
           ))}
         </Stack>
