@@ -107,6 +107,21 @@ def ensure_borg2_repository_url(repository: Optional[str], binary: str) -> None:
     raise ValueError(REMOVED_REPOSITORY_URL_MESSAGE)
 
 
+def job_borg_major(repository: dict[str, Any], payload: dict[str, Any]) -> int:
+    """The Borg major a job runs on, 1 when the job names none. Every job
+    decoder reads it here: anything but 1 or 2 is refused, so no later
+    `== 2` check can take an unknown major for Borg 1."""
+    value = repository.get("borg_version") or payload.get("borg_version") or 1
+    try:
+        major = int(value)
+    except (TypeError, ValueError):
+        major = None
+    # int() would also take 2.5 for 2
+    if major not in (1, 2) or str(value).strip() != str(major):
+        raise ValueError(f"Unsupported Borg major: {value!r}")
+    return major
+
+
 @dataclass(frozen=True)
 class BackupCreatePayload:
     repository_path: str
@@ -149,7 +164,6 @@ class BackupCreatePayload:
             and not all(isinstance(flag, str) for flag in custom_flags)
         ):
             raise ValueError("backup.create custom_flags must be a string or list")
-        custom_flags = parse_borg_flags(custom_flags, "create")
 
         exclude_patterns = backup.get(
             "exclude_patterns", payload.get("exclude_patterns", [])
@@ -159,14 +173,13 @@ class BackupCreatePayload:
         ):
             raise ValueError("backup.create exclude_patterns must be a list")
 
-        borg_version = int(
-            repository.get("borg_version") or payload.get("borg_version") or 1
-        )
+        borg_version = job_borg_major(repository, payload)
         if borg_version == 2:
             ensure_borg2_repository_url(
                 repository_path,
                 repository.get("borg_binary") or payload.get("borg_binary") or "borg2",
             )
+        custom_flags = parse_borg_flags(custom_flags, "create", borg_version)
         upload_ratelimit_kib = backup.get(
             "upload_ratelimit_kib", payload.get("upload_ratelimit_kib")
         )
@@ -208,8 +221,8 @@ class BackupCreatePayload:
                 "--compression",
                 self.compression,
             ]
-            if self.upload_ratelimit_kib:
-                cmd.extend(["--upload-ratelimit", str(self.upload_ratelimit_kib)])
+            # No upload_ratelimit_kib: Borg 2.0.0b22 removed --upload-ratelimit,
+            # and a server before agent 0.1.17 still sends a repository's limit.
             for pattern in self.exclude_patterns:
                 cmd.extend(["--exclude", pattern])
             cmd.extend(self.custom_flags)

@@ -61,7 +61,7 @@ class RepositoryV2Create(BaseModel):
     mode: str = "full"
     bypass_lock: bool = False
     custom_flags: Optional[str] = None
-    _validate_custom_flags = borg_flags_validator("custom_flags", "create")
+    _validate_custom_flags = borg_flags_validator("custom_flags", "create", 2)
     upload_ratelimit_kib: Optional[int] = None
     pre_backup_script: Optional[str] = None
     post_backup_script: Optional[str] = None
@@ -86,7 +86,7 @@ class RepositoryV2Import(BaseModel):
     mode: str = "full"
     bypass_lock: bool = False
     custom_flags: Optional[str] = None
-    _validate_custom_flags = borg_flags_validator("custom_flags", "create")
+    _validate_custom_flags = borg_flags_validator("custom_flags", "create", 2)
     upload_ratelimit_kib: Optional[int] = None
     pre_backup_script: Optional[str] = None
     post_backup_script: Optional[str] = None

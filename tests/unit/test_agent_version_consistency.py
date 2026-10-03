@@ -104,3 +104,16 @@ def test_an_agent_from_before_the_borg2_b25_adoption_is_offered_an_upgrade():
         )
         == "outdated"
     )
+
+
+def test_an_agent_from_before_the_per_major_flag_checks_is_offered_an_upgrade():
+    """From 0.1.17 the agent checks custom flags against the job's Borg major
+    and leaves the upload limit out of a Borg 2 backup (#1263), so a server
+    built from this tree must offer 0.1.16 agents the upgrade.
+    """
+    assert (
+        compute_agent_upgrade_status(
+            reported="0.1.16", desired=None, available=_pyproject_version()
+        )
+        == "outdated"
+    )

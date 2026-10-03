@@ -148,7 +148,11 @@ from app.utils.source_locations import (
     legacy_source_fields,
     normalize_source_locations,
 )
-from app.utils.borg_flags import borg_flags_validator, parse_borg_flags
+from app.utils.borg_flags import (
+    borg_flags_major_validator,
+    borg_flags_validator,
+    parse_borg_flags,
+)
 from app.utils.borg_env import (
     build_repository_borg_env,
     effective_repository_remote_path,
@@ -233,12 +237,10 @@ def _normalize_restore_check_paths(paths: Any) -> list[str]:
     return normalized_paths
 
 
-def _normalize_check_flags(value: Any) -> Optional[str]:
-    if value is None:
-        return None
-    text = str(value).strip()
+def _validate_borg_flags(text: Optional[str], command: str, borg_version) -> None:
+    """422 for flags the allowlist or the repository's Borg major refuses."""
     try:
-        parse_borg_flags(text, "check")
+        parse_borg_flags(text, command, borg_version or 1)
     except ValueError as exc:
         raise HTTPException(
             status_code=422,
@@ -247,6 +249,13 @@ def _normalize_check_flags(value: Any) -> Optional[str]:
                 "params": {"reason": str(exc)},
             },
         ) from exc
+
+
+def _normalize_check_flags(value: Any, borg_version) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    _validate_borg_flags(text, "check", borg_version)
     return text or None
 
 
@@ -1395,6 +1404,10 @@ class RepositoryCreate(BaseModel):
         None  # Custom command-line flags for borg create (e.g., "--stats --list")
     )
     _validate_custom_flags = borg_flags_validator("custom_flags", "create")
+    # Borg 2 by version or by a Borg-2-only encryption, as the route decides
+    _validate_custom_flags_major = borg_flags_major_validator(
+        "custom_flags", "create", lambda data: 2 if _uses_borg2_payload(data) else 1
+    )
     upload_ratelimit_kib: Optional[int] = None
     source_connection_id: Optional[int] = (
         None  # SSH connection ID for remote data source (pull-based backups)
@@ -1453,6 +1466,10 @@ class RepositoryImport(BaseModel):
         None  # Custom command-line flags for borg create (e.g., "--stats --list")
     )
     _validate_custom_flags = borg_flags_validator("custom_flags", "create")
+    # Borg 2 by version or by a Borg-2-only encryption, as the route decides
+    _validate_custom_flags_major = borg_flags_major_validator(
+        "custom_flags", "create", lambda data: 2 if _uses_borg2_payload(data) else 1
+    )
     upload_ratelimit_kib: Optional[int] = None
     source_connection_id: Optional[int] = (
         None  # SSH connection ID for remote data source (pull-based backups)
@@ -4828,6 +4845,12 @@ async def update_repository(
         update_data = repo_data.model_dump(exclude_unset=True)
         if "upload_ratelimit_kib" in update_data:
             _validate_upload_ratelimit_kib(repo_data.upload_ratelimit_kib)
+        # before anything below touches the repository (a new path is
+        # initialized further down)
+        if repo_data.custom_flags is not None:
+            _validate_borg_flags(
+                repo_data.custom_flags, "create", repository.borg_version
+            )
 
         # No response returns the passphrase, so the edit form submits a blank
         # one unless a new one was typed: blank keeps the stored value.
@@ -5968,7 +5991,9 @@ async def check_repository(
         # Extract max_duration from request body (default to 3600)
         max_duration = request.get("max_duration", 3600) if request else 3600
         check_extra_flags = (
-            _normalize_check_flags(request.get("check_extra_flags"))
+            _normalize_check_flags(
+                request.get("check_extra_flags"), repository.borg_version
+            )
             if request
             else None
         )
@@ -7293,7 +7318,7 @@ async def update_check_schedule(
 
         if "check_extra_flags" in request:
             repo.check_extra_flags = _normalize_check_flags(
-                request.get("check_extra_flags")
+                request.get("check_extra_flags"), repo.borg_version
             )
 
         if repo.check_cron_expression and repo.check_schedule_enabled:

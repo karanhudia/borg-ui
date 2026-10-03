@@ -368,7 +368,7 @@ class TestCheckV2Service:
             repository_id=borg_v2_repo_for_services.id,
             status="running",
             max_duration=0,
-            extra_flags="--verify-data --save-space",
+            extra_flags="--verify-data --find-lost-archives",
         )
         db_session.commit()
         db_session.refresh(job)
@@ -398,7 +398,7 @@ class TestCheckV2Service:
 
         cmd = mock_exec.call_args.args
         assert "--verify-data" in cmd
-        assert "--save-space" in cmd
+        assert "--find-lost-archives" in cmd
 
     @pytest.mark.unit
     @pytest.mark.asyncio

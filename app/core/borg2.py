@@ -251,30 +251,36 @@ def _command_repository(cmd: List[str]) -> Optional[str]:
     return None
 
 
-# The first beta whose extract refuses a directory that is not empty.
-EXTRACT_REFUSES_OCCUPIED_DIRECTORY_SINCE_BETA = 25
+def borg2_extract_existing_files_flags(existing_files: Optional[str]) -> List[str]:
+    """The extract options for what a restore does with a destination that
+    already holds files (#1261). "refuse", the default, is the exact restore
+    into an empty directory and needs none. "continue" is chosen in the
+    restore dialog, next to its caveat: Borg's --continue writes into such a
+    directory and skips a file that already has the archived type, mode,
+    size and modification time, so a file damaged in place stays damaged."""
+    return ["--continue"] if existing_files == "continue" else []
 
 
 def borg2_restore_target_refusal(
-    destination: Optional[str], binary: Optional[str] = None
+    destination: Optional[str],
+    existing_files: Optional[str] = "refuse",
 ) -> Optional[Dict]:
-    """The translatable reason `binary` (default: the configured Borg 2)
-    will not restore into `destination`, or None.
+    """The translatable reason a Borg 2 restore will not go into
+    `destination`, or None.
 
     Borg 2.0.0b25 refuses to extract into a directory that is not empty
     ("Extraction directory ... is not empty", exit 33), the original location
     and a fresh filesystem with its lost+found included. Its way around,
     --continue, skips a file that already has the archived type, mode, size
     and modification time, so a file damaged in place would stay damaged
-    behind a restore that reports success. Borg UI does not pass the option;
-    it refuses such a restore before Borg runs and says what to do.
+    behind a restore that reports success. Borg UI passes the option only
+    for a restore that asks for it (`existing_files="continue"`); any other
+    is refused before Borg runs, with what to do.
 
     Nothing for a directory that is empty, missing or unreadable: Borg then
-    does, or says, what it would without this. Nothing either for a Borg 2
-    before 2.0.0b25, which extracts into such a directory; the binary is
-    probed only for a directory that holds something.
+    does, or says, what it would without this.
     """
-    if not destination:
+    if not destination or existing_files == "continue":
         return None
     try:
         with os.scandir(destination) as entries:
@@ -282,10 +288,6 @@ def borg2_restore_target_refusal(
     except OSError:
         return None
     if not occupied:
-        return None
-    if _borg2_before_beta(
-        binary or _get_borg2_binary(), EXTRACT_REFUSES_OCCUPIED_DIRECTORY_SINCE_BETA
-    ):
         return None
     return {
         "key": "backend.errors.restore.borg2DestinationNotEmpty",

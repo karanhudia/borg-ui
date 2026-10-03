@@ -197,9 +197,16 @@ class BorgRouter:
             cmd.extend(["--upload-ratelimit", str(upload_ratelimit_kib)])
         for pattern in exclude_patterns:
             cmd.extend(["--exclude", pattern])
-        cmd.extend(parse_borg_flags(custom_flags, "create"))
+        cmd.extend(parse_borg_flags(custom_flags, "create", 1))
         cmd.append(f"{repository_path}::{archive_name}")
         return cmd
+
+    def upload_ratelimit(self, kib: Optional[int]) -> Optional[int]:
+        """The upload limit a backup of this repository can apply: none for
+        Borg 2, which removed --upload-ratelimit in 2.0.0b22."""
+        if self.is_v2:
+            return None
+        return kib
 
     def build_archive_info_command(
         self, repository_path: str, archive_name: str
@@ -235,10 +242,12 @@ class BorgRouter:
         bypass_lock: bool = False,
         strip_components: Optional[int] = None,
         destination: Optional[str] = None,
+        existing_files: Optional[str] = "refuse",
     ) -> List[str]:
         """`destination`: the directory the command will run in. Borg 2
         does not extract into one that holds anything, and the restore is
-        refused with RestoreRefused; Borg 1 has no use for it."""
+        refused with RestoreRefused unless `existing_files` is "continue";
+        Borg 1 writes into such a directory and has no use for either."""
         if self.is_v2:
             from app.services.v2.restore_service import restore_v2_service
 
@@ -250,6 +259,7 @@ class BorgRouter:
                 bypass_lock=bypass_lock,
                 strip_components=strip_components,
                 destination=destination,
+                existing_files=existing_files,
             )
 
         cmd = ["borg", "extract", "--progress", "--log-json", "--umask", "0022"]

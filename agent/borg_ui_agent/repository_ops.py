@@ -22,10 +22,10 @@ from typing import Any, Optional
 from agent.borg_ui_agent.backup import (
     _extract_environment,
     borg1_lock_wait_args,
-    borg2_before_beta,
     build_borg_env,
     ensure_borg2_repository_url,
     env_with_repository_port,
+    job_borg_major,
     parse_borg_progress,
     progress_replaces_log_line,
 )
@@ -180,9 +180,7 @@ class RepositoryOperationPayload:
         if not isinstance(repository_path, str) or not repository_path.strip():
             raise ValueError("repository operation payload requires repository.path")
 
-        borg_version = int(
-            repository.get("borg_version") or payload.get("borg_version") or 1
-        )
+        borg_version = job_borg_major(repository, payload)
         return cls(
             job_kind=job_kind,
             repository_path=repository_path.strip(),
@@ -451,6 +449,8 @@ class RepositoryOperationPayload:
                     "--umask",
                     "0022",
                 ]
+                if _restores_into_existing_files(operation):
+                    cmd.append("--continue")
                 if strip_components:
                     cmd.extend(["--strip-components", str(strip_components)])
                 cmd.append(archive)
@@ -475,7 +475,9 @@ class RepositoryOperationPayload:
 
         if self.job_kind == "repository.check":
             extra_flags = parse_borg_flags(
-                _split_flags((self.operation or {}).get("check_extra_flags")), "check"
+                _split_flags((self.operation or {}).get("check_extra_flags")),
+                "check",
+                self.borg_version,
             )
             max_duration = (self.operation or {}).get("max_duration")
             if self.borg_version == 2:
@@ -1822,8 +1824,11 @@ def compact_stats_supported(binary: str) -> bool:
     return supported
 
 
-# The first beta whose extract refuses a directory that is not empty.
-EXTRACT_REFUSES_OCCUPIED_DIRECTORY_SINCE_BETA = 25
+def _restores_into_existing_files(operation: dict[str, Any]) -> bool:
+    """Whether the restore was asked to write into what the destination
+    holds (#1261) rather than to restore exactly into an empty directory."""
+    target = operation.get("target")
+    return isinstance(target, dict) and target.get("existing_files") == "continue"
 
 
 def _restore_target_refusal(
@@ -1836,15 +1841,17 @@ def _restore_target_refusal(
     and a fresh filesystem with its lost+found included. Its way around,
     --continue, skips a file that already has the archived type, mode, size
     and modification time, so a file damaged in place would stay damaged
-    behind a restore that reports success. The agent does not pass the
-    option; it refuses the restore before Borg runs and says what to do.
-    Borg 1, a Borg 2 before 2.0.0b25 (which extracts into such a directory)
-    and an empty, missing or unreadable directory are left to Borg.
+    behind a restore that reports success. The agent passes the option only
+    for a restore that asks for it (`target.existing_files`); any other is
+    refused before Borg runs, with what to do. Borg 1 and an empty, missing
+    or unreadable directory are left to Borg.
     """
     # the subcommand by its place in `_base_borg2`, not by the first word
     # that reads "extract": a repository or a binary may be named that
     subcommand = 3
     if payload.borg_version != 2 or cmd[subcommand : subcommand + 1] != ["extract"]:
+        return None
+    if _restores_into_existing_files(payload.operation or {}):
         return None
     try:
         with os.scandir(target_dir) as entries:
@@ -1853,14 +1860,11 @@ def _restore_target_refusal(
         return None
     if not occupied:
         return None
-    if borg2_before_beta(
-        payload.borg_cmd, EXTRACT_REFUSES_OCCUPIED_DIRECTORY_SINCE_BETA
-    ):
-        return None
     return (
         "Borg 2 does not restore into a directory that already holds files, "
         f"and {target_dir} is not empty. Choose an empty directory as the "
-        "destination and move the restored files from there."
+        "destination, or choose \u201cRestore into existing files\u201d in the "
+        "restore dialog."
     )
 
 
