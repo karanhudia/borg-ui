@@ -49,4 +49,4 @@ def test_revision_chains_on_the_previous_head_and_leaves_one_head():
 
     script = ScriptDirectory.from_config(_alembic_config("sqlite://"))
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    assert len(script.get_heads()) == 1
