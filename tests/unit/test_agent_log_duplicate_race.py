@@ -15,6 +15,10 @@ def _assert_lookup_key(db, *, job_id, sequence):
     assert db.query.return_value.filter.call_count == 2
     conditions = db.query.return_value.filter.call_args_list[1].args
     assert [c.right.value for c in conditions] == [job_id, sequence]
+    assert [(c.left.table.name, c.left.key) for c in conditions] == [
+        ("agent_job_logs", "agent_job_id"),
+        ("agent_job_logs", "sequence"),
+    ]
 
 
 def test_log_upload_losing_the_insert_race_is_a_duplicate():
