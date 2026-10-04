@@ -1,29 +1,29 @@
 {
-  "generatedAt": "2026-10-04T04:17:24.844Z",
+  "generatedAt": "2026-10-04T05:33:16.365Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1317 visual report",
-    "commitSha": "6569b604d93e",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/37176441866"
+    "commitSha": "1abb83062689",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/37179522497"
   },
   "totals": {
     "baseline": 1134,
-    "actual": 1134,
-    "compared": 1134,
-    "changed": 5,
-    "added": 0,
-    "removed": 0,
-    "unchanged": 1129
+    "actual": 1132,
+    "compared": 1130,
+    "changed": 13,
+    "added": 2,
+    "removed": 4,
+    "unchanged": 1117
   },
   "changed": [
     {
-      "fileName": "components-sidebarupdatenotice--without-version--mobile.png",
-      "baselinePath": "images/baseline/components-sidebarupdatenotice--without-version--mobile.png",
-      "actualPath": "images/actual/components-sidebarupdatenotice--without-version--mobile.png",
-      "diffPath": "images/diff/components-sidebarupdatenotice--without-version--mobile.png",
-      "diffPixels": 312118,
+      "fileName": "pages-backup-plans-content--deleting-plan--mobile.png",
+      "baselinePath": "images/baseline/pages-backup-plans-content--deleting-plan--mobile.png",
+      "actualPath": "images/actual/pages-backup-plans-content--deleting-plan--mobile.png",
+      "diffPath": "images/diff/pages-backup-plans-content--deleting-plan--mobile.png",
+      "diffPixels": 16638,
       "totalPixels": 329160,
-      "diffRatio": 0.9482257868513793,
+      "diffRatio": 0.0505468465184105,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -35,49 +35,13 @@
       }
     },
     {
-      "fileName": "components-wizard-repository-location--filesystem-destinations--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-repository-location--filesystem-destinations--mobile.png",
-      "actualPath": "images/actual/components-wizard-repository-location--filesystem-destinations--mobile.png",
-      "diffPath": "images/diff/components-wizard-repository-location--filesystem-destinations--mobile.png",
-      "diffPixels": 328112,
-      "totalPixels": 329160,
-      "diffRatio": 0.9968161380483656,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "pages-managedagents--locked-community--mobile.png",
-      "baselinePath": "images/baseline/pages-managedagents--locked-community--mobile.png",
-      "actualPath": "images/actual/pages-managedagents--locked-community--mobile.png",
-      "diffPath": "images/diff/pages-managedagents--locked-community--mobile.png",
-      "diffPixels": 233280,
-      "totalPixels": 329160,
-      "diffRatio": 0.7087130878600073,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "pages-managedagents--locked-community.png",
-      "baselinePath": "images/baseline/pages-managedagents--locked-community.png",
-      "actualPath": "images/actual/pages-managedagents--locked-community.png",
-      "diffPath": "images/diff/pages-managedagents--locked-community.png",
-      "diffPixels": 672898,
+      "fileName": "pages-backup-plans-content--deleting-plan.png",
+      "baselinePath": "images/baseline/pages-backup-plans-content--deleting-plan.png",
+      "actualPath": "images/actual/pages-backup-plans-content--deleting-plan.png",
+      "diffPath": "images/diff/pages-backup-plans-content--deleting-plan.png",
+      "diffPixels": 216,
       "totalPixels": 1024000,
-      "diffRatio": 0.657126953125,
+      "diffRatio": 0.0002109375,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -86,6 +50,114 @@
       "actual": {
         "width": 1280,
         "height": 800
+      }
+    },
+    {
+      "fileName": "pages-backup-plans-content--skipped-repository--mobile.png",
+      "baselinePath": "images/baseline/pages-backup-plans-content--skipped-repository--mobile.png",
+      "actualPath": "images/actual/pages-backup-plans-content--skipped-repository--mobile.png",
+      "diffPath": "images/diff/pages-backup-plans-content--skipped-repository--mobile.png",
+      "diffPixels": 16638,
+      "totalPixels": 329160,
+      "diffRatio": 0.0505468465184105,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-backup-plans-content--skipped-repository-dark--mobile.png",
+      "baselinePath": "images/baseline/pages-backup-plans-content--skipped-repository-dark--mobile.png",
+      "actualPath": "images/actual/pages-backup-plans-content--skipped-repository-dark--mobile.png",
+      "diffPath": "images/diff/pages-backup-plans-content--skipped-repository-dark--mobile.png",
+      "diffPixels": 16554,
+      "totalPixels": 329160,
+      "diffRatio": 0.0502916514764856,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-backup-plans-content--skipped-repository-dark.png",
+      "baselinePath": "images/baseline/pages-backup-plans-content--skipped-repository-dark.png",
+      "actualPath": "images/actual/pages-backup-plans-content--skipped-repository-dark.png",
+      "diffPath": "images/diff/pages-backup-plans-content--skipped-repository-dark.png",
+      "diffPixels": 217,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0002119140625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-backup-plans-content--skipped-repository.png",
+      "baselinePath": "images/baseline/pages-backup-plans-content--skipped-repository.png",
+      "actualPath": "images/actual/pages-backup-plans-content--skipped-repository.png",
+      "diffPath": "images/diff/pages-backup-plans-content--skipped-repository.png",
+      "diffPixels": 216,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0002109375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "quick-start-steps--destination-agent.png",
+      "baselinePath": "images/baseline/quick-start-steps--destination-agent.png",
+      "actualPath": "images/actual/quick-start-steps--destination-agent.png",
+      "diffPath": "images/diff/quick-start-steps--destination-agent.png",
+      "diffPixels": 28,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00002734375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "quick-start-steps--destination-ssh-no-default-path--mobile.png",
+      "baselinePath": "images/baseline/quick-start-steps--destination-ssh-no-default-path--mobile.png",
+      "actualPath": "images/actual/quick-start-steps--destination-ssh-no-default-path--mobile.png",
+      "diffPath": "images/diff/quick-start-steps--destination-ssh-no-default-path--mobile.png",
+      "diffPixels": 2803,
+      "totalPixels": 329160,
+      "diffRatio": 0.008515615506136833,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
       }
     },
     {
@@ -105,10 +177,108 @@
         "width": 1280,
         "height": 800
       }
+    },
+    {
+      "fileName": "quick-start-steps--what--mobile.png",
+      "baselinePath": "images/baseline/quick-start-steps--what--mobile.png",
+      "actualPath": "images/actual/quick-start-steps--what--mobile.png",
+      "diffPath": "images/diff/quick-start-steps--what--mobile.png",
+      "diffPixels": 66562,
+      "totalPixels": 329160,
+      "diffRatio": 0.2022177664357759,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "quick-start-steps--what-another-computer--mobile.png",
+      "baselinePath": "images/baseline/quick-start-steps--what-another-computer--mobile.png",
+      "actualPath": "images/actual/quick-start-steps--what-another-computer--mobile.png",
+      "diffPath": "images/diff/quick-start-steps--what-another-computer--mobile.png",
+      "diffPixels": 67234,
+      "totalPixels": 329160,
+      "diffRatio": 0.20425932677117511,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "quick-start-steps--what-another-computer.png",
+      "baselinePath": "images/baseline/quick-start-steps--what-another-computer.png",
+      "actualPath": "images/actual/quick-start-steps--what-another-computer.png",
+      "diffPath": "images/diff/quick-start-steps--what-another-computer.png",
+      "diffPixels": 69069,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0674501953125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "quick-start-steps--what.png",
+      "baselinePath": "images/baseline/quick-start-steps--what.png",
+      "actualPath": "images/actual/quick-start-steps--what.png",
+      "diffPath": "images/diff/quick-start-steps--what.png",
+      "diffPixels": 69675,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0680419921875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
     }
   ],
-  "added": [],
-  "removed": [],
+  "added": [
+    {
+      "fileName": "quick-start-steps--what-agent--mobile.png",
+      "actualPath": "images/actual/quick-start-steps--what-agent--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--what-agent.png",
+      "actualPath": "images/actual/quick-start-steps--what-agent.png"
+    }
+  ],
+  "removed": [
+    {
+      "fileName": "pages-managedagents--locked-community--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--locked-community--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--locked-community.png",
+      "baselinePath": "images/baseline/pages-managedagents--locked-community.png"
+    },
+    {
+      "fileName": "quick-start-steps--what-agent-pro--mobile.png",
+      "baselinePath": "images/baseline/quick-start-steps--what-agent-pro--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--what-agent-pro.png",
+      "baselinePath": "images/baseline/quick-start-steps--what-agent-pro.png"
+    }
+  ],
   "unchanged": [
     {
       "fileName": "activity-activitytimeline--dark--mobile.png"
@@ -2307,6 +2477,9 @@
       "fileName": "components-sidebarupdatenotice--without-cta.png"
     },
     {
+      "fileName": "components-sidebarupdatenotice--without-version--mobile.png"
+    },
+    {
       "fileName": "components-sidebarupdatenotice--without-version.png"
     },
     {
@@ -2518,6 +2691,9 @@
     },
     {
       "fileName": "components-wizard-repository-location--existing-repository-storage-mode-locked.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--filesystem-destinations--mobile.png"
     },
     {
       "fileName": "components-wizard-repository-location--filesystem-destinations.png"
@@ -2853,28 +3029,10 @@
       "fileName": "pages-backup-plans-content--community-locked-runs.png"
     },
     {
-      "fileName": "pages-backup-plans-content--deleting-plan--mobile.png"
-    },
-    {
-      "fileName": "pages-backup-plans-content--deleting-plan.png"
-    },
-    {
       "fileName": "pages-backup-plans-content--empty-with-quick-start--mobile.png"
     },
     {
       "fileName": "pages-backup-plans-content--empty-with-quick-start.png"
-    },
-    {
-      "fileName": "pages-backup-plans-content--skipped-repository--mobile.png"
-    },
-    {
-      "fileName": "pages-backup-plans-content--skipped-repository-dark--mobile.png"
-    },
-    {
-      "fileName": "pages-backup-plans-content--skipped-repository-dark.png"
-    },
-    {
-      "fileName": "pages-backup-plans-content--skipped-repository.png"
     },
     {
       "fileName": "pages-cloudstorage--add-guided-remote--mobile.png"
@@ -3225,9 +3383,6 @@
       "fileName": "quick-start-steps--destination-agent--mobile.png"
     },
     {
-      "fileName": "quick-start-steps--destination-agent.png"
-    },
-    {
       "fileName": "quick-start-steps--destination-inside-source--mobile.png"
     },
     {
@@ -3235,9 +3390,6 @@
     },
     {
       "fileName": "quick-start-steps--destination-ssh--mobile.png"
-    },
-    {
-      "fileName": "quick-start-steps--destination-ssh-no-default-path--mobile.png"
     },
     {
       "fileName": "quick-start-steps--destination-ssh.png"
@@ -3316,24 +3468,6 @@
     },
     {
       "fileName": "quick-start-steps--schedule.png"
-    },
-    {
-      "fileName": "quick-start-steps--what--mobile.png"
-    },
-    {
-      "fileName": "quick-start-steps--what-agent-pro--mobile.png"
-    },
-    {
-      "fileName": "quick-start-steps--what-agent-pro.png"
-    },
-    {
-      "fileName": "quick-start-steps--what-another-computer--mobile.png"
-    },
-    {
-      "fileName": "quick-start-steps--what-another-computer.png"
-    },
-    {
-      "fileName": "quick-start-steps--what.png"
     },
     {
       "fileName": "remote-machines-connectiondiagnosticsdialog--partial-tcp-failure--mobile.png"
