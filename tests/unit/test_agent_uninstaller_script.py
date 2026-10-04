@@ -352,6 +352,7 @@ def test_keep_config_keeps_the_config_but_not_the_upgrade_trigger(
             "CONFIG_FILE": str(config),
             "UPGRADE_TRIGGER": str(trigger),
             "NO_REMOTE_UPGRADE_MARKER": str(tmp_path / "marker"),
+            "KEEP_BORG": "0",
             "KEEP_CONFIG": "1",
         },
     )
@@ -382,6 +383,7 @@ def test_removes_the_whole_config_directory_by_default(
             "CONFIG_FILE": str(config_dir / "config.toml"),
             "UPGRADE_TRIGGER": str(config_dir / "upgrade-requested"),
             "NO_REMOTE_UPGRADE_MARKER": str(tmp_path / "marker"),
+            "KEEP_BORG": "0",
             "KEEP_CONFIG": "0",
         },
     )
@@ -690,3 +692,116 @@ def test_the_main_sequence_is_idempotent(script: str, tmp_path: Path, call_log: 
     second = _run_whole_script(script, env={"CALL_LOG": str(call_log), **env})
 
     assert second.returncode == 0, second.stderr + second.stdout
+
+
+def _install_borg(env: dict[str, str]) -> Path:
+    """What the installer leaves for one Borg: the binary, its forwarder, the
+    link on PATH, and beside them the parts that belong to the agent alone."""
+    agent_root = Path(env["AGENT_ROOT"])
+    binary = agent_root / "borg1" / "1.4.5" / "borg"
+    binary.parent.mkdir(parents=True)
+    binary.write_text("#!/bin/sh\necho borg 1.4.5\n")
+    binary.chmod(0o755)
+    forwarder = agent_root / "bin" / "borg1"
+    forwarder.write_text(f'#!/bin/sh\nexec "{binary}" "$@"\n')
+    forwarder.chmod(0o755)
+    helper = Path(env["UPGRADE_HELPER"])
+    helper.write_text("#!/bin/sh\n")
+    helper.chmod(0o755)
+    (agent_root / ".venv" / "bin").mkdir(parents=True)
+    (agent_root / ".venv" / "bin" / "borg-ui-agent").write_text("#!/bin/sh\n")
+    link = Path(env["BORG1_LINK"])
+    link.symlink_to(forwarder)
+    return link
+
+
+def test_keep_borg_keeps_the_binaries_the_symlinks_point_to(
+    script: str, tmp_path: Path, call_log: Path
+):
+    """The option promises the binaries and their symlinks. A kept symlink
+    into a removed directory is a `borg` on PATH that cannot start."""
+    env = _installed_machine(tmp_path, unit_user="borg-ui-agent")
+    link = _install_borg(env)
+
+    result = _run_whole_script(
+        script, env={"CALL_LOG": str(call_log), **env}, args=("--keep-borg",)
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    agent_root = Path(env["AGENT_ROOT"])
+    assert (agent_root / "borg1" / "1.4.5" / "borg").exists()
+    assert (agent_root / "bin" / "borg1").exists()
+    started = subprocess.run(
+        [str(link), "--version"], capture_output=True, text=True, check=False
+    )
+    assert started.returncode == 0, started.stderr
+    assert started.stdout.strip() == "borg 1.4.5"
+    # Everything that is the agent's own still goes.
+    assert not (agent_root / ".venv").exists()
+    assert not Path(env["UPGRADE_HELPER"]).exists()
+    assert not Path(env["CONFIG_DIR"]).exists()
+
+
+def test_keep_borg_leaves_nothing_behind_when_there_is_no_borg_of_ours(
+    script: str, tmp_path: Path, call_log: Path
+):
+    """An endpoint installed with the distribution's Borg has no binaries
+    under the agent root, so the option has nothing to keep there."""
+    env = _installed_machine(tmp_path, unit_user="borg-ui-agent")
+    Path(env["UPGRADE_HELPER"]).write_text("#!/bin/sh\n")
+    (Path(env["AGENT_ROOT"]) / ".venv").mkdir()
+
+    result = _run_whole_script(
+        script, env={"CALL_LOG": str(call_log), **env}, args=("--keep-borg",)
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert not Path(env["AGENT_ROOT"]).exists()
+
+
+def test_keep_borg_does_not_keep_a_directory_that_holds_no_binary(
+    script: str, tmp_path: Path, call_log: Path
+):
+    """An install that stopped before the download finished leaves the
+    version directory behind, empty. There is no Borg in it to keep."""
+    env = _installed_machine(tmp_path, unit_user="borg-ui-agent")
+    agent_root = Path(env["AGENT_ROOT"])
+    (agent_root / "borg1" / "1.4.5").mkdir(parents=True)
+    (agent_root / "borg2").mkdir()
+
+    result = _run_whole_script(
+        script, env={"CALL_LOG": str(call_log), **env}, args=("--keep-borg",)
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert not agent_root.exists()
+
+
+def test_keep_borg_keeps_one_borg_and_drops_the_empty_directory_of_the_other(
+    script: str, tmp_path: Path, call_log: Path
+):
+    env = _installed_machine(tmp_path, unit_user="borg-ui-agent")
+    _install_borg(env)
+    agent_root = Path(env["AGENT_ROOT"])
+    (agent_root / "borg2" / "2.0.0b25").mkdir(parents=True)
+
+    result = _run_whole_script(
+        script, env={"CALL_LOG": str(call_log), **env}, args=("--keep-borg",)
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert (agent_root / "borg1" / "1.4.5" / "borg").exists()
+    assert not (agent_root / "borg2").exists()
+
+
+def test_without_keep_borg_the_binaries_and_their_symlinks_go(
+    script: str, tmp_path: Path, call_log: Path
+):
+    env = _installed_machine(tmp_path, unit_user="borg-ui-agent")
+    link = _install_borg(env)
+
+    result = _run_whole_script(script, env={"CALL_LOG": str(call_log), **env})
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert not Path(env["AGENT_ROOT"]).exists()
+    assert not link.is_symlink()

@@ -410,6 +410,21 @@ Older agents do not have that subcommand, so Borg UI shows an equivalent edit
 of the config file instead. Either way it is one command, and you do not have
 to choose between them.
 
+The move does not carry remote upgrade with it. The upgrade helper installs
+only from the address recorded when the endpoint was installed, and refuses
+when the agent is enrolled against another one. From agent 0.1.16 a moved
+endpoint therefore reports no remote upgrade support and is shown as manual
+only, instead of offering an upgrade that the helper then refuses. One
+reinstall that names the new address brings remote upgrade back:
+
+```bash
+curl -fsSL https://borg.example.com/agent/install.sh | sudo bash -s -- \
+  --server https://borg.example.com --reinstall
+```
+
+The plain `--reinstall` command keeps the recorded address and says so. On
+macOS the command runs without `sudo`, as the agent's user.
+
 ### Removing an endpoint
 
 `borg-ui-agent unregister` tells the server the endpoint is gone and deletes
@@ -453,7 +468,13 @@ Your backup repositories are never touched.
 Flags, if you want to keep something:
 
 - `--keep-borg` leaves the Borg binaries this installer placed, and their
-  symlinks, in place
+  symlinks, in place: `borg1/`, `borg2/` and the forwarders in `bin/` stay
+  under the agent's directory (`/opt/borg-ui-agent` on Linux,
+  `~/Library/Application Support/borg-ui-agent` on macOS); the virtualenv and
+  the upgrade helper are removed. On Linux `borg` on `PATH` keeps working
+  through the `/usr/local/bin` symlinks. On macOS that `bin/` was only on the
+  agent job's `PATH`, which goes with the job, so call the forwarder by its
+  path
 - `--keep-user` leaves the dedicated service user and `/var/lib/borg-ui-agent`
   in place
 - `--keep-config` leaves `/etc/borg-ui-agent/config.toml` in place, for a
