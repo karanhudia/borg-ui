@@ -70,7 +70,7 @@ result = subprocess.run(
     env=env,
 )
 frames = []
-for line in result.stdout.splitlines():
+for line in result.stderr.splitlines():
     if not line.strip() or not line.startswith("{"):
         continue
     payload = json.loads(line)
@@ -139,7 +139,7 @@ def main() -> int:
             )
 
             progress_frames = []
-            for line in result.stdout.splitlines():
+            for line in result.stderr.splitlines():
                 if not line.strip() or not line.startswith("{"):
                     continue
                 payload = json.loads(line)
@@ -148,33 +148,25 @@ def main() -> int:
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-        live_frames = [frame for frame in progress_frames if not frame.get("finished")]
-        if not live_frames:
-            if container_name:
-                raise SmokeFailure(
-                    "Borg 1 CLI did not emit any live archive_progress frames"
-                )
-            print(
-                "Borg 1 CLI progress contract smoke skipped: local borg did not emit live archive_progress frames",
-                flush=True,
-            )
-            return 0
+    live_frames = [frame for frame in progress_frames if not frame.get("finished")]
+    if not live_frames:
+        raise SmokeFailure("Borg 1 CLI did not emit any live archive_progress frames")
 
-        if not any(frame.get("original_size", 0) > 0 for frame in live_frames):
-            raise SmokeFailure(
-                f"Borg 1 CLI never emitted non-zero original_size: {live_frames}"
-            )
-        if not any(frame.get("compressed_size", 0) > 0 for frame in live_frames):
-            raise SmokeFailure(
-                f"Borg 1 CLI never emitted non-zero compressed_size: {live_frames}"
-            )
-        if not any(frame.get("path") for frame in live_frames):
-            raise SmokeFailure(
-                f"Borg 1 CLI never emitted archive_progress path values: {live_frames}"
-            )
+    if not any(frame.get("original_size", 0) > 0 for frame in live_frames):
+        raise SmokeFailure(
+            f"Borg 1 CLI never emitted non-zero original_size: {live_frames}"
+        )
+    if not any(frame.get("compressed_size", 0) > 0 for frame in live_frames):
+        raise SmokeFailure(
+            f"Borg 1 CLI never emitted non-zero compressed_size: {live_frames}"
+        )
+    if not any(frame.get("path") for frame in live_frames):
+        raise SmokeFailure(
+            f"Borg 1 CLI never emitted archive_progress path values: {live_frames}"
+        )
 
-        print("Borg 1 CLI progress contract smoke passed", flush=True)
-        return 0
+    print("Borg 1 CLI progress contract smoke passed", flush=True)
+    return 0
 
 
 if __name__ == "__main__":
