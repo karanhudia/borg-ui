@@ -223,11 +223,11 @@ def test_borg2_only_url_is_refused_for_borg1(
 @pytest.mark.parametrize("route", ROUTES)
 @pytest.mark.parametrize(("scheme", "url"), BORG2_ONLY_URLS)
 @pytest.mark.parametrize("version_fields", [{"borg_version": 1}, {}])
-def test_agent_repository_is_refused_by_the_major_it_would_be_recorded_with(
+def test_agent_repository_with_a_borg2_mode_keeps_its_store_url(
     test_client: TestClient, admin_headers, test_db, route, scheme, url, version_fields
 ):
-    """A Borg 2 encryption mode sends a server payload to the Borg 2 routes;
-    an agent repository keeps the major the payload states."""
+    """A Borg 2 encryption mode makes the payload Borg 2, for an agent
+    repository as for a server one, so its store URL is no Borg 1 URL."""
     _enable_paid_features(test_db)
     payload = {
         "name": "Store URL Repo",
@@ -241,10 +241,14 @@ def test_agent_repository_is_refused_by_the_major_it_would_be_recorded_with(
 
     response, _, _ = _post(test_client, admin_headers, route, payload)
 
-    assert response.status_code == 400, response.text
-    assert response.json()["detail"] == _refusal(scheme)
-    assert test_db.query(AgentJob).count() == 0
-    assert test_db.query(Repository).count() == 0
+    if scheme == "rest://":
+        # Borg 2 has no rest:// any more (test_api_repositories_agent_borg2_major).
+        assert response.status_code == 400, response.text
+        assert test_db.query(Repository).count() == 0
+        return
+    assert response.status_code == 200, response.text
+    repository = test_db.query(Repository).one()
+    assert (repository.path, repository.borg_version) == (url, 2)
 
 
 @pytest.mark.unit
@@ -429,6 +433,11 @@ def test_borg2_repository_keeps_every_store_url(
 
     response, _, _ = _post(test_client, admin_headers, route, payload)
 
+    if scheme == "rest://" and executor == "agent":
+        # Borg 2 has no rest:// any more (test_api_repositories_agent_borg2_major);
+        # the server path finds that out when Borg runs, stubbed here.
+        assert response.status_code == 400, response.text
+        return
     assert response.status_code in (200, 201), response.text
     repository = test_db.query(Repository).one()
     assert repository.path == url
