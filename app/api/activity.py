@@ -1339,7 +1339,7 @@ def list_recent_activity(
 
 
 @router.get("/{job_type}/{job_id}/logs")
-async def get_job_logs(
+def get_job_logs(
     job_type: str,
     job_id: int,
     offset: int = 0,
@@ -1624,7 +1624,7 @@ async def get_job_logs(
 
 
 @router.get("/{job_type}/{job_id}/logs/download")
-async def download_job_logs(
+def download_job_logs(
     job_type: str,
     job_id: int,
     current_user: User = Depends(get_current_download_user),

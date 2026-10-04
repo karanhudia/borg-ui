@@ -44,7 +44,7 @@ class TokenCreatedResponse(BaseModel):
 
 
 @router.get("/settings/tokens", response_model=list[TokenResponse])
-async def list_tokens(
+def list_tokens(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

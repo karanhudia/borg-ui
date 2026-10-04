@@ -2029,7 +2029,7 @@ async def _scan_remote_containers(
 @router.get(
     "/filesystem-snapshots", response_model=FilesystemSnapshotCapabilitiesResponse
 )
-async def discover_filesystem_snapshot_capabilities(
+def discover_filesystem_snapshot_capabilities(
     current_user: User = Depends(get_current_user),
 ) -> FilesystemSnapshotCapabilitiesResponse:
     del current_user
@@ -2098,7 +2098,7 @@ async def scan_containers(
 
 
 @router.get("/databases", response_model=DatabaseDiscoveryResponse)
-async def discover_databases(
+def discover_databases(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> DatabaseDiscoveryResponse:
@@ -2263,7 +2263,7 @@ _APP_SOURCE_ROLES = require_role_dependency(
 
 
 @router.get("/apps", response_model=AppTemplateListResponse)
-async def list_app_templates(
+def list_app_templates(
     current_user: User = Depends(get_current_user),
 ) -> AppTemplateListResponse:
     del current_user
