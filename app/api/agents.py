@@ -19,6 +19,7 @@ from fastapi import (
     status,
 )
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 import structlog
 
@@ -1968,7 +1969,7 @@ async def update_job_progress(
 
 
 @router.post("/jobs/{job_id}/logs", response_model=AgentJobLogResponse)
-async def upload_job_log(
+def upload_job_log(
     job_id: int,
     payload: AgentJobLogRequest,
     current_agent: AgentMachine = Depends(get_current_agent),
@@ -1998,12 +1999,37 @@ async def upload_job_log(
     )
     job.updated_at = _now_utc()
     job_payload = job.payload
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # A redelivery racing the first copy: (job, sequence) is unique, so
+        # the other request stored it.
+        db.rollback()
+        return AgentJobLogResponse(accepted=True, duplicate=True)
     _complete_finished_operation_log(
         db, job_id, payload.sequence, payload.message, payload=job_payload
     )
 
     return AgentJobLogResponse(accepted=True, duplicate=False)
+
+
+def _record_job_completion(
+    job_id: int,
+    payload: AgentJobCompleteRequest,
+    current_agent: AgentMachine,
+    db: Session,
+) -> tuple[AgentJob, bool]:
+    job = _get_agent_job(job_id, current_agent, db)
+    if job.status in FINAL_AGENT_JOB_STATUSES:
+        return job, False
+
+    # Same path the WebSocket transport takes - one place decides how a
+    # completion (including borg warning exit codes) is classified.
+    transitioned = _complete_agent_job(
+        job, db, result=payload.result, completed_at=payload.completed_at
+    )
+    db.commit()
+    return job, transitioned
 
 
 @router.post("/jobs/{job_id}/complete", response_model=AgentJobStatusResponse)
@@ -2013,16 +2039,11 @@ async def complete_job(
     current_agent: AgentMachine = Depends(get_current_agent),
     db: Session = Depends(get_db),
 ):
-    job = _get_agent_job(job_id, current_agent, db)
-    if job.status in FINAL_AGENT_JOB_STATUSES:
-        return AgentJobStatusResponse(id=job.id, status=job.status)
-
-    # Same path the WebSocket transport takes - one place decides how a
-    # completion (including borg warning exit codes) is classified.
-    transitioned = _complete_agent_job(
-        job, db, result=payload.result, completed_at=payload.completed_at
+    # The linked job's log file is written while the job is finished, which can
+    # wait on slow storage, so the sync part runs off the event loop.
+    job, transitioned = await asyncio.to_thread(
+        _record_job_completion, job_id, payload, current_agent, db
     )
-    db.commit()
     if transitioned:
         await _notify_agent_job_outcome(db, job)
 
@@ -2096,16 +2117,15 @@ async def upload_job_artifact(
     return {"accepted": delivered, "size": size}
 
 
-@router.post("/jobs/{job_id}/fail", response_model=AgentJobStatusResponse)
-async def fail_job(
+def _record_job_failure(
     job_id: int,
     payload: AgentJobFailRequest,
-    current_agent: AgentMachine = Depends(get_current_agent),
-    db: Session = Depends(get_db),
-):
+    current_agent: AgentMachine,
+    db: Session,
+) -> tuple[AgentJob, bool]:
     job = _get_agent_job(job_id, current_agent, db)
     if job.status in FINAL_AGENT_JOB_STATUSES:
-        return AgentJobStatusResponse(id=job.id, status=job.status)
+        return job, False
 
     # Same path the WebSocket transport takes - one place records the failure
     # and finishes the linked jobs.
@@ -2119,6 +2139,19 @@ async def fail_job(
         failure_kind=payload.failure_kind,
     )
     db.commit()
+    return job, transitioned
+
+
+@router.post("/jobs/{job_id}/fail", response_model=AgentJobStatusResponse)
+async def fail_job(
+    job_id: int,
+    payload: AgentJobFailRequest,
+    current_agent: AgentMachine = Depends(get_current_agent),
+    db: Session = Depends(get_db),
+):
+    job, transitioned = await asyncio.to_thread(
+        _record_job_failure, job_id, payload, current_agent, db
+    )
     if transitioned:
         await _notify_agent_job_outcome(db, job)
 
@@ -2126,7 +2159,7 @@ async def fail_job(
 
 
 @router.post("/jobs/{job_id}/cancel", response_model=AgentJobStatusResponse)
-async def mark_job_canceled(
+def mark_job_canceled(
     job_id: int,
     payload: AgentJobCanceledRequest,
     current_agent: AgentMachine = Depends(get_current_agent),
