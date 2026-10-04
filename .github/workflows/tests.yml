@@ -446,11 +446,18 @@ jobs:
           retention-days: 7
 
   smoke-borg-core:
-    name: Smoke / Core
+    name: Smoke / Core (borg ${{ matrix.borg }})
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    needs: [frontend-build]
+    needs: [frontend-build, runtime-base-image]
+    strategy:
+      fail-fast: false
+      matrix:
+        # image: the Borg 1.4.x and Borg 2 builds users get (runtime base image).
+        # apt: the Borg 1 that distributions ship (1.2.x on Ubuntu 24.04).
+        borg: [image, apt]
+    container: ${{ matrix.borg == 'image' && needs.runtime-base-image.outputs.image || null }}
 
     services:
       redis:
@@ -468,15 +475,22 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
+        if: matrix.borg == 'apt'
         uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
       - name: Install system dependencies
+        if: matrix.borg == 'apt'
         run: |
           sudo apt-get update
           sudo apt-get install -y borgbackup
+
+      - name: Verify Borg installation
+        run: |
+          borg --version
+          if [ "${{ matrix.borg }}" = image ]; then borg2 --version; fi
 
       - name: Install Python dependencies
         run: |
@@ -520,7 +534,7 @@ jobs:
           DATA_DIR: ${{ github.workspace }}/data
           SECRET_KEY: test-secret-key-for-ci-only
           DATABASE_URL: sqlite:///${{ github.workspace }}/data/test.db
-          REDIS_HOST: localhost
+          REDIS_HOST: ${{ matrix.borg == 'image' && 'redis' || 'localhost' }}
           REDIS_PORT: 6379
           ACTIVATION_SERVICE_URL: ""
 
@@ -545,7 +559,7 @@ jobs:
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: smoke-core-artifacts
+          name: smoke-core-artifacts-${{ matrix.borg }}
           path: |
             /tmp/borg-ui-tests/TEST_INFO.txt
             logs/
@@ -553,10 +567,17 @@ jobs:
           retention-days: 7
 
   smoke-borg-extended:
-    name: Smoke / Extended
+    name: Smoke / Extended (borg ${{ matrix.borg }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: [frontend-build]
+    needs: [frontend-build, runtime-base-image]
+    strategy:
+      fail-fast: false
+      matrix:
+        # image: the Borg 1.4.x and Borg 2 builds users get (runtime base image).
+        # apt: the Borg 1 that distributions ship (1.2.x on Ubuntu 24.04).
+        borg: [image, apt]
+    container: ${{ matrix.borg == 'image' && needs.runtime-base-image.outputs.image || null }}
 
     services:
       redis:
@@ -574,15 +595,22 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
+        if: matrix.borg == 'apt'
         uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
       - name: Install system dependencies
+        if: matrix.borg == 'apt'
         run: |
           sudo apt-get update
           sudo apt-get install -y borgbackup
+
+      - name: Verify Borg installation
+        run: |
+          borg --version
+          if [ "${{ matrix.borg }}" = image ]; then borg2 --version; fi
 
       - name: Install Python dependencies
         run: |
@@ -626,7 +654,7 @@ jobs:
           DATA_DIR: ${{ github.workspace }}/data
           SECRET_KEY: test-secret-key-for-ci-only
           DATABASE_URL: sqlite:///${{ github.workspace }}/data/test.db
-          REDIS_HOST: localhost
+          REDIS_HOST: ${{ matrix.borg == 'image' && 'redis' || 'localhost' }}
           REDIS_PORT: 6379
           ACTIVATION_SERVICE_URL: ""
 
@@ -651,7 +679,7 @@ jobs:
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: smoke-extended-artifacts
+          name: smoke-extended-artifacts-${{ matrix.borg }}
           path: |
             /tmp/borg-ui-tests/TEST_INFO.txt
             logs/
