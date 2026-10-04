@@ -157,7 +157,7 @@ class TestRemoteCommandQuoting:
             ),
         )
 
-        await filesystem.validate_path(
+        filesystem.validate_path(
             path=SUBSHELL_PATH,
             connection_type="ssh",
             ssh_key_id=stored_key.id,
@@ -258,7 +258,7 @@ class TestSftpBatchInjection:
         )
         with patch.object(filesystem.subprocess, "run") as mock_run:
             with pytest.raises(HTTPException) as exc:
-                await filesystem.create_folder(
+                filesystem.create_folder(
                     request=request, current_user=ADMIN, db=test_db
                 )
         assert exc.value.status_code == 400
@@ -297,7 +297,7 @@ class TestFilesystemSshTarget:
         _saved_connection(test_db, stored_key)
         with patch.object(filesystem.subprocess, "run") as mock_run:
             with pytest.raises(HTTPException) as exc:
-                await filesystem.validate_path(
+                filesystem.validate_path(
                     path="/srv",
                     connection_type="ssh",
                     ssh_key_id=stored_key.id,
@@ -323,7 +323,7 @@ class TestFilesystemSshTarget:
             "run",
             lambda cmd, **kwargs: SimpleNamespace(returncode=1, stdout="", stderr=""),
         )
-        payload = await filesystem.validate_path(
+        payload = filesystem.validate_path(
             path="/srv",
             connection_type="ssh",
             ssh_key_id=stored_key.id,

@@ -294,6 +294,14 @@ app.include_router(v2_router, prefix="/api/v2")  # Borg 2 versioned API
 async def startup_event():
     """Initialize application on startup"""
     logger.info("Starting Borg UI")
+    # Sync handlers run in anyio's threadpool (default 40 tokens). Cap it at the
+    # DB pool size so a burst queues for a thread, not for a connection.
+    from anyio import to_thread
+    from app.database.database import engine
+
+    to_thread.current_default_thread_limiter().total_tokens = (
+        engine.pool.size() + engine.pool._max_overflow
+    )
     _log_insecure_no_auth_warning()
     _log_proxy_auth_security_warnings()
 

@@ -1439,7 +1439,7 @@ def _replace_repository_links(
 
 
 @router.get("/")
-async def list_backup_plans(
+def list_backup_plans(
     repository_id: int | None = Query(default=None, ge=1),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -1462,7 +1462,7 @@ async def list_backup_plans(
 
 
 @router.get("/runs")
-async def list_backup_plan_runs(
+def list_backup_plan_runs(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     limit: int = 50,
@@ -1509,7 +1509,7 @@ async def list_backup_plan_runs(
 
 
 @router.get("/runs/{run_id}")
-async def get_backup_plan_run(
+def get_backup_plan_run(
     run_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -1770,7 +1770,7 @@ async def run_backup_plan(
 
 
 @router.get("/{plan_id}/runs")
-async def list_backup_plan_runs_for_plan(
+def list_backup_plan_runs_for_plan(
     plan_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -1934,7 +1934,7 @@ async def toggle_backup_plan_repository(
 
 
 @router.get("/{plan_id}")
-async def get_backup_plan(
+def get_backup_plan(
     plan_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

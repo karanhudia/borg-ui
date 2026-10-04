@@ -4333,7 +4333,7 @@ async def import_repository(
 
 
 @router.get("/{repo_id}/rclone/status")
-async def get_repository_rclone_status(
+def get_repository_rclone_status(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -4532,7 +4532,7 @@ async def download_keyfile(repo_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{repo_id}/storage")
-async def get_repository_storage(
+def get_repository_storage(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -6278,7 +6278,7 @@ async def execute_repository_wipe(
 
 
 @router.get("/{repo_id}/wipe-jobs/{job_id}")
-async def get_repository_wipe_job(
+def get_repository_wipe_job(
     repo_id: int,
     job_id: int,
     current_user: User = Depends(get_current_user),
@@ -6811,7 +6811,7 @@ async def get_repository_stats(
 
 # Check job endpoints
 @router.get("/check-jobs/{job_id}")
-async def get_check_job_status(
+def get_check_job_status(
     job_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -6841,7 +6841,7 @@ async def get_check_job_status(
 
 
 @router.get("/{repo_id}/check-jobs")
-async def get_repository_check_jobs(
+def get_repository_check_jobs(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -6880,7 +6880,7 @@ async def get_repository_check_jobs(
 
 
 @router.get("/restore-check-jobs/{job_id}")
-async def get_restore_check_job_status(
+def get_restore_check_job_status(
     job_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -6922,7 +6922,7 @@ async def get_restore_check_job_status(
 
 
 @router.get("/{repo_id}/restore-check-jobs")
-async def get_repository_restore_check_jobs(
+def get_repository_restore_check_jobs(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -6970,7 +6970,7 @@ async def get_repository_restore_check_jobs(
 
 # Compact job endpoints
 @router.get("/compact-jobs/{job_id}")
-async def get_compact_job_status(
+def get_compact_job_status(
     job_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -7000,7 +7000,7 @@ async def get_compact_job_status(
 
 
 @router.get("/{repo_id}/compact-jobs")
-async def get_repository_compact_jobs(
+def get_repository_compact_jobs(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -7033,7 +7033,7 @@ async def get_repository_compact_jobs(
 
 
 @router.get("/prune-jobs/{job_id}")
-async def get_prune_job_status(
+def get_prune_job_status(
     job_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -7062,7 +7062,7 @@ async def get_prune_job_status(
 
 
 @router.get("/{repo_id}/prune-jobs")
-async def get_repository_prune_jobs(
+def get_repository_prune_jobs(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -7095,7 +7095,7 @@ async def get_repository_prune_jobs(
 
 # Helper endpoint to check if repository has running maintenance jobs
 @router.get("/{repo_id}/running-jobs")
-async def get_running_jobs(
+def get_running_jobs(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -7547,7 +7547,7 @@ async def update_restore_check_schedule(
 
 
 @router.get("/{repo_id}/check-schedule")
-async def get_check_schedule(
+def get_check_schedule(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -7593,7 +7593,7 @@ async def get_check_schedule(
 
 
 @router.get("/{repo_id}/restore-check-schedule")
-async def get_restore_check_schedule(
+def get_restore_check_schedule(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
