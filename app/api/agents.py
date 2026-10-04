@@ -2003,8 +2003,19 @@ def upload_job_log(
         db.commit()
     except IntegrityError:
         # A redelivery racing the first copy: (job, sequence) is unique, so
-        # the other request stored it.
+        # the other request stored it. Any other integrity failure (the job
+        # deleted meanwhile) is not an acknowledgment.
         db.rollback()
+        stored = (
+            db.query(AgentJobLog)
+            .filter(
+                AgentJobLog.agent_job_id == job_id,
+                AgentJobLog.sequence == payload.sequence,
+            )
+            .first()
+        )
+        if stored is None:
+            raise
         return AgentJobLogResponse(accepted=True, duplicate=True)
     _complete_finished_operation_log(
         db, job_id, payload.sequence, payload.message, payload=job_payload
