@@ -54,6 +54,8 @@ ALLOWED_BORG_FLAGS: dict[str, dict[str, bool]] = {
         "--exclude": True,
         "-e": True,
         "--pattern": True,
+        "--patterns-from": True,
+        "--exclude-from": True,
         "--files-cache": True,
         "--files-changed": True,
         "--checkpoint-interval": True,

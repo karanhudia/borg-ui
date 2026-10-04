@@ -1626,7 +1626,7 @@ async def create_backup_plan_from_repository(
         plan_name = _unique_backup_plan_name(db, f"{repository.name} Backup Plan")
 
     try:
-        parse_borg_flags(repository.custom_flags, "create")
+        parse_borg_flags(repository.custom_flags, "create", local_paths=False)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

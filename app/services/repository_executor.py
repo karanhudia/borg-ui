@@ -260,6 +260,7 @@ def build_agent_backup_payload(
             parse_borg_flags(
                 custom_flags if custom_flags is not None else repository.custom_flags,
                 "create",
+                local_paths=False,
             )
         ),
     }
