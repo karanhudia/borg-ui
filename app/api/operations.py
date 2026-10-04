@@ -440,7 +440,7 @@ def _history_by_repository(
 
 
 @router.get("/", response_model=OperationListResponse)
-async def list_operations(
+def list_operations(
     repository_id: Optional[int] = None,
     category: Optional[list[str]] = Query(default=None),
     kind: Optional[list[str]] = Query(default=None),
@@ -485,7 +485,7 @@ async def list_operations(
 
 
 @router.get("/queue", response_model=QueueResponse)
-async def get_queue(
+def get_queue(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -564,7 +564,7 @@ async def get_queue(
 
 
 @router.get("/repositories", response_model=HubResponse)
-async def get_repositories_hub(
+def get_repositories_hub(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -661,7 +661,7 @@ async def get_repositories_hub(
 
 
 @router.get("/repositories/{repository_id}", response_model=HubRepositoryDetail)
-async def get_repository_hub_detail(
+def get_repository_hub_detail(
     repository_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -788,7 +788,7 @@ async def update_limits(
 
 
 @router.get("/{operation_id}", response_model=OperationDetail)
-async def get_operation(
+def get_operation(
     operation_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -873,7 +873,7 @@ async def cancel_operation(
 
 
 @router.get("/{operation_id}/logs")
-async def get_operation_logs(
+def get_operation_logs(
     operation_id: int,
     offset: int = 0,
     limit: int = 500,
@@ -893,7 +893,7 @@ async def get_operation_logs(
 
 
 @router.get("/{operation_id}/logs/download")
-async def download_operation_logs(
+def download_operation_logs(
     operation_id: int,
     current_user: User = Depends(get_current_download_user),
     db: Session = Depends(get_db),

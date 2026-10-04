@@ -447,7 +447,7 @@ async def create_enrollment_token(
 
 
 @router.get("/enrollment-tokens", response_model=list[AgentEnrollmentTokenSummary])
-async def list_enrollment_tokens(
+def list_enrollment_tokens(
     _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
@@ -522,7 +522,7 @@ def _agent_machine_response(
 
 
 @router.get("/agents", response_model=list[AgentMachineResponse])
-async def list_agent_machines(
+def list_agent_machines(
     _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
@@ -958,7 +958,7 @@ async def list_agent_machine_scripts(
     "/agents/{agent_machine_id}/logs",
     response_model=list[AgentSessionLogEntryResponse],
 )
-async def list_agent_machine_logs(
+def list_agent_machine_logs(
     agent_machine_id: int,
     _: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
@@ -1046,7 +1046,7 @@ MAX_AGENT_JOBS_LIMIT = 1000
 
 
 @router.get("/agent-jobs", response_model=list[AgentJobSummaryResponse])
-async def list_agent_jobs(
+def list_agent_jobs(
     limit: int = Query(
         DEFAULT_AGENT_JOBS_LIMIT,
         ge=1,
@@ -1071,7 +1071,7 @@ async def list_agent_jobs(
     "/agent-jobs/{job_id}/logs",
     response_model=list[AgentJobLogEntryResponse],
 )
-async def list_agent_job_logs(
+def list_agent_job_logs(
     job_id: int,
     _: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
