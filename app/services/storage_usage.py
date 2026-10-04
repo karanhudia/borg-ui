@@ -23,9 +23,8 @@ Borg 1 keeps `info --json` `cache.stats.unique_csize`. The same payload
 also reports the source data size of every archive
 (`cache.stats.total_size`), which the caller carries alongside: one
 repository-level figure, where Borg 2 reports it through `compact
---stats`. Borg 1 and Borg 2 up to 2.0.0b24 also report
-`repository.last_modified` (the last manifest write), which the caller
-persists; 2.0.0b25 dropped the field with the manifest timestamp.
+--stats`. Borg 1 also reports `repository.last_modified` (the last
+manifest write), which the caller persists; Borg 2 reports none.
 """
 
 import asyncio
@@ -590,8 +589,9 @@ async def measure_repository_size(
     info_timeout: int = 60,
     use_bypass_lock: bool = False,
 ) -> SizeResult:
-    """Best available size and `last_modified` for a server-executed
-    repository. An empty Borg 2 index is 0 bytes; unknown is `None`."""
+    """Best available size, and Borg 1's `last_modified`, for a
+    server-executed repository. An empty Borg 2 index is 0 bytes; unknown
+    is `None`."""
     from app.utils.borg_env import effective_repository_remote_path
 
     remote_path = effective_repository_remote_path(repository)
@@ -628,20 +628,7 @@ async def measure_repository_size(
             original_size=borg1_original_size(payload),
         )
 
-    from app.core.borg2 import _get_borg2_binary, borg2
-
-    last_modified = None
-    rinfo = await borg2.rinfo(
-        repository.path,
-        passphrase=repository.passphrase,
-        remote_path=remote_path,
-        env=env,
-    )
-    if rinfo.get("success"):
-        try:
-            last_modified = _last_modified(json.loads(rinfo.get("stdout") or "{}"))
-        except json.JSONDecodeError:
-            pass
+    from app.core.borg2 import _get_borg2_binary
 
     index_env = dict(env or {})
     if repository.passphrase:
@@ -659,7 +646,6 @@ async def measure_repository_size(
             bytes=indexed[0],
             objects=indexed[1],
             source=SOURCE_BORG2_INDEX,
-            last_modified=last_modified,
         )
 
     # the whole measurement runs under the repository's metadata lock, so
@@ -670,5 +656,4 @@ async def measure_repository_size(
     return SizeResult(
         bytes=used,
         source=SOURCE_STORAGE_USED if used else None,
-        last_modified=last_modified,
     )

@@ -313,16 +313,10 @@ def test_borg1_original_size_takes_whole_non_negative_numbers_only(total_size):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_measure_borg2_prefers_the_index_and_keeps_last_modified(monkeypatch):
+async def test_measure_borg2_prefers_the_index_and_runs_no_repo_info(monkeypatch):
+    """Borg 2 reports no last_modified, so no repo-info runs for it."""
     repo = _repo()
-    rinfo = AsyncMock(
-        return_value={
-            "success": True,
-            "stdout": json.dumps(
-                {"repository": {"last_modified": "2026-09-06T08:57:17.922941+00:00"}}
-            ),
-        }
-    )
+    rinfo = AsyncMock()
     index = AsyncMock(return_value=(301284, 4))
     used = AsyncMock(return_value=999)
     monkeypatch.setattr(storage_usage, "borg2_index_size", index)
@@ -332,12 +326,8 @@ async def test_measure_borg2_prefers_the_index_and_keeps_last_modified(monkeypat
         patch("app.core.borg2._get_borg2_binary", return_value="/opt/venv/bin/borg"),
     ):
         result = await measure_repository_size(repo, env={"BORG_RSH": "ssh"})
-    assert result == SizeResult(
-        bytes=301284,
-        objects=4,
-        source=SOURCE_BORG2_INDEX,
-        last_modified=datetime(2026, 9, 6, 8, 57, 17, 922941),
-    )
+    assert result == SizeResult(bytes=301284, objects=4, source=SOURCE_BORG2_INDEX)
+    rinfo.assert_not_awaited()
     assert index.call_args.kwargs["borg2_binary"] == "/opt/venv/bin/borg"
     assert index.call_args.kwargs["env"]["BORG_PASSPHRASE"] == "x"
     used.assert_not_awaited()
@@ -353,7 +343,6 @@ async def test_measure_borg2_distinguishes_failed_measurements_from_an_empty_ind
     used = AsyncMock(return_value=424242)
     monkeypatch.setattr(storage_usage, "storage_used", used)
     with (
-        patch("app.core.borg2.borg2.rinfo", AsyncMock(return_value={"success": False})),
         patch("app.core.borg2._get_borg2_binary", return_value="borg2"),
     ):
         result = await measure_repository_size(repo, temp_key_file="/tmp/k")
@@ -364,7 +353,6 @@ async def test_measure_borg2_distinguishes_failed_measurements_from_an_empty_ind
     unavailable_store = AsyncMock(return_value=None)
     monkeypatch.setattr(storage_usage, "storage_used", unavailable_store)
     with (
-        patch("app.core.borg2.borg2.rinfo", AsyncMock(return_value={"success": False})),
         patch("app.core.borg2._get_borg2_binary", return_value="borg2"),
     ):
         assert await measure_repository_size(repo) == SizeResult()
@@ -374,7 +362,6 @@ async def test_measure_borg2_distinguishes_failed_measurements_from_an_empty_ind
         storage_usage, "borg2_index_size", AsyncMock(return_value=(0, 0))
     )
     with (
-        patch("app.core.borg2.borg2.rinfo", AsyncMock(return_value={"success": False})),
         patch("app.core.borg2._get_borg2_binary", return_value="borg2"),
     ):
         empty = await measure_repository_size(repo)
@@ -649,7 +636,6 @@ async def test_rclone_fallback_runs_in_the_prepared_environment(monkeypatch):
     )
     monkeypatch.setattr(storage_usage.asyncio, "create_subprocess_exec", spawn)
     with (
-        patch("app.core.borg2.borg2.rinfo", AsyncMock(return_value={"success": False})),
         patch("app.core.borg2._get_borg2_binary", return_value="borg2"),
     ):
         result = await measure_repository_size(repo, env=env)

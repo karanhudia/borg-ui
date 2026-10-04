@@ -4564,6 +4564,71 @@ class TestRepositoriesStatistics:
         assert unparsable["last_modified"] == "2026-09-01T06:00:00+00:00"
 
     @pytest.mark.asyncio
+    async def test_get_repository_stats_derives_the_borg2_last_write(self, test_db):
+        """Borg 2 reports no last_modified (#1262): server and agent
+        repositories report the newest archive write, as the detail does."""
+        from datetime import datetime
+
+        from app.api.repositories import get_repository_stats
+        from app.database.models import Archive
+
+        seen = datetime(2026, 9, 2)
+        repo = Repository(
+            name="B25 Stats Repo",
+            path="/tmp/b25-stats-repo",
+            encryption="repokey-aes-ocb",
+            compression="lz4",
+            repository_type="local",
+            borg_version=2,
+            archive_count=1,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.add(
+            Archive(
+                repository_id=repo.id,
+                borg_id="id-a1",
+                name="a1",
+                series="a1",
+                start=datetime(2026, 9, 1, 12, 0),
+                end=datetime(2026, 9, 1, 12, 5),
+                first_seen_at=seen,
+                last_seen_at=seen,
+            )
+        )
+        test_db.commit()
+
+        async def server_stats(stdout):
+            with (
+                patch(
+                    "app.api.repositories.resolve_repo_ssh_key_file", return_value=None
+                ),
+                patch(
+                    "app.api.repositories.borg._execute_command",
+                    new=AsyncMock(
+                        return_value={
+                            "success": True,
+                            "stdout": stdout,
+                            "stderr": "",
+                            "return_code": 0,
+                        }
+                    ),
+                ),
+                patch(
+                    "app.api.repositories.BorgRouter.list_archives",
+                    new=AsyncMock(return_value=[]),
+                ),
+            ):
+                return await get_repository_stats(repo, test_db)
+
+        server = await server_stats('{"repository": {"id": "x"}}')
+        assert server["last_modified"] == "2026-09-01T12:05:00+00:00"
+
+        with patch("app.api.repositories.is_agent_executor", return_value=True):
+            agent = await get_repository_stats(repo, test_db)
+        assert agent["last_modified"] == "2026-09-01T12:05:00+00:00"
+
+    @pytest.mark.asyncio
     async def test_get_repository_stats_omits_passphrase_for_unencrypted_local_repo(
         self, test_db
     ):
