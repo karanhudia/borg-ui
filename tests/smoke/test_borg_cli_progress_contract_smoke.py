@@ -31,6 +31,8 @@ def _detect_app_container() -> str | None:
     preferred = os.environ.get("BORG_UI_SMOKE_APP_CONTAINER")
     if preferred:
         return preferred
+    if not shutil.which("docker"):
+        return None
     for candidate in ("borg-web-ui-dev", "borg-web-ui"):
         result = subprocess.run(
             ["docker", "ps", "--format", "{{.Names}}"],
