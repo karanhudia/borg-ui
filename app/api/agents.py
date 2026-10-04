@@ -2024,9 +2024,40 @@ def upload_job_log(
     return AgentJobLogResponse(accepted=True, duplicate=False)
 
 
+# Strong references: the loop only holds weak ones, and a report that is
+# already committed must still get its notification.
+_TERMINAL_REPORT_TASKS: set[asyncio.Task] = set()
+
+
+async def _record_and_notify(worker, job_id: int, payload, agent_id: int) -> str:
+    from app.database.database import SessionLocal
+
+    transitioned, status_value = await asyncio.to_thread(
+        worker, job_id, payload, agent_id
+    )
+    if transitioned:
+        db = SessionLocal()
+        try:
+            job = await asyncio.to_thread(db.get, AgentJob, job_id)
+            await _notify_agent_job_outcome(db, job)
+        finally:
+            db.close()
+    return status_value
+
+
+async def _terminal_report(worker, job_id: int, payload, agent_id: int) -> str:
+    """Commit a terminal report off the loop, then notify. Shielded: the agent
+    drops a request after 30 s, and its retry would find the job final and
+    never notify, so a committed report always gets its notification."""
+    task = asyncio.ensure_future(_record_and_notify(worker, job_id, payload, agent_id))
+    _TERMINAL_REPORT_TASKS.add(task)
+    task.add_done_callback(_TERMINAL_REPORT_TASKS.discard)
+    return await asyncio.shield(task)
+
+
 def _record_job_completion(
     job_id: int, payload: AgentJobCompleteRequest, agent_id: int
-) -> bool:
+) -> tuple[bool, str]:
     """Runs in a worker thread with its own session: the thread can outlive a
     request that was cancelled, and the request's session is closed with it."""
     from app.database.database import SessionLocal
@@ -2035,7 +2066,7 @@ def _record_job_completion(
     try:
         job = _get_agent_job(job_id, db.get(AgentMachine, agent_id), db)
         if job.status in FINAL_AGENT_JOB_STATUSES:
-            return False
+            return False, job.status
 
         # Same path the WebSocket transport takes - one place decides how a
         # completion (including borg warning exit codes) is classified.
@@ -2043,7 +2074,7 @@ def _record_job_completion(
             job, db, result=payload.result, completed_at=payload.completed_at
         )
         db.commit()
-        return transitioned
+        return transitioned, job.status
     finally:
         db.close()
 
@@ -2053,18 +2084,13 @@ async def complete_job(
     job_id: int,
     payload: AgentJobCompleteRequest,
     current_agent: AgentMachine = Depends(get_current_agent),
-    db: Session = Depends(get_db),
 ):
     # The linked job's log file is written while the job is finished, which can
     # wait on slow storage, so the sync part runs off the event loop.
-    transitioned = await asyncio.to_thread(
+    status_value = await _terminal_report(
         _record_job_completion, job_id, payload, current_agent.id
     )
-    job = _get_agent_job(job_id, current_agent, db)
-    if transitioned:
-        await _notify_agent_job_outcome(db, job)
-
-    return AgentJobStatusResponse(id=job.id, status=job.status)
+    return AgentJobStatusResponse(id=job_id, status=status_value)
 
 
 @router.post("/jobs/{job_id}/artifact")
@@ -2136,7 +2162,7 @@ async def upload_job_artifact(
 
 def _record_job_failure(
     job_id: int, payload: AgentJobFailRequest, agent_id: int
-) -> bool:
+) -> tuple[bool, str]:
     """Own session, as in `_record_job_completion`."""
     from app.database.database import SessionLocal
 
@@ -2144,7 +2170,7 @@ def _record_job_failure(
     try:
         job = _get_agent_job(job_id, db.get(AgentMachine, agent_id), db)
         if job.status in FINAL_AGENT_JOB_STATUSES:
-            return False
+            return False, job.status
 
         # Same path the WebSocket transport takes - one place records the
         # failure and finishes the linked jobs.
@@ -2158,7 +2184,7 @@ def _record_job_failure(
             failure_kind=payload.failure_kind,
         )
         db.commit()
-        return transitioned
+        return transitioned, job.status
     finally:
         db.close()
 
@@ -2168,16 +2194,11 @@ async def fail_job(
     job_id: int,
     payload: AgentJobFailRequest,
     current_agent: AgentMachine = Depends(get_current_agent),
-    db: Session = Depends(get_db),
 ):
-    transitioned = await asyncio.to_thread(
+    status_value = await _terminal_report(
         _record_job_failure, job_id, payload, current_agent.id
     )
-    job = _get_agent_job(job_id, current_agent, db)
-    if transitioned:
-        await _notify_agent_job_outcome(db, job)
-
-    return AgentJobStatusResponse(id=job.id, status=job.status)
+    return AgentJobStatusResponse(id=job_id, status=status_value)
 
 
 @router.post("/jobs/{job_id}/cancel", response_model=AgentJobStatusResponse)
