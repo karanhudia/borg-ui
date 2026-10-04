@@ -502,7 +502,7 @@ async def create_script(
 
 
 @router.put("/scripts/{script_id}", response_model=ScriptResponse)
-async def update_script(
+def update_script(
     script_id: int,
     script_data: ScriptUpdate,
     db: Session = Depends(get_db),

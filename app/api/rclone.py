@@ -2715,7 +2715,7 @@ async def create_remote(
 
 
 @router.put("/remotes/{remote_id}", dependencies=[RCLONE_FEATURE_DEPENDENCY])
-async def update_remote(
+def update_remote(
     remote_id: int,
     payload: RcloneRemoteUpdate,
     current_user: User = Depends(get_current_user),
@@ -2826,7 +2826,7 @@ async def update_remote(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[RCLONE_FEATURE_DEPENDENCY],
 )
-async def delete_remote(
+def delete_remote(
     remote_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

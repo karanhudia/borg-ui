@@ -93,7 +93,7 @@ async def create_token(
 
 
 @router.delete("/settings/tokens/{token_id}", status_code=204)
-async def revoke_token(
+def revoke_token(
     token_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

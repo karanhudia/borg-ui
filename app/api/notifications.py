@@ -202,7 +202,7 @@ async def create_notification_setting(
 
 
 @router.put("/{setting_id}", response_model=NotificationSettingsResponse)
-async def update_notification_setting(
+def update_notification_setting(
     setting_id: int,
     setting_data: NotificationSettingsUpdate,
     db: Session = Depends(get_db),
@@ -246,7 +246,7 @@ async def update_notification_setting(
 
 
 @router.delete("/{setting_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_notification_setting(
+def delete_notification_setting(
     setting_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

@@ -1809,7 +1809,7 @@ def list_backup_plan_runs_for_plan(
 
 
 @router.post("/{plan_id}/toggle")
-async def toggle_backup_plan(
+def toggle_backup_plan(
     plan_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -1858,7 +1858,7 @@ async def toggle_backup_plan(
 
 
 @router.post("/{plan_id}/repositories/{repository_id}/toggle")
-async def toggle_backup_plan_repository(
+def toggle_backup_plan_repository(
     plan_id: int,
     repository_id: int,
     current_user: User = Depends(get_current_user),
@@ -1949,7 +1949,7 @@ def get_backup_plan(
 
 
 @router.put("/{plan_id}")
-async def update_backup_plan(
+def update_backup_plan(
     plan_id: int,
     payload: BackupPlanPayload,
     current_user: User = Depends(get_current_user),
@@ -1989,7 +1989,7 @@ async def update_backup_plan(
 
 
 @router.delete("/{plan_id}")
-async def delete_backup_plan(
+def delete_backup_plan(
     plan_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

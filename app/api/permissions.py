@@ -192,7 +192,7 @@ def get_user_permission_scope(
     response_model=PermissionScopeResponse,
     dependencies=[Depends(get_current_admin_user)],
 )
-async def update_user_permission_scope(
+def update_user_permission_scope(
     user_id: int,
     payload: PermissionScopeUpdate,
     db: Session = Depends(get_db),
@@ -252,7 +252,7 @@ async def assign_permission(
     response_model=PermissionResponse,
     dependencies=[Depends(get_current_admin_user)],
 )
-async def update_permission(
+def update_permission(
     user_id: int,
     repo_id: int,
     payload: PermissionUpdate,
@@ -284,7 +284,7 @@ async def update_permission(
     status_code=204,
     dependencies=[Depends(get_current_admin_user)],
 )
-async def remove_permission(
+def remove_permission(
     user_id: int,
     repo_id: int,
     db: Session = Depends(get_db),
