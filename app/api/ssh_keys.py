@@ -1850,7 +1850,7 @@ async def test_ssh_connection(
 
 
 @router.put("/connections/{connection_id}")
-async def update_ssh_connection(
+def update_ssh_connection(
     connection_id: int,
     connection_data: SSHConnectionUpdate,
     current_user: User = Depends(get_current_user),
@@ -2455,7 +2455,7 @@ async def redeploy_key_to_connection(
 
 
 @router.delete("/connections/{connection_id}")
-async def delete_ssh_connection(
+def delete_ssh_connection(
     connection_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -2584,7 +2584,7 @@ def get_ssh_key(
 
 
 @router.put("/{key_id}")
-async def update_ssh_key(
+def update_ssh_key(
     key_id: int,
     key_data: SSHKeyUpdate,
     current_user: User = Depends(get_current_user),

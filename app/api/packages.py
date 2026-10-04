@@ -147,7 +147,7 @@ async def install_package(package_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{package_id}", response_model=PackageResponse)
-async def update_package(
+def update_package(
     package_id: int,
     package: PackageCreate,
     current_user: User = Depends(get_current_user),
@@ -199,7 +199,7 @@ async def update_package(
 
 
 @router.delete("/{package_id}")
-async def delete_package(
+def delete_package(
     package_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
