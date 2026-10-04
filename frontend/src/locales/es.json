@@ -1159,6 +1159,8 @@
       "stats": {
         "addedToRepository": "Añadido al repositorio",
         "addedHint": "Datos exclusivos de este archivo. Eliminarlo libera al menos esta cantidad.",
+        "addedAtCreation": "Añadido al crearse",
+        "addedAtCreationHint": "Datos que este archivo añadió al crearse. Los archivos posteriores pueden compartirlos, así que eliminarlo puede liberar menos.",
         "filesChanged": "Archivos cambiados",
         "filesChangedNotIndexed": "Aún no indexado",
         "filesChangedUnavailable": "No disponible para este repositorio",
@@ -4822,6 +4824,10 @@
       "repositoryPathLabel": "Ruta del repositorio",
       "repositoryPathHelper": "Ruta donde se almacenará el repositorio",
       "borgV2Warning": "La compatibilidad con Borg 2 sigue en beta. No la uses todavía para datos de producción. Por ahora está pensada para entusiastas y pruebas, y requiere el binario borg2 en cualquier host remoto.",
+      "borg2OnlyUrl": "Solo Borg 2 puede abrir esta URL de repositorio.",
+      "borg2PathAbsolute": "Ruta absoluta en el host.",
+      "borg2PathRelative": "Relativa al directorio de inicio de sesión de {{login}}. Empieza con / para una ruta absoluta.",
+      "borg2UrlRelative": "Relativa al directorio de inicio de sesión del usuario SSH. Escribe ssh://host//ruta para una ruta absoluta.",
       "connected": "Conectado",
       "browseFilesystem": "Explorar sistema de archivos"
     },
@@ -5011,6 +5017,7 @@
       "encryption": "Cifrado",
       "encryptionRepokey": "Repokey",
       "encryptionKeyfile": "Archivo de clave",
+      "encryptionAuthenticated": "Autenticado",
       "encryptionNone": "Ninguno",
       "passphrase": "Frase de contraseña",
       "passphraseSet": "••••••••",
@@ -5074,6 +5081,10 @@
         "keyfile-chacha20-poly1305": {
           "label": "Archivo de clave (ChaCha20)",
           "description": "Archivo de clave con ChaCha20"
+        },
+        "authenticated": {
+          "label": "Autenticado (sin cifrado)",
+          "description": "Los datos no se cifran; una clave y una frase de contraseña los protegen contra manipulaciones"
         },
         "none": {
           "label": "Ninguna",

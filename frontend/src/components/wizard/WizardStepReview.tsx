@@ -79,6 +79,7 @@ interface WizardStepReviewProps {
 
 function getEncryptionLabelKey(encryption: string) {
   if (encryption === 'none') return 'wizard.review.encryptionNone'
+  if (encryption === 'authenticated') return 'wizard.review.encryptionAuthenticated'
   if (encryption.startsWith('repokey')) return 'wizard.review.encryptionRepokey'
   if (encryption.startsWith('keyfile')) return 'wizard.review.encryptionKeyfile'
   return 'wizard.review.encryptionNone'
@@ -143,7 +144,14 @@ export default function WizardStepReview({
     executionTarget === 'agent' && data.agentMachineId
       ? agentMachines.find((agent) => agent.id === data.agentMachineId)
       : null
-  const isEncrypted = data.encryption !== 'none'
+  // Borg 2's `authenticated` stores the data unencrypted, protected
+  // against tampering by a key and passphrase.
+  const isEncrypted = data.encryption !== 'none' && data.encryption !== 'authenticated'
+  const encryptionTone = isEncrypted
+    ? 'success'
+    : data.encryption === 'authenticated'
+      ? 'warning'
+      : 'error'
   const hasBackupSource = data.repositoryMode === 'full' && data.sourceDirs.length > 0
   const hasPlanOwnedAgentSources =
     data.repositoryMode === 'full' && executionTarget === 'agent' && data.sourceDirs.length === 0
@@ -411,7 +419,7 @@ export default function WizardStepReview({
         <ReviewSectionCard
           icon={<Shield size={14} />}
           label={t('wizard.review.security')}
-          accentColor={isEncrypted ? theme.palette.success.main : theme.palette.error.main}
+          accentColor={theme.palette[encryptionTone].main}
         >
           {mode === 'create' && (
             <ReviewAttrRow label={t('wizard.review.encryption')}>
@@ -419,12 +427,12 @@ export default function WizardStepReview({
                 {isEncrypted ? (
                   <Lock size={11} color={theme.palette.success.main} />
                 ) : (
-                  <Unlock size={11} color={theme.palette.error.main} />
+                  <Unlock size={11} color={theme.palette[encryptionTone].main} />
                 )}
                 <Chip
                   label={t(getEncryptionLabelKey(data.encryption))}
                   size="small"
-                  color={isEncrypted ? 'success' : 'error'}
+                  color={encryptionTone}
                   sx={{ height: 17, fontSize: '0.62rem', fontWeight: 600 }}
                 />
               </Box>

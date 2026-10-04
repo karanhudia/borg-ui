@@ -123,6 +123,65 @@ export const SshDestination: Story = {
   ),
 }
 
+// A URL only Borg 2 can open: Borg 2 is selected and Borg 1 is not offered.
+export const Borg2OnlyUrl: Story = {
+  args: {
+    ...baseArgs,
+    data: {
+      ...baseArgs.data,
+      name: 'Object Storage Repository',
+      borgVersion: 2,
+      path: 'sftp://backup@storage.example.com/borg/media',
+    },
+    borg2RequiredByPath: true,
+  },
+  render: (args) => (
+    <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>
+      <WizardStepLocation {...args} />
+    </Box>
+  ),
+}
+
+// Borg 2 reads a path on an SSH connection relative to the login directory
+// unless it starts with a slash; the field says which one it is.
+export const Borg2SshRelativePath: Story = {
+  args: {
+    ...baseArgs,
+    data: {
+      ...baseArgs.data,
+      name: 'Remote Repository',
+      borgVersion: 2,
+      repositoryLocation: 'ssh',
+      repoSshConnectionId: 1,
+      path: 'borg/repositories/media',
+    },
+  },
+  render: (args) => (
+    <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>
+      <WizardStepLocation {...args} />
+    </Box>
+  ),
+}
+
+export const Borg2SshAbsolutePath: Story = {
+  args: {
+    ...baseArgs,
+    data: {
+      ...baseArgs.data,
+      name: 'Remote Repository',
+      borgVersion: 2,
+      repositoryLocation: 'ssh',
+      repoSshConnectionId: 1,
+      path: '/srv/borg/repositories/media',
+    },
+  },
+  render: (args) => (
+    <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>
+      <WizardStepLocation {...args} />
+    </Box>
+  ),
+}
+
 export const DirectBorg2Rclone: Story = {
   args: {
     ...baseArgs,
