@@ -9,7 +9,7 @@ export const storyFeatureMap = {
   backup_reports: 'pro',
   alerting_monitoring: 'pro',
   rclone: 'pro',
-  managed_agents: 'pro',
+  managed_agents: 'community',
   remote_clients: 'pro',
   multi_user: 'community',
   extra_users: 'pro',

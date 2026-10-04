@@ -12,7 +12,7 @@ export const FEATURES = {
   backup_plan_multi_repository: 'pro',
   backup_plan_mixed_sources: 'pro',
   rclone: 'pro',
-  managed_agents: 'pro',
+  managed_agents: 'community',
   remote_clients: 'pro',
   database_discovery: 'pro',
   container_backups: 'pro',

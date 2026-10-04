@@ -12,7 +12,7 @@ const featureMap = {
   backup_plan_mixed_sources: 'pro',
   extra_users: 'pro',
   rclone: 'pro',
-  managed_agents: 'pro',
+  managed_agents: 'community',
   rbac: 'enterprise',
 } as const
 
