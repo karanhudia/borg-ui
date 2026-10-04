@@ -22,7 +22,6 @@ FEATURES: dict[str, Plan] = {
     "backup_plan_multi_repository": Plan.PRO,
     "backup_plan_mixed_sources": Plan.PRO,
     "rclone": Plan.PRO,
-    "managed_agents": Plan.COMMUNITY,
     "remote_clients": Plan.PRO,
     "database_discovery": Plan.PRO,
     "container_backups": Plan.PRO,

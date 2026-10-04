@@ -17,7 +17,6 @@ from app.core.agent_versions import compute_agent_upgrade_status
 from app.core.agent_constants import (
     AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS,
 )
-from app.core.features import require_feature_access
 from app.core.security import get_current_admin_user, get_password_hash
 from app.database.database import get_db
 from app.database.models import (
@@ -53,14 +52,6 @@ _DIAGNOSTIC_HOST_RE = re.compile(
     r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*"
     r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.?$"
 )
-
-
-def require_managed_agents_admin_user(
-    current_user: User = Depends(get_current_admin_user),
-    db: Session = Depends(get_db),
-) -> User:
-    require_feature_access(db, "managed_agents")
-    return current_user
 
 
 def _now_utc() -> datetime:
@@ -403,7 +394,7 @@ def _enrollment_expires_at(
 )
 async def create_enrollment_token(
     payload: AgentEnrollmentTokenCreate,
-    current_user: User = Depends(require_managed_agents_admin_user),
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     name = payload.name.strip()
@@ -463,7 +454,7 @@ async def list_enrollment_tokens(
 )
 async def revoke_enrollment_token(
     token_id: int,
-    current_user: User = Depends(require_managed_agents_admin_user),
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     token = (
@@ -602,7 +593,7 @@ UPGRADE_IN_FLIGHT_STATUSES = ("queued", "claimed", "running", "cancel_requested"
 @router.post("/agents/upgrade")
 async def upgrade_agent_machines(
     payload: AgentUpgradeRequest,
-    current_user: User = Depends(require_managed_agents_admin_user),
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     """Ask each named endpoint to reinstall itself.
@@ -745,7 +736,7 @@ def _last_upgrade_job_id(db: Session, agent: AgentMachine) -> Optional[int]:
 async def create_agent_backup_job(
     agent_machine_id: int,
     payload: AgentBackupJobCreate,
-    current_user: User = Depends(require_managed_agents_admin_user),
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     agent = db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).first()
@@ -790,7 +781,7 @@ async def browse_agent_machine_filesystem(
     agent_machine_id: int,
     path: str = "/",
     include_hidden: bool = False,
-    _: User = Depends(require_managed_agents_admin_user),
+    _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     return await browse_agent_filesystem(
@@ -805,7 +796,7 @@ async def browse_agent_machine_filesystem(
 @router.get("/agents/{agent_machine_id}/repository-defaults")
 async def get_agent_machine_repository_defaults(
     agent_machine_id: int,
-    _: User = Depends(require_managed_agents_admin_user),
+    _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     """Ask a connected managed agent for its environment-configured repository
@@ -848,7 +839,7 @@ async def get_agent_machine_repository_defaults(
 async def run_agent_machine_diagnostics(
     agent_machine_id: int,
     payload: AgentDiagnosticsRequest,
-    _: User = Depends(require_managed_agents_admin_user),
+    _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     agent = db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).first()
@@ -902,7 +893,7 @@ async def run_agent_machine_diagnostics(
 @router.get("/agents/{agent_machine_id}/scripts")
 async def list_agent_machine_scripts(
     agent_machine_id: int,
-    _: User = Depends(require_managed_agents_admin_user),
+    _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     """Ask a connected managed agent which pre/post-backup scripts it publishes
@@ -960,7 +951,7 @@ async def list_agent_machine_scripts(
 )
 async def list_agent_machine_logs(
     agent_machine_id: int,
-    _: User = Depends(require_managed_agents_admin_user),
+    _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     agent = db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).first()
@@ -977,7 +968,7 @@ async def list_agent_machine_logs(
 )
 async def revoke_agent_machine(
     agent_machine_id: int,
-    current_user: User = Depends(require_managed_agents_admin_user),
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     agent = db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).first()
@@ -1001,7 +992,7 @@ async def revoke_agent_machine(
 @router.delete("/agents/{agent_machine_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_agent_machine(
     agent_machine_id: int,
-    current_user: User = Depends(require_managed_agents_admin_user),
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     agent = db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).first()
@@ -1073,7 +1064,7 @@ async def list_agent_jobs(
 )
 async def list_agent_job_logs(
     job_id: int,
-    _: User = Depends(require_managed_agents_admin_user),
+    _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     job = db.query(AgentJob).filter(AgentJob.id == job_id).first()
@@ -1105,7 +1096,7 @@ async def list_agent_job_logs(
 )
 async def request_agent_job_cancel(
     job_id: int,
-    current_user: User = Depends(require_managed_agents_admin_user),
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     job = db.query(AgentJob).filter(AgentJob.id == job_id).first()

@@ -7,12 +7,10 @@ export const fullFeatureSystemInfo = {
   plan: 'pro',
   features: {
     borg_v2: 'pro',
-    managed_agents: 'community',
     rclone: 'pro',
   },
   feature_access: {
     borg_v2: true,
-    managed_agents: true,
     rclone: true,
   },
 } satisfies SystemInfo

@@ -61,12 +61,10 @@ import {
   managedAgentsAPI,
 } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
-import { usePlan } from '../hooks/usePlan'
 import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import PageTabs from '../components/PageTabs'
 import PageHeader from '../components/PageHeader'
-import PlanGate from '../components/shared/PlanGate'
 import LogViewerDialog, { type LogViewerFetchLogs } from '../components/shared/LogViewerDialog'
 import ResponsiveDialog from '../components/shared/ResponsiveDialog'
 import DiagnosticsTcpTargetFields from '../components/shared/DiagnosticsTcpTargetFields'
@@ -97,7 +95,6 @@ import {
   agentSessionLogsToViewerResult,
 } from './managed-agents/logViewerAdapters'
 import { useAnalytics } from '../hooks/useAnalytics'
-import { useFeatureAnalytics } from '../hooks/useFeatureAnalytics'
 import { copyText } from '../utils/clipboard'
 
 type PageTab = 'agents' | 'jobs' | 'tokens'
@@ -234,151 +231,11 @@ function tcpStatusLabel(status: string, labels: Record<string, string>): string 
   return status === 'success' ? labels.reachable : labels.failed
 }
 
-export function ManagedAgentsPreview({
-  defaultAgentServerUrl,
-  activeTab = 'agents',
-  agents = EMPTY_AGENTS,
-  tokens = EMPTY_TOKENS,
-  jobs = EMPTY_JOBS,
-  isLoading = false,
-}: {
-  defaultAgentServerUrl: string
-  activeTab?: PageTab
-  agents?: AgentMachineResponse[]
-  tokens?: AgentEnrollmentTokenSummary[]
-  jobs?: AgentJobResponse[]
-  isLoading?: boolean
-}) {
-  const { t } = useTranslation()
-  const setupCommand = buildAgentInstallCommand(
-    defaultAgentServerUrl,
-    '<enrollment-token>',
-    '<machine-name>'
-  )
-  const macosSetupCommand = buildAgentInstallCommand(
-    defaultAgentServerUrl,
-    '<enrollment-token>',
-    '<machine-name>',
-    'borg1',
-    'current',
-    'macos'
-  )
-  const agentsById = useMemo(() => {
-    return new Map(agents.map((agent) => [agent.id, agent]))
-  }, [agents])
-
-  return (
-    <Box>
-      <PageHeader
-        title={t('managedAgents.page.title')}
-        subtitle={t('managedAgents.page.subtitle')}
-        actions={
-          <>
-            <IconButton
-              aria-label={t('managedAgents.page.refresh')}
-              title={t('managedAgents.page.refresh')}
-            >
-              <RefreshCw size={20} />
-            </IconButton>
-            <Button variant="contained" startIcon={<Plus size={18} />}>
-              {t('managedAgents.page.addAgent')}
-            </Button>
-          </>
-        }
-      />
-
-      <AgentSetupGuide command={setupCommand} macosCommand={macosSetupCommand} onCopy={() => {}} />
-
-      <PageTabs value={activeTab} onChange={() => {}}>
-        <Tab label={t('managedAgents.page.tabs.agents')} value="agents" />
-        <Tab label={t('managedAgents.page.tabs.jobs')} value="jobs" />
-        <Tab label={t('managedAgents.page.tabs.tokens')} value="tokens" />
-      </PageTabs>
-
-      {isLoading ? (
-        <Stack spacing={2}>
-          {[0, 1, 2].map((index) => (
-            <Skeleton key={index} variant="rounded" height={96} sx={{ borderRadius: 2 }} />
-          ))}
-        </Stack>
-      ) : null}
-
-      {!isLoading && activeTab === 'agents' ? (
-        <AgentList
-          agents={agents}
-          serverUrl={defaultAgentServerUrl}
-          onCopy={() => {}}
-          onRevoke={() => {}}
-          onDelete={() => {}}
-          onViewLogs={() => {}}
-          isRevoking={false}
-          isDeleting={false}
-        />
-      ) : null}
-
-      {!isLoading && activeTab === 'jobs' ? (
-        <JobsTable
-          jobs={jobs}
-          agentsById={agentsById}
-          onCancel={() => {}}
-          onViewLogs={() => {}}
-          isCanceling={false}
-        />
-      ) : null}
-
-      {!isLoading && activeTab === 'tokens' ? (
-        <TokensTable tokens={tokens} onRevoke={() => {}} isRevoking={false} />
-      ) : null}
-    </Box>
-  )
-}
-
-export function ManagedAgentsPlanGate({
-  defaultAgentServerUrl,
-  activeTab = 'agents',
-  agents = EMPTY_AGENTS,
-  tokens = EMPTY_TOKENS,
-  jobs = EMPTY_JOBS,
-  isLoading = false,
-}: {
-  defaultAgentServerUrl: string
-  activeTab?: PageTab
-  agents?: AgentMachineResponse[]
-  tokens?: AgentEnrollmentTokenSummary[]
-  jobs?: AgentJobResponse[]
-  isLoading?: boolean
-}) {
-  const { t } = useTranslation()
-
-  return (
-    <PlanGate
-      feature="managed_agents"
-      message={t('managedAgents.planGate.message')}
-      surface={MANAGED_AGENTS_ANALYTICS_SECTION}
-      operation="view_page_gate"
-      preview={
-        <ManagedAgentsPreview
-          defaultAgentServerUrl={defaultAgentServerUrl}
-          activeTab={activeTab}
-          agents={agents}
-          tokens={tokens}
-          jobs={jobs}
-          isLoading={isLoading}
-        />
-      }
-    >
-      <Box />
-    </PlanGate>
-  )
-}
-
 export default function ManagedAgents() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { hasGlobalPermission } = useAuth()
   const { trackSystem, EventAction } = useAnalytics()
-  const { trackFeatureUsed } = useFeatureAnalytics()
-  const { can } = usePlan()
   const canManageAgents = hasGlobalPermission('settings.ssh.manage')
   const [activeTab, setActiveTab] = useState<PageTab>('agents')
   const [addAgentDialogOpen, setAddAgentDialogOpen] = useState(false)
@@ -389,7 +246,6 @@ export default function ManagedAgents() {
     []
   )
 
-  const hasManagedAgentsPlan = can('managed_agents')
   const canReadManagedAgents = canManageAgents
 
   const agentsQuery = useQuery({
@@ -453,12 +309,6 @@ export default function ManagedAgents() {
         has_default_path: Boolean(payload.default_path),
         expires_never: Boolean(payload.expires_never),
       })
-      trackFeatureUsed('managed_agents', {
-        surface: MANAGED_AGENTS_ANALYTICS_SECTION,
-        operation: 'create_enrollment_token',
-        has_default_path: Boolean(payload.default_path),
-        expires_never: Boolean(payload.expires_never),
-      })
       toast.success(t('managedAgents.page.toasts.tokenCreated'))
     },
     onError: (error: unknown) => {
@@ -474,10 +324,6 @@ export default function ManagedAgents() {
         section: MANAGED_AGENTS_ANALYTICS_SECTION,
         operation: 'revoke_enrollment_token',
       })
-      trackFeatureUsed('managed_agents', {
-        surface: MANAGED_AGENTS_ANALYTICS_SECTION,
-        operation: 'revoke_enrollment_token',
-      })
       toast.success(t('managedAgents.page.toasts.tokenRevoked'))
     },
     onError: (error: unknown) => {
@@ -491,10 +337,6 @@ export default function ManagedAgents() {
       queryClient.invalidateQueries({ queryKey: ['managed-agents'] })
       trackSystem(EventAction.DELETE, {
         section: MANAGED_AGENTS_ANALYTICS_SECTION,
-        operation: 'revoke_agent',
-      })
-      trackFeatureUsed('managed_agents', {
-        surface: MANAGED_AGENTS_ANALYTICS_SECTION,
         operation: 'revoke_agent',
       })
       toast.success(t('managedAgents.page.toasts.agentRevoked'))
@@ -514,10 +356,6 @@ export default function ManagedAgents() {
         section: MANAGED_AGENTS_ANALYTICS_SECTION,
         operation: 'delete_agent',
       })
-      trackFeatureUsed('managed_agents', {
-        surface: MANAGED_AGENTS_ANALYTICS_SECTION,
-        operation: 'delete_agent',
-      })
       toast.success(t('managedAgents.page.toasts.agentDeleted'))
     },
     onError: (error: unknown) => {
@@ -531,10 +369,6 @@ export default function ManagedAgents() {
       queryClient.invalidateQueries({ queryKey: ['managed-agents'] })
       trackSystem(EventAction.START, {
         section: MANAGED_AGENTS_ANALYTICS_SECTION,
-        operation: 'upgrade_agent',
-      })
-      trackFeatureUsed('managed_agents', {
-        surface: MANAGED_AGENTS_ANALYTICS_SECTION,
         operation: 'upgrade_agent',
       })
       toast.success(
@@ -567,11 +401,6 @@ export default function ManagedAgents() {
         operation: 'cancel_job',
         job_id_present: Boolean(jobId),
       })
-      trackFeatureUsed('managed_agents', {
-        surface: MANAGED_AGENTS_ANALYTICS_SECTION,
-        operation: 'cancel_job',
-        job_id_present: Boolean(jobId),
-      })
       toast.success(t('managedAgents.page.toasts.cancellationRequested'))
     },
     onError: (error: unknown) => {
@@ -583,19 +412,6 @@ export default function ManagedAgents() {
     return <Navigate to="/dashboard" replace />
   }
 
-  if (!hasManagedAgentsPlan) {
-    return (
-      <ManagedAgentsPlanGate
-        defaultAgentServerUrl={defaultAgentServerUrl}
-        activeTab={activeTab}
-        agents={agents}
-        tokens={tokens}
-        jobs={jobs}
-        isLoading={isLoading}
-      />
-    )
-  }
-
   const handleCopy = async (value: string, source = 'unknown') => {
     if (!(await copyText(value))) {
       toast.error(t('common.errors.copyFailed'))
@@ -603,11 +419,6 @@ export default function ManagedAgents() {
     }
     trackSystem(EventAction.VIEW, {
       section: MANAGED_AGENTS_ANALYTICS_SECTION,
-      operation: 'copy_command',
-      source,
-    })
-    trackFeatureUsed('managed_agents', {
-      surface: MANAGED_AGENTS_ANALYTICS_SECTION,
       operation: 'copy_command',
       source,
     })
@@ -657,10 +468,6 @@ export default function ManagedAgents() {
               onClick={() => {
                 trackSystem(EventAction.VIEW, {
                   section: MANAGED_AGENTS_ANALYTICS_SECTION,
-                  operation: 'open_add_agent_dialog',
-                })
-                trackFeatureUsed('managed_agents', {
-                  surface: MANAGED_AGENTS_ANALYTICS_SECTION,
                   operation: 'open_add_agent_dialog',
                 })
                 setAddAgentDialogOpen(true)
@@ -720,22 +527,11 @@ export default function ManagedAgents() {
               operation: 'view_agent_logs',
               status: agent.status,
             })
-            trackFeatureUsed('managed_agents', {
-              surface: MANAGED_AGENTS_ANALYTICS_SECTION,
-              operation: 'view_agent_logs',
-              status: agent.status,
-            })
             setLogsAgent(agent)
           }}
           onRunDiagnostics={async (agent, payload) => {
             trackSystem(EventAction.START, {
               section: MANAGED_AGENTS_ANALYTICS_SECTION,
-              operation: 'run_agent_diagnostics',
-              status: agent.status,
-              has_target: Boolean(payload.target),
-            })
-            trackFeatureUsed('managed_agents', {
-              surface: MANAGED_AGENTS_ANALYTICS_SECTION,
               operation: 'run_agent_diagnostics',
               status: agent.status,
               has_target: Boolean(payload.target),
@@ -758,12 +554,6 @@ export default function ManagedAgents() {
           onViewLogs={(job) => {
             trackSystem(EventAction.VIEW, {
               section: MANAGED_AGENTS_ANALYTICS_SECTION,
-              operation: 'view_job_logs',
-              job_type: getJobKind(job),
-              status: job.status,
-            })
-            trackFeatureUsed('managed_agents', {
-              surface: MANAGED_AGENTS_ANALYTICS_SECTION,
               operation: 'view_job_logs',
               job_type: getJobKind(job),
               status: job.status,

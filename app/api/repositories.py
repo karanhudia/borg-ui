@@ -187,7 +187,6 @@ AGENT_RCLONE_SYNC_CAPABILITY = "repository.rclone_sync"
 AGENT_REPOSITORY_INIT_CAPABILITY = "repository.init"
 DIRECT_RCLONE_STORAGE_BACKEND = "rclone_direct"
 RCLONE_FEATURE = "rclone"
-MANAGED_AGENTS_FEATURE = "managed_agents"
 ACTIVE_MAINTENANCE_JOB_STATUSES = ("pending", "running")
 
 # Initialize Borg interface
@@ -1614,10 +1613,6 @@ def _payload_uses_rclone(data: Union[RepositoryCreate, RepositoryImport]) -> boo
 
 def _require_rclone_feature(db: Session) -> None:
     require_feature_access(db, RCLONE_FEATURE)
-
-
-def _require_managed_agents_feature(db: Session) -> None:
-    require_feature_access(db, MANAGED_AGENTS_FEATURE)
 
 
 def _is_direct_rclone_payload(
@@ -3551,8 +3546,6 @@ async def create_repository(
         _validate_upload_ratelimit_kib(repo_data.upload_ratelimit_kib)
         if _payload_uses_rclone(repo_data):
             _require_rclone_feature(db)
-        if executor_type == "agent":
-            _require_managed_agents_feature(db)
         if _is_direct_rclone_payload(repo_data):
             return await _create_direct_rclone_repository_record(
                 repo_data, current_user, db
@@ -3964,8 +3957,6 @@ async def import_repository(
         _validate_upload_ratelimit_kib(repo_data.upload_ratelimit_kib)
         if _payload_uses_rclone(repo_data):
             _require_rclone_feature(db)
-        if executor_type == "agent":
-            _require_managed_agents_feature(db)
         if _is_direct_rclone_payload(repo_data):
             return await _import_direct_rclone_repository_record(
                 repo_data, current_user, db
@@ -4919,8 +4910,6 @@ async def update_repository(
             existing_direct_rclone_repository and bool(update_data)
         ):
             _require_rclone_feature(db)
-        if target_executor_type == "agent":
-            _require_managed_agents_feature(db)
         sync_cloud_mirror_after_update = False
         index_mode_changed = False
         if requested_rclone_updates:
