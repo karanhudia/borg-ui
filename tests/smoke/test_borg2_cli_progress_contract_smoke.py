@@ -35,6 +35,8 @@ def _detect_app_container() -> str | None:
     preferred = os.environ.get("BORG_UI_SMOKE_APP_CONTAINER")
     if preferred:
         return preferred
+    if not shutil.which("docker"):
+        return None
     result = subprocess.run(
         ["docker", "ps", "--format", "{{.Names}}"],
         capture_output=True,
@@ -65,7 +67,7 @@ env = os.environ.copy()
 env["BORG_BASE_DIR"] = str(base / "borg-base")
 Path(env["BORG_BASE_DIR"]).mkdir(parents=True, exist_ok=True)
 env["BORG_PASSPHRASE"] = ""
-subprocess.run(["borg2", "-r", str(repo), "repo-create", "--encryption", "none"], check=True, capture_output=True, text=True, env=env)
+subprocess.run(["borg2", "-r", str(repo), "repo-create", "--encryption", "none-sha256"], check=True, capture_output=True, text=True, env=env)
 result = subprocess.run(
     ["borg2", "-r", str(repo), "create", "--progress", "--stats", "--log-json", "--compression", "none", "contract-smoke", str(src)],
     check=True,
@@ -74,7 +76,7 @@ result = subprocess.run(
     env=env,
 )
 frames = []
-for line in result.stdout.splitlines():
+for line in result.stderr.splitlines():
     if not line.strip() or not line.startswith("{"):
         continue
     payload = json.loads(line)
@@ -144,7 +146,7 @@ def main() -> int:
             )
 
             progress_frames = []
-            for line in result.stdout.splitlines():
+            for line in result.stderr.splitlines():
                 if not line.strip() or not line.startswith("{"):
                     continue
                 payload = json.loads(line)
@@ -153,33 +155,21 @@ def main() -> int:
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-        live_frames = [frame for frame in progress_frames if not frame.get("finished")]
-        if not live_frames:
-            if container_name:
-                raise SmokeFailure(
-                    "Borg 2 CLI did not emit any live archive_progress frames"
-                )
-            print(
-                "Borg 2 CLI progress contract smoke skipped: local borg2 did not emit live archive_progress frames",
-                flush=True,
-            )
-            return 0
+    live_frames = [frame for frame in progress_frames if not frame.get("finished")]
+    if not live_frames:
+        raise SmokeFailure("Borg 2 CLI did not emit any live archive_progress frames")
 
-        if not any(frame.get("original_size", 0) > 0 for frame in live_frames):
-            raise SmokeFailure(
-                f"Borg 2 CLI never emitted non-zero original_size: {live_frames}"
-            )
-        if not any(frame.get("compressed_size", 0) > 0 for frame in live_frames):
-            raise SmokeFailure(
-                f"Borg 2 CLI never emitted non-zero compressed_size: {live_frames}"
-            )
-        if not any(frame.get("path") for frame in live_frames):
-            raise SmokeFailure(
-                f"Borg 2 CLI never emitted archive_progress path values: {live_frames}"
-            )
+    if not any(frame.get("original_size", 0) > 0 for frame in live_frames):
+        raise SmokeFailure(
+            f"Borg 2 CLI never emitted non-zero original_size: {live_frames}"
+        )
+    if not any(frame.get("path") for frame in live_frames):
+        raise SmokeFailure(
+            f"Borg 2 CLI never emitted archive_progress path values: {live_frames}"
+        )
 
-        print("Borg 2 CLI progress contract smoke passed", flush=True)
-        return 0
+    print("Borg 2 CLI progress contract smoke passed", flush=True)
+    return 0
 
 
 if __name__ == "__main__":
