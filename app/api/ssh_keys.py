@@ -2276,7 +2276,7 @@ async def trust_connection_host_key(
 
 
 @router.delete("/connections/{connection_id}/host-key")
-def forget_connection_host_key(
+async def forget_connection_host_key(
     connection_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
