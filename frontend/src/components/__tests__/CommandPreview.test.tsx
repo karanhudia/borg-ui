@@ -125,7 +125,7 @@ describe('CommandPreview', () => {
           /borg2 -r \/backups\/repo repo-create --encryption aes256-ocb --key-location repokey/
         )
       ).toBeInTheDocument()
-      expect(screen.getByText(/borg2 create/)).toBeInTheDocument()
+      expect(screen.getByText(/borg2 -r \/backups\/repo create /)).toBeInTheDocument()
     })
 
     it('renders only backup step for import mode (no step number)', () => {
@@ -198,6 +198,53 @@ describe('CommandPreview', () => {
       // Should appear in init command
       const matches = screen.getAllByText(/--remote-path/)
       expect(matches.length).toBeGreaterThanOrEqual(1)
+    })
+
+    it('shows the remote path as BORG_REMOTE_PATH for Borg 2', () => {
+      // Borg 2 has no --remote-path; a shown command with it would be one
+      // Borg rejects
+      render(
+        <CommandPreview
+          mode="create"
+          borgVersion={2}
+          repositoryPath="/backups/repo"
+          encryption="repokey-aes-ocb"
+          remotePath="/usr/local/bin/borg2"
+          sourceDirs={['/data']}
+          repositoryMode="full"
+          dataSource="local"
+        />
+      )
+
+      expect(
+        screen.getByText(
+          'BORG_REMOTE_PATH=/usr/local/bin/borg2 borg2 -r /backups/repo repo-create --encryption aes256-ocb --key-location repokey'
+        )
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          /^BORG_REMOTE_PATH=\/usr\/local\/bin\/borg2 borg2 -r \/backups\/repo create --progress --stats --compression lz4 \S+ \/data$/
+        )
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/--remote-path/)).not.toBeInTheDocument()
+    })
+
+    it('quotes a Borg 2 remote command that holds spaces', () => {
+      render(
+        <CommandPreview
+          mode="create"
+          borgVersion={2}
+          repositoryPath="/backups/repo"
+          encryption="repokey-aes-ocb"
+          remotePath="sudo -n -H /opt/borg2"
+          sourceDirs={['/data']}
+          repositoryMode="full"
+          dataSource="local"
+        />
+      )
+
+      const withEnv = screen.getAllByText(/BORG_REMOTE_PATH='sudo -n -H \/opt\/borg2' borg2 /)
+      expect(withEnv.length).toBeGreaterThanOrEqual(2)
     })
   })
 
@@ -385,7 +432,7 @@ describe('CommandPreview', () => {
       )
 
       expect(screen.getByText('Command Preview')).toBeInTheDocument()
-      expect(screen.getByText(/borg2 create/)).toBeInTheDocument()
+      expect(screen.getByText(/borg2 -r \/backups\/repo create /)).toBeInTheDocument()
       expect(screen.queryByText(/Step 1:/)).not.toBeInTheDocument()
     })
 

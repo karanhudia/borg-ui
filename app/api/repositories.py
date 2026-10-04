@@ -4761,11 +4761,12 @@ async def _verify_updated_passphrase(
     value is never stored. Runs the command of the info route."""
     router = BorgRouter(repository)
     cmd = router.build_repo_info_command(repository.path)
-    if remote_path := effective_repository_remote_path(repository):
-        cmd.extend(["--remote-path", remote_path])
     use_bypass_lock, _ = _resolve_bypass_lock(repository, db, "bypass_lock_on_info")
-    if use_bypass_lock and not router.is_v2:
-        cmd.append("--bypass-lock")
+    cmd.extend(
+        router.remote_command_options(
+            effective_repository_remote_path(repository), bypass_lock=use_bypass_lock
+        )
+    )
 
     # Preparing the command can commit its session (a host key pinned on
     # first use). A session of its own keeps the pending update out of that.

@@ -274,10 +274,10 @@ class BorgRouter:
         if self.is_v2:
             return []
         options: List[str] = []
-        if bypass_lock:
-            options.append("--bypass-lock")
         if remote_path:
             options.extend(["--remote-path", remote_path])
+        if bypass_lock:
+            options.append("--bypass-lock")
         return options
 
     def prepare_env(self, env: dict) -> dict:

@@ -150,9 +150,9 @@ def test_the_router_hands_out_command_options_for_borg1_only():
 
     assert borg1.remote_command_options("/opt/borg") == ["--remote-path", "/opt/borg"]
     assert borg1.remote_command_options("/opt/borg", bypass_lock=True) == [
-        "--bypass-lock",
         "--remote-path",
         "/opt/borg",
+        "--bypass-lock",
     ]
     assert borg1.remote_command_options(None) == []
     # Borg 2 has neither option: BORG_REMOTE_PATH carries the remote command

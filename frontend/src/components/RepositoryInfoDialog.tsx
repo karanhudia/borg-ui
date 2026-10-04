@@ -34,7 +34,12 @@ import PlanGate from './shared/PlanGate'
 import UpgradePrompt from './UpgradePrompt'
 import type { Repository, RepositoryStorage } from '../types'
 import { isV2Repo } from '../utils/repoCapabilities'
-import { generateBorgInitCommand } from '../utils/borgUtils'
+import {
+  borg2CanCreateWith,
+  generateBorgInitCommand,
+  remotePathParts,
+  shellQuote,
+} from '../utils/borgUtils'
 import { copyText } from '../utils/clipboard'
 
 interface RepositoryInfoDialogProps {
@@ -69,25 +74,16 @@ interface RecoveryCommand {
   command: string
 }
 
-const SAFE_SHELL_ARG_PATTERN = /^[A-Za-z0-9_@%+=:,./-]+$/
-
-function shellQuote(value: string): string {
-  if (value && SAFE_SHELL_ARG_PATTERN.test(value)) {
-    return value
-  }
-
-  return `'${value.replace(/'/g, "'\\''")}'`
-}
-
 function buildCheckCommand(repository: Repository, repair = false): string {
   const borgVersion = repository.borg_version === 2 ? 2 : 1
   const binary = borgVersion === 2 ? 'borg2' : 'borg'
   const remotePath = typeof repository.remote_path === 'string' ? repository.remote_path.trim() : ''
-  const remotePathFlag = remotePath ? ` --remote-path ${shellQuote(remotePath)}` : ''
+  const { flag, envPrefix } = remotePathParts(borgVersion, remotePath)
+  const remotePathFlag = flag ? ` ${flag.trimEnd()}` : ''
   const repositoryPath = shellQuote(repository.path)
 
   if (borgVersion === 2) {
-    return `${binary} -r ${repositoryPath} check${repair ? ' --repair' : ''}${remotePathFlag}`
+    return `${envPrefix}${binary} -r ${repositoryPath} check${repair ? ' --repair' : ''}`
   }
 
   return `${binary} check${repair ? ' --repair' : ''}${remotePathFlag} ${repositoryPath}`
@@ -99,7 +95,7 @@ function buildRecoveryCommands(
 ): RecoveryCommand[] {
   const borgVersion = repository.borg_version === 2 ? 2 : 1
   const remotePath = typeof repository.remote_path === 'string' ? repository.remote_path.trim() : ''
-  const remotePathFlag = remotePath ? `--remote-path ${shellQuote(remotePath)} ` : ''
+  const { flag: remotePathFlag, envPrefix } = remotePathParts(borgVersion, remotePath)
   const encryption =
     typeof repository.encryption === 'string' && repository.encryption.trim()
       ? repository.encryption.trim()
@@ -107,7 +103,7 @@ function buildRecoveryCommands(
         ? 'repokey-aes-ocb'
         : 'repokey'
 
-  return [
+  const commands: RecoveryCommand[] = [
     {
       key: 'check',
       label: t('repositoryInfoDialog.recovery.checkCommand'),
@@ -118,15 +114,23 @@ function buildRecoveryCommands(
       label: t('repositoryInfoDialog.recovery.repairCommand'),
       command: buildCheckCommand(repository, true),
     },
+  ]
+  // no init for a mode Borg 2 can no longer create a repository with
+  if (borgVersion === 2 && !borg2CanCreateWith(encryption)) return commands
+
+  return [
+    ...commands,
     {
       key: 'init',
       label: t('repositoryInfoDialog.recovery.initCommand'),
-      command: generateBorgInitCommand({
-        repositoryPath: shellQuote(repository.path),
-        borgVersion,
-        encryption,
-        remotePathFlag,
-      }),
+      command:
+        envPrefix +
+        generateBorgInitCommand({
+          repositoryPath: shellQuote(repository.path),
+          borgVersion,
+          encryption,
+          remotePathFlag,
+        }),
     },
   ]
 }
