@@ -61,7 +61,6 @@ interface RepositoryWizardProps {
   mode: 'create' | 'edit' | 'import'
   repository?: Repository
   onSubmit: (data: RepositoryData, keyfile?: File | null) => void | Promise<void>
-  canUseManagedAgents?: boolean
   canUseRclone?: boolean
 }
 
@@ -220,7 +219,6 @@ const RepositoryWizard = ({
   mode,
   repository,
   onSubmit,
-  canUseManagedAgents = true,
   canUseRclone = true,
 }: RepositoryWizardProps) => {
   const { track, trackRepository, EventCategory, EventAction } = useAnalytics()
@@ -355,7 +353,7 @@ const RepositoryWizard = ({
     const [connectionsRes, agentsRes, statusRes, remotesRes, providersRes, keysRes] =
       await Promise.allSettled([
         sshKeysAPI.getSSHConnections(),
-        canUseManagedAgents ? managedAgentsAPI.listAgents() : Promise.resolve({ data: [] }),
+        managedAgentsAPI.listAgents(),
         canUseRclone
           ? rcloneAPI.getStatus()
           : Promise.resolve({
@@ -413,7 +411,7 @@ const RepositoryWizard = ({
       console.error('Failed to load rclone providers:', providersRes.reason)
       setRcloneProviders([])
     }
-  }, [canUseManagedAgents, canUseRclone, t])
+  }, [canUseRclone, t])
 
   // Populate form data for edit mode
   const populateEditData = React.useCallback(() => {
@@ -529,7 +527,6 @@ const RepositoryWizard = ({
       const nextUpdates = { ...updates }
 
       if (nextUpdates.repositoryLocation === 'rclone' && !canUseRclone) return prev
-      if (nextUpdates.executionTarget === 'agent' && !canUseManagedAgents) return prev
       if (nextUpdates.cloudMirrorEnabled && !canUseRclone) {
         nextUpdates.cloudMirrorEnabled = false
       }
@@ -812,7 +809,6 @@ const RepositoryWizard = ({
         if (!wizardState.name.trim()) return false
         if (!wizardState.path.trim()) return false
         if (wizardState.repositoryLocation === 'rclone' && !canUseRclone) return false
-        if (wizardState.executionTarget === 'agent' && !canUseManagedAgents) return false
         if (wizardState.repositoryLocation === 'rclone') {
           const directRclonePath = parseDirectRcloneUrl(wizardState.path)
           if (
@@ -893,14 +889,6 @@ const RepositoryWizard = ({
       trackFeatureBlocked('rclone', {
         surface: 'repository_wizard',
         operation: 'submit_cloud_mirror_repository',
-        mode,
-      })
-      return
-    }
-    if (wizardState.executionTarget === 'agent' && !canUseManagedAgents) {
-      trackFeatureBlocked('managed_agents', {
-        surface: 'repository_wizard',
-        operation: 'submit_agent_repository',
         mode,
       })
       return
@@ -1070,10 +1058,6 @@ const RepositoryWizard = ({
         trackFeatureUsed('borg_v2', featureContext)
       }
 
-      if (data.agent_machine_id) {
-        trackFeatureUsed('managed_agents', featureContext)
-      }
-
       if (
         data.storage_backend === 'rclone' ||
         data.storage_backend === 'rclone_direct' ||
@@ -1206,7 +1190,6 @@ const RepositoryWizard = ({
               agentMachines={agentMachines}
               rcloneStatus={rcloneStatus}
               rcloneRemotes={rcloneRemotes}
-              canUseManagedAgents={canUseManagedAgents}
               canUseRclone={canUseRclone}
               directRcloneModeLocked={directRcloneModeLocked}
               dataSource={wizardState.dataSource}

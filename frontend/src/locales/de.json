@@ -271,9 +271,6 @@
     }
   },
   "managedAgents": {
-    "planGate": {
-      "message": "Managed Agents benötigen Pro oder Enterprise. Führe ein Upgrade durch, um entfernte Maschinen zu registrieren und Agent-Jobs auszuführen."
-    },
     "agent": "Agent",
     "page": {
       "title": "Verwaltete Agenten",
@@ -1465,7 +1462,6 @@
     "runTooltipProFeatures": "Dieser Plan verwendet reine Pro-Funktionen: {{features}}. Bearbeite ihn oder upgrade auf Pro, um ihn auszuführen.",
     "proFeatureLabels": {
       "multiRepository": "mehrere Repositories oder parallele Ausführung",
-      "managedAgent": "Managed-Agent-Backups",
       "database": "Datenbank-Backups",
       "container": "Container-Backups"
     },
@@ -1605,7 +1601,6 @@
       "sshSourceDescription": "Remote-Maschine",
       "managedAgent": "Managed Agent",
       "managedAgentDescription": "Pfade von einem registrierten Managed Agent lesen",
-      "managedAgentRequiresPro": "Managed-Agent-Quellen erfordern Pro.",
       "mixedSourceTypesRequiresPro": "Gemischte Quelltypen erfordern Pro. Mehrere Pfade desselben Quelltyps bleiben verfügbar.",
       "agentRepoConstraintBanner": "Dieses Repository läuft auf {{agent}}. Sicherungsquellen müssen vom selben Agent stammen.",
       "agentRepoLockedLocal": "Quellen vom Borg UI-Server können nicht in ein Agent-Repository geschrieben werden.",
@@ -4687,7 +4682,6 @@
       "executionTargetLocalDesc": "Diesen Server oder vorhandene SSH-Remote-Ausführung verwenden",
       "managedAgent": "Verwalteter Agent",
       "managedAgentDesc": "Borg auf einer registrierten Maschine ausführen",
-      "managedAgentRequiresPro": "Managed-Agent-Repositories erfordern Pro.",
       "managedAgentSelectLabel": "Verwalteter Agent",
       "noActiveManagedAgents": "Keine aktiven verwalteten Agenten registriert.",
       "managedAgentFilesystem": "Dateisystem des verwalteten Agenten",
@@ -6628,8 +6622,7 @@
       "sshDesc": "Ein Server, NAS oder PC, den dieser Server per SSH erreicht. Borg UI holt die Dateien von dort.",
       "notSure": "Unsicher? Wähle \"Dateien auf diesem Server\", wenn die Daten dort liegen, wo Borg UI läuft. Wähle \"anderen Rechner\", wenn sie woanders liegen und du dich dort mit Benutzername und Passwort anmelden kannst.",
       "agent": "Anderer Rechner mit dem Borg-UI-Agenten",
-      "agentDesc": "Installiere einen kleinen Agenten auf einem Laptop, Desktop oder Server. Er verbindet sich von sich aus mit Borg UI, funktioniert also auch hinter einer Firewall, und sichert auf seine eigene Festplatte.",
-      "agentPro": "Erfordert einen Pro- oder Enterprise-Plan."
+      "agentDesc": "Installiere einen kleinen Agenten auf einem Laptop, Desktop oder Server. Er verbindet sich von sich aus mit Borg UI, funktioniert also auch hinter einer Firewall, und sichert auf seine eigene Festplatte."
     },
     "folders": {
       "title": "Wähle die Ordner zum Sichern",
