@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-10-04T05:33:16.365Z",
+  "generatedAt": "2026-10-04T07:26:15.851Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1317 visual report",
-    "commitSha": "1abb83062689",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/37179522497"
+    "commitSha": "42652679bc6d",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/37185695969"
   },
   "totals": {
     "baseline": 1134,
     "actual": 1132,
     "compared": 1130,
-    "changed": 13,
+    "changed": 10,
     "added": 2,
     "removed": 4,
-    "unchanged": 1117
+    "unchanged": 1120
   },
   "changed": [
     {
@@ -114,60 +114,6 @@
       "diffPixels": 216,
       "totalPixels": 1024000,
       "diffRatio": 0.0002109375,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "quick-start-steps--destination-agent.png",
-      "baselinePath": "images/baseline/quick-start-steps--destination-agent.png",
-      "actualPath": "images/actual/quick-start-steps--destination-agent.png",
-      "diffPath": "images/diff/quick-start-steps--destination-agent.png",
-      "diffPixels": 28,
-      "totalPixels": 1024000,
-      "diffRatio": 0.00002734375,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "quick-start-steps--destination-ssh-no-default-path--mobile.png",
-      "baselinePath": "images/baseline/quick-start-steps--destination-ssh-no-default-path--mobile.png",
-      "actualPath": "images/actual/quick-start-steps--destination-ssh-no-default-path--mobile.png",
-      "diffPath": "images/diff/quick-start-steps--destination-ssh-no-default-path--mobile.png",
-      "diffPixels": 2803,
-      "totalPixels": 329160,
-      "diffRatio": 0.008515615506136833,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "quick-start-steps--destination-ssh-no-default-path.png",
-      "baselinePath": "images/baseline/quick-start-steps--destination-ssh-no-default-path.png",
-      "actualPath": "images/actual/quick-start-steps--destination-ssh-no-default-path.png",
-      "diffPath": "images/diff/quick-start-steps--destination-ssh-no-default-path.png",
-      "diffPixels": 2785,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0027197265625,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -3383,6 +3329,9 @@
       "fileName": "quick-start-steps--destination-agent--mobile.png"
     },
     {
+      "fileName": "quick-start-steps--destination-agent.png"
+    },
+    {
       "fileName": "quick-start-steps--destination-inside-source--mobile.png"
     },
     {
@@ -3390,6 +3339,12 @@
     },
     {
       "fileName": "quick-start-steps--destination-ssh--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--destination-ssh-no-default-path--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--destination-ssh-no-default-path.png"
     },
     {
       "fileName": "quick-start-steps--destination-ssh.png"
