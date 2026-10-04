@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import asyncio
 from fastapi import FastAPI, Request, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 import structlog
 import os
 from dotenv import load_dotenv
@@ -197,6 +198,22 @@ app = FastAPI(
     redoc_url="/api/redoc",
     root_path=BASE_PATH if BASE_PATH else None,
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError):
+    # FastAPI's default 422 echoes the rejected input, which can be the whole
+    # request body (passphrase included) when a required field is missing.
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": [
+                {"type": e["type"], "loc": e["loc"], "msg": e["msg"]}
+                for e in exc.errors()
+            ]
+        },
+    )
+
 
 if BASE_PATH:
     app.add_middleware(BasePathMiddleware, base_path=BASE_PATH)
