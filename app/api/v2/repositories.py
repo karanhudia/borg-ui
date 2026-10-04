@@ -264,7 +264,7 @@ async def _rinfo(
 
 
 @router.get("/encryption-modes")
-async def list_encryption_modes(current_user: User = Depends(get_current_user)):
+def list_encryption_modes(current_user: User = Depends(get_current_user)):
     """Return supported encryption modes for Borg 2 repositories."""
     return {"encryption_modes": BORG2_ENCRYPTION_MODES}
 

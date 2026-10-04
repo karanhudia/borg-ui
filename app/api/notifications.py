@@ -140,7 +140,7 @@ class TestNotificationRequest(BaseModel):
 
 # Endpoints
 @router.get("", response_model=List[NotificationSettingsResponse])
-async def list_notification_settings(
+def list_notification_settings(
     db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """List all notification settings."""
@@ -149,7 +149,7 @@ async def list_notification_settings(
 
 
 @router.get("/{setting_id}", response_model=NotificationSettingsResponse)
-async def get_notification_setting(
+def get_notification_setting(
     setting_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

@@ -334,7 +334,7 @@ def _proxy_query_params(request: Request) -> list[tuple[str, str]]:
 
 
 @router.get("", response_model=list[RemoteClientResponse])
-async def list_remote_clients(
+def list_remote_clients(
     _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):

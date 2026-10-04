@@ -301,7 +301,7 @@ async def start_restore(
 
 
 @router.get("/jobs")
-async def get_restore_jobs(
+def get_restore_jobs(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     limit: int = 50,
@@ -359,7 +359,7 @@ async def get_restore_jobs(
 
 
 @router.get("/status/{job_id}")
-async def get_restore_status(
+def get_restore_status(
     job_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

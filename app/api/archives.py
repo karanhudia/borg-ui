@@ -765,7 +765,7 @@ async def download_folder_from_archive(
 
 # Delete job status endpoints
 @router.get("/delete-jobs/{job_id}")
-async def get_delete_job_status(
+def get_delete_job_status(
     job_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

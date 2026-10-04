@@ -1862,7 +1862,7 @@ async def unregister_agent(
 
 
 @router.get("/jobs/poll", response_model=AgentJobPollResponse)
-async def poll_jobs(
+def poll_jobs(
     limit: int = Query(default=1, ge=1, le=10),
     current_agent: AgentMachine = Depends(get_current_agent),
     db: Session = Depends(get_db),
