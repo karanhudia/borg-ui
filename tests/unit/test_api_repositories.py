@@ -629,6 +629,7 @@ class TestRepositoriesCreate:
     def test_create_agent_repository_queues_init_and_waits_before_success(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        _set_plan(test_db, "community")
         agent = AgentMachine(
             name="Laptop",
             agent_id="agt_laptop",
@@ -665,6 +666,7 @@ class TestRepositoriesCreate:
                     "path": "/agent/repo",
                     "encryption": "none",
                     "compression": "lz4",
+                    "borg_version": 1,
                     "source_directories": ["/home/user/docs"],
                     "execution_target": "agent",
                     "agent_machine_id": agent.id,
