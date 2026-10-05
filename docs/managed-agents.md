@@ -410,12 +410,18 @@ Older agents do not have that subcommand, so Borg UI shows an equivalent edit
 of the config file instead. Either way it is one command, and you do not have
 to choose between them.
 
-The move does not carry remote upgrade with it. The upgrade helper installs
-only from the address recorded when the endpoint was installed, and refuses
-when the agent is enrolled against another one. From agent 0.1.16 a moved
-endpoint therefore reports no remote upgrade support and is shown as manual
-only, instead of offering an upgrade that the helper then refuses. One
-reinstall that names the new address brings remote upgrade back:
+The upgrade helper installs only from the address in its upgrade record, and
+refuses when the agent is enrolled against another one. From agent 0.1.18
+`set-server` moves the record too when it runs with the rights to write it:
+as root on Linux (the `sudo` in the command above) and as the agent's user on
+macOS. It then prints `Upgrade record: moved to the new server.` and remote
+upgrade keeps working on the new address, if that address is https.
+
+Without those rights, or with an older agent, the move does not carry remote
+upgrade with it. From agent 0.1.16 such an endpoint reports no remote upgrade
+support and is shown as manual only, instead of offering an upgrade that the
+helper then refuses. One reinstall that names the new address brings remote
+upgrade back:
 
 ```bash
 curl -fsSL https://borg.example.com/agent/install.sh | sudo bash -s -- \

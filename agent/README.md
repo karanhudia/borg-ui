@@ -391,6 +391,10 @@ The first implementation supports:
   `existing_files: "continue"` writes into what the directory holds with
   Borg 2's `--continue` instead of being refused (capability
   `repository.restore.existing_files`)
+- from 0.1.18 `set-server` moves the upgrade record along with the config
+  when it may write the record (root on Linux, the agent's user on macOS),
+  so a moved endpoint keeps remote upgrade without a reinstall; without
+  those rights it still names the reinstall
 - cancellation through heartbeat; from 0.1.7 (`jobs.cancel`) a running
   backup, check, prune, compact, restore or archive delete stops as well,
   even while Borg prints nothing
