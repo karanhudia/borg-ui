@@ -411,15 +411,18 @@ ensure_launch_agent() {
 # The PATH both jobs run with. launchd sources no shell profile, so a Borg or
 # rclone this run found on the user's PATH (a pipx ~/.local/bin, say) is out of
 # the job's reach unless its directory is named here (#1290). Those directories
-# follow the forwarders and precede the fixed ones, so the job resolves each
-# name the way this run did. The upgrade job carries the same PATH, which is
-# what lets a remote reinstall find them again.
+# follow the forwarders, in this run's PATH order, and precede the fixed ones,
+# so the job resolves each name the way this run did. The upgrade job carries
+# the same PATH, which is what lets a remote reinstall find them again.
 darwin_service_path() {
-  local path="${AGENT_ROOT}/bin" name dir
+  local path="${AGENT_ROOT}/bin" found=":" name dir entries
   for name in borg borg2 rclone; do
     dir="$(type -P "${name}" || true)"
-    dir="${dir%/*}"
-    [[ "${dir}" == /* && "${dir}" != *:* ]] || continue
+    found+="${dir%/*}:"
+  done
+  IFS=: read -ra entries <<<"${PATH}"
+  for dir in "${entries[@]}"; do
+    [[ "${dir}" == /* && "${found}" == *":${dir}:"* ]] || continue
     case ":${path}:" in *":${dir}:"*) ;; *) path+=":${dir}" ;; esac
   done
   for dir in /opt/homebrew/bin /usr/local/bin /opt/local/bin /usr/bin /bin /usr/sbin /sbin; do

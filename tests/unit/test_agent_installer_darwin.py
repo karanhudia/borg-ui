@@ -360,6 +360,25 @@ def test_a_borg_the_user_installed_elsewhere_is_on_both_jobs_path(mac, tmp_path)
         assert _resolve("borg", path) == str(local_bin / "borg")
 
 
+def test_the_job_resolves_every_name_from_the_directory_this_run_did(mac, tmp_path):
+    """Directories keep the installer's PATH order: rclone found first in one
+    directory must not lose to a copy in the directory borg was found in."""
+    first, second = tmp_path / "first", tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    _write_executable(second / "borg", BORG_STUB)
+    for directory in (first, second):
+        _write_executable(directory / "rclone", "#!/usr/bin/env bash\n")
+    mac["env"]["PATH"] = f"{first}:{second}:{mac['env']['PATH']}"
+
+    result = _run(mac, *ENROL, "--skip-borg-install")
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    path = _job_path(mac, "com.borg-ui.agent")
+    assert _resolve("borg", path) == str(second / "borg")
+    assert _resolve("rclone", path) == str(first / "rclone")
+
+
 def test_a_reinstall_from_the_upgrade_job_keeps_the_users_borg(mac, tmp_path):
     """The upgrade job reinstalls under its own PATH, so the directory has to
     survive that run, not only the one started from the user's shell."""
