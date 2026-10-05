@@ -839,6 +839,51 @@ describe('ManagedAgents', () => {
     )
   }, 60000)
 
+  it('names this server in the reinstall only when the operator says the endpoint was moved', async () => {
+    const user = userEvent.setup()
+    const onCopy = vi.fn()
+    const agent = {
+      id: 9,
+      agent_id: 'agent-moved-9',
+      name: 'moved',
+      hostname: 'moved-01',
+      status: 'online',
+      os: 'linux',
+      arch: 'x86_64',
+      agent_version: '0.1.16',
+      borg_versions: [],
+      last_seen_at: '2026-05-18T10:00:00.000Z',
+      created_at: '2026-05-18T09:00:00.000Z',
+      updated_at: '2026-05-18T10:00:00.000Z',
+    } as AgentMachineResponse
+    const props = {
+      open: true,
+      serverUrl: 'https://borg-ui.example.com',
+      onCancel: vi.fn(),
+      onCopy,
+    }
+
+    const { rerender } = renderWithProviders(<AgentReinstallDialog {...props} agent={agent} />)
+    const dialog = screen.getByRole('dialog', { name: /reinstall agent/i })
+    const moved = within(dialog).getByRole('checkbox', { name: /moved to this server/i })
+    // Off by default: the browser's address is not always the one agents use,
+    // and recording it on an endpoint that never moved turns its upgrades off.
+    expect(moved).not.toBeChecked()
+
+    await user.click(moved)
+    await user.click(within(dialog).getByLabelText('Copy reinstall command'))
+    expect(onCopy).toHaveBeenLastCalledWith(
+      'curl -fsSL https://borg-ui.example.com/agent/install.sh | sudo bash -s -- --server https://borg-ui.example.com --reinstall'
+    )
+
+    rerender(<AgentReinstallDialog {...props} agent={{ ...agent, id: 10 }} />)
+    expect(
+      within(screen.getByRole('dialog', { name: /reinstall agent/i })).getByRole('checkbox', {
+        name: /moved to this server/i,
+      })
+    ).not.toBeChecked()
+  }, 60000)
+
   it('opens a tokenless reinstall script from an agent card', async () => {
     const user = userEvent.setup()
     const onCopy = vi.fn()

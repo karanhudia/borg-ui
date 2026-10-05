@@ -422,8 +422,12 @@ curl -fsSL https://borg.example.com/agent/install.sh | sudo bash -s -- \
   --server https://borg.example.com --reinstall
 ```
 
-The plain `--reinstall` command keeps the recorded address and says so. On
-macOS the command runs without `sudo`, as the agent's user.
+In Borg UI, open **Reinstall agent** on the endpoint's card and tick **This endpoint
+was moved to this server** to get that command. Leave it off when agents reach
+the server through a different address than your browser does: recording the
+browser's address would turn their remote upgrades off. The plain
+`--reinstall` command keeps the recorded address and says so. On macOS the
+command runs without `sudo`, as the agent's user.
 
 ### Removing an endpoint
 

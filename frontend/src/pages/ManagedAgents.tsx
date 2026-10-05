@@ -14,6 +14,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   Link as MuiLink,
   LinearProgress,
@@ -1578,11 +1579,20 @@ export function AgentReinstallDialog({
   // still change repository formats). Changing Borg is an explicit choice,
   // reset whenever the dialog targets a different agent.
   const [borgInstallMode, setBorgInstallMode] = useState<BorgInstallMode>('skip')
+  // Off by default for the same reason: naming this server records it for
+  // remote upgrades, which breaks an endpoint that reaches it another way.
+  const [movedToThisServer, setMovedToThisServer] = useState(false)
   useEffect(() => {
     setBorgInstallMode('skip')
+    setMovedToThisServer(false)
   }, [agent])
   const platform = platformFromAgentOs(agent?.os)
-  const command = buildAgentReinstallCommand(serverUrl, borgInstallMode, platform)
+  const command = buildAgentReinstallCommand(
+    serverUrl,
+    borgInstallMode,
+    platform,
+    movedToThisServer
+  )
 
   return (
     <ResponsiveDialog
@@ -1634,6 +1644,28 @@ export function AgentReinstallDialog({
               {t('managedAgents.page.reinstallDialog.borgSelectionHint')}
             </Typography>
           </Box>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={movedToThisServer}
+                onChange={(event) => setMovedToThisServer(event.target.checked)}
+                // Flush the box with the content edge; the 9px padding stays
+                // as the touch target.
+                sx={{ mt: -0.75, ml: -1.125 }}
+              />
+            }
+            label={
+              <Stack spacing={0.35}>
+                <Typography sx={{ fontWeight: 700 }}>
+                  {t('managedAgents.page.reinstallDialog.movedToThisServer')}
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  {t('managedAgents.page.reinstallDialog.movedToThisServerHint')}
+                </Typography>
+              </Stack>
+            }
+            sx={{ m: 0, alignItems: 'flex-start' }}
+          />
           <InsecureCommandWarning serverUrl={serverUrl} />
           <CopyableCodeBlock
             value={command}
