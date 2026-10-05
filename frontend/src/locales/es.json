@@ -5818,7 +5818,7 @@
         "backupArchiveNameRequired": "El nombre del archivo es obligatorio",
         "backupRepositoryPathRequired": "La ruta del repositorio es obligatoria",
         "backupSourcePathRequired": "Se requiere al menos una ruta de origen",
-        "capabilityMissing": "Este agente no admite la función requerida",
+        "capabilityMissing": "Este agente no admite la función requerida ({{capability}})",
         "enrollmentExpiryAmbiguous": "Elige solo una opción de caducidad para el token de inscripción",
         "enrollmentExpiryTooShort": "El token de inscripción debe durar al menos cinco minutos",
         "enrollmentNameRequired": "El nombre del token de inscripción es obligatorio",

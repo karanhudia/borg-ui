@@ -664,7 +664,7 @@ class BorgRouter:
             # post-backup flows that have no HTTP context. Translate to a plain
             # error so background maintenance doesn't surface an HTTP-specific
             # exception; the linked maintenance job already records the detail.
-            from app.services.operations.maintenance_start import detail_text
+            from app.utils.http_detail import detail_text
 
             raise RuntimeError(
                 f"agent {maintenance_kind} failed: {detail_text(exc.detail)}"

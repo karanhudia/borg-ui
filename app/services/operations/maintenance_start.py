@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.database.models import Operation, Repository
 from app.services.operations.enqueue import enqueue
 from app.services.operations.job_facade import MAINTENANCE_KINDS
+from app.utils.http_detail import detail_text
 
 logger = structlog.get_logger()
 
@@ -139,26 +140,6 @@ def start_inline_maintenance(
     db.commit()
     db.refresh(operation)
     return operation
-
-
-def detail_text(detail: Any) -> str:
-    """An HTTPException detail as one line: its message or key, as the other
-    detail flatteners do, except that the admission's generic "repository
-    busy" key says which operation holds the repository instead."""
-    from app.services.job_admission import REPOSITORY_OPERATION_ACTIVE_KEY
-
-    if isinstance(detail, dict):
-        message = detail.get("message")
-        if message:
-            return str(message)
-        key = detail.get("key")
-        params = detail.get("params")
-        active = params.get("active_operation") if isinstance(params, dict) else None
-        if key == REPOSITORY_OPERATION_ACTIVE_KEY and active:
-            return f"{active} is active on the repository"
-        if key:
-            return str(key)
-    return str(detail)
 
 
 def failure_text(error: BaseException) -> str:
