@@ -448,7 +448,7 @@ async def create_enrollment_token(
 
 
 @router.get("/enrollment-tokens", response_model=list[AgentEnrollmentTokenSummary])
-async def list_enrollment_tokens(
+def list_enrollment_tokens(
     _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
@@ -462,7 +462,7 @@ async def list_enrollment_tokens(
 @router.post(
     "/enrollment-tokens/{token_id}/revoke", status_code=status.HTTP_204_NO_CONTENT
 )
-async def revoke_enrollment_token(
+def revoke_enrollment_token(
     token_id: int,
     current_user: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
@@ -523,7 +523,7 @@ def _agent_machine_response(
 
 
 @router.get("/agents", response_model=list[AgentMachineResponse])
-async def list_agent_machines(
+def list_agent_machines(
     _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
@@ -553,7 +553,7 @@ async def list_agent_machines(
     "/agents/{agent_machine_id}/desired-version",
     response_model=AgentMachineResponse,
 )
-async def set_agent_desired_version(
+def set_agent_desired_version(
     agent_machine_id: int,
     payload: AgentDesiredVersionRequest,
     _: User = Depends(get_current_admin_user),
@@ -959,7 +959,7 @@ async def list_agent_machine_scripts(
     "/agents/{agent_machine_id}/logs",
     response_model=list[AgentSessionLogEntryResponse],
 )
-async def list_agent_machine_logs(
+def list_agent_machine_logs(
     agent_machine_id: int,
     _: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
@@ -976,7 +976,7 @@ async def list_agent_machine_logs(
 @router.post(
     "/agents/{agent_machine_id}/revoke", status_code=status.HTTP_204_NO_CONTENT
 )
-async def revoke_agent_machine(
+def revoke_agent_machine(
     agent_machine_id: int,
     current_user: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
@@ -1000,7 +1000,7 @@ async def revoke_agent_machine(
 
 
 @router.delete("/agents/{agent_machine_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_agent_machine(
+def delete_agent_machine(
     agent_machine_id: int,
     current_user: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
@@ -1047,7 +1047,7 @@ MAX_AGENT_JOBS_LIMIT = 1000
 
 
 @router.get("/agent-jobs", response_model=list[AgentJobSummaryResponse])
-async def list_agent_jobs(
+def list_agent_jobs(
     limit: int = Query(
         DEFAULT_AGENT_JOBS_LIMIT,
         ge=1,
@@ -1072,7 +1072,7 @@ async def list_agent_jobs(
     "/agent-jobs/{job_id}/logs",
     response_model=list[AgentJobLogEntryResponse],
 )
-async def list_agent_job_logs(
+def list_agent_job_logs(
     job_id: int,
     _: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),

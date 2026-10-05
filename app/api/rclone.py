@@ -2331,7 +2331,7 @@ def _serialize_oauth_credential_status(provider: str, db: Session) -> dict[str, 
 
 
 @router.get("/oauth/credentials", dependencies=[RCLONE_FEATURE_DEPENDENCY])
-async def list_oauth_credentials(
+def list_oauth_credentials(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     _require_admin(current_user)
@@ -2641,7 +2641,7 @@ async def cancel_oauth_session(
 
 
 @router.get("/remotes")
-async def list_remotes(
+def list_remotes(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

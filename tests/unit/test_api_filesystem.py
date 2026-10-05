@@ -753,7 +753,7 @@ class TestFilesystemValidationAndCreateFolder:
             filesystem, "is_borg_repository_ssh", lambda *args, **kwargs: True
         )
 
-        payload = await filesystem.validate_path(
+        payload = filesystem.validate_path(
             path="/remote",
             connection_type="ssh",
             ssh_key_id=ssh_key.id,
@@ -814,7 +814,7 @@ class TestFilesystemValidationAndCreateFolder:
             filesystem, "is_borg_repository_ssh", fake_is_borg_repository_ssh
         )
 
-        payload = await filesystem.validate_path(
+        payload = filesystem.validate_path(
             path="/backups",
             connection_type="ssh",
             ssh_key_id=ssh_key.id,

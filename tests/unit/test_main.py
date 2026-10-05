@@ -478,3 +478,29 @@ class TestStartupBuildsSchema:
         assert called[0] == "ensure_schema", (
             f"the schema has to exist before anything opens a session, got {called[:3]}"
         )
+
+
+def test_validation_error_does_not_echo_submitted_input():
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    # Unauthenticated body validation runs before the handler's auth dependency
+    # only on routes without one, so use a throwaway route.
+    from pydantic import BaseModel
+
+    class Body(BaseModel):
+        name: str
+        passphrase: str
+
+    @app.post("/__test_validation_leak")
+    async def _route(body: Body):
+        return {}
+
+    resp = TestClient(app).post(
+        "/__test_validation_leak", json={"passphrase": "s3cret-pass"}
+    )
+    assert resp.status_code == 422
+    assert "s3cret-pass" not in resp.text
+    assert resp.json()["detail"][0]["loc"] == ["body", "name"]
+    assert "input" not in resp.json()["detail"][0]

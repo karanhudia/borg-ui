@@ -479,7 +479,9 @@ class RemoteBackupService:
             cmd_parts.extend(["--compression", shlex.quote(compression)])
 
         # Custom flags: allowlisted and re-quoted, since this is a shell string
-        custom_flag_list = parse_borg_flags(custom_flags, "create", 1)
+        custom_flag_list = parse_borg_flags(
+            custom_flags, "create", 1, local_paths=False
+        )
         if custom_flag_list:
             cmd_parts.append(shlex.join(custom_flag_list))
 

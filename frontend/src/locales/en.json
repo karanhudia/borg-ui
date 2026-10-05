@@ -6836,18 +6836,19 @@
       "missing": "Nothing here yet",
       "unmeasured": "Too big to measure quickly",
       "latestDump": "Latest dump {{when}}",
-      "staleDump": "Latest dump {{when}}. Older than {{hours}} hours: backups will stop until Immich writes a new one.",
-      "noDump": "No database dump yet. Turn on Administration > Settings > Backup in Immich, or the backup will stop.",
+      "staleDump": "Latest dump {{when}}. Older than {{hours}} hours: backups will stop until {{app}} writes a new one.",
+      "noDump": "No database dump from {{app}} yet: backups will stop until there is one. The notes below say how to turn it on.",
+      "madeBeforeBackup": "Borg UI takes a fresh copy before each backup.",
       "total": "About {{size}} will be backed up.",
       "totalAtLeast": "At least {{size}} will be backed up.",
       "noAccess": "{{user}} can't open this",
       "backUp": "Back up"
     },
-    "missingRoot": "{{path}} does not exist on that machine. Pick the folder that holds Immich's files: the {{hint}}.",
+    "missingRoot": "{{path}} does not exist on that machine. Pick the folder that holds {{app}}'s files: the {{hint}}.",
     "denied": {
       "title": "Borg UI can't open {{path}} as {{user}}",
       "why": "Docker keeps named volumes readable only by root. Borg connects as the same user, so the backup would fail too.",
-      "fixFolder": "Easiest fix: keep Immich's files in a normal folder, as Immich's own compose file does. Set the {{hint}} to a folder such as /srv/immich, move the files there, and restart Immich.",
+      "fixFolder": "Easiest fix: keep {{app}}'s files in a normal folder. Set the {{hint}} to a folder such as /srv/{{id}}, move the files there, and restart {{app}}.",
       "fixAcl": "Or let {{user}} read this volume (needs the acl package on that machine):"
     },
     "goodToKnow": "Good to know",

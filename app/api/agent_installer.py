@@ -2329,7 +2329,7 @@ async def get_agent_installer_checksum(
 
 
 @router.get("/agent/uninstall.sh")
-async def get_agent_uninstaller() -> Response:
+def get_agent_uninstaller() -> Response:
     """The uninstaller this server serves, identical for every caller.
 
     Unauthenticated, matching install.sh beside it. Acceptable because the
@@ -2345,7 +2345,7 @@ async def get_agent_uninstaller() -> Response:
 
 
 @router.get("/agent/dist/")
-async def get_agent_dist_index() -> Response:
+def get_agent_dist_index() -> Response:
     """A find-links index of the agent wheelhouse this image serves.
 
     The installer runs `pip install --no-index --find-links <server>/agent/dist/`,
@@ -2365,7 +2365,7 @@ async def get_agent_dist_index() -> Response:
 
 
 @router.get("/agent/dist/{filename}")
-async def get_agent_wheel(filename: str) -> FileResponse:
+def get_agent_wheel(filename: str) -> FileResponse:
     """Serve one wheel from the agent wheelhouse."""
     # A path parameter never spans '/', but reject anything that is not a plain
     # wheel filename sitting directly in the dist dir, so nothing outside it can be
