@@ -90,3 +90,16 @@ def test_an_agent_from_before_macos_support_is_offered_an_upgrade():
         )
         == "outdated"
     )
+
+
+def test_an_agent_from_before_the_macos_service_path_fix_is_offered_an_upgrade():
+    """From 0.1.15 a macOS install names the directories it found Borg in on
+    the launchd jobs' PATH (#1290), so a server built from this tree must offer
+    0.1.14 agents the upgrade.
+    """
+    assert (
+        compute_agent_upgrade_status(
+            reported="0.1.14", desired=None, available=_pyproject_version()
+        )
+        == "outdated"
+    )

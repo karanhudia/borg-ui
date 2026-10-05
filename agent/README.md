@@ -367,6 +367,10 @@ The first implementation supports:
   the user's Application Support directory, a Homebrew or MacPorts Borg
   reports its install source, and the self-upgrade readiness reads the
   launchd job instead of the systemd units
+- from 0.1.15 a macOS install, `--skip-borg-install` included, adds the
+  directories where it found `borg`, `borg2` and `rclone` to the launchd jobs'
+  PATH, so a Borg installed outside the fixed directories (a pipx
+  `~/.local/bin`, say) is the one the agent runs (#1290)
 - cancellation through heartbeat; from 0.1.7 (`jobs.cancel`) a running
   backup, check, prune, compact, restore or archive delete stops as well,
   even while Borg prints nothing

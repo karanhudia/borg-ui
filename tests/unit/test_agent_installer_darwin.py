@@ -326,6 +326,59 @@ def test_the_agent_job_resolves_borg_through_the_forwarder_directory(mac):
     assert job["StandardOutPath"].startswith(str(mac["home"] / "Library" / "Logs"))
 
 
+def _job_path(mac: dict, label: str) -> str:
+    with (mac["agents"] / f"{label}.plist").open("rb") as handle:
+        return plistlib.load(handle)["EnvironmentVariables"]["PATH"]
+
+
+def _resolve(name: str, path: str) -> str:
+    return subprocess.run(
+        ["/bin/bash", "-c", f"type -P {name}"],
+        capture_output=True,
+        text=True,
+        env={"PATH": path},
+    ).stdout.strip()
+
+
+def test_a_borg_the_user_installed_elsewhere_is_on_both_jobs_path(mac, tmp_path):
+    """#1290: with --skip-borg-install the installer's own PATH found Borg, for
+    example a pipx ~/.local/bin/borg, so launchd's must reach it too, ahead of
+    any other borg in the fixed directories."""
+    local_bin = tmp_path / "home" / ".local" / "bin"
+    local_bin.mkdir(parents=True)
+    _write_executable(local_bin / "borg", BORG_STUB)
+    mac["env"]["PATH"] = f"{local_bin}:{mac['env']['PATH']}"
+
+    result = _run(mac, *ENROL, "--skip-borg-install")
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    root = mac["root"]
+    for label in ("com.borg-ui.agent", "com.borg-ui.agent-upgrade"):
+        path = _job_path(mac, label)
+        assert path.startswith(f"{root}/bin:{local_bin}:"), path
+        assert path.count(str(local_bin)) == 1
+        assert _resolve("borg", path) == str(local_bin / "borg")
+
+
+def test_a_reinstall_from_the_upgrade_job_keeps_the_users_borg(mac, tmp_path):
+    """The upgrade job reinstalls under its own PATH, so the directory has to
+    survive that run, not only the one started from the user's shell."""
+    local_bin = tmp_path / "home" / ".local" / "bin"
+    local_bin.mkdir(parents=True)
+    _write_executable(local_bin / "borg", BORG_STUB)
+    stubs = mac["env"]["PATH"].split(":", 1)[0]
+    mac["env"]["PATH"] = f"{local_bin}:{mac['env']['PATH']}"
+    _run(mac, *ENROL, "--skip-borg-install")
+
+    mac["env"]["PATH"] = f"{stubs}:{_job_path(mac, 'com.borg-ui.agent-upgrade')}"
+    result = _run(mac, "--reinstall")
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    path = _job_path(mac, "com.borg-ui.agent")
+    assert _resolve("borg", path) == str(local_bin / "borg")
+    assert path.count(str(local_bin)) == 1
+
+
 def test_the_upgrade_job_watches_the_trigger_and_the_agent_is_ready_for_it(mac):
     _run(mac, *ENROL, "--borg-version", "1")
     root = mac["root"]
