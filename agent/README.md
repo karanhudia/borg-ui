@@ -391,6 +391,10 @@ The first implementation supports:
   `existing_files: "continue"` writes into what the directory holds with
   Borg 2's `--continue` instead of being refused (capability
   `repository.restore.existing_files`)
+- from 0.1.18 a Borg 2 backup of a repository behind rclone (`rclone:`
+  URL) takes the job's upload limit as rclone's bandwidth limit
+  (`RCLONE_BWLIMIT` in the create command's environment); other Borg 2
+  backups still have none
 - cancellation through heartbeat; from 0.1.7 (`jobs.cancel`) a running
   backup, check, prune, compact, restore or archive delete stops as well,
   even while Borg prints nothing

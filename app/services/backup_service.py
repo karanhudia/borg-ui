@@ -1964,6 +1964,11 @@ class BackupService:
                 custom_flags=custom_flag_list,
                 upload_ratelimit_kib=effective_upload_ratelimit_kib,
             )
+            # Only the create carries it, not the archive info that follows
+            create_env = {
+                **env,
+                **router.backup_environment(effective_upload_ratelimit_kib),
+            }
 
             backup_paths, backup_cwd = self._resolve_backup_command_paths(
                 processed_source_paths,
@@ -2011,10 +2016,10 @@ class BackupService:
 
             # Execute command - NO LOG FILE FOR MAXIMUM PERFORMANCE
             process = await asyncio.create_subprocess_exec(
-                *with_lock_wait(cmd, env),
+                *with_lock_wait(cmd, create_env),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,  # Merge stderr into stdout
-                env=env,
+                env=create_env,
                 cwd=backup_cwd,  # Use cwd for SSH mounts to get cleaner archive paths
             )
             process_wait_task = asyncio.get_running_loop().create_task(process.wait())

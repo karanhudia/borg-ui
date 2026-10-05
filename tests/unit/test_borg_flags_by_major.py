@@ -174,7 +174,7 @@ def _repository(borg_version, **fields):
 
 
 @pytest.mark.unit
-def test_agent_payload_carries_the_upload_limit_for_borg1_only():
+def test_agent_payload_leaves_the_upload_limit_out_of_a_local_borg2_repository():
     from app.services.repository_executor import build_agent_backup_payload
 
     borg1 = build_agent_backup_payload(_repository(1), "a", source_directories=["/s"])

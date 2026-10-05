@@ -129,3 +129,16 @@ def test_an_agent_from_before_the_per_major_flag_checks_is_offered_an_upgrade():
         )
         == "outdated"
     )
+
+
+def test_an_agent_from_before_the_rclone_upload_limit_is_offered_an_upgrade():
+    """From 0.1.18 a Borg 2 backup behind rclone takes its upload limit as
+    RCLONE_BWLIMIT (#1307), so a server built from this tree must offer 0.1.17
+    agents the upgrade.
+    """
+    assert (
+        compute_agent_upgrade_status(
+            reported="0.1.17", desired=None, available=_pyproject_version()
+        )
+        == "outdated"
+    )

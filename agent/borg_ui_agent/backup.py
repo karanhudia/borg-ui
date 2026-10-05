@@ -188,6 +188,14 @@ class BackupCreatePayload:
             if upload_ratelimit_kib <= 0:
                 raise ValueError("backup.create upload_ratelimit_kib must be positive")
         environment = _extract_environment(payload, repository)
+        if (
+            borg_version == 2
+            and upload_ratelimit_kib
+            and repository_path.strip().startswith("rclone:")
+        ):
+            # Borg 2 has no --upload-ratelimit; its rclone backend runs
+            # rclone, which reads this (K is KiB) (#1307)
+            environment["RCLONE_BWLIMIT"] = f"{upload_ratelimit_kib}K"
 
         return cls(
             repository_path=repository_path.strip(),
@@ -221,8 +229,8 @@ class BackupCreatePayload:
                 "--compression",
                 self.compression,
             ]
-            # No upload_ratelimit_kib: Borg 2.0.0b22 removed --upload-ratelimit,
-            # and a server before agent 0.1.17 still sends a repository's limit.
+            # No --upload-ratelimit: Borg 2.0.0b22 removed it (behind rclone the
+            # limit is RCLONE_BWLIMIT in the environment instead, #1307).
             for pattern in self.exclude_patterns:
                 cmd.extend(["--exclude", pattern])
             cmd.extend(self.custom_flags)

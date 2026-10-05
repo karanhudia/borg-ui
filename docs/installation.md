@@ -713,6 +713,13 @@ Removing Borg UI never touches your repositories.
 > protected by the repository key. A `keyfile` repository of this format
 > whose key file is lost can no longer be unlocked or deleted through Borg.
 >
+> Borg 2 has no upload limit of its own (2.0.0b22 removed
+> `--upload-ratelimit`). A Borg 2 repository behind rclone (an `rclone:`
+> URL) takes the repository's, the plan's or the scheduled upload limit as
+> rclone's bandwidth limit (`RCLONE_BWLIMIT`) for the backup; restores and
+> checks run at full speed. Other Borg 2 repositories have no upload limit.
+> A managed agent does this from 0.1.18.
+>
 > Borg 1 repositories are unaffected.
 
 Then pull and start the new image:
