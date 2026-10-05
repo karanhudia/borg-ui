@@ -382,6 +382,15 @@ The first implementation supports:
   record with the one the agent is enrolled against and reports no
   `self_upgrade` capability when they differ, which is what `set-server`
   leaves behind; `set-server` names the reinstall that brings it back
+- from 0.1.17 custom flags are also checked against the job's Borg major:
+  an option only the other major has (Borg 1's `--upload-ratelimit`,
+  `--noatime` or check's `--save-space`, Borg 2's check
+  `--match-archives`, ...) fails the job before Borg runs, and a Borg 2
+  backup leaves a repository's upload limit out (Borg 2.0.0b22 removed
+  `--upload-ratelimit`); a restore whose target carries
+  `existing_files: "continue"` writes into what the directory holds with
+  Borg 2's `--continue` instead of being refused (capability
+  `repository.restore.existing_files`)
 - cancellation through heartbeat; from 0.1.7 (`jobs.cancel`) a running
   backup, check, prune, compact, restore or archive delete stops as well,
   even while Borg prints nothing

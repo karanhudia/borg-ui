@@ -14,6 +14,7 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import SingletonThreadPool, StaticPool
 
+from app.core.borg_router import BorgRouter
 from app.core.borg_errors import (
     LOCK_CONTENTION_DETAIL_KEY,
     is_lock_contention_exit_code,
@@ -260,10 +261,11 @@ def build_agent_backup_payload(
             parse_borg_flags(
                 custom_flags if custom_flags is not None else repository.custom_flags,
                 "create",
+                repository.borg_version or 1,
             )
         ),
     }
-    effective_upload_ratelimit_kib = (
+    effective_upload_ratelimit_kib = BorgRouter(repository).upload_ratelimit(
         upload_ratelimit_kib
         if upload_ratelimit_kib is not None
         else getattr(repository, "upload_ratelimit_kib", None)

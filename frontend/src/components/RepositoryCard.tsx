@@ -181,7 +181,9 @@ export default function RepositoryCard({
     rcloneStorage?.sync_direction !== 'sshfs_to_remote'
   const canShowDestructiveActions = canManageRepository && capabilities.canDeleteRepository
   const hasSeparatedRepositoryActions = canBreakLock || canShowDestructiveActions
-  const uploadRatelimitLabel = formatUploadRatelimit(repository.upload_ratelimit_kib)
+  // Borg 2 has no upload limit; a stored one has no effect there
+  const uploadRatelimitLabel =
+    repository.borg_version === 2 ? null : formatUploadRatelimit(repository.upload_ratelimit_kib)
 
   // Neither value can move while background work is off: `Last index` has
   // nothing running, and `Last prune` is read from archive listings that no

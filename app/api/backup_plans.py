@@ -1118,6 +1118,40 @@ def _replace_script_hooks(
         )
 
 
+def _validate_flags_for_repository(
+    repo: Repository,
+    *,
+    custom_flags_override: Optional[str],
+    custom_flags: Optional[str],
+    check_extra_flags: Optional[str],
+    run_check_after: bool,
+) -> None:
+    """The plan's flags reach this repository's create, and its check when
+    the plan runs one: refuse an option its Borg major does not have before
+    the link is saved enabled or resumed. With neither a link nor a plan
+    value the backup takes the repository's own flags, as the executors do."""
+    create_flags = next(
+        (
+            flags
+            for flags in (custom_flags_override, custom_flags, repo.custom_flags)
+            if flags is not None
+        ),
+        None,
+    )
+    try:
+        parse_borg_flags(create_flags, "create", repo.borg_version or 1)
+        if run_check_after:
+            parse_borg_flags(check_extra_flags, "check", repo.borg_version or 1)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "key": "backend.errors.repo.invalidBorgFlags",
+                "params": {"reason": f"{repo.name}: {exc}"},
+            },
+        ) from exc
+
+
 def _validate_payload(
     db: Session, user: User, payload: BackupPlanPayload
 ) -> list[Repository]:
@@ -1293,6 +1327,16 @@ def _validate_payload(
                 detail={"key": "backend.errors.backupPlans.observeRepositorySelected"},
             )
         check_repo_access(db, user, repo, "operator")
+        if link.enabled:
+            _validate_flags_for_repository(
+                repo,
+                custom_flags_override=link.custom_flags_override,
+                # as the plan stores it: blank is none, and the backup then
+                # takes the repository's own flags
+                custom_flags=(payload.custom_flags or "").strip() or None,
+                check_extra_flags=payload.check_extra_flags,
+                run_check_after=payload.run_check_after,
+            )
         repos.append(repo)
 
         if link.enabled:
@@ -1626,7 +1670,9 @@ async def create_backup_plan_from_repository(
         plan_name = _unique_backup_plan_name(db, f"{repository.name} Backup Plan")
 
     try:
-        parse_borg_flags(repository.custom_flags, "create")
+        parse_borg_flags(
+            repository.custom_flags, "create", repository.borg_version or 1
+        )
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -1909,6 +1955,13 @@ async def toggle_backup_plan_repository(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail={"key": route.reason_key, "params": route.display_params},
             )
+        _validate_flags_for_repository(
+            repo,
+            custom_flags_override=link.custom_flags_override,
+            custom_flags=plan.custom_flags,
+            check_extra_flags=plan.check_extra_flags,
+            run_check_after=bool(plan.run_check_after),
+        )
         require_backup_plan_feature_access(
             db,
             enabled_repository_count=sum(
