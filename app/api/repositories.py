@@ -75,6 +75,7 @@ from app.core.features import (
 )
 from app.config import settings
 from app.services.mqtt_service import mqtt_service
+from app.services.process_cancel import communicate_or_kill
 from app.services.operations.wipe_facade import (
     WipeJobFacade,
     active_wipe_operation,
@@ -689,7 +690,7 @@ async def _run_repository_command(
             stderr=asyncio.subprocess.PIPE,
             env=env,
         )
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+        stdout, stderr = await communicate_or_kill(process, timeout=timeout)
         return process.returncode, stdout, stderr
     finally:
         try:

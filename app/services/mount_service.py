@@ -28,6 +28,7 @@ from cryptography.fernet import Fernet
 
 from app.utils.ssh_host_validation import ssh_destination
 from app.config import settings
+from app.services.process_cancel import communicate_or_kill
 from app.core.borg_router import BorgRouter
 from app.utils.borg_env import (
     effective_repository_remote_path,
@@ -191,29 +192,6 @@ def _sshfs_volume_stripped_candidate(remote_path: str) -> Optional[str]:
     """
     stripped = _SYNOLOGY_VOLUME_PREFIX.sub("/", (remote_path or "").strip(), count=1)
     return stripped if stripped != remote_path else None
-
-
-async def _communicate_or_kill(
-    process: asyncio.subprocess.Process,
-    *,
-    timeout: float,
-    input: Optional[bytes] = None,
-) -> Tuple[bytes, bytes]:
-    """`communicate` with a deadline that also ends the child.
-
-    `wait_for` only cancels the wait: a hung ssh or sftp would otherwise
-    outlive the check that started it, on a timeout as on a cancellation.
-    """
-    try:
-        return await asyncio.wait_for(process.communicate(input=input), timeout)
-    except (asyncio.TimeoutError, asyncio.CancelledError):
-        if process.returncode is None:
-            try:
-                process.kill()
-            except ProcessLookupError:
-                pass
-            await asyncio.shield(process.wait())
-        raise
 
 
 def _sftp_quote(path: str) -> str:
@@ -1548,7 +1526,7 @@ class MountService:
                 *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
 
-            stdout, stderr = await _communicate_or_kill(process, timeout=10)
+            stdout, stderr = await communicate_or_kill(process, timeout=10)
 
             # A shell that ran the check prints exactly one of the two words.
             # Anything else is an SFTP-only account (or a login banner / forced
@@ -1629,7 +1607,7 @@ class MountService:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        _, stderr = await _communicate_or_kill(
+        _, stderr = await communicate_or_kill(
             process, timeout=15, input=f"{command}\n".encode()
         )
         if process.returncode not in (0, 1):

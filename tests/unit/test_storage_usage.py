@@ -33,7 +33,7 @@ class FakeProcess:
         self.killed = False
         self.waited = False
 
-    async def communicate(self):
+    async def communicate(self, input=None):
         if self._hang:
             await asyncio.sleep(60)
         return self._out

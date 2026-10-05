@@ -6,6 +6,7 @@ import structlog
 from typing import Dict, List
 from app.config import settings
 from app.core.borg_stream import CommandByteStream, CommandLineStream
+from app.services.process_cancel import communicate_or_kill
 from app.utils.borg_env import with_lock_wait
 from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.ssh_utils import public_key_only_ssh_args
@@ -122,9 +123,7 @@ class BorgInterface:
                 env=exec_env,
             )
 
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(), timeout=timeout
-            )
+            stdout, stderr = await communicate_or_kill(process, timeout=timeout)
 
             result = {
                 "return_code": process.returncode,

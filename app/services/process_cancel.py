@@ -10,6 +10,7 @@ the only thing that differed between the copies.
 """
 
 import asyncio
+from typing import Optional, Tuple
 
 import structlog
 
@@ -58,3 +59,28 @@ async def terminate_process(process, job_id: int, label: str) -> bool:
             "Failed to cancel process", job_id=job_id, kind=label, error=str(e)
         )
         return False
+
+
+async def communicate_or_kill(
+    process: asyncio.subprocess.Process,
+    *,
+    timeout: Optional[float],
+    input: Optional[bytes] = None,
+) -> Tuple[bytes, bytes]:
+    """`communicate` with a deadline that also ends the child.
+
+    `wait_for` only cancels the wait: a timed-out or cancelled Borg would
+    otherwise keep running, and keep its repository lock, after the caller
+    has given up on it (#1259).
+    """
+    try:
+        return await asyncio.wait_for(process.communicate(input=input), timeout)
+    except (asyncio.TimeoutError, asyncio.CancelledError):
+        try:
+            process.kill()
+        except ProcessLookupError:
+            # Already gone; raising here would replace the timeout or the
+            # cancellation with an OSError.
+            pass
+        await asyncio.shield(process.wait())
+        raise
