@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor, within } from '@testing-library/react'
 import { QueryClient } from '@tanstack/react-query'
@@ -389,6 +391,35 @@ describe('ManagedAgents', () => {
     await user.click(screen.getByLabelText('Copy install commands'))
 
     expect(onCopy).toHaveBeenCalledWith(expect.stringContaining('git clone'))
+  })
+
+  it('installs and registers the manual agent where the service templates start it', async () => {
+    const user = userEvent.setup()
+    const onCopy = vi.fn()
+    const template = (path: string) =>
+      readFileSync(resolve(__dirname, '../../../../agent/install', path), 'utf8')
+    const unit = template('systemd/borg-ui-agent.service')
+    // launchd expands no ~, so the guide renders /Users/alex/ as $HOME/.
+    const plist = template('launchd/com.borg-ui.agent.plist').replace(/\/Users\/alex\//g, '$HOME/')
+
+    renderWithProviders(<AgentSetupHelpContent command="install" onCopy={onCopy} />)
+    await user.click(screen.getByLabelText('Copy systemd commands'))
+    await user.click(screen.getByLabelText('Copy launchd commands'))
+    const [systemd, launchd] = onCopy.mock.calls.map(([value]) => value as string)
+
+    const [, linuxBinary, linuxConfig] = unit.match(/^ExecStart=(\S+) --config (\S+) run$/m)!
+    const linuxVenv = linuxBinary.replace(/\/bin\/borg-ui-agent$/, '')
+    expect(systemd).toContain(`-m venv ${linuxVenv}\n`)
+    expect(systemd).toContain(`${linuxVenv}/bin/pip install .`)
+    expect(systemd).toContain(`${linuxBinary} \\\n  --config ${linuxConfig} \\\n  register `)
+
+    const [, macBinary, macConfig] = plist.match(
+      /<key>ProgramArguments<\/key>\s*<array>\s*<string>([^<]+)<\/string>\s*<string>--config<\/string>\s*<string>([^<]+)<\/string>/
+    )!
+    const macVenv = macBinary.replace(/\/bin\/borg-ui-agent$/, '')
+    expect(launchd).toContain(`-m venv "${macVenv}"`)
+    expect(launchd).toContain(`"${macVenv}/bin/pip" install .`)
+    expect(launchd).toContain(`"${macBinary}" \\\n  --config "${macConfig}" \\\n  register `)
   })
 
   it('uses a single waiting indicator in the add-agent install command', () => {

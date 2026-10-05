@@ -542,8 +542,8 @@
         },
         "service": {
           "title": "4. Dienstprüfungen",
-          "description": "Das Installationsprogramm aktiviert systemd standardmäßig, damit der Agent Neustarts übersteht. Verwenden Sie diese Befehle nur zum Prüfen oder Reparieren einer manuellen Installation.",
-          "descriptionMacos": "Auf einem Mac ist der Agent ein launchd-Benutzeragent in der Domain des angemeldeten Benutzers. Mit dem ersten Befehl prüfen Sie ihn. Der zweite Block passt die Vorlage an Ihr Home-Verzeichnis an und lädt sie; die Vorlage erwartet den Agent unter ~/Library/Application Support/borg-ui-agent, wo ihn der Installer ablegt."
+          "description": "Das Installationsprogramm aktiviert systemd standardmäßig, damit der Agent Neustarts übersteht. Verwenden Sie diese Befehle nur zum Prüfen oder Reparieren einer manuellen Installation. Führen Sie den zweiten Block im geklonten borg-ui-Verzeichnis aus: Er installiert den Agent nach /opt/borg-ui-agent und registriert ihn in /etc/borg-ui-agent/config.toml, wo die systemd-Unit beides erwartet, und aktiviert dann die Unit.",
+          "descriptionMacos": "Auf einem Mac ist der Agent ein launchd-Benutzeragent in der Domain des angemeldeten Benutzers. Mit dem ersten Befehl prüfen Sie ihn. Führen Sie den zweiten Block im geklonten borg-ui-Verzeichnis aus: Er installiert und registriert den Agent unter ~/Library/Application Support/borg-ui-agent, wo die Vorlage ihn erwartet, passt dann die Vorlage an Ihr Home-Verzeichnis an und lädt sie."
         }
       }
     },
