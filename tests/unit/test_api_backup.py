@@ -613,6 +613,24 @@ class TestBackupStart:
             "BORG_PASSPHRASE": {"value": "repo-secret"}
         }
 
+        # Run again while its job is live (#1266): the live job is reused.
+        for live_status in ("queued", "claimed", "running", "cancel_requested"):
+            agent_job.status = live_status
+            test_db.commit()
+            again = queue_agent_backup_job(
+                test_db, BackupJobFacade(test_db, operation), repo
+            )
+            assert again.id == agent_job.id
+        assert test_db.query(AgentJob).count() == 1
+
+        # Once that job has ended, a run gets a new one.
+        agent_job.status = "failed"
+        test_db.commit()
+        again = queue_agent_backup_job(
+            test_db, BackupJobFacade(test_db, operation), repo
+        )
+        assert again.id != agent_job.id
+
     def test_start_backup_for_agent_repository_rejects_conflict_before_agent_job(
         self, test_client: TestClient, admin_headers, test_db
     ):
