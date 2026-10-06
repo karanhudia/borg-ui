@@ -423,20 +423,30 @@ Older agents do not have that subcommand, so Borg UI shows an equivalent edit
 of the config file instead. Either way it is one command, and you do not have
 to choose between them.
 
-The move does not carry remote upgrade with it. The upgrade helper installs
-only from the address recorded when the endpoint was installed, and refuses
-when the agent is enrolled against another one. From agent 0.1.16 a moved
-endpoint therefore reports no remote upgrade support and is shown as manual
-only, instead of offering an upgrade that the helper then refuses. One
-reinstall that names the new address brings remote upgrade back:
+The upgrade helper installs only from the address in its upgrade record, and
+refuses when the agent is enrolled against another one. From agent 0.1.19
+`set-server` moves the record too when it runs with the rights to write it:
+as root on Linux (the `sudo` in the command above) and as the agent's user on
+macOS. It then prints `Upgrade record: moved to the new server.` and remote
+upgrade keeps working on the new address, if that address is https.
+
+Without those rights, or with an older agent, the move does not carry remote
+upgrade with it. From agent 0.1.16 such an endpoint reports no remote upgrade
+support and is shown as manual only, instead of offering an upgrade that the
+helper then refuses. One reinstall that names the new address brings remote
+upgrade back:
 
 ```bash
 curl -fsSL https://borg.example.com/agent/install.sh | sudo bash -s -- \
   --server https://borg.example.com --reinstall
 ```
 
-The plain `--reinstall` command keeps the recorded address and says so. On
-macOS the command runs without `sudo`, as the agent's user.
+In Borg UI, open **Reinstall agent** on the endpoint's card and tick **This endpoint
+was moved to this server** to get that command. Leave it off when agents reach
+the server through a different address than your browser does: recording the
+browser's address would turn their remote upgrades off. The plain
+`--reinstall` command keeps the recorded address and says so. On macOS the
+command runs without `sudo`, as the agent's user.
 
 ### Removing an endpoint
 

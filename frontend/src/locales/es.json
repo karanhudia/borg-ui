@@ -271,9 +271,6 @@
     }
   },
   "managedAgents": {
-    "planGate": {
-      "message": "Los agentes gestionados requieren Pro o Enterprise. Actualiza para registrar máquinas remotas y ejecutar jobs con agentes."
-    },
     "agent": "Agente",
     "page": {
       "title": "Agentes gestionados",
@@ -363,6 +360,8 @@
         "runAsAgentUser": "Ejecútalo como el usuario con el que se ejecuta el agente, sin sudo.",
         "borgInstallation": "Instalación de Borg",
         "borgSelectionHint": "Seleccionar versiones de Borg actualiza esos binarios en el agente a las versiones que ofrece este servidor. Deje la opción en Omitir salvo que desee un upgrade de Borg.",
+        "movedToThisServer": "Este endpoint se movió a este servidor",
+        "movedToThisServerHint": "Añade --server para que la reinstalación registre esta dirección para los upgrades remotos. Actívalo después de que Cambiar la URL del servidor haya movido el endpoint aquí. Déjalo desactivado si los agentes llegan a este servidor por otra dirección, porque registrar esta desactivaría sus upgrades remotos.",
         "borgOptions": {
           "borg1": {
             "label": "Borg 1.x",
@@ -1157,6 +1156,8 @@
       "stats": {
         "addedToRepository": "Añadido al repositorio",
         "addedHint": "Datos exclusivos de este archivo. Eliminarlo libera al menos esta cantidad.",
+        "addedAtCreation": "Añadido al crearse",
+        "addedAtCreationHint": "Datos que este archivo añadió al crearse. Los archivos posteriores pueden compartirlos, así que eliminarlo puede liberar menos.",
         "filesChanged": "Archivos cambiados",
         "filesChangedNotIndexed": "Aún no indexado",
         "filesChangedUnavailable": "No disponible para este repositorio",
@@ -1469,7 +1470,6 @@
     "runTooltipProFeatures": "Este plan usa funciones solo Pro: {{features}}. Edítalo o actualiza a Pro para ejecutarlo.",
     "proFeatureLabels": {
       "multiRepository": "varios repositorios o ejecución en paralelo",
-      "managedAgent": "copias con agentes gestionados",
       "database": "copias de bases de datos",
       "container": "copias de contenedores"
     },
@@ -1609,7 +1609,6 @@
       "sshSourceDescription": "Máquina remota",
       "managedAgent": "Agente gestionado",
       "managedAgentDescription": "Leer rutas desde un agente gestionado registrado",
-      "managedAgentRequiresPro": "Las fuentes de agente gestionado requieren Pro.",
       "mixedSourceTypesRequiresPro": "Los tipos de fuente mixtos requieren Pro. Varias rutas del mismo tipo de fuente siguen disponibles.",
       "agentRepoConstraintBanner": "Este repositorio se ejecuta en {{agent}}. Las fuentes de copia deben provenir del mismo agente.",
       "agentRepoLockedLocal": "Las fuentes del servidor Borg UI no se pueden enviar a un repositorio de agente.",
@@ -1860,9 +1859,9 @@
       "settings": {
         "archiveNameHelper": "Admite {plan_name}, {repo_name}, {now}, {date}, {time} y {timestamp}.",
         "extraBorgFlagsHelper": "Indicadores de línea de comandos personalizados para borg create (ej., --stats, --progress, --list). Se aplica a cada ejecución de repositorio en este plan.",
-        "uploadSpeedHelper": "MB/s. Vacío significa sin límite. Solo se aplica a repositorios Borg 1; Borg 2 no tiene límite de subida.",
+        "uploadSpeedHelper": "MB/s. Vacío significa sin límite. Se aplica a repositorios Borg 1 y a repositorios Borg 2 detrás de rclone; los demás repositorios Borg 2 no tienen límite de subida.",
         "uploadPoliciesTitle": "Límites de subida programados",
-        "uploadPoliciesHelper": "Las ventanas horarias sustituyen el límite de subida constante. Deja el límite vacío para no limitar. Como el límite constante, solo se aplican a repositorios Borg 1.",
+        "uploadPoliciesHelper": "Las ventanas horarias sustituyen el límite de subida constante. Deja el límite vacío para no limitar. Como el límite constante, se aplican a repositorios Borg 1 y a repositorios Borg 2 detrás de rclone.",
         "addUploadPolicy": "Añadir política de subida",
         "removeUploadPolicy": "Eliminar política de subida",
         "daytimePolicyLabel": "Límite diurno",
@@ -4691,7 +4690,6 @@
       "executionTargetLocalDesc": "Usar este servidor o la ejecución remota SSH existente",
       "managedAgent": "Agente gestionado",
       "managedAgentDesc": "Ejecutar Borg en una máquina inscrita",
-      "managedAgentRequiresPro": "Los repositorios de agente gestionado requieren Pro.",
       "managedAgentSelectLabel": "Agente gestionado",
       "noActiveManagedAgents": "No hay agentes gestionados activos inscritos.",
       "managedAgentFilesystem": "Sistema de archivos del agente gestionado",
@@ -4820,6 +4818,10 @@
       "repositoryPathLabel": "Ruta del repositorio",
       "repositoryPathHelper": "Ruta donde se almacenará el repositorio",
       "borgV2Warning": "La compatibilidad con Borg 2 sigue en beta. No la uses todavía para datos de producción. Por ahora está pensada para entusiastas y pruebas, y requiere el binario borg2 en cualquier host remoto.",
+      "borg2OnlyUrl": "Solo Borg 2 puede abrir esta URL de repositorio.",
+      "borg2PathAbsolute": "Ruta absoluta en el host.",
+      "borg2PathRelative": "Relativa al directorio de inicio de sesión de {{login}}. Empieza con / para una ruta absoluta.",
+      "borg2UrlRelative": "Relativa al directorio de inicio de sesión del usuario SSH. Escribe ssh://host//ruta para una ruta absoluta.",
       "connected": "Conectado",
       "browseFilesystem": "Explorar sistema de archivos"
     },
@@ -5009,6 +5011,7 @@
       "encryption": "Cifrado",
       "encryptionRepokey": "Repokey",
       "encryptionKeyfile": "Archivo de clave",
+      "encryptionAuthenticated": "Autenticado",
       "encryptionNone": "Ninguno",
       "passphrase": "Frase de contraseña",
       "passphraseSet": "••••••••",
@@ -5072,6 +5075,10 @@
         "keyfile-chacha20-poly1305": {
           "label": "Archivo de clave (ChaCha20)",
           "description": "Archivo de clave con ChaCha20"
+        },
+        "authenticated": {
+          "label": "Autenticado (sin cifrado)",
+          "description": "Los datos no se cifran; una clave y una frase de contraseña los protegen contra manipulaciones"
         },
         "none": {
           "label": "Ninguna",
@@ -5218,7 +5225,8 @@
     "customFlagsHint": "Indicadores de línea de comandos personalizados para borg create (ej., --stats, --progress, --list)",
     "uploadSpeedLimit": "Límite de velocidad de subida",
     "uploadSpeedLimitHint": "MB/s. Vacío significa sin límite. La configuración del plan de copia puede sobrescribir este valor predeterminado.",
-    "uploadSpeedLimitBorg2": "Borg 2 no tiene límite de subida. Este ajuste solo se aplica a repositorios Borg 1.",
+    "uploadSpeedLimitBorg2": "Borg 2 no tiene límite de subida. Este ajuste se aplica a repositorios Borg 1 y a repositorios Borg 2 detrás de rclone.",
+    "uploadSpeedLimitRclone": "MB/s. Vacío significa sin límite. Se aplica como límite de ancho de banda de rclone durante las copias, ya que Borg 2 no tiene límite de subida propio.",
     "scripts": "Scripts",
     "scriptsOptional": "(Opcional)",
     "scriptsHint": "Configura scripts en línea o asigna scripts reutilizables de tu Biblioteca de Scripts.",
@@ -6655,8 +6663,7 @@
       "sshDesc": "Un servidor, NAS o PC al que este servidor llega por SSH. Borg UI trae los archivos desde allí.",
       "notSure": "¿No lo tienes claro? Elige \"Archivos en este servidor\" si los datos están donde se ejecuta Borg UI. Elige \"otro equipo\" si están en otro sitio y puedes entrar en él con usuario y contraseña.",
       "agent": "Otro equipo con el agente de Borg UI",
-      "agentDesc": "Instala un pequeño agente en un portátil, sobremesa o servidor. Se conecta él mismo a Borg UI, así que funciona detrás de un cortafuegos, y guarda las copias en su propio disco.",
-      "agentPro": "Requiere un plan Pro o Enterprise."
+      "agentDesc": "Instala un pequeño agente en un portátil, sobremesa o servidor. Se conecta él mismo a Borg UI, así que funciona detrás de un cortafuegos, y guarda las copias en su propio disco."
     },
     "folders": {
       "title": "Elige las carpetas a respaldar",

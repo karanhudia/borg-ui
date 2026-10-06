@@ -31,15 +31,22 @@ class FakeProcess:
         self._hang = hang
         self._kill_raises = kill_raises
         self.killed = False
+        self.terminated = False
         self.waited = False
+        self.stdout = self.stderr = None
 
-    async def communicate(self):
+    async def communicate(self, input=None):
         if self._hang:
             await asyncio.sleep(60)
         return self._out
 
     def kill(self):
         self.killed = True
+        if self._kill_raises:
+            raise self._kill_raises
+
+    def terminate(self):
+        self.terminated = True
         if self._kill_raises:
             raise self._kill_raises
 
@@ -411,7 +418,7 @@ async def test_timed_out_children_are_killed(monkeypatch):
         storage_usage.asyncio, "create_subprocess_exec", AsyncMock(return_value=hung)
     )
     assert await borg2_index_size("/r", borg2_binary="borg2", timeout=0.01) is None
-    assert hung.killed and hung.waited
+    assert hung.terminated and hung.waited
 
     hung = FakeProcess(hang=True)
     monkeypatch.setattr(storage_usage.shutil, "which", lambda name: "/usr/bin/rclone")
@@ -421,7 +428,7 @@ async def test_timed_out_children_are_killed(monkeypatch):
     assert (
         await storage_usage.rclone_storage_used("sftp://u@h/./r", timeout=0.01) is None
     )
-    assert hung.killed and hung.waited
+    assert hung.terminated and hung.waited
 
 
 @pytest.mark.unit
@@ -455,7 +462,7 @@ async def test_cancelled_reads_kill_the_child(monkeypatch):
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
-    assert hung.killed and hung.waited
+    assert hung.terminated and hung.waited
 
 
 @pytest.mark.unit
@@ -479,7 +486,7 @@ async def test_cancellation_survives_a_child_that_already_exited(monkeypatch):
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
-    assert gone.killed and gone.waited
+    assert gone.terminated and gone.waited
 
 
 @pytest.mark.unit

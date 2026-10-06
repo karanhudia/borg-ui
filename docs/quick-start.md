@@ -25,7 +25,7 @@ that permission do not see the button.
 2. **What**: choose where the data lives. Pick **Files on this server** for folders
    on the machine running Borg UI, **Files on another computer** for a
    server, NAS or PC that Borg UI can reach over SSH, or **Another computer
-   with the Borg UI agent** (Pro or Enterprise) for a machine that runs the
+   with the Borg UI agent** for a machine that runs the
    [agent](managed-agents) and connects out to Borg UI, for example a laptop
    behind a firewall.
 3. **Connect** (another computer only): for SSH, pick a computer Borg UI
@@ -157,13 +157,13 @@ Jellyfin, put the newest copy back as `data/jellyfin.db`, and delete any
 
 ## What it sets up
 
-| Setting | Default |
-| --- | --- |
-| Encryption | On (`repokey`), protected by your passphrase |
-| Compression | `zstd,3` |
-| Keep | 7 daily, 4 weekly, 6 monthly, 1 yearly |
+| Setting           | Default                                                                                |
+| ----------------- | -------------------------------------------------------------------------------------- |
+| Encryption        | On (`repokey`), protected by your passphrase                                           |
+| Compression       | `zstd,3`                                                                               |
+| Keep              | 7 daily, 4 weekly, 6 monthly, 1 yearly                                                 |
 | After each backup | Delete old backups (prune), free up space (compact), check integrity for up to an hour |
-| Schedule | On |
+| Schedule          | On                                                                                     |
 
 Open **Customize** on the review step to change any of these. Everything Quick
 Start creates is a normal repository and backup plan, so you can edit it later

@@ -12,7 +12,6 @@ export const FEATURES = {
   backup_plan_multi_repository: 'pro',
   backup_plan_mixed_sources: 'pro',
   rclone: 'pro',
-  managed_agents: 'pro',
   remote_clients: 'pro',
   database_discovery: 'pro',
   container_backups: 'pro',
@@ -25,6 +24,14 @@ export const FEATURES = {
 } as const satisfies Record<string, Plan>
 
 export type Feature = keyof typeof FEATURES
+
+/**
+ * Community features with no plan gate that still report adoption through
+ * `Plan - FeatureUsed`. They are not in FEATURES, so nothing can block on them.
+ */
+export const COMMUNITY_TRACKED_FEATURES = ['managed_agents'] as const
+
+export type TrackedFeature = Feature | (typeof COMMUNITY_TRACKED_FEATURES)[number]
 
 export const PLAN_LABEL: Record<Plan, string> = {
   community: 'Community',

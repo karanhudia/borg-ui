@@ -42,6 +42,7 @@ from urllib.parse import unquote, urlsplit
 
 import structlog
 
+from app.services.process_cancel import communicate_or_kill
 from app.utils.datetime_utils import parse_borg_archive_time, utc_now
 
 logger = structlog.get_logger()
@@ -231,23 +232,6 @@ class SizeResult:
     original_size: Optional[int] = None
 
 
-async def _communicate(process, timeout: int) -> tuple[bytes, bytes]:
-    """communicate() with a deadline that also ends the child: wait_for only
-    cancels the wait, a timed-out (or cancelled) borg or rclone would keep
-    running."""
-    try:
-        return await asyncio.wait_for(process.communicate(), timeout)
-    except (asyncio.TimeoutError, asyncio.CancelledError):
-        try:
-            process.kill()
-        except ProcessLookupError:
-            # already gone; kill() would otherwise replace the cancellation
-            # with an OSError that the callers treat as "failed to start"
-            pass
-        await process.wait()
-        raise
-
-
 # -- Borg 2 chunk index --------------------------------------------------------
 
 
@@ -310,7 +294,7 @@ async def borg2_index_size(
             stderr=asyncio.subprocess.PIPE,
             env=child_env,
         )
-        stdout, stderr = await _communicate(process, timeout)
+        stdout, stderr = await communicate_or_kill(process, timeout=timeout)
     except asyncio.TimeoutError:
         logger.warning("borg2 index size timed out", repository=repository_url)
         return None
@@ -398,7 +382,7 @@ async def rclone_storage_used(
             stderr=asyncio.subprocess.PIPE,
             env=env,
         )
-        stdout, stderr = await _communicate(process, timeout)
+        stdout, stderr = await communicate_or_kill(process, timeout=timeout)
     except (asyncio.TimeoutError, OSError) as exc:
         logger.warning("rclone size failed", repository=url, error=str(exc))
         return None

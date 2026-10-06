@@ -271,9 +271,6 @@
     }
   },
   "managedAgents": {
-    "planGate": {
-      "message": "Managed Agents need Pro or Enterprise. Upgrade to enroll remote machines and run agent-backed jobs."
-    },
     "agent": "Agent",
     "page": {
       "title": "Managed Agents",
@@ -363,6 +360,8 @@
         "runAsAgentUser": "Run it as the user the agent runs as, without sudo.",
         "borgInstallation": "Borg installation",
         "borgSelectionHint": "Selecting Borg versions upgrades those binaries on the agent to the versions this server provides. Leave this on Skip unless a Borg upgrade is intended.",
+        "movedToThisServer": "This endpoint was moved to this server",
+        "movedToThisServerHint": "Adds --server so the reinstall records this address for remote upgrades. Turn it on after Change server URL moved the endpoint here. Leave it off if agents reach this server through another address, because recording this one would turn their remote upgrades off.",
         "borgOptions": {
           "borg1": {
             "label": "Borg 1.x",
@@ -1157,6 +1156,8 @@
       "stats": {
         "addedToRepository": "Added to the repository",
         "addedHint": "Data unique to this archive. Deleting it frees at least this much.",
+        "addedAtCreation": "Added at creation",
+        "addedAtCreationHint": "Data this archive added when it was created. Later archives can share it, so deleting this one may free less.",
         "filesChanged": "Files changed",
         "filesChangedNotIndexed": "Not indexed yet",
         "filesChangedUnavailable": "Not available for this repository",
@@ -1469,7 +1470,6 @@
     "runTooltipProFeatures": "This plan uses Pro-only features: {{features}}. Edit it or upgrade to Pro to run it.",
     "proFeatureLabels": {
       "multiRepository": "multiple repositories or parallel execution",
-      "managedAgent": "managed-agent backups",
       "database": "database backups",
       "container": "container backups"
     },
@@ -1609,7 +1609,6 @@
       "sshSourceDescription": "Remote machine",
       "managedAgent": "Managed agent",
       "managedAgentDescription": "Read paths from an enrolled managed agent",
-      "managedAgentRequiresPro": "Managed-agent sources require Pro.",
       "mixedSourceTypesRequiresPro": "Mixed source types require Pro. Multiple paths from the same source type are still available.",
       "agentRepoConstraintBanner": "This repository runs on {{agent}}. Backup sources must come from the same agent.",
       "agentRepoLockedLocal": "Borg UI server sources can't be pushed into an agent repository.",
@@ -1860,9 +1859,9 @@
       "settings": {
         "archiveNameHelper": "Supports {plan_name}, {repo_name}, {now}, {date}, {time}, and {timestamp}.",
         "extraBorgFlagsHelper": "Custom command-line flags for borg create (e.g., --stats, --progress, --list). Applied to every repository run in this plan.",
-        "uploadSpeedHelper": "MB/s. Empty means unlimited. Applies to Borg 1 repositories only; Borg 2 has no upload limit.",
+        "uploadSpeedHelper": "MB/s. Empty means unlimited. Applies to Borg 1 repositories and to Borg 2 repositories behind rclone; other Borg 2 repositories have no upload limit.",
         "uploadPoliciesTitle": "Scheduled upload limits",
-        "uploadPoliciesHelper": "Time windows override the constant upload limit. Leave a policy limit empty for unlimited. Like the constant limit, they apply to Borg 1 repositories only.",
+        "uploadPoliciesHelper": "Time windows override the constant upload limit. Leave a policy limit empty for unlimited. Like the constant limit, they apply to Borg 1 repositories and to Borg 2 repositories behind rclone.",
         "addUploadPolicy": "Add upload policy",
         "removeUploadPolicy": "Remove upload policy",
         "daytimePolicyLabel": "Daytime cap",
@@ -4691,7 +4690,6 @@
       "executionTargetLocalDesc": "Use this server or existing SSH remote execution",
       "managedAgent": "Managed Agent",
       "managedAgentDesc": "Run Borg on an enrolled machine",
-      "managedAgentRequiresPro": "Managed-agent repositories require Pro.",
       "managedAgentSelectLabel": "Managed Agent",
       "noActiveManagedAgents": "No active managed agents are enrolled.",
       "managedAgentFilesystem": "Managed Agent Filesystem",
@@ -4820,6 +4818,10 @@
       "repositoryPathLabel": "Repository Path",
       "repositoryPathHelper": "Path where the repository will be stored",
       "borgV2Warning": "Borg 2 support is still in beta. Do not use it for production data yet. It is currently intended for enthusiasts and testing, and requires the borg2 binary on any remote hosts.",
+      "borg2OnlyUrl": "Only Borg 2 can open this repository URL.",
+      "borg2PathAbsolute": "Absolute path on the host.",
+      "borg2PathRelative": "Relative to the login directory of {{login}}. Start with / for an absolute path.",
+      "borg2UrlRelative": "Relative to the login directory of the SSH user. Write ssh://host//path for an absolute path.",
       "connected": "Connected",
       "browseFilesystem": "Browse filesystem"
     },
@@ -5009,6 +5011,7 @@
       "encryption": "Encryption",
       "encryptionRepokey": "Repokey",
       "encryptionKeyfile": "Keyfile",
+      "encryptionAuthenticated": "Authenticated",
       "encryptionNone": "None",
       "passphrase": "Passphrase",
       "passphraseSet": "••••••••",
@@ -5072,6 +5075,10 @@
         "keyfile-chacha20-poly1305": {
           "label": "Key File (ChaCha20)",
           "description": "Key file with ChaCha20"
+        },
+        "authenticated": {
+          "label": "Authenticated (no encryption)",
+          "description": "Data is not encrypted; a key and passphrase protect it against tampering"
         },
         "none": {
           "label": "None",
@@ -5218,7 +5225,8 @@
     "customFlagsHint": "Custom command-line flags for borg create (e.g., --stats, --progress, --list)",
     "uploadSpeedLimit": "Upload speed limit",
     "uploadSpeedLimitHint": "MB/s. Empty means unlimited. Backup plan settings can override this default.",
-    "uploadSpeedLimitBorg2": "Borg 2 has no upload limit. This setting applies to Borg 1 repositories only.",
+    "uploadSpeedLimitBorg2": "Borg 2 has no upload limit. This setting applies to Borg 1 repositories and to Borg 2 repositories behind rclone.",
+    "uploadSpeedLimitRclone": "MB/s. Empty means unlimited. Applied as rclone's bandwidth limit during backups, since Borg 2 has no upload limit of its own.",
     "scripts": "Scripts",
     "scriptsOptional": "(Optional)",
     "scriptsHint": "Configure inline scripts or assign reusable scripts from your Script Library.",
@@ -6655,8 +6663,7 @@
       "sshDesc": "A server, NAS or PC that this server can reach over SSH. Borg UI pulls the files from it.",
       "notSure": "Not sure? Pick \"Files on this server\" if the data lives where Borg UI runs. Pick \"another computer\" if it lives elsewhere and you can log in to it with a username and password.",
       "agent": "Another computer with the Borg UI agent",
-      "agentDesc": "Install a small agent on a laptop, desktop or server. It connects out to Borg UI, so it works behind a firewall, and backs up to its own disk.",
-      "agentPro": "Requires a Pro or Enterprise plan."
+      "agentDesc": "Install a small agent on a laptop, desktop or server. It connects out to Borg UI, so it works behind a firewall, and backs up to its own disk."
     },
     "folders": {
       "title": "Pick the folders to back up",
