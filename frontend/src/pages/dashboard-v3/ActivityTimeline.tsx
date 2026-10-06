@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Box } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { addDays, differenceInDays, format, parseISO, startOfDay } from 'date-fns'
@@ -54,7 +55,7 @@ export function ActivityTimeline({
   const cH = LANES.length * LANE_H
   const colW = cW / DAYS
 
-  const today = startOfDay(new Date())
+  const [today] = useState(() => startOfDay(new Date()))
 
   // One cell per (day column, lane), summed over the entries that land on
   // it. A day after the viewer's today (the server fell back to UTC for a

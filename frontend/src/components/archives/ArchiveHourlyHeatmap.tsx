@@ -60,7 +60,7 @@ export default function ArchiveHourlyHeatmap({
   const [scrollRef, containerWidth] = useContainerWidth()
   const [chooser, setChooser] = useState<{ anchor: HTMLElement; cell: HourCell } | null>(null)
 
-  const today = useMemo(() => startOfDay(new Date()), [])
+  const [today] = useState(() => startOfDay(new Date()))
   const dayCount = weeks * 7
   const start = subDays(today, dayCount - 1)
   const cell = useMemo(() => {
