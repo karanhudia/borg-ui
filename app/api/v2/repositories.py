@@ -21,6 +21,7 @@ from app.core.features import require_feature
 from app.core.borg2 import (
     borg2,
     BORG2_ENCRYPTION_MODES,
+    borg1_ssh_address_host,
     borg2_ssh_repository_url,
     borg2_unreadable_repository_detail,
     normalize_repo_info_encryption,
@@ -193,6 +194,16 @@ def _resolve_repository_target(
 ) -> tuple[str, Optional[int]]:
     repo_path = path.strip()
     if not connection_id:
+        # Borg 2 reads Borg 1's `[user@]host:path` as a local directory.
+        host = borg1_ssh_address_host(repo_path)
+        if host is not None:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.repo.borg1OnlySshAddress",
+                    "params": {"host": host},
+                },
+            )
         return repo_path, None
 
     conn = db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()

@@ -53,7 +53,12 @@ import structlog
 
 from app.config import settings
 from app.core.borg_stream import CommandByteStream, CommandLineStream
-from app.utils.repository_paths import strip_ssh_url_path
+from app.utils.repository_paths import (  # noqa: F401  (URL rules re-exported)
+    BORG2_ONLY_URL_PREFIXES,
+    borg1_ssh_address_host,
+    borg2_only_url_prefix,
+    strip_ssh_url_path,
+)
 from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.ssh_paths import apply_ssh_command_prefix
 from app.utils.ssh_utils import public_key_only_ssh_args
@@ -100,6 +105,14 @@ BORG2_ENCRYPTION_FLAGS: Dict[str, List[str]] = {
 }
 
 BORG2_ENCRYPTION_MODES = list(BORG2_ENCRYPTION_FLAGS)
+
+# The stored modes only Borg 2 has (`authenticated` is a Borg 1 mode too).
+V2_ONLY_ENCRYPTION_MODES = {
+    "repokey-aes-ocb",
+    "repokey-chacha20-poly1305",
+    "keyfile-aes-ocb",
+    "keyfile-chacha20-poly1305",
+}
 
 # Modes an earlier Borg 2 had, with what to say to a caller that still asks.
 BORG2_REMOVED_ENCRYPTION_MODES: Dict[str, str] = {

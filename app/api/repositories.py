@@ -64,6 +64,11 @@ from app.core.borg_router import BorgRouter
 from app.core.borg_errors import is_lock_error, is_repository_exists_failure
 from app.core.borg2 import (
     BORG2_ENCRYPTION_MODES,
+    BORG2_ONLY_URL_PREFIXES,  # noqa: F401  (re-export)
+    V2_ONLY_ENCRYPTION_MODES,
+    borg1_ssh_address_host,
+    borg2_only_url_prefix,
+    borg2_repository_url_refusal,
     borg2_unreadable_repository_detail,
     normalize_repo_info_encryption,
 )
@@ -166,13 +171,6 @@ from app.utils.ssh_utils import (
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["repositories"], dependencies=[Depends(authorize_request)])
-
-V2_ONLY_ENCRYPTION_MODES = {
-    "repokey-aes-ocb",
-    "repokey-chacha20-poly1305",
-    "keyfile-aes-ocb",
-    "keyfile-chacha20-poly1305",
-}
 
 
 def _router_repo_snapshot(repository: Repository) -> SimpleNamespace:
@@ -1571,18 +1569,6 @@ def _uses_borg2_payload(data: Union[RepositoryCreate, RepositoryImport]) -> bool
     return requested_version == 2 or data.encryption in V2_ONLY_ENCRYPTION_MODES
 
 
-# Repository URLs only Borg 2 can open.
-BORG2_ONLY_URL_PREFIXES = (
-    "rest://",
-    "sftp://",
-    "http://",
-    "https://",
-    "s3:",
-    "b2:",
-    "rclone:",
-)
-
-
 def _reject_borg2_only_url_for_borg1(
     path: Optional[str],
     *,
@@ -1601,21 +1587,45 @@ def _reject_borg2_only_url_for_borg1(
     """
     if borg2 or connection_id:
         return
-    lowered = (path or "").strip().lower()
-    for prefix in BORG2_ONLY_URL_PREFIXES:
-        if not lowered.startswith(prefix):
-            continue
-        if prefix.endswith("//") or not agent:
-            detail = {
-                "key": "backend.errors.repo.borg2OnlyUrl",
-                "params": {"scheme": prefix},
-            }
-        else:
-            detail = {
-                "key": "backend.errors.repo.borg2OnlyUrlOrSshHost",
-                "params": {"scheme": prefix, "host": prefix[:-1]},
-            }
-        raise HTTPException(status_code=400, detail=detail)
+    prefix = borg2_only_url_prefix(path)
+    if prefix is None:
+        return
+    if prefix.endswith("//") or not agent:
+        detail = {
+            "key": "backend.errors.repo.borg2OnlyUrl",
+            "params": {"scheme": prefix},
+        }
+    else:
+        detail = {
+            "key": "backend.errors.repo.borg2OnlyUrlOrSshHost",
+            "params": {"scheme": prefix, "host": prefix[:-1]},
+        }
+    raise HTTPException(status_code=400, detail=detail)
+
+
+def _reject_borg1_ssh_address_for_borg2(
+    path: Optional[str],
+    *,
+    borg2: bool,
+    connection_id: Optional[int],
+) -> None:
+    """Refuse Borg 1's short SSH form `[user@]host:path` for a Borg 2
+    repository: Borg 2 reads it as a local directory and creates the
+    repository on the machine that runs Borg instead of that host. With an SSH
+    connection the path is a directory on that host and is left alone.
+    """
+    if not borg2 or connection_id:
+        return
+    host = borg1_ssh_address_host(path)
+    if host is None:
+        return
+    raise HTTPException(
+        status_code=400,
+        detail={
+            "key": "backend.errors.repo.borg1OnlySshAddress",
+            "params": {"host": host},
+        },
+    )
 
 
 def _is_rclone_payload(data: Union[RepositoryCreate, RepositoryImport]) -> bool:
@@ -2609,6 +2619,35 @@ async def _agent_has_passphrase(agent: AgentMachine) -> bool:
     return bool(isinstance(result, dict) and result.get("has_passphrase"))
 
 
+def _reject_agent_borg2_payload(
+    repo_data: Union[RepositoryCreate, RepositoryImport], *, imported: bool
+) -> None:
+    """Refuse what the Borg 2 routes refuse for a server repository: a mode
+    repo-create does not know, and a URL Borg 2 reads as a local directory."""
+    if not imported and repo_data.encryption not in BORG2_ENCRYPTION_MODES:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "key": "backend.errors.repo.invalidEncryption",
+                "params": {
+                    "mode": repo_data.encryption,
+                    "valid": BORG2_ENCRYPTION_MODES,
+                },
+            },
+        )
+    refusal = borg2_repository_url_refusal(repo_data.path)
+    if refusal:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "key": "backend.errors.repo.verificationFailed"
+                if imported
+                else "backend.errors.repo.initFailed",
+                "params": {"error": refusal},
+            },
+        )
+
+
 async def _create_agent_repository_record(
     repo_data: Union[RepositoryCreate, RepositoryImport],
     current_user: User,
@@ -2616,13 +2655,17 @@ async def _create_agent_repository_record(
     *,
     imported: bool,
 ):
-    # Recorded below with the payload's major, whatever the encryption mode says.
+    # Borg 2 by version or by a Borg-2-only encryption, as the server path
+    # decides; the row and the agent's jobs carry this major.
+    borg_version = 2 if _uses_borg2_payload(repo_data) else 1
     _reject_borg2_only_url_for_borg1(
         repo_data.path,
-        borg2=(repo_data.borg_version or 1) == 2,
+        borg2=borg_version == 2,
         connection_id=repo_data.connection_id,
         agent=True,
     )
+    if borg_version == 2:
+        _reject_agent_borg2_payload(repo_data, imported=imported)
     cloud_mirror_remote = _validate_cloud_mirror_payload(repo_data, db)
     await _preflight_cloud_mirror_path(repo_data, cloud_mirror_remote)
     agent = await _validate_agent_repository_payload(repo_data, db)
@@ -2693,7 +2736,7 @@ async def _create_agent_repository_record(
         upload_ratelimit_kib=repo_data.upload_ratelimit_kib,
         source_ssh_connection_id=source_connection_id,
         source_locations=source_locations_json,
-        borg_version=repo_data.borg_version or 1,
+        borg_version=borg_version,
     )
     db.add(repository)
     db.commit()
@@ -3558,6 +3601,11 @@ async def create_repository(
             connection_id=repo_data.connection_id,
             agent=executor_type == "agent",
         )
+        _reject_borg1_ssh_address_for_borg2(
+            repo_data.path,
+            borg2=_uses_borg2_payload(repo_data),
+            connection_id=repo_data.connection_id,
+        )
         if _uses_borg2_payload(repo_data):
             _require_borg2_feature(db)
             if executor_type == "agent":
@@ -3973,6 +4021,11 @@ async def import_repository(
             borg2=_uses_borg2_payload(repo_data),
             connection_id=repo_data.connection_id,
             agent=executor_type == "agent",
+        )
+        _reject_borg1_ssh_address_for_borg2(
+            repo_data.path,
+            borg2=_uses_borg2_payload(repo_data),
+            connection_id=repo_data.connection_id,
         )
         if _uses_borg2_payload(repo_data):
             _require_borg2_feature(db)
@@ -5279,6 +5332,11 @@ async def update_repository(
                     borg2=(repository.borg_version or 1) == 2,
                     connection_id=target_connection_id,
                     agent=target_executor_type == "agent",
+                )
+                _reject_borg1_ssh_address_for_borg2(
+                    raw_path,
+                    borg2=(repository.borg_version or 1) == 2,
+                    connection_id=target_connection_id,
                 )
 
         target_path = raw_path if raw_path is not None else repository.path
