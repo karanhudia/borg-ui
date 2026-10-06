@@ -5818,7 +5818,7 @@
         "backupArchiveNameRequired": "Archivname ist erforderlich",
         "backupRepositoryPathRequired": "Repository-Pfad ist erforderlich",
         "backupSourcePathRequired": "Mindestens ein Quellpfad ist erforderlich",
-        "capabilityMissing": "Dieser Agent unterstützt die erforderliche Funktion nicht",
+        "capabilityMissing": "Dieser Agent unterstützt die erforderliche Funktion nicht ({{capability}})",
         "enrollmentExpiryAmbiguous": "Wählen Sie nur eine Ablaufoption für das Enrollment-Token",
         "enrollmentExpiryTooShort": "Das Enrollment-Token muss mindestens fünf Minuten gültig sein",
         "enrollmentNameRequired": "Name des Enrollment-Tokens ist erforderlich",

@@ -5818,7 +5818,7 @@
         "backupArchiveNameRequired": "Il nome archivio è obbligatorio",
         "backupRepositoryPathRequired": "Il percorso del repository è obbligatorio",
         "backupSourcePathRequired": "È richiesto almeno un percorso sorgente",
-        "capabilityMissing": "Questo agente non supporta la funzionalità richiesta",
+        "capabilityMissing": "Questo agente non supporta la funzionalità richiesta ({{capability}})",
         "enrollmentExpiryAmbiguous": "Scegli una sola opzione di scadenza per il token di registrazione",
         "enrollmentExpiryTooShort": "Il token di registrazione deve durare almeno cinque minuti",
         "enrollmentNameRequired": "Il nome del token di registrazione è obbligatorio",

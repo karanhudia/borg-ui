@@ -5818,7 +5818,7 @@
         "backupArchiveNameRequired": "Archive name is required",
         "backupRepositoryPathRequired": "Repository path is required",
         "backupSourcePathRequired": "At least one source path is required",
-        "capabilityMissing": "This agent does not support the required capability",
+        "capabilityMissing": "This agent does not support the required capability ({{capability}})",
         "enrollmentExpiryAmbiguous": "Choose only one enrollment token expiry option",
         "enrollmentExpiryTooShort": "Enrollment token expiry must be at least five minutes",
         "enrollmentNameRequired": "Enrollment token name is required",
