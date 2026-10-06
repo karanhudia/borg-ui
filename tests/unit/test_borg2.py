@@ -135,7 +135,7 @@ async def test_rcreate_injects_managed_rclone_config_into_process_env(
     class Process:
         returncode = 0
 
-        async def communicate(self):
+        async def communicate(self, input=None):
             return b"", b""
 
     async def create_subprocess_exec(*cmd, **kwargs):
@@ -297,7 +297,7 @@ async def test_prune_keep_within_is_sent_as_keep(monkeypatch):
     class Process:
         returncode = 0
 
-        async def communicate(self):
+        async def communicate(self, input=None):
             return b"", b""
 
     async def create_subprocess_exec(*cmd, **kwargs):
@@ -402,7 +402,7 @@ async def test_no_borg2_command_carries_bypass_lock(monkeypatch, command):
     class Process:
         returncode = 0
 
-        async def communicate(self):
+        async def communicate(self, input=None):
             return b"{}", b""
 
     async def create_subprocess_exec(*cmd, **_):

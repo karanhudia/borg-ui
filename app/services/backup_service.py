@@ -61,6 +61,7 @@ from app.utils.ssh_utils import (
 )  # Backward-compatible patch target for tests
 
 from app.services.process_cancel import (
+    communicate_or_kill,
     terminate_process,
     terminate_tracked_process,
 )
@@ -537,8 +538,8 @@ class BackupService:
                     stderr=asyncio.subprocess.PIPE,
                     env=env,
                 )
-                info_stdout, info_stderr = await asyncio.wait_for(
-                    info_process.communicate(), timeout=timeouts["info_timeout"]
+                info_stdout, info_stderr = await communicate_or_kill(
+                    info_process, timeout=timeouts["info_timeout"]
                 )
 
                 if info_process.returncode == 0:
