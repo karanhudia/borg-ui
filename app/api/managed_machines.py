@@ -13,7 +13,11 @@ import structlog
 from app.api.agent_installer import agent_package_version
 from app.api.agents import FINAL_AGENT_JOB_STATUSES, _cancel_agent_job
 from app.core.agent_auth import AGENT_TOKEN_PREFIX_LENGTH
-from app.core.agent_versions import compute_agent_upgrade_status
+from app.core.agent_versions import (
+    agent_borg2_version,
+    compute_agent_upgrade_status,
+)
+from app.core.borg2 import borg2_below_minimum, borg2_minimum_version
 from app.core.agent_constants import (
     AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS,
 )
@@ -117,6 +121,10 @@ class AgentMachineResponse(BaseModel):
     desired_borg_version: Optional[str] = None
     available_agent_version: Optional[str] = None
     upgrade_status: str = "unknown"
+    # The oldest Borg 2 an endpoint may run (the server's own), and whether
+    # the Borg 2 this one reports is older: its Borg 2 jobs are refused.
+    borg2_minimum_version: Optional[str] = None
+    borg2_below_minimum: bool = False
     # None until the agent has reported its capabilities at least once. An
     # endpoint that has never checked in has not said it cannot upgrade
     # itself, and must not be labelled manual-only for it.
@@ -448,7 +456,7 @@ async def create_enrollment_token(
 
 
 @router.get("/enrollment-tokens", response_model=list[AgentEnrollmentTokenSummary])
-async def list_enrollment_tokens(
+def list_enrollment_tokens(
     _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
@@ -462,7 +470,7 @@ async def list_enrollment_tokens(
 @router.post(
     "/enrollment-tokens/{token_id}/revoke", status_code=status.HTTP_204_NO_CONTENT
 )
-async def revoke_enrollment_token(
+def revoke_enrollment_token(
     token_id: int,
     current_user: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
@@ -519,11 +527,15 @@ def _agent_machine_response(
     response.self_upgrade_supported = (
         None if agent.capabilities is None else "self_upgrade" in agent.capabilities
     )
+    response.borg2_minimum_version = borg2_minimum_version()
+    response.borg2_below_minimum = borg2_below_minimum(
+        agent_borg2_version(agent.borg_versions)
+    )
     return response
 
 
 @router.get("/agents", response_model=list[AgentMachineResponse])
-async def list_agent_machines(
+def list_agent_machines(
     _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
@@ -553,7 +565,7 @@ async def list_agent_machines(
     "/agents/{agent_machine_id}/desired-version",
     response_model=AgentMachineResponse,
 )
-async def set_agent_desired_version(
+def set_agent_desired_version(
     agent_machine_id: int,
     payload: AgentDesiredVersionRequest,
     _: User = Depends(get_current_admin_user),
@@ -761,9 +773,15 @@ async def create_agent_backup_job(
             detail={"key": "backend.errors.agents.agentNotQueueable"},
         )
 
-    now = _now_utc()
-    from app.services.repository_executor import BACKUP_AGENT_JOB_TYPE
+    from app.services.repository_executor import (
+        BACKUP_AGENT_JOB_TYPE,
+        require_agent_borg2,
+    )
 
+    if payload.borg_version == 2:
+        require_agent_borg2(agent, (payload.borg_binary or "").strip() or None)
+
+    now = _now_utc()
     job = AgentJob(
         agent_machine_id=agent.id,
         job_type=BACKUP_AGENT_JOB_TYPE,
@@ -959,7 +977,7 @@ async def list_agent_machine_scripts(
     "/agents/{agent_machine_id}/logs",
     response_model=list[AgentSessionLogEntryResponse],
 )
-async def list_agent_machine_logs(
+def list_agent_machine_logs(
     agent_machine_id: int,
     _: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
@@ -976,7 +994,7 @@ async def list_agent_machine_logs(
 @router.post(
     "/agents/{agent_machine_id}/revoke", status_code=status.HTTP_204_NO_CONTENT
 )
-async def revoke_agent_machine(
+def revoke_agent_machine(
     agent_machine_id: int,
     current_user: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
@@ -1000,7 +1018,7 @@ async def revoke_agent_machine(
 
 
 @router.delete("/agents/{agent_machine_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_agent_machine(
+def delete_agent_machine(
     agent_machine_id: int,
     current_user: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
@@ -1047,7 +1065,7 @@ MAX_AGENT_JOBS_LIMIT = 1000
 
 
 @router.get("/agent-jobs", response_model=list[AgentJobSummaryResponse])
-async def list_agent_jobs(
+def list_agent_jobs(
     limit: int = Query(
         DEFAULT_AGENT_JOBS_LIMIT,
         ge=1,
@@ -1072,7 +1090,7 @@ async def list_agent_jobs(
     "/agent-jobs/{job_id}/logs",
     response_model=list[AgentJobLogEntryResponse],
 )
-async def list_agent_job_logs(
+def list_agent_job_logs(
     job_id: int,
     _: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),

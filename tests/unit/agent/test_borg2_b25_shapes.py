@@ -65,7 +65,7 @@ def _payload(job_kind: str, borg_version: int) -> RepositoryOperationPayload:
 @pytest.mark.unit
 @pytest.mark.parametrize("job_kind", _BORG_JOB_KINDS)
 def test_borg2_remote_path_is_not_on_the_command_line(job_kind):
-    """Borg 2.0.0b22 removed --remote-path: a command that carries it fails
+    """Borg 2 has no --remote-path: a command that carries it fails
     with "unrecognized arguments" before it reaches the repository."""
     payload = _payload(job_kind, 2)
 
@@ -275,26 +275,6 @@ def test_index_script_loads_the_key_where_the_index_is_sealed(monkeypatch, capsy
 
 
 @pytest.mark.unit
-def test_index_script_leaves_an_older_borg2_alone(monkeypatch, capsys):
-    """Up to 2.0.0b24 the repository object has no key and key_factory wants
-    a manifest: the script must not call it there."""
-
-    class PlainRepository(_Repository):
-        def list(self, limit=None, marker=None):
-            return [] if marker else [(b"a", 7)]
-
-    def key_factory(*args):
-        raise AssertionError("key_factory must not be called")
-
-    _fake_borg(monkeypatch, PlainRepository, key_factory)
-    monkeypatch.setenv(storage_usage.REPOSITORY_URL_ENV, "/repo")
-
-    exec(compile(storage_usage.INDEX_SUM_SCRIPT, "<index>", "exec"), {})
-
-    assert json.loads(capsys.readouterr().out) == {"objects": 1, "bytes": 7}
-
-
-@pytest.mark.unit
 def test_server_and_agent_run_the_same_index_script():
     from app.services import storage_usage as server_storage_usage
 
@@ -335,10 +315,6 @@ def test_borg1_keeps_its_unencrypted_mode():
     assert cmd[-1] == "/agent/repo"
 
 
-def _B25(binary: str) -> str:
-    return "2.0.0b25"
-
-
 def _rest_payload(job_kind: str, borg_version: int = 2) -> dict:
     return {
         "schema_version": 1,
@@ -357,7 +333,6 @@ def test_borg2_refuses_a_rest_url(monkeypatch, job_kind):
     """2.0.0b25 reads rest://user@host/path as the local directory
     ./rest:/user@host/path: repo-create and create succeed there (exit 0) and
     nothing reaches the repository server."""
-    monkeypatch.setattr("agent.borg_ui_agent.backup.borg2_binary_version", _B25)
     payload = RepositoryOperationPayload.from_job_payload(_rest_payload(job_kind))
 
     with pytest.raises(ValueError, match="ssh://"):
@@ -369,7 +344,6 @@ def test_a_refused_rest_url_fails_the_job_without_running_borg(monkeypatch):
     def no_process(*args, **kwargs):
         raise AssertionError("borg must not run")
 
-    monkeypatch.setattr("agent.borg_ui_agent.backup.borg2_binary_version", _B25)
     monkeypatch.setattr(
         "agent.borg_ui_agent.repository_ops.subprocess.Popen", no_process
     )
@@ -390,7 +364,6 @@ def test_a_borg2_backup_to_a_rest_url_fails_without_running_borg(monkeypatch):
     def no_process(*args, **kwargs):
         raise AssertionError("borg must not run")
 
-    monkeypatch.setattr("agent.borg_ui_agent.backup.borg2_binary_version", _B25)
     monkeypatch.setattr("agent.borg_ui_agent.backup.subprocess.Popen", no_process)
     client = _Client()
 
@@ -415,57 +388,21 @@ def test_a_borg2_backup_to_a_rest_url_fails_without_running_borg(monkeypatch):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize(
-    ("banner", "refused"),
-    [
-        ("borg2 2.0.0b25\n", True),
-        ("borg2 2.0.0b26\n", True),
-        ("borg 2.0.0\n", True),
-        # an endpoint that manages its own Borg keeps its binary across an
-        # agent upgrade, and these still speak rest://
-        ("borg2 2.0.0b24\n", False),
-        ("borg2 2.0.0b22\n", False),
-        # nothing readable is not evidence of an old binary
-        ("", True),
-        ("borg 1.4.5\n", True),
-    ],
-)
-def test_a_rest_url_is_refused_by_what_the_binary_reports(monkeypatch, banner, refused):
-    from agent.borg_ui_agent import backup
-
-    monkeypatch.setattr(backup, "_BINARY_VERSIONS", {})
-    monkeypatch.setattr(
-        backup.subprocess,
-        "run",
-        lambda *args, **kwargs: types.SimpleNamespace(
-            returncode=0, stdout=banner, stderr=""
-        ),
-    )
-    payload = RepositoryOperationPayload.from_job_payload(
-        _rest_payload("repository.list_archives")
-    )
-
-    if refused:
-        with pytest.raises(ValueError, match="ssh://"):
-            payload.build_command()
-    else:
-        assert payload.build_command()[:3] == [
-            "borg2",
-            "-r",
-            "rest://borg@repo.example/backups/one",
-        ]
-
-
-@pytest.mark.unit
-def test_the_binary_is_not_probed_for_other_urls(monkeypatch):
+def test_no_binary_is_probed_for_a_repository_url(monkeypatch):
+    """Every Borg 2 the agent runs is the server's or newer (#1306): a rest://
+    URL is refused and any other passed without asking the binary."""
     from agent.borg_ui_agent import backup
 
     def no_probe(*args, **kwargs):
-        raise AssertionError("no probe for a URL that is not rest://")
+        raise AssertionError("no probe")
 
     monkeypatch.setattr(backup.subprocess, "run", no_probe)
 
     assert _payload("repository.list_archives", 2).build_command()[3] == "repo-list"
+    with pytest.raises(ValueError, match="ssh://"):
+        RepositoryOperationPayload.from_job_payload(
+            _rest_payload("repository.list_archives")
+        ).build_command()
 
 
 def _restore_job(target: str, borg_version: int = 2) -> dict:
@@ -520,7 +457,6 @@ def test_borg2_restore_into_an_occupied_directory_is_refused(
     original location and a fresh filesystem with lost+found included. The
     agent says so before Borg runs; it does not reach for --continue, which
     skips a file that looks restored by type, mode, size and time."""
-    monkeypatch.setattr("agent.borg_ui_agent.backup.borg2_binary_version", _B25)
     if occupied_by == "lost+found":
         (tmp_path / occupied_by).mkdir()
     else:
@@ -647,7 +583,6 @@ def test_the_refusal_reads_the_subcommand_not_a_word_that_reads_like_it(
     command: a repository named `extract` does not make a listing one."""
     from agent.borg_ui_agent.repository_ops import _restore_target_refusal
 
-    monkeypatch.setattr("agent.borg_ui_agent.backup.borg2_binary_version", _B25)
     (tmp_path / "existing.txt").write_text("x")
     payload = types.SimpleNamespace(borg_version=2, borg_cmd="borg2", operation={})
 

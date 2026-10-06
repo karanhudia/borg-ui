@@ -50,7 +50,7 @@ keeps them; a flag given on a reinstall replaces that one value, an empty one
 clears it. A Linux install never asks for them: it is scripted over `ssh -t`
 or by configuration management as often as it is typed, and a question would
 hang it. A first-time macOS install run from a terminal without these flags
-asks, and for an `ssh://` or `rest://` repository offers to open one SSH
+asks, and for an `ssh://` repository offers to open one SSH
 connection as the user, so the host key and the login are confirmed while
 someone is there to answer; a service cannot do that later. `--no-prompt`
 skips the questions. That check covers the one repository given
@@ -367,17 +367,18 @@ The first implementation supports:
   the user's Application Support directory, a Homebrew or MacPorts Borg
   reports its install source, and the self-upgrade readiness reads the
   launchd job instead of the systemd units
+- from 0.1.15 the `repository.disk_usage` job runs the same `du` as the
+  storage measurement, so on macOS it runs `-A -sk` and reports the size
+  in bytes (#1291)
 - from 0.1.15 the agent speaks Borg 2.0.0b25: the remote Borg command
   travels in `BORG_REMOTE_PATH` instead of `--remote-path` (an option Borg 2
-  removed in 2.0.0b22), the repository size is read with the repository
+  does not have), the repository size is read with the repository
   key (2.0.0b25 seals the chunk index with it), a Borg 2 job on a `rest://`
-  repository is refused where the machine's Borg 2 is 2.0.0b25 or later
-  (it would read the URL as a local directory; the scheme is `ssh://` now;
-  an older Borg 2 keeps its `rest://` repositories) and so is creating a
-  Borg 2 repository with the encryption mode `none`, which 2.0.0b25 removed;
-  a Borg 2 restore into a directory that holds anything is refused with a
-  message before Borg runs, where the machine's Borg 2 is 2.0.0b25 or later
-  (which does not extract into one)
+  repository is refused (2.0.0b25 would read the URL as a local directory;
+  the scheme is `ssh://` now) and so is creating a Borg 2 repository with
+  the encryption mode `none`, which 2.0.0b25 removed; a Borg 2 restore into
+  a directory that holds anything is refused with a message before Borg
+  runs (2.0.0b25 does not extract into one)
 - from 0.1.16 the self-upgrade readiness compares the server in the upgrade
   record with the one the agent is enrolled against and reports no
   `self_upgrade` capability when they differ, which is what `set-server`
@@ -386,11 +387,14 @@ The first implementation supports:
   an option only the other major has (Borg 1's `--upload-ratelimit`,
   `--noatime` or check's `--save-space`, Borg 2's check
   `--match-archives`, ...) fails the job before Borg runs, and a Borg 2
-  backup leaves a repository's upload limit out (Borg 2.0.0b22 removed
+  backup leaves a repository's upload limit out (Borg 2 has no
   `--upload-ratelimit`); a restore whose target carries
   `existing_files: "continue"` writes into what the directory holds with
   Borg 2's `--continue` instead of being refused (capability
-  `repository.restore.existing_files`)
+  `repository.restore.existing_files`); the agent no longer asks its Borg 2
+  for its version: the server runs no Borg 2 job on an endpoint whose Borg 2
+  is older than its own (#1306), so `rest://` is refused and a Borg 2
+  compact runs with `--stats` without a probe
 - from 0.1.18 a Borg 2 backup of a repository behind rclone (`rclone:`
   URL) takes the job's upload limit as rclone's bandwidth limit
   (`RCLONE_BWLIMIT` in the create command's environment); other Borg 2

@@ -3,16 +3,24 @@
 Repository and backup plan ``custom_flags`` and ``check_extra_flags`` are free
 text that end up in a borg argv (or, for remote-direct backups, in a shell
 command on the source host). Only options that cannot run commands, change
-the repository or read arbitrary files are accepted. Keep this module in sync
+the repository or read arbitrary files are accepted. The two file options
+(``--patterns-from``, ``--exclude-from``) are accepted because their path is
+confined to the local mount points whenever borg runs on this server. Keep this module in sync
 with ``agent/borg_ui_agent/borg_flags.py``; a unit test compares them.
 """
 
 from __future__ import annotations
 
+import os
 import shlex
 from collections.abc import Sequence
 
 from pydantic import field_validator, model_validator
+
+from app.utils.local_paths import is_within_local_mount
+
+# Options whose value is a file borg reads on the machine it runs on.
+FILE_READ_FLAGS = frozenset({"--patterns-from", "--exclude-from"})
 
 # Option name -> True when it takes a value. Borg 1 and Borg 2 spellings;
 # BORG_MAJOR_ONLY_FLAGS names the ones only one major accepts.
@@ -56,6 +64,8 @@ ALLOWED_BORG_FLAGS: dict[str, dict[str, bool]] = {
         "--exclude": True,
         "-e": True,
         "--pattern": True,
+        "--patterns-from": True,
+        "--exclude-from": True,
         "--files-cache": True,
         "--files-changed": True,
         "--checkpoint-interval": True,
@@ -94,8 +104,8 @@ ALLOWED_BORG_FLAGS: dict[str, dict[str, bool]] = {
 
 # Options of ALLOWED_BORG_FLAGS that only one Borg major accepts; the other
 # fails at argument parsing ("unrecognized arguments", exit 2). Measured on
-# Borg 1.4.5 and 2.0.0b25. Borg 2.0.0b22 removed --upload-ratelimit and
-# --upload-buffer with the Borg 1 remote protocol they throttled.
+# Borg 1.4.5 and 2.0.0b25. Borg 2 has no --upload-ratelimit and no
+# --upload-buffer: they throttled the Borg 1 remote protocol.
 BORG_MAJOR_ONLY_FLAGS: dict[str, dict[int, frozenset[str]]] = {
     "create": {
         1: frozenset(
@@ -145,6 +155,8 @@ def parse_borg_flags(
     value: str | Sequence[str] | None,
     command: str,
     borg_version: int | None = None,
+    *,
+    local_paths: bool = True,
 ) -> list[str]:
     """Split and validate user supplied flags for ``borg <command>``.
 
@@ -153,6 +165,10 @@ def parse_borg_flags(
     tokens), so a value can never be read as a separate option or path.
     Raises ValueError for anything not on the allowlist, and with
     ``borg_version`` for an option that Borg major does not have.
+
+    With ``local_paths`` (borg runs on this server) file options must point
+    inside LOCAL_MOUNT_POINTS. Pass False when the file lives on another
+    machine (remote-direct source host, agent) or when only saving the value.
     """
     allowed = ALLOWED_BORG_FLAGS.get(command)
     if allowed is None:
@@ -214,6 +230,12 @@ def parse_borg_flags(
             raise ValueError(f"Borg {command} flag {name} requires a value")
         if not name.startswith("--") and flag_value.startswith("-"):
             raise ValueError(f"Invalid value for borg {command} flag {name}")
+        if local_paths and name in FILE_READ_FLAGS:
+            if not os.path.isabs(flag_value) or not is_within_local_mount(flag_value):
+                raise ValueError(
+                    f"Borg {command} flag {name} must point to a file inside a "
+                    f"local mount point: {flag_value}"
+                )
         if name.startswith("--"):
             result.append(f"{name}={flag_value}")
         else:
@@ -225,7 +247,7 @@ def borg_flags_validator(field: str, command: str, borg_version: int | None = No
     """Pydantic field validator that rejects what parse_borg_flags rejects."""
 
     def _validate(cls, value):
-        parse_borg_flags(value, command, borg_version)
+        parse_borg_flags(value, command, borg_version, local_paths=False)
         return value
 
     return field_validator(field)(_validate)
@@ -240,7 +262,7 @@ def borg_flags_major_validator(field: str, command: str, major=None):
         borg_version = (
             major(self) if major else (getattr(self, "borg_version", None) or 1)
         )
-        parse_borg_flags(getattr(self, field), command, borg_version)
+        parse_borg_flags(getattr(self, field), command, borg_version, local_paths=False)
         return self
 
     return model_validator(mode="after")(_validate)

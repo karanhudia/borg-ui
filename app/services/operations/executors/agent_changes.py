@@ -20,7 +20,8 @@ from sqlalchemy.orm import Session
 from app.core.borg_stream import LINE_LIMIT
 from app.database.models import AgentJob, Repository
 from app.services.agent_artifact_relay import agent_artifact_relay
-from app.services.operations.maintenance_start import detail_text, failure_text
+from app.services.operations.maintenance_start import failure_text
+from app.utils.http_detail import detail_text
 from app.services.operations.runner import repository_busy
 from app.services.repository_executor import (
     AGENT_DIFF_JOB_KIND,

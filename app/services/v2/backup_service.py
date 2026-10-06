@@ -8,7 +8,12 @@ import json
 import os
 from typing import List, Optional
 
-from app.core.borg2 import borg2, ensure_borg2_repository_url
+from app.core.borg2 import (
+    borg2,
+    borg2_only_url_prefix,
+    borg2_repository_url_refusal,
+    ensure_borg2_repository_url,
+)
 from app.database.models import Repository
 from app.utils.borg_env import effective_repository_remote_path
 from app.utils.borg_flags import parse_borg_flags
@@ -18,7 +23,13 @@ class BackupV2Service:
     """Version-specific Borg 2 backup helpers and execution."""
 
     def validate_local_repository_access(self, repo: Repository) -> None:
-        if not repo or repo.path.startswith(("ssh://", "rclone:")):
+        if not repo:
+            return
+        refusal = borg2_repository_url_refusal(repo.path)
+        if refusal:
+            raise ValueError(refusal)
+        # A URL Borg 2 opens itself is no directory on this server.
+        if repo.path.startswith("ssh://") or borg2_only_url_prefix(repo.path):
             return
 
         if not os.path.isdir(repo.path):
@@ -59,7 +70,7 @@ class BackupV2Service:
         limit does not reach the command (behind rclone it goes through
         backup_environment instead); the Borg 1 options among the custom
         flags are refused (ValueError) before Borg runs."""
-        ensure_borg2_repository_url(repository_path, borg2.borg_cmd)
+        ensure_borg2_repository_url(repository_path)
         cmd = [
             borg2.borg_cmd,
             "--progress",

@@ -110,7 +110,7 @@ BORG_EXIT_CODES = {
 REPOSITORY_EXISTS_EXIT_CODE = 10
 
 # Both shipped versions raise Repository.AlreadyExists with the same text,
-# verified against borg 1.4.5 and 2.0.0b24: "A repository already exists at
+# verified against borg 1.4.5 and 2.0.0b25: "A repository already exists at
 # {}." Matched whole, one line at a time: borg prints other diagnostics
 # around it, and a bare "repository already exists" substring would also
 # accept an unrelated failure. Getting this wrong in the permissive

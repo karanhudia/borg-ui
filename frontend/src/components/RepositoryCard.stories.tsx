@@ -52,7 +52,7 @@ const borg2RepositoryWithStoredSize: Repository = {
   ...sampleRepository,
   id: 44,
   name: 'Borg 2 on a store URL',
-  path: 'rest://backup-host/repos/production',
+  path: 'ssh://borg@backup-host/repos/production',
   repository_type: 'sftp',
   borg_version: 2,
   archive_count: 35,

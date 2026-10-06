@@ -1,0 +1,51 @@
+{
+  "id": "paperless-ngx",
+  "version": 1,
+  "name": "Paperless-ngx",
+  "description": "A full export of your documents and database, made by Paperless itself.",
+  "logo": "paperless-ngx-logo.svg",
+  "docs_url": "https://docs.paperless-ngx.com/administration/#backup",
+  "verified": {
+    "app_version": "v3.2.1",
+    "date": "2026-10-01",
+    "restore_tested": false
+  },
+  "detect": {
+    "images": ["ghcr.io/paperless-ngx/paperless-ngx", "paperlessngx/paperless-ngx"],
+    "mount_destinations": ["/usr/src/paperless/export"]
+  },
+  "root_hint": "folder mounted at /usr/src/paperless/export in your Paperless compose file (./export in the official one)",
+  "folders": [
+    {
+      "path": "originals",
+      "label": "Originals",
+      "description": "Your documents exactly as they came in.",
+      "role": "data"
+    },
+    {
+      "path": "archive",
+      "label": "Archived PDFs",
+      "description": "The searchable PDFs Paperless made from your documents.",
+      "role": "data"
+    },
+    {
+      "path": "thumbnails",
+      "label": "Thumbnails",
+      "description": "Preview images, part of the export Paperless imports back.",
+      "role": "data"
+    }
+  ],
+  "pre_backup_script": {
+    "file": "paperless-ngx-export.sh",
+    "name": "Export Paperless-ngx",
+    "description": "Run Paperless's document exporter into its export folder, and stop the backup if the export did not finish.",
+    "timeout": 3600
+  },
+  "schedule_cron": "0 3 * * *",
+  "notes": [
+    "Before each backup, Borg UI runs Paperless's document_exporter in the container. The export holds your documents, tags, correspondents and settings, so the database works the same with SQLite, PostgreSQL or MariaDB.",
+    "The exporter deletes files in the export folder that no longer belong to the export. Use the folder only for this.",
+    "Restore with document_importer into the same Paperless version. API tokens are not exported, and mail account passwords are exported in plain text (the Borg repository encrypts them if encryption is on).",
+    "If Borg UI talks to Docker through a socket proxy, it needs exec allowed."
+  ]
+}

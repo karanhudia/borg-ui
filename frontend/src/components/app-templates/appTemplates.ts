@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { sourceDiscoveryAPI, type AppTemplate } from '../../services/api'
 
 const APP_ROOT_PLACEHOLDER = '__APP_ROOT__'
+const CONTAINER_PLACEHOLDER = '__CONTAINER__'
 
 /** Where to look for the app: this server, or an SSH machine. Agents can't be scanned. */
 export type AppScanTarget =
@@ -35,7 +36,7 @@ export function useAppDetection(template: AppTemplate | null, target: AppScanTar
   }
 }
 
-function trimRoot(root: string): string {
+export function trimRoot(root: string): string {
   return root.trim().replace(/\/+$/, '') || '/'
 }
 
@@ -104,11 +105,22 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
-/** The template's pre-backup script with the app's root folder filled in. */
-export function renderAppScript(template: AppTemplate, root: string): string | null {
+/**
+ * The template's pre-backup script with the app's root folder and container
+ * filled in. The container is '' when the folder was picked by hand.
+ */
+export function renderAppScript(
+  template: AppTemplate,
+  root: string,
+  container: string = ''
+): string | null {
   const script = template.pre_backup_script
   if (!script) return null
-  return script.content.split(APP_ROOT_PLACEHOLDER).join(shellQuote(trimRoot(root)))
+  return script.content
+    .split(APP_ROOT_PLACEHOLDER)
+    .join(shellQuote(trimRoot(root)))
+    .split(CONTAINER_PLACEHOLDER)
+    .join(shellQuote(container))
 }
 
 /**

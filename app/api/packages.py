@@ -56,7 +56,7 @@ class PackageInstallResponse(BaseModel):
 
 
 @router.get("/", response_model=List[PackageResponse])
-async def list_packages(db: Session = Depends(get_db)):
+def list_packages(db: Session = Depends(get_db)):
     """List all installed packages"""
     packages = db.query(InstalledPackage).order_by(InstalledPackage.name).all()
     return packages
@@ -147,7 +147,7 @@ async def install_package(package_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{package_id}", response_model=PackageResponse)
-async def update_package(
+def update_package(
     package_id: int,
     package: PackageCreate,
     current_user: User = Depends(get_current_user),
@@ -199,7 +199,7 @@ async def update_package(
 
 
 @router.delete("/{package_id}")
-async def delete_package(
+def delete_package(
     package_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -249,7 +249,7 @@ async def reinstall_package(
 
 
 @router.get("/jobs/{job_id}")
-async def get_job_status(job_id: int, db: Session = Depends(get_db)):
+def get_job_status(job_id: int, db: Session = Depends(get_db)):
     """Get the status of a package installation job"""
     job = resolve_package_job(db, job_id)
     if not job:
@@ -271,7 +271,7 @@ async def get_job_status(job_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/jobs")
-async def list_jobs(db: Session = Depends(get_db)):
+def list_jobs(db: Session = Depends(get_db)):
     """List all package installation jobs"""
     jobs = [
         PackageInstallFacade(db, op)

@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import shlex
-import shutil
 import signal
 import subprocess
 import threading
@@ -20,7 +19,6 @@ from agent.borg_ui_agent.cancel import (
     start_keepalive,
 )
 from agent.borg_ui_agent.client import AgentClient
-from agent.borg_ui_agent.compact_stats import borg2_beta_at_least, parse_borg_version
 from agent.borg_ui_agent.failure_report import FailureTail, failure_report
 
 
@@ -30,10 +28,6 @@ from agent.borg_ui_agent.failure_report import FailureTail, failure_report
 # `./rest:/user@host/repo` under the working directory. repo-create and
 # create succeed there, and the backup never leaves the machine. Stated on
 # the server as well (app/core/borg2.py); the two share no imports.
-#
-# An endpoint that manages its own Borg keeps its binary across an agent
-# upgrade, and a Borg 2 before 2.0.0b25 still speaks rest://: the URL is
-# refused only for a binary that does not read as one of those.
 REMOVED_REPOSITORY_URL_MESSAGE = (
     "rest:// repository URLs were removed in Borg 2.0.0b25, which reads one as "
     "a local directory. Use ssh://[user@]host[:port]/path instead (the path "
@@ -42,69 +36,10 @@ REMOVED_REPOSITORY_URL_MESSAGE = (
 )
 
 
-REST_URLS_REMOVED_IN_BETA = 25
-
-# The version a Borg 2 binary reports, by binary file (path, mtime, size):
-# probed once per file, again when the file changes under a long-lived agent.
-_BINARY_VERSIONS: dict[tuple, str] = {}
-
-
-def _binary_key(binary: str) -> tuple:
-    path = shutil.which(binary) or binary
-    try:
-        stat = os.stat(path)
-    except OSError:
-        return (path, None, None)
-    return (path, stat.st_mtime_ns, stat.st_size)
-
-
-def borg2_binary_version(binary: str) -> Optional[str]:
-    """The version `binary --version` reports, or None when it cannot be
-    read this time; only a read version is remembered."""
-    key = _binary_key(binary)
-    known = _BINARY_VERSIONS.get(key)
-    if known is not None:
-        return known
-    try:
-        probe = subprocess.run(
-            [binary, "--version"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-        version = parse_borg_version(f"{probe.stdout}\n{probe.stderr}")
-    except (OSError, ValueError, subprocess.TimeoutExpired):
-        version = None
-    if version is not None:
-        _BINARY_VERSIONS[key] = version
-    return version
-
-
-def borg2_before_beta(binary: str, beta: int) -> bool:
-    """Whether `binary` reads as a Borg 2 before 2.0.0b<beta>. An unreadable
-    version is not evidence of an old binary."""
-    version = borg2_binary_version(binary)
-    if version is None or not version.startswith("2."):
-        return False
-    return not borg2_beta_at_least(version, beta)
-
-
-def borg2_still_speaks_rest_urls(binary: str) -> bool:
-    """Whether `binary` reads as a Borg 2 before 2.0.0b25. An unreadable
-    version is not evidence of an old binary: the URL is then refused, which
-    costs a failed job, where running it could cost the backup."""
-    return borg2_before_beta(binary, REST_URLS_REMOVED_IN_BETA)
-
-
-def ensure_borg2_repository_url(repository: Optional[str], binary: str) -> None:
-    """Raise ValueError for a repository URL this Borg 2 would misread. The
-    binary is probed only for a rest:// URL."""
-    if not (repository or "").strip().lower().startswith("rest://"):
-        return
-    if borg2_still_speaks_rest_urls(binary):
-        return
-    raise ValueError(REMOVED_REPOSITORY_URL_MESSAGE)
+def ensure_borg2_repository_url(repository: Optional[str]) -> None:
+    """Raise ValueError for a repository URL Borg 2 would misread."""
+    if (repository or "").strip().lower().startswith("rest://"):
+        raise ValueError(REMOVED_REPOSITORY_URL_MESSAGE)
 
 
 def job_borg_major(repository: dict[str, Any], payload: dict[str, Any]) -> int:
@@ -175,10 +110,7 @@ class BackupCreatePayload:
 
         borg_version = job_borg_major(repository, payload)
         if borg_version == 2:
-            ensure_borg2_repository_url(
-                repository_path,
-                repository.get("borg_binary") or payload.get("borg_binary") or "borg2",
-            )
+            ensure_borg2_repository_url(repository_path)
         custom_flags = parse_borg_flags(custom_flags, "create", borg_version)
         upload_ratelimit_kib = backup.get(
             "upload_ratelimit_kib", payload.get("upload_ratelimit_kib")
@@ -230,7 +162,8 @@ class BackupCreatePayload:
                 self.compression,
             ]
             # No --upload-ratelimit: Borg 2.0.0b22 removed it (behind rclone the
-            # limit is RCLONE_BWLIMIT in the environment instead, #1307).
+            # limit is RCLONE_BWLIMIT in the environment instead, #1307). A
+            # server before agent 0.1.17 still sends a repository's limit.
             for pattern in self.exclude_patterns:
                 cmd.extend(["--exclude", pattern])
             cmd.extend(self.custom_flags)
@@ -318,7 +251,7 @@ def _extract_environment(
 _BORG_NONINTERACTIVE_ACCESS_DEFAULTS = {
     "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK": "yes",
     "BORG_RELOCATED_REPO_ACCESS_IS_OK": "yes",
-    # Borg 2.0.0b23's pack cache: borgstore serves archive metadata as
+    # Borg 2's pack cache: borgstore serves archive metadata as
     # whole-pack loads, so on remote repositories every listing re-transfers
     # packs. The writethrough cache under borg's own cache directory downloads
     # each pack once. Applied via setdefault like the flags above, so the
@@ -565,7 +498,7 @@ def execute_backup_create_job(
     env = build_borg_env(payload.environment)
     env_with_repository_port(env, payload.repository_path)
     if payload.borg_version == 2 and payload.remote_path:
-        # Borg 2 has no --remote-path (removed in 2.0.0b22).
+        # Borg 2 has no --remote-path.
         env["BORG_REMOTE_PATH"] = payload.remote_path
 
     sequence = 0

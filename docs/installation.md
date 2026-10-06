@@ -595,7 +595,7 @@ applies here too.
 
 Borg 2 is a beta with no distribution package. Where the host's glibc is new
 enough, the installer uses the same static binary the image uses. Otherwise it
-builds Borg 2 from source, which needs OpenSSL 3.2 or newer because 2.0.0b24
+builds Borg 2 from source, which needs OpenSSL 3.2 or newer because Borg 2
 takes argon2 from OpenSSL.
 
 Debian 12 (bookworm) ships OpenSSL 3.0, so Borg 2 cannot be installed there. The
@@ -703,10 +703,14 @@ Removing Borg UI never touches your repositories.
 >    is not replaced. A managed agent does this from 0.1.17.
 > 5. Upgrade the managed agents. An agent upgrade installs the server's
 >    Borg 2 along with the agent, and from then on that machine cannot read
->    its old Borg 2 repositories either. A machine that manages its own Borg
->    (`--skip-borg-install`) keeps its binary: it goes on working with its
->    old repositories and `rest://` URLs until you replace its Borg 2
->    yourself.
+>    its old Borg 2 repositories either. Borg UI runs no Borg 2 job on an
+>    endpoint whose Borg 2 is older than the server's: the agent list marks
+>    such an endpoint, and each Borg 2 backup, restore or maintenance run
+>    on it is refused with both versions named. A machine that manages its
+>    own Borg (`--skip-borg-install`) keeps its binary across an upgrade;
+>    replace its Borg 2 yourself and restart the agent, or run the installer
+>    on it with `--reinstall --borg-version both --borg-source server` (`2`
+>    instead of `both` where it has no Borg 1).
 >
 > On a repository created with 2.0.0b25, every command needs the passphrase,
 > `break-lock` and deleting the repository included, because the lock is

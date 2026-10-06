@@ -84,6 +84,44 @@ def test_start_rejects_a_second_check_on_the_same_repository(db, repository):
     assert excinfo.value.detail["key"] == "backend.errors.repo.checkAlreadyRunning"
 
 
+def test_a_running_prune_preview_does_not_refuse_a_real_prune(db, repository):
+    """The retention comparison a backup chains runs dry-run prunes inline; a
+    user's prune started meanwhile queues behind them (the lane holds it)
+    instead of being refused as "prune already running"."""
+    from app.services.operations.maintenance_start import start_inline_maintenance
+
+    start_inline_maintenance(
+        db, repository, "prune", params={"dry_run": True}, user_id=None
+    )
+
+    op = start_maintenance(
+        db,
+        repository,
+        "prune",
+        trigger="manual",
+        params={"dry_run": False},
+        user_id=None,
+        duplicate_error_key="backend.errors.repo.pruneAlreadyRunning",
+    )
+
+    assert op.status == "queued"
+
+
+def test_a_queued_real_prune_still_refuses_a_second_one(db, repository):
+    kwargs = dict(
+        trigger="manual",
+        params={"dry_run": False},
+        user_id=None,
+        duplicate_error_key="backend.errors.repo.pruneAlreadyRunning",
+    )
+    start_maintenance(db, repository, "prune", **kwargs)
+
+    with pytest.raises(HTTPException) as excinfo:
+        start_maintenance(db, repository, "prune", **kwargs)
+
+    assert excinfo.value.status_code == 409
+
+
 def test_start_allows_a_different_kind_to_queue_alongside(db, repository):
     start_maintenance(
         db,

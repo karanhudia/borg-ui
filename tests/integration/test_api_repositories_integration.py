@@ -4,6 +4,7 @@ Integration tests for repositories API with real borg operations
 These tests use actual borg repositories to verify end-to-end functionality.
 """
 
+import os
 import pytest
 import shutil
 import subprocess
@@ -80,7 +81,7 @@ def _create_borg2_repo_with_archives(test_db, tmp_path):
     test_db.commit()
     test_db.refresh(repo)
 
-    # Borg 2 prunes per series (archives sharing a name, b23+), and borg-ui
+    # Borg 2 prunes per series (archives sharing a name), and borg-ui
     # gives Borg 2 archives a stable series name, so both share one here.
     return repo, repo_path, source_path, ["test-archive", "test-archive"]
 
@@ -940,8 +941,9 @@ class TestRepositoryMaintenanceOperations:
 class TestRepositoryValidation:
     """Test repository validation and error handling"""
 
+    @pytest.mark.skipif(os.geteuid() == 0, reason="root ignores directory permissions")
     def test_create_repository_invalid_path(
-        self, test_client: TestClient, admin_headers
+        self, test_client: TestClient, admin_headers, tmp_path
     ):
         """
         Test repository creation with invalid path
@@ -949,11 +951,41 @@ class TestRepositoryValidation:
         WHY: Verifies validation catches bad paths
         PREVENTS: Repositories created in inaccessible locations
         """
+        forbidden = tmp_path / "forbidden"
+        forbidden.mkdir(mode=0o500)
+        try:
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Invalid Path Repo",
+                    "path": str(forbidden / "path"),
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "repository_type": "local",
+                    "source_directories": ["/tmp"],
+                },
+                headers=admin_headers,
+            )
+        finally:
+            forbidden.chmod(0o700)
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.permissionDeniedCreateDirectory"
+        )
+
+    def test_create_repository_path_below_file(
+        self, test_client: TestClient, admin_headers, tmp_path
+    ):
+        """An OSError other than PermissionError is the caller's path, not a 500."""
+        blocker = tmp_path / "blocker"
+        blocker.write_text("")
         response = test_client.post(
             "/api/repositories/",
             json={
-                "name": "Invalid Path Repo",
-                "path": "/root/forbidden/path",  # Likely not accessible
+                "name": "Path Below File Repo",
+                "path": str(blocker / "repo"),
                 "encryption": "none",
                 "compression": "lz4",
                 "repository_type": "local",
@@ -963,6 +995,10 @@ class TestRepositoryValidation:
         )
 
         assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["key"] == "backend.errors.repo.failedToCreateDirectory"
+        assert detail["params"]["path"] == str(blocker / "repo")
+        assert detail["params"]["reason"]
 
     def test_create_repository_duplicate_path(
         self, test_client: TestClient, admin_headers, db_borg_repo

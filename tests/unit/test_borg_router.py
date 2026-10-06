@@ -1221,7 +1221,10 @@ async def test_run_agent_maintenance_fails_the_operation_when_queue_is_refused(
                     "params": {"active_operation": "prune"},
                 },
             ),
-            "agent job could not be queued: backend.errors.repo.pruneAlreadyRunning",
+            (
+                "agent job could not be queued: "
+                "backend.errors.repo.pruneAlreadyRunning (active_operation=prune)"
+            ),
         ),
         (
             HTTPException(

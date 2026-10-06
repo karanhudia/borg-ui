@@ -65,12 +65,11 @@ from borg.logger import setup_logging
 setup_logging()
 from borg.repository import Repository
 from borg.helpers import Location
+from borg.crypto.key import key_factory
 total = objects = 0
 marker = None
 with Repository(Location(os.environ["BORG_UI_REPOSITORY_URL"]), exclusive=False, lock=False) as repo:
-    if getattr(repo, "key", False) is None:
-        from borg.crypto.key import key_factory
-        key_factory(repo)
+    key_factory(repo)
     while True:
         batch = repo.list(limit=100000, marker=marker)
         if not batch:
@@ -519,7 +518,7 @@ def http_storage_used(
     return value if value > 0 else None
 
 
-def _du_command(path: str) -> tuple[list[str], int]:
+def du_command(path: str) -> tuple[list[str], int]:
     """The du invocation and the unit its first field is in.
 
     GNU du reports apparent bytes with -b. BSD du has no -b, so on Darwin
@@ -531,10 +530,20 @@ def _du_command(path: str) -> tuple[list[str], int]:
     return ["du", "-sb", "--", path], 1
 
 
+def du_output_in_bytes(stdout: str) -> str:
+    """`du_command`'s output with its size field in bytes, the unit the
+    server reads from a `repository.disk_usage` job."""
+    unit = du_command("")[1]
+    size, sep, rest = (stdout or "").partition("\t")
+    if unit == 1 or not size.isdigit():
+        return stdout
+    return f"{int(size) * unit}{sep}{rest}"
+
+
 def du_storage_used(
     path: str, *, timeout: float, should_cancel: ShouldCancel = None
 ) -> Optional[int]:
-    command, unit = _du_command(path)
+    command, unit = du_command(path)
     try:
         proc = _run(command, timeout=timeout, should_cancel=should_cancel)
     except (subprocess.TimeoutExpired, OSError) as exc:
@@ -554,21 +563,13 @@ def du_storage_used(
 
 
 def store_target(url: str) -> tuple[str, Optional[str]]:
-    """(tool, target) for the store-level fallback, or ("", None).
-
-    `rest://user@host/path` runs borgstore's REST server over ssh behind a
-    forced command, so no shell command reaches its files; only `rest:///`
-    (local) is measurable with du.
-    """
+    """(tool, target) for the store-level fallback, or ("", None)."""
     # URI schemes are case-insensitive; the target keeps the text as given.
     lowered = url.lower()
     if lowered.startswith(("http://", "https://")):
         return "http", url
     if lowered.startswith(("sftp://", "rclone:")):
         return "rclone", url
-    if lowered.startswith("rest://"):
-        parts = urlsplit(url)
-        return ("", None) if parts.hostname else ("du", parts.path)
     if "://" not in url and not lowered.startswith(("s3:", "b2:")):
         return "du", url
     return "", None

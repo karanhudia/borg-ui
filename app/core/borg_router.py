@@ -291,8 +291,7 @@ class BorgRouter:
     ) -> List[str]:
         """The options a caller appends to a command it got from a builder
         here. Borg 1 takes both on the command line. Borg 2 has neither:
-        `--remote-path` was removed in 2.0.0b22 (see `remote_path_env`) and
-        it never had `--bypass-lock`."""
+        no `--remote-path` (see `remote_path_env`) and no `--bypass-lock`."""
         if self.is_v2:
             return []
         options: List[str] = []
@@ -351,8 +350,8 @@ class BorgRouter:
 
     def remote_path_env(self, remote_path: Optional[str]) -> dict:
         """What a caller that builds its own environment adds for the remote
-        Borg command. Borg 2 reads it from BORG_REMOTE_PATH only (the option
-        was removed in 2.0.0b22); Borg 1 gets it on the command line."""
+        Borg command. Borg 2 reads it from BORG_REMOTE_PATH only (it has no
+        such option); Borg 1 gets it on the command line."""
         if self.is_v2 and remote_path:
             return {"BORG_REMOTE_PATH": remote_path}
         return {}
@@ -366,7 +365,7 @@ class BorgRouter:
 
             from app.core.borg2 import ensure_borg2_repository_url
 
-            ensure_borg2_repository_url(repository_path, borg2.borg_cmd)
+            ensure_borg2_repository_url(repository_path)
             # no --remote-path on Borg 2: see `remote_path_env`
             return [borg2.borg_cmd, "-r", repository_path, "break-lock"]
 
@@ -758,7 +757,7 @@ class BorgRouter:
             # post-backup flows that have no HTTP context. Translate to a plain
             # error so background maintenance doesn't surface an HTTP-specific
             # exception; the linked maintenance job already records the detail.
-            from app.services.operations.maintenance_start import detail_text
+            from app.utils.http_detail import detail_text
 
             raise RuntimeError(
                 f"agent {maintenance_kind} failed: {detail_text(exc.detail)}"

@@ -67,7 +67,7 @@ def _listing(payload, *, chunks=None):
     )
 
 
-def _repo(borg_version=2, path="rest://borg@host/repos/repo", passphrase="x"):
+def _repo(borg_version=2, path="ssh://borg@host/repos/repo", passphrase="x"):
     return SimpleNamespace(
         borg_version=borg_version,
         path=path,
@@ -186,11 +186,6 @@ def test_store_target_by_scheme():
     )
     assert store_target("sftp://u@h:23/./r") == ("rclone", "sftp://u@h:23/./r")
     assert store_target("rclone:remote:r") == ("rclone", "rclone:remote:r")
-    # borgstore's rest://user@host/path runs the REST server over ssh behind
-    # a forced command, so no shell command (du) reaches the files.
-    assert store_target("rest://borg@host/repos/repo") == ("", None)
-    assert store_target("rest://borg@host:2222/repos/repo") == ("", None)
-    assert store_target("rest:///srv/store") == ("du", "/srv/store")
     # Borg 2 reads ssh://host/path as relative to the login directory: only
     # the absolute form (second slash) names what du over ssh would measure
     assert store_target("ssh://u@h//r") == ("du", "ssh://u@h//r")

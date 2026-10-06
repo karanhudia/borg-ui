@@ -20,7 +20,7 @@ def _records(name, parser):
 @pytest.mark.unit
 @pytest.mark.parametrize("fixture", ["borg1_diff.jsonl", "borg2_diff.jsonl"])
 def test_diff_fixture_maps_every_change_kind(fixture):
-    """Real `borg diff --json-lines` output from Borg 1.4.5 and Borg 2.0.0b21
+    """Real `borg diff --json-lines` output from Borg 1.4.5 and Borg 2.0.0b25
     (see tests/fixtures/borg_output/README.md), asserting the exact shapes
     the two versions produce."""
     recs = _records(fixture, parse_diff_line)

@@ -1139,9 +1139,16 @@ def _validate_flags_for_repository(
         None,
     )
     try:
-        parse_borg_flags(create_flags, "create", repo.borg_version or 1)
+        parse_borg_flags(
+            create_flags, "create", repo.borg_version or 1, local_paths=False
+        )
         if run_check_after:
-            parse_borg_flags(check_extra_flags, "check", repo.borg_version or 1)
+            parse_borg_flags(
+                check_extra_flags,
+                "check",
+                repo.borg_version or 1,
+                local_paths=False,
+            )
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -1483,7 +1490,7 @@ def _replace_repository_links(
 
 
 @router.get("/")
-async def list_backup_plans(
+def list_backup_plans(
     repository_id: int | None = Query(default=None, ge=1),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -1506,7 +1513,7 @@ async def list_backup_plans(
 
 
 @router.get("/runs")
-async def list_backup_plan_runs(
+def list_backup_plan_runs(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     limit: int = 50,
@@ -1553,7 +1560,7 @@ async def list_backup_plan_runs(
 
 
 @router.get("/runs/{run_id}")
-async def get_backup_plan_run(
+def get_backup_plan_run(
     run_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -1671,7 +1678,10 @@ async def create_backup_plan_from_repository(
 
     try:
         parse_borg_flags(
-            repository.custom_flags, "create", repository.borg_version or 1
+            repository.custom_flags,
+            "create",
+            repository.borg_version or 1,
+            local_paths=False,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -1816,7 +1826,7 @@ async def run_backup_plan(
 
 
 @router.get("/{plan_id}/runs")
-async def list_backup_plan_runs_for_plan(
+def list_backup_plan_runs_for_plan(
     plan_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -1855,7 +1865,7 @@ async def list_backup_plan_runs_for_plan(
 
 
 @router.post("/{plan_id}/toggle")
-async def toggle_backup_plan(
+def toggle_backup_plan(
     plan_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -1904,7 +1914,7 @@ async def toggle_backup_plan(
 
 
 @router.post("/{plan_id}/repositories/{repository_id}/toggle")
-async def toggle_backup_plan_repository(
+def toggle_backup_plan_repository(
     plan_id: int,
     repository_id: int,
     current_user: User = Depends(get_current_user),
@@ -1987,7 +1997,7 @@ async def toggle_backup_plan_repository(
 
 
 @router.get("/{plan_id}")
-async def get_backup_plan(
+def get_backup_plan(
     plan_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -2002,7 +2012,7 @@ async def get_backup_plan(
 
 
 @router.put("/{plan_id}")
-async def update_backup_plan(
+def update_backup_plan(
     plan_id: int,
     payload: BackupPlanPayload,
     current_user: User = Depends(get_current_user),
@@ -2042,7 +2052,7 @@ async def update_backup_plan(
 
 
 @router.delete("/{plan_id}")
-async def delete_backup_plan(
+def delete_backup_plan(
     plan_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

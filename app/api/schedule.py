@@ -431,7 +431,7 @@ def _resolve_backup_plan_next_run(
 
 
 @router.get("/")
-async def get_scheduled_jobs(
+def get_scheduled_jobs(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get all scheduled jobs"""
@@ -932,7 +932,7 @@ async def create_scheduled_job(
 
 
 @router.get("/cron-presets")
-async def get_cron_presets(current_user: User = Depends(get_current_user)):
+def get_cron_presets(current_user: User = Depends(get_current_user)):
     """Get common cron expression presets"""
     presets = [
         {
@@ -996,7 +996,7 @@ async def get_cron_presets(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/upcoming-jobs")
-async def get_upcoming_jobs(
+def get_upcoming_jobs(
     hours: int = Query(24, description="Hours to look ahead"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -1096,7 +1096,7 @@ async def get_upcoming_jobs(
 
 
 @router.get("/{job_id}")
-async def get_scheduled_job(
+def get_scheduled_job(
     job_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -1422,7 +1422,7 @@ async def update_scheduled_job(
 
 
 @router.delete("/{job_id}")
-async def delete_scheduled_job(
+def delete_scheduled_job(
     job_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -1473,7 +1473,7 @@ async def delete_scheduled_job(
 
 
 @router.post("/{job_id}/toggle")
-async def toggle_scheduled_job(
+def toggle_scheduled_job(
     job_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

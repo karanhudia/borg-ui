@@ -9,8 +9,8 @@ from app.services.v2.restore_service import RestoreV2Service
 @pytest.mark.unit
 def test_build_extract_command_uses_borg2_archive_identifier():
     """bypass_lock and remote_path are accepted and leave the command line
-    alone: Borg 2 has neither --bypass-lock nor (since 2.0.0b22)
-    --remote-path, and emitting one failed the command at argument parsing."""
+    alone: Borg 2 has neither --bypass-lock nor --remote-path, and emitting
+    one fails the command at argument parsing."""
     with patch("app.services.v2.restore_service.borg2.borg_cmd", "borg2"):
         cmd = RestoreV2Service().build_extract_command(
             repository_path="/repos/v2",

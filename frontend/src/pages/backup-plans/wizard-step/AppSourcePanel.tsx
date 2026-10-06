@@ -52,6 +52,7 @@ export default function AppSourcePanel({
   const [rootIncluded, setRootIncluded] = useState(true)
   const [extraPaths, setExtraPaths] = useState<string[]>([])
   const [excludes, setExcludes] = useState<string[]>([])
+  const [container, setContainer] = useState('')
 
   const remoteId = sourceKey.startsWith('remote:') ? Number(sourceKey.split(':')[1]) : null
   const connection = sshConnections.find((item) => item.id === remoteId)
@@ -96,7 +97,7 @@ export default function AppSourcePanel({
     const checkScript = template.pre_backup_script
     const content =
       rootIncluded && checksBackedUpDumps(template, excludes)
-        ? renderAppScript(template, appRoot)
+        ? renderAppScript(template, appRoot, container)
         : null
     onAdd(
       location,
@@ -211,6 +212,7 @@ export default function AppSourcePanel({
           onRootIncludedChange={setRootIncluded}
           extraPaths={extraPaths}
           onPathsChange={setPaths}
+          onContainerChange={setContainer}
           excludes={excludes}
           onExcludesChange={setExcludes}
         />

@@ -1000,17 +1000,17 @@ class TestV2RepositoryRoutes:
         assert repo.archive_count == 2
         assert repo.last_backup == datetime(2026, 8, 19, 19, 3, 18)
 
-    def test_get_repository_info_normalizes_borg2_b22_encryption(
+    def test_get_repository_info_normalizes_borg2_encryption(
         self, test_client: TestClient, admin_headers, test_db
     ):
-        """Borg 2.0.0b22 reports the cipher and the id hash instead of a single
+        """Borg 2 reports the cipher and the id hash instead of a single
         `mode`, and `info --json` carries the block too — so the rinfo merge
         below never fires and the dialog showed "N/A" for an encrypted
-        repository. Both payloads are verbatim from 2.0.0b22.
+        repository. Both encryption blocks are verbatim from 2.0.0b25.
         """
         _enable_borg_v2(test_db)
-        repo = _create_v2_repo(test_db, path="/tmp/v2-b22-repo")
-        b22_encryption = {"encryption": "aes256-ocb", "id_hash": "sha256"}
+        repo = _create_v2_repo(test_db, path="/tmp/v2-borg2-repo")
+        borg2_encryption = {"encryption": "aes256-ocb", "id_hash": "sha256"}
 
         with patch(
             "app.api.v2.repositories.borg2.info_repo",
@@ -1018,7 +1018,7 @@ class TestV2RepositoryRoutes:
                 return_value={
                     "success": True,
                     "stdout": json.dumps(
-                        {"archives": [], "encryption": dict(b22_encryption)}
+                        {"archives": [], "encryption": dict(borg2_encryption)}
                     ),
                     "stderr": "",
                 }
@@ -1032,7 +1032,7 @@ class TestV2RepositoryRoutes:
                         "stdout": json.dumps(
                             {
                                 "repository": {"id": 9},
-                                "encryption": dict(b22_encryption),
+                                "encryption": dict(borg2_encryption),
                             }
                         ),
                         "stderr": "",
@@ -1318,16 +1318,16 @@ class TestV2RepositoryRoutes:
         assert response.json()["borg_version"] == 2
         mock_rinfo.assert_awaited_once()
 
-    def test_get_repository_stats_normalizes_borg2_b22_encryption(
+    def test_get_repository_stats_normalizes_borg2_encryption(
         self, test_client: TestClient, admin_headers, test_db
     ):
-        """/stats returns the same rinfo payload as /info, so b22's mode-less
-        encryption block needs the same normalization — a client reading
-        `stats.encryption.mode` would otherwise get nothing while /info has
-        it. The payload is verbatim from 2.0.0b22.
+        """/stats returns the same rinfo payload as /info, so Borg 2's
+        mode-less encryption block needs the same normalization — a client
+        reading `stats.encryption.mode` would otherwise get nothing while
+        /info has it. The encryption block is verbatim from 2.0.0b25.
         """
         _enable_borg_v2(test_db)
-        repo = _create_v2_repo(test_db, path="/tmp/v2-b22-stats-repo")
+        repo = _create_v2_repo(test_db, path="/tmp/v2-borg2-stats-repo")
 
         with patch(
             "app.api.v2.repositories.borg2.rinfo",
