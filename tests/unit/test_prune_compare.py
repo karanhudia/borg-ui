@@ -362,6 +362,7 @@ def test_stored_reports_stale_when_the_archive_count_or_the_day_moved(
         "archive_count_at": None,
         "stale": True,
         "auto": True,
+        "sizes_available": True,
         "candidates": [],
     }
     rows = _archives(db, repo, 2)
@@ -423,6 +424,15 @@ def test_stored_reports_stale_when_the_archive_count_or_the_day_moved(
     assert pc.stored(db, repo)["stale"] is False
     _archives(db, repo, 1)
     assert pc.stored(db, repo)["stale"] is True
+
+
+@pytest.mark.unit
+def test_stored_says_borg2_reports_no_candidate_size(db, repo):
+    """#1351: a Borg 2 repository's rows free "at least 0" by construction,
+    so the payload tells the page there is no size to show."""
+    repo.borg_version = 2
+    db.commit()
+    assert pc.stored(db, repo)["sizes_available"] is False
 
 
 @pytest.mark.unit

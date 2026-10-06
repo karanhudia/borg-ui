@@ -77,6 +77,7 @@ const preview: PrunePreviewResponse = {
   kept_count: 1,
   freed_at_least: 300,
   partial_measure: false,
+  sizes_available: true,
   footprint_before: 1000,
   footprint_after_at_most: 700,
   lost_files: { available: false, capability: 'plan_locked' },
@@ -212,6 +213,28 @@ describe('PrunePreview page', () => {
     renderWithProviders(<PrunePreview />, { initialRoute: '/repositories/7/prune-preview' })
     expect(await screen.findByText(/lower bound/i)).toBeInTheDocument()
     expect(screen.queryByText(/another series/i)).not.toBeInTheDocument()
+  })
+
+  it('shows no freed figure, ranking or lower bound when Borg 2 reports no sizes', async () => {
+    // #1351: Borg 2 has no per-archive size a deletion would free
+    vi.mocked(repositoriesAPI.prunePreview).mockResolvedValue({
+      data: {
+        ...preview,
+        archives: preview.archives.map((a) => ({ ...a, deduplicated_size: null })),
+        freed_at_least: 0,
+        sizes_available: false,
+        footprint_after_at_most: 1000,
+      },
+    } as never)
+    renderWithProviders(<PrunePreview />, { initialRoute: '/repositories/7/prune-preview' })
+    await screen.findByTestId('prune-preview-deleted')
+    const freed = screen.getByTestId('prune-preview-freed').textContent
+    expect(freed).toMatch(/not available/)
+    expect(freed).not.toMatch(/at least/)
+    expect(screen.getByText(/Borg 2 reports no per-archive size/)).toBeInTheDocument()
+    expect(screen.queryByText(/ranked by what they free/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/re-measured/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/lower bound/i)).not.toBeInTheDocument()
   })
 
   it('drops the ceiling while the index is incomplete', async () => {

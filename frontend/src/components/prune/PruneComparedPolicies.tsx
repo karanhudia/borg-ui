@@ -40,6 +40,9 @@ interface Props {
   refreshDisabled: boolean
   /** Can open System settings, where the automatic previews switch lives. */
   canManageSettings?: boolean
+  /** False on Borg 2: every row frees "at least 0" by construction, so the
+   *  column is left out. */
+  sizesAvailable?: boolean
   onSelect: (row: PruneComparisonRow) => void
   onRefresh: () => void
 }
@@ -51,6 +54,7 @@ export function PruneComparedPolicies({
   pending,
   refreshDisabled,
   canManageSettings = false,
+  sizesAvailable = true,
   onSelect,
   onRefresh,
 }: Props) {
@@ -81,7 +85,9 @@ export function PruneComparedPolicies({
         ? t('prunePreview.compare.current')
         : t('prunePreview.compare.currentNoPolicy')
       : t(`prunePreview.compare.presets.${row.key}`, { defaultValue: row.label })
-  const partial = rows.some((r) => r.partial_measure)
+  // no size is measured where none is shown (a row stored before Borg 2's
+  // re-measure was skipped may still say partial)
+  const partial = sizesAvailable && rows.some((r) => r.partial_measure)
 
   return (
     <Paper variant="outlined" sx={{ p: 2, mt: 3 }}>
@@ -143,7 +149,9 @@ export function PruneComparedPolicies({
                 <TableCell>{t('prunePreview.compare.colRetention')}</TableCell>
                 <TableCell align="right">{t('prunePreview.compare.colKept')}</TableCell>
                 <TableCell align="right">{t('prunePreview.compare.colDeleted')}</TableCell>
-                <TableCell align="right">{t('prunePreview.compare.colFree')}</TableCell>
+                {sizesAvailable && (
+                  <TableCell align="right">{t('prunePreview.compare.colFree')}</TableCell>
+                )}
                 <TableCell align="right">{t('prunePreview.compare.colLost')}</TableCell>
               </TableRow>
             </TableHead>
@@ -172,9 +180,11 @@ export function PruneComparedPolicies({
                   <TableCell align="right" sx={deletedSx(row.deleted_count)}>
                     {row.deleted_count}
                   </TableCell>
-                  <TableCell align="right" sx={freedSx(row)}>
-                    {freedText(row)}
-                  </TableCell>
+                  {sizesAvailable && (
+                    <TableCell align="right" sx={freedSx(row)}>
+                      {freedText(row)}
+                    </TableCell>
+                  )}
                   <TableCell align="right" sx={lostSx(row)}>
                     {lostText(row)}
                   </TableCell>
@@ -196,9 +206,11 @@ export function PruneComparedPolicies({
                   <TableCell align="right" sx={deletedSx(editing.deleted_count)}>
                     {editing.deleted_count}
                   </TableCell>
-                  <TableCell align="right" sx={freedSx(editing)}>
-                    {freedText(editing)}
-                  </TableCell>
+                  {sizesAvailable && (
+                    <TableCell align="right" sx={freedSx(editing)}>
+                      {freedText(editing)}
+                    </TableCell>
+                  )}
                   <TableCell align="right" sx={lostSx(editing)}>
                     {lostText(editing)}
                   </TableCell>

@@ -19,6 +19,7 @@ const comparison: PruneComparison = {
   archive_count_at: 12,
   stale: false,
   auto: true,
+  sizes_available: true,
   candidates: [
     {
       key: 'current',
@@ -74,6 +75,35 @@ describe('PruneComparedPolicies', () => {
     expect(onSelect).toHaveBeenCalledWith(comparison.candidates[1])
   })
 
+  it('leaves out the freed column when Borg 2 reports no sizes', () => {
+    // #1351: every row would free "at least 0" by construction
+    renderWithProviders(
+      <PruneComparedPolicies
+        comparison={{ ...comparison, sizes_available: false }}
+        editing={{
+          retention: { ...retention(3), keep_within: '' },
+          kept_count: 4,
+          deleted_count: 8,
+          freed_at_least: 0,
+          lost_size: null,
+        }}
+        selectedKey={null}
+        pending={false}
+        refreshDisabled={false}
+        sizesAvailable={false}
+        onSelect={() => {}}
+        onRefresh={() => {}}
+      />
+    )
+    expect(screen.getByText('Standard')).toBeInTheDocument()
+    expect(screen.getByText('Editing')).toBeInTheDocument()
+    expect(screen.queryByText('Would free')).not.toBeInTheDocument()
+    expect(screen.queryByText(/at least/)).not.toBeInTheDocument()
+    expect(screen.getByText('File data lost')).toBeInTheDocument()
+    // the fixture's stored row says partial; no size is measured here
+    expect(screen.queryByText(/stored values/i)).not.toBeInTheDocument()
+  })
+
   it('shows the editing row and the stale note', () => {
     renderWithProviders(
       <PruneComparedPolicies
@@ -108,6 +138,7 @@ describe('PruneComparedPolicies', () => {
           archive_count_at: null,
           stale: true,
           auto: true,
+          sizes_available: true,
           candidates: [],
         }}
         editing={null}

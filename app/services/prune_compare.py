@@ -16,6 +16,7 @@ from app.services.prune_preview import (
     Retention,
     retention_defaults,
     run_candidate,
+    sizes_bound_freed_space,
 )
 from app.utils.datetime_utils import serialize_datetime, utc_now
 
@@ -237,6 +238,7 @@ def stored(db: Session, repository: Repository) -> dict:
             "archive_count_at": None,
             "stale": True,
             "auto": auto_enabled(db),
+            "sizes_available": sizes_bound_freed_space(repository),
             "candidates": [],
         }
     count_at = rows[0].archive_count_at
@@ -262,6 +264,7 @@ def stored(db: Session, repository: Repository) -> dict:
         "archive_count_at": count_at,
         "stale": stale,
         "auto": auto_enabled(db),
+        "sizes_available": sizes_bound_freed_space(repository),
         "candidates": [_row_payload(r) for r in rows],
     }
 
