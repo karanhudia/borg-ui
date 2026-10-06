@@ -5849,6 +5849,7 @@
         "notValidBorgRepository": "Non è un repository Borg valido: {{path}}",
         "parentDirectoryNotWritable": "La directory padre non è scrivibile: {{path}}. Assicurati che la directory esista con i permessi corretti.",
         "permissionDeniedCreateDirectory": "Permesso negato: impossibile creare la directory in '{{path}}'. Per archiviare repository sulla tua macchina host, usa percorsi che iniziano con '/local/'.",
+        "failedToCreateDirectory": "Impossibile creare la directory in '{{path}}': {{reason}}",
         "permissionDeniedCreateParentDirectory": "Permesso negato: impossibile creare la directory padre '{{path}}'. Assicurati che la directory esista sulla tua macchina host con i permessi corretti.",
         "encryptedPassphraseRequired": "La passphrase è richiesta per la modalità di crittografia '{{mode}}'",
         "agentBorg2Unavailable": "Questo endpoint non ha Borg 2 installato, quindi non è possibile creare o aprire un repository Borg 2. Installa Borg 2 sull'endpoint oppure scegli Borg 1.",

@@ -3734,6 +3734,23 @@ async def create_repository(
                             "params": {"path": repo_path},
                         },
                     )
+                except OSError as e:
+                    # Read-only filesystem, a file in the path, ...: the path is wrong
+                    logger.error(
+                        "Failed to create repository directory",
+                        path=repo_path,
+                        error=str(e),
+                    )
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "key": "backend.errors.repo.failedToCreateDirectory",
+                            "params": {
+                                "path": repo_path,
+                                "reason": e.strerror or str(e),
+                            },
+                        },
+                    )
             else:
                 # For /local/ paths, we need to ensure the parent directory exists
                 # Let's try to create the full path up to the repository directory

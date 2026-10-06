@@ -5849,6 +5849,7 @@
         "notValidBorgRepository": "Kein gültiges Borg-Repository: {{path}}",
         "parentDirectoryNotWritable": "Übergeordnetes Verzeichnis ist nicht beschreibbar: {{path}}. Bitte stellen Sie sicher, dass das Verzeichnis mit den richtigen Berechtigungen vorhanden ist.",
         "permissionDeniedCreateDirectory": "Zugriff verweigert: Verzeichnis kann nicht unter '{{path}}' erstellt werden. Um Repositories auf Ihrem Host-Rechner zu speichern, verwenden Sie Pfade, die mit '/local/' beginnen.",
+        "failedToCreateDirectory": "Verzeichnis kann nicht unter '{{path}}' erstellt werden: {{reason}}",
         "permissionDeniedCreateParentDirectory": "Zugriff verweigert: Übergeordnetes Verzeichnis '{{path}}' kann nicht erstellt werden. Stellen Sie sicher, dass das Verzeichnis auf Ihrem Host-Rechner mit den entsprechenden Berechtigungen vorhanden ist.",
         "encryptedPassphraseRequired": "Passphrase ist für den Verschlüsselungsmodus '{{mode}}' erforderlich",
         "agentBorg2Unavailable": "Auf diesem Endpunkt ist Borg 2 nicht installiert, daher kann dort kein Borg-2-Repository erstellt oder geöffnet werden. Installiere Borg 2 auf dem Endpunkt oder wähle Borg 1.",
