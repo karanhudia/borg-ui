@@ -363,6 +363,8 @@
         "runAsAgentUser": "Führen Sie ihn als der Benutzer aus, unter dem der Agent läuft, ohne sudo.",
         "borgInstallation": "Borg-Installation",
         "borgSelectionHint": "Eine Borg-Auswahl aktualisiert diese Binaries auf dem Agenten auf die Versionen dieses Servers. Lassen Sie die Auswahl auf Überspringen, sofern kein Borg-Upgrade beabsichtigt ist.",
+        "movedToThisServer": "Dieser Endpunkt wurde auf diesen Server umgezogen",
+        "movedToThisServerHint": "Ergänzt --server, damit die Neuinstallation diese Adresse für Remote-Upgrades hinterlegt. Aktivieren Sie dies, nachdem Server-URL ändern den Endpunkt hierher umgezogen hat. Lassen Sie es aus, wenn Agenten diesen Server über eine andere Adresse erreichen, denn mit dieser Adresse wären ihre Remote-Upgrades abgeschaltet.",
         "borgOptions": {
           "borg1": {
             "label": "Borg 1.x",
@@ -1860,9 +1862,9 @@
       "settings": {
         "archiveNameHelper": "Unterstützt {plan_name}, {repo_name}, {now}, {date}, {time} und {timestamp}.",
         "extraBorgFlagsHelper": "Benutzerdefinierte Befehlszeilen-Flags für borg create (z.B. --stats, --progress, --list). Wird auf jeden Repository-Lauf in diesem Plan angewendet.",
-        "uploadSpeedHelper": "MB/s. Leer bedeutet unbegrenzt. Gilt nur für Borg-1-Repositories; Borg 2 kennt kein Upload-Limit.",
+        "uploadSpeedHelper": "MB/s. Leer bedeutet unbegrenzt. Gilt für Borg-1-Repositories und für Borg-2-Repositories hinter rclone; andere Borg-2-Repositories haben kein Upload-Limit.",
         "uploadPoliciesTitle": "Geplante Upload-Limits",
-        "uploadPoliciesHelper": "Zeitfenster überschreiben das konstante Upload-Limit. Ein leeres Limit bedeutet unbegrenzt. Wie das konstante Limit gelten sie nur für Borg-1-Repositories.",
+        "uploadPoliciesHelper": "Zeitfenster überschreiben das konstante Upload-Limit. Ein leeres Limit bedeutet unbegrenzt. Wie das konstante Limit gelten sie für Borg-1-Repositories und für Borg-2-Repositories hinter rclone.",
         "addUploadPolicy": "Upload-Regel hinzufügen",
         "removeUploadPolicy": "Upload-Regel entfernen",
         "daytimePolicyLabel": "Tageslimit",
@@ -5218,7 +5220,8 @@
     "customFlagsHint": "Benutzerdefinierte Befehlszeilen-Flags für borg create (z.B. --stats, --progress, --list)",
     "uploadSpeedLimit": "Upload-Geschwindigkeitslimit",
     "uploadSpeedLimitHint": "MB/s. Leer bedeutet unbegrenzt. Backup-Plan-Einstellungen können diesen Standard überschreiben.",
-    "uploadSpeedLimitBorg2": "Borg 2 kennt kein Upload-Limit. Diese Einstellung gilt nur für Borg-1-Repositories.",
+    "uploadSpeedLimitBorg2": "Borg 2 kennt kein Upload-Limit. Diese Einstellung gilt für Borg-1-Repositories und für Borg-2-Repositories hinter rclone.",
+    "uploadSpeedLimitRclone": "MB/s. Leer bedeutet unbegrenzt. Wird bei Backups als Bandbreitenlimit von rclone angewendet, da Borg 2 selbst kein Upload-Limit kennt.",
     "scripts": "Skripte",
     "scriptsOptional": "(Optional)",
     "scriptsHint": "Inline-Skripte konfigurieren oder wiederverwendbare Skripte aus der Skriptbibliothek zuweisen.",

@@ -363,6 +363,8 @@
         "runAsAgentUser": "Run it as the user the agent runs as, without sudo.",
         "borgInstallation": "Borg installation",
         "borgSelectionHint": "Selecting Borg versions upgrades those binaries on the agent to the versions this server provides. Leave this on Skip unless a Borg upgrade is intended.",
+        "movedToThisServer": "This endpoint was moved to this server",
+        "movedToThisServerHint": "Adds --server so the reinstall records this address for remote upgrades. Turn it on after Change server URL moved the endpoint here. Leave it off if agents reach this server through another address, because recording this one would turn their remote upgrades off.",
         "borgOptions": {
           "borg1": {
             "label": "Borg 1.x",
@@ -1860,9 +1862,9 @@
       "settings": {
         "archiveNameHelper": "Supports {plan_name}, {repo_name}, {now}, {date}, {time}, and {timestamp}.",
         "extraBorgFlagsHelper": "Custom command-line flags for borg create (e.g., --stats, --progress, --list). Applied to every repository run in this plan.",
-        "uploadSpeedHelper": "MB/s. Empty means unlimited. Applies to Borg 1 repositories only; Borg 2 has no upload limit.",
+        "uploadSpeedHelper": "MB/s. Empty means unlimited. Applies to Borg 1 repositories and to Borg 2 repositories behind rclone; other Borg 2 repositories have no upload limit.",
         "uploadPoliciesTitle": "Scheduled upload limits",
-        "uploadPoliciesHelper": "Time windows override the constant upload limit. Leave a policy limit empty for unlimited. Like the constant limit, they apply to Borg 1 repositories only.",
+        "uploadPoliciesHelper": "Time windows override the constant upload limit. Leave a policy limit empty for unlimited. Like the constant limit, they apply to Borg 1 repositories and to Borg 2 repositories behind rclone.",
         "addUploadPolicy": "Add upload policy",
         "removeUploadPolicy": "Remove upload policy",
         "daytimePolicyLabel": "Daytime cap",
@@ -5218,7 +5220,8 @@
     "customFlagsHint": "Custom command-line flags for borg create (e.g., --stats, --progress, --list)",
     "uploadSpeedLimit": "Upload speed limit",
     "uploadSpeedLimitHint": "MB/s. Empty means unlimited. Backup plan settings can override this default.",
-    "uploadSpeedLimitBorg2": "Borg 2 has no upload limit. This setting applies to Borg 1 repositories only.",
+    "uploadSpeedLimitBorg2": "Borg 2 has no upload limit. This setting applies to Borg 1 repositories and to Borg 2 repositories behind rclone.",
+    "uploadSpeedLimitRclone": "MB/s. Empty means unlimited. Applied as rclone's bandwidth limit during backups, since Borg 2 has no upload limit of its own.",
     "scripts": "Scripts",
     "scriptsOptional": "(Optional)",
     "scriptsHint": "Configure inline scripts or assign reusable scripts from your Script Library.",

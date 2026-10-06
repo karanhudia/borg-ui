@@ -89,10 +89,10 @@ export const generateBorgInitCommand = (options: BorgInitCommandOptions): string
 
   if (borgVersion === 2) {
     const encryptionFlags = BORG2_ENCRYPTION_FLAGS[encryption] ?? `--encryption ${encryption}`
-    return `${getBorgBinary(2)} -r ${repositoryPath} repo-create ${remotePathFlag}${encryptionFlags}`
+    return `${getBorgBinary(2)} -r ${shellQuote(repositoryPath)} repo-create ${remotePathFlag}${encryptionFlags}`
   }
 
-  return `${getBorgBinary(1)} init --encryption ${encryption} ${remotePathFlag}${repositoryPath}`
+  return `${getBorgBinary(1)} init --encryption ${encryption} ${remotePathFlag}${shellQuote(repositoryPath)}`
 }
 
 /**
@@ -112,22 +112,24 @@ export const generateBorgCreateCommand = (options: BorgCommandOptions): string =
   } = options
 
   // Build exclude patterns
-  const excludeArgs = excludePatterns.map((pattern: string) => `--exclude '${pattern}'`).join(' ')
+  const excludeArgs = excludePatterns
+    .map((pattern: string) => `--exclude ${shellQuote(pattern)}`)
+    .join(' ')
   const excludeStr = excludeArgs ? `${excludeArgs} ` : ''
 
   // Build custom flags with proper spacing
   const customFlagsStr = customFlags && customFlags.trim() ? ` ${customFlags.trim()} ` : ''
 
   // Build source directories string
-  const sourceDirsStr = sourceDirs.join(' ')
+  const sourceDirsStr = sourceDirs.map(shellQuote).join(' ')
 
   const commonOptions = `--progress --stats --compression ${compression} ${excludeStr}${customFlagsStr}`
 
   // Borg 2 takes the repository as -r and the archive name on its own;
   // repo::archive is Borg 1 syntax
   if (borgVersion === 2) {
-    return `${getBorgBinary(2)} -r ${repositoryPath} create ${remotePathFlag}${commonOptions}${archiveName} ${sourceDirsStr}`
+    return `${getBorgBinary(2)} -r ${shellQuote(repositoryPath)} create ${remotePathFlag}${commonOptions}${archiveName} ${sourceDirsStr}`
   }
 
-  return `${getBorgBinary(1)} create ${remotePathFlag}${commonOptions}${repositoryPath}::${archiveName} ${sourceDirsStr}`
+  return `${getBorgBinary(1)} create ${remotePathFlag}${commonOptions}${shellQuote(repositoryPath)}::${archiveName} ${sourceDirsStr}`
 }

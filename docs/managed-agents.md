@@ -424,7 +424,7 @@ of the config file instead. Either way it is one command, and you do not have
 to choose between them.
 
 The upgrade helper installs only from the address in its upgrade record, and
-refuses when the agent is enrolled against another one. From agent 0.1.18
+refuses when the agent is enrolled against another one. From agent 0.1.19
 `set-server` moves the record too when it runs with the rights to write it:
 as root on Linux (the `sudo` in the command above) and as the agent's user on
 macOS. It then prints `Upgrade record: moved to the new server.` and remote
@@ -441,8 +441,12 @@ curl -fsSL https://borg.example.com/agent/install.sh | sudo bash -s -- \
   --server https://borg.example.com --reinstall
 ```
 
-The plain `--reinstall` command keeps the recorded address and says so. On
-macOS the command runs without `sudo`, as the agent's user.
+In Borg UI, open **Reinstall agent** on the endpoint's card and tick **This endpoint
+was moved to this server** to get that command. Leave it off when agents reach
+the server through a different address than your browser does: recording the
+browser's address would turn their remote upgrades off. The plain
+`--reinstall` command keeps the recorded address and says so. On macOS the
+command runs without `sudo`, as the agent's user.
 
 ### Removing an endpoint
 
