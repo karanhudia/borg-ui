@@ -204,7 +204,9 @@ class RepositoryOperationPayload:
         if self.job_kind == "repository.disk_usage":
             if not self.repository_path:
                 raise ValueError("repository.disk_usage requires a repository path")
-            return ["du", "-sb", "--", self.repository_path]
+            from agent.borg_ui_agent import storage_usage
+
+            return storage_usage.du_command(self.repository_path)[0]
 
         if self.job_kind == "repository.rclone_sync":
             rclone = _rclone_operation(self.operation)
@@ -923,6 +925,11 @@ def _execute_short_repository_operation(
         return RepositoryOperationResult(
             job_id=job_id, status="failed", message=error_message
         )
+
+    if payload.job_kind == "repository.disk_usage":
+        from agent.borg_ui_agent import storage_usage
+
+        process.stdout = storage_usage.du_output_in_bytes(process.stdout)
 
     succeeded = process.returncode == 0 or is_warning_return_code(process.returncode)
     parsed = _parse_json_output(process.stdout) if succeeded else None
