@@ -47,9 +47,9 @@ def test_storage_usage_is_advertised_handled_and_admitted():
 @pytest.mark.unit
 def test_borg2_compact_runs_with_stats():
     cmd = RepositoryOperationPayload(
-        job_kind="repository.compact", repository_path="rest://borg@h/r", borg_version=2
+        job_kind="repository.compact", repository_path="ssh://borg@h/r", borg_version=2
     ).build_command()
-    assert cmd[:3] == ["borg2", "-r", "rest://borg@h/r"]
+    assert cmd[:3] == ["borg2", "-r", "ssh://borg@h/r"]
     assert "--stats" in cmd and "--verbose" in cmd and "--log-json" in cmd
 
 
@@ -87,10 +87,6 @@ def _compact_env(monkeypatch, borg_version):
 
     monkeypatch.setattr(
         "agent.borg_ui_agent.repository_ops.subprocess.Popen", _FakePopen
-    )
-    monkeypatch.setattr(
-        "agent.borg_ui_agent.repository_ops.compact_stats_supported",
-        lambda binary: True,
     )
     job = {
         "id": 7,
@@ -132,13 +128,13 @@ def test_index_size_runs_the_script_with_the_venv_python(monkeypatch):
 
     monkeypatch.setattr(storage_usage, "_run", fake_run)
     assert storage_usage.index_size(
-        "rest://borg:secret@h/r", borg_binary="borg2", env={"A": "1"}, timeout=5
+        "ssh://borg:secret@h/r", borg_binary="borg2", env={"A": "1"}, timeout=5
     ) == (301284, 4)
     cmd, kwargs = calls[0]
     assert cmd[0] == "/venv/bin/python" and cmd[1] == "-c" and len(cmd) == 3
     # the URL may carry credentials: environment, never argv
     assert "secret" not in " ".join(cmd)
-    assert kwargs["env"]["BORG_UI_REPOSITORY_URL"] == "rest://borg:secret@h/r"
+    assert kwargs["env"]["BORG_UI_REPOSITORY_URL"] == "ssh://borg:secret@h/r"
     assert kwargs["env"]["A"] == "1"
     assert "lock=False" in cmd[2]
     assert "marker" in cmd[2] and "[size for" not in cmd[2]
@@ -151,8 +147,6 @@ def test_index_size_runs_the_script_with_the_venv_python(monkeypatch):
 
 @pytest.mark.unit
 def test_store_target_and_rclone_remote():
-    assert storage_usage.store_target("rest://borg@host/store/repo") == ("", None)
-    assert storage_usage.store_target("rest:///srv/store") == ("du", "/srv/store")
     assert storage_usage.store_target("sftp://u@h:23/./r") == (
         "rclone",
         "sftp://u@h:23/./r",
@@ -175,7 +169,6 @@ def test_store_target_and_rclone_remote():
         "rclone",
         "Rclone:Remote:Path",
     )
-    assert storage_usage.store_target("REST://borg@host/r") == ("", None)
     assert storage_usage.store_target("S3:profile@bucket") == ("", None)
     assert storage_usage.rclone_remote_for("RCLONE:Remote:Path") == "Remote:Path"
     assert storage_usage.rclone_remote_for("SFTP://u@h/./r") == ":sftp,host=h,user=u:r"
@@ -185,7 +178,7 @@ def test_store_target_and_rclone_remote():
 def test_measure_order_and_explicit_reasons(monkeypatch):
     monkeypatch.setattr(storage_usage, "index_size", lambda *a, **k: (301284, 4))
     assert storage_usage.measure(
-        "rest://borg@h/r", borg_version=2, borg_binary="borg2"
+        "ssh://borg@h/r", borg_version=2, borg_binary="borg2"
     ) == {
         "bytes": 301284,
         "objects": 4,
@@ -211,7 +204,7 @@ def test_measure_order_and_explicit_reasons(monkeypatch):
         lambda url, timeout, env=None, should_cancel=None: (None, ""),
     )
     result = storage_usage.measure(
-        "rest://borg@h/r", borg_version=2, borg_binary="borg2"
+        "ssh://borg@h/r", borg_version=2, borg_binary="borg2"
     )
     assert result["bytes"] is None and result["reason"] == "unsupported_scheme"
     # an empty index is not an empty store: the store measurement follows,
@@ -266,7 +259,7 @@ def test_handler_reports_one_json_object():
         "id": 7,
         "payload": {
             "job_kind": JOB_KIND,
-            "repository": {"path": "rest://borg@h/r", "borg_version": 2},
+            "repository": {"path": "ssh://borg@h/r", "borg_version": 2},
             "operation": {"timeout_seconds": 45},
         },
     }
@@ -837,7 +830,7 @@ def test_invalid_port_is_unknown_and_spawns_nothing(monkeypatch, port, scheme):
 def test_interpreter_is_the_venv_python_behind_the_wrapper(tmp_path):
     """The agent image puts a bash wrapper `borg2` in /usr/local/bin next to
     the system python (seen live: the index step failed silently and the
-    size fell through to a fallback that does not exist for rest://).
+    size fell through to a fallback that does not exist for its URL).
     BORG2_BINARY in the job environment points at the venv binary."""
     venv = tmp_path / "opt" / "venv"
     (venv / "bin").mkdir(parents=True)

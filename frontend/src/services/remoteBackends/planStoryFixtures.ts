@@ -9,7 +9,6 @@ export const storyFeatureMap = {
   backup_reports: 'pro',
   alerting_monitoring: 'pro',
   rclone: 'pro',
-  managed_agents: 'pro',
   remote_clients: 'pro',
   multi_user: 'community',
   extra_users: 'pro',
@@ -19,7 +18,7 @@ export const storyFeatureMap = {
 export const proSystemInfo: SystemInfo = {
   app_version: '2.2.2',
   borg_version: 'borg 1.4.1',
-  borg2_version: 'borg2 2.0.0b19',
+  borg2_version: 'borg2 2.0.0b25',
   plan: 'pro',
   features: storyFeatureMap,
   feature_access: { remote_clients: true },

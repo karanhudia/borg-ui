@@ -483,25 +483,13 @@ describe('RepositoryWizard', () => {
       expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled()
     })
 
-    it('disables paid repository destinations when plan features are unavailable', async () => {
+    it('disables direct rclone when the plan cannot use rclone', async () => {
       const user = userEvent.setup()
       renderWizard('create', undefined, vi.fn(), vi.fn(), {
-        canUseManagedAgents: false,
         canUseRclone: false,
       })
 
       await waitForLocationStep()
-      const destinationSelect = screen.getByRole('combobox', {
-        name: /Where should backups be stored/i,
-      })
-      await user.click(destinationSelect)
-      const listbox = await screen.findByRole('listbox')
-      expect(within(listbox).getByRole('option', { name: /Managed Agent/i })).toHaveAttribute(
-        'aria-disabled',
-        'true'
-      )
-
-      await user.keyboard('{Escape}')
       await user.click(screen.getByRole('button', { name: /v2/i }))
       const directRcloneToggle = await screen.findByRole('checkbox', {
         name: /Use direct Borg 2 rclone repository/i,
@@ -1629,6 +1617,45 @@ describe('RepositoryWizard', () => {
       expect(submittedPayload).toEqual(
         expect.objectContaining({
           upload_ratelimit_kib: 1,
+        })
+      )
+    })
+
+    it('clears a stored upload speed limit when a Borg 2 repository is saved', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('edit', {
+        id: 14,
+        name: 'Borg 2 Limit Repo',
+        path: '/backups/borg2-limit',
+        mode: 'full',
+        repository_type: 'local',
+        storage_backend: 'local',
+        execution_target: 'local',
+        executor_type: 'server',
+        borg_version: 2,
+        encryption: 'repokey-aes-ocb',
+        compression: 'lz4',
+        connection_id: null,
+        rclone_storage: null,
+        upload_ratelimit_kib: 1536,
+      })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toHaveValue('Borg 2 Limit Repo')
+      })
+
+      const reviewStep = screen.getByText('Review').closest('div')
+      expect(reviewStep).not.toBeNull()
+      fireEvent.click(reviewStep!)
+      await user.click(screen.getByRole('button', { name: /Save Changes/i }))
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalled()
+      })
+      const [submittedPayload] = onSubmit.mock.calls[0]
+      expect(submittedPayload).toEqual(
+        expect.objectContaining({
+          upload_ratelimit_kib: null,
         })
       )
     })

@@ -26,6 +26,6 @@ export const Pending: Story = {
 export const Active: Story = {
   args: {
     desiredBorgVersion: '2',
-    borgVersions: [{ major: 2, version: '2.0.0b14' }],
+    borgVersions: [{ major: 2, version: '2.0.0b25' }],
   },
 }

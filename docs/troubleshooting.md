@@ -143,22 +143,40 @@ Break the lock only when you are certain the previous Borg process is gone.
 
 ### Borg 2 repository unreadable after an upgrade
 
-Borg operations on an existing Borg 2 repository fail with
-`repository version 3 is not supported by this borg version`.
+Borg operations on an existing Borg 2 repository fail with:
 
-This exact error means a Borg 2.0.0b22 (or later) client is reading a
-repository written by an earlier Borg 2 beta: that release changed the
-repository format (packs) and cannot open the old one. With this error — and
-only with this error — the storage, the passphrase and the key are fine; the
-format alone is the problem, and there is no in-place conversion. To keep
-using the repository, go back to the image you upgraded from. To move on,
-move the repository aside and let a fresh one be created — and delete the old
-one only once the new one holds backups you have verified. Borg 1
-repositories are not affected.
+| Message | Exit code | Meaning |
+| --- | --- | --- |
+| `... is not a valid repository. Check the repository config.` | 15 | Borg 2.0.0b25 is reading a repository written by an earlier Borg 2 beta. |
+
+Borg 2 changes its repository format between betas, the last time in
+2.0.0b25 (repository version 5), without a conversion. With this
+error, right after an upgrade, the storage, the passphrase and the key are
+fine; the format alone is the problem. To keep using the repository, go back
+to the image you upgraded from. To move on, move the repository aside and let
+a fresh one be created, and delete the old one only once the new one holds
+backups you have verified. Borg 1 repositories are not affected.
+
+The message is also what Borg prints for a directory that is not a
+repository at all, so check that the path is the one you mean.
 
 A repository that became inaccessible after an image pull but reports a
-different error is an ordinary access problem — check the job log for the
+different error is an ordinary access problem: check the job log for the
 actual message and start from storage, network and credentials.
+
+### Borg 2.0.0b25: other messages after the upgrade
+
+| Message | Cause | What to do |
+| --- | --- | --- |
+| `rest:// repository URLs were removed in Borg 2.0.0b25 ...` | The repository path still starts with `rest://`. Borg would read it as a local directory, so Borg UI does not run it. | Change the path to `ssh://`, keeping the rest of the URL, and create the repository anew. |
+| `This endpoint's Borg 2 is ..., older than this server's ...` | A managed agent's Borg 2 is older than the one the server ships. Borg UI runs no Borg 2 job on it; the agent list marks it with "Borg 2 too old". | Run the agent installer on the endpoint with `--reinstall --borg-version both --borg-source server` (`2` instead of `both` where it has no Borg 1), or replace its Borg 2 yourself and restart the agent. If the installer says the `borg2` it would link "exists and is not a symlink", that file is an older Borg 2 installed by hand: rename or remove it and run the installer again. |
+| `Borg 2 has no unencrypted repositories since 2.0.0b25 ...` | A repository was to be created with encryption `none`. | Choose an encrypted mode. |
+| A new `ssh://` repository appears under the login directory of the remote user | Borg 2 reads `ssh://host/path` as relative to the login directory. | Write an absolute path with a second slash: `ssh://host//srv/backups/repo`. |
+| `Borg 2 does not restore into a directory that already holds files ...` | An exact Borg 2 restore into a directory that is not empty. Borg 2.0.0b25 refuses it (`Extraction directory ... is not empty`, exit code 33), and Borg UI says so before Borg runs. | Restore into an empty directory, or choose "Restore into existing files" in the restore dialog (Borg's `--continue`: a file with the archived type, mode, size and modification time is skipped, so a file damaged in place is not replaced). |
+| `The agent of this repository is too old to restore into existing files ...` | A restore into existing files on a managed agent before 0.1.17, which does not read the choice. | Upgrade the agent, or restore into an empty directory. |
+| `Cannot acquire a passphrase ...` (exit code 50) on break-lock, check or repository deletion | These commands need the repository key now. | Store the repository's passphrase in Borg UI. |
+| `No key found in repository ...` (exit code 44) | A `keyfile` repository whose key file is not on this machine. | Restore the key file from your key export. |
+| `unrecognized arguments: --remote-path` | A Borg UI or agent older than this release with Borg 2.0.0b25. | Upgrade Borg UI and the agent. |
 
 ### Slow archive browsing
 

@@ -3,7 +3,6 @@
 import json
 import platform
 import shutil
-import subprocess
 import time
 from pathlib import Path
 
@@ -11,7 +10,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.database.models import Repository
-from tests.utils.borg import create_archive, make_borg_test_env
+from tests.utils.borg import (
+    BORG2_TEST_ENCRYPTION,
+    BORG2_TEST_PASSPHRASE,
+    create_archive,
+    init_borg_repo,
+    make_borg_test_env,
+)
 
 
 def _mount_prerequisites_available() -> bool:
@@ -66,20 +71,7 @@ def _create_borg2_repo_with_archives(test_db, tmp_path):
     source_path.mkdir()
     env = make_borg_test_env(str(tmp_path))
 
-    init_result = subprocess.run(
-        [
-            borg2_binary,
-            "-r",
-            str(repo_path),
-            "repo-create",
-            "--encryption",
-            "none-sha256",
-        ],
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-    assert init_result.returncode == 0, init_result.stderr
+    init_borg_repo(borg2_binary, repo_path, env=env)
 
     (source_path / "mount.txt").write_text("borg2 mount data\n", encoding="utf-8")
     create_archive(borg2_binary, repo_path, "mount-archive-1", [source_path], env=env)
@@ -93,7 +85,8 @@ def _create_borg2_repo_with_archives(test_db, tmp_path):
     repo = Repository(
         name="Borg2 Mount Repo",
         path=str(repo_path),
-        encryption="none",
+        encryption=BORG2_TEST_ENCRYPTION,
+        passphrase=BORG2_TEST_PASSPHRASE,
         compression="lz4",
         repository_type="local",
         borg_version=2,

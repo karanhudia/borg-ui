@@ -217,7 +217,6 @@ interface SourceSelectionDialogProps {
   initialSelectedDatabase?: SourceDiscoveryDatabase
   /** Open the scan sub-dialog on mount. Used by Storybook to capture stacked states. */
   initialScanDialogOpen?: boolean
-  canUseManagedAgents?: boolean
   canUseMixedSourceTypes?: boolean
   canUseDatabaseDiscovery?: boolean
   canUseContainerBackups?: boolean
@@ -798,7 +797,6 @@ export function SourceSelectionDialog({
   initialCaptureModeExpanded = false,
   initialSelectedDatabase,
   initialScanDialogOpen = false,
-  canUseManagedAgents = true,
   canUseMixedSourceTypes = true,
   canUseDatabaseDiscovery = true,
   canUseContainerBackups = true,
@@ -1621,7 +1619,7 @@ export function SourceSelectionDialog({
     const hasRemoteOptions = sshConnections.length > 0
     const hasAgentOptions = agentMachines.length > 0
     const remoteDisabled = sourceKind === 'remote' && !hasRemoteOptions
-    const agentDisabled = sourceKind === 'agent' && (!canUseManagedAgents || !hasAgentOptions)
+    const agentDisabled = sourceKind === 'agent' && !hasAgentOptions
     const selectedSnapshotCapability =
       snapshotDraft.provider === 'none'
         ? null
@@ -1654,7 +1652,7 @@ export function SourceSelectionDialog({
         return
       }
       if (key === 'agent') {
-        if (!canUseManagedAgents || !hasAgentOptions) return
+        if (!hasAgentOptions) return
         if (agentRepoConstraint) {
           selectSourceKey(`agent:${agentRepoConstraint.agentId}`)
           return
@@ -1694,14 +1692,12 @@ export function SourceSelectionDialog({
       },
       {
         key: 'agent',
-        icon: !canUseManagedAgents ? <Lock size={16} /> : <Laptop size={16} />,
+        icon: <Laptop size={16} />,
         label: t('backupPlans.sourceChooser.managedAgent'),
-        description: !canUseManagedAgents
-          ? t('backupPlans.sourceChooser.managedAgentRequiresPro')
-          : hasAgentOptions
-            ? t('backupPlans.sourceChooser.managedAgentDescription')
-            : t('backupPlans.sourceChooser.noManagedAgents'),
-        disabled: !canUseManagedAgents || !hasAgentOptions,
+        description: hasAgentOptions
+          ? t('backupPlans.sourceChooser.managedAgentDescription')
+          : t('backupPlans.sourceChooser.noManagedAgents'),
+        disabled: !hasAgentOptions,
       },
     ]
 
@@ -1735,10 +1731,7 @@ export function SourceSelectionDialog({
             emptyMessage={t('backupPlans.sourceChooser.noRemoteMachines')}
             hideEmptyAlert
           />
-        ) : sourceKind === 'agent' &&
-          canUseManagedAgents &&
-          hasAgentOptions &&
-          agentRepoConstraint ? (
+        ) : sourceKind === 'agent' && hasAgentOptions && agentRepoConstraint ? (
           <Box
             sx={{
               border: 1,
@@ -1765,7 +1758,7 @@ export function SourceSelectionDialog({
               })}
             </Typography>
           </Box>
-        ) : sourceKind === 'agent' && canUseManagedAgents && hasAgentOptions ? (
+        ) : sourceKind === 'agent' && hasAgentOptions ? (
           <ManagedAgentSelect
             value={selectedAgentIdNum || ''}
             onChange={(id) => selectSourceKey(`agent:${id}`)}
@@ -1798,11 +1791,7 @@ export function SourceSelectionDialog({
               }}
             >
               {agentDisabled
-                ? t(
-                    canUseManagedAgents
-                      ? 'backupPlans.sourceChooser.noManagedAgents'
-                      : 'backupPlans.sourceChooser.managedAgentRequiresPro'
-                  )
+                ? t('backupPlans.sourceChooser.noManagedAgents')
                 : remoteDisabled
                   ? t('backupPlans.sourceChooser.noRemoteMachines')
                   : t('backupPlans.sourceChooser.readingFromLocal')}
@@ -3028,7 +3017,7 @@ export function SourceSelectionDialog({
     const hasRemoteOptions = sshConnections.length > 0
     const hasAgentOptions = agentMachines.length > 0
     const remoteDisabled = sourceKind === 'remote' && !hasRemoteOptions
-    const agentDisabled = sourceKind === 'agent' && (!canUseManagedAgents || !hasAgentOptions)
+    const agentDisabled = sourceKind === 'agent' && !hasAgentOptions
     const lockedByAgentRepo = !!agentRepoConstraint
     const queuedContainerLocations = draftSourceLocations.filter((location) => location.container)
 
@@ -3048,7 +3037,7 @@ export function SourceSelectionDialog({
         return
       }
       if (key === 'agent') {
-        if (!canUseManagedAgents || !hasAgentOptions) return
+        if (!hasAgentOptions) return
         if (agentRepoConstraint) {
           selectSourceKey(`agent:${agentRepoConstraint.agentId}`)
           return
@@ -3088,14 +3077,12 @@ export function SourceSelectionDialog({
       },
       {
         key: 'agent',
-        icon: !canUseManagedAgents ? <Lock size={16} /> : <Laptop size={16} />,
+        icon: <Laptop size={16} />,
         label: t('backupPlans.sourceChooser.managedAgent'),
-        description: !canUseManagedAgents
-          ? t('backupPlans.sourceChooser.managedAgentRequiresPro')
-          : hasAgentOptions
-            ? t('backupPlans.sourceChooser.managedAgentDescription')
-            : t('backupPlans.sourceChooser.noManagedAgents'),
-        disabled: !canUseManagedAgents || !hasAgentOptions,
+        description: hasAgentOptions
+          ? t('backupPlans.sourceChooser.managedAgentDescription')
+          : t('backupPlans.sourceChooser.noManagedAgents'),
+        disabled: !hasAgentOptions,
       },
     ]
 
@@ -3359,10 +3346,7 @@ export function SourceSelectionDialog({
               emptyMessage={t('backupPlans.sourceChooser.noRemoteMachines')}
               hideEmptyAlert
             />
-          ) : sourceKind === 'agent' &&
-            canUseManagedAgents &&
-            hasAgentOptions &&
-            agentRepoConstraint ? (
+          ) : sourceKind === 'agent' && hasAgentOptions && agentRepoConstraint ? (
             <Box
               sx={{
                 border: 1,
@@ -3389,7 +3373,7 @@ export function SourceSelectionDialog({
                 })}
               </Typography>
             </Box>
-          ) : sourceKind === 'agent' && canUseManagedAgents && hasAgentOptions ? (
+          ) : sourceKind === 'agent' && hasAgentOptions ? (
             <ManagedAgentSelect
               value={selectedAgentIdNum || ''}
               onChange={(id) => selectSourceKey(`agent:${id}`)}
@@ -3422,11 +3406,7 @@ export function SourceSelectionDialog({
                 }}
               >
                 {agentDisabled
-                  ? t(
-                      canUseManagedAgents
-                        ? 'backupPlans.sourceChooser.noManagedAgents'
-                        : 'backupPlans.sourceChooser.managedAgentRequiresPro'
-                    )
+                  ? t('backupPlans.sourceChooser.noManagedAgents')
                   : remoteDisabled
                     ? t('backupPlans.sourceChooser.noRemoteMachines')
                     : t('backupPlans.sourceChooser.readingFromLocal')}

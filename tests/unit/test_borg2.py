@@ -8,7 +8,9 @@ from app.core.borg2 import (
     BORG2_ENCRYPTION_MODES,
     borg2,
     borg2_encryption_flags,
-    borg2_speaks_encryption_flags,
+    borg2_below_minimum,
+    borg2_minimum_version,
+    borg2_repository_url_refusal,
     normalize_repo_info_encryption,
 )
 
@@ -133,7 +135,7 @@ async def test_rcreate_injects_managed_rclone_config_into_process_env(
     class Process:
         returncode = 0
 
-        async def communicate(self):
+        async def communicate(self, input=None):
             return b"", b""
 
     async def create_subprocess_exec(*cmd, **kwargs):
@@ -148,7 +150,8 @@ async def test_rcreate_injects_managed_rclone_config_into_process_env(
 
     result = await borg2.rcreate(
         repository="rclone:prod-s3:borg-ui/direct",
-        encryption="none",
+        encryption="authenticated",
+        passphrase="secret",
     )
 
     assert result["success"] is True
@@ -158,8 +161,8 @@ async def test_rcreate_injects_managed_rclone_config_into_process_env(
         "rclone:prod-s3:borg-ui/direct",
         "repo-create",
         "--encryption",
-        "none-sha256",
-    )  # 'none' has no key, so repo-create gets no --key-location
+        "authenticated-sha256",
+    )  # the key stays in the repository: borg's default, no --key-location
     assert captured["env"]["RCLONE_CONFIG"] == str(rclone_root / "rclone.conf")
 
 
@@ -176,11 +179,10 @@ async def test_rcreate_injects_managed_rclone_config_into_process_env(
             ["--encryption", "chacha20-poly1305", "--key-location", "keyfile"],
         ),
         ("authenticated", ["--encryption", "authenticated-sha256"]),
-        ("none", ["--encryption", "none-sha256"]),
     ],
 )
 def test_encryption_mode_is_translated_to_the_repo_create_split(mode, expected):
-    """Borg 2.0.0b22 takes the cipher and the key location as separate options;
+    """Borg 2 takes the cipher and the key location as separate options;
     the combined name stays the vocabulary of the API, the UI and the stored
     repository row."""
     assert borg2_encryption_flags(mode) == expected
@@ -195,23 +197,86 @@ def test_every_offered_encryption_mode_can_be_translated():
 
 
 @pytest.mark.unit
+def test_the_borg2_minimum_is_the_servers_own_pin():
+    """The minimum is the Borg 2 this server ships, read from its pin, so it
+    moves with the next bump instead of being a constant of its own."""
+    from app.api.borg_binaries import CURRENT_VERSIONS
+
+    assert borg2_minimum_version() == CURRENT_VERSIONS["2"]
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize(
-    "version, speaks",
+    "version, below",
     [
-        ("2.0.0b21", False),
-        ("2.0.0b22", True),
         ("2.0.0b24", True),
-        ("2.0.0", True),
-        # Only a version that reads as an older Borg 2 is refused: nothing
+        ("2.0.0b9", True),
+        ("2.0.0a4", True),
+        ("2.1.0a1", False),
+        ("borg2 2.0.0b24", True),
+        ("2.0.0b25", False),
+        # a development build leads to the version it names: before it
+        ("2.0.0b25.dev3+g1234567", True),
+        ("2.0.0b26.dev3+g1234567", False),
+        ("2.0.0.dev1", True),
+        ("2.1.0.dev1", False),
+        ("2.0.0b26", False),
+        ("2.0.0rc1", False),
+        ("2.0.0", False),
+        ("2.1.0", False),
+        # Only a version that reads as an older Borg 2 is below: nothing
         # readable is not evidence of an old binary, and the message would
         # name an empty version.
-        ("", True),
-        (None, True),
-        ("unknown", True),
+        ("", False),
+        (None, False),
+        ("unknown", False),
     ],
 )
-def test_only_a_readably_old_borg2_is_refused_the_split_flags(version, speaks):
-    assert borg2_speaks_encryption_flags(version) is speaks
+def test_only_a_readably_older_borg2_is_below_the_minimum(monkeypatch, version, below):
+    from app.api import borg_binaries
+
+    monkeypatch.setitem(borg_binaries.CURRENT_VERSIONS, "2", "2.0.0b25")
+    assert borg2_below_minimum(version) is below
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "minimum, version, below",
+    [
+        ("2.0.0rc1", "2.0.0b30", True),
+        ("2.0.0rc2", "2.0.0rc1", True),
+        ("2.0.0", "2.0.0rc9", True),
+        ("2.0.0", "2.0.0", False),
+    ],
+)
+def test_the_minimum_moves_with_the_pin(monkeypatch, minimum, version, below):
+    from app.api import borg_binaries
+
+    monkeypatch.setitem(borg_binaries.CURRENT_VERSIONS, "2", minimum)
+    assert borg2_minimum_version() == minimum
+    assert borg2_below_minimum(version) is below
+
+
+@pytest.mark.unit
+def test_the_unencrypted_mode_is_refused_not_mapped():
+    """Borg 2.0.0b25 removed none-sha256/none-blake3 ("invalid choice:
+    'none-sha256'"). The mode is not offered and not silently turned into
+    another one: a repository created as `none` would not be what was asked
+    for."""
+    assert "none" not in BORG2_ENCRYPTION_MODES
+    with pytest.raises(ValueError, match="2.0.0b25"):
+        borg2_encryption_flags("none")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_rcreate_reports_a_refused_mode_without_running_borg():
+    with patch.object(borg2, "_run", new=AsyncMock()) as mock_run:
+        result = await borg2.rcreate(repository="/repo", encryption="none")
+
+    mock_run.assert_not_awaited()
+    assert result["success"] is False
+    assert "authenticated" in result["stderr"]
 
 
 @pytest.mark.unit
@@ -225,14 +290,14 @@ def test_an_unknown_encryption_mode_is_rejected_by_name():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_prune_keep_within_is_sent_as_keep(monkeypatch):
-    """Borg 2.0.0b22 removed --keep-within; --keep takes the same interval. The
-    field keeps its name everywhere else — only the flag moved."""
+    """Borg 2 has no --keep-within; --keep takes the same interval. The field
+    keeps its name everywhere else — only the flag differs."""
     captured: dict[str, object] = {}
 
     class Process:
         returncode = 0
 
-        async def communicate(self):
+        async def communicate(self, input=None):
             return b"", b""
 
     async def create_subprocess_exec(*cmd, **kwargs):
@@ -253,9 +318,9 @@ async def test_prune_keep_within_is_sent_as_keep(monkeypatch):
 
 
 @pytest.mark.unit
-def test_repo_info_encryption_from_b22_gets_a_mode():
-    """Verbatim from `borg2 repo-info --json` on 2.0.0b22: the single `mode`
-    became `encryption` + `id_hash`, which left every reader of `mode` — the
+def test_repo_info_encryption_gets_a_mode():
+    """Verbatim from `borg2 repo-info --json` on 2.0.0b25: the single `mode`
+    is `encryption` + `id_hash`, which left every reader of `mode` — the
     stored row, the API, the info dialog — showing nothing for an encrypted
     repository."""
     info = {
@@ -271,9 +336,9 @@ def test_repo_info_encryption_from_b22_gets_a_mode():
 
 
 @pytest.mark.unit
-def test_repo_info_encryption_from_b21_is_left_alone():
-    """Verbatim from 2.0.0b21, and the Borg 1 shape too: a `mode` that is
-    already there is never rewritten."""
+def test_repo_info_encryption_with_a_mode_is_left_alone():
+    """The Borg 1 shape: a `mode` that is already there is never
+    rewritten."""
     info = {"encryption": {"mode": "repokey-aes-ocb"}}
 
     assert normalize_repo_info_encryption(info)["encryption"] == {
@@ -327,10 +392,9 @@ _ARGUMENTS = {
 @pytest.mark.asyncio
 @pytest.mark.parametrize("command", _bypass_lock_commands())
 async def test_no_borg2_command_carries_bypass_lock(monkeypatch, command):
-    """--bypass-lock is a Borg 1 flag. Borg 2 has never had it — it is absent
-    from the 2.0.0b21 and 2.0.0b22 sources alike — so a Borg 2 command carrying
-    it dies at argument parsing, which reads as an unreachable repository rather
-    than as a flag this Borg does not know. The argument stays (callers and the
+    """--bypass-lock is a Borg 1 flag. Borg 2 has no such option, so a Borg 2
+    command carrying it dies at argument parsing, which reads as an
+    unreachable repository rather than as a flag this Borg does not know. The argument stays (callers and the
     repository settings speak for both majors) and is ignored.
     """
     captured: dict[str, object] = {}
@@ -338,7 +402,7 @@ async def test_no_borg2_command_carries_bypass_lock(monkeypatch, command):
     class Process:
         returncode = 0
 
-        async def communicate(self):
+        async def communicate(self, input=None):
             return b"{}", b""
 
     async def create_subprocess_exec(*cmd, **_):
@@ -357,6 +421,108 @@ async def test_no_borg2_command_carries_bypass_lock(monkeypatch, command):
     await method(**kwargs)
 
     assert "--bypass-lock" not in list(captured["cmd"])
+
+
+def _remote_path_commands() -> list[str]:
+    """Every borg2 command that takes a remote_path argument, the ones that
+    run a process and the ones that hand back a stream alike. Read off the
+    interface for the reason `_bypass_lock_commands` is."""
+    names = [
+        name
+        for name, member in inspect.getmembers(borg2, inspect.ismethod)
+        if not name.startswith("_")
+        and "remote_path" in inspect.signature(member).parameters
+    ]
+    assert names, "no borg2 command takes remote_path — has the interface moved?"
+    return names
+
+
+_REMOTE_PATH_ARGUMENTS = {
+    **_ARGUMENTS,
+    "archive_a": "aid:1",
+    "archive_b": "aid:2",
+    "source_paths": ["/data"],
+    "directory_path": "etc",
+}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("command", _remote_path_commands())
+async def test_borg2_remote_path_travels_in_the_environment(monkeypatch, command):
+    """Borg 2 has no --remote-path, only BORG_REMOTE_PATH. A command line
+    that carries the option dies at argument parsing
+    ("unrecognized arguments: --remote-path"), for every repository that has
+    a remote path configured.
+    """
+    captured: dict[str, object] = {}
+
+    class Process:
+        returncode = 0
+        stdout = None
+        stderr = None
+
+        async def communicate(self):
+            return b"{}", b""
+
+        async def wait(self):
+            return 0
+
+    async def create_subprocess_exec(*cmd, env=None, **_):
+        captured["cmd"] = list(cmd)
+        captured["env"] = env
+        return Process()
+
+    class Stream:
+        def __init__(self, cmd, *, env=None, timeout=3600):
+            captured["cmd"] = list(cmd)
+            captured["env"] = env
+
+    async def run_streaming(cmd, env=None, **_):
+        captured["cmd"] = list(cmd)
+        captured["env"] = borg2._base_env(env)
+        return {"success": True, "stdout": ""}
+
+    monkeypatch.setattr(
+        "app.core.borg2.asyncio.create_subprocess_exec", create_subprocess_exec
+    )
+    monkeypatch.setattr("app.core.borg2.CommandLineStream", Stream)
+    monkeypatch.setattr("app.core.borg2.CommandByteStream", Stream)
+    monkeypatch.setattr(borg2, "_run_streaming", run_streaming)
+
+    method = getattr(borg2, command)
+    kwargs = {"remote_path": "/opt/borg2/bin/borg"}
+    for name, parameter in inspect.signature(method).parameters.items():
+        if (
+            parameter.default is inspect.Parameter.empty
+            and name in _REMOTE_PATH_ARGUMENTS
+        ):
+            kwargs[name] = _REMOTE_PATH_ARGUMENTS[name]
+
+    result = method(**kwargs)
+    if inspect.isawaitable(result):
+        await result
+
+    assert "--remote-path" not in captured["cmd"]
+    assert "/opt/borg2/bin/borg" not in captured["cmd"]
+    assert captured["env"]["BORG_REMOTE_PATH"] == "/opt/borg2/bin/borg"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_borg2_without_a_remote_path_leaves_the_environment_alone(monkeypatch):
+    """An inherited BORG_REMOTE_PATH (the container's own) is not cleared by
+    a repository that configures none."""
+    monkeypatch.setenv("BORG_REMOTE_PATH", "borg2")
+    with patch.object(
+        borg2,
+        "_run",
+        new=AsyncMock(return_value={"success": True, "stdout": ""}),
+    ) as mock_run:
+        await borg2.break_lock(repository="/repo", passphrase="secret")
+
+    assert mock_run.await_args.kwargs["env"] == {"BORG_PASSPHRASE": "secret"}
+    assert borg2._base_env()["BORG_REMOTE_PATH"] == "borg2"
 
 
 @pytest.mark.unit
@@ -394,6 +560,23 @@ async def test_rdelete_disables_the_store_cache():
         await borg2.rdelete(repository="/repo")
 
     assert mock_run.await_args.kwargs["env"] == {"BORG_STORE_CACHE": ""}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("command", ["rdelete", "break_lock", "check_repository"])
+async def test_commands_that_need_the_key_run_with_the_passphrase(command):
+    """From Borg 2.0.0b25 the lock is sealed with the repository key, so
+    break-lock and repo-delete --force ask for the passphrase like any other
+    command (and exit 50 without one); check needs it for the index."""
+    with patch.object(
+        borg2,
+        "_run",
+        new=AsyncMock(return_value={"success": True, "stdout": ""}),
+    ) as mock_run:
+        await getattr(borg2, command)(repository="/repo", passphrase="secret")
+
+    assert mock_run.await_args.kwargs["env"]["BORG_PASSPHRASE"] == "secret"
 
 
 @pytest.mark.unit
@@ -449,3 +632,250 @@ async def test_delete_and_compact_forward_on_process(method):
         await getattr(borg2, method)(*args, on_process=hook)
 
     assert mock_run.await_args.kwargs["on_process"] is hook
+
+
+_REST_URL = "rest://borg@repo.example/backups/one"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("command", _remote_path_commands())
+async def test_no_borg2_command_runs_on_a_rest_url(monkeypatch, command):
+    """Borg 2.0.0b25 dropped rest:// and reads such a URL as the local
+    directory ./rest:/user@host/path: repo-create and create exit 0 there,
+    and the backup never reaches the repository server. No command is
+    started on one."""
+
+    async def create_subprocess_exec(*cmd, **_):
+        raise AssertionError(f"borg must not run: {cmd}")
+
+    class Stream:
+        def __init__(self, cmd, **_):
+            raise AssertionError(f"borg must not run: {cmd}")
+
+    monkeypatch.setattr(
+        "app.core.borg2.asyncio.create_subprocess_exec", create_subprocess_exec
+    )
+    monkeypatch.setattr("app.core.borg2.CommandLineStream", Stream)
+    monkeypatch.setattr("app.core.borg2.CommandByteStream", Stream)
+
+    method = getattr(borg2, command)
+    kwargs = {}
+    for name, parameter in inspect.signature(method).parameters.items():
+        if (
+            parameter.default is inspect.Parameter.empty
+            and name in _REMOTE_PATH_ARGUMENTS
+        ):
+            kwargs[name] = _REMOTE_PATH_ARGUMENTS[name]
+    kwargs["repository"] = _REST_URL
+
+    if inspect.iscoroutinefunction(method):
+        result = await method(**kwargs)
+        assert result["success"] is False
+        assert "ssh://" in result["stderr"]
+    else:
+        with pytest.raises(ValueError, match="ssh://"):
+            method(**kwargs)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "repository",
+    [
+        "/local/repo",
+        "ssh://borg@repo.example/backups/one",
+        "sftp://borg@repo.example/backups/one",
+        "rclone:remote:backups/one",
+        "/data/rest://looks-odd-but-is-a-path",
+    ],
+)
+def test_other_repository_urls_are_left_alone(repository):
+    assert borg2_repository_url_refusal(repository) is None
+
+
+@pytest.mark.unit
+def test_command_builders_outside_the_interface_refuse_a_rest_url(monkeypatch):
+    from types import SimpleNamespace
+
+    from app.core.borg_router import BorgRouter
+    from app.services.v2.backup_service import backup_v2_service
+    from app.services.v2.mount_service import mount_v2_service
+    from app.services.v2.restore_service import restore_v2_service
+
+    builders = [
+        lambda: restore_v2_service.build_extract_command(_REST_URL, "aid:1"),
+        lambda: mount_v2_service.build_mount_command(_REST_URL, "aid:1", "/mnt"),
+        lambda: backup_v2_service.build_backup_create_command(
+            _REST_URL, "series", "lz4", [], []
+        ),
+        lambda: BorgRouter(SimpleNamespace(borg_version=2)).build_break_lock_command(
+            _REST_URL
+        ),
+    ]
+    for build in builders:
+        with pytest.raises(ValueError, match="ssh://"):
+            build()
+
+
+@pytest.mark.unit
+def test_a_rest_url_is_refused_without_asking_the_binary(monkeypatch):
+    """Every Borg 2 this application runs reads rest:// as a local directory,
+    so the URL is refused outright; no binary is probed for its version."""
+    from app.core import borg2 as borg2_module
+
+    def no_probe(*args, **kwargs):
+        raise AssertionError("no probe")
+
+    monkeypatch.setattr(borg2_module.subprocess, "run", no_probe)
+
+    assert "ssh://" in borg2_repository_url_refusal(_REST_URL)
+    assert "ssh://" in borg2_repository_url_refusal("REST://borg@repo.example/one")
+    assert borg2_repository_url_refusal("ssh://borg@repo.example/one") is None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("occupied_by", "refused"),
+    [
+        (None, False),
+        ("unrelated.txt", True),
+        (".hidden", True),
+        ("lost+found", True),
+    ],
+)
+def test_a_restore_into_an_occupied_directory_is_refused(
+    monkeypatch, tmp_path, occupied_by, refused
+):
+    """Borg 2.0.0b25 refuses to extract into a directory that is not empty
+    (exit 33): the original location, a directory with a single dotfile, a
+    fresh filesystem with its lost+found. Borg UI says so before Borg runs
+    and does not reach for --continue, which skips a file that looks
+    restored by type, mode, size and time."""
+    from app.core.borg2 import borg2_restore_target_refusal
+    from app.core.borg_errors import RestoreRefused
+    from app.services.v2.restore_service import restore_v2_service
+
+    if occupied_by == "lost+found":
+        (tmp_path / occupied_by).mkdir()
+    elif occupied_by:
+        (tmp_path / occupied_by).write_text("x")
+    destination = str(tmp_path)
+    detail = {
+        "key": "backend.errors.restore.borg2DestinationNotEmpty",
+        "params": {"path": destination},
+    }
+
+    assert borg2_restore_target_refusal(destination) == (detail if refused else None)
+    if refused:
+        with pytest.raises(RestoreRefused) as raised:
+            restore_v2_service.build_extract_command(
+                "/repo", "aid:1", ["etc"], destination=destination
+            )
+        assert raised.value.detail == detail
+    else:
+        cmd = restore_v2_service.build_extract_command(
+            "/repo", "aid:1", ["etc"], strip_components=1, destination=destination
+        )
+        assert cmd[3:] == [
+            "extract",
+            "--log-json",
+            "--umask",
+            "0022",
+            "--strip-components",
+            "1",
+            "aid:1",
+            "etc",
+        ]
+
+
+@pytest.mark.unit
+def test_a_restore_into_existing_files_is_not_refused(tmp_path):
+    from app.core.borg2 import borg2_restore_target_refusal
+
+    (tmp_path / "existing.txt").write_text("x")
+
+    assert borg2_restore_target_refusal(str(tmp_path)) is not None
+    assert borg2_restore_target_refusal(str(tmp_path), "continue") is None
+
+
+@pytest.mark.unit
+def test_an_empty_destination_is_not_refused(tmp_path):
+    from app.core.borg2 import borg2_restore_target_refusal
+
+    assert borg2_restore_target_refusal(str(tmp_path)) is None
+
+
+@pytest.mark.unit
+def test_a_restore_that_names_no_destination_or_a_missing_one_is_built(tmp_path):
+    from app.core.borg2 import borg2_restore_target_refusal
+    from app.services.v2.restore_service import restore_v2_service
+
+    assert borg2_restore_target_refusal(None) is None
+    assert borg2_restore_target_refusal(str(tmp_path / "missing")) is None
+    # a restore check extracts into a directory of its own making
+    assert "--continue" not in restore_v2_service.build_extract_command(
+        "/repo", "aid:1", ["etc"]
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_extract_never_passes_continue(tmp_path):
+    (tmp_path / "existing.txt").write_text("x")
+
+    with patch.object(
+        borg2,
+        "_run",
+        new=AsyncMock(return_value={"success": True, "stdout": ""}),
+    ) as mock_run:
+        await borg2.extract_archive(
+            repository="/repo",
+            archive="aid:1",
+            paths=["etc/hosts"],
+            destination=str(tmp_path),
+        )
+
+    cmd = mock_run.await_args.args[0]
+    assert "--continue" not in cmd
+    assert cmd[-2:] == ["aid:1", "etc/hosts"]
+
+
+@pytest.mark.unit
+def test_borg1_restore_command_ignores_the_destination(tmp_path):
+    from types import SimpleNamespace
+
+    from app.core.borg_router import BorgRouter
+
+    (tmp_path / "existing.txt").write_text("x")
+
+    cmd = BorgRouter(SimpleNamespace(borg_version=1)).build_restore_extract_command(
+        "/repo", "archive", ["etc"], destination=str(tmp_path)
+    )
+
+    assert cmd[:2] == ["borg", "extract"]
+    assert "--continue" not in cmd
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("stderr", "expected"),
+    [
+        # on a repository written by an earlier beta, and on a directory
+        # that holds no repository: the same answer, exit 15
+        (
+            "Repository /backups/repo is not a valid repository. "
+            "Check the repository config.",
+            {"key": "backend.errors.repo.borg2RepositoryNotReadable"},
+        ),
+        ("Repository /backups/repo does not exist.", None),
+        ("passphrase supplied in BORG_PASSPHRASE is incorrect", None),
+        ("", None),
+        (None, None),
+    ],
+)
+def test_a_repository_this_borg2_cannot_read_gets_a_translatable_detail(
+    stderr, expected
+):
+    from app.core.borg2 import borg2_unreadable_repository_detail
+
+    assert borg2_unreadable_repository_detail(stderr) == expected

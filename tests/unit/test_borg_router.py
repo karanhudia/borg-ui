@@ -733,8 +733,6 @@ def test_build_mount_command_uses_v2_shape():
 
     assert cmd == [
         "borg2",
-        "--remote-path",
-        "/usr/bin/borg2",
         "-r",
         "/repo/path",
         "mount",
@@ -875,6 +873,7 @@ def test_build_restore_extract_command_delegates_strip_components_for_v2():
             archive_name="manual-1",
             paths=["home/user/folder"],
             strip_components=3,
+            destination="/restore/here",
         )
 
     assert cmd == ["borg2", "extract"]
@@ -885,6 +884,8 @@ def test_build_restore_extract_command_delegates_strip_components_for_v2():
         remote_path=None,
         bypass_lock=False,
         strip_components=3,
+        destination="/restore/here",
+        existing_files="refuse",
     )
 
 
@@ -955,9 +956,18 @@ def test_build_break_lock_command_uses_v2_shape():
         "-r",
         "/repo/path",
         "break-lock",
-        "--remote-path",
-        "/usr/bin/borg2",
     ]
+
+
+@pytest.mark.unit
+def test_remote_path_env_is_borg2_only():
+    """Borg 2 reads the remote Borg command from BORG_REMOTE_PATH; Borg 1
+    keeps --remote-path on its command line and needs nothing in the env."""
+    assert BorgRouter(SimpleNamespace(borg_version=2)).remote_path_env(
+        "/usr/bin/borg2"
+    ) == {"BORG_REMOTE_PATH": "/usr/bin/borg2"}
+    assert BorgRouter(SimpleNamespace(borg_version=2)).remote_path_env(None) == {}
+    assert BorgRouter(SimpleNamespace(borg_version=1)).remote_path_env("borg") == {}
 
 
 @pytest.mark.unit
@@ -1211,7 +1221,10 @@ async def test_run_agent_maintenance_fails_the_operation_when_queue_is_refused(
                     "params": {"active_operation": "prune"},
                 },
             ),
-            "agent job could not be queued: backend.errors.repo.pruneAlreadyRunning",
+            (
+                "agent job could not be queued: "
+                "backend.errors.repo.pruneAlreadyRunning (active_operation=prune)"
+            ),
         ),
         (
             HTTPException(
