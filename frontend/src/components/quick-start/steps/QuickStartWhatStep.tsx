@@ -1,20 +1,11 @@
 import { Stack, Typography } from '@mui/material'
-import { Laptop, Lock, Monitor, Server } from 'lucide-react'
+import { Laptop, Monitor, Server } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import QuickStartChoiceCard from '../QuickStartChoiceCard'
 import { sourceKindPatch, type QuickStartStepProps } from '../quickStartState'
 
-interface QuickStartWhatStepProps extends QuickStartStepProps {
-  /** managed_agents plan feature. */
-  canUseAgents?: boolean
-}
-
-export default function QuickStartWhatStep({
-  answers,
-  onChange,
-  canUseAgents = false,
-}: QuickStartWhatStepProps) {
+export default function QuickStartWhatStep({ answers, onChange }: QuickStartStepProps) {
   const { t } = useTranslation()
   return (
     <Stack spacing={2}>
@@ -37,12 +28,9 @@ export default function QuickStartWhatStep({
           onSelect={() => onChange(sourceKindPatch(answers, 'ssh'))}
         />
         <QuickStartChoiceCard
-          icon={canUseAgents ? <Laptop size={20} /> : <Lock size={20} />}
+          icon={<Laptop size={20} />}
           title={t('quickStart.what.agent')}
-          description={
-            canUseAgents ? t('quickStart.what.agentDesc') : t('quickStart.what.agentPro')
-          }
-          disabled={!canUseAgents}
+          description={t('quickStart.what.agentDesc')}
           selected={answers.sourceKind === 'agent'}
           onSelect={() => onChange(sourceKindPatch(answers, 'agent'))}
         />

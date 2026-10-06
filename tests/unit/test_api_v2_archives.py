@@ -584,19 +584,46 @@ class TestV2ArchiveRoutes:
         assert sub_dir["type"] == "directory"
         assert sub_dir["size"] == 18
 
-    def test_get_archive_contents_names_an_unsupported_repository_version(
+    def test_list_archives_names_the_format_change_for_an_unreadable_repository(
         self, test_client: TestClient, admin_headers, test_db
     ):
-        """Borg 2 betas changed the repository format. A repository written
-        by an older beta fails with a raw borgstore trace; the route turns it
-        into a translated message that names the version."""
+        """Borg 2.0.0b25 answers a repository written by an earlier beta with
+        the sentence it has for a wrong path. After an upgrade the format
+        change is the likely cause, so the route hands the frontend a text
+        that says so instead of the bare sentence."""
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db)
         stderr = (
-            "borgstore: cache cleanup failed for namespace 'packs/': "
-            "ObjectNotFound('packs')\nproto='file', path='/x' does not have a "
-            "valid config. Check the repository config [repository version 3 "
-            "is not supported by this borg version].\n"
+            f"Repository {repo.path} is not a valid repository. "
+            "Check the repository config.\n"
+        )
+
+        with patch(
+            "app.api.v2.archives.borg2.list_archives",
+            new=AsyncMock(
+                return_value={"success": False, "stdout": "", "stderr": stderr}
+            ),
+        ):
+            response = test_client.get(
+                f"/api/v2/archives/list?repository={repo.id}", headers=admin_headers
+            )
+
+        assert response.status_code == 500
+        assert response.json()["detail"] == {
+            "key": "backend.errors.repo.borg2RepositoryNotReadable"
+        }
+
+    def test_get_archive_contents_names_the_format_change_for_an_unreadable_repository(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Borg 2 betas changed the repository format. Browsing a repository
+        written by an earlier beta gets the same translated message as the
+        archive list instead of the bare sentence."""
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db)
+        stderr = (
+            f"Repository {repo.path} is not a valid repository. "
+            "Check the repository config.\n"
         )
         with (
             patch(
@@ -617,8 +644,7 @@ class TestV2ArchiveRoutes:
 
         assert response.status_code == 500
         assert response.json()["detail"] == {
-            "key": "backend.errors.archives.unsupportedRepositoryVersion",
-            "params": {"version": 3},
+            "key": "backend.errors.repo.borg2RepositoryNotReadable"
         }
 
     def test_get_archive_contents_passes_requested_path_to_borg2(

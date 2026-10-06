@@ -13,11 +13,14 @@ import structlog
 from app.api.agent_installer import agent_package_version
 from app.api.agents import FINAL_AGENT_JOB_STATUSES, _cancel_agent_job
 from app.core.agent_auth import AGENT_TOKEN_PREFIX_LENGTH
-from app.core.agent_versions import compute_agent_upgrade_status
+from app.core.agent_versions import (
+    agent_borg2_version,
+    compute_agent_upgrade_status,
+)
+from app.core.borg2 import borg2_below_minimum, borg2_minimum_version
 from app.core.agent_constants import (
     AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS,
 )
-from app.core.features import require_feature_access
 from app.core.security import get_current_admin_user, get_password_hash
 from app.database.database import get_db
 from app.database.models import (
@@ -41,7 +44,7 @@ from app.services.agent_connection_manager import (
 from app.services.agent_upgrades import release_agent_upgrade_waves
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.utils.datetime_utils import serialize_datetime
-from app.utils.borg_flags import borg_flags_validator
+from app.utils.borg_flags import borg_flags_major_validator, borg_flags_validator
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/managed-machines", tags=["managed-machines"])
@@ -53,14 +56,6 @@ _DIAGNOSTIC_HOST_RE = re.compile(
     r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*"
     r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.?$"
 )
-
-
-def require_managed_agents_admin_user(
-    current_user: User = Depends(get_current_admin_user),
-    db: Session = Depends(get_db),
-) -> User:
-    require_feature_access(db, "managed_agents")
-    return current_user
 
 
 def _now_utc() -> datetime:
@@ -117,6 +112,10 @@ class AgentMachineResponse(BaseModel):
     desired_borg_version: Optional[str] = None
     available_agent_version: Optional[str] = None
     upgrade_status: str = "unknown"
+    # The oldest Borg 2 an endpoint may run (the server's own), and whether
+    # the Borg 2 this one reports is older: its Borg 2 jobs are refused.
+    borg2_minimum_version: Optional[str] = None
+    borg2_below_minimum: bool = False
     # None until the agent has reported its capabilities at least once. An
     # endpoint that has never checked in has not said it cannot upgrade
     # itself, and must not be labelled manual-only for it.
@@ -218,6 +217,7 @@ class AgentBackupJobCreate(BaseModel):
     exclude_patterns: list[str] = Field(default_factory=list)
     custom_flags: list[str] = Field(default_factory=list)
     _validate_custom_flags = borg_flags_validator("custom_flags", "create")
+    _validate_custom_flags_major = borg_flags_major_validator("custom_flags", "create")
     remote_path: Optional[str] = None
     repository_id: Optional[int] = None
     secrets: dict[str, Any] = Field(default_factory=dict)
@@ -403,7 +403,7 @@ def _enrollment_expires_at(
 )
 async def create_enrollment_token(
     payload: AgentEnrollmentTokenCreate,
-    current_user: User = Depends(require_managed_agents_admin_user),
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     name = payload.name.strip()
@@ -463,7 +463,7 @@ def list_enrollment_tokens(
 )
 def revoke_enrollment_token(
     token_id: int,
-    current_user: User = Depends(require_managed_agents_admin_user),
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     token = (
@@ -517,6 +517,10 @@ def _agent_machine_response(
     )
     response.self_upgrade_supported = (
         None if agent.capabilities is None else "self_upgrade" in agent.capabilities
+    )
+    response.borg2_minimum_version = borg2_minimum_version()
+    response.borg2_below_minimum = borg2_below_minimum(
+        agent_borg2_version(agent.borg_versions)
     )
     return response
 
@@ -602,7 +606,7 @@ UPGRADE_IN_FLIGHT_STATUSES = ("queued", "claimed", "running", "cancel_requested"
 @router.post("/agents/upgrade")
 async def upgrade_agent_machines(
     payload: AgentUpgradeRequest,
-    current_user: User = Depends(require_managed_agents_admin_user),
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     """Ask each named endpoint to reinstall itself.
@@ -745,7 +749,7 @@ def _last_upgrade_job_id(db: Session, agent: AgentMachine) -> Optional[int]:
 async def create_agent_backup_job(
     agent_machine_id: int,
     payload: AgentBackupJobCreate,
-    current_user: User = Depends(require_managed_agents_admin_user),
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     agent = db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).first()
@@ -760,9 +764,15 @@ async def create_agent_backup_job(
             detail={"key": "backend.errors.agents.agentNotQueueable"},
         )
 
-    now = _now_utc()
-    from app.services.repository_executor import BACKUP_AGENT_JOB_TYPE
+    from app.services.repository_executor import (
+        BACKUP_AGENT_JOB_TYPE,
+        require_agent_borg2,
+    )
 
+    if payload.borg_version == 2:
+        require_agent_borg2(agent, (payload.borg_binary or "").strip() or None)
+
+    now = _now_utc()
     job = AgentJob(
         agent_machine_id=agent.id,
         job_type=BACKUP_AGENT_JOB_TYPE,
@@ -790,7 +800,7 @@ async def browse_agent_machine_filesystem(
     agent_machine_id: int,
     path: str = "/",
     include_hidden: bool = False,
-    _: User = Depends(require_managed_agents_admin_user),
+    _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     return await browse_agent_filesystem(
@@ -805,7 +815,7 @@ async def browse_agent_machine_filesystem(
 @router.get("/agents/{agent_machine_id}/repository-defaults")
 async def get_agent_machine_repository_defaults(
     agent_machine_id: int,
-    _: User = Depends(require_managed_agents_admin_user),
+    _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     """Ask a connected managed agent for its environment-configured repository
@@ -848,7 +858,7 @@ async def get_agent_machine_repository_defaults(
 async def run_agent_machine_diagnostics(
     agent_machine_id: int,
     payload: AgentDiagnosticsRequest,
-    _: User = Depends(require_managed_agents_admin_user),
+    _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     agent = db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).first()
@@ -902,7 +912,7 @@ async def run_agent_machine_diagnostics(
 @router.get("/agents/{agent_machine_id}/scripts")
 async def list_agent_machine_scripts(
     agent_machine_id: int,
-    _: User = Depends(require_managed_agents_admin_user),
+    _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     """Ask a connected managed agent which pre/post-backup scripts it publishes
@@ -960,7 +970,7 @@ async def list_agent_machine_scripts(
 )
 def list_agent_machine_logs(
     agent_machine_id: int,
-    _: User = Depends(require_managed_agents_admin_user),
+    _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     agent = db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).first()
@@ -977,7 +987,7 @@ def list_agent_machine_logs(
 )
 def revoke_agent_machine(
     agent_machine_id: int,
-    current_user: User = Depends(require_managed_agents_admin_user),
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     agent = db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).first()
@@ -1001,7 +1011,7 @@ def revoke_agent_machine(
 @router.delete("/agents/{agent_machine_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_agent_machine(
     agent_machine_id: int,
-    current_user: User = Depends(require_managed_agents_admin_user),
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     agent = db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).first()
@@ -1073,7 +1083,7 @@ def list_agent_jobs(
 )
 def list_agent_job_logs(
     job_id: int,
-    _: User = Depends(require_managed_agents_admin_user),
+    _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     job = db.query(AgentJob).filter(AgentJob.id == job_id).first()
@@ -1105,7 +1115,7 @@ def list_agent_job_logs(
 )
 async def request_agent_job_cancel(
     job_id: int,
-    current_user: User = Depends(require_managed_agents_admin_user),
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     job = db.query(AgentJob).filter(AgentJob.id == job_id).first()

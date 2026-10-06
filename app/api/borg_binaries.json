@@ -1,7 +1,7 @@
 {
   "current": {
     "1": "1.4.5",
-    "2": "2.0.0b24"
+    "2": "2.0.0b25"
   },
   "release_url": "https://github.com/borgbackup/borg/releases/download/{version}/{asset}",
   "binaries": {
@@ -42,34 +42,48 @@
         "sha256": "9690873e91beabd50c8873221e9f8ba7b19becd36eb0eb5d37fc34cbf78d15ef"
       }
     ],
-    "2.0.0b24": [
+    "2.0.0b25": [
+      {
+        "platform": "linux",
+        "arch": "aarch64",
+        "min_glibc": "2.39",
+        "asset": "borg-linux-glibc239-arm64-gh",
+        "sha256": "ce00afcc269ebfd5d163235325d96f25813b314ae4cfee14e6de5c2eb0a22cce"
+      },
+      {
+        "platform": "linux",
+        "arch": "x86_64",
+        "min_glibc": "2.39",
+        "asset": "borg-linux-glibc239-x86_64-gh",
+        "sha256": "10112ca0cce2d4bde99cf3d93a9f4cd6bda8cd6f099c8fc4057fa5041d375cf4"
+      },
       {
         "platform": "linux",
         "arch": "aarch64",
         "min_glibc": "2.43",
         "asset": "borg-linux-glibc243-arm64-gh",
-        "sha256": "c9474a30e30c5e810ae51c2c88075a631fc1753b37513fc45cc5de2915838b3a"
+        "sha256": "11e3df36bd889fed585a4be722a2acc30d384d693220ec6c5cfea3d729d0b8a9"
       },
       {
         "platform": "linux",
         "arch": "x86_64",
         "min_glibc": "2.43",
         "asset": "borg-linux-glibc243-x86_64-gh",
-        "sha256": "5fa90f4eac2b6ea4847848c24f3f812926cae117a7a444ee10a2301b9ec6aba7"
+        "sha256": "41035528acfeaf5ca2fbad091ab1104de2eebf14e6ec6a5327a8ff72e8834685"
       },
       {
         "platform": "darwin",
         "arch": "aarch64",
         "min_macos": "15",
         "asset": "borg-macos-15-arm64-gh",
-        "sha256": "6b4d6b2978f3b9e3a296ff7e095f6d20512b8fb86d615881f4400c0b6fdf75a9"
+        "sha256": "66c9d3d1a0c13a3ae1f0960a4ad6f0a0f83f8d67ae34c9242b7f58583da150d3"
       },
       {
         "platform": "darwin",
         "arch": "x86_64",
         "min_macos": "15",
         "asset": "borg-macos-15-x86_64-gh",
-        "sha256": "b70ef8dee24afeaac1e35a4f129a1d3f1b49a84783d81da6001f6ca14540f8af"
+        "sha256": "d280799231934152cb796ec7c892f67aabfad2d8a73e494fdc0dd4a36d483514"
       }
     ]
   }
