@@ -22,6 +22,8 @@ export interface RepositoryAdvancedStepData {
 
 interface WizardStepRepositoryAdvancedProps {
   repositoryId?: number | null
+  borgVersion?: 1 | 2
+  repositoryPath?: string
   repositoryMode: 'full' | 'observe'
   data: RepositoryAdvancedStepData
   onChange: (data: Partial<RepositoryAdvancedStepData>) => void
@@ -29,6 +31,8 @@ interface WizardStepRepositoryAdvancedProps {
 
 export default function WizardStepRepositoryAdvanced({
   repositoryId,
+  borgVersion,
+  repositoryPath,
   repositoryMode,
   data,
   onChange,
@@ -55,6 +59,8 @@ export default function WizardStepRepositoryAdvanced({
       <AdvancedRepositoryOptions
         repositoryId={repositoryId}
         mode={repositoryMode}
+        borgVersion={borgVersion}
+        repositoryPath={repositoryPath}
         remotePath={data.remotePath}
         preBackupScript={data.preBackupScript}
         postBackupScript={data.postBackupScript}

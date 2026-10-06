@@ -33,7 +33,11 @@ import { useAnalytics } from '../hooks/useAnalytics'
 import { useFeatureAnalytics } from '../hooks/useFeatureAnalytics'
 import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
-import { kibToUploadRatelimitMb, uploadRatelimitMbToKib } from '../utils/uploadRatelimit'
+import {
+  kibToUploadRatelimitMb,
+  uploadRatelimitMbToKib,
+  uploadRatelimitSupported,
+} from '../utils/uploadRatelimit'
 import type { SourceLocation } from '../types'
 
 interface Repository extends RepositoryData {
@@ -61,7 +65,6 @@ interface RepositoryWizardProps {
   mode: 'create' | 'edit' | 'import'
   repository?: Repository
   onSubmit: (data: RepositoryData, keyfile?: File | null) => void | Promise<void>
-  canUseManagedAgents?: boolean
   canUseRclone?: boolean
 }
 
@@ -220,7 +223,6 @@ const RepositoryWizard = ({
   mode,
   repository,
   onSubmit,
-  canUseManagedAgents = true,
   canUseRclone = true,
 }: RepositoryWizardProps) => {
   const { track, trackRepository, EventCategory, EventAction } = useAnalytics()
@@ -355,7 +357,7 @@ const RepositoryWizard = ({
     const [connectionsRes, agentsRes, statusRes, remotesRes, providersRes, keysRes] =
       await Promise.allSettled([
         sshKeysAPI.getSSHConnections(),
-        canUseManagedAgents ? managedAgentsAPI.listAgents() : Promise.resolve({ data: [] }),
+        managedAgentsAPI.listAgents(),
         canUseRclone
           ? rcloneAPI.getStatus()
           : Promise.resolve({
@@ -413,7 +415,7 @@ const RepositoryWizard = ({
       console.error('Failed to load rclone providers:', providersRes.reason)
       setRcloneProviders([])
     }
-  }, [canUseManagedAgents, canUseRclone, t])
+  }, [canUseRclone, t])
 
   // Populate form data for edit mode
   const populateEditData = React.useCallback(() => {
@@ -529,7 +531,6 @@ const RepositoryWizard = ({
       const nextUpdates = { ...updates }
 
       if (nextUpdates.repositoryLocation === 'rclone' && !canUseRclone) return prev
-      if (nextUpdates.executionTarget === 'agent' && !canUseManagedAgents) return prev
       if (nextUpdates.cloudMirrorEnabled && !canUseRclone) {
         nextUpdates.cloudMirrorEnabled = false
       }
@@ -812,7 +813,6 @@ const RepositoryWizard = ({
         if (!wizardState.name.trim()) return false
         if (!wizardState.path.trim()) return false
         if (wizardState.repositoryLocation === 'rclone' && !canUseRclone) return false
-        if (wizardState.executionTarget === 'agent' && !canUseManagedAgents) return false
         if (wizardState.repositoryLocation === 'rclone') {
           const directRclonePath = parseDirectRcloneUrl(wizardState.path)
           if (
@@ -897,14 +897,6 @@ const RepositoryWizard = ({
       })
       return
     }
-    if (wizardState.executionTarget === 'agent' && !canUseManagedAgents) {
-      trackFeatureBlocked('managed_agents', {
-        surface: 'repository_wizard',
-        operation: 'submit_agent_repository',
-        mode,
-      })
-      return
-    }
 
     const storageBackend = isCachedRcloneRepositoryEdit
       ? 'rclone'
@@ -939,7 +931,11 @@ const RepositoryWizard = ({
       post_hook_timeout: wizardState.postHookTimeout,
       continue_on_hook_failure: wizardState.hookFailureMode === 'continue',
       skip_on_hook_failure: wizardState.hookFailureMode === 'skip',
-      upload_ratelimit_kib: uploadRatelimitMbToKib(wizardState.uploadRatelimitMb),
+      // Borg 2 has no upload limit except behind rclone: elsewhere a
+      // stored one is cleared on save
+      upload_ratelimit_kib: uploadRatelimitSupported(wizardState.borgVersion, wizardState.path)
+        ? uploadRatelimitMbToKib(wizardState.uploadRatelimitMb)
+        : null,
       bypass_lock: wizardState.bypassLock,
       // Spec 6.8 and 6.7: only PUT accepts these, so they ride along
       // when editing and are left to their defaults at creation.
@@ -1206,7 +1202,6 @@ const RepositoryWizard = ({
               agentMachines={agentMachines}
               rcloneStatus={rcloneStatus}
               rcloneRemotes={rcloneRemotes}
-              canUseManagedAgents={canUseManagedAgents}
               canUseRclone={canUseRclone}
               directRcloneModeLocked={directRcloneModeLocked}
               dataSource={wizardState.dataSource}
@@ -1333,6 +1328,8 @@ const RepositoryWizard = ({
         return (
           <WizardStepRepositoryAdvanced
             repositoryId={mode === 'edit' ? repository?.id : null}
+            borgVersion={wizardState.borgVersion}
+            repositoryPath={wizardState.path}
             repositoryMode={wizardState.repositoryMode}
             data={{
               compression: wizardState.compression,
@@ -1355,6 +1352,8 @@ const RepositoryWizard = ({
         return (
           <WizardStepBackupConfig
             repositoryId={mode === 'edit' ? repository?.id : null}
+            borgVersion={wizardState.borgVersion}
+            repositoryPath={wizardState.path}
             dataSource={wizardState.dataSource}
             repositoryMode={wizardState.repositoryMode}
             data={{

@@ -92,14 +92,54 @@ def test_an_agent_from_before_macos_support_is_offered_an_upgrade():
     )
 
 
-def test_an_agent_from_before_the_portable_disk_usage_job_is_offered_an_upgrade():
-    """From 0.1.15 `repository.disk_usage` runs `du -A -sk` on macOS and
-    reports bytes (#1291), so a server built from this tree must offer 0.1.14
-    agents the upgrade.
+def test_an_agent_from_before_the_borg2_b25_adoption_is_offered_an_upgrade():
+    """From 0.1.15 the agent speaks Borg 2.0.0b25 (BORG_REMOTE_PATH in place
+    of --remote-path, the repository key for the index size, rest:// and the
+    unencrypted mode refused) and `repository.disk_usage` runs `du -A -sk` on
+    macOS and reports bytes (#1291), so a server built from this tree must
+    offer 0.1.14 agents the upgrade.
     """
     assert (
         compute_agent_upgrade_status(
             reported="0.1.14", desired=None, available=_pyproject_version()
+        )
+        == "outdated"
+    )
+
+
+def test_an_agent_from_before_the_upgrade_record_comparison_is_offered_an_upgrade():
+    """From 0.1.16 the agent compares its server with the upgrade record, so a
+    server built from this tree must offer 0.1.15 agents the upgrade.
+    """
+    assert (
+        compute_agent_upgrade_status(
+            reported="0.1.15", desired=None, available=_pyproject_version()
+        )
+        == "outdated"
+    )
+
+
+def test_an_agent_from_before_the_per_major_flag_checks_is_offered_an_upgrade():
+    """From 0.1.17 the agent checks custom flags against the job's Borg major
+    and leaves the upload limit out of a Borg 2 backup (#1263), so a server
+    built from this tree must offer 0.1.16 agents the upgrade.
+    """
+    assert (
+        compute_agent_upgrade_status(
+            reported="0.1.16", desired=None, available=_pyproject_version()
+        )
+        == "outdated"
+    )
+
+
+def test_an_agent_from_before_the_rclone_upload_limit_is_offered_an_upgrade():
+    """From 0.1.18 a Borg 2 backup behind rclone takes its upload limit as
+    RCLONE_BWLIMIT (#1307), so a server built from this tree must offer 0.1.17
+    agents the upgrade.
+    """
+    assert (
+        compute_agent_upgrade_status(
+            reported="0.1.17", desired=None, available=_pyproject_version()
         )
         == "outdated"
     )

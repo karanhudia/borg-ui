@@ -48,6 +48,23 @@ describe('agentInstallCommandText', () => {
     )
   })
 
+  it('names the server in the reinstall only when the endpoint was moved', () => {
+    // A reinstall without --server installs from the upgrade record, so only
+    // this form moves the record of an endpoint moved with set-server.
+    expect(buildAgentReinstallCommand('https://borg.example', 'skip', 'linux', true)).toBe(
+      'curl -fsSL https://borg.example/agent/install.sh | sudo bash -s -- --server https://borg.example --reinstall'
+    )
+    expect(buildAgentReinstallCommand('https://borg.example', 'borg2', 'macos', true)).toBe(
+      'curl -fsSL https://borg.example/agent/install.sh | bash -s -- --server https://borg.example --reinstall --borg-version 2'
+    )
+    expect(
+      buildAgentReinstallCommand('https://[2001:db8::1]:8083', 'skip', 'linux', true)
+    ).toContain('--server "https://[2001:db8::1]:8083" --reinstall')
+    expect(
+      buildAgentReinstallCommand('https://borg.example', 'skip', 'linux', false)
+    ).not.toContain('--server')
+  })
+
   it('quotes a server URL the shell would otherwise expand, and only then', () => {
     // An IPv6 literal is a glob pattern to zsh, which refuses the whole line.
     const command = buildAgentInstallCommand('https://[2001:db8::1]:8083', 'tok', 'node')

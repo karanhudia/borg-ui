@@ -170,6 +170,7 @@ class TestRestoreServiceRouting:
             None,
             restore_layout="preserve_path",
             path_metadata=None,
+            existing_files="refuse",
         )
 
     @pytest.mark.unit
@@ -224,6 +225,7 @@ class TestRestoreServiceRouting:
             9,
             restore_layout="preserve_path",
             path_metadata=None,
+            existing_files="refuse",
         )
 
     @pytest.mark.unit
@@ -357,6 +359,56 @@ class TestRestoreServiceExecution:
         refreshed = resolve_restore_job(verification, restore_job.id)
         assert refreshed.status == "failed"
         assert "destinationNotAllowed" in refreshed.error_message
+        verification.close()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_local_restore_reports_why_the_router_refused_it(
+        self, testing_session_local, restore_job
+    ):
+        """Borg 2 does not extract into a directory that holds anything; the
+        router refuses such a restore and the job carries its reason, not
+        the generic failure."""
+        from app.core.borg_errors import RestoreRefused
+
+        detail = {
+            "key": "backend.errors.restore.borg2DestinationNotEmpty",
+            "params": {"path": restore_job.destination},
+        }
+        service = RestoreService()
+
+        with (
+            patch("app.services.restore_service.SessionLocal", testing_session_local),
+            patch.object(service, "_ensure_local_destination"),
+            patch("app.services.restore_service.BorgRouter") as borg_router,
+            patch(
+                "app.services.restore_service.asyncio.create_subprocess_exec"
+            ) as create_subprocess,
+            patch(
+                "app.services.restore_service.notification_service.send_restore_failure",
+                new=AsyncMock(),
+            ) as notify,
+        ):
+            borg_router.return_value.build_restore_extract_command.side_effect = (
+                RestoreRefused(detail)
+            )
+            await service._execute_local_to_local(
+                restore_job.id,
+                restore_job.repository,
+                restore_job.archive,
+                restore_job.destination,
+                None,
+            )
+
+        create_subprocess.assert_not_called()
+        # an operator who asked to hear about failed restores hears about it
+        notify.assert_awaited_once()
+        assert json.loads(notify.await_args.args[3]) == detail
+        verification = testing_session_local()
+        refreshed = resolve_restore_job(verification, restore_job.id)
+        assert refreshed.status == "failed"
+        assert json.loads(refreshed.error_message) == detail
+        assert refreshed.completed_at is not None
         verification.close()
 
     @pytest.mark.unit

@@ -16,6 +16,16 @@ if TYPE_CHECKING:
     from app.database.models import Repository
 
 
+# Borg 2.0.0b25 removed the unencrypted modes: every Borg 2 repository has a
+# key, and every command on it needs the passphrase (the lock is sealed with
+# the key). Borg 2 test repositories are created `authenticated` with this
+# passphrase; make_borg_test_env carries it for the commands a test runs
+# itself, the repository row carries it for the ones the application runs.
+# A Borg 1 repository created with encryption "none" ignores the variable.
+BORG2_TEST_ENCRYPTION = "authenticated"
+BORG2_TEST_PASSPHRASE = "borg2-test-passphrase"
+
+
 def require_borg_binary() -> str:
     """Return the Borg binary path or skip the test if unavailable."""
     borg_path = shutil.which("borg")
@@ -38,6 +48,7 @@ def make_borg_test_env(base_path: str) -> dict:
     env["BORG_BASE_DIR"] = str(borg_base_dir)
     env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
     env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
+    env["BORG_PASSPHRASE"] = BORG2_TEST_PASSPHRASE
     return env
 
 
@@ -70,12 +81,16 @@ def init_borg_repo(
     repo_path: Path,
     *,
     env: Optional[dict] = None,
-    encryption: str = "none",
+    encryption: Optional[str] = None,
 ) -> Path:
-    """Initialize a Borg repository."""
+    """Initialize a Borg repository: unencrypted for Borg 1, authenticated
+    (BORG2_TEST_PASSPHRASE) for Borg 2, unless a mode is given."""
     repo_path.mkdir(parents=True, exist_ok=True)
     borg_name = Path(borg_binary).name
+    if encryption is None:
+        encryption = BORG2_TEST_ENCRYPTION if borg_name.startswith("borg2") else "none"
     if borg_name.startswith("borg2"):
+        env = {"BORG_PASSPHRASE": BORG2_TEST_PASSPHRASE, **(env or {})}
         # Imported here: the smoke scripts load this module without the app's
         # environment, and importing app.config creates /data.
         from app.core.borg2 import BORG2_ENCRYPTION_FLAGS

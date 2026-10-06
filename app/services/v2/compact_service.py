@@ -2,12 +2,11 @@
 
 Mirrors compact_service.py but uses the borg2 binary.
 
-Borg 2 compact has two phases (verified against live borg2 2.0.0b22):
+Borg 2 compact has two phases (verified against live borg2 2.0.0b25):
   operation=1  compact.analyze_archives  "Computing used chunks X%"   → 0-50%
   operation=2  compact.compact_packs     "Compacting packs X%"        → 50-100%
 
-The second phase was compact.report_and_delete until 2.0.0b22 renamed it; the
-progress split keys on `operation`, not on the msgid, so it did not move.
+The progress split keys on `operation`, not on the msgid.
 
 Both phases emit progress_percent on stderr with --progress --log-json.
 """
@@ -21,7 +20,7 @@ import structlog
 
 from app.database.models import Repository
 from app.database.database import SessionLocal
-from app.core.borg2 import _get_borg2_binary, compact_stats_supported
+from app.core.borg2 import _get_borg2_binary, ensure_borg2_repository_url
 from app.config import settings
 from app.services.borg2_compact_stats import is_stats_line, parse_compact_stats
 from app.services.maintenance_state import apply_compact_completion
@@ -38,7 +37,6 @@ from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import (
     build_repository_borg_env,
     cleanup_temp_key_file,
-    effective_repository_remote_path,
 )
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,  # noqa: F401
@@ -189,19 +187,14 @@ class CompactV2Service:
 
             borg_cmd = _get_borg2_binary()
             # --stats --info: Borg 2 reports the repository statistics only
-            # here, on INFO level (see borg2_compact_stats), from 2.0.0b15 on.
-            # a subprocess probe, off the event loop
-            with_stats = await asyncio.to_thread(compact_stats_supported, borg_cmd)
-            if with_stats:
-                # Exact byte counts in the statistics lines instead of the
-                # rounded, BORG_UNITS-dependent human form.
-                env["BORG_UNITS"] = "raw"
-            cmd = [borg_cmd, "-r", repository.path, "compact"]
-            if with_stats:
-                cmd.extend(["--stats", "--info"])
+            # here, on INFO level (see borg2_compact_stats). Exact byte
+            # counts in the statistics lines instead of the rounded,
+            # BORG_UNITS-dependent human form.
+            env["BORG_UNITS"] = "raw"
+            ensure_borg2_repository_url(repository.path)
+            cmd = [borg_cmd, "-r", repository.path, "compact", "--stats", "--info"]
+            # the remote Borg command is in env (BORG_REMOTE_PATH)
             cmd.extend(["--progress", "--log-json"])
-            if remote_path := effective_repository_remote_path(repository):
-                cmd.extend(["--remote-path", remote_path])
 
             logger.info(
                 "Starting borg2 compact",
@@ -392,21 +385,16 @@ class CompactV2Service:
                 # the whole window: the parser is line-anchored and cheap,
                 # and the statistics must not depend on how many lines
                 # Borg prints after them
-                stats = parse_compact_stats(log_buffer.lines()) if with_stats else None
+                stats = parse_compact_stats(log_buffer.lines())
                 size_written = apply_compact_completion(
                     job,
                     repository,
                     process.returncode,
                     stats=stats,
                 )
-                if (
-                    with_stats
-                    and stats is None
-                    and job.status
-                    in (
-                        "completed",
-                        "completed_with_warnings",
-                    )
+                if stats is None and job.status in (
+                    "completed",
+                    "completed_with_warnings",
                 ):
                     # The size this compact was asked for is missing: a
                     # Borg release that no longer prints these lines shows

@@ -33,7 +33,6 @@ type SourceStepProps = Pick<
   | 'onCreateScript'
   | 't'
 > & {
-  canUseManagedAgents?: boolean
   canUseMixedSourceTypes?: boolean
   canUseDatabaseDiscovery?: boolean
   canUseContainerBackups?: boolean
@@ -46,7 +45,6 @@ export function SourceStep({
   fullRepositories,
   scripts,
   loadingScripts,
-  canUseManagedAgents = true,
   canUseMixedSourceTypes = true,
   canUseDatabaseDiscovery = true,
   canUseContainerBackups = true,
@@ -424,7 +422,6 @@ export function SourceStep({
         fullRepositories={fullRepositories}
         scripts={scripts}
         loadingScripts={loadingScripts}
-        canUseManagedAgents={canUseManagedAgents}
         canUseMixedSourceTypes={canUseMixedSourceTypes}
         canUseDatabaseDiscovery={canUseDatabaseDiscovery}
         canUseContainerBackups={canUseContainerBackups}

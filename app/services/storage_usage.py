@@ -5,7 +5,7 @@ Order for Borg 2, which reports no size through any command:
 1. the chunk-index sum through Borg's own Python API, run with the
    interpreter next to the configured Borg 2 binary (a venv install): the
    bytes of every indexed object, no lock, no pack access, works while a
-   backup holds the lock;
+   backup holds the lock (it needs the repository key);
 2. a store-level measurement per URL scheme, which counts file bytes
    including pack headers and the index ("storage used");
 3. nothing: the caller leaves the stored size alone, which a Borg 2
@@ -16,15 +16,15 @@ These are different quantities, which is why the caller records the source
 next to the value. `compact --stats` reports pack file bytes, which include
 data no index entry covers (an interrupted write, before compact); on a
 repository whose packs are fully indexed the index sum matched it byte for
-byte in every measurement taken (b23, b24), but the two are not identical
-by definition. Storage used adds the index and other store files on top.
+byte in every measurement taken (2.0.0b25), but the two are not
+identical by definition. Storage used adds the index and other store files on top.
 
 Borg 1 keeps `info --json` `cache.stats.unique_csize`. The same payload
 also reports the source data size of every archive
 (`cache.stats.total_size`), which the caller carries alongside: one
 repository-level figure, where Borg 2 reports it through `compact
---stats`. Both versions also report `repository.last_modified` (the last
-manifest write), which the caller persists.
+--stats`. Borg 1 also reports `repository.last_modified` (the last
+manifest write), which the caller persists; Borg 2 reports none.
 """
 
 import asyncio
@@ -42,6 +42,7 @@ from urllib.parse import unquote, urlsplit
 
 import structlog
 
+from app.services.process_cancel import communicate_or_kill
 from app.utils.datetime_utils import parse_borg_archive_time, utc_now
 
 logger = structlog.get_logger()
@@ -190,8 +191,10 @@ def _host_port(parts) -> str:
 
 
 # Sums Repository.list() storage sizes; lock=False reads while another borg
-# holds the exclusive lock (like --bypass-lock). Needs no key: the index is
-# not encrypted. Prints one JSON object. The URL arrives in the environment
+# holds the exclusive lock (like --bypass-lock). The index is sealed with the
+# repository key, which an unlocked open does not load: the script loads it
+# (the passphrase is in the environment).
+# Prints one JSON object. The URL arrives in the environment
 # (REPOSITORY_URL_ENV), never on the command line: it may carry credentials
 # and a process list shows arguments.
 REPOSITORY_URL_ENV = "BORG_UI_REPOSITORY_URL"
@@ -201,9 +204,11 @@ from borg.logger import setup_logging
 setup_logging()
 from borg.repository import Repository
 from borg.helpers import Location
+from borg.crypto.key import key_factory
 total = objects = 0
 marker = None
 with Repository(Location(os.environ["BORG_UI_REPOSITORY_URL"]), exclusive=False, lock=False) as repo:
+    key_factory(repo)
     while True:
         batch = repo.list(limit=100000, marker=marker)
         if not batch:
@@ -225,23 +230,6 @@ class SizeResult:
     # Borg 1 only: the source data size of every archive, from the same
     # `info --json` call (`cache.stats.total_size`).
     original_size: Optional[int] = None
-
-
-async def _communicate(process, timeout: int) -> tuple[bytes, bytes]:
-    """communicate() with a deadline that also ends the child: wait_for only
-    cancels the wait, a timed-out (or cancelled) borg or rclone would keep
-    running."""
-    try:
-        return await asyncio.wait_for(process.communicate(), timeout)
-    except (asyncio.TimeoutError, asyncio.CancelledError):
-        try:
-            process.kill()
-        except ProcessLookupError:
-            # already gone; kill() would otherwise replace the cancellation
-            # with an OSError that the callers treat as "failed to start"
-            pass
-        await process.wait()
-        raise
 
 
 # -- Borg 2 chunk index --------------------------------------------------------
@@ -306,7 +294,7 @@ async def borg2_index_size(
             stderr=asyncio.subprocess.PIPE,
             env=child_env,
         )
-        stdout, stderr = await _communicate(process, timeout)
+        stdout, stderr = await communicate_or_kill(process, timeout=timeout)
     except asyncio.TimeoutError:
         logger.warning("borg2 index size timed out", repository=repository_url)
         return None
@@ -394,7 +382,7 @@ async def rclone_storage_used(
             stderr=asyncio.subprocess.PIPE,
             env=env,
         )
-        stdout, stderr = await _communicate(process, timeout)
+        stdout, stderr = await communicate_or_kill(process, timeout=timeout)
     except (asyncio.TimeoutError, OSError) as exc:
         logger.warning("rclone size failed", repository=url, error=str(exc))
         return None
@@ -513,12 +501,7 @@ async def du_storage_used(
 def store_target(repository_path: str) -> tuple[str, Optional[str]]:
     """(tool, target) for the store-level fallback, or ("", None).
 
-    `rest://user@host:port/path` is borgstore's "ssh to host and run the REST
-    server on stdio" form. The key on such a host is normally bound to that
-    server (`command="...",restrict` in authorized_keys), so a shell command
-    over ssh does not run: no store-level measurement, only the chunk index
-    through Borg itself. `rest:///path` is local. `http(s)://` is a REST
-    server listing.
+    `http(s)://` is a REST server listing.
     """
     # URI schemes are case-insensitive; the target keeps the text as given.
     lowered = repository_path.lower()
@@ -526,13 +509,12 @@ def store_target(repository_path: str) -> tuple[str, Optional[str]]:
         return "http", repository_path
     if lowered.startswith(("sftp://", "rclone:")):
         return "rclone", repository_path
-    if lowered.startswith("rest://"):
-        parts = urlsplit(repository_path)
-        if parts.hostname:
-            return "", None
-        return "du", parts.path
     if lowered.startswith("ssh://"):
-        return "du", repository_path
+        # Borg 2 reads ssh://host/path as relative to the login directory
+        # and ssh://host//path as absolute. du over ssh measures an absolute
+        # path, so only that form names the same directory for both.
+        parts = urlsplit(repository_path)
+        return ("du", repository_path) if parts.path.startswith("//") else ("", None)
     if "://" not in repository_path and not lowered.startswith(("s3:", "b2:")):
         return "du", repository_path
     return "", None
@@ -579,8 +561,9 @@ async def measure_repository_size(
     info_timeout: int = 60,
     use_bypass_lock: bool = False,
 ) -> SizeResult:
-    """Best available size and `last_modified` for a server-executed
-    repository. An empty Borg 2 index is 0 bytes; unknown is `None`."""
+    """Best available size, and Borg 1's `last_modified`, for a
+    server-executed repository. An empty Borg 2 index is 0 bytes; unknown
+    is `None`."""
     from app.utils.borg_env import effective_repository_remote_path
 
     remote_path = effective_repository_remote_path(repository)
@@ -617,20 +600,7 @@ async def measure_repository_size(
             original_size=borg1_original_size(payload),
         )
 
-    from app.core.borg2 import _get_borg2_binary, borg2
-
-    last_modified = None
-    rinfo = await borg2.rinfo(
-        repository.path,
-        passphrase=repository.passphrase,
-        remote_path=remote_path,
-        env=env,
-    )
-    if rinfo.get("success"):
-        try:
-            last_modified = _last_modified(json.loads(rinfo.get("stdout") or "{}"))
-        except json.JSONDecodeError:
-            pass
+    from app.core.borg2 import _get_borg2_binary
 
     index_env = dict(env or {})
     if repository.passphrase:
@@ -648,7 +618,6 @@ async def measure_repository_size(
             bytes=indexed[0],
             objects=indexed[1],
             source=SOURCE_BORG2_INDEX,
-            last_modified=last_modified,
         )
 
     # the whole measurement runs under the repository's metadata lock, so
@@ -659,5 +628,4 @@ async def measure_repository_size(
     return SizeResult(
         bytes=used,
         source=SOURCE_STORAGE_USED if used else None,
-        last_modified=last_modified,
     )
