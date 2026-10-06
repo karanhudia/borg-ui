@@ -1,6 +1,10 @@
 """The SIGTERM/wait/SIGKILL routine the tracking services share."""
 
 import asyncio
+import os
+import signal
+import sys
+import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -137,7 +141,53 @@ async def test_communicate_or_kill_ends_its_child_on_timeout():
     )
     with pytest.raises(asyncio.TimeoutError):
         await communicate_or_kill(process, timeout=0.2, input=b"")
-    assert process.returncode is not None
+    # SIGTERM, not SIGKILL: Borg releases its lock on SIGTERM.
+    assert process.returncode == -signal.SIGTERM
+
+
+@pytest.mark.unit
+async def test_communicate_or_kill_kills_a_child_that_ignores_sigterm(monkeypatch):
+    monkeypatch.setattr("app.services.process_cancel._GRACE_SECONDS", 0.2)
+    process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-c",
+        "import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+        "print('ready', flush=True); time.sleep(30)",
+        stdout=asyncio.subprocess.PIPE,
+    )
+    await process.stdout.readline()
+    with pytest.raises(asyncio.TimeoutError):
+        await communicate_or_kill(process, timeout=0.2)
+    assert process.returncode == -signal.SIGKILL
+
+
+@pytest.mark.unit
+async def test_communicate_or_kill_reaps_a_child_whose_output_filled_the_pipe(
+    monkeypatch,
+):
+    """asyncio reports the exit only once both pipes are closed. A child that
+    keeps writing through the SIGTERM grace period fills the reader's buffer,
+    the reader pauses, and nothing reads the EOF once `communicate` is
+    cancelled; without draining, the reap never returns."""
+    monkeypatch.setattr("app.services.process_cancel._GRACE_SECONDS", 0.5)
+    process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-c",
+        "import signal, sys; signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "while True: sys.stdout.write('x' * 65536)",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    started = time.monotonic()
+    try:
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(communicate_or_kill(process, timeout=0.5), 10)
+        # The 0.5 s deadline plus the grace period, not the 10 s guard.
+        assert time.monotonic() - started < 5
+        assert process.returncode is not None
+    finally:
+        if process.returncode is None:
+            process.kill()
 
 
 @pytest.mark.unit
@@ -190,3 +240,31 @@ async def test_a_timed_out_borg2_command_ends_its_borg(slow_children):
     result = await Borg2Interface()._run(["borg2", "info"], timeout=0.2)
     assert result["success"] is False
     assert [p.returncode is not None for p in slow_children] == [True]
+
+
+@pytest.mark.unit
+async def test_communicate_or_kill_gives_up_on_a_pipe_a_grandchild_holds(
+    monkeypatch,
+):
+    """Borg's ssh inherits its stderr; a pipe held past SIGKILL must not keep
+    the caller waiting for as long as the grandchild lives."""
+    monkeypatch.setattr("app.services.process_cancel._GRACE_SECONDS", 0.2)
+    process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-c",
+        "import signal, subprocess, time\n"
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "child = subprocess.Popen(['sleep', '30'])\n"
+        "print(child.pid, flush=True)\n"
+        "time.sleep(30)",
+        stdout=asyncio.subprocess.PIPE,
+    )
+    grandchild = int(await process.stdout.readline())
+    started = time.monotonic()
+    try:
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(communicate_or_kill(process, timeout=0.2), 10)
+        assert time.monotonic() - started < 5
+        assert process.returncode == -signal.SIGKILL
+    finally:
+        os.kill(grandchild, signal.SIGKILL)

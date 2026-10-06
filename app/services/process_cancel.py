@@ -76,11 +76,39 @@ async def communicate_or_kill(
     try:
         return await asyncio.wait_for(process.communicate(input=input), timeout)
     except (asyncio.TimeoutError, asyncio.CancelledError):
+        await asyncio.shield(_end_child(process))
+        raise
+
+
+async def _end_child(process: asyncio.subprocess.Process) -> None:
+    """SIGTERM, which Borg answers by releasing its lock, then SIGKILL after
+    the grace period.
+
+    The pipes are drained while waiting: asyncio reports the exit only once
+    both are closed, and a reader paused on a full buffer stops reading when
+    `communicate` is cancelled, so `wait()` alone could never return. A pipe a
+    grandchild still holds (Borg's ssh inherits its stderr) can outlive even
+    SIGKILL, so that wait is bounded too.
+    """
+    for send_signal in (process.terminate, process.kill):
         try:
-            process.kill()
+            send_signal()
         except ProcessLookupError:
             # Already gone; raising here would replace the timeout or the
             # cancellation with an OSError.
             pass
-        await asyncio.shield(process.wait())
-        raise
+        try:
+            await asyncio.wait_for(_drain_and_wait(process), _GRACE_SECONDS)
+            return
+        except asyncio.TimeoutError:
+            pass
+    logger.warning("Killed process still holds its pipes open", pid=process.pid)
+
+
+async def _drain_and_wait(process: asyncio.subprocess.Process) -> None:
+    async def discard(pipe: asyncio.StreamReader) -> None:
+        while await pipe.read(65536):
+            pass
+
+    pipes = [discard(p) for p in (process.stdout, process.stderr) if p is not None]
+    await asyncio.gather(*pipes, process.wait())
