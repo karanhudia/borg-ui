@@ -1,21 +1,435 @@
 {
-  "generatedAt": "2026-10-04T07:26:15.851Z",
+  "generatedAt": "2026-10-06T11:39:51.163Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1317 visual report",
-    "commitSha": "42652679bc6d",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/37185695969"
+    "commitSha": "0a12f3ed71f9",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/37457574507"
   },
   "totals": {
-    "baseline": 1134,
+    "baseline": 1164,
     "actual": 1132,
     "compared": 1130,
-    "changed": 10,
+    "changed": 52,
     "added": 2,
-    "removed": 4,
-    "unchanged": 1120
+    "removed": 34,
+    "unchanged": 1078
   },
   "changed": [
+    {
+      "fileName": "components-commandpreview--local-backup-commands--mobile.png",
+      "baselinePath": "images/baseline/components-commandpreview--local-backup-commands--mobile.png",
+      "actualPath": "images/actual/components-commandpreview--local-backup-commands--mobile.png",
+      "diffPath": "images/diff/components-commandpreview--local-backup-commands--mobile.png",
+      "diffPixels": 5850,
+      "totalPixels": 329160,
+      "diffRatio": 0.017772511848341232,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-commandpreview--local-backup-commands.png",
+      "baselinePath": "images/baseline/components-commandpreview--local-backup-commands.png",
+      "actualPath": "images/actual/components-commandpreview--local-backup-commands.png",
+      "diffPath": "images/diff/components-commandpreview--local-backup-commands.png",
+      "diffPixels": 5794,
+      "totalPixels": 1024000,
+      "diffRatio": 0.005658203125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-rcloneremoteselect--empty-state.png",
+      "baselinePath": "images/baseline/components-rcloneremoteselect--empty-state.png",
+      "actualPath": "images/actual/components-rcloneremoteselect--empty-state.png",
+      "diffPath": "images/diff/components-rcloneremoteselect--empty-state.png",
+      "diffPixels": 1024000,
+      "totalPixels": 1024000,
+      "diffRatio": 1,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-repositorycard--borg-2-stored-size--mobile.png",
+      "baselinePath": "images/baseline/components-repositorycard--borg-2-stored-size--mobile.png",
+      "actualPath": "images/actual/components-repositorycard--borg-2-stored-size--mobile.png",
+      "diffPath": "images/diff/components-repositorycard--borg-2-stored-size--mobile.png",
+      "diffPixels": 1583,
+      "totalPixels": 329160,
+      "diffRatio": 0.004809211325799003,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-repositorycard--borg-2-stored-size.png",
+      "baselinePath": "images/baseline/components-repositorycard--borg-2-stored-size.png",
+      "actualPath": "images/actual/components-repositorycard--borg-2-stored-size.png",
+      "diffPath": "images/diff/components-repositorycard--borg-2-stored-size.png",
+      "diffPixels": 1572,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00153515625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-repositorycard--size-still-measuring--mobile.png",
+      "baselinePath": "images/baseline/components-repositorycard--size-still-measuring--mobile.png",
+      "actualPath": "images/actual/components-repositorycard--size-still-measuring--mobile.png",
+      "diffPath": "images/diff/components-repositorycard--size-still-measuring--mobile.png",
+      "diffPixels": 1583,
+      "totalPixels": 329160,
+      "diffRatio": 0.004809211325799003,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-repositorycard--size-still-measuring.png",
+      "baselinePath": "images/baseline/components-repositorycard--size-still-measuring.png",
+      "actualPath": "images/actual/components-repositorycard--size-still-measuring.png",
+      "diffPath": "images/diff/components-repositorycard--size-still-measuring.png",
+      "diffPixels": 1572,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00153515625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-repositorycard--size-unknown--mobile.png",
+      "baselinePath": "images/baseline/components-repositorycard--size-unknown--mobile.png",
+      "actualPath": "images/actual/components-repositorycard--size-unknown--mobile.png",
+      "diffPath": "images/diff/components-repositorycard--size-unknown--mobile.png",
+      "diffPixels": 1583,
+      "totalPixels": 329160,
+      "diffRatio": 0.004809211325799003,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-repositorycard--size-unknown.png",
+      "baselinePath": "images/baseline/components-repositorycard--size-unknown.png",
+      "actualPath": "images/actual/components-repositorycard--size-unknown.png",
+      "diffPath": "images/diff/components-repositorycard--size-unknown.png",
+      "diffPixels": 1572,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00153515625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-repositorycard--with-upload-limit--mobile.png",
+      "baselinePath": "images/baseline/components-repositorycard--with-upload-limit--mobile.png",
+      "actualPath": "images/actual/components-repositorycard--with-upload-limit--mobile.png",
+      "diffPath": "images/diff/components-repositorycard--with-upload-limit--mobile.png",
+      "diffPixels": 63821,
+      "totalPixels": 329160,
+      "diffRatio": 0.19389050917486936,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-repositorycard--with-upload-limit.png",
+      "baselinePath": "images/baseline/components-repositorycard--with-upload-limit.png",
+      "actualPath": "images/actual/components-repositorycard--with-upload-limit.png",
+      "diffPath": "images/diff/components-repositorycard--with-upload-limit.png",
+      "diffPixels": 4299,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0041982421875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-repositoryinfodialog--borg-2-stored-statistics--mobile.png",
+      "baselinePath": "images/baseline/components-repositoryinfodialog--borg-2-stored-statistics--mobile.png",
+      "actualPath": "images/actual/components-repositoryinfodialog--borg-2-stored-statistics--mobile.png",
+      "diffPath": "images/diff/components-repositoryinfodialog--borg-2-stored-statistics--mobile.png",
+      "diffPixels": 44938,
+      "totalPixels": 329160,
+      "diffRatio": 0.1365232713573946,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-repositoryinfodialog--borg-2-stored-statistics.png",
+      "baselinePath": "images/baseline/components-repositoryinfodialog--borg-2-stored-statistics.png",
+      "actualPath": "images/actual/components-repositoryinfodialog--borg-2-stored-statistics.png",
+      "diffPath": "images/diff/components-repositoryinfodialog--borg-2-stored-statistics.png",
+      "diffPixels": 1906,
+      "totalPixels": 1024000,
+      "diffRatio": 0.001861328125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-repositoryinfodialog--statistics-indexing-after-import--mobile.png",
+      "baselinePath": "images/baseline/components-repositoryinfodialog--statistics-indexing-after-import--mobile.png",
+      "actualPath": "images/actual/components-repositoryinfodialog--statistics-indexing-after-import--mobile.png",
+      "diffPath": "images/diff/components-repositoryinfodialog--statistics-indexing-after-import--mobile.png",
+      "diffPixels": 45589,
+      "totalPixels": 329160,
+      "diffRatio": 0.13850103293231256,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-repositoryinfodialog--statistics-indexing-after-import.png",
+      "baselinePath": "images/baseline/components-repositoryinfodialog--statistics-indexing-after-import.png",
+      "actualPath": "images/actual/components-repositoryinfodialog--statistics-indexing-after-import.png",
+      "diffPath": "images/diff/components-repositoryinfodialog--statistics-indexing-after-import.png",
+      "diffPixels": 1906,
+      "totalPixels": 1024000,
+      "diffRatio": 0.001861328125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-repositoryinfodialog--statistics-unknown--mobile.png",
+      "baselinePath": "images/baseline/components-repositoryinfodialog--statistics-unknown--mobile.png",
+      "actualPath": "images/actual/components-repositoryinfodialog--statistics-unknown--mobile.png",
+      "diffPath": "images/diff/components-repositoryinfodialog--statistics-unknown--mobile.png",
+      "diffPixels": 44772,
+      "totalPixels": 329160,
+      "diffRatio": 0.13601895734597155,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-repositoryinfodialog--statistics-unknown.png",
+      "baselinePath": "images/baseline/components-repositoryinfodialog--statistics-unknown.png",
+      "actualPath": "images/actual/components-repositoryinfodialog--statistics-unknown.png",
+      "diffPath": "images/diff/components-repositoryinfodialog--statistics-unknown.png",
+      "diffPixels": 1906,
+      "totalPixels": 1024000,
+      "diffRatio": 0.001861328125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-wizard-repository-review--cloud-mirror--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-repository-review--cloud-mirror--mobile.png",
+      "actualPath": "images/actual/components-wizard-repository-review--cloud-mirror--mobile.png",
+      "diffPath": "images/diff/components-wizard-repository-review--cloud-mirror--mobile.png",
+      "diffPixels": 14910,
+      "totalPixels": 329160,
+      "diffRatio": 0.045297119941669704,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-wizard-repository-review--cloud-mirror.png",
+      "baselinePath": "images/baseline/components-wizard-repository-review--cloud-mirror.png",
+      "actualPath": "images/actual/components-wizard-repository-review--cloud-mirror.png",
+      "diffPath": "images/diff/components-wizard-repository-review--cloud-mirror.png",
+      "diffPixels": 14846,
+      "totalPixels": 1024000,
+      "diffRatio": 0.014498046875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "managed-agents-agentcardchips--everything--mobile.png",
+      "baselinePath": "images/baseline/managed-agents-agentcardchips--everything--mobile.png",
+      "actualPath": "images/actual/managed-agents-agentcardchips--everything--mobile.png",
+      "diffPath": "images/diff/managed-agents-agentcardchips--everything--mobile.png",
+      "diffPixels": 2950,
+      "totalPixels": 329160,
+      "diffRatio": 0.008962206829505407,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "managed-agents-agentcardchips--everything-dark--mobile.png",
+      "baselinePath": "images/baseline/managed-agents-agentcardchips--everything-dark--mobile.png",
+      "actualPath": "images/actual/managed-agents-agentcardchips--everything-dark--mobile.png",
+      "diffPath": "images/diff/managed-agents-agentcardchips--everything-dark--mobile.png",
+      "diffPixels": 2952,
+      "totalPixels": 329160,
+      "diffRatio": 0.008968282901932191,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "managed-agents-agentcardchips--everything-dark.png",
+      "baselinePath": "images/baseline/managed-agents-agentcardchips--everything-dark.png",
+      "actualPath": "images/actual/managed-agents-agentcardchips--everything-dark.png",
+      "diffPath": "images/diff/managed-agents-agentcardchips--everything-dark.png",
+      "diffPixels": 3236,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00316015625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "managed-agents-agentcardchips--everything.png",
+      "baselinePath": "images/baseline/managed-agents-agentcardchips--everything.png",
+      "actualPath": "images/actual/managed-agents-agentcardchips--everything.png",
+      "diffPath": "images/diff/managed-agents-agentcardchips--everything.png",
+      "diffPixels": 3231,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0031552734375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
     {
       "fileName": "pages-backup-plans-content--deleting-plan--mobile.png",
       "baselinePath": "images/baseline/pages-backup-plans-content--deleting-plan--mobile.png",
@@ -125,6 +539,348 @@
       }
     },
     {
+      "fileName": "pages-managedagents--agent-diagnostics-partial-failure--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-diagnostics-partial-failure--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--agent-diagnostics-partial-failure--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--agent-diagnostics-partial-failure--mobile.png",
+      "diffPixels": 153,
+      "totalPixels": 329160,
+      "diffRatio": 0.00046481954064892455,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-managedagents--agent-diagnostics-partial-failure.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-diagnostics-partial-failure.png",
+      "actualPath": "images/actual/pages-managedagents--agent-diagnostics-partial-failure.png",
+      "diffPath": "images/diff/pages-managedagents--agent-diagnostics-partial-failure.png",
+      "diffPixels": 153,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0001494140625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-managedagents--agent-diagnostics-success--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-diagnostics-success--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--agent-diagnostics-success--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--agent-diagnostics-success--mobile.png",
+      "diffPixels": 153,
+      "totalPixels": 329160,
+      "diffRatio": 0.00046481954064892455,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-managedagents--agent-diagnostics-success.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-diagnostics-success.png",
+      "actualPath": "images/actual/pages-managedagents--agent-diagnostics-success.png",
+      "diffPath": "images/diff/pages-managedagents--agent-diagnostics-success.png",
+      "diffPixels": 153,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0001494140625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-managedagents--agent-diagnostics-timeout--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-diagnostics-timeout--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--agent-diagnostics-timeout--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--agent-diagnostics-timeout--mobile.png",
+      "diffPixels": 153,
+      "totalPixels": 329160,
+      "diffRatio": 0.00046481954064892455,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-managedagents--agent-diagnostics-timeout.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-diagnostics-timeout.png",
+      "actualPath": "images/actual/pages-managedagents--agent-diagnostics-timeout.png",
+      "diffPath": "images/diff/pages-managedagents--agent-diagnostics-timeout.png",
+      "diffPixels": 153,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0001494140625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-managedagents--agent-fleet-offline-recovery--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-fleet-offline-recovery--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--agent-fleet-offline-recovery--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--agent-fleet-offline-recovery--mobile.png",
+      "diffPixels": 124,
+      "totalPixels": 329160,
+      "diffRatio": 0.0003767164904605663,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-managedagents--agent-fleet-offline-recovery-mobile--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-fleet-offline-recovery-mobile--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--agent-fleet-offline-recovery-mobile--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--agent-fleet-offline-recovery-mobile--mobile.png",
+      "diffPixels": 124,
+      "totalPixels": 329160,
+      "diffRatio": 0.0003767164904605663,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-managedagents--agent-fleet-offline-recovery-mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-fleet-offline-recovery-mobile.png",
+      "actualPath": "images/actual/pages-managedagents--agent-fleet-offline-recovery-mobile.png",
+      "diffPath": "images/diff/pages-managedagents--agent-fleet-offline-recovery-mobile.png",
+      "diffPixels": 119,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0001162109375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-managedagents--agent-fleet-offline-recovery.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-fleet-offline-recovery.png",
+      "actualPath": "images/actual/pages-managedagents--agent-fleet-offline-recovery.png",
+      "diffPath": "images/diff/pages-managedagents--agent-fleet-offline-recovery.png",
+      "diffPixels": 119,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0001162109375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-managedagents--agent-fleet-upgrade-selection--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-fleet-upgrade-selection--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--agent-fleet-upgrade-selection--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--agent-fleet-upgrade-selection--mobile.png",
+      "diffPixels": 124,
+      "totalPixels": 329160,
+      "diffRatio": 0.0003767164904605663,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-managedagents--agent-fleet-upgrade-selection.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-fleet-upgrade-selection.png",
+      "actualPath": "images/actual/pages-managedagents--agent-fleet-upgrade-selection.png",
+      "diffPath": "images/diff/pages-managedagents--agent-fleet-upgrade-selection.png",
+      "diffPixels": 357,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0003486328125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-managedagents--agent-fleet-version-states--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-fleet-version-states--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--agent-fleet-version-states--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--agent-fleet-version-states--mobile.png",
+      "diffPixels": 124,
+      "totalPixels": 329160,
+      "diffRatio": 0.0003767164904605663,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-managedagents--agent-fleet-version-states.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-fleet-version-states.png",
+      "actualPath": "images/actual/pages-managedagents--agent-fleet-version-states.png",
+      "diffPath": "images/diff/pages-managedagents--agent-fleet-version-states.png",
+      "diffPixels": 357,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0003486328125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-managedagents--fleet-overview.png",
+      "baselinePath": "images/baseline/pages-managedagents--fleet-overview.png",
+      "actualPath": "images/actual/pages-managedagents--fleet-overview.png",
+      "diffPath": "images/diff/pages-managedagents--fleet-overview.png",
+      "diffPixels": 119,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0001162109375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "quick-start-steps--app-chosen.png",
+      "baselinePath": "images/baseline/quick-start-steps--app-chosen.png",
+      "actualPath": "images/actual/quick-start-steps--app-chosen.png",
+      "diffPath": "images/diff/quick-start-steps--app-chosen.png",
+      "diffPixels": 43,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0000419921875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "quick-start-steps--destination-agent.png",
+      "baselinePath": "images/baseline/quick-start-steps--destination-agent.png",
+      "actualPath": "images/actual/quick-start-steps--destination-agent.png",
+      "diffPath": "images/diff/quick-start-steps--destination-agent.png",
+      "diffPixels": 28,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00002734375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "quick-start-steps--destination-ssh-no-default-path--mobile.png",
+      "baselinePath": "images/baseline/quick-start-steps--destination-ssh-no-default-path--mobile.png",
+      "actualPath": "images/actual/quick-start-steps--destination-ssh-no-default-path--mobile.png",
+      "diffPath": "images/diff/quick-start-steps--destination-ssh-no-default-path--mobile.png",
+      "diffPixels": 21,
+      "totalPixels": 329160,
+      "diffRatio": 0.00006379876048122494,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "quick-start-steps--destination-ssh-no-default-path.png",
+      "baselinePath": "images/baseline/quick-start-steps--destination-ssh-no-default-path.png",
+      "actualPath": "images/actual/quick-start-steps--destination-ssh-no-default-path.png",
+      "diffPath": "images/diff/quick-start-steps--destination-ssh-no-default-path.png",
+      "diffPixels": 2782,
+      "totalPixels": 1024000,
+      "diffRatio": 0.002716796875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
       "fileName": "quick-start-steps--what--mobile.png",
       "baselinePath": "images/baseline/quick-start-steps--what--mobile.png",
       "actualPath": "images/actual/quick-start-steps--what--mobile.png",
@@ -208,6 +964,126 @@
     }
   ],
   "removed": [
+    {
+      "fileName": "components-advancedrepositoryoptions--borg-2-without-upload-limit--mobile.png",
+      "baselinePath": "images/baseline/components-advancedrepositoryoptions--borg-2-without-upload-limit--mobile.png"
+    },
+    {
+      "fileName": "components-advancedrepositoryoptions--borg-2-without-upload-limit.png",
+      "baselinePath": "images/baseline/components-advancedrepositoryoptions--borg-2-without-upload-limit.png"
+    },
+    {
+      "fileName": "components-commandpreview--borg-2-remote-path--mobile.png",
+      "baselinePath": "images/baseline/components-commandpreview--borg-2-remote-path--mobile.png"
+    },
+    {
+      "fileName": "components-commandpreview--borg-2-remote-path.png",
+      "baselinePath": "images/baseline/components-commandpreview--borg-2-remote-path.png"
+    },
+    {
+      "fileName": "components-commandpreview--paths-needing-quotes--mobile.png",
+      "baselinePath": "images/baseline/components-commandpreview--paths-needing-quotes--mobile.png"
+    },
+    {
+      "fileName": "components-commandpreview--paths-needing-quotes.png",
+      "baselinePath": "images/baseline/components-commandpreview--paths-needing-quotes.png"
+    },
+    {
+      "fileName": "components-repositorycard--borg-2-with-stored-upload-limit--mobile.png",
+      "baselinePath": "images/baseline/components-repositorycard--borg-2-with-stored-upload-limit--mobile.png"
+    },
+    {
+      "fileName": "components-repositorycard--borg-2-with-stored-upload-limit.png",
+      "baselinePath": "images/baseline/components-repositorycard--borg-2-with-stored-upload-limit.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--failed-info-recovery-borg-2-remote-path--mobile.png",
+      "baselinePath": "images/baseline/components-repositoryinfodialog--failed-info-recovery-borg-2-remote-path--mobile.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--failed-info-recovery-borg-2-remote-path.png",
+      "baselinePath": "images/baseline/components-repositoryinfodialog--failed-info-recovery-borg-2-remote-path.png"
+    },
+    {
+      "fileName": "components-wizard-restore-destination--borg-1-original-location--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-restore-destination--borg-1-original-location--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-restore-destination--borg-1-original-location.png",
+      "baselinePath": "images/baseline/components-wizard-restore-destination--borg-1-original-location.png"
+    },
+    {
+      "fileName": "components-wizard-restore-destination--borg-2-exact-restore--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-restore-destination--borg-2-exact-restore--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-restore-destination--borg-2-exact-restore.png",
+      "baselinePath": "images/baseline/components-wizard-restore-destination--borg-2-exact-restore.png"
+    },
+    {
+      "fileName": "components-wizard-restore-destination--borg-2-original-location-needs-choice--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-restore-destination--borg-2-original-location-needs-choice--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-restore-destination--borg-2-original-location-needs-choice.png",
+      "baselinePath": "images/baseline/components-wizard-restore-destination--borg-2-original-location-needs-choice.png"
+    },
+    {
+      "fileName": "components-wizard-restore-destination--borg-2-restore-into-existing-files--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-restore-destination--borg-2-restore-into-existing-files--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-restore-destination--borg-2-restore-into-existing-files.png",
+      "baselinePath": "images/baseline/components-wizard-restore-destination--borg-2-restore-into-existing-files.png"
+    },
+    {
+      "fileName": "components-wizard-restore-review--borg-1-original-location--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-restore-review--borg-1-original-location--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-restore-review--borg-1-original-location.png",
+      "baselinePath": "images/baseline/components-wizard-restore-review--borg-1-original-location.png"
+    },
+    {
+      "fileName": "components-wizard-restore-review--borg-2-exact-restore--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-restore-review--borg-2-exact-restore--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-restore-review--borg-2-exact-restore.png",
+      "baselinePath": "images/baseline/components-wizard-restore-review--borg-2-exact-restore.png"
+    },
+    {
+      "fileName": "components-wizard-restore-review--borg-2-restore-into-existing-files--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-restore-review--borg-2-restore-into-existing-files--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-restore-review--borg-2-restore-into-existing-files.png",
+      "baselinePath": "images/baseline/components-wizard-restore-review--borg-2-restore-into-existing-files.png"
+    },
+    {
+      "fileName": "managed-agents-agentborg2minimumchip--at-minimum--mobile.png",
+      "baselinePath": "images/baseline/managed-agents-agentborg2minimumchip--at-minimum--mobile.png"
+    },
+    {
+      "fileName": "managed-agents-agentborg2minimumchip--at-minimum.png",
+      "baselinePath": "images/baseline/managed-agents-agentborg2minimumchip--at-minimum.png"
+    },
+    {
+      "fileName": "managed-agents-agentborg2minimumchip--below-minimum--mobile.png",
+      "baselinePath": "images/baseline/managed-agents-agentborg2minimumchip--below-minimum--mobile.png"
+    },
+    {
+      "fileName": "managed-agents-agentborg2minimumchip--below-minimum-borg-2-only--mobile.png",
+      "baselinePath": "images/baseline/managed-agents-agentborg2minimumchip--below-minimum-borg-2-only--mobile.png"
+    },
+    {
+      "fileName": "managed-agents-agentborg2minimumchip--below-minimum-borg-2-only.png",
+      "baselinePath": "images/baseline/managed-agents-agentborg2minimumchip--below-minimum-borg-2-only.png"
+    },
+    {
+      "fileName": "managed-agents-agentborg2minimumchip--below-minimum.png",
+      "baselinePath": "images/baseline/managed-agents-agentborg2minimumchip--below-minimum.png"
+    },
     {
       "fileName": "pages-managedagents--locked-community--mobile.png",
       "baselinePath": "images/baseline/pages-managedagents--locked-community--mobile.png"
@@ -1571,12 +2447,6 @@
       "fileName": "components-checkwarningdialog--conflicting-advanced-flags.png"
     },
     {
-      "fileName": "components-commandpreview--local-backup-commands--mobile.png"
-    },
-    {
-      "fileName": "components-commandpreview--local-backup-commands.png"
-    },
-    {
       "fileName": "components-cronbuilder--daily--mobile.png"
     },
     {
@@ -2066,9 +2936,6 @@
       "fileName": "components-rcloneremoteselect--empty-state--mobile.png"
     },
     {
-      "fileName": "components-rcloneremoteselect--empty-state.png"
-    },
-    {
       "fileName": "components-reposelect--labelled--mobile.png"
     },
     {
@@ -2091,12 +2958,6 @@
     },
     {
       "fileName": "components-repositorycard--borg-1-stored-size.png"
-    },
-    {
-      "fileName": "components-repositorycard--borg-2-stored-size--mobile.png"
-    },
-    {
-      "fileName": "components-repositorycard--borg-2-stored-size.png"
     },
     {
       "fileName": "components-repositorycard--default--mobile.png"
@@ -2171,24 +3032,6 @@
       "fileName": "components-repositorycard--remote-repository-without-permanent-delete.png"
     },
     {
-      "fileName": "components-repositorycard--size-still-measuring--mobile.png"
-    },
-    {
-      "fileName": "components-repositorycard--size-still-measuring.png"
-    },
-    {
-      "fileName": "components-repositorycard--size-unknown--mobile.png"
-    },
-    {
-      "fileName": "components-repositorycard--size-unknown.png"
-    },
-    {
-      "fileName": "components-repositorycard--with-upload-limit--mobile.png"
-    },
-    {
-      "fileName": "components-repositorycard--with-upload-limit.png"
-    },
-    {
       "fileName": "components-repositorycard--without-break-lock-access--mobile.png"
     },
     {
@@ -2207,12 +3050,6 @@
       "fileName": "components-repositoryinfodialog--borg-1-stored-statistics.png"
     },
     {
-      "fileName": "components-repositoryinfodialog--borg-2-stored-statistics--mobile.png"
-    },
-    {
-      "fileName": "components-repositoryinfodialog--borg-2-stored-statistics.png"
-    },
-    {
       "fileName": "components-repositoryinfodialog--failed-info-recovery--mobile.png"
     },
     {
@@ -2229,18 +3066,6 @@
     },
     {
       "fileName": "components-repositoryinfodialog--failed-info-with-agent-reason.png"
-    },
-    {
-      "fileName": "components-repositoryinfodialog--statistics-indexing-after-import--mobile.png"
-    },
-    {
-      "fileName": "components-repositoryinfodialog--statistics-indexing-after-import.png"
-    },
-    {
-      "fileName": "components-repositoryinfodialog--statistics-unknown--mobile.png"
-    },
-    {
-      "fileName": "components-repositoryinfodialog--statistics-unknown.png"
     },
     {
       "fileName": "components-repositorystats--borg-1-detail--mobile.png"
@@ -2657,12 +3482,6 @@
       "fileName": "components-wizard-repository-location--ssh-destination.png"
     },
     {
-      "fileName": "components-wizard-repository-review--cloud-mirror--mobile.png"
-    },
-    {
-      "fileName": "components-wizard-repository-review--cloud-mirror.png"
-    },
-    {
       "fileName": "components-wizard-repository-review--direct-borg-2-rclone--mobile.png"
     },
     {
@@ -2745,18 +3564,6 @@
     },
     {
       "fileName": "managed-agents-agentbulkupgradebar--one-selected.png"
-    },
-    {
-      "fileName": "managed-agents-agentcardchips--everything--mobile.png"
-    },
-    {
-      "fileName": "managed-agents-agentcardchips--everything-dark--mobile.png"
-    },
-    {
-      "fileName": "managed-agents-agentcardchips--everything-dark.png"
-    },
-    {
-      "fileName": "managed-agents-agentcardchips--everything.png"
     },
     {
       "fileName": "managed-agents-agentcardchips--unknown-and-manual--mobile.png"
@@ -3149,48 +3956,6 @@
       "fileName": "pages-managedagents--add-agent-waiting-for-connection.png"
     },
     {
-      "fileName": "pages-managedagents--agent-diagnostics-partial-failure--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--agent-diagnostics-partial-failure.png"
-    },
-    {
-      "fileName": "pages-managedagents--agent-diagnostics-success--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--agent-diagnostics-success.png"
-    },
-    {
-      "fileName": "pages-managedagents--agent-diagnostics-timeout--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--agent-diagnostics-timeout.png"
-    },
-    {
-      "fileName": "pages-managedagents--agent-fleet-offline-recovery--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--agent-fleet-offline-recovery-mobile--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--agent-fleet-offline-recovery-mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--agent-fleet-offline-recovery.png"
-    },
-    {
-      "fileName": "pages-managedagents--agent-fleet-upgrade-selection--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--agent-fleet-upgrade-selection.png"
-    },
-    {
-      "fileName": "pages-managedagents--agent-fleet-version-states--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--agent-fleet-version-states.png"
-    },
-    {
       "fileName": "pages-managedagents--agent-job-logs--mobile.png"
     },
     {
@@ -3222,9 +3987,6 @@
     },
     {
       "fileName": "pages-managedagents--fleet-overview--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--fleet-overview.png"
     },
     {
       "fileName": "pages-managedagents--setup-help-details--mobile.png"
@@ -3299,9 +4061,6 @@
       "fileName": "quick-start-steps--app-chosen--mobile.png"
     },
     {
-      "fileName": "quick-start-steps--app-chosen.png"
-    },
-    {
       "fileName": "quick-start-steps--app.png"
     },
     {
@@ -3329,9 +4088,6 @@
       "fileName": "quick-start-steps--destination-agent--mobile.png"
     },
     {
-      "fileName": "quick-start-steps--destination-agent.png"
-    },
-    {
       "fileName": "quick-start-steps--destination-inside-source--mobile.png"
     },
     {
@@ -3339,12 +4095,6 @@
     },
     {
       "fileName": "quick-start-steps--destination-ssh--mobile.png"
-    },
-    {
-      "fileName": "quick-start-steps--destination-ssh-no-default-path--mobile.png"
-    },
-    {
-      "fileName": "quick-start-steps--destination-ssh-no-default-path.png"
     },
     {
       "fileName": "quick-start-steps--destination-ssh.png"
