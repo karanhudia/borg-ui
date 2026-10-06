@@ -8,6 +8,7 @@ import re
 import shlex
 import subprocess
 import structlog
+from collections.abc import Iterable
 from typing import Optional
 
 from app.utils.ssh_host_keys import host_key_ssh_opts_for_path
@@ -259,6 +260,34 @@ async def _du_local(
     return None
 
 
+def remote_du_command(path: str, exclude_patterns: Iterable[str] = ()) -> str:
+    """Shell command for the apparent size of `path` on a remote host of
+    any kind; `parse_remote_du` reads its output.
+
+    GNU du reports bytes with -b. BSD du (macOS) has no -b, so there -A -sk
+    reports the same measure in KiB, after a `KiB` line naming the unit.
+    The probe on /dev/null picks the branch; du's exit status is kept.
+    """
+    target = shlex.quote(path)
+    gnu = "".join(f" --exclude={shlex.quote(p)}" for p in exclude_patterns)
+    bsd = "".join(f" -I {shlex.quote(p)}" for p in exclude_patterns)
+    return (
+        f"if du -sb /dev/null >/dev/null 2>&1; then du -sb{gnu} -- {target}; "
+        f"else echo KiB; du -A -sk{bsd} -- {target}; fi"
+    )
+
+
+def parse_remote_du(stdout: str) -> Optional[int]:
+    """Bytes from `remote_du_command`'s output, or None without a size."""
+    fields = (stdout or "").split()
+    unit = 1
+    if fields[:1] == ["KiB"]:
+        unit, fields = 1024, fields[1:]
+    if fields and fields[0].isdigit():
+        return int(fields[0]) * unit
+    return None
+
+
 async def _du_ssh(
     path: str,
     exclude_patterns: list[str],
@@ -272,11 +301,6 @@ async def _du_ssh(
         return None
 
     username, host, port, remote_path = parsed
-
-    du_excludes = ""
-    for pattern in exclude_patterns:
-        safe_pattern = pattern.replace("'", "'\\''")
-        du_excludes += f" --exclude='{safe_pattern}'"
 
     async def run_remote_du(command_remote_path: str):
         cmd = ["ssh"]
@@ -295,7 +319,7 @@ async def _du_ssh(
                 port,
                 "--",
                 ssh_destination(username, host),
-                f"du -sb{du_excludes} {shlex.quote(command_remote_path)} 2>/dev/null | cut -f1",
+                f"{remote_du_command(command_remote_path, exclude_patterns)} 2>/dev/null",
             ]
         )
 
@@ -306,10 +330,9 @@ async def _du_ssh(
         )
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
 
-        output = stdout.decode().strip()
-        if process.returncode == 0 and output and output.isdigit():
-            return int(output), stderr
-        return None, stderr
+        # du exits 1 with a partial total when a subdirectory is unreadable;
+        # that total still counts, as it did behind the former `| cut -f1`.
+        return parse_remote_du(stdout.decode()), stderr
 
     path_size, stderr = await run_remote_du(remote_path)
     if path_size is not None:

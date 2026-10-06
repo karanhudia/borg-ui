@@ -24,6 +24,7 @@ from app.app_templates import (
     load_app_templates,
     match_app_template,
 )
+from app.utils.fs import parse_remote_du, remote_du_command
 from app.utils.local_paths import is_within_local_mount
 from app.utils.ssh_host_validation import ssh_destination
 from app.config import settings
@@ -1082,7 +1083,7 @@ def _run_remote_mount_size_probe(
     path: str,
     timeout_seconds: float,
 ) -> subprocess.CompletedProcess[str]:
-    remote_command = f"du -s -B1 {shlex.quote(path)}"
+    remote_command = remote_du_command(path)
     ssh_cmd = [
         "ssh",
         *ssh_key_auth_args(key_file_path),
@@ -1106,11 +1107,9 @@ def _run_remote_mount_size_probe(
 def _mount_size_result_status(
     result: subprocess.CompletedProcess[str],
 ) -> tuple[int | None, str]:
-    stdout = (result.stdout or "").strip()
-    if result.returncode == 0 and stdout:
-        first_token = stdout.split()[0]
-        if first_token.isdigit():
-            return int(first_token), "available"
+    size = parse_remote_du(result.stdout)
+    if result.returncode == 0 and size is not None:
+        return size, "available"
 
     stderr = (result.stderr or "").lower()
     if any(

@@ -516,7 +516,7 @@ def http_storage_used(
     return value if value > 0 else None
 
 
-def _du_command(path: str) -> tuple[list[str], int]:
+def du_command(path: str) -> tuple[list[str], int]:
     """The du invocation and the unit its first field is in.
 
     GNU du reports apparent bytes with -b. BSD du has no -b, so on Darwin
@@ -528,10 +528,20 @@ def _du_command(path: str) -> tuple[list[str], int]:
     return ["du", "-sb", "--", path], 1
 
 
+def du_output_in_bytes(stdout: str) -> str:
+    """`du_command`'s output with its size field in bytes, the unit the
+    server reads from a `repository.disk_usage` job."""
+    unit = du_command("")[1]
+    size, sep, rest = (stdout or "").partition("\t")
+    if unit == 1 or not size.isdigit():
+        return stdout
+    return f"{int(size) * unit}{sep}{rest}"
+
+
 def du_storage_used(
     path: str, *, timeout: float, should_cancel: ShouldCancel = None
 ) -> Optional[int]:
-    command, unit = _du_command(path)
+    command, unit = du_command(path)
     try:
         proc = _run(command, timeout=timeout, should_cancel=should_cancel)
     except (subprocess.TimeoutExpired, OSError) as exc:
