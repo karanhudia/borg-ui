@@ -27,6 +27,7 @@ from app.utils.restore_layout import (
 )
 
 from app.services.process_cancel import terminate_tracked_process
+from app.utils.http_detail import detail_text, structured_detail
 from app.utils.local_paths import is_restore_destination_allowed
 
 logger = structlog.get_logger()
@@ -57,11 +58,19 @@ _AGENT_CANCEL_TRANSITION_ATTEMPTS = 3
 AGENT_RESTORE_EXISTING_FILES_CAPABILITY = "repository.restore.existing_files"
 
 
-def _http_detail_text(exc) -> str:
+def refusal_error_message(exc) -> str:
+    """The job error for a refused start: the validator's own `{key, params}`
+    when it has one, so the UI translates it with its params."""
     detail = getattr(exc, "detail", None)
-    if isinstance(detail, dict):
-        return detail.get("message") or detail.get("key") or str(detail)
-    return str(detail)
+    structured = structured_detail(detail)
+    if structured:
+        return json.dumps(structured)
+    return json.dumps(
+        {
+            "key": "backend.errors.restore.failedStartRestore",
+            "params": {"error": detail_text(detail)},
+        }
+    )
 
 
 def _agent_result_return_code(agent_job) -> Optional[int]:
@@ -337,12 +346,7 @@ class RestoreService:
                 )
             except HTTPException as exc:
                 job.status = "failed"
-                job.error_message = json.dumps(
-                    {
-                        "key": "backend.errors.restore.failedStartRestore",
-                        "params": {"error": _http_detail_text(exc)},
-                    }
-                )
+                job.error_message = refusal_error_message(exc)
                 job.completed_at = datetime.now(timezone.utc)
                 db.commit()
                 await self._notify_agent_restore(db, job)

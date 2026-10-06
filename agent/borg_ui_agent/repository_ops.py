@@ -40,12 +40,7 @@ from agent.borg_ui_agent.cancel import (
     start_keepalive,
 )
 from agent.borg_ui_agent.client import AgentClient
-from agent.borg_ui_agent.compact_stats import (
-    TAIL_LINES,
-    has_compact_stats,
-    parse_borg_version,
-    parse_compact_stats,
-)
+from agent.borg_ui_agent.compact_stats import TAIL_LINES, parse_compact_stats
 from agent.borg_ui_agent.failure_report import FailureTail, failure_report
 
 
@@ -82,17 +77,17 @@ MACHINE_PARSED_JOB_KINDS = {
     "repository.diff",
 }
 
-# Borg 2.0.0b22 split repo-create's single --encryption value into the cipher,
-# where the key is stored, and the id hash. The server sends the combined mode
+# Borg 2's repo-create takes the cipher, where the key is stored, and the id
+# hash as separate options. The server sends the combined mode
 # name it stores, so the agent translates it the same way the server does for
 # its own repositories (app/core/borg2.py: BORG2_ENCRYPTION_FLAGS). The two are
 # separate packages and share no imports, so the table is stated twice; a mode
 # missing here is rejected up front with the mode name, mirroring the server —
 # passing it to repo-create would fail with an argument-parsing error that
-# does not name the actual problem. b23 folded the id hash into the mode name
-# (no alias for the plain b22 name); the sha256 variant keeps exactly what
-# `authenticated` produced before. b25 removed the unencrypted modes, so
-# `none` is refused by name rather than mapped to something else.
+# does not name the actual problem. Without encryption the id hash is part of
+# the mode name; `authenticated` is the sha256 variant. Borg 2 has no
+# unencrypted modes, so `none` is refused by name rather than mapped to
+# something else.
 BORG2_ENCRYPTION_FLAGS = {
     "repokey-aes-ocb": ["--encryption", "aes256-ocb", "--key-location", "repokey"],
     "repokey-chacha20-poly1305": [
@@ -202,8 +197,8 @@ class RepositoryOperationPayload:
         return cmd
 
     def _base_borg2(self, subcommand: str) -> list[str]:
-        ensure_borg2_repository_url(self.repository_path, self.borg_cmd)
-        # No --remote-path: Borg 2.0.0b22 removed the option, the remote Borg
+        ensure_borg2_repository_url(self.repository_path)
+        # No --remote-path: Borg 2 has no such option, the remote Borg
         # command travels in BORG_REMOTE_PATH (`remote_path_env`).
         return [self.borg_cmd, "-r", self.repository_path, subcommand]
 
@@ -212,13 +207,13 @@ class RepositoryOperationPayload:
             return {"BORG_REMOTE_PATH": self.remote_path}
         return {}
 
-    def build_command(
-        self, *, rclone_config_path: Optional[str] = None, compact_stats: bool = True
-    ) -> list[str]:
+    def build_command(self, *, rclone_config_path: Optional[str] = None) -> list[str]:
         if self.job_kind == "repository.disk_usage":
             if not self.repository_path:
                 raise ValueError("repository.disk_usage requires a repository path")
-            return ["du", "-sb", "--", self.repository_path]
+            from agent.borg_ui_agent import storage_usage
+
+            return storage_usage.du_command(self.repository_path)[0]
 
         if self.job_kind == "repository.rclone_sync":
             rclone = _rclone_operation(self.operation)
@@ -496,12 +491,13 @@ class RepositoryOperationPayload:
                 # --stats: the only place Borg 2 reports repository-wide
                 # statistics; parsed from the tail of the output into the
                 # completion report (`_execute_streaming_repository_operation`).
-                # The flag exists from 2.0.0b15 (`compact_stats_supported`).
-                cmd = [*self._base_borg2("compact")]
-                if compact_stats:
-                    cmd.append("--stats")
-                cmd.extend(["--progress", "--verbose", "--log-json"])
-                return cmd
+                return [
+                    *self._base_borg2("compact"),
+                    "--stats",
+                    "--progress",
+                    "--verbose",
+                    "--log-json",
+                ]
             return [
                 *self._base_borg1("compact"),
                 "--progress",
@@ -552,9 +548,9 @@ class RepositoryOperationPayload:
                     cmd.extend([flag, str(int(value))])
             keep_within = operation.get("keep_within")
             if keep_within is not None and str(keep_within).strip():
-                # Borg 2.0.0b22 removed --keep-within (and --keep-last) in
-                # favour of --keep, which takes either form: a count or an
-                # interval like "1d". Borg 1 keeps the old spelling.
+                # Borg 2 has no --keep-within (nor --keep-last): --keep takes
+                # either form, a count or an interval like "1d". Borg 1 has
+                # --keep-within.
                 if self.borg_version == 2:
                     cmd.extend(["--keep", str(keep_within).strip()])
                 else:
@@ -734,15 +730,13 @@ def execute_repository_operation_job(
     rclone_config_path: Optional[str] = None
     try:
         payload = RepositoryOperationPayload.from_job_payload(job.get("payload") or {})
-        with_stats = _reports_compact_stats(payload) and compact_stats_supported(
-            payload.borg_cmd
-        )
+        with_stats = _reports_compact_stats(payload)
         try:
             if payload.job_kind == "repository.rclone_sync":
                 rclone_config_path = _write_temp_rclone_config(payload)
                 cmd = payload.build_command(rclone_config_path=rclone_config_path)
             else:
-                cmd = payload.build_command(compact_stats=with_stats)
+                cmd = payload.build_command()
         except Exception:
             _remove_temp_file(rclone_config_path)
             raise
@@ -945,6 +939,11 @@ def _execute_short_repository_operation(
         return RepositoryOperationResult(
             job_id=job_id, status="failed", message=error_message
         )
+
+    if payload.job_kind == "repository.disk_usage":
+        from agent.borg_ui_agent import storage_usage
+
+        process.stdout = storage_usage.du_output_in_bytes(process.stdout)
 
     succeeded = process.returncode == 0 or is_warning_return_code(process.returncode)
     parsed = _parse_json_output(process.stdout) if succeeded else None
@@ -1777,51 +1776,6 @@ def _warning_exit(payload: RepositoryOperationPayload, return_code: int) -> bool
     if payload.job_kind != "repository.compact":
         return False
     return is_warning_return_code(return_code)
-
-
-# Whether a Borg 2 binary accepts `compact --stats`, by binary file
-# (path, mtime, size): probed once per file (`borg2 --version` is a
-# subprocess), again when the file changes under a long-lived agent.
-_COMPACT_STATS_SUPPORT: dict[tuple, bool] = {}
-
-
-def _binary_key(binary: str) -> tuple:
-    path = shutil.which(binary) or binary
-    try:
-        stat = os.stat(path)
-    except OSError:
-        return (path, None, None)
-    return (path, stat.st_mtime_ns, stat.st_size)
-
-
-def compact_stats_supported(binary: str) -> bool:
-    """Whether `binary` accepts `compact --stats` (Borg 2.0.0b15 on, see
-    `compact_stats.has_compact_stats`). A binary whose version cannot be
-    read this time (a probe timeout, a banner without a version) does not
-    get the flag: a wrong flag would fail the whole compact, a missing one
-    only its statistics. It is probed again next time; only a read version
-    is remembered."""
-    key = _binary_key(binary)
-    known = _COMPACT_STATS_SUPPORT.get(key)
-    if known is not None:
-        return known
-    try:
-        probe = subprocess.run(
-            [binary, "--version"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-        version = parse_borg_version(f"{probe.stdout}\n{probe.stderr}")
-    except (OSError, ValueError, subprocess.TimeoutExpired):
-        # ValueError covers a `--version` output the locale cannot decode
-        version = None
-    if version is None:
-        return False
-    supported = has_compact_stats(version)
-    _COMPACT_STATS_SUPPORT[key] = supported
-    return supported
 
 
 def _restores_into_existing_files(operation: dict[str, Any]) -> bool:

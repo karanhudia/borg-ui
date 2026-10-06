@@ -31,7 +31,10 @@ def _require_browse_agent(db: Session, agent_machine_id: int) -> AgentMachine:
     if "filesystem.browse" not in capabilities:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={"key": "backend.errors.agents.capabilityMissing"},
+            detail={
+                "key": "backend.errors.agents.capabilityMissing",
+                "params": {"capability": "filesystem.browse"},
+            },
         )
     return agent
 

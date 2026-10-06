@@ -74,6 +74,7 @@ from app.services.operations.events import broadcast_operation_updated
 from app.services.operations.runner import operation_runner
 from app.services.operations.vocab import TERMINAL_STATUSES
 from app.utils.archive_names import build_archive_name
+from app.utils.http_detail import detail_text
 from app.utils.script_params import SYSTEM_VARIABLE_PREFIX
 from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.ssh_utils import ssh_key_auth_args, write_ssh_key_to_tempfile
@@ -585,19 +586,6 @@ def _write_bookkeeping(
             time.sleep(delay * (attempt + 1))
         finally:
             db.close()
-
-
-def _http_detail_message(exc: HTTPException) -> Optional[str]:
-    """A human-ish string from an HTTPException detail (which is usually a
-    ``{"key": ..., "params": ...}`` dict) for logging/recording."""
-    detail = getattr(exc, "detail", None)
-    if isinstance(detail, dict):
-        key = detail.get("key")
-        params = detail.get("params")
-        if key and params:
-            return f"{key} {params}"
-        return str(key) if key else str(detail)
-    return str(detail) if detail is not None else None
 
 
 def _should_run_plan_script(run_on: str, backup_result: Optional[str]) -> bool:
@@ -1510,7 +1498,7 @@ class BackupPlanExecutionService:
                     db, agent, script_name=agent_script_name, env=env
                 )
             except HTTPException as exc:
-                message = _http_detail_message(exc) or "agent cannot run scripts"
+                message = detail_text(exc.detail) or "agent cannot run scripts"
                 _finish("failed", message, None, None, None)
                 return (
                     False,

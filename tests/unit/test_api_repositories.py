@@ -27,6 +27,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 from structlog.testing import capture_logs
+from app.api.borg_binaries import CURRENT_VERSIONS
 from app.core.agent_auth import AGENT_AUTH_HEADER
 from app.core.security import get_password_hash
 from app.services.operations.maintenance_start import active_maintenance_operation
@@ -149,6 +150,11 @@ def _agent_machine_with_capabilities(*capabilities: str) -> AgentMachine:
         token_prefix="borgui_agent_secret"[:20],
         status="online",
         capabilities=list(capabilities),
+        # the server's own Borg versions: a Borg 2 job needs at least its Borg 2
+        borg_versions=[
+            {"major": int(major), "version": version}
+            for major, version in sorted(CURRENT_VERSIONS.items())
+        ],
     )
 
 
@@ -758,7 +764,7 @@ class TestRepositoriesCreate:
             status="online",
             capabilities=["repository.init"],
             borg_versions=[
-                {"major": 2, "version": "2.0.0b21", "path": "/usr/local/bin/borg2"}
+                {"major": 2, "version": "2.0.0b24", "path": "/usr/local/bin/borg2"}
             ],
         )
         test_db.add(agent)
@@ -794,8 +800,12 @@ class TestRepositoriesCreate:
         assert response.status_code == 400
         detail = response.json()["detail"]
         assert detail["key"] == "backend.errors.repo.agentBorg2TooOld"
-        assert detail["params"]["version"] == "2.0.0b21"
-        assert detail["params"]["minimum"] == "2.0.0b22"
+        # the minimum is the server's own Borg 2 (#1306), not a constant
+        assert detail["params"]["version"] == "2.0.0b24"
+        assert detail["params"]["minimum"] == CURRENT_VERSIONS["2"]
+        assert detail["params"]["flags"] == (
+            "--reinstall --borg-version 2 --borg-source server"
+        )
         assert test_db.query(AgentJob).count() == 0
 
     def test_create_borg2_agent_repository_allows_agent_reporting_borg2(
@@ -810,7 +820,11 @@ class TestRepositoriesCreate:
             capabilities=["repository.init"],
             borg_versions=[
                 {"major": 1, "version": "1.4.5", "path": "/usr/local/bin/borg"},
-                {"major": 2, "version": "2.0.0b24", "path": "/usr/local/bin/borg2"},
+                {
+                    "major": 2,
+                    "version": CURRENT_VERSIONS["2"],
+                    "path": "/usr/local/bin/borg2",
+                },
             ],
         )
         test_db.add(agent)
@@ -1426,20 +1440,20 @@ class TestRepositoriesCreate:
         )
         run_local.assert_not_called()
 
-    def test_agent_repository_info_normalizes_borg2_b22_encryption(
+    def test_agent_repository_info_normalizes_borg2_encryption(
         self, test_client: TestClient, admin_headers, test_db
     ):
         """The route the info dialog actually calls for an agent repository.
 
         BorgApiClient sends every agent repo to the v1 path regardless of Borg
         major (`v = execution_target === 'agent' ? '' : ...`), so a fix that only
-        landed on /api/v2/repositories left the dialog showing "N/A". The payload
-        is verbatim from `borg2 info --json` on 2.0.0b22.
+        landed on /api/v2/repositories left the dialog showing "N/A". The
+        encryption block is verbatim from `borg2 info --json` on 2.0.0b25.
         """
         agent = _agent_machine_with_capabilities("repository.info")
         repo = Repository(
-            name="Agent b22 Repo",
-            path="/agent/b22/repo",
+            name="Agent Borg2 Repo",
+            path="/agent/borg2/repo",
             encryption="repokey-aes-ocb",
             compression="lz4",
             executor_type="agent",

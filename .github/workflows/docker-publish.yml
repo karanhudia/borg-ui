@@ -2,6 +2,8 @@ name: Build and Publish Docker Images
 
 on:
   push:
+    branches:
+      - main  # Publishes only the edge tags, never latest/X.Y/X
     tags:
       - 'v*'  # Only build on version tags (e.g., v1.0.1)
   workflow_dispatch:
@@ -20,10 +22,11 @@ on:
         required: false
         type: string
 
-# Ensure only one Docker build runs at a time for the same tag
+# Ensure only one Docker build runs at a time for the same tag. A newer push
+# to main supersedes an in-progress edge build; tag builds always finish.
 concurrency:
   group: docker-build-${{ github.ref }}
-  cancel-in-progress: false  # Don't cancel, let it finish
+  cancel-in-progress: ${{ github.ref == 'refs/heads/main' }}
 
 env:
   REGISTRY: docker.io
@@ -51,6 +54,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Validate release version
+        if: github.ref != 'refs/heads/main'
         env:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_VERSION: ${{ inputs.version }}
@@ -160,8 +164,10 @@ jobs:
           elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             VERSION="${{ github.ref_name }}"
             VERSION="${VERSION#v}"  # Remove 'v' prefix
+          elif [[ "$GITHUB_REF" == refs/heads/main ]]; then
+            VERSION="edge-${GITHUB_SHA::7}"
           else
-            echo "ERROR: This workflow should only run on version tags (v*)"
+            echo "ERROR: This workflow should only run on version tags (v*) or main"
             exit 1
           fi
 
@@ -195,6 +201,7 @@ jobs:
           tags: |
             # Always publish the exact version tag, including prereleases
             type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=edge,enable=${{ github.ref == 'refs/heads/main' }}
             # Only stable releases should publish moving tags
             type=raw,value=latest,enable=${{ steps.version.outputs.is_stable == 'true' }}
             type=semver,pattern={{major}}.{{minor}},enable=${{ steps.version.outputs.is_stable == 'true' }}
@@ -291,8 +298,10 @@ jobs:
           elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             VERSION="${{ github.ref_name }}"
             VERSION="${VERSION#v}"  # Remove 'v' prefix
+          elif [[ "$GITHUB_REF" == refs/heads/main ]]; then
+            VERSION="edge-${GITHUB_SHA::7}"
           else
-            echo "ERROR: This workflow should only run on version tags (v*)"
+            echo "ERROR: This workflow should only run on version tags (v*) or main"
             exit 1
           fi
 
@@ -325,6 +334,7 @@ jobs:
           images: ${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=edge,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=latest,enable=${{ steps.version.outputs.is_stable == 'true' }}
             type=semver,pattern={{major}}.{{minor}},enable=${{ steps.version.outputs.is_stable == 'true' }}
             type=semver,pattern={{major}},enable=${{ steps.version.outputs.is_stable == 'true' && !startsWith(github.ref, 'refs/tags/v0.') }}
@@ -347,6 +357,7 @@ jobs:
             VERSION=${{ steps.meta.outputs.version }}
 
       - name: Update Docker Hub description
+        if: github.ref != 'refs/heads/main'
         uses: peter-evans/dockerhub-description@v5
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}

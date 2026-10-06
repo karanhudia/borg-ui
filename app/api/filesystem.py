@@ -813,7 +813,7 @@ async def browse_ssh_filesystem(
 
 
 @router.post("/validate-path")
-async def validate_path(
+def validate_path(
     path: str = Query(..., description="Path to validate"),
     connection_type: str = Query("local", description="Connection type"),
     ssh_key_id: Optional[int] = Query(None),
@@ -969,7 +969,7 @@ class CreateFolderRequest(BaseModel):
 
 
 @router.post("/create-folder")
-async def create_folder(
+def create_folder(
     request: CreateFolderRequest,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),

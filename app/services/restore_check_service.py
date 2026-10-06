@@ -24,6 +24,7 @@ from app.services.restore_check_canary import (
     get_restore_canary_archive_paths,
     verify_restored_canary,
 )
+from app.utils.http_detail import detail_text
 from app.utils.borg_env import (
     build_repository_borg_env,
     cleanup_temp_key_file,
@@ -144,13 +145,6 @@ _AGENT_OP_STALL_TIMEOUT_SECONDS = 600
 # off the stall timeout; this bounds how long a job may keep doing so without
 # any progress, so a hung but live process is not waited on forever.
 _AGENT_OP_NO_PROGRESS_MAX_SECONDS = 6 * 3600
-
-
-def _http_detail_text(exc: HTTPException) -> str:
-    detail = getattr(exc, "detail", None)
-    if isinstance(detail, dict):
-        return detail.get("message") or detail.get("key") or str(detail)
-    return str(detail)
 
 
 class RestoreCheckService:
@@ -605,7 +599,7 @@ class RestoreCheckService:
                 job,
                 job_id,
                 raw_logs,
-                message=f"Could not list archives on the agent: {_http_detail_text(exc)}",
+                message=f"Could not list archives on the agent: {detail_text(exc.detail)}",
             )
             await self._send_completion_notification(
                 db=db, repository=repository, job=job
@@ -697,7 +691,7 @@ class RestoreCheckService:
                 job,
                 job_id,
                 raw_logs,
-                message=f"Could not start restore on the agent: {_http_detail_text(exc)}",
+                message=f"Could not start restore on the agent: {detail_text(exc.detail)}",
             )
             await self._send_completion_notification(
                 db=db, repository=repository, job=job
@@ -717,7 +711,7 @@ class RestoreCheckService:
                 job,
                 job_id,
                 raw_logs,
-                message=f"Restore verification failed on the agent: {_http_detail_text(exc)}",
+                message=f"Restore verification failed on the agent: {detail_text(exc.detail)}",
             )
             await self._send_completion_notification(
                 db=db, repository=repository, job=job

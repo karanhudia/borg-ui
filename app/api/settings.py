@@ -1344,7 +1344,7 @@ async def send_backup_report_now(
 
 
 @router.get("/users")
-async def get_users(db: Session = Depends(get_db)):
+def get_users(db: Session = Depends(get_db)):
     """Get all users (admin only)"""
     try:
         users = db.query(User).all()
@@ -1712,7 +1712,7 @@ async def change_password(
 
 
 @router.get("/profile")
-async def get_profile(
+def get_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -1802,7 +1802,7 @@ async def update_profile(
 
 
 @router.get("/preferences")
-async def get_preferences(current_user: User = Depends(get_current_user)):
+def get_preferences(current_user: User = Depends(get_current_user)):
     """Get current user's preferences"""
     return {
         "success": True,

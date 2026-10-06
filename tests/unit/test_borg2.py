@@ -8,8 +8,9 @@ from app.core.borg2 import (
     BORG2_ENCRYPTION_MODES,
     borg2,
     borg2_encryption_flags,
+    borg2_below_minimum,
+    borg2_minimum_version,
     borg2_repository_url_refusal,
-    borg2_speaks_encryption_flags,
     normalize_repo_info_encryption,
 )
 
@@ -181,7 +182,7 @@ async def test_rcreate_injects_managed_rclone_config_into_process_env(
     ],
 )
 def test_encryption_mode_is_translated_to_the_repo_create_split(mode, expected):
-    """Borg 2.0.0b22 takes the cipher and the key location as separate options;
+    """Borg 2 takes the cipher and the key location as separate options;
     the combined name stays the vocabulary of the API, the UI and the stored
     repository row."""
     assert borg2_encryption_flags(mode) == expected
@@ -196,23 +197,64 @@ def test_every_offered_encryption_mode_can_be_translated():
 
 
 @pytest.mark.unit
+def test_the_borg2_minimum_is_the_servers_own_pin():
+    """The minimum is the Borg 2 this server ships, read from its pin, so it
+    moves with the next bump instead of being a constant of its own."""
+    from app.api.borg_binaries import CURRENT_VERSIONS
+
+    assert borg2_minimum_version() == CURRENT_VERSIONS["2"]
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize(
-    "version, speaks",
+    "version, below",
     [
-        ("2.0.0b21", False),
-        ("2.0.0b22", True),
         ("2.0.0b24", True),
-        ("2.0.0", True),
-        # Only a version that reads as an older Borg 2 is refused: nothing
+        ("2.0.0b9", True),
+        ("2.0.0a4", True),
+        ("2.1.0a1", False),
+        ("borg2 2.0.0b24", True),
+        ("2.0.0b25", False),
+        # a development build leads to the version it names: before it
+        ("2.0.0b25.dev3+g1234567", True),
+        ("2.0.0b26.dev3+g1234567", False),
+        ("2.0.0.dev1", True),
+        ("2.1.0.dev1", False),
+        ("2.0.0b26", False),
+        ("2.0.0rc1", False),
+        ("2.0.0", False),
+        ("2.1.0", False),
+        # Only a version that reads as an older Borg 2 is below: nothing
         # readable is not evidence of an old binary, and the message would
         # name an empty version.
-        ("", True),
-        (None, True),
-        ("unknown", True),
+        ("", False),
+        (None, False),
+        ("unknown", False),
     ],
 )
-def test_only_a_readably_old_borg2_is_refused_the_split_flags(version, speaks):
-    assert borg2_speaks_encryption_flags(version) is speaks
+def test_only_a_readably_older_borg2_is_below_the_minimum(monkeypatch, version, below):
+    from app.api import borg_binaries
+
+    monkeypatch.setitem(borg_binaries.CURRENT_VERSIONS, "2", "2.0.0b25")
+    assert borg2_below_minimum(version) is below
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "minimum, version, below",
+    [
+        ("2.0.0rc1", "2.0.0b30", True),
+        ("2.0.0rc2", "2.0.0rc1", True),
+        ("2.0.0", "2.0.0rc9", True),
+        ("2.0.0", "2.0.0", False),
+    ],
+)
+def test_the_minimum_moves_with_the_pin(monkeypatch, minimum, version, below):
+    from app.api import borg_binaries
+
+    monkeypatch.setitem(borg_binaries.CURRENT_VERSIONS, "2", minimum)
+    assert borg2_minimum_version() == minimum
+    assert borg2_below_minimum(version) is below
 
 
 @pytest.mark.unit
@@ -248,8 +290,8 @@ def test_an_unknown_encryption_mode_is_rejected_by_name():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_prune_keep_within_is_sent_as_keep(monkeypatch):
-    """Borg 2.0.0b22 removed --keep-within; --keep takes the same interval. The
-    field keeps its name everywhere else — only the flag moved."""
+    """Borg 2 has no --keep-within; --keep takes the same interval. The field
+    keeps its name everywhere else — only the flag differs."""
     captured: dict[str, object] = {}
 
     class Process:
@@ -276,9 +318,9 @@ async def test_prune_keep_within_is_sent_as_keep(monkeypatch):
 
 
 @pytest.mark.unit
-def test_repo_info_encryption_from_b22_gets_a_mode():
-    """Verbatim from `borg2 repo-info --json` on 2.0.0b22: the single `mode`
-    became `encryption` + `id_hash`, which left every reader of `mode` — the
+def test_repo_info_encryption_gets_a_mode():
+    """Verbatim from `borg2 repo-info --json` on 2.0.0b25: the single `mode`
+    is `encryption` + `id_hash`, which left every reader of `mode` — the
     stored row, the API, the info dialog — showing nothing for an encrypted
     repository."""
     info = {
@@ -294,9 +336,9 @@ def test_repo_info_encryption_from_b22_gets_a_mode():
 
 
 @pytest.mark.unit
-def test_repo_info_encryption_from_b21_is_left_alone():
-    """Verbatim from 2.0.0b21, and the Borg 1 shape too: a `mode` that is
-    already there is never rewritten."""
+def test_repo_info_encryption_with_a_mode_is_left_alone():
+    """The Borg 1 shape: a `mode` that is already there is never
+    rewritten."""
     info = {"encryption": {"mode": "repokey-aes-ocb"}}
 
     assert normalize_repo_info_encryption(info)["encryption"] == {
@@ -350,10 +392,9 @@ _ARGUMENTS = {
 @pytest.mark.asyncio
 @pytest.mark.parametrize("command", _bypass_lock_commands())
 async def test_no_borg2_command_carries_bypass_lock(monkeypatch, command):
-    """--bypass-lock is a Borg 1 flag. Borg 2 has never had it — it is absent
-    from the 2.0.0b21 and 2.0.0b22 sources alike — so a Borg 2 command carrying
-    it dies at argument parsing, which reads as an unreachable repository rather
-    than as a flag this Borg does not know. The argument stays (callers and the
+    """--bypass-lock is a Borg 1 flag. Borg 2 has no such option, so a Borg 2
+    command carrying it dies at argument parsing, which reads as an
+    unreachable repository rather than as a flag this Borg does not know. The argument stays (callers and the
     repository settings speak for both majors) and is ignored.
     """
     captured: dict[str, object] = {}
@@ -409,8 +450,8 @@ _REMOTE_PATH_ARGUMENTS = {
 @pytest.mark.asyncio
 @pytest.mark.parametrize("command", _remote_path_commands())
 async def test_borg2_remote_path_travels_in_the_environment(monkeypatch, command):
-    """Borg 2.0.0b22 removed --remote-path in favour of BORG_REMOTE_PATH. A
-    command line that still carries the option dies at argument parsing
+    """Borg 2 has no --remote-path, only BORG_REMOTE_PATH. A command line
+    that carries the option dies at argument parsing
     ("unrecognized arguments: --remote-path"), for every repository that has
     a remote path configured.
     """
@@ -617,7 +658,6 @@ async def test_no_borg2_command_runs_on_a_rest_url(monkeypatch, command):
     )
     monkeypatch.setattr("app.core.borg2.CommandLineStream", Stream)
     monkeypatch.setattr("app.core.borg2.CommandByteStream", Stream)
-    monkeypatch.setattr("app.core.borg2.borg2_binary_version", lambda _: "2.0.0b25")
 
     method = getattr(borg2, command)
     kwargs = {}
@@ -657,8 +697,6 @@ def test_other_repository_urls_are_left_alone(repository):
 def test_command_builders_outside_the_interface_refuse_a_rest_url(monkeypatch):
     from types import SimpleNamespace
 
-    monkeypatch.setattr("app.core.borg2.borg2_binary_version", lambda _: "2.0.0b25")
-
     from app.core.borg_router import BorgRouter
     from app.services.v2.backup_service import backup_v2_service
     from app.services.v2.mount_service import mount_v2_service
@@ -680,46 +718,19 @@ def test_command_builders_outside_the_interface_refuse_a_rest_url(monkeypatch):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize(
-    ("banner", "refused"),
-    [
-        ("borg2 2.0.0b25\n", True),
-        ("borg 2.0.0\n", True),
-        # a configured binary may be any build, and these still speak rest://
-        ("borg2 2.0.0b24\n", False),
-        ("borg2 2.0.0b22\n", False),
-        # nothing readable is not evidence of an old binary
-        ("", True),
-        ("borg 1.4.5\n", True),
-    ],
-)
-def test_a_rest_url_is_refused_by_what_the_binary_reports(monkeypatch, banner, refused):
-    from types import SimpleNamespace
-
-    from app.core import borg2 as borg2_module
-
-    monkeypatch.setattr(borg2_module, "_BINARY_VERSIONS", {})
-    monkeypatch.setattr(
-        borg2_module.subprocess,
-        "run",
-        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout=banner, stderr=""),
-    )
-
-    refusal = borg2_repository_url_refusal(_REST_URL, "borg2")
-
-    assert (refusal is not None) is refused
-
-
-@pytest.mark.unit
-def test_the_binary_is_not_probed_for_other_urls(monkeypatch):
+def test_a_rest_url_is_refused_without_asking_the_binary(monkeypatch):
+    """Every Borg 2 this application runs reads rest:// as a local directory,
+    so the URL is refused outright; no binary is probed for its version."""
     from app.core import borg2 as borg2_module
 
     def no_probe(*args, **kwargs):
-        raise AssertionError("no probe for a URL that is not rest://")
+        raise AssertionError("no probe")
 
     monkeypatch.setattr(borg2_module.subprocess, "run", no_probe)
 
-    assert borg2_repository_url_refusal("ssh://borg@repo.example/one", "borg2") is None
+    assert "ssh://" in borg2_repository_url_refusal(_REST_URL)
+    assert "ssh://" in borg2_repository_url_refusal("REST://borg@repo.example/one")
+    assert borg2_repository_url_refusal("ssh://borg@repo.example/one") is None
 
 
 @pytest.mark.unit
@@ -744,7 +755,6 @@ def test_a_restore_into_an_occupied_directory_is_refused(
     from app.core.borg_errors import RestoreRefused
     from app.services.v2.restore_service import restore_v2_service
 
-    monkeypatch.setattr("app.core.borg2.borg2_binary_version", lambda _: "2.0.0b25")
     if occupied_by == "lost+found":
         (tmp_path / occupied_by).mkdir()
     elif occupied_by:
@@ -850,22 +860,12 @@ def test_borg1_restore_command_ignores_the_destination(tmp_path):
 @pytest.mark.parametrize(
     ("stderr", "expected"),
     [
-        # 2.0.0b25 on a repository written by 2.0.0b22 to 2.0.0b24, and on a
-        # directory that holds no repository: the same answer, exit 15
+        # on a repository written by an earlier beta, and on a directory
+        # that holds no repository: the same answer, exit 15
         (
             "Repository /backups/repo is not a valid repository. "
             "Check the repository config.",
             {"key": "backend.errors.repo.borg2RepositoryNotReadable"},
-        ),
-        # up to 2.0.0b24 the other format is named
-        (
-            "proto='file', path='/x' does not have a valid config. Check the "
-            "repository config [repository version 3 is not supported by this "
-            "borg version].",
-            {
-                "key": "backend.errors.archives.unsupportedRepositoryVersion",
-                "params": {"version": 3},
-            },
         ),
         ("Repository /backups/repo does not exist.", None),
         ("passphrase supplied in BORG_PASSPHRASE is incorrect", None),

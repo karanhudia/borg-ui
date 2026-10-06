@@ -55,8 +55,7 @@ message prints the commands for that, pinned to the server's version — a
 virtualenv with `borgbackup` and `borgstore`, and a `borg2` symlink in
 `/usr/local/bin` (a plain pip install provides only `borg`, which the agent
 does not use for Borg 2). That install builds Borg from source, so the machine
-needs a C toolchain, Borg's build dependencies and, from 2.0.0b24 on, OpenSSL
-3.2 or newer.
+needs a C toolchain, Borg's build dependencies and OpenSSL 3.2 or newer.
 
 By default, the service runs as the user who invoked `sudo`. That means the
 agent can read and write the same paths that user can access, matching the
@@ -133,8 +132,7 @@ on the terminal and also runs over `ssh -t`.
 A Linux install never asks for the values: it is scripted over `ssh -t` or by
 configuration management as often as it is typed, and a question would hang
 it. A first-time macOS install run from a terminal without the flags asks for
-both, and for an `ssh://` repository (`rest://` with a Borg 2 before
-2.0.0b25) offers to open one SSH
+both, and for an `ssh://` repository offers to open one SSH
 connection as the user, so the host key and the login are confirmed while
 someone is there to answer; a service cannot do that later. Empty answers skip
 them, and `--no-prompt` skips the questions. That check covers the one repository given
@@ -344,6 +342,21 @@ A Borg pin outranks how the endpoint was installed. An endpoint installed with
 `--skip-borg-install` still gets the pinned version, and an endpoint that took
 Borg 1 from distribution packages gets a pinned Borg 2 from this server's
 static binaries, because no distribution ships Borg 2.
+
+An endpoint's Borg 2 must be at least the one this server ships. Borg 2
+betas change the repository format and the command line between releases,
+so Borg UI runs no Borg 2 job on an endpoint whose Borg 2 is older: creating
+or importing a Borg 2 repository there, and every Borg 2 backup, restore,
+check, prune, compact, archive listing or mount, is refused with both
+versions named. The agent list marks such an endpoint with "Borg 2 too old".
+An upgrade that installs Borg from this server fixes it; an endpoint with
+`--skip-borg-install` needs the installer run on it with
+`--reinstall --borg-version both --borg-source server` (`2` instead of
+`both` where it has no Borg 1), or its Borg 2 replaced by hand. The agent
+reports its Borg binaries when it starts, so restart it after replacing
+Borg 2 by hand. The installer leaves a `borg2` that is a regular file in
+its place ("exists and is not a symlink"): rename or remove such a file
+and run the installer again.
 
 Because the upgrade is only complete once the endpoint reports the pinned
 major version, a Borg pin that cannot be installed shows up as a failed

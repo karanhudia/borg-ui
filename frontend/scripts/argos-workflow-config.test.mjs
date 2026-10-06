@@ -83,7 +83,7 @@ describe('GitHub Pages visual regression workflow', () => {
     expect(captureWorkflow).toContain('contents: read')
     expect(captureWorkflow).toContain('ref: ${{ github.event.pull_request.head.sha }}')
     expect(captureWorkflow).toContain('npm run visual:screenshots')
-    expect(captureWorkflow).toContain('actions/upload-artifact@v4')
+    expect(captureWorkflow).toContain('actions/upload-artifact@v7')
     expect(captureWorkflow).toContain('name: visual-actual')
     expect(captureWorkflow).not.toContain('pull-requests: write')
     expect(captureWorkflow).not.toContain('pages: write')

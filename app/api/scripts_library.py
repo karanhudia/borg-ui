@@ -233,7 +233,7 @@ def compute_script_usage_counts(
 
 
 @router.get("/scripts", response_model=List[ScriptResponse])
-async def list_scripts(
+def list_scripts(
     category: Optional[str] = None,
     search: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -285,7 +285,7 @@ async def list_scripts(
 
 
 @router.get("/scripts/{script_id}", response_model=ScriptDetailResponse)
-async def get_script(
+def get_script(
     script_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -918,7 +918,7 @@ async def test_script(
 
 
 @router.get("/repositories/{repository_id}/scripts")
-async def get_repository_scripts(
+def get_repository_scripts(
     repository_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

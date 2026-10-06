@@ -334,7 +334,7 @@ def _proxy_query_params(request: Request) -> list[tuple[str, str]]:
 
 
 @router.get("", response_model=list[RemoteClientResponse])
-async def list_remote_clients(
+def list_remote_clients(
     _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
@@ -386,7 +386,7 @@ async def create_remote_client(
 
 
 @router.put("/{client_id}", response_model=RemoteClientResponse)
-async def update_remote_client(
+def update_remote_client(
     client_id: str,
     payload: RemoteClientUpdate,
     _: User = Depends(get_current_admin_user),
@@ -405,7 +405,7 @@ async def update_remote_client(
 
 
 @router.patch("/{client_id}/health", response_model=RemoteClientResponse)
-async def update_remote_client_health(
+def update_remote_client_health(
     client_id: str,
     payload: RemoteClientHealthUpdate,
     _: User = Depends(get_current_admin_user),
@@ -520,7 +520,7 @@ async def proxy_remote_client_request(
 
 
 @router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_remote_client(
+def delete_remote_client(
     client_id: str,
     _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),

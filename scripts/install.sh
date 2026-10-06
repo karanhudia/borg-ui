@@ -169,10 +169,13 @@ resolve_version() {
   fi
 
   log "Resolving the latest release"
-  local tag
-  tag="$(curl -fsSL --proto '=https' --tlsv1.2 \
-    "https://api.github.com/repos/${REPO}/releases/latest" |
-    grep -m1 '"tag_name"' | cut -d'"' -f4 || true)"
+  # The response is captured before it is searched: grep -m1 exits on the
+  # first match, and curl, still writing the rest, reported a harmless but
+  # alarming "(23) Failure writing output to destination" in the log.
+  local json tag
+  json="$(curl -fsSL --proto '=https' --tlsv1.2 \
+    "https://api.github.com/repos/${REPO}/releases/latest" || true)"
+  tag="$(grep -m1 '"tag_name"' <<<"${json}" | cut -d'"' -f4 || true)"
   [[ -n "${tag}" ]] || die "could not resolve the latest release; pass --version explicitly"
   VERSION="${tag#v}"
 }
@@ -504,7 +507,7 @@ install_borg1() {
 
 # Borg 2 has no stable release and no distribution package. Prefer the pinned
 # static binary; where this machine's glibc is too old for it, build it into
-# its own virtualenv, which needs a compiler and OpenSSL 3.2 or newer (2.0.0b24
+# its own virtualenv, which needs a compiler and OpenSSL 3.2 or newer (Borg 2
 # takes argon2 from OpenSSL). Where neither is possible the install continues
 # without Borg 2: Borg 1 repositories are unaffected.
 install_borg2() {
