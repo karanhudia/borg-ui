@@ -30,6 +30,7 @@ import {
 import SshConnectionSelect from '../shared/SshConnectionSelect'
 import ManagedAgentSelect from '../shared/ManagedAgentSelect'
 import DestinationSelect from '../shared/DestinationSelect'
+import { borg2PathIsAbsolute, borg2SshUrlIsAbsolute } from '../../utils/borgUtils'
 
 interface SSHConnection {
   id: number
@@ -87,9 +88,12 @@ interface WizardStepLocationProps {
   sourceSshConnectionId?: number | ''
   canUseRclone?: boolean
   directRcloneModeLocked?: boolean
+  // The path is a URL only Borg 2 can open: Borg 1 is not offered.
+  borg2RequiredByPath?: boolean
   onChange: (data: Partial<LocationStepData>) => void
   onBrowsePath: () => void
   onBrowseDirectRclonePath?: () => void
+  onPathBlur?: () => void
 }
 
 export default function WizardStepLocation({
@@ -103,9 +107,11 @@ export default function WizardStepLocation({
   sourceSshConnectionId,
   canUseRclone = true,
   directRcloneModeLocked = false,
+  borg2RequiredByPath = false,
   onChange,
   onBrowsePath,
   onBrowseDirectRclonePath,
+  onPathBlur,
 }: WizardStepLocationProps) {
   const { t } = useTranslation()
   const executionTarget = data.executionTarget ?? 'local'
@@ -133,6 +139,35 @@ export default function WizardStepLocation({
   const isLegacyRemoteSource = mode === 'edit' && dataSource === 'remote' && !!sourceSshConnectionId
   const isRemoteLocationDisabled = isLegacyRemoteSource
   const isAgentLocationDisabled = isLegacyRemoteSource
+
+  // How Borg 2 reads the path: relative to the login directory of the SSH
+  // user or absolute. A server repository's field holds a plain path, an
+  // agent's the whole ssh:// URL.
+  const selectedSshConnection = sshConnections.find((c) => c.id === data.repoSshConnectionId)
+  const borg2PathHint = (() => {
+    const path = data.path.trim()
+    if (borgVersion !== 2 || isDirectRclone || !path) return null
+    if (isAgentExecution) {
+      const absolute = borg2SshUrlIsAbsolute(path)
+      if (absolute === null) return null
+      return absolute
+        ? t('wizard.location.borg2PathAbsolute')
+        : t('wizard.location.borg2UrlRelative')
+    }
+    if (data.repositoryLocation !== 'ssh' || !selectedSshConnection) return null
+    // a URL until the field is left
+    const urlAbsolute = borg2SshUrlIsAbsolute(path)
+    if (urlAbsolute !== null) {
+      return urlAbsolute
+        ? t('wizard.location.borg2PathAbsolute')
+        : t('wizard.location.borg2UrlRelative')
+    }
+    return borg2PathIsAbsolute(path)
+      ? t('wizard.location.borg2PathAbsolute')
+      : t('wizard.location.borg2PathRelative', {
+          login: `${selectedSshConnection.username}@${selectedSshConnection.host}`,
+        })
+  })()
 
   const queueableAgents = agentMachines.filter(
     (agent) => agent.status !== 'revoked' && agent.status !== 'disabled'
@@ -262,6 +297,8 @@ export default function WizardStepLocation({
                     <ButtonBase
                       key={v}
                       onClick={() => onChange({ borgVersion: v })}
+                      disabled={v === 1 && borg2RequiredByPath}
+                      aria-pressed={selected}
                       sx={{
                         px: 1.75,
                         py: 0.5,
@@ -271,6 +308,7 @@ export default function WizardStepLocation({
                         fontWeight: selected ? 700 : 400,
                         fontSize: '0.8rem',
                         color: selected ? 'text.primary' : 'text.secondary',
+                        '&.Mui-disabled': { opacity: 0.4 },
                         transition: 'all 0.15s ease',
                         fontFamily: 'monospace',
                         letterSpacing: 0.3,
@@ -293,6 +331,11 @@ export default function WizardStepLocation({
                 </Tooltip>
               )}
             </Box>
+            {borg2RequiredByPath && (
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                {t('wizard.location.borg2OnlyUrl')}
+              </Typography>
+            )}
           </Box>
         </PlanGate>
       )}
@@ -576,12 +619,13 @@ export default function WizardStepLocation({
               ? '/backups/my-repo'
               : '/path/on/remote/server'
         }
+        onBlur={onPathBlur}
         required
         fullWidth
         helperText={
           isDirectRclone
             ? t('wizard.location.directRclonePathHelper')
-            : t('wizard.location.repositoryPathHelper')
+            : (borg2PathHint ?? t('wizard.location.repositoryPathHelper'))
         }
         slotProps={{
           input: {
