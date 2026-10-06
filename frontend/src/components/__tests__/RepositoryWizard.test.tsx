@@ -6,9 +6,11 @@ import type { ComponentProps } from 'react'
 import RepositoryWizard from '../RepositoryWizard'
 import { managedAgentsAPI, rcloneAPI, sshKeysAPI } from '../../services/api'
 
-const { mockTrack, mockTrackRepository } = vi.hoisted(() => ({
+const { mockTrack, mockTrackRepository, mockBrowsedPath } = vi.hoisted(() => ({
   mockTrack: vi.fn(),
   mockTrackRepository: vi.fn(),
+  // What the mocked file picker returns, when a test sets it.
+  mockBrowsedPath: { value: null as string | null },
 }))
 
 vi.setConfig({ testTimeout: 60000 })
@@ -98,7 +100,8 @@ vi.mock('../FileExplorerDialog', () => ({
           type="button"
           onClick={() =>
             onSelect([
-              connectionType === 'rclone' ? 'borg-ui/repositories' : '/selected/from-browser',
+              mockBrowsedPath.value ??
+                (connectionType === 'rclone' ? 'borg-ui/repositories' : '/selected/from-browser'),
             ])
           }
         >
@@ -356,6 +359,7 @@ const selectObserveMode = async (user: ReturnType<typeof userEvent.setup>) => {
 describe('RepositoryWizard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockBrowsedPath.value = null
     ;(sshKeysAPI.getSSHConnections as Mock).mockResolvedValue({
       data: { connections: mockSshConnections },
     })
@@ -1782,6 +1786,532 @@ describe('RepositoryWizard', () => {
       })
       expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled()
     })
+  })
+
+  describe('repository URLs only Borg 2 can open', () => {
+    const versionButton = (version: 1 | 2) => screen.getByRole('button', { name: `v${version}` })
+
+    const submitLocalCreate = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Mirror this repository to cloud storage')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByLabelText(/^Passphrase/i)).toBeInTheDocument()
+      })
+      setInputValue(screen.getByLabelText(/^Passphrase/i), 'storepass')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.click(await screen.findByRole('button', { name: /Create Repository/i }))
+    }
+
+    it.each([
+      'rest://user@storage.example.com/repo',
+      'sftp://user@storage.example.com/repo',
+      'http://storage.example.com/repo',
+      'HTTPS://storage.example.com/repo',
+      '  s3:key:secret@https://s3.example.com/bucket/repo',
+      'b2:key:secret@bucket/repo',
+      'rclone:remote:repo',
+    ])('selects Borg 2 and does not offer Borg 1 for %s', async (path) => {
+      renderWizard('create')
+      await fillLocalLocation('Store Repo', path)
+
+      await waitFor(() => {
+        expect(versionButton(1)).toBeDisabled()
+      })
+      expect(versionButton(2)).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByText(/Only Borg 2 can open this repository URL/i)).toBeInTheDocument()
+    })
+
+    it('submits a store URL as a Borg 2 repository with a Borg 2 encryption mode', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('create')
+      await fillLocalLocation('Store Repo', 'sftp://user@storage.example.com/repo')
+
+      await submitLocalCreate(user)
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            path: 'sftp://user@storage.example.com/repo',
+            borg_version: 2,
+            encryption: 'repokey-aes-ocb',
+            connection_id: null,
+          }),
+          null
+        )
+      })
+    }, 90000)
+
+    it('selects Borg 2 for a store URL pre-filled from the managed agent', async () => {
+      const user = userEvent.setup()
+      ;(managedAgentsAPI.getRepositoryDefaults as Mock).mockResolvedValue({
+        data: { repo: 's3:key:secret@https://s3.example.com/bucket/repo', remote_path: null },
+      })
+      renderWizard('create')
+      await waitForLocationStep()
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'Agent Store Repo')
+
+      await chooseDestination(user, /Managed Agent/i)
+      await user.click(screen.getByRole('combobox', { name: /Managed Agent/i }))
+      const agentListbox = await screen.findByRole('listbox')
+      await user.click(within(agentListbox).getByText('workstation.local'))
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Path/i)).toHaveValue(
+          's3:key:secret@https://s3.example.com/bucket/repo'
+        )
+      })
+      expect(versionButton(1)).toBeDisabled()
+      expect(versionButton(2)).toHaveAttribute('aria-pressed', 'true')
+    }, 90000)
+
+    it('leaves the choice open for an ssh:// URL from the managed agent', async () => {
+      const user = userEvent.setup()
+      ;(managedAgentsAPI.getRepositoryDefaults as Mock).mockResolvedValue({
+        data: { repo: 'ssh://borg@storage.example.com/./repo', remote_path: null },
+      })
+      renderWizard('create')
+      await waitForLocationStep()
+
+      await chooseDestination(user, /Managed Agent/i)
+      await user.click(screen.getByRole('combobox', { name: /Managed Agent/i }))
+      const agentListbox = await screen.findByRole('listbox')
+      await user.click(within(agentListbox).getByText('workstation.local'))
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Path/i)).toHaveValue(
+          'ssh://borg@storage.example.com/./repo'
+        )
+      })
+      expect(versionButton(1)).not.toBeDisabled()
+      expect(versionButton(1)).toHaveAttribute('aria-pressed', 'true')
+    }, 90000)
+
+    it('leaves the choice open for a directory on an SSH connection', async () => {
+      const user = userEvent.setup()
+      renderWizard('create')
+      await fillLocalLocation('Remote Repo', '/offsite/repo')
+      await chooseRemoteRepository(user)
+
+      setInputValue(screen.getByLabelText(/Repository Path/i), 's3:archive')
+
+      expect(versionButton(1)).not.toBeDisabled()
+      expect(versionButton(1)).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.queryByText(/Only Borg 2 can open this repository URL/i)).toBeNull()
+    })
+
+    it('offers Borg 1 again once the path no longer needs Borg 2', async () => {
+      renderWizard('create')
+      await fillLocalLocation('Store Repo', 'sftp://user@storage.example.com/repo')
+      await waitFor(() => {
+        expect(versionButton(1)).toBeDisabled()
+      })
+
+      setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/repo')
+
+      expect(versionButton(1)).not.toBeDisabled()
+      expect(versionButton(2)).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('keeps the recorded Borg major when an existing repository is edited', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('edit', {
+        id: 11,
+        name: 'Recorded Repo',
+        path: 'sftp://user@storage.example.com/repo',
+        mode: 'full',
+        repository_type: 'local',
+        storage_backend: 'local',
+        execution_target: 'local',
+        executor_type: 'server',
+        borg_version: 1,
+        encryption: 'repokey',
+        compression: 'lz4',
+        connection_id: null,
+        rclone_storage: null,
+      })
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toHaveValue('Recorded Repo')
+      })
+
+      fireEvent.click(screen.getByText('Review').closest('div')!)
+      await user.click(screen.getByRole('button', { name: /Save Changes/i }))
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({ borg_version: 1, encryption: 'repokey' }),
+          null
+        )
+      })
+    })
+  })
+
+  describe('relative and absolute Borg 2 ssh:// paths', () => {
+    const RELATIVE = /Relative to the login directory of backupuser@server1\.example\.com/i
+    const ABSOLUTE = /Absolute path on the host/i
+
+    const borg2SshCreate = async (user: ReturnType<typeof userEvent.setup>) => {
+      await fillLocalLocation('Borg 2 SSH Repo', '/offsite/repo')
+      await user.click(screen.getByRole('button', { name: 'v2' }))
+      await chooseRemoteRepository(user)
+    }
+
+    const submitCreate = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Mirror this repository to cloud storage')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByLabelText(/^Passphrase/i)).toBeInTheDocument()
+      })
+      setInputValue(screen.getByLabelText(/^Passphrase/i), 'securepass')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.click(await screen.findByRole('button', { name: /Create Repository/i }))
+    }
+
+    const URL_RELATIVE = /Relative to the login directory of the SSH user/i
+
+    // What a user does: type or paste, then leave the field.
+    const enterPath = (value: string) => {
+      setInputValue(screen.getByLabelText(/Repository Path/i), value)
+    }
+    const leavePath = () => {
+      fireEvent.blur(screen.getByLabelText(/Repository Path/i))
+    }
+    const typePath = (value: string) => {
+      enterPath('')
+      for (const char of value) {
+        const input = screen.getByLabelText(/Repository Path/i) as HTMLInputElement
+        setInputValue(input, input.value + char)
+      }
+    }
+
+    it('keeps a pasted relative Borg 2 URL relative', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('create')
+      await borg2SshCreate(user)
+
+      enterPath('ssh://backupuser@server1.example.com:22/backups/repo')
+      expect(screen.getByText(URL_RELATIVE)).toBeInTheDocument()
+      leavePath()
+
+      expect(screen.getByLabelText(/Repository Path/i)).toHaveValue('backups/repo')
+      expect(screen.getByText(RELATIVE)).toBeInTheDocument()
+
+      await submitCreate(user)
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({ borg_version: 2, path: 'backups/repo', connection_id: 1 }),
+          null
+        )
+      })
+    }, 90000)
+
+    it('keeps a pasted absolute Borg 2 URL absolute', async () => {
+      const user = userEvent.setup()
+      renderWizard('create')
+      await borg2SshCreate(user)
+
+      enterPath('ssh://backupuser@server1.example.com//srv/backups/repo')
+      expect(screen.getByText(ABSOLUTE)).toBeInTheDocument()
+      leavePath()
+
+      expect(screen.getByLabelText(/Repository Path/i)).toHaveValue('/srv/backups/repo')
+      expect(screen.getByText(ABSOLUTE)).toBeInTheDocument()
+    })
+
+    it('takes a pasted URL with an upper-case scheme like any other', async () => {
+      const user = userEvent.setup()
+      renderWizard('create')
+      await borg2SshCreate(user)
+
+      enterPath('SSH://backupuser@server1.example.com:22//srv/backups/repo')
+      leavePath()
+
+      expect(screen.getByLabelText(/Repository Path/i)).toHaveValue('/srv/backups/repo')
+      expect(screen.getByText(ABSOLUTE)).toBeInTheDocument()
+    })
+
+    it('writes the login directory itself as .', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('create')
+      await borg2SshCreate(user)
+
+      enterPath('ssh://backupuser@server1.example.com:22/')
+      leavePath()
+
+      expect(screen.getByLabelText(/Repository Path/i)).toHaveValue('.')
+      expect(screen.getByText(RELATIVE)).toBeInTheDocument()
+      await submitCreate(user)
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({ path: '.', connection_id: 1 }),
+          null
+        )
+      })
+    }, 90000)
+
+    it('sends a Borg 2 URL whole when the field was never left', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('create')
+      await borg2SshCreate(user)
+
+      enterPath('ssh://backupuser@server1.example.com:22//srv/backups/repo')
+      await submitCreate(user)
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            path: 'ssh://backupuser@server1.example.com:22//srv/backups/repo',
+          }),
+          null
+        )
+      })
+    }, 90000)
+
+    it.each([
+      ['ssh://backupuser@server1.example.com:22//srv/repo', '/srv/repo', ABSOLUTE],
+      ['ssh://backupuser@server1.example.com:22//./srv/repo', '/srv/repo', ABSOLUTE],
+      ['ssh://backupuser@server1.example.com:22/backups/repo', 'backups/repo', RELATIVE],
+    ])('keeps %s as it reads while it is typed', async (url, path, hint) => {
+      const user = userEvent.setup()
+      renderWizard('create')
+      await borg2SshCreate(user)
+
+      typePath(url)
+      expect(screen.getByLabelText(/Repository Path/i)).toHaveValue(url)
+      leavePath()
+
+      expect(screen.getByLabelText(/Repository Path/i)).toHaveValue(path)
+      expect(screen.getByText(hint)).toBeInTheDocument()
+    })
+
+    it('says how a typed Borg 2 path is read', async () => {
+      const user = userEvent.setup()
+      renderWizard('create')
+      await borg2SshCreate(user)
+      const pathInput = screen.getByLabelText(/Repository Path/i)
+
+      setInputValue(pathInput, '/srv/backups/repo')
+      expect(screen.getByText(ABSOLUTE)).toBeInTheDocument()
+
+      setInputValue(pathInput, 'backups/repo')
+      expect(screen.getByText(RELATIVE)).toBeInTheDocument()
+
+      setInputValue(pathInput, '/./backups/repo')
+      expect(screen.getByText(RELATIVE)).toBeInTheDocument()
+    })
+
+    it('says nothing about it for Borg 1, which reads every path as given', async () => {
+      const user = userEvent.setup()
+      renderWizard('create')
+      await fillLocalLocation('Borg 1 SSH Repo', '/offsite/repo')
+      await chooseRemoteRepository(user)
+
+      expect(screen.queryByText(ABSOLUTE)).toBeNull()
+      expect(screen.queryByText(RELATIVE)).toBeNull()
+    })
+
+    const borg2SshRepository = (path: string) => ({
+      id: 21,
+      name: 'Borg 2 SSH Repo',
+      path,
+      mode: 'full',
+      repository_type: 'ssh',
+      storage_backend: 'ssh',
+      execution_target: 'ssh',
+      executor_type: 'server',
+      borg_version: 2,
+      encryption: 'repokey-aes-ocb',
+      compression: 'lz4',
+      connection_id: 1,
+      rclone_storage: null,
+    })
+
+    const saveEdit = async (user: ReturnType<typeof userEvent.setup>) => {
+      fireEvent.click(screen.getByText('Review').closest('div')!)
+      await user.click(screen.getByRole('button', { name: /Save Changes/i }))
+    }
+
+    it.each([
+      ['ssh://backupuser@server1.example.com:22/backups/repo', 'backups/repo', RELATIVE],
+      ['ssh://backupuser@server1.example.com:22//srv/backups/repo', '/srv/backups/repo', ABSOLUTE],
+    ])('shows the stored %s as %s and saves it unchanged', async (stored, shown, hint) => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('edit', borg2SshRepository(stored))
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Path/i)).toHaveValue(shown)
+      })
+      await waitFor(() => {
+        expect(screen.getByText(hint)).toBeInTheDocument()
+      })
+
+      await saveEdit(user)
+      // the stored URL's tail: the server keeps the stored form for it
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            path: stored.slice('ssh://backupuser@server1.example.com:22'.length),
+          }),
+          null
+        )
+      })
+    })
+
+    it.each([
+      ['backups/other', 'ssh://backupuser@server1.example.com:22/backups/other'],
+      // the stored URL's tail with the other meaning: the server would read
+      // the tail back as the unchanged relative path
+      ['/backups/repo', 'ssh://backupuser@server1.example.com:22//backups/repo'],
+    ])('sends the changed Borg 2 path %s as the URL %s', async (typed, sent) => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard(
+        'edit',
+        borg2SshRepository('ssh://backupuser@server1.example.com:22/backups/repo')
+      )
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Path/i)).toHaveValue('backups/repo')
+      })
+
+      setInputValue(screen.getByLabelText(/Repository Path/i), typed)
+      await saveEdit(user)
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ path: sent }), null)
+      })
+    })
+
+    it('sends a pasted Borg 2 URL whole when the field was never left', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard(
+        'edit',
+        borg2SshRepository('ssh://backupuser@server1.example.com:22/backups/repo')
+      )
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Path/i)).toHaveValue('backups/repo')
+      })
+
+      setInputValue(
+        screen.getByLabelText(/Repository Path/i),
+        'ssh://backupuser@server1.example.com:22//srv/other'
+      )
+      await saveEdit(user)
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({ path: 'ssh://backupuser@server1.example.com:22//srv/other' }),
+          null
+        )
+      })
+    })
+
+    it('trims a changed Borg 2 path before it becomes a URL', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard(
+        'edit',
+        borg2SshRepository('ssh://backupuser@server1.example.com:22/backups/repo')
+      )
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Path/i)).toHaveValue('backups/repo')
+      })
+
+      setInputValue(screen.getByLabelText(/Repository Path/i), ' /srv/backups/repo ')
+      await saveEdit(user)
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            path: 'ssh://backupuser@server1.example.com:22//srv/backups/repo',
+          }),
+          null
+        )
+      })
+    })
+
+    it('sends a plain path once the repository moves off the SSH connection', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard(
+        'edit',
+        borg2SshRepository('ssh://backupuser@server1.example.com:22/backups/repo')
+      )
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Path/i)).toHaveValue('backups/repo')
+      })
+
+      await chooseDestination(user, /Borg UI Server/i)
+      setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/local')
+      await saveEdit(user)
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({ path: '/backups/local', connection_id: null }),
+          null
+        )
+      })
+    })
+
+    it('takes a directory picked on an SSH mount as the absolute path it is', async () => {
+      // The picker browses an SSH connection's mount from the server
+      // destination and returns the directory as ssh://user@host:port/dir.
+      const user = userEvent.setup()
+      mockBrowsedPath.value = 'ssh://backupuser@server1.example.com:22/srv/backups/repo'
+      renderWizard('create')
+      await fillLocalLocation('Picked Repo', '/offsite/repo')
+      await user.click(screen.getByRole('button', { name: 'v2' }))
+
+      await user.click(screen.getByTitle('Browse filesystem'))
+      await user.click(
+        within(screen.getByTestId('file-explorer-dialog')).getByRole('button', {
+          name: /select browsed path/i,
+          hidden: true,
+        })
+      )
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Path/i)).toHaveValue('/srv/backups/repo')
+      })
+      expect(screen.getByText(ABSOLUTE)).toBeInTheDocument()
+    })
+
+    it('says how a Borg 2 ssh:// URL of a managed agent is read', async () => {
+      const user = userEvent.setup()
+      ;(managedAgentsAPI.getRepositoryDefaults as Mock).mockResolvedValue({
+        data: { repo: 'ssh://borg@storage.example.com/backups/repo', remote_path: null },
+      })
+      renderWizard('create')
+      await waitForLocationStep()
+      await user.click(screen.getByRole('button', { name: 'v2' }))
+      await chooseDestination(user, /Managed Agent/i)
+      await user.click(screen.getByRole('combobox', { name: /Managed Agent/i }))
+      const agentListbox = await screen.findByRole('listbox')
+      await user.click(within(agentListbox).getByText('workstation.local'))
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(/Relative to the login directory of the SSH user/i)
+        ).toBeInTheDocument()
+      })
+      setInputValue(
+        screen.getByLabelText(/Repository Path/i),
+        'ssh://borg@storage.example.com//srv/backups/repo'
+      )
+      expect(screen.getByLabelText(/Repository Path/i)).toHaveValue(
+        'ssh://borg@storage.example.com//srv/backups/repo'
+      )
+      expect(screen.getByText(ABSOLUTE)).toBeInTheDocument()
+    }, 90000)
   })
 
   describe('navigation', () => {

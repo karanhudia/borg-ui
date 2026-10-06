@@ -1217,6 +1217,62 @@ async def test_fill_archive_info_stamps_stats_measured_at(db, repo, monkeypatch)
 
 
 @pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fill_archive_info_keeps_the_added_size_borg2_info_lacks(
+    db, repo, monkeypatch
+):
+    """#1264: Borg 2's `info` reports no deduplicated_size; the figure the
+    archive got from its backup's `create --json` stays."""
+    repo.borg_version = 2
+    row = Archive(
+        repository_id=repo.id,
+        borg_id="bb22",
+        name="daily",
+        series="daily",
+        start=datetime(2026, 9, 2),
+        deduplicated_size=300743,
+    )
+    db.add(row)
+    db.commit()
+    monkeypatch.setattr(
+        index_exec,
+        "_server_archive_info",
+        AsyncMock(return_value={"success": True, "stdout": _agent_info_payload()}),
+    )
+
+    assert await index_exec.fill_archive_info(db, repo, [row], {}, limit=1) == 1
+    db.refresh(row)
+    assert row.nfiles == 7 and row.original_size == 20
+    assert row.deduplicated_size == 300743
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fill_archive_info_clears_a_borg1_size_info_lacks(db, repo, monkeypatch):
+    """Borg 1's figure is relative to the archives that exist: a re-measure
+    without one must not leave the old figure as freshly measured."""
+    row = Archive(
+        repository_id=repo.id,
+        borg_id="aa11",
+        name="daily",
+        series="daily",
+        start=datetime(2026, 9, 2),
+        deduplicated_size=4,
+    )
+    db.add(row)
+    db.commit()
+    monkeypatch.setattr(
+        index_exec,
+        "_server_archive_info",
+        AsyncMock(return_value={"success": True, "stdout": _agent_info_payload()}),
+    )
+
+    assert await index_exec.fill_archive_info(db, repo, [row], {}, limit=1) == 1
+    db.refresh(row)
+    assert row.deduplicated_size is None
+
+
+@pytest.mark.unit
 def test_archives_needing_info_backfills_across_runs(db, repo):
     """The per-run cap means later runs must pick up archives an earlier run
     left unfilled, not just the rows they created themselves."""
@@ -1969,3 +2025,137 @@ def test_apply_listing_links_a_new_row_to_the_backup_that_made_it(db, repo):
     index_exec.apply_listing(db, repo, entries, timezone_name="UTC")
     db.commit()
     assert {a.borg_id: a.backup_operation_id for a in db.query(Archive).all()} == by_id
+
+
+def _seed_borg2_backup(db, repo, *, archive_id, deduplicated_size, day=2):
+    from tests.utils.operations import seed_job_operation
+
+    return seed_job_operation(
+        db,
+        "backup",
+        repository=repo.path,
+        status="completed",
+        started_at=datetime(2026, 9, day, 2, 0, 0),
+        completed_at=datetime(2026, 9, day, 2, 5, 0),
+        archive_name="daily",
+        archive_id=archive_id,
+        deduplicated_size=deduplicated_size,
+    )
+
+
+@pytest.mark.unit
+def test_apply_listing_takes_the_added_size_borg2_create_reported(db, repo):
+    """#1264: Borg 2 reports what an archive added only in `create --json`,
+    which the backup kept; the archive row gets it from the backup it is
+    linked to, since `info` never reports it."""
+    repo.borg_version = 2
+    db.commit()
+    _seed_borg2_backup(db, repo, archive_id="bb22", deduplicated_size=300743)
+
+    index_exec.apply_listing(
+        db,
+        repo,
+        [{"id": "bb22", "name": "daily", "time": "2026-09-02T02:00:09"}],
+        timezone_name="UTC",
+    )
+
+    assert db.query(Archive).one().deduplicated_size == 300743
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("archive_id", "deduplicated_size"),
+    [
+        # a backup that reported nothing keeps the column default: every
+        # created Borg 2 archive adds at least its own metadata, so 0 is
+        # "not reported", never a size
+        ("bb22", 0),
+        ("bb22", None),
+        # the backup made another archive of the series
+        ("cc33", 300743),
+    ],
+)
+def test_apply_listing_leaves_the_added_size_unknown(
+    db, repo, archive_id, deduplicated_size
+):
+    repo.borg_version = 2
+    db.commit()
+    _seed_borg2_backup(
+        db, repo, archive_id=archive_id, deduplicated_size=deduplicated_size
+    )
+
+    index_exec.apply_listing(
+        db,
+        repo,
+        [{"id": "bb22", "name": "daily", "time": "2026-09-02T02:00:09"}],
+        timezone_name="UTC",
+    )
+
+    assert db.query(Archive).one().deduplicated_size is None
+
+
+@pytest.mark.unit
+def test_apply_listing_fills_the_added_size_of_an_archive_listed_before(db, repo):
+    """An archive indexed before its backup's figure was taken over (listed
+    before this change, or before the backup completed) gets it on a later
+    listing."""
+    repo.borg_version = 2
+    db.commit()
+    backup = _seed_borg2_backup(db, repo, archive_id="bb22", deduplicated_size=300743)
+    db.add(
+        Archive(
+            repository_id=repo.id,
+            borg_id="bb22",
+            name="daily",
+            series="daily",
+            start=datetime(2026, 9, 2, 2, 0, 9),
+            backup_operation_id=backup.id,
+        )
+    )
+    db.commit()
+
+    index_exec.apply_listing(
+        db,
+        repo,
+        [{"id": "bb22", "name": "daily", "time": "2026-09-02T02:00:09"}],
+        timezone_name="UTC",
+    )
+
+    assert db.query(Archive).one().deduplicated_size == 300743
+
+
+@pytest.mark.unit
+def test_apply_listing_leaves_borg1_sizes_to_the_info_fill(db, repo):
+    """Borg 1 measures deduplicated_size against the archives that exist; a
+    figure from the backup would be stale once later archives share its
+    chunks."""
+    _seed_borg2_backup(db, repo, archive_id=None, deduplicated_size=300743)
+
+    index_exec.apply_listing(
+        db,
+        repo,
+        [{"id": "aa11", "name": "daily", "start": "2026-09-02T02:00:09"}],
+        timezone_name="UTC",
+    )
+
+    row = db.query(Archive).one()
+    assert row.backup_operation_id is not None
+    assert row.deduplicated_size is None
+
+
+@pytest.mark.unit
+def test_apply_listing_takes_the_added_size_of_a_backup_without_archive_id(db, repo):
+    """A backup that recorded no archive id (output without the --json
+    document) is matched by name and start, as for the link itself."""
+    repo.borg_version = 2
+    db.commit()
+    _seed_borg2_backup(db, repo, archive_id=None, deduplicated_size=708)
+
+    index_exec.apply_listing(
+        db,
+        repo,
+        [{"id": "bb22", "name": "daily", "time": "2026-09-02T02:00:09"}],
+        timezone_name="UTC",
+    )
+
+    assert db.query(Archive).one().deduplicated_size == 708

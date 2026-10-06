@@ -1156,6 +1156,8 @@
       "stats": {
         "addedToRepository": "Added to the repository",
         "addedHint": "Data unique to this archive. Deleting it frees at least this much.",
+        "addedAtCreation": "Added at creation",
+        "addedAtCreationHint": "Data this archive added when it was created. Later archives can share it, so deleting this one may free less.",
         "filesChanged": "Files changed",
         "filesChangedNotIndexed": "Not indexed yet",
         "filesChangedUnavailable": "Not available for this repository",
@@ -4816,6 +4818,10 @@
       "repositoryPathLabel": "Repository Path",
       "repositoryPathHelper": "Path where the repository will be stored",
       "borgV2Warning": "Borg 2 support is still in beta. Do not use it for production data yet. It is currently intended for enthusiasts and testing, and requires the borg2 binary on any remote hosts.",
+      "borg2OnlyUrl": "Only Borg 2 can open this repository URL.",
+      "borg2PathAbsolute": "Absolute path on the host.",
+      "borg2PathRelative": "Relative to the login directory of {{login}}. Start with / for an absolute path.",
+      "borg2UrlRelative": "Relative to the login directory of the SSH user. Write ssh://host//path for an absolute path.",
       "connected": "Connected",
       "browseFilesystem": "Browse filesystem"
     },
@@ -5005,6 +5011,7 @@
       "encryption": "Encryption",
       "encryptionRepokey": "Repokey",
       "encryptionKeyfile": "Keyfile",
+      "encryptionAuthenticated": "Authenticated",
       "encryptionNone": "None",
       "passphrase": "Passphrase",
       "passphraseSet": "••••••••",
@@ -5068,6 +5075,10 @@
         "keyfile-chacha20-poly1305": {
           "label": "Key File (ChaCha20)",
           "description": "Key file with ChaCha20"
+        },
+        "authenticated": {
+          "label": "Authenticated (no encryption)",
+          "description": "Data is not encrypted; a key and passphrase protect it against tampering"
         },
         "none": {
           "label": "None",

@@ -267,6 +267,52 @@ class TestRunCandidate:
         rm.assert_not_awaited()
         assert (r.freed_at_least, r.partial_measure, r.deleted_count) == (40, True, 2)
 
+    @pytest.mark.asyncio
+    async def test_borg2_added_sizes_promise_no_freed_space(self, test_db):
+        """#1264: a Borg 2 archive's deduplicated_size is what it added when
+        it was created; archives kept after it can share those chunks, so it
+        bounds nothing that deleting it frees."""
+        from datetime import datetime
+
+        from app.services.prune_preview import Retention, run_candidate
+
+        repo = _repo(test_db)
+        repo.borg_version = 2
+        a = _archive(test_db, repo, "daily", 1)
+        a.borg_id = HEX(1)
+        a.deduplicated_size = 100 * 1024**3
+        a.stats_measured_at = datetime(2026, 9, 1)
+        b = _archive(test_db, repo, "daily", 2)
+        b.borg_id = HEX(2)
+        b.deduplicated_size = 708
+        b.stats_measured_at = datetime(2026, 9, 2)
+        test_db.commit()
+        op = type("Op", (), {"status": "completed", "id": 1})()
+        with (
+            patch.object(
+                prune_preview, "run_prune_dry_run", new=AsyncMock(return_value=(op, ""))
+            ),
+            patch.object(
+                prune_preview,
+                "parse_prune_verdicts",
+                return_value=_verdicts(
+                    (1, "daily", "deleted", None), (2, "daily", "kept", "daily #1")
+                ),
+            ),
+        ):
+            r = await run_candidate(
+                test_db, repo, Retention(), user_id=None, remeasure=False
+            )
+
+        assert r.freed_at_least == 0
+        assert [p.deduplicated_size for p in r.joined] == [None, None]
+        assert [
+            p.deduplicated_size
+            for p in join_verdicts(
+                test_db, repo, _verdicts((1, "daily", "deleted", None))
+            )
+        ] == [None]
+
 
 from app.database.models import ArchiveChange
 from app.services.prune_preview import lost_files

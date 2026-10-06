@@ -24,6 +24,8 @@ PREFIXED = {**CONNECTION, "ssh_path_prefix": "/volume1"}
         # a plain path: a leading slash means absolute
         ("/srv/backups/repo", "ssh://borg@repo.example:22//srv/backups/repo"),
         ("backups/repo", "ssh://borg@repo.example:22/backups/repo"),
+        # the login directory itself, as the repository form writes it
+        (".", "ssh://borg@repo.example:22/."),
         # Borg 1's spelling of "in the login directory" stays relative
         ("/./backups/repo", "ssh://borg@repo.example:22/./backups/repo"),
         # a URL keeps the form it came in
@@ -125,6 +127,62 @@ def test_the_repository_form_round_trip_keeps_a_borg2_url(stored):
 
     assert borg2_ssh_repository_url(sent_back, CONNECTION, stored_path=stored) == stored
     assert borg2_ssh_repository_url(stored, CONNECTION) == stored
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("stored", "shown", "connection"),
+    [
+        ("ssh://borg@repo.example:22/backups/repo", "backups/repo", CONNECTION),
+        (
+            "ssh://borg@repo.example:22//srv/backups/repo",
+            "/srv/backups/repo",
+            CONNECTION,
+        ),
+        ("ssh://borg@repo.example:22/./backups/repo", "./backups/repo", CONNECTION),
+        (
+            "ssh://borg@repo.example:22//volume1/backups/repo",
+            "/volume1/backups/repo",
+            PREFIXED,
+        ),
+    ],
+)
+def test_the_form_spelling_of_a_borg2_url_names_the_same_repository(
+    stored, shown, connection
+):
+    """#1264: the repository form shows a Borg 2 path the way a plain path
+    is read (a leading slash is absolute, anything else relative to the login
+    directory), not as the URL's tail. Sent as a changed path, that spelling
+    must name the stored repository again."""
+    assert borg2_ssh_repository_url(shown, connection, stored_path=stored) == stored
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("sent", "expected"),
+    [
+        # the stored tail's text with the absolute meaning
+        (
+            "ssh://borg@repo.example:22//backups/repo",
+            "ssh://borg@repo.example:22//backups/repo",
+        ),
+        (
+            "ssh://borg@repo.example:22/backups/other",
+            "ssh://borg@repo.example:22/backups/other",
+        ),
+    ],
+)
+def test_a_changed_borg2_path_sent_as_a_url_keeps_its_form(sent, expected):
+    """#1264: the form sends a changed Borg 2 path as a URL. A plain
+    `/backups/repo` would equal the stored relative URL's tail and be kept
+    relative."""
+    stored = "ssh://borg@repo.example:22/backups/repo"
+
+    assert borg2_ssh_repository_url(sent, CONNECTION, stored_path=stored) == expected
+    assert (
+        borg2_ssh_repository_url("/backups/repo", CONNECTION, stored_path=stored)
+        == stored
+    )
 
 
 @pytest.mark.unit

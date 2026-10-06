@@ -1156,6 +1156,8 @@
       "stats": {
         "addedToRepository": "Aggiunto al repository",
         "addedHint": "Dati presenti solo in questo archivio. Eliminandolo si libera almeno questo spazio.",
+        "addedAtCreation": "Aggiunto alla creazione",
+        "addedAtCreationHint": "Dati che questo archivio ha aggiunto alla creazione. Gli archivi successivi possono condividerli, quindi eliminarlo può liberare meno spazio.",
         "filesChanged": "File modificati",
         "filesChangedNotIndexed": "Non ancora indicizzato",
         "filesChangedUnavailable": "Non disponibile per questo repository",
@@ -4816,6 +4818,10 @@
       "repositoryPathLabel": "Percorso Repository",
       "repositoryPathHelper": "Percorso dove verrà archiviato il repository",
       "borgV2Warning": "Il supporto a Borg 2 è ancora in beta. Non usarlo ancora per dati di produzione. Al momento è pensato per appassionati e test, e richiede il binario borg2 su qualsiasi host remoto.",
+      "borg2OnlyUrl": "Solo Borg 2 può aprire questo URL del repository.",
+      "borg2PathAbsolute": "Percorso assoluto sull'host.",
+      "borg2PathRelative": "Relativo alla directory di login di {{login}}. Inizia con / per un percorso assoluto.",
+      "borg2UrlRelative": "Relativo alla directory di login dell'utente SSH. Scrivi ssh://host//percorso per un percorso assoluto.",
       "connected": "Connesso",
       "browseFilesystem": "Sfoglia il filesystem"
     },
@@ -5005,6 +5011,7 @@
       "encryption": "Crittografia",
       "encryptionRepokey": "Chiave Repository",
       "encryptionKeyfile": "File Chiave",
+      "encryptionAuthenticated": "Autenticato",
       "encryptionNone": "Nessuna",
       "passphrase": "Passphrase",
       "passphraseSet": "••••••••",
@@ -5068,6 +5075,10 @@
         "keyfile-chacha20-poly1305": {
           "label": "File chiave (ChaCha20)",
           "description": "File chiave con ChaCha20"
+        },
+        "authenticated": {
+          "label": "Autenticato (senza cifratura)",
+          "description": "I dati non vengono cifrati; una chiave e una passphrase li proteggono da manomissioni"
         },
         "none": {
           "label": "Nessuna",

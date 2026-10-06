@@ -1156,6 +1156,8 @@
       "stats": {
         "addedToRepository": "Zum Repository hinzugefügt",
         "addedHint": "Daten, die nur dieses Archiv enthält. Beim Löschen wird mindestens so viel frei.",
+        "addedAtCreation": "Beim Erstellen hinzugefügt",
+        "addedAtCreationHint": "Daten, die dieses Archiv beim Erstellen hinzugefügt hat. Spätere Archive können sie mitnutzen, daher kann das Löschen dieses Archivs weniger freigeben.",
         "filesChanged": "Geänderte Dateien",
         "filesChangedNotIndexed": "Noch nicht indiziert",
         "filesChangedUnavailable": "Für dieses Repository nicht verfügbar",
@@ -4816,6 +4818,10 @@
       "repositoryPathLabel": "Repository-Pfad",
       "repositoryPathHelper": "Pfad, unter dem das Repository gespeichert wird",
       "borgV2Warning": "Die Borg-2-Unterstützung ist noch in der Beta. Verwende sie noch nicht für Produktionsdaten. Sie ist derzeit für Enthusiasten und Tests gedacht und erfordert das borg2-Binary auf allen Remote-Hosts.",
+      "borg2OnlyUrl": "Nur Borg 2 kann diese Repository-URL öffnen.",
+      "borg2PathAbsolute": "Absoluter Pfad auf dem Host.",
+      "borg2PathRelative": "Relativ zum Login-Verzeichnis von {{login}}. Für einen absoluten Pfad mit / beginnen.",
+      "borg2UrlRelative": "Relativ zum Login-Verzeichnis des SSH-Benutzers. Für einen absoluten Pfad ssh://host//pfad schreiben.",
       "connected": "Verbunden",
       "browseFilesystem": "Dateisystem durchsuchen"
     },
@@ -5005,6 +5011,7 @@
       "encryption": "Verschlüsselung",
       "encryptionRepokey": "Repokey",
       "encryptionKeyfile": "Schlüsseldatei",
+      "encryptionAuthenticated": "Authentifiziert",
       "encryptionNone": "Keine",
       "passphrase": "Passphrase",
       "passphraseSet": "••••••••",
@@ -5068,6 +5075,10 @@
         "keyfile-chacha20-poly1305": {
           "label": "Schlüsseldatei (ChaCha20)",
           "description": "Schlüsseldatei mit ChaCha20"
+        },
+        "authenticated": {
+          "label": "Authentifiziert (ohne Verschlüsselung)",
+          "description": "Daten werden nicht verschlüsselt; Schlüssel und Passphrase schützen sie vor Manipulation"
         },
         "none": {
           "label": "Keine",
