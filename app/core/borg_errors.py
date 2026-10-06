@@ -110,7 +110,7 @@ BORG_EXIT_CODES = {
 REPOSITORY_EXISTS_EXIT_CODE = 10
 
 # Both shipped versions raise Repository.AlreadyExists with the same text,
-# verified against borg 1.4.5 and 2.0.0b24: "A repository already exists at
+# verified against borg 1.4.5 and 2.0.0b25: "A repository already exists at
 # {}." Matched whole, one line at a time: borg prints other diagnostics
 # around it, and a bare "repository already exists" substring would also
 # accept an unrelated failure. Getting this wrong in the permissive
@@ -118,6 +118,15 @@ REPOSITORY_EXISTS_EXIT_CODE = 10
 # future borg failing this match (a visible error on an existing
 # repository) is the better way to be wrong.
 _REPOSITORY_EXISTS_LINE = _re.compile(r"a repository already exists at .+\.", _re.I)
+
+
+class RestoreRefused(Exception):
+    """A restore the repository's Borg will not run as asked. `detail` is
+    the translatable reason, shaped like an HTTP error detail."""
+
+    def __init__(self, detail: dict):
+        super().__init__(detail.get("key", "restore refused"))
+        self.detail = detail
 
 
 def is_repository_exists_failure(result: dict) -> bool:

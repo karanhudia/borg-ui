@@ -230,7 +230,8 @@ export default function ArchiveDetail() {
         data.destination_type,
         data.destination_connection_id,
         data.restore_layout,
-        data.path_metadata
+        data.path_metadata,
+        data.existing_files
       )
     },
     onSuccess: (res) => {

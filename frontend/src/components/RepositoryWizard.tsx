@@ -939,7 +939,11 @@ const RepositoryWizard = ({
       post_hook_timeout: wizardState.postHookTimeout,
       continue_on_hook_failure: wizardState.hookFailureMode === 'continue',
       skip_on_hook_failure: wizardState.hookFailureMode === 'skip',
-      upload_ratelimit_kib: uploadRatelimitMbToKib(wizardState.uploadRatelimitMb),
+      // Borg 2 has no upload limit: a stored one is cleared on save
+      upload_ratelimit_kib:
+        wizardState.borgVersion === 2
+          ? null
+          : uploadRatelimitMbToKib(wizardState.uploadRatelimitMb),
       bypass_lock: wizardState.bypassLock,
       // Spec 6.8 and 6.7: only PUT accepts these, so they ride along
       // when editing and are left to their defaults at creation.
@@ -1333,6 +1337,7 @@ const RepositoryWizard = ({
         return (
           <WizardStepRepositoryAdvanced
             repositoryId={mode === 'edit' ? repository?.id : null}
+            borgVersion={wizardState.borgVersion}
             repositoryMode={wizardState.repositoryMode}
             data={{
               compression: wizardState.compression,
@@ -1355,6 +1360,7 @@ const RepositoryWizard = ({
         return (
           <WizardStepBackupConfig
             repositoryId={mode === 'edit' ? repository?.id : null}
+            borgVersion={wizardState.borgVersion}
             dataSource={wizardState.dataSource}
             repositoryMode={wizardState.repositoryMode}
             data={{

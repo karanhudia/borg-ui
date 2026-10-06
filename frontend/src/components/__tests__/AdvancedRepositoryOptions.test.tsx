@@ -54,4 +54,13 @@ describe('AdvancedRepositoryOptions', () => {
 
     expect(onUploadRatelimitMbChange).toHaveBeenLastCalledWith('2')
   })
+
+  it('disables the upload speed limit for Borg 2, which has none', () => {
+    renderOptions({ borgVersion: 2, uploadRatelimitMb: '1.5' })
+
+    const field = screen.getByLabelText(/Upload speed limit/i)
+    expect(field).toBeDisabled()
+    expect(field).toHaveValue(null)
+    expect(screen.getByText(/Borg 2 has no upload limit/i)).toBeInTheDocument()
+  })
 })

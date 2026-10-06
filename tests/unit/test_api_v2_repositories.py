@@ -204,6 +204,32 @@ class TestV2RepositoryRoutes:
             response.json()["detail"]["key"] == "backend.errors.repo.invalidEncryption"
         )
 
+    def test_create_repository_rejects_the_removed_unencrypted_mode(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Borg 2.0.0b25 has no unencrypted mode; the request is refused
+        before any repo-create runs."""
+        _enable_borg_v2(test_db)
+
+        with patch(
+            "app.services.v2.repository_service.borg2._run", new=AsyncMock()
+        ) as mock_run:
+            response = test_client.post(
+                "/api/v2/repositories/",
+                json={
+                    "name": "Unencrypted Borg 2 Repo",
+                    "path": "/tmp/v2-none-repo",
+                    "encryption": "none",
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["key"] == "backend.errors.repo.invalidEncryption"
+        assert "none" not in detail["params"]["valid"]
+        mock_run.assert_not_awaited()
+
     def test_create_repository_requires_admin(
         self, test_client: TestClient, auth_headers, test_db
     ):
@@ -214,7 +240,7 @@ class TestV2RepositoryRoutes:
             json={
                 "name": "Viewer Repo",
                 "path": "/tmp/v2-viewer-repo",
-                "encryption": "none",
+                "encryption": "authenticated",
             },
             headers=auth_headers,
         )
@@ -289,7 +315,7 @@ class TestV2RepositoryRoutes:
                     json={
                         "name": "SSH Borg 2 Repo",
                         "path": "ssh://example.com/backups/repo",
-                        "encryption": "none",
+                        "encryption": "authenticated",
                         "connection_id": connection.id,
                     },
                     headers=admin_headers,
@@ -330,7 +356,7 @@ class TestV2RepositoryRoutes:
                 json={
                     "name": "Storage Box Borg 2 Repo",
                     "path": "/./borg-repository",
-                    "encryption": "none",
+                    "encryption": "authenticated",
                     "connection_id": connection.id,
                 },
                 headers=admin_headers,
@@ -371,7 +397,7 @@ class TestV2RepositoryRoutes:
                 json={
                     "name": "Init Fail Repo",
                     "path": "/tmp/v2-init-fail",
-                    "encryption": "none",
+                    "encryption": "authenticated",
                 },
                 headers=admin_headers,
             )
@@ -403,7 +429,7 @@ class TestV2RepositoryRoutes:
                 json={
                     "name": "Protocol Mismatch Repo",
                     "path": "/tmp/v2-protocol-mismatch",
-                    "encryption": "none",
+                    "encryption": "authenticated",
                 },
                 headers=admin_headers,
             )
@@ -424,7 +450,7 @@ class TestV2RepositoryRoutes:
             json={
                 "name": "Existing Repo",
                 "path": "/tmp/new-repo",
-                "encryption": "none",
+                "encryption": "authenticated",
             },
             headers=admin_headers,
         )
@@ -446,7 +472,7 @@ class TestV2RepositoryRoutes:
                 json={
                     "name": "Import Repo",
                     "path": "/tmp/v2-import-repo",
-                    "encryption": "none",
+                    "encryption": "authenticated",
                 },
                 headers=admin_headers,
             )
@@ -477,7 +503,7 @@ class TestV2RepositoryRoutes:
                 json={
                     "name": "Imported Repo",
                     "path": "/tmp/v2-import-success",
-                    "encryption": "none",
+                    "encryption": "authenticated",
                     "source_directories": ["/data/source"],
                     "source_connection_id": connection.id,
                     "custom_flags": "--stats",
@@ -529,7 +555,7 @@ class TestV2RepositoryRoutes:
                 json={
                     "name": "Imported Storage Box Borg 2 Repo",
                     "path": "/./borg-repository",
-                    "encryption": "none",
+                    "encryption": "authenticated",
                     "connection_id": connection.id,
                 },
                 headers=admin_headers,
@@ -607,7 +633,7 @@ class TestV2RepositoryRoutes:
             json={
                 "name": "Another Import",
                 "path": "/tmp/existing-import",
-                "encryption": "none",
+                "encryption": "authenticated",
             },
             headers=admin_headers,
         )
@@ -974,17 +1000,17 @@ class TestV2RepositoryRoutes:
         assert repo.archive_count == 2
         assert repo.last_backup == datetime(2026, 8, 19, 19, 3, 18)
 
-    def test_get_repository_info_normalizes_borg2_b22_encryption(
+    def test_get_repository_info_normalizes_borg2_encryption(
         self, test_client: TestClient, admin_headers, test_db
     ):
-        """Borg 2.0.0b22 reports the cipher and the id hash instead of a single
+        """Borg 2 reports the cipher and the id hash instead of a single
         `mode`, and `info --json` carries the block too — so the rinfo merge
         below never fires and the dialog showed "N/A" for an encrypted
-        repository. Both payloads are verbatim from 2.0.0b22.
+        repository. Both encryption blocks are verbatim from 2.0.0b25.
         """
         _enable_borg_v2(test_db)
-        repo = _create_v2_repo(test_db, path="/tmp/v2-b22-repo")
-        b22_encryption = {"encryption": "aes256-ocb", "id_hash": "sha256"}
+        repo = _create_v2_repo(test_db, path="/tmp/v2-borg2-repo")
+        borg2_encryption = {"encryption": "aes256-ocb", "id_hash": "sha256"}
 
         with patch(
             "app.api.v2.repositories.borg2.info_repo",
@@ -992,7 +1018,7 @@ class TestV2RepositoryRoutes:
                 return_value={
                     "success": True,
                     "stdout": json.dumps(
-                        {"archives": [], "encryption": dict(b22_encryption)}
+                        {"archives": [], "encryption": dict(borg2_encryption)}
                     ),
                     "stderr": "",
                 }
@@ -1006,7 +1032,7 @@ class TestV2RepositoryRoutes:
                         "stdout": json.dumps(
                             {
                                 "repository": {"id": 9},
-                                "encryption": dict(b22_encryption),
+                                "encryption": dict(borg2_encryption),
                             }
                         ),
                         "stderr": "",
@@ -1292,16 +1318,16 @@ class TestV2RepositoryRoutes:
         assert response.json()["borg_version"] == 2
         mock_rinfo.assert_awaited_once()
 
-    def test_get_repository_stats_normalizes_borg2_b22_encryption(
+    def test_get_repository_stats_normalizes_borg2_encryption(
         self, test_client: TestClient, admin_headers, test_db
     ):
-        """/stats returns the same rinfo payload as /info, so b22's mode-less
-        encryption block needs the same normalization — a client reading
-        `stats.encryption.mode` would otherwise get nothing while /info has
-        it. The payload is verbatim from 2.0.0b22.
+        """/stats returns the same rinfo payload as /info, so Borg 2's
+        mode-less encryption block needs the same normalization — a client
+        reading `stats.encryption.mode` would otherwise get nothing while
+        /info has it. The encryption block is verbatim from 2.0.0b25.
         """
         _enable_borg_v2(test_db)
-        repo = _create_v2_repo(test_db, path="/tmp/v2-b22-stats-repo")
+        repo = _create_v2_repo(test_db, path="/tmp/v2-borg2-stats-repo")
 
         with patch(
             "app.api.v2.repositories.borg2.rinfo",

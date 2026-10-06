@@ -70,7 +70,6 @@ def main() -> int:
             name=f"Borg2 Browse Smoke Repo {unique_suffix}",
             repo_path=client.temp_dir / "borg2-browse-repo",
             source_dirs=[source_root],
-            encryption="none",
         )
 
         archives = client.list_archives_v2(repo_id)

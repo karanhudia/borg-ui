@@ -9,6 +9,8 @@ type OnFailureMode = 'fail' | 'continue' | 'skip'
 interface AdvancedRepositoryOptionsProps {
   repositoryId?: number | null
   mode: 'full' | 'observe'
+  /** Borg 2 has no upload limit (no --upload-ratelimit). */
+  borgVersion?: 1 | 2
   remotePath: string
   preBackupScript: string
   postBackupScript: string
@@ -30,6 +32,7 @@ interface AdvancedRepositoryOptionsProps {
 export default function AdvancedRepositoryOptions({
   repositoryId,
   mode,
+  borgVersion = 1,
   remotePath,
   preBackupScript,
   postBackupScript,
@@ -100,11 +103,16 @@ export default function AdvancedRepositoryOptions({
 
           <TextField
             label={t('advancedRepositoryOptions.uploadSpeedLimit')}
-            value={uploadRatelimitMb}
+            value={borgVersion === 2 ? '' : uploadRatelimitMb}
             onChange={(e) => onUploadRatelimitMbChange(e.target.value)}
             type="number"
             fullWidth
-            helperText={t('advancedRepositoryOptions.uploadSpeedLimitHint')}
+            disabled={borgVersion === 2}
+            helperText={
+              borgVersion === 2
+                ? t('advancedRepositoryOptions.uploadSpeedLimitBorg2')
+                : t('advancedRepositoryOptions.uploadSpeedLimitHint')
+            }
             slotProps={{
               htmlInput: { min: 0, step: 0.1 },
             }}

@@ -215,6 +215,129 @@ def test_archive_sums_wait_until_every_archive_carries_its_info(test_db):
 
 
 @pytest.mark.unit
+def test_borg2_last_modified_is_the_newest_archive_write(test_db):
+    """Borg 2 reports no last_modified (#1262): the newest current
+    archive's end stands in; a row the newest listing no longer saw does
+    not."""
+    at = datetime(2026, 9, 1, 12, 0, 0)
+    repo = _repo(test_db, "b25", borg_version=2, archive_count=2)
+    _archive(test_db, repo, "a1", at - timedelta(days=1))
+    _archive(test_db, repo, "a2", at, end=at + timedelta(minutes=5))
+    _archive(
+        test_db,
+        repo,
+        "gone",
+        at + timedelta(days=1),
+        last_seen_at=SEEN_AT - timedelta(days=1),
+    )
+
+    summary = storage_summaries(test_db, [repo])[repo.id]
+    assert summary.last_modified == at + timedelta(minutes=5)
+
+
+@pytest.mark.unit
+def test_borg2_last_modified_falls_back_to_the_start_without_an_end(test_db):
+    at = datetime(2026, 9, 1, 12, 0, 0)
+    repo = _repo(test_db, "b25-no-end", borg_version=2, archive_count=1)
+    _archive(test_db, repo, "a1", at)
+    assert storage_summaries(test_db, [repo])[repo.id].last_modified == at
+
+
+def _deletion(test_db, repo, completed_at, *, kind="delete_archive", **fields):
+    op = Operation(
+        repository_id=repo.id,
+        kind=kind,
+        category="maintenance",
+        status=fields.pop("status", "completed"),
+        trigger="manual",
+        priority=10,
+        run_id=f"{kind}-{repo.id}-{completed_at.isoformat()}",
+        started_at=fields.pop("started_at", completed_at - timedelta(minutes=1)),
+        completed_at=completed_at,
+        **fields,
+    )
+    test_db.add(op)
+    test_db.commit()
+    return op
+
+
+@pytest.mark.unit
+def test_borg2_last_modified_of_an_empty_repository_is_its_creation(test_db):
+    """No write Borg UI knows of: a repository a listing found empty was
+    last written when it was created; one no listing has reached yet (an
+    import whose archives are not listed) is unknown. Rows an emptying
+    listing left behind were writes, and the newest still counts."""
+    created = datetime(2026, 8, 1, 9, 0, 0)
+    fresh = _repo(test_db, "b25-fresh", borg_version=2, created_at=created)
+    _archive_sync(test_db, fresh, SEEN_AT)
+    unlisted = _repo(test_db, "b25-unlisted", borg_version=2, created_at=created)
+    emptied = _repo(
+        test_db,
+        "b25-emptied",
+        borg_version=2,
+        archive_count=0,
+        index_mode="archives",
+        created_at=created,
+    )
+    _archive(test_db, emptied, "gone", datetime(2026, 9, 1))
+    _archive_sync(test_db, emptied, SEEN_AT + timedelta(hours=1))
+
+    # an agent's own listing counted an archive the rows do not show yet
+    counted = _repo(
+        test_db, "b25-counted", borg_version=2, archive_count=1, created_at=created
+    )
+    _archive_sync(test_db, counted, SEEN_AT)
+
+    summaries = storage_summaries(test_db, [fresh, unlisted, emptied, counted])
+    assert summaries[fresh.id].last_modified == created
+    assert summaries[unlisted.id].last_modified is None
+    assert summaries[emptied.id].last_modified == datetime(2026, 9, 1)
+    assert summaries[counted.id].last_modified is None
+
+
+@pytest.mark.unit
+def test_borg2_last_modified_counts_deletions_as_writes(test_db):
+    """A successful deletion, wipe or prune through Borg UI after the
+    newest archive is the last write; an older one, a failed one (it may
+    never have reached the repository) and a prune preview are not."""
+    at = datetime(2026, 9, 1, 12, 0, 0)
+    deleted = _repo(test_db, "b25-deleted", borg_version=2, archive_count=1)
+    _archive(test_db, deleted, "a1", at)
+    _deletion(test_db, deleted, at + timedelta(days=2))
+    _deletion(test_db, deleted, at + timedelta(days=3), status="failed")
+    older = _repo(test_db, "b25-older", borg_version=2, archive_count=1)
+    _archive(test_db, older, "a1", at)
+    _deletion(test_db, older, at - timedelta(days=1))
+    wiped = _repo(test_db, "b25-wiped", borg_version=2, archive_count=0)
+    _archive_sync(test_db, wiped, SEEN_AT)
+    _deletion(test_db, wiped, at, kind="wipe")
+    pruned = _repo(test_db, "b25-pruned", borg_version=2, archive_count=1)
+    _archive(test_db, pruned, "a1", at)
+    _deletion(test_db, pruned, at + timedelta(days=1), kind="prune")
+    _deletion(
+        test_db,
+        pruned,
+        at + timedelta(days=4),
+        kind="prune",
+        params={"dry_run": True},
+    )
+
+    summaries = storage_summaries(test_db, [deleted, older, wiped, pruned])
+    assert summaries[deleted.id].last_modified == at + timedelta(days=2)
+    assert summaries[older.id].last_modified == at
+    assert summaries[wiped.id].last_modified == at
+    assert summaries[pruned.id].last_modified == at + timedelta(days=1)
+
+
+@pytest.mark.unit
+def test_borg1_last_modified_stays_what_borg_reports(test_db):
+    at = datetime(2026, 9, 1, 12, 0, 0)
+    reported = _repo(test_db, "b1-lm", borg_version=1, archive_count=1)
+    _archive(test_db, reported, "a1", at)
+    assert storage_summaries(test_db, [reported])[reported.id].last_modified is None
+
+
+@pytest.mark.unit
 def test_borg1_original_size_comes_from_the_newest_stats_operation(test_db):
     """`borg info` reports the repository's source data size in one call;
     an archive row still waiting for its info does not blank the figure."""

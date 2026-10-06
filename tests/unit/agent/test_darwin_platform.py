@@ -13,7 +13,14 @@ from pathlib import Path
 
 import pytest
 
-from agent.borg_ui_agent import borg, config, paths, scripts, self_upgrade
+from agent.borg_ui_agent import (
+    borg,
+    config,
+    paths,
+    repository_ops,
+    scripts,
+    self_upgrade,
+)
 from agent.borg_ui_agent import storage_usage
 
 
@@ -143,6 +150,56 @@ def test_du_reports_apparent_bytes_on_linux(linux, monkeypatch):
     assert calls == [["du", "-sb", "--", "/repo"]]
 
 
+class _CompletionClient:
+    def __init__(self):
+        self.result = None
+
+    def send_log(self, job_id, **kwargs):
+        pass
+
+    def complete_job(self, job_id, *, result):
+        self.result = result
+
+
+def _disk_usage(monkeypatch, du_stdout: str) -> dict:
+    """Run a `repository.disk_usage` job against a faked du; the result the
+    server receives. The server reads the first stdout field as bytes (#1291)."""
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout=du_stdout, stderr="")
+
+    monkeypatch.setattr(repository_ops.subprocess, "run", fake_run)
+    client = _CompletionClient()
+    repository_ops.execute_repository_operation_job(
+        {
+            "id": 1,
+            "payload": {
+                "schema_version": 1,
+                "job_kind": "repository.disk_usage",
+                "repository": {"path": "/repo", "borg_version": 1},
+            },
+        },
+        client,
+    )
+    return {"calls": calls, "stdout": client.result["stdout"]}
+
+
+def test_disk_usage_job_reports_bytes_on_darwin(darwin, monkeypatch):
+    ran = _disk_usage(monkeypatch, "166\t/repo\n")
+
+    assert ran["calls"] == [["du", "-A", "-sk", "--", "/repo"]]
+    assert ran["stdout"] == f"{166 * 1024}\t/repo\n"
+
+
+def test_disk_usage_job_reports_bytes_on_linux(linux, monkeypatch):
+    ran = _disk_usage(monkeypatch, "169984\t/repo\n")
+
+    assert ran["calls"] == [["du", "-sb", "--", "/repo"]]
+    assert ran["stdout"] == "169984\t/repo\n"
+
+
 # --- remote upgrade readiness ----------------------------------------------
 
 
@@ -172,6 +229,11 @@ def darwin_ready(darwin):
                 "",
             ]
         ),
+        encoding="utf-8",
+    )
+    (root / "config.toml").write_text(
+        'server_url = "https://borg.example"\nagent_id = "agent-1"\n'
+        'agent_token = "secret"\n',
         encoding="utf-8",
     )
     job = darwin / "Library" / "LaunchAgents" / "com.borg-ui.agent-upgrade.plist"
@@ -214,6 +276,27 @@ def test_a_complete_per_user_install_can_upgrade_itself(darwin_ready):
 
     assert readiness.supported is True
     assert readiness.trigger == darwin_ready["root"] / "upgrade-requested"
+
+
+def test_a_per_user_install_moved_to_another_server_cannot_upgrade_itself(
+    darwin_ready,
+):
+    config = darwin_ready["root"] / "config.toml"
+    config.write_text(
+        config.read_text().replace("https://borg.example", "https://new.example"),
+        encoding="utf-8",
+    )
+
+    assert self_upgrade.check_self_upgrade().reason == "server_mismatch"
+    assert self_upgrade.can_self_upgrade() is False
+
+
+def test_an_upgrade_record_that_is_not_text_is_no_capability_not_a_crash(
+    darwin_ready,
+):
+    (darwin_ready["root"] / "upgrade.conf").write_bytes(b'SERVER="\xff\xfe"\n')
+
+    assert self_upgrade.can_self_upgrade() is False
 
 
 def test_a_job_that_names_no_helper_is_reported_as_missing(darwin_ready):

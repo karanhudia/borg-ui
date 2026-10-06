@@ -277,10 +277,10 @@ def test_both_borg_majors_get_forwarders_and_nothing_else_is_linked(mac, tmp_pat
     fixtures = tmp_path / "fixtures"
     _write_executable(
         fixtures / "borg2-macos-15-arm64-gh",
-        "#!/usr/bin/env bash\necho 'borg 2.0.0b24'\n",
+        "#!/usr/bin/env bash\necho 'borg 2.0.0b25'\n",
     )
     script = mac["installer"].read_text(encoding="utf-8")
-    script = _pin(script, "PINNED_BORG2_VERSION", "2.0.0b24")
+    script = _pin(script, "PINNED_BORG2_VERSION", "2.0.0b25")
     script = _pin(
         script,
         "PINNED_BORG_BINARIES",
@@ -489,6 +489,79 @@ def test_a_bootstrap_that_keeps_failing_stops_the_reinstall_with_the_error(mac):
 
     assert result.returncode != 0
     assert "Bootstrap failed: 5: Input/output error" in result.stderr
+
+
+def _recorded_server(mac: dict) -> str:
+    conf = (mac["root"] / "upgrade.conf").read_text(encoding="utf-8")
+    return re.search(r'^SERVER="(.*)"$', conf, re.M).group(1)
+
+
+def _readiness(mac: dict):
+    job = mac["agents"] / "com.borg-ui.agent-upgrade.plist"
+    return check_self_upgrade(
+        conf_path=mac["root"] / "upgrade.conf",
+        unit_path=job,
+        path_unit_path=job,
+        trigger_path=mac["root"] / "upgrade-requested",
+    )
+
+
+def _move_to(mac: dict, server: str) -> None:
+    """What `set-server` does: the config moves, the upgrade record does not."""
+    config = mac["root"] / "config.toml"
+    config.write_text(
+        config.read_text(encoding="utf-8").replace("https://borg.example", server),
+        encoding="utf-8",
+    )
+
+
+def test_a_moved_endpoint_gets_remote_upgrade_back_by_a_reinstall_naming_the_server(
+    mac,
+):
+    _run(mac, *ENROL, "--borg-version", "1")
+    _move_to(mac, "https://new.example")
+    assert _readiness(mac).reason == "server_mismatch"
+
+    result = _run(mac, "--server", "https://new.example", "--reinstall")
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert _recorded_server(mac) == "https://new.example"
+    assert _readiness(mac).supported is True
+
+
+def test_a_plain_reinstall_of_a_moved_endpoint_says_what_is_missing(mac):
+    _run(mac, *ENROL, "--borg-version", "1")
+    _move_to(mac, "https://new.example")
+
+    result = _run(mac, "--reinstall")
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    # The record wins over the config, as before; the difference is named.
+    assert _recorded_server(mac) == "https://borg.example"
+    assert "enrolled\nagainst https://new.example." in result.stderr
+    assert "run the reinstall with --server" in result.stderr
+    assert _readiness(mac).reason == "server_mismatch"
+
+
+def test_the_notice_never_repeats_an_address_that_is_not_a_plain_url(mac):
+    """The agent can write its config, and root reads this notice."""
+    _run(mac, *ENROL, "--borg-version", "1")
+    _move_to(mac, "https://new.example/$(id)")
+
+    result = _run(mac, "--reinstall")
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "against another server." in result.stderr
+    assert "$(id)" not in result.stderr
+
+
+def test_a_plain_reinstall_of_an_endpoint_that_never_moved_says_nothing(mac):
+    _run(mac, *ENROL, "--borg-version", "1")
+
+    result = _run(mac, "--reinstall")
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "upgrade record" not in result.stderr
 
 
 def test_a_reinstall_from_inside_the_upgrade_job_does_not_unload_itself(mac):
@@ -971,7 +1044,6 @@ def test_an_ssh_url_is_split_into_login_host_and_port(test_client: TestClient):
             "ssh://u@borg.example:23/./repo",
             "ssh://borg.example/srv/repo",
             "ssh://u@borg.example:2222",
-            "rest://borg@store.example/series/repo",
         ],
         capture_output=True,
         text=True,
@@ -982,7 +1054,6 @@ def test_an_ssh_url_is_split_into_login_host_and_port(test_client: TestClient):
         "u@borg.example 23",
         "borg.example 22",
         "u@borg.example 2222",
-        "borg@store.example 22",
     ]
 
 
@@ -1111,9 +1182,9 @@ def test_a_first_install_on_a_terminal_asks_for_the_repository_and_checks_the_ho
     assert env["BORG_REMOTE_PATH"] == "borg-1.4"
 
 
-def test_a_rest_store_gets_the_ssh_check_too(mac, tmp_path):
-    """A rest:// store is reached over SSH, so its host key needs the same
-    first contact."""
+def test_a_rest_url_gets_no_ssh_check(mac, tmp_path):
+    """rest:// is no Borg 2 scheme since 2.0.0b25 (its URL is read as a local
+    directory, and Borg UI refuses it): no SSH contact is offered for one."""
     log = tmp_path / "ssh.log"
     _write_executable(
         tmp_path / "stubs" / "ssh",
@@ -1122,17 +1193,15 @@ def test_a_rest_store_gets_the_ssh_check_too(mac, tmp_path):
 
     rc, output = _run_on_a_terminal(
         mac,
-        ["rest://borg@store.example/series/repo", "", "y"],
+        ["rest://borg@store.example/series/repo", ""],
         *ENROL,
         "--borg-version",
         "1",
     )
 
     assert rc == 0, output
-    assert (
-        log.read_text().strip()
-        == "-o ConnectTimeout=15 -p 22 -- borg@store.example exit"
-    )
+    assert "Open an SSH connection" not in output
+    assert not log.exists()
 
 
 def test_a_failed_ssh_check_is_reported_and_the_install_goes_on(mac, tmp_path):

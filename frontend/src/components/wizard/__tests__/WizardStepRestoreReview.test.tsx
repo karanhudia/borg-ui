@@ -39,4 +39,33 @@ describe('WizardStepRestoreReview', () => {
       screen.queryByText('/recovery/folder1/folder2/home/username/folder1/folder2')
     ).not.toBeInTheDocument()
   })
+
+  it.each([
+    [2, 'continue', 'Restore into existing files'],
+    [2, 'refuse', 'Exact restore'],
+    [1, 'refuse', 'Overwritten at the same path'],
+  ] as const)(
+    'names what happens to existing files (Borg %s, %s)',
+    (borgVersion, existingFiles, label) => {
+      renderWithProviders(
+        <WizardStepRestoreReview
+          data={{
+            destinationType: 'local',
+            destinationConnectionId: '',
+            restoreStrategy: 'custom',
+            customPath: '/recovery',
+            restoreLayout: 'preserve_path',
+            existingFiles,
+          }}
+          borgVersion={borgVersion}
+          selectedFiles={[]}
+          sshConnections={[]}
+          archiveName="archive-1"
+        />
+      )
+
+      expect(screen.getByText('Existing files')).toBeInTheDocument()
+      expect(screen.getByText(label)).toBeInTheDocument()
+    }
+  )
 })
