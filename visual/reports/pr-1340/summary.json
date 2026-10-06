@@ -1,129 +1,21 @@
 {
-  "generatedAt": "2026-10-05T14:43:40.789Z",
+  "generatedAt": "2026-10-06T09:57:06.133Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1340 visual report",
-    "commitSha": "6e3c2109d5cd",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/37326730691"
+    "commitSha": "5cd8ba0c6336",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/37446148651"
   },
   "totals": {
-    "baseline": 1134,
-    "actual": 1158,
-    "compared": 1134,
-    "changed": 13,
-    "added": 24,
+    "baseline": 1162,
+    "actual": 1164,
+    "compared": 1162,
+    "changed": 3,
+    "added": 2,
     "removed": 0,
-    "unchanged": 1121
+    "unchanged": 1159
   },
   "changed": [
-    {
-      "fileName": "components-commandpreview--local-backup-commands--mobile.png",
-      "baselinePath": "images/baseline/components-commandpreview--local-backup-commands--mobile.png",
-      "actualPath": "images/actual/components-commandpreview--local-backup-commands--mobile.png",
-      "diffPath": "images/diff/components-commandpreview--local-backup-commands--mobile.png",
-      "diffPixels": 5850,
-      "totalPixels": 329160,
-      "diffRatio": 0.017772511848341232,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-commandpreview--local-backup-commands.png",
-      "baselinePath": "images/baseline/components-commandpreview--local-backup-commands.png",
-      "actualPath": "images/actual/components-commandpreview--local-backup-commands.png",
-      "diffPath": "images/diff/components-commandpreview--local-backup-commands.png",
-      "diffPixels": 5794,
-      "totalPixels": 1024000,
-      "diffRatio": 0.005658203125,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-repositorycard--with-upload-limit--mobile.png",
-      "baselinePath": "images/baseline/components-repositorycard--with-upload-limit--mobile.png",
-      "actualPath": "images/actual/components-repositorycard--with-upload-limit--mobile.png",
-      "diffPath": "images/diff/components-repositorycard--with-upload-limit--mobile.png",
-      "diffPixels": 63821,
-      "totalPixels": 329160,
-      "diffRatio": 0.19389050917486936,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-repositorycard--with-upload-limit.png",
-      "baselinePath": "images/baseline/components-repositorycard--with-upload-limit.png",
-      "actualPath": "images/actual/components-repositorycard--with-upload-limit.png",
-      "diffPath": "images/diff/components-repositorycard--with-upload-limit.png",
-      "diffPixels": 4299,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0041982421875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-wizard-repository-review--cloud-mirror--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-repository-review--cloud-mirror--mobile.png",
-      "actualPath": "images/actual/components-wizard-repository-review--cloud-mirror--mobile.png",
-      "diffPath": "images/diff/components-wizard-repository-review--cloud-mirror--mobile.png",
-      "diffPixels": 14910,
-      "totalPixels": 329160,
-      "diffRatio": 0.045297119941669704,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-wizard-repository-review--cloud-mirror.png",
-      "baselinePath": "images/baseline/components-wizard-repository-review--cloud-mirror.png",
-      "actualPath": "images/actual/components-wizard-repository-review--cloud-mirror.png",
-      "diffPath": "images/diff/components-wizard-repository-review--cloud-mirror.png",
-      "diffPixels": 14846,
-      "totalPixels": 1024000,
-      "diffRatio": 0.014498046875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
     {
       "fileName": "pages-managedagents--agent-reinstall-dialog-macos.png",
       "baselinePath": "images/baseline/pages-managedagents--agent-reinstall-dialog-macos.png",
@@ -161,85 +53,13 @@
       }
     },
     {
-      "fileName": "quick-start-steps--destination-ssh-no-default-path--mobile.png",
-      "baselinePath": "images/baseline/quick-start-steps--destination-ssh-no-default-path--mobile.png",
-      "actualPath": "images/actual/quick-start-steps--destination-ssh-no-default-path--mobile.png",
-      "diffPath": "images/diff/quick-start-steps--destination-ssh-no-default-path--mobile.png",
-      "diffPixels": 2803,
-      "totalPixels": 329160,
-      "diffRatio": 0.008515615506136833,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "quick-start-steps--folders-immich-no-permission--mobile.png",
-      "baselinePath": "images/baseline/quick-start-steps--folders-immich-no-permission--mobile.png",
-      "actualPath": "images/actual/quick-start-steps--folders-immich-no-permission--mobile.png",
-      "diffPath": "images/diff/quick-start-steps--folders-immich-no-permission--mobile.png",
-      "diffPixels": 72682,
-      "totalPixels": 329160,
-      "diffRatio": 0.2208105480617329,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "quick-start-steps--folders-immich-no-permission.png",
-      "baselinePath": "images/baseline/quick-start-steps--folders-immich-no-permission.png",
-      "actualPath": "images/actual/quick-start-steps--folders-immich-no-permission.png",
-      "diffPath": "images/diff/quick-start-steps--folders-immich-no-permission.png",
-      "diffPixels": 8260,
+      "fileName": "quick-start-steps--destination-ssh-no-default-path.png",
+      "baselinePath": "images/baseline/quick-start-steps--destination-ssh-no-default-path.png",
+      "actualPath": "images/actual/quick-start-steps--destination-ssh-no-default-path.png",
+      "diffPath": "images/diff/quick-start-steps--destination-ssh-no-default-path.png",
+      "diffPixels": 2785,
       "totalPixels": 1024000,
-      "diffRatio": 0.00806640625,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "quick-start-steps--folders-picked--mobile.png",
-      "baselinePath": "images/baseline/quick-start-steps--folders-picked--mobile.png",
-      "actualPath": "images/actual/quick-start-steps--folders-picked--mobile.png",
-      "diffPath": "images/diff/quick-start-steps--folders-picked--mobile.png",
-      "diffPixels": 23293,
-      "totalPixels": 329160,
-      "diffRatio": 0.07076497751853202,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "quick-start-steps--folders-picked.png",
-      "baselinePath": "images/baseline/quick-start-steps--folders-picked.png",
-      "actualPath": "images/actual/quick-start-steps--folders-picked.png",
-      "diffPath": "images/diff/quick-start-steps--folders-picked.png",
-      "diffPixels": 16590,
-      "totalPixels": 1024000,
-      "diffRatio": 0.016201171875,
+      "diffRatio": 0.0027197265625,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -252,94 +72,6 @@
     }
   ],
   "added": [
-    {
-      "fileName": "components-advancedrepositoryoptions--borg-2-without-upload-limit--mobile.png",
-      "actualPath": "images/actual/components-advancedrepositoryoptions--borg-2-without-upload-limit--mobile.png"
-    },
-    {
-      "fileName": "components-advancedrepositoryoptions--borg-2-without-upload-limit.png",
-      "actualPath": "images/actual/components-advancedrepositoryoptions--borg-2-without-upload-limit.png"
-    },
-    {
-      "fileName": "components-commandpreview--borg-2-remote-path--mobile.png",
-      "actualPath": "images/actual/components-commandpreview--borg-2-remote-path--mobile.png"
-    },
-    {
-      "fileName": "components-commandpreview--borg-2-remote-path.png",
-      "actualPath": "images/actual/components-commandpreview--borg-2-remote-path.png"
-    },
-    {
-      "fileName": "components-repositorycard--borg-2-with-stored-upload-limit--mobile.png",
-      "actualPath": "images/actual/components-repositorycard--borg-2-with-stored-upload-limit--mobile.png"
-    },
-    {
-      "fileName": "components-repositorycard--borg-2-with-stored-upload-limit.png",
-      "actualPath": "images/actual/components-repositorycard--borg-2-with-stored-upload-limit.png"
-    },
-    {
-      "fileName": "components-repositoryinfodialog--failed-info-recovery-borg-2-remote-path--mobile.png",
-      "actualPath": "images/actual/components-repositoryinfodialog--failed-info-recovery-borg-2-remote-path--mobile.png"
-    },
-    {
-      "fileName": "components-repositoryinfodialog--failed-info-recovery-borg-2-remote-path.png",
-      "actualPath": "images/actual/components-repositoryinfodialog--failed-info-recovery-borg-2-remote-path.png"
-    },
-    {
-      "fileName": "components-wizard-restore-destination--borg-1-original-location--mobile.png",
-      "actualPath": "images/actual/components-wizard-restore-destination--borg-1-original-location--mobile.png"
-    },
-    {
-      "fileName": "components-wizard-restore-destination--borg-1-original-location.png",
-      "actualPath": "images/actual/components-wizard-restore-destination--borg-1-original-location.png"
-    },
-    {
-      "fileName": "components-wizard-restore-destination--borg-2-exact-restore--mobile.png",
-      "actualPath": "images/actual/components-wizard-restore-destination--borg-2-exact-restore--mobile.png"
-    },
-    {
-      "fileName": "components-wizard-restore-destination--borg-2-exact-restore.png",
-      "actualPath": "images/actual/components-wizard-restore-destination--borg-2-exact-restore.png"
-    },
-    {
-      "fileName": "components-wizard-restore-destination--borg-2-original-location-needs-choice--mobile.png",
-      "actualPath": "images/actual/components-wizard-restore-destination--borg-2-original-location-needs-choice--mobile.png"
-    },
-    {
-      "fileName": "components-wizard-restore-destination--borg-2-original-location-needs-choice.png",
-      "actualPath": "images/actual/components-wizard-restore-destination--borg-2-original-location-needs-choice.png"
-    },
-    {
-      "fileName": "components-wizard-restore-destination--borg-2-restore-into-existing-files--mobile.png",
-      "actualPath": "images/actual/components-wizard-restore-destination--borg-2-restore-into-existing-files--mobile.png"
-    },
-    {
-      "fileName": "components-wizard-restore-destination--borg-2-restore-into-existing-files.png",
-      "actualPath": "images/actual/components-wizard-restore-destination--borg-2-restore-into-existing-files.png"
-    },
-    {
-      "fileName": "components-wizard-restore-review--borg-1-original-location--mobile.png",
-      "actualPath": "images/actual/components-wizard-restore-review--borg-1-original-location--mobile.png"
-    },
-    {
-      "fileName": "components-wizard-restore-review--borg-1-original-location.png",
-      "actualPath": "images/actual/components-wizard-restore-review--borg-1-original-location.png"
-    },
-    {
-      "fileName": "components-wizard-restore-review--borg-2-exact-restore--mobile.png",
-      "actualPath": "images/actual/components-wizard-restore-review--borg-2-exact-restore--mobile.png"
-    },
-    {
-      "fileName": "components-wizard-restore-review--borg-2-exact-restore.png",
-      "actualPath": "images/actual/components-wizard-restore-review--borg-2-exact-restore.png"
-    },
-    {
-      "fileName": "components-wizard-restore-review--borg-2-restore-into-existing-files--mobile.png",
-      "actualPath": "images/actual/components-wizard-restore-review--borg-2-restore-into-existing-files--mobile.png"
-    },
-    {
-      "fileName": "components-wizard-restore-review--borg-2-restore-into-existing-files.png",
-      "actualPath": "images/actual/components-wizard-restore-review--borg-2-restore-into-existing-files.png"
-    },
     {
       "fileName": "pages-managedagents--agent-reinstall-dialog-moved-to-this-server--mobile.png",
       "actualPath": "images/actual/pages-managedagents--agent-reinstall-dialog-moved-to-this-server--mobile.png"
@@ -1066,6 +798,12 @@
       "fileName": "components-activebackupplanruncard--live-hook-activity.png"
     },
     {
+      "fileName": "components-advancedrepositoryoptions--borg-2-without-upload-limit--mobile.png"
+    },
+    {
+      "fileName": "components-advancedrepositoryoptions--borg-2-without-upload-limit.png"
+    },
+    {
       "fileName": "components-advancedrepositoryoptions--default--mobile.png"
     },
     {
@@ -1696,6 +1434,18 @@
       "fileName": "components-checkwarningdialog--conflicting-advanced-flags.png"
     },
     {
+      "fileName": "components-commandpreview--borg-2-remote-path--mobile.png"
+    },
+    {
+      "fileName": "components-commandpreview--borg-2-remote-path.png"
+    },
+    {
+      "fileName": "components-commandpreview--local-backup-commands--mobile.png"
+    },
+    {
+      "fileName": "components-commandpreview--local-backup-commands.png"
+    },
+    {
       "fileName": "components-cronbuilder--daily--mobile.png"
     },
     {
@@ -2218,6 +1968,12 @@
       "fileName": "components-repositorycard--borg-2-stored-size.png"
     },
     {
+      "fileName": "components-repositorycard--borg-2-with-stored-upload-limit--mobile.png"
+    },
+    {
+      "fileName": "components-repositorycard--borg-2-with-stored-upload-limit.png"
+    },
+    {
       "fileName": "components-repositorycard--default--mobile.png"
     },
     {
@@ -2302,6 +2058,12 @@
       "fileName": "components-repositorycard--size-unknown.png"
     },
     {
+      "fileName": "components-repositorycard--with-upload-limit--mobile.png"
+    },
+    {
+      "fileName": "components-repositorycard--with-upload-limit.png"
+    },
+    {
       "fileName": "components-repositorycard--without-break-lock-access--mobile.png"
     },
     {
@@ -2327,6 +2089,12 @@
     },
     {
       "fileName": "components-repositoryinfodialog--failed-info-recovery--mobile.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--failed-info-recovery-borg-2-remote-path--mobile.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--failed-info-recovery-borg-2-remote-path.png"
     },
     {
       "fileName": "components-repositoryinfodialog--failed-info-recovery-unavailable--mobile.png"
@@ -2770,6 +2538,12 @@
       "fileName": "components-wizard-repository-location--ssh-destination.png"
     },
     {
+      "fileName": "components-wizard-repository-review--cloud-mirror--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-review--cloud-mirror.png"
+    },
+    {
       "fileName": "components-wizard-repository-review--direct-borg-2-rclone--mobile.png"
     },
     {
@@ -2780,6 +2554,48 @@
     },
     {
       "fileName": "components-wizard-repository-review--managed-agent-plan-sources.png"
+    },
+    {
+      "fileName": "components-wizard-restore-destination--borg-1-original-location--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-restore-destination--borg-1-original-location.png"
+    },
+    {
+      "fileName": "components-wizard-restore-destination--borg-2-exact-restore--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-restore-destination--borg-2-exact-restore.png"
+    },
+    {
+      "fileName": "components-wizard-restore-destination--borg-2-original-location-needs-choice--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-restore-destination--borg-2-original-location-needs-choice.png"
+    },
+    {
+      "fileName": "components-wizard-restore-destination--borg-2-restore-into-existing-files--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-restore-destination--borg-2-restore-into-existing-files.png"
+    },
+    {
+      "fileName": "components-wizard-restore-review--borg-1-original-location--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-restore-review--borg-1-original-location.png"
+    },
+    {
+      "fileName": "components-wizard-restore-review--borg-2-exact-restore--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-restore-review--borg-2-exact-restore.png"
+    },
+    {
+      "fileName": "components-wizard-restore-review--borg-2-restore-into-existing-files--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-restore-review--borg-2-restore-into-existing-files.png"
     },
     {
       "fileName": "components-wizard-ssh-key-delete-dialog--deleting--mobile.png"
@@ -2816,6 +2632,24 @@
     },
     {
       "fileName": "components-wizard-ssh-key-dialog--with-error.png"
+    },
+    {
+      "fileName": "managed-agents-agentborg2minimumchip--at-minimum--mobile.png"
+    },
+    {
+      "fileName": "managed-agents-agentborg2minimumchip--at-minimum.png"
+    },
+    {
+      "fileName": "managed-agents-agentborg2minimumchip--below-minimum--mobile.png"
+    },
+    {
+      "fileName": "managed-agents-agentborg2minimumchip--below-minimum-borg-2-only--mobile.png"
+    },
+    {
+      "fileName": "managed-agents-agentborg2minimumchip--below-minimum-borg-2-only.png"
+    },
+    {
+      "fileName": "managed-agents-agentborg2minimumchip--below-minimum.png"
     },
     {
       "fileName": "managed-agents-agentborgversionchip--active--mobile.png"
@@ -3466,7 +3300,7 @@
       "fileName": "quick-start-steps--destination-ssh--mobile.png"
     },
     {
-      "fileName": "quick-start-steps--destination-ssh-no-default-path.png"
+      "fileName": "quick-start-steps--destination-ssh-no-default-path--mobile.png"
     },
     {
       "fileName": "quick-start-steps--destination-ssh.png"
@@ -3487,6 +3321,12 @@
       "fileName": "quick-start-steps--folders-immich-found.png"
     },
     {
+      "fileName": "quick-start-steps--folders-immich-no-permission--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--folders-immich-no-permission.png"
+    },
+    {
       "fileName": "quick-start-steps--folders-immich-not-found--mobile.png"
     },
     {
@@ -3497,6 +3337,12 @@
     },
     {
       "fileName": "quick-start-steps--folders-immich-not-readable.png"
+    },
+    {
+      "fileName": "quick-start-steps--folders-picked--mobile.png"
+    },
+    {
+      "fileName": "quick-start-steps--folders-picked.png"
     },
     {
       "fileName": "quick-start-steps--protect--mobile.png"
