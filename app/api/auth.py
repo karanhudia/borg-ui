@@ -703,7 +703,7 @@ def _consume_oidc_login_state(
 
 
 @router.get("/config", response_model=AuthConfig)
-async def get_auth_config():
+def get_auth_config():
     """Get authentication configuration for frontend"""
     from app.core.proxy_auth import inspect_proxy_auth_config
 
@@ -762,7 +762,7 @@ async def get_auth_config():
 
 
 @router.get("/authorization-model", response_model=AuthorizationModelResponse)
-async def get_authorization_model():
+def get_authorization_model():
     """Expose the backend authorization model as the source of truth for the frontend."""
     return serialize_authorization_model()
 
@@ -1721,7 +1721,7 @@ async def logout(
 
 
 @router.get("/events", response_model=list[AuthEventResponse])
-async def list_auth_events(
+def list_auth_events(
     limit: int = 50,
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
@@ -1751,7 +1751,7 @@ async def list_auth_events(
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user_info(
+def get_current_user_info(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -1778,7 +1778,7 @@ async def refresh_token(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/totp", response_model=TotpStatusResponse)
-async def get_totp_status(current_user: User = Depends(get_current_user)):
+def get_totp_status(current_user: User = Depends(get_current_user)):
     return {
         "enabled": bool(current_user.totp_enabled),
         "recovery_codes_remaining": len(_get_recovery_code_hashes(current_user)),
@@ -1881,7 +1881,7 @@ async def disable_totp(
 
 
 @router.get("/passkeys", response_model=list[PasskeyCredentialResponse])
-async def list_passkeys(current_user: User = Depends(get_current_user)):
+def list_passkeys(current_user: User = Depends(get_current_user)):
     return [
         _serialize_passkey_credential(credential)
         for credential in current_user.passkeys
@@ -2186,7 +2186,7 @@ async def finish_passkey_authentication(
 
 
 @router.get("/users", response_model=list[UserResponse])
-async def get_users(
+def get_users(
     current_user: User = Depends(get_current_admin_user), db: Session = Depends(get_db)
 ):
     """Get all users (admin only)"""

@@ -188,7 +188,7 @@ def _archives_query(db: Session, repository: Repository, series, since, until):
 
 
 @router.get("/{repo_id}/archives")
-async def list_archives(
+def list_archives(
     repo_id: int,
     series: Optional[str] = None,
     since: Optional[datetime] = None,
@@ -228,7 +228,7 @@ async def list_archives(
 
 
 @router.get("/{repo_id}/archives/heatmap")
-async def archives_heatmap(
+def archives_heatmap(
     repo_id: int,
     since: Optional[datetime] = None,
     until: Optional[datetime] = None,
@@ -377,7 +377,7 @@ def _attach_repository_sizes(
 
 
 @router.get("/{repo_id}/archives/growth")
-async def archives_growth(
+def archives_growth(
     repo_id: int,
     series: Optional[str] = None,
     current_user: User = Depends(get_current_user),
@@ -504,7 +504,7 @@ async def prune_preview(
 
 
 @router.get("/{repo_id}/prune/comparison")
-async def prune_comparison(
+def prune_comparison(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -517,7 +517,7 @@ async def prune_comparison(
 
 
 @router.get("/{repo_id}/prune/comparison/{candidate}/preview")
-async def prune_comparison_preview(
+def prune_comparison_preview(
     repo_id: int,
     candidate: str,
     current_user: User = Depends(get_current_user),
@@ -592,7 +592,7 @@ async def prune_comparison_refresh(
 
 
 @router.get("/{repo_id}/prune/retention-defaults")
-async def prune_retention_defaults(
+def prune_retention_defaults(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -610,7 +610,7 @@ def _archive_or_404(db: Session, repository: Repository, archive_id: int) -> Arc
 
 
 @router.get("/{repo_id}/archives/{archive_id}")
-async def get_archive(
+def get_archive(
     repo_id: int,
     archive_id: int,
     current_user: User = Depends(get_current_user),
@@ -644,7 +644,7 @@ async def get_archive(
 
 
 @router.get("/{repo_id}/status")
-async def repository_status_route(
+def repository_status_route(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -868,7 +868,7 @@ def _totals(changes: list[Change]) -> dict:
 
 
 @router.get("/{repo_id}/archives/{archive_id}/changes")
-async def archive_changes(
+def archive_changes(
     repo_id: int,
     archive_id: int,
     compare_to: Optional[int] = None,
@@ -998,7 +998,7 @@ def present_ranges(entries: list[dict]) -> list[dict]:
 
 
 @router.get("/{repo_id}/history")
-async def path_history(
+def path_history(
     repo_id: int,
     path: str = Query(min_length=1),
     current_user: User = Depends(get_current_user),
@@ -1161,7 +1161,7 @@ def rows_for_paths(db: Session, repository: Repository, paths: list[str]) -> lis
 
 
 @router.get("/{repo_id}/search")
-async def search_paths(
+def search_paths(
     repo_id: int,
     q: str = Query(min_length=1),
     limit: int = Query(default=50, ge=1, le=MAX_LIMIT),

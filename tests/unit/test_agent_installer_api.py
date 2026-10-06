@@ -248,12 +248,12 @@ def test_agent_installer_names_the_glibc_floor_for_borg2(test_client: TestClient
     script = test_client.get("/agent/install.sh").text
 
     result = _run_install_borg_from_server(
-        script, major="2", version="2.0.0b24", glibc="2.39", binaries=_MANIFEST_TABLE
+        script, major="2", version="2.0.0b25", glibc="2.39", binaries=_MANIFEST_TABLE
     )
 
     assert result.returncode == 1
     assert (
-        "Borg 2.0.0b24 for x86_64 needs glibc 2.43 or newer; "
+        "Borg 2.0.0b25 for x86_64 needs glibc 2.43 or newer; "
         "this machine has glibc 2.39."
     ) in result.stderr
     # The agent resolves Borg 2 as `borg2`; a bare pip install provides only
@@ -263,7 +263,7 @@ def test_agent_installer_names_the_glibc_floor_for_borg2(test_client: TestClient
     # The pip route builds from source: say what the build needs.
     assert "OpenSSL 3.2 or newer" in result.stderr
     assert (
-        '/opt/borg2/bin/pip install --pre "borgbackup==2.0.0b24" '
+        '/opt/borg2/bin/pip install --pre "borgbackup==2.0.0b25" '
         '"borgstore[rclone,sftp,rest,s3,blake3]"'
     ) in result.stderr
     assert "ln -sfn /opt/borg2/bin/borg /usr/local/bin/borg2" in result.stderr
@@ -316,13 +316,13 @@ def test_agent_installer_explains_an_architecture_without_binaries(
     result = _run_install_borg_from_server(
         script,
         major="2",
-        version="2.0.0b24",
+        version="2.0.0b25",
         glibc="2.43",
         binaries="2 linux aarch64 2.43 cc https://example.invalid/borg2-arm64",
     )
 
     assert result.returncode == 1
-    assert "No published Borg 2.0.0b24 binary for x86_64." in result.stderr
+    assert "No published Borg 2.0.0b25 binary for x86_64." in result.stderr
     assert "Borg publishes no static binary for 32-bit ARM or musl systems." in (
         result.stderr
     )

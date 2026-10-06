@@ -13,7 +13,14 @@ from pathlib import Path
 
 import pytest
 
-from agent.borg_ui_agent import borg, config, paths, scripts, self_upgrade
+from agent.borg_ui_agent import (
+    borg,
+    config,
+    paths,
+    repository_ops,
+    scripts,
+    self_upgrade,
+)
 from agent.borg_ui_agent import storage_usage
 
 
@@ -141,6 +148,56 @@ def test_du_reports_apparent_bytes_on_linux(linux, monkeypatch):
 
     assert storage_usage.du_storage_used("/repo", timeout=5) == 169984
     assert calls == [["du", "-sb", "--", "/repo"]]
+
+
+class _CompletionClient:
+    def __init__(self):
+        self.result = None
+
+    def send_log(self, job_id, **kwargs):
+        pass
+
+    def complete_job(self, job_id, *, result):
+        self.result = result
+
+
+def _disk_usage(monkeypatch, du_stdout: str) -> dict:
+    """Run a `repository.disk_usage` job against a faked du; the result the
+    server receives. The server reads the first stdout field as bytes (#1291)."""
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout=du_stdout, stderr="")
+
+    monkeypatch.setattr(repository_ops.subprocess, "run", fake_run)
+    client = _CompletionClient()
+    repository_ops.execute_repository_operation_job(
+        {
+            "id": 1,
+            "payload": {
+                "schema_version": 1,
+                "job_kind": "repository.disk_usage",
+                "repository": {"path": "/repo", "borg_version": 1},
+            },
+        },
+        client,
+    )
+    return {"calls": calls, "stdout": client.result["stdout"]}
+
+
+def test_disk_usage_job_reports_bytes_on_darwin(darwin, monkeypatch):
+    ran = _disk_usage(monkeypatch, "166\t/repo\n")
+
+    assert ran["calls"] == [["du", "-A", "-sk", "--", "/repo"]]
+    assert ran["stdout"] == f"{166 * 1024}\t/repo\n"
+
+
+def test_disk_usage_job_reports_bytes_on_linux(linux, monkeypatch):
+    ran = _disk_usage(monkeypatch, "169984\t/repo\n")
+
+    assert ran["calls"] == [["du", "-sb", "--", "/repo"]]
+    assert ran["stdout"] == "169984\t/repo\n"
 
 
 # --- remote upgrade readiness ----------------------------------------------

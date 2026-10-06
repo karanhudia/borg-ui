@@ -28,7 +28,7 @@ def main() -> int:
             "backup-contract-source",
             {"notes/readme.txt": "backup contract smoke\n"},
         )
-        client.write_incompressible_file(source_root / "large.bin", size_mb=128)
+        client.write_incompressible_file(source_root / "large.bin", size_mb=512)
 
         repo_id, repo_path = client.create_repository(
             name="Backup Contract Smoke Repo",

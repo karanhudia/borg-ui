@@ -157,7 +157,7 @@ class TestRemoteCommandQuoting:
             ),
         )
 
-        await filesystem.validate_path(
+        filesystem.validate_path(
             path=SUBSHELL_PATH,
             connection_type="ssh",
             ssh_key_id=stored_key.id,
@@ -186,7 +186,8 @@ class TestRemoteCommandQuoting:
             await fs._du_ssh(f"ssh://borg@example.com:22{SUBSHELL_PATH}", [], 5)
 
         remote = mock_exec.call_args.args[-1]
-        assert shlex.split(remote)[:3] == ["du", "-sb", SUBSHELL_PATH]
+        assert remote == fs.remote_du_command(SUBSHELL_PATH) + " 2>/dev/null"
+        assert f"-- {shlex.quote(SUBSHELL_PATH)};" in remote
 
     @pytest.mark.asyncio
     async def test_du_ssh_refuses_option_username(self):
@@ -258,7 +259,7 @@ class TestSftpBatchInjection:
         )
         with patch.object(filesystem.subprocess, "run") as mock_run:
             with pytest.raises(HTTPException) as exc:
-                await filesystem.create_folder(
+                filesystem.create_folder(
                     request=request, current_user=ADMIN, db=test_db
                 )
         assert exc.value.status_code == 400
@@ -297,7 +298,7 @@ class TestFilesystemSshTarget:
         _saved_connection(test_db, stored_key)
         with patch.object(filesystem.subprocess, "run") as mock_run:
             with pytest.raises(HTTPException) as exc:
-                await filesystem.validate_path(
+                filesystem.validate_path(
                     path="/srv",
                     connection_type="ssh",
                     ssh_key_id=stored_key.id,
@@ -323,7 +324,7 @@ class TestFilesystemSshTarget:
             "run",
             lambda cmd, **kwargs: SimpleNamespace(returncode=1, stdout="", stderr=""),
         )
-        payload = await filesystem.validate_path(
+        payload = filesystem.validate_path(
             path="/srv",
             connection_type="ssh",
             ssh_key_id=stored_key.id,

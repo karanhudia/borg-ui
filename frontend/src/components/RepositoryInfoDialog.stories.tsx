@@ -30,7 +30,7 @@ const borg2Repository: Repository = {
   ...borg1Repository,
   id: 44,
   name: 'Borg 2 on a store URL',
-  path: 'rest://backup-host/repos/production',
+  path: 'ssh://borg@backup-host/repos/production',
   borg_version: 2,
   encryption: 'repokey-aes-ocb',
   archive_count: 35,

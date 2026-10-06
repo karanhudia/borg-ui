@@ -27,7 +27,7 @@ const immich = {
   description: 'Photos, videos and Immich database dumps.',
   docs_url: 'https://docs.immich.app/administration/backup-and-restore',
   verified: { app_version: 'v3.2.4', date: '2026-09-30', restore_tested: false },
-  detect: { image_prefix: 'ghcr.io/immich-app/immich-server', mount_destination: '/data' },
+  detect: { images: ['ghcr.io/immich-app/immich-server'], mount_destinations: ['/data'] },
   root_hint: 'UPLOAD_LOCATION in your Immich .env file',
   folders: [
     { path: 'upload', label: 'Uploads', description: '', role: 'data', stale_after_hours: null },

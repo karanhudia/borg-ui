@@ -1,10 +1,10 @@
-{"changes": [{"item1": "2026-09-04T07:23:09.550789+05:30", "item2": "2026-09-04T07:23:11.412776+05:30", "type": "ctime"}, {"item1": "2026-09-04T07:23:09.550789+05:30", "item2": "2026-09-04T07:23:11.412776+05:30", "type": "mtime"}], "path": "src"}
-{"changes": [{"added": 15, "removed": 5, "type": "modified"}, {"item1": "2026-09-04T07:23:09.548789+05:30", "item2": "2026-09-04T07:23:11.403776+05:30", "type": "ctime"}, {"item1": "2026-09-04T07:23:09.548789+05:30", "item2": "2026-09-04T07:23:11.403776+05:30", "type": "mtime"}], "path": "src/grow.txt"}
-{"changes": [{"item1": "-rw-r--r--", "item2": "-rwxr-xr-x", "type": "changed mode"}, {"item1": "2026-09-04T07:23:09.548789+05:30", "item2": "2026-09-04T07:23:11.410776+05:30", "type": "ctime"}], "path": "src/mode.sh"}
-{"changes": [{"type": "changed link"}, {"item1": "2026-09-04T07:23:09.549789+05:30", "item2": "2026-09-04T07:23:11.411776+05:30", "type": "ctime"}, {"item1": "2026-09-04T07:23:09.549789+05:30", "item2": "2026-09-04T07:23:11.411776+05:30", "type": "mtime"}], "path": "src/link_changed"}
+{"changes": [{"item1": "2026-10-01T15:43:37.903038680+00:00", "item2": "2026-10-01T15:43:46.380081932+00:00", "type": "ctime"}, {"item1": "2026-10-01T15:43:37.903038680+00:00", "item2": "2026-10-01T15:43:46.380081932+00:00", "type": "mtime"}], "path": "src"}
+{"changes": [{"added": 15, "removed": 5, "type": "modified"}, {"item1": "2026-10-01T15:43:37.898952411+00:00", "item2": "2026-10-01T15:43:46.366284786+00:00", "type": "ctime"}, {"item1": "2026-10-01T15:43:37.898952411+00:00", "item2": "2026-10-01T15:43:46.366284786+00:00", "type": "mtime"}], "path": "src/grow.txt"}
+{"changes": [{"item1": "-rw-r--r--", "item2": "-rwxr-xr-x", "type": "changed mode"}, {"item1": "2026-10-01T15:43:37.899157579+00:00", "item2": "2026-10-01T15:43:46.372516398+00:00", "type": "ctime"}], "path": "src/mode.sh"}
+{"changes": [{"type": "changed link"}, {"item1": "2026-10-01T15:43:37.900975296+00:00", "item2": "2026-10-01T15:43:46.376394124+00:00", "type": "ctime"}, {"item1": "2026-10-01T15:43:37.900975296+00:00", "item2": "2026-10-01T15:43:46.376394124+00:00", "type": "mtime"}], "path": "src/link_changed"}
 {"changes": [{"added": 4, "removed": 0, "type": "added"}], "path": "src/new.txt"}
-{"changes": [{"type": "added link"}], "path": "src/link_added"}
 {"changes": [{"type": "added directory"}], "path": "src/dir_new"}
 {"changes": [{"added": 2, "removed": 0, "type": "added"}], "path": "src/dir_new/f.txt"}
+{"changes": [{"type": "added link"}], "path": "src/link_added"}
 {"changes": [{"added": 0, "removed": 5, "type": "removed"}], "path": "src/gone.txt"}
 {"changes": [{"type": "removed link"}], "path": "src/link_removed"}

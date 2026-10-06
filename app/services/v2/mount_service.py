@@ -16,7 +16,7 @@ class MountV2Service:
         remote_path: Optional[str] = None,  # noqa: ARG002 - BORG_REMOTE_PATH, see app/core/borg2.py
         bypass_lock: bool = False,  # noqa: ARG002 - Borg 1 only, see app/core/borg2.py
     ) -> List[str]:
-        ensure_borg2_repository_url(repository_path, borg2.borg_cmd)
+        ensure_borg2_repository_url(repository_path)
         cmd = [borg2.borg_cmd, "-r", repository_path, "mount"]
         if archive_name:
             # Borg 2 mounts a single archive by filtering the repository target

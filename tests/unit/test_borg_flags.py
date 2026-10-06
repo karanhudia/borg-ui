@@ -33,6 +33,9 @@ MALICIOUS_CREATE_FLAGS = [
     "/etc/shadow",
     "--patterns-from=/etc/shadow",
     "--exclude-from=/etc/shadow",
+    "--patterns-from=relative/patterns.txt",
+    "--patterns-from",
+    "--exclude-from=",
     "--exclude",
     "--exclude --rsh=id",
     "--stats=1",
@@ -63,6 +66,89 @@ def test_create_rejects_injection_payloads(text):
 def test_check_rejects_injection_payloads(text):
     with pytest.raises(ValueError):
         parse_borg_flags(text, "check")
+
+
+@pytest.fixture
+def mount(tmp_path, monkeypatch):
+    from app.config import settings
+
+    root = tmp_path / "local"
+    root.mkdir()
+    monkeypatch.setattr(settings, "local_mount_points", str(root))
+    return root
+
+
+@pytest.mark.parametrize("flag", ["--patterns-from", "--exclude-from"])
+def test_file_flags_accept_paths_inside_mount(mount, flag):
+    path = str(mount / "my patterns.txt")
+    assert parse_borg_flags(f"{flag}={shlex.quote(path)}", "create") == [
+        f"{flag}={path}"
+    ]
+    assert parse_borg_flags([flag, path], "create") == [f"{flag}={path}"]
+
+
+@pytest.mark.parametrize("flag", ["--patterns-from", "--exclude-from"])
+def test_file_flags_reject_paths_outside_mount(mount, tmp_path, flag):
+    outside = tmp_path / "secret.txt"
+    outside.write_text("x")
+    for bad in [
+        "/etc/passwd",
+        f"{mount}/../secret.txt",
+        str(outside),
+        "patterns.txt",
+    ]:
+        with pytest.raises(ValueError, match="local mount point"):
+            parse_borg_flags(f"{flag}={bad}", "create")
+
+
+def test_file_flags_reject_symlink_escaping_mount(mount, tmp_path):
+    target = tmp_path / "secret.txt"
+    target.write_text("x")
+    (mount / "link.txt").symlink_to(target)
+    with pytest.raises(ValueError, match="local mount point"):
+        parse_borg_flags(f"--patterns-from={mount}/link.txt", "create")
+
+
+def test_file_flags_not_accepted_for_check(mount):
+    with pytest.raises(ValueError, match="not allowed"):
+        parse_borg_flags(f"--patterns-from={mount}/p.txt", "check")
+
+
+def test_file_flags_path_unchecked_when_borg_runs_elsewhere(mount):
+    assert parse_borg_flags(
+        "--patterns-from=/srv/patterns.txt", "create", local_paths=False
+    ) == ["--patterns-from=/srv/patterns.txt"]
+    # Shell metacharacters stay inert once the remote command is re-quoted.
+    flags = parse_borg_flags("--exclude-from='/a b;id'", "create", local_paths=False)
+    assert shlex.split(shlex.join(flags)) == ["--exclude-from=/a b;id"]
+
+
+def test_agent_accepts_file_flags_without_path_check():
+    assert agent_borg_flags.parse_borg_flags(
+        "--patterns-from=/home/me/p.txt", "create"
+    ) == ["--patterns-from=/home/me/p.txt"]
+
+
+def test_agent_backup_payload_keeps_file_flags(mount):
+    from app.services.repository_executor import build_agent_backup_payload
+
+    payload = build_agent_backup_payload(
+        _agent_repository("--patterns-from=/home/me/p.txt"),
+        "a",
+        source_directories=["/src"],
+    )
+    assert payload["backup"]["custom_flags"] == "--patterns-from=/home/me/p.txt"
+
+
+def test_saving_a_plan_does_not_check_the_path(mount):
+    from app.api.backup_plans import BackupPlanPayload
+
+    BackupPlanPayload(
+        name="p",
+        source_directories=["/s"],
+        repositories=[],
+        custom_flags="--patterns-from=/home/me/p.txt",
+    )
 
 
 def test_rejection_message_names_the_flag():
@@ -140,6 +226,8 @@ def test_agent_copy_matches_server_allowlist():
     """The agent package cannot import app/, so it carries its own copy."""
     assert agent_borg_flags.ALLOWED_BORG_FLAGS == borg_flags.ALLOWED_BORG_FLAGS
     for text in MALICIOUS_CREATE_FLAGS:
+        if "-from=" in text and not text.endswith("="):
+            continue  # valid for the agent: the file is read on its own host
         with pytest.raises(ValueError):
             agent_borg_flags.parse_borg_flags(text, "create")
     assert agent_borg_flags.parse_borg_flags("--filter AME", "create") == [

@@ -55,6 +55,8 @@ ALLOWED_BORG_FLAGS: dict[str, dict[str, bool]] = {
         "--exclude": True,
         "-e": True,
         "--pattern": True,
+        "--patterns-from": True,
+        "--exclude-from": True,
         "--files-cache": True,
         "--files-changed": True,
         "--checkpoint-interval": True,
@@ -93,8 +95,8 @@ ALLOWED_BORG_FLAGS: dict[str, dict[str, bool]] = {
 
 # Options of ALLOWED_BORG_FLAGS that only one Borg major accepts; the other
 # fails at argument parsing ("unrecognized arguments", exit 2). Measured on
-# Borg 1.4.5 and 2.0.0b25. Borg 2.0.0b22 removed --upload-ratelimit and
-# --upload-buffer with the Borg 1 remote protocol they throttled.
+# Borg 1.4.5 and 2.0.0b25. Borg 2 has no --upload-ratelimit and no
+# --upload-buffer: they throttled the Borg 1 remote protocol.
 BORG_MAJOR_ONLY_FLAGS: dict[str, dict[int, frozenset[str]]] = {
     "create": {
         1: frozenset(

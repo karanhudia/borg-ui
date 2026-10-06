@@ -95,8 +95,9 @@ def test_an_agent_from_before_macos_support_is_offered_an_upgrade():
 def test_an_agent_from_before_the_borg2_b25_adoption_is_offered_an_upgrade():
     """From 0.1.15 the agent speaks Borg 2.0.0b25 (BORG_REMOTE_PATH in place
     of --remote-path, the repository key for the index size, rest:// and the
-    unencrypted mode refused), so a server built from this tree must offer
-    0.1.14 agents the upgrade.
+    unencrypted mode refused) and `repository.disk_usage` runs `du -A -sk` on
+    macOS and reports bytes (#1291), so a server built from this tree must
+    offer 0.1.14 agents the upgrade.
     """
     assert (
         compute_agent_upgrade_status(

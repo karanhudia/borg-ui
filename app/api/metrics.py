@@ -125,7 +125,7 @@ def timestamp_to_unix(dt: datetime) -> int:
 
 
 @router.get("/metrics", response_class=PlainTextResponse)
-async def get_metrics(
+def get_metrics(
     db: Session = Depends(get_db),
     x_borg_metrics_token: Optional[str] = Header(default=None),
     authorization: Optional[str] = Header(default=None),

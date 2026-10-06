@@ -35,7 +35,7 @@ const agents: AgentMachineResponse[] = [
     os: 'linux',
     arch: 'arm64',
     agent_version: '0.1.0',
-    borg_versions: [{ major: 2, version: '2.0.0b10', path: '/usr/local/bin/borg2' }],
+    borg_versions: [{ major: 2, version: '2.0.0b25', path: '/usr/local/bin/borg2' }],
     capabilities: ['backup.create', 'backup.cancel', 'logs.stream'],
     labels: { site: 'home-lab' },
     status: 'online',
