@@ -507,7 +507,7 @@ install_borg1() {
 
 # Borg 2 has no stable release and no distribution package. Prefer the pinned
 # static binary; where this machine's glibc is too old for it, build it into
-# its own virtualenv, which needs a compiler and OpenSSL 3.2 or newer (2.0.0b24
+# its own virtualenv, which needs a compiler and OpenSSL 3.2 or newer (Borg 2
 # takes argon2 from OpenSSL). Where neither is possible the install continues
 # without Borg 2: Borg 1 repositories are unaffected.
 install_borg2() {

@@ -12,7 +12,7 @@ Use BorgRouter instead so the routing stays in one place.
 
 import asyncio
 import time
-from typing import Callable, List, Optional
+from typing import Any, Callable, List, Mapping, Optional
 
 import structlog
 from sqlalchemy.orm import Session
@@ -116,7 +116,7 @@ def _cancel_unqueued_maintenance_job(
 class BorgRouter:
     def __init__(self, repo):
         self.repo = repo
-        self.is_v2 = (repo.borg_version or 1) == 2
+        self.is_v2 = (getattr(repo, "borg_version", None) or 1) == 2
 
     def validate_local_repository_access(self) -> None:
         """Fail fast for clearly invalid local repository paths.
@@ -197,9 +197,16 @@ class BorgRouter:
             cmd.extend(["--upload-ratelimit", str(upload_ratelimit_kib)])
         for pattern in exclude_patterns:
             cmd.extend(["--exclude", pattern])
-        cmd.extend(parse_borg_flags(custom_flags, "create"))
+        cmd.extend(parse_borg_flags(custom_flags, "create", 1))
         cmd.append(f"{repository_path}::{archive_name}")
         return cmd
+
+    def upload_ratelimit(self, kib: Optional[int]) -> Optional[int]:
+        """The upload limit a backup of this repository can apply: none for
+        Borg 2, which has no --upload-ratelimit."""
+        if self.is_v2:
+            return None
+        return kib
 
     def build_archive_info_command(
         self, repository_path: str, archive_name: str
@@ -234,7 +241,13 @@ class BorgRouter:
         remote_path: str = None,
         bypass_lock: bool = False,
         strip_components: Optional[int] = None,
+        destination: Optional[str] = None,
+        existing_files: Optional[str] = "refuse",
     ) -> List[str]:
+        """`destination`: the directory the command will run in. Borg 2
+        does not extract into one that holds anything, and the restore is
+        refused with RestoreRefused unless `existing_files` is "continue";
+        Borg 1 writes into such a directory and has no use for either."""
         if self.is_v2:
             from app.services.v2.restore_service import restore_v2_service
 
@@ -245,6 +258,8 @@ class BorgRouter:
                 remote_path=remote_path,
                 bypass_lock=bypass_lock,
                 strip_components=strip_components,
+                destination=destination,
+                existing_files=existing_files,
             )
 
         cmd = ["borg", "extract", "--progress", "--log-json", "--umask", "0022"]
@@ -259,6 +274,76 @@ class BorgRouter:
             cmd.extend(paths)
         return cmd
 
+    def remote_command_options(
+        self, remote_path: Optional[str], *, bypass_lock: bool = False
+    ) -> List[str]:
+        """The options a caller appends to a command it got from a builder
+        here. Borg 1 takes both on the command line. Borg 2 has neither:
+        no `--remote-path` (see `remote_path_env`) and no `--bypass-lock`."""
+        if self.is_v2:
+            return []
+        options: List[str] = []
+        if remote_path:
+            options.extend(["--remote-path", remote_path])
+        if bypass_lock:
+            options.append("--bypass-lock")
+        return options
+
+    def prepare_env(self, env: dict) -> dict:
+        """What the repository's Borg major needs in a prepared environment,
+        in place. Borg 2 does not add the port of an ssh:// URL to a remote
+        shell it was given; Borg 1 does."""
+        if self.is_v2:
+            from app.core.borg2 import borg2_env_with_repository_port
+
+            borg2_env_with_repository_port(env, getattr(self.repo, "path", None))
+        return env
+
+    def ssh_repository_url(
+        self,
+        raw_path: str,
+        connection_details: Mapping[str, Any],
+        *,
+        borg1_url: Optional[str] = None,
+    ) -> str:
+        """The ssh:// URL of this repository on a connection, in the syntax
+        of its Borg major. `borg1_url`: the URL a caller has already built
+        the Borg 1 way, returned as it is for Borg 1."""
+        if self.is_v2:
+            from app.core.borg2 import borg2_ssh_repository_url
+
+            return borg2_ssh_repository_url(
+                raw_path,
+                connection_details,
+                stored_path=getattr(self.repo, "path", None),
+            )
+        if borg1_url is not None:
+            return borg1_url
+        from app.utils.repository_paths import build_ssh_repository_path
+
+        return build_ssh_repository_path(raw_path, connection_details)
+
+    def ssh_repository_directory(self) -> str:
+        """The directory on the host that this repository's ssh:// URL
+        names. Raises ValueError for a Borg 2 URL relative to the login
+        directory, which names none."""
+        path = (getattr(self.repo, "path", None) or "").strip()
+        if self.is_v2:
+            from app.core.borg2 import borg2_ssh_repository_directory
+
+            return borg2_ssh_repository_directory(path)
+        from urllib.parse import urlparse
+
+        return urlparse(path).path or "/"
+
+    def remote_path_env(self, remote_path: Optional[str]) -> dict:
+        """What a caller that builds its own environment adds for the remote
+        Borg command. Borg 2 reads it from BORG_REMOTE_PATH only (it has no
+        such option); Borg 1 gets it on the command line."""
+        if self.is_v2 and remote_path:
+            return {"BORG_REMOTE_PATH": remote_path}
+        return {}
+
     def build_break_lock_command(
         self, repository_path: str, remote_path: str = None
     ) -> List[str]:
@@ -266,10 +351,11 @@ class BorgRouter:
         if self.is_v2:
             from app.core.borg2 import borg2
 
-            cmd = [borg2.borg_cmd, "-r", repository_path, "break-lock"]
-            if remote_path:
-                cmd.extend(["--remote-path", remote_path])
-            return cmd
+            from app.core.borg2 import ensure_borg2_repository_url
+
+            ensure_borg2_repository_url(repository_path)
+            # no --remote-path on Borg 2: see `remote_path_env`
+            return [borg2.borg_cmd, "-r", repository_path, "break-lock"]
 
         cmd = ["borg", "break-lock"]
         if remote_path:
@@ -290,8 +376,6 @@ class BorgRouter:
             if dry_run:
                 cmd.append("--dry-run")
             cmd.extend(["-a", "sh:*"])
-            if remote_path := effective_repository_remote_path(self.repo):
-                cmd.extend(["--remote-path", remote_path])
             return cmd
 
         from app.core.borg import borg
@@ -311,10 +395,7 @@ class BorgRouter:
         if self.is_v2:
             from app.core.borg2 import borg2
 
-            cmd = [borg2.borg_cmd, "-r", self.repo.path, "compact"]
-            if remote_path := effective_repository_remote_path(self.repo):
-                cmd.extend(["--remote-path", remote_path])
-            return cmd
+            return [borg2.borg_cmd, "-r", self.repo.path, "compact"]
 
         from app.core.borg import borg
 

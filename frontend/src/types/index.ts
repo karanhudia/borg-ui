@@ -99,7 +99,7 @@ export interface RepositoryCompactStats {
 
 /**
  * The `storage` object of a repository response (#981): the stored size
- * with its provenance and time, Borg's last manifest write, the archive
+ * with its provenance and time, the repository's last write, the archive
  * sums and the newest compact statistics. A `null` field is not measured
  * yet or not reported by this Borg version; `0` is a measurement. The list
  * carries the stored columns only (`archives_consistent` null), the detail

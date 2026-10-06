@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -119,6 +120,25 @@ def test_agent_restore_terminal_failed_records_exit_code():
     )
     assert job.status == "failed"
     assert "restoreFailedExitCode" in job.error_message
+
+
+@pytest.mark.unit
+def test_agent_restore_terminal_failed_before_borg_ran_keeps_the_agents_reason():
+    """An agent that refuses a restore (a Borg 2 destination that is not
+    empty) or cannot prepare its destination reports no exit code; its
+    message is the only thing that says why."""
+    reason = (
+        "Borg 2 does not restore into a directory that already holds files, "
+        "and /srv/data is not empty."
+    )
+    job = _apply_terminal(
+        SimpleNamespace(status="failed", result=None, error_message=reason, id=1)
+    )
+    assert job.status == "failed"
+    assert json.loads(job.error_message) == {
+        "key": "backend.errors.service.restoreFailedOnAgent",
+        "params": {"error": reason},
+    }
 
 
 @pytest.mark.unit

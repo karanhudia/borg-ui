@@ -23,6 +23,9 @@ from agent.borg_ui_agent.backup import (
     _extract_environment,
     borg1_lock_wait_args,
     build_borg_env,
+    ensure_borg2_repository_url,
+    env_with_repository_port,
+    job_borg_major,
     parse_borg_progress,
     progress_replaces_log_line,
 )
@@ -37,12 +40,7 @@ from agent.borg_ui_agent.cancel import (
     start_keepalive,
 )
 from agent.borg_ui_agent.client import AgentClient
-from agent.borg_ui_agent.compact_stats import (
-    TAIL_LINES,
-    has_compact_stats,
-    parse_borg_version,
-    parse_compact_stats,
-)
+from agent.borg_ui_agent.compact_stats import TAIL_LINES, parse_compact_stats
 from agent.borg_ui_agent.failure_report import FailureTail, failure_report
 
 
@@ -79,16 +77,17 @@ MACHINE_PARSED_JOB_KINDS = {
     "repository.diff",
 }
 
-# Borg 2.0.0b22 split repo-create's single --encryption value into the cipher,
-# where the key is stored, and the id hash. The server sends the combined mode
+# Borg 2's repo-create takes the cipher, where the key is stored, and the id
+# hash as separate options. The server sends the combined mode
 # name it stores, so the agent translates it the same way the server does for
 # its own repositories (app/core/borg2.py: BORG2_ENCRYPTION_FLAGS). The two are
 # separate packages and share no imports, so the table is stated twice; a mode
 # missing here is rejected up front with the mode name, mirroring the server —
 # passing it to repo-create would fail with an argument-parsing error that
-# does not name the actual problem. b23 folded the id hash into the mode name
-# for the unencrypted modes (no alias for the plain b22 names); the sha256
-# variants keep exactly what `authenticated`/`none` produced before.
+# does not name the actual problem. Without encryption the id hash is part of
+# the mode name; `authenticated` is the sha256 variant. Borg 2 has no
+# unencrypted modes, so `none` is refused by name rather than mapped to
+# something else.
 BORG2_ENCRYPTION_FLAGS = {
     "repokey-aes-ocb": ["--encryption", "aes256-ocb", "--key-location", "repokey"],
     "repokey-chacha20-poly1305": [
@@ -105,7 +104,14 @@ BORG2_ENCRYPTION_FLAGS = {
         "keyfile",
     ],
     "authenticated": ["--encryption", "authenticated-sha256"],
-    "none": ["--encryption", "none-sha256"],
+}
+
+BORG2_REMOVED_ENCRYPTION_MODES = {
+    "none": (
+        "Borg 2 has no unencrypted repositories since 2.0.0b25; use "
+        "'authenticated' (data is not encrypted, but protected by a key and "
+        "its passphrase) or an encrypted mode"
+    ),
 }
 
 # Kill a streaming extract only when no bytes have flowed for this long — a
@@ -169,9 +175,7 @@ class RepositoryOperationPayload:
         if not isinstance(repository_path, str) or not repository_path.strip():
             raise ValueError("repository operation payload requires repository.path")
 
-        borg_version = int(
-            repository.get("borg_version") or payload.get("borg_version") or 1
-        )
+        borg_version = job_borg_major(repository, payload)
         return cls(
             job_kind=job_kind,
             repository_path=repository_path.strip(),
@@ -193,14 +197,17 @@ class RepositoryOperationPayload:
         return cmd
 
     def _base_borg2(self, subcommand: str) -> list[str]:
-        cmd = [self.borg_cmd, "-r", self.repository_path, subcommand]
-        if self.remote_path:
-            cmd.extend(["--remote-path", self.remote_path])
-        return cmd
+        ensure_borg2_repository_url(self.repository_path)
+        # No --remote-path: Borg 2 has no such option, the remote Borg
+        # command travels in BORG_REMOTE_PATH (`remote_path_env`).
+        return [self.borg_cmd, "-r", self.repository_path, subcommand]
 
-    def build_command(
-        self, *, rclone_config_path: Optional[str] = None, compact_stats: bool = True
-    ) -> list[str]:
+    def remote_path_env(self) -> dict[str, str]:
+        if self.borg_version == 2 and self.remote_path:
+            return {"BORG_REMOTE_PATH": self.remote_path}
+        return {}
+
+    def build_command(self, *, rclone_config_path: Optional[str] = None) -> list[str]:
         if self.job_kind == "repository.disk_usage":
             if not self.repository_path:
                 raise ValueError("repository.disk_usage requires a repository path")
@@ -244,6 +251,8 @@ class RepositoryOperationPayload:
                 raise ValueError("repository.init requires operation.encryption")
             encryption = encryption.strip()
             if self.borg_version == 2:
+                if encryption in BORG2_REMOVED_ENCRYPTION_MODES:
+                    raise ValueError(BORG2_REMOVED_ENCRYPTION_MODES[encryption])
                 encryption_flags = BORG2_ENCRYPTION_FLAGS.get(encryption)
                 if encryption_flags is None:
                     raise ValueError(
@@ -435,6 +444,8 @@ class RepositoryOperationPayload:
                     "--umask",
                     "0022",
                 ]
+                if _restores_into_existing_files(operation):
+                    cmd.append("--continue")
                 if strip_components:
                     cmd.extend(["--strip-components", str(strip_components)])
                 cmd.append(archive)
@@ -459,7 +470,9 @@ class RepositoryOperationPayload:
 
         if self.job_kind == "repository.check":
             extra_flags = parse_borg_flags(
-                _split_flags((self.operation or {}).get("check_extra_flags")), "check"
+                _split_flags((self.operation or {}).get("check_extra_flags")),
+                "check",
+                self.borg_version,
             )
             max_duration = (self.operation or {}).get("max_duration")
             if self.borg_version == 2:
@@ -478,12 +491,13 @@ class RepositoryOperationPayload:
                 # --stats: the only place Borg 2 reports repository-wide
                 # statistics; parsed from the tail of the output into the
                 # completion report (`_execute_streaming_repository_operation`).
-                # The flag exists from 2.0.0b15 (`compact_stats_supported`).
-                cmd = [*self._base_borg2("compact")]
-                if compact_stats:
-                    cmd.append("--stats")
-                cmd.extend(["--progress", "--verbose", "--log-json"])
-                return cmd
+                return [
+                    *self._base_borg2("compact"),
+                    "--stats",
+                    "--progress",
+                    "--verbose",
+                    "--log-json",
+                ]
             return [
                 *self._base_borg1("compact"),
                 "--progress",
@@ -534,9 +548,9 @@ class RepositoryOperationPayload:
                     cmd.extend([flag, str(int(value))])
             keep_within = operation.get("keep_within")
             if keep_within is not None and str(keep_within).strip():
-                # Borg 2.0.0b22 removed --keep-within (and --keep-last) in
-                # favour of --keep, which takes either form: a count or an
-                # interval like "1d". Borg 1 keeps the old spelling.
+                # Borg 2 has no --keep-within (nor --keep-last): --keep takes
+                # either form, a count or an interval like "1d". Borg 1 has
+                # --keep-within.
                 if self.borg_version == 2:
                     cmd.extend(["--keep", str(keep_within).strip()])
                 else:
@@ -716,15 +730,13 @@ def execute_repository_operation_job(
     rclone_config_path: Optional[str] = None
     try:
         payload = RepositoryOperationPayload.from_job_payload(job.get("payload") or {})
-        with_stats = _reports_compact_stats(payload) and compact_stats_supported(
-            payload.borg_cmd
-        )
+        with_stats = _reports_compact_stats(payload)
         try:
             if payload.job_kind == "repository.rclone_sync":
                 rclone_config_path = _write_temp_rclone_config(payload)
                 cmd = payload.build_command(rclone_config_path=rclone_config_path)
             else:
-                cmd = payload.build_command(compact_stats=with_stats)
+                cmd = payload.build_command()
         except Exception:
             _remove_temp_file(rclone_config_path)
             raise
@@ -737,6 +749,8 @@ def execute_repository_operation_job(
         )
 
     env = build_borg_env(payload.environment)
+    env.update(payload.remote_path_env())
+    env_with_repository_port(env, payload.repository_path)
     if payload.job_kind in MACHINE_PARSED_JOB_KINDS:
         # The server parses timestamps out of these outputs; pin the render
         # zone so they come out UTC. Applied after the server-sent overrides:
@@ -1764,49 +1778,48 @@ def _warning_exit(payload: RepositoryOperationPayload, return_code: int) -> bool
     return is_warning_return_code(return_code)
 
 
-# Whether a Borg 2 binary accepts `compact --stats`, by binary file
-# (path, mtime, size): probed once per file (`borg2 --version` is a
-# subprocess), again when the file changes under a long-lived agent.
-_COMPACT_STATS_SUPPORT: dict[tuple, bool] = {}
+def _restores_into_existing_files(operation: dict[str, Any]) -> bool:
+    """Whether the restore was asked to write into what the destination
+    holds (#1261) rather than to restore exactly into an empty directory."""
+    target = operation.get("target")
+    return isinstance(target, dict) and target.get("existing_files") == "continue"
 
 
-def _binary_key(binary: str) -> tuple:
-    path = shutil.which(binary) or binary
+def _restore_target_refusal(
+    cmd: list[str], payload: RepositoryOperationPayload, target_dir: str
+) -> str | None:
+    """Why a Borg 2 restore into `target_dir` is refused, or None.
+
+    Borg 2.0.0b25 refuses to extract into a directory that is not empty
+    ("Extraction directory ... is not empty", exit 33), the original location
+    and a fresh filesystem with its lost+found included. Its way around,
+    --continue, skips a file that already has the archived type, mode, size
+    and modification time, so a file damaged in place would stay damaged
+    behind a restore that reports success. The agent passes the option only
+    for a restore that asks for it (`target.existing_files`); any other is
+    refused before Borg runs, with what to do. Borg 1 and an empty, missing
+    or unreadable directory are left to Borg.
+    """
+    # the subcommand by its place in `_base_borg2`, not by the first word
+    # that reads "extract": a repository or a binary may be named that
+    subcommand = 3
+    if payload.borg_version != 2 or cmd[subcommand : subcommand + 1] != ["extract"]:
+        return None
+    if _restores_into_existing_files(payload.operation or {}):
+        return None
     try:
-        stat = os.stat(path)
+        with os.scandir(target_dir) as entries:
+            occupied = next(entries, None) is not None
     except OSError:
-        return (path, None, None)
-    return (path, stat.st_mtime_ns, stat.st_size)
-
-
-def compact_stats_supported(binary: str) -> bool:
-    """Whether `binary` accepts `compact --stats` (Borg 2.0.0b15 on, see
-    `compact_stats.has_compact_stats`). A binary whose version cannot be
-    read this time (a probe timeout, a banner without a version) does not
-    get the flag: a wrong flag would fail the whole compact, a missing one
-    only its statistics. It is probed again next time; only a read version
-    is remembered."""
-    key = _binary_key(binary)
-    known = _COMPACT_STATS_SUPPORT.get(key)
-    if known is not None:
-        return known
-    try:
-        probe = subprocess.run(
-            [binary, "--version"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-        version = parse_borg_version(f"{probe.stdout}\n{probe.stderr}")
-    except (OSError, ValueError, subprocess.TimeoutExpired):
-        # ValueError covers a `--version` output the locale cannot decode
-        version = None
-    if version is None:
-        return False
-    supported = has_compact_stats(version)
-    _COMPACT_STATS_SUPPORT[key] = supported
-    return supported
+        return None
+    if not occupied:
+        return None
+    return (
+        "Borg 2 does not restore into a directory that already holds files, "
+        f"and {target_dir} is not empty. Choose an empty directory as the "
+        "destination, or choose \u201cRestore into existing files\u201d in the "
+        "restore dialog."
+    )
 
 
 def _resolve_restore_target(operation: dict[str, Any]) -> tuple[str, bool]:
@@ -1862,6 +1875,16 @@ def _execute_restore_operation(
         client.fail_job(job_id, error_message=error_message)
         return RepositoryOperationResult(
             job_id=job_id, status="failed", message=error_message
+        )
+
+    refusal = _restore_target_refusal(cmd, payload, target_dir)
+    if refusal:
+        client.send_log(
+            job_id, sequence=initial_sequence, stream="stderr", message=refusal
+        )
+        client.fail_job(job_id, error_message=refusal)
+        return RepositoryOperationResult(
+            job_id=job_id, status="failed", message=refusal
         )
 
     try:
@@ -2112,10 +2135,11 @@ def execute_storage_usage_job(
             job_id=job_id, status="failed", message=error_message
         )
     env = build_borg_env(payload.environment)
+    env_with_repository_port(env, payload.repository_path)
     if payload.remote_path:
         # The index step runs through Borg's Python API, where the remote
         # path travels in the environment: the payload's value must win over
-        # an inherited one, unlike --remote-path on the other handlers' argv.
+        # an inherited one.
         env["BORG_REMOTE_PATH"] = payload.remote_path
     # The server stops waiting after its info timeout; a measurement that
     # outlives it would hold the job open and refuse the next refresh.

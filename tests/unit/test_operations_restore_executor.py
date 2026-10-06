@@ -137,6 +137,8 @@ async def test_run_restore_passes_the_details_and_params_to_the_service(
         "ssh_connection_id": None,
         "restore_layout": "contents_only",
         "path_metadata": [{"path": "docs/", "type": "directory"}],
+        # an operation queued before #1261 has no choice: the exact restore
+        "existing_files": "refuse",
     }
 
 

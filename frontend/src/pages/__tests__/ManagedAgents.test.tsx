@@ -631,6 +631,64 @@ describe('ManagedAgents', () => {
     expect(screen.getByText(/borg 2 pending/i)).toBeInTheDocument()
   })
 
+  it("marks an agent whose Borg 2 is older than the server's, on the card and in diagnostics", () => {
+    const agent = buildAgent({
+      borg_versions: [
+        { major: 1, version: '1.4.5' },
+        { major: 2, version: '2.0.0b24' },
+      ],
+      borg2_minimum_version: '2.0.0b25',
+      borg2_below_minimum: true,
+    })
+
+    renderWithProviders(
+      <AgentList
+        agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        onRunDiagnostics={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+    expect(screen.getByText('Borg 2 too old')).toBeInTheDocument()
+
+    renderWithProviders(<AgentDiagnosticsDialog open agent={agent} onClose={vi.fn()} />)
+    const alert = screen
+      .getAllByRole('alert')
+      .find((element) => element.textContent?.includes('older than this server'))
+    expect(alert).toBeDefined()
+    expect(alert).toHaveTextContent('2.0.0b24')
+    expect(alert).toHaveTextContent('2.0.0b25')
+    expect(alert).toHaveTextContent('--reinstall --borg-version both --borg-source server')
+  })
+
+  it('shows no Borg 2 marker for an agent at the minimum', () => {
+    const agent = buildAgent({
+      borg_versions: [{ major: 2, version: '2.0.0b25' }],
+      borg2_minimum_version: '2.0.0b25',
+      borg2_below_minimum: false,
+    })
+
+    renderWithProviders(
+      <AgentList
+        agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        onRunDiagnostics={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+    expect(screen.queryByText('Borg 2 too old')).not.toBeInTheDocument()
+  })
+
   it('opens managed-agent diagnostics from an agent card and runs a session check', async () => {
     const user = userEvent.setup()
     const agent = buildAgent({
@@ -833,7 +891,7 @@ describe('ManagedAgents', () => {
         },
         {
           major: 2,
-          version: '2.0.0b23',
+          version: '2.0.0b25',
           path: '/opt/borg-ui-agent/borg2/current/borg',
           install_source: 'borg-ui-installer',
         },

@@ -475,6 +475,10 @@
         "pending": "Borg {{version}} ausstehend",
         "pendingTooltip": "Auf Borg {{version}} festgelegt, aber dieser Endpunkt meldet die Version noch nicht. Das nächste Upgrade installiert sie."
       },
+      "borg2Minimum": {
+        "label": "Borg 2 zu alt",
+        "tooltip": "Das Borg 2 dieses Endpunkts ist {{version}} und damit älter als das {{minimum}} dieses Servers. Seine Borg-2-Backups, -Wiederherstellungen und -Wartungen werden abgelehnt. Führe den Agent-Installer auf dem Endpunkt mit {{flags}} aus, um das Borg 2 des Servers zu installieren. Wenn du Borg 2 von Hand ersetzt, starte danach den Agent neu, damit er die neue Version meldet."
+      },
       "setServerDialog": {
         "title": "Server-URL ändern",
         "description": "Richte diesen Endpunkt auf eine andere Borg-UI-Adresse aus. Identität, Zugangsdaten und Verlauf bleiben erhalten, ein neues Registrierungs-Token ist nicht nötig.",
@@ -1856,9 +1860,9 @@
       "settings": {
         "archiveNameHelper": "Unterstützt {plan_name}, {repo_name}, {now}, {date}, {time} und {timestamp}.",
         "extraBorgFlagsHelper": "Benutzerdefinierte Befehlszeilen-Flags für borg create (z.B. --stats, --progress, --list). Wird auf jeden Repository-Lauf in diesem Plan angewendet.",
-        "uploadSpeedHelper": "MB/s. Leer bedeutet unbegrenzt.",
+        "uploadSpeedHelper": "MB/s. Leer bedeutet unbegrenzt. Gilt nur für Borg-1-Repositories; Borg 2 kennt kein Upload-Limit.",
         "uploadPoliciesTitle": "Geplante Upload-Limits",
-        "uploadPoliciesHelper": "Zeitfenster überschreiben das konstante Upload-Limit. Ein leeres Limit bedeutet unbegrenzt.",
+        "uploadPoliciesHelper": "Zeitfenster überschreiben das konstante Upload-Limit. Ein leeres Limit bedeutet unbegrenzt. Wie das konstante Limit gelten sie nur für Borg-1-Repositories.",
         "addUploadPolicy": "Upload-Regel hinzufügen",
         "removeUploadPolicy": "Upload-Regel entfernen",
         "daytimePolicyLabel": "Tageslimit",
@@ -4889,7 +4893,18 @@
       "restorePath": "Ziel",
       "contentsOnlyMarker": "(Inhalt)",
       "andMoreItems_one": "... und {{count}} weiteres Element",
-      "andMoreItems_other": "... und {{count}} weitere Elemente"
+      "andMoreItems_other": "... und {{count}} weitere Elemente",
+      "existingFiles": {
+        "title": "Vorhandene Dateien",
+        "exact": "Exakte Wiederherstellung (leeres Verzeichnis)",
+        "exactDesc": "Borg 2 stellt nur in ein leeres Verzeichnis wieder her. Jede Datei wird aus dem Archiv geschrieben. Wähle einen neuen oder leeren Ordner.",
+        "exactUnavailable": "Der ursprüngliche Ort enthält immer Dateien, eine exakte Wiederherstellung ist dort nicht möglich. Wähle dafür einen eigenen Ort.",
+        "continue": "In vorhandene Dateien wiederherstellen",
+        "continueDesc": "In ein Verzeichnis schreiben, das bereits Dateien enthält.",
+        "continueWarning": "Dateien, die bereits mit dem archivierten Typ, denselben Rechten, derselben Größe und Änderungszeit vorhanden sind, werden übersprungen. Eine Datei, die beschädigt wurde, ohne dass sich Größe oder Zeit geändert haben, wird also nicht repariert. Abweichende Dateien werden ersetzt; Dateien, die das Archiv nicht enthält, bleiben liegen. Auf einem frisch formatierten Datenträger (nur lost+found) ist das Ergebnis dasselbe wie bei einer exakten Wiederherstellung.",
+        "originalNeedsChoice": "Um an den ursprünglichen Ort wiederherzustellen, wähle „In vorhandene Dateien wiederherstellen“.",
+        "borg1": "Dateien mit gleichem Pfad werden überschrieben, andere Dateien im Ziel bleiben liegen."
+      }
     },
     "restoreFiles": {
       "title": "Wiederherzustellende Dateien auswählen",
@@ -4950,7 +4965,11 @@
       "files_one": "{{count}} Datei",
       "files_other": "{{count}} Dateien",
       "entireArchiveNote": "Das gesamte Archiv wird mit allen Dateien und Verzeichnissen wiederhergestellt.",
-      "everythingLooksGood": "Alles sieht gut aus! Klicke auf \"Dateien wiederherstellen\", um den Wiederherstellungsvorgang zu starten."
+      "everythingLooksGood": "Alles sieht gut aus! Klicke auf \"Dateien wiederherstellen\", um den Wiederherstellungsvorgang zu starten.",
+      "existingFiles": "Vorhandene Dateien",
+      "existingFilesExact": "Exakte Wiederherstellung",
+      "existingFilesContinue": "In vorhandene Dateien wiederherstellen",
+      "existingFilesBorg1": "Bei gleichem Pfad überschrieben"
     },
     "review": {
       "configurationSummary": "Konfigurationsübersicht",
@@ -5199,6 +5218,7 @@
     "customFlagsHint": "Benutzerdefinierte Befehlszeilen-Flags für borg create (z.B. --stats, --progress, --list)",
     "uploadSpeedLimit": "Upload-Geschwindigkeitslimit",
     "uploadSpeedLimitHint": "MB/s. Leer bedeutet unbegrenzt. Backup-Plan-Einstellungen können diesen Standard überschreiben.",
+    "uploadSpeedLimitBorg2": "Borg 2 kennt kein Upload-Limit. Diese Einstellung gilt nur für Borg-1-Repositories.",
     "scripts": "Skripte",
     "scriptsOptional": "(Optional)",
     "scriptsHint": "Inline-Skripte konfigurieren oder wiederverwendbare Skripte aus der Skriptbibliothek zuweisen.",
@@ -5853,9 +5873,10 @@
         "permissionDeniedCreateParentDirectory": "Zugriff verweigert: Übergeordnetes Verzeichnis '{{path}}' kann nicht erstellt werden. Stellen Sie sicher, dass das Verzeichnis auf Ihrem Host-Rechner mit den entsprechenden Berechtigungen vorhanden ist.",
         "encryptedPassphraseRequired": "Passphrase ist für den Verschlüsselungsmodus '{{mode}}' erforderlich",
         "agentBorg2Unavailable": "Auf diesem Endpunkt ist Borg 2 nicht installiert, daher kann dort kein Borg-2-Repository erstellt oder geöffnet werden. Installiere Borg 2 auf dem Endpunkt oder wähle Borg 1.",
-        "agentBorg2TooOld": "Das Borg 2 dieses Endpunkts ist {{version}}; borg-ui benötigt {{minimum}} oder neuer für ein Borg-2-Repository. Aktualisiere Borg 2 auf dem Endpunkt oder wähle Borg 1.",
+        "agentBorg2TooOld": "Das Borg 2 dieses Endpunkts ist {{version}} und damit älter als das {{minimum}} dieses Servers, daher führt Borg UI dort keine Borg-2-Aufträge aus: Borg-2-Betas ändern das Repository-Format und die Befehlszeile von Version zu Version. Führe den Agent-Installer auf dem Endpunkt mit {{flags}} aus, um das Borg 2 des Servers zu installieren. Wenn du Borg 2 von Hand ersetzt, starte danach den Agent neu, damit er die neue Version meldet.",
         "borg2OnlyUrl": "Eine Repository-URL mit {{scheme}} benötigt Borg 2; Borg 1 kann sie nicht öffnen. Wähle Borg 2 für dieses Repository.",
         "borg2OnlyUrlOrSshHost": "Eine Repository-URL mit {{scheme}} benötigt Borg 2; Borg 1 liest sie als SSH-Host namens {{host}}. Wähle Borg 2 für dieses Repository oder schreibe den SSH-Host als ssh://{{host}}/pfad (ssh://{{host}}/./pfad für einen Pfad relativ zum Login-Verzeichnis).",
+        "borg1OnlySshAddress": "{{host}}:pfad ist eine SSH-Adresse, die nur Borg 1 versteht; Borg 2 liest sie als lokales Verzeichnis. Schreibe sie als ssh://{{host}}/pfad für einen Pfad relativ zum Login-Verzeichnis oder ssh://{{host}}//pfad für einen absoluten Pfad, oder wähle Borg 1 für dieses Repository.",
         "agentPassphraseUnavailable": "Dieser Managed Agent hat keine BORG_PASSPHRASE gemeldet, daher kann er ein verschlüsseltes Repository nicht öffnen. Setze BORG_PASSPHRASE in der Umgebung des Agents oder gib hier eine Passphrase ein.",
         "encryptedPassphraseIncorrect": "Das Repository ist verschlüsselt, aber die Passphrase ist falsch oder fehlt. Bitte geben Sie die korrekte Passphrase an.",
         "encryptionKeyfileNotRequired": "Das Repository verwendet die Verschlüsselung '{{mode}}', für die keine Schlüsseldatei erforderlich ist. Der Upload einer Schlüsseldatei ist nur für die Verschlüsselungsmodi 'keyfile' oder 'keyfile-blake2' erforderlich.",
@@ -5933,7 +5954,10 @@
         "failedParseArchiveList": "Fehler beim Parsen der Archivliste",
         "failedParseRepositoryInfo": "Fehler beim Parsen der Repository-Informationen",
         "failedParseArchiveInfo": "Fehler beim Parsen der Archiv-Informationen",
-        "failedExportKeyfile": "Fehler beim Exportieren der Schlüsseldatei"
+        "failedExportKeyfile": "Fehler beim Exportieren der Schlüsseldatei",
+        "borg2RepositoryNotReadable": "Borg 2 erkennt dies nicht als Repository. Wurde es vor dem Upgrade auf Borg 2.0.0b25 angelegt, ist das die Ursache: 2.0.0b25 hat das Repository-Format geändert und kann Repositories früherer Borg-2-Betas nicht lesen. Das Repository muss neu angelegt werden; die Upgrade-Hinweise in der Installationsanleitung beschreiben die Schritte. Andernfalls den Repository-Pfad prüfen.",
+        "invalidEncryption": "Der Verschlüsselungsmodus '{{mode}}' ist für Borg-2-Repositories nicht verfügbar.",
+        "invalidEncryptionMode": "Der Verschlüsselungsmodus '{{mode}}' ist für dieses Repository nicht verfügbar."
       },
       "rclone": {
         "invalidRemoteName": "Remote-Name darf nur Buchstaben, Zahlen, Punkte, Bindestriche und Unterstriche enthalten",
@@ -6009,7 +6033,9 @@
         "failedFetchArchives": "Fehler beim Abrufen der Archive",
         "failedFetchArchiveContents": "Fehler beim Abrufen des Archivinhalts",
         "destinationNotAllowed": "Das Wiederherstellungsziel liegt außerhalb der erlaubten lokalen Einhängepunkte: {{path}}",
-        "operatorAccessRequired": "Für die Wiederherstellung auf eine SSH-Verbindung ist Operator- oder Administratorzugriff erforderlich"
+        "operatorAccessRequired": "Für die Wiederherstellung auf eine SSH-Verbindung ist Operator- oder Administratorzugriff erforderlich",
+        "borg2DestinationNotEmpty": "Borg 2 stellt nicht in ein Verzeichnis wieder her, das bereits Dateien enthält, und {{path}} ist nicht leer. Wähle ein leeres Verzeichnis als Ziel oder im Wiederherstellungsdialog „In vorhandene Dateien wiederherstellen“.",
+        "agentCannotRestoreIntoExisting": "Der Agent dieses Repositorys ist zu alt, um in vorhandene Dateien wiederherzustellen. Aktualisiere den Agent auf 0.1.17 oder neuer, oder stelle in ein leeres Verzeichnis wieder her."
       },
       "schedule": {
         "adminAccessRequired": "Administratorzugriff erforderlich",
@@ -6134,7 +6160,6 @@
         "deleteAlreadyRunning": "Für dieses Archiv wird bereits ein Löschvorgang ausgeführt (Auftrags-ID: {{jobId}})",
         "deleteJobNotFound": "Löschauftrag nicht gefunden",
         "failedGetArchiveContents": "Archivinhalt konnte nicht abgerufen werden",
-        "unsupportedRepositoryVersion": "Dieses Repository verwendet Formatversion {{version}}, die die Borg-2-Version auf diesem Server nicht lesen kann. Borg 2 ist noch in der Beta und das Repository-Format hat sich zwischen Betas geändert. Lege das Repository mit der aktuellen Version neu an oder installiere die Borg-2-Version, mit der es erstellt wurde.",
         "failedGetArchiveInfo": "Archivinformationen konnten nicht abgerufen werden",
         "failedListArchives": "Archive konnten nicht aufgelistet werden",
         "repositoryNotFound": "Repository nicht gefunden",
@@ -6234,7 +6259,8 @@
         "restoreFailedZeroFilesNoOutput": "Wiederherstellung fehlgeschlagen: 0 Dateien extrahiert (Exitcode {{exitCode}}). Keine Fehlerausgabe von Borg. Dateien existieren möglicherweise nicht im Archiv oder der Zugriff wurde verweigert.",
         "restoreFailedExitCode": "Der Wiederherstellungsprozess wurde mit Code {{exitCode}} beendet",
         "restoreFailed": "Wiederherstellung fehlgeschlagen",
-        "jobCompletedWithWarning": "Mit Warnung abgeschlossen (Exitcode {{exitCode}})"
+        "jobCompletedWithWarning": "Mit Warnung abgeschlossen (Exitcode {{exitCode}})",
+        "restoreFailedOnAgent": "Wiederherstellung auf dem Agent fehlgeschlagen: {{error}}"
       },
       "dashboard": {
         "failedGetSystemMetrics": "Fehler beim Abrufen der Systemmetriken",

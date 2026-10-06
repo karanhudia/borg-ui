@@ -231,6 +231,11 @@ def darwin_ready(darwin):
         ),
         encoding="utf-8",
     )
+    (root / "config.toml").write_text(
+        'server_url = "https://borg.example"\nagent_id = "agent-1"\n'
+        'agent_token = "secret"\n',
+        encoding="utf-8",
+    )
     job = darwin / "Library" / "LaunchAgents" / "com.borg-ui.agent-upgrade.plist"
     _write_plist(
         job,
@@ -271,6 +276,27 @@ def test_a_complete_per_user_install_can_upgrade_itself(darwin_ready):
 
     assert readiness.supported is True
     assert readiness.trigger == darwin_ready["root"] / "upgrade-requested"
+
+
+def test_a_per_user_install_moved_to_another_server_cannot_upgrade_itself(
+    darwin_ready,
+):
+    config = darwin_ready["root"] / "config.toml"
+    config.write_text(
+        config.read_text().replace("https://borg.example", "https://new.example"),
+        encoding="utf-8",
+    )
+
+    assert self_upgrade.check_self_upgrade().reason == "server_mismatch"
+    assert self_upgrade.can_self_upgrade() is False
+
+
+def test_an_upgrade_record_that_is_not_text_is_no_capability_not_a_crash(
+    darwin_ready,
+):
+    (darwin_ready["root"] / "upgrade.conf").write_bytes(b'SERVER="\xff\xfe"\n')
+
+    assert self_upgrade.can_self_upgrade() is False
 
 
 def test_a_job_that_names_no_helper_is_reported_as_missing(darwin_ready):

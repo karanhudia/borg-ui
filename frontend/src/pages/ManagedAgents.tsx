@@ -74,6 +74,8 @@ import AddAgentDialog from './managed-agents/AddAgentDialog'
 import AgentBulkUpgradeBar from './managed-agents/AgentBulkUpgradeBar'
 import AgentUpgradeBanner from './managed-agents/AgentUpgradeBanner'
 import AgentBorgVersionChip from './managed-agents/AgentBorgVersionChip'
+import AgentBorg2MinimumChip from './managed-agents/AgentBorg2MinimumChip'
+import { borg2MinimumParams } from './managed-agents/agentBorg2Minimum'
 import AgentManualUpgradeChip from './managed-agents/AgentManualUpgradeChip'
 import AgentUpgradeChip from './managed-agents/AgentUpgradeChip'
 import AgentPinControl from './managed-agents/AgentPinControl'
@@ -1374,6 +1376,15 @@ export function AgentDiagnosticsDialog({
             </Stack>
           </Stack>
 
+          {agent?.borg2_below_minimum && (
+            <Alert severity="error" icon={<AlertTriangle size={16} />} sx={{ borderRadius: 1.5 }}>
+              {t(
+                'managedAgents.page.borg2Minimum.tooltip',
+                borg2MinimumParams(borgVersions, agent.borg2_minimum_version)
+              )}
+            </Alert>
+          )}
+
           {lastError && (
             <Alert severity="warning" icon={<AlertTriangle size={16} />} sx={{ borderRadius: 1.5 }}>
               {lastError}
@@ -1908,6 +1919,11 @@ export function AgentList({
                       )}
                       <AgentBorgVersionChip
                         desiredBorgVersion={agent.desired_borg_version}
+                        borgVersions={agent.borg_versions}
+                      />
+                      <AgentBorg2MinimumChip
+                        belowMinimum={agent.borg2_below_minimum}
+                        minimumVersion={agent.borg2_minimum_version}
                         borgVersions={agent.borg_versions}
                       />
                       {agent.self_upgrade_supported === false && <AgentManualUpgradeChip />}
