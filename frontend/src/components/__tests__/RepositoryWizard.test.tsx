@@ -1507,6 +1507,9 @@ describe('RepositoryWizard', () => {
       expect(submittedPayload).not.toHaveProperty('execution_target')
       expect(submittedPayload).not.toHaveProperty('executor_type')
       expect(submittedPayload).not.toHaveProperty('agent_machine_id')
+      // An update cannot change either; the backend refuses keys it does not apply.
+      expect(submittedPayload).not.toHaveProperty('borg_version')
+      expect(submittedPayload).not.toHaveProperty('encryption')
     })
 
     it('hydrates upload speed limits when editing a repository', async () => {
