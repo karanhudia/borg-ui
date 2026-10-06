@@ -8,7 +8,12 @@ import json
 import os
 from typing import List, Optional
 
-from app.core.borg2 import borg2
+from app.core.borg2 import (
+    borg2,
+    borg2_only_url_prefix,
+    borg2_repository_url_refusal,
+    ensure_borg2_repository_url,
+)
 from app.database.models import Repository
 from app.utils.borg_env import effective_repository_remote_path
 from app.utils.borg_flags import parse_borg_flags
@@ -18,7 +23,13 @@ class BackupV2Service:
     """Version-specific Borg 2 backup helpers and execution."""
 
     def validate_local_repository_access(self, repo: Repository) -> None:
-        if not repo or repo.path.startswith(("ssh://", "rclone:")):
+        if not repo:
+            return
+        refusal = borg2_repository_url_refusal(repo.path)
+        if refusal:
+            raise ValueError(refusal)
+        # A URL Borg 2 opens itself is no directory on this server.
+        if repo.path.startswith("ssh://") or borg2_only_url_prefix(repo.path):
             return
 
         if not os.path.isdir(repo.path):
@@ -38,8 +49,12 @@ class BackupV2Service:
         compression: str,
         exclude_patterns: List[str],
         custom_flags: List[str],
-        upload_ratelimit_kib: Optional[int] = None,
+        upload_ratelimit_kib: Optional[int] = None,  # noqa: ARG002 - Borg 1 only
     ) -> List[str]:
+        """Borg 2 has no --upload-ratelimit, so a repository's upload
+        limit does not reach the command; the Borg 1 options among the custom
+        flags are refused (ValueError) before Borg runs."""
+        ensure_borg2_repository_url(repository_path)
         cmd = [
             borg2.borg_cmd,
             "--progress",
@@ -56,11 +71,9 @@ class BackupV2Service:
             "--compression",
             compression,
         ]
-        if upload_ratelimit_kib:
-            cmd.extend(["--upload-ratelimit", str(upload_ratelimit_kib)])
         for pattern in exclude_patterns:
             cmd.extend(["--exclude", pattern])
-        cmd.extend(parse_borg_flags(custom_flags, "create"))
+        cmd.extend(parse_borg_flags(custom_flags, "create", 2))
         cmd.append(archive_name)
         return cmd
 

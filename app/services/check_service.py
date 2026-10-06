@@ -134,7 +134,7 @@ class CheckService:
             )
             if extra_flags:
                 # A stored value the allowlist rejects fails the check here.
-                cmd.extend(parse_borg_flags(extra_flags, "check"))
+                cmd.extend(parse_borg_flags(extra_flags, "check", 1))
                 logger.info(
                     "Added extra flags to borg check command",
                     job_id=job_id,

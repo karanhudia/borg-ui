@@ -20,7 +20,7 @@ def _records(name, parser):
 @pytest.mark.unit
 @pytest.mark.parametrize("fixture", ["borg1_diff.jsonl", "borg2_diff.jsonl"])
 def test_diff_fixture_maps_every_change_kind(fixture):
-    """Real `borg diff --json-lines` output from Borg 1.4.5 and Borg 2.0.0b21
+    """Real `borg diff --json-lines` output from Borg 1.4.5 and Borg 2.0.0b25
     (see tests/fixtures/borg_output/README.md), asserting the exact shapes
     the two versions produce."""
     recs = _records(fixture, parse_diff_line)
@@ -198,11 +198,10 @@ def test_borg2_diff_command_shape(monkeypatch):
         "/r",
         "diff",
         "--json-lines",
-        "--remote-path",
-        "/opt/borg2",
         "aid:1",
         "aid:2",
     ]
     assert captured["env"]["BORG_PASSPHRASE"] == "pw"
+    assert captured["env"]["BORG_REMOTE_PATH"] == "/opt/borg2"
     b.list_archive_lines("/r", "aid:1")
     assert captured["cmd"] == ["borg2", "-r", "/r", "list", "--json-lines", "aid:1"]

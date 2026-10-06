@@ -4,12 +4,11 @@ import pytest
 
 from app.services.borg2_compact_stats import is_stats_line, parse_compact_stats
 
-# The logger Borg 2.0.0b24 emits the lines from; the parser does not depend
-# on it.
+# The logger Borg 2 emits the lines from; the parser does not depend on it.
 COMPACT_LOGGER = "borg.archiver.compact_cmd"
 
-# Verbatim `borg compact --stats -v` output of 2.0.0b23 / b24 on a scratch
-# repository.
+# Verbatim `borg compact --stats -v` output on a scratch repository; 2.0.0b25
+# prints these lines word for word.
 PLAIN = """Starting compaction / garbage collection...
 Overall statistics, considering all 2 archives in this repository:
 Source data size was 1 MB in 6 files.
@@ -246,43 +245,6 @@ def test_lines_match_as_a_whole():
     assert parse_compact_stats(["Repository size is 1 B in 1 objects. extra"]) is None
     assert not is_stats_line("Compaction saved 0 B. and more")
     assert parse_compact_stats(["Repository size is 1 B in 1 objects."]) is not None
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize(
-    "version, supported",
-    [
-        ("2.0.0b14", False),
-        ("2.0.0b15", True),
-        ("borg2 2.0.0b24", True),
-        ("2.0.0rc1", True),
-        ("2.0.0", True),
-        ("2.1.0", True),
-        ("borg 1.4.1", False),
-        ("Unknown", False),
-    ],
-)
-def test_has_compact_stats(version, supported):
-    from app.services.borg2_compact_stats import has_compact_stats
-
-    assert has_compact_stats(version) is supported
-
-
-@pytest.mark.unit
-def test_parse_borg_version_takes_the_first_version_token():
-    from app.services.borg2_compact_stats import parse_borg_version
-
-    assert parse_borg_version("borg2 2.0.0b24\n") == "2.0.0b24"
-    assert parse_borg_version("borg 1.4.1") == "1.4.1"
-    assert parse_borg_version("\nborg2 2.0.0\n") == "2.0.0"
-    assert parse_borg_version("no version here") is None
-    assert parse_borg_version("") is None
-    # a wrapper banner before Borg's own line: Borg's token wins
-    assert parse_borg_version("Python 3.11.2 -- borg2 2.0.0b24\n") == "2.0.0b24"
-    assert parse_borg_version("OpenSSL 3.2.1\nborg 1.4.1") == "1.4.1"
-    assert parse_borg_version("borg2 2.0.0rc1") == "2.0.0"
-    # digit runs `int` would refuse are not version tokens
-    assert parse_borg_version("borg2 " + "9" * 5000 + ".0.0") is None
 
 
 @pytest.mark.unit

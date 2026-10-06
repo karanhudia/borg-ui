@@ -7,7 +7,7 @@ sha256 digest of each published Linux binary, and writes the manifest. Adopting 
 new Borg version is therefore: change runtime-base.env, run this, commit.
 
     python scripts/refresh_borg_binary_manifest.py            # versions from runtime-base.env
-    python scripts/refresh_borg_binary_manifest.py 1.4.5 2.0.0b22   # or state them
+    python scripts/refresh_borg_binary_manifest.py 1.4.5 2.0.0b25   # or state them
     python scripts/refresh_borg_binary_manifest.py --latest   # adopt newer releases
 
 --latest asks GitHub which releases exist, and if a newer one carries the Linux
@@ -55,8 +55,8 @@ PYPI_ERRORS = (OSError, ValueError, KeyError, TypeError, AttributeError)
 
 # The published Linux binaries a Debian-family installer can use, recognised by
 # the shape of the asset name rather than by a list of the names seen so far.
-# borgbackup renames these whenever it moves its build runner — 2.0.0b21 shipped
-# borg-linux-glibc235-*, 2.0.0b22 borg-linux-glibc239-* — and to a fixed
+# borgbackup renames these whenever it moves its build runner — from
+# borg-linux-glibc235-* to borg-linux-glibc239-*, for one — and to a fixed
 # allow-list such a release reads as "publishes nothing installable", which is
 # indistinguishable from "no new release" and stalls the pin in silence.
 #

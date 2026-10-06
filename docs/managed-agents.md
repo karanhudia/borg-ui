@@ -55,8 +55,7 @@ message prints the commands for that, pinned to the server's version — a
 virtualenv with `borgbackup` and `borgstore`, and a `borg2` symlink in
 `/usr/local/bin` (a plain pip install provides only `borg`, which the agent
 does not use for Borg 2). That install builds Borg from source, so the machine
-needs a C toolchain, Borg's build dependencies and, from 2.0.0b24 on, OpenSSL
-3.2 or newer.
+needs a C toolchain, Borg's build dependencies and OpenSSL 3.2 or newer.
 
 By default, the service runs as the user who invoked `sudo`. That means the
 agent can read and write the same paths that user can access, matching the
@@ -133,7 +132,7 @@ on the terminal and also runs over `ssh -t`.
 A Linux install never asks for the values: it is scripted over `ssh -t` or by
 configuration management as often as it is typed, and a question would hang
 it. A first-time macOS install run from a terminal without the flags asks for
-both, and for an `ssh://` or `rest://` repository offers to open one SSH
+both, and for an `ssh://` repository offers to open one SSH
 connection as the user, so the host key and the login are confirmed while
 someone is there to answer; a service cannot do that later. Empty answers skip
 them, and `--no-prompt` skips the questions. That check covers the one repository given
@@ -344,6 +343,21 @@ A Borg pin outranks how the endpoint was installed. An endpoint installed with
 Borg 1 from distribution packages gets a pinned Borg 2 from this server's
 static binaries, because no distribution ships Borg 2.
 
+An endpoint's Borg 2 must be at least the one this server ships. Borg 2
+betas change the repository format and the command line between releases,
+so Borg UI runs no Borg 2 job on an endpoint whose Borg 2 is older: creating
+or importing a Borg 2 repository there, and every Borg 2 backup, restore,
+check, prune, compact, archive listing or mount, is refused with both
+versions named. The agent list marks such an endpoint with "Borg 2 too old".
+An upgrade that installs Borg from this server fixes it; an endpoint with
+`--skip-borg-install` needs the installer run on it with
+`--reinstall --borg-version both --borg-source server` (`2` instead of
+`both` where it has no Borg 1), or its Borg 2 replaced by hand. The agent
+reports its Borg binaries when it starts, so restart it after replacing
+Borg 2 by hand. The installer leaves a `borg2` that is a regular file in
+its place ("exists and is not a symlink"): rename or remove such a file
+and run the installer again.
+
 Because the upgrade is only complete once the endpoint reports the pinned
 major version, a Borg pin that cannot be installed shows up as a failed
 upgrade once the timeout elapses, rather than as a success that changed
@@ -409,6 +423,21 @@ Older agents do not have that subcommand, so Borg UI shows an equivalent edit
 of the config file instead. Either way it is one command, and you do not have
 to choose between them.
 
+The move does not carry remote upgrade with it. The upgrade helper installs
+only from the address recorded when the endpoint was installed, and refuses
+when the agent is enrolled against another one. From agent 0.1.16 a moved
+endpoint therefore reports no remote upgrade support and is shown as manual
+only, instead of offering an upgrade that the helper then refuses. One
+reinstall that names the new address brings remote upgrade back:
+
+```bash
+curl -fsSL https://borg.example.com/agent/install.sh | sudo bash -s -- \
+  --server https://borg.example.com --reinstall
+```
+
+The plain `--reinstall` command keeps the recorded address and says so. On
+macOS the command runs without `sudo`, as the agent's user.
+
 ### Removing an endpoint
 
 `borg-ui-agent unregister` tells the server the endpoint is gone and deletes
@@ -452,7 +481,13 @@ Your backup repositories are never touched.
 Flags, if you want to keep something:
 
 - `--keep-borg` leaves the Borg binaries this installer placed, and their
-  symlinks, in place
+  symlinks, in place: `borg1/`, `borg2/` and the forwarders in `bin/` stay
+  under the agent's directory (`/opt/borg-ui-agent` on Linux,
+  `~/Library/Application Support/borg-ui-agent` on macOS); the virtualenv and
+  the upgrade helper are removed. On Linux `borg` on `PATH` keeps working
+  through the `/usr/local/bin` symlinks. On macOS that `bin/` was only on the
+  agent job's `PATH`, which goes with the job, so call the forwarder by its
+  path
 - `--keep-user` leaves the dedicated service user and `/var/lib/borg-ui-agent`
   in place
 - `--keep-config` leaves `/etc/borg-ui-agent/config.toml` in place, for a

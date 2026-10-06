@@ -238,6 +238,25 @@ describe('RepositoryCard', () => {
       expect(screen.getByText('1.5 MB/s')).toBeInTheDocument()
     })
 
+    it('leaves a stored upload limit out for Borg 2, which has none', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            borg_version: 2,
+            upload_ratelimit_kib: 1536,
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.queryByText('Upload limit:')).not.toBeInTheDocument()
+      expect(screen.queryByText('1.5 MB/s')).not.toBeInTheDocument()
+    })
+
     it('renders next backup badge when an enabled schedule exists', () => {
       renderWithProviders(
         <RepositoryCard

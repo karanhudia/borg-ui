@@ -3,6 +3,59 @@
   "generated_at": "2026-09-26T00:00:00Z",
   "announcements": [
     {
+      "id": "borg2-b25-repository-format",
+      "type": "migration_notice",
+      "priority": 180,
+      "title": "Borg 2 repositories must be recreated after the next upgrade",
+      "title_localized": {
+        "es": "Los repositorios Borg 2 deben recrearse tras la próxima actualización",
+        "de": "Borg-2-Repositories müssen nach dem nächsten Upgrade neu angelegt werden",
+        "it": "I repository Borg 2 vanno ricreati dopo il prossimo aggiornamento"
+      },
+      "message": "The next Borg UI release moves Borg 2 to 2.0.0b25, which cannot read repositories written by earlier Borg 2 betas. Restore what you need from your Borg 2 repositories before you upgrade. Borg 1 repositories are not affected.",
+      "message_localized": {
+        "es": "La próxima versión de Borg UI pasa Borg 2 a 2.0.0b25, que no puede leer repositorios escritos por betas anteriores de Borg 2. Restaure lo que necesite de sus repositorios Borg 2 antes de actualizar. Los repositorios Borg 1 no se ven afectados.",
+        "de": "Die nächste Version von Borg UI hebt Borg 2 auf 2.0.0b25 an, das Repositories früherer Borg-2-Betas nicht lesen kann. Stellen Sie vor dem Upgrade wieder her, was Sie aus Ihren Borg-2-Repositories noch brauchen. Borg-1-Repositories sind nicht betroffen.",
+        "it": "La prossima versione di Borg UI porta Borg 2 alla 2.0.0b25, che non può leggere i repository scritti dalle beta precedenti di Borg 2. Ripristini ciò che le serve dai repository Borg 2 prima di aggiornare. I repository Borg 1 non sono interessati."
+      },
+      "highlights": [
+        "Existing Borg 2 repositories cannot be opened after the upgrade; there is no conversion",
+        "rest:// repository URLs become ssh://",
+        "The unencrypted mode (none) no longer exists for Borg 2"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Los repositorios Borg 2 existentes no se pueden abrir tras la actualización; no hay conversión",
+          "Las URL de repositorio rest:// pasan a ser ssh://",
+          "El modo sin cifrado (none) ya no existe para Borg 2"
+        ],
+        "de": [
+          "Bestehende Borg-2-Repositories lassen sich nach dem Upgrade nicht mehr öffnen; es gibt keine Konvertierung",
+          "Repository-URLs mit rest:// werden zu ssh://",
+          "Den unverschlüsselten Modus (none) gibt es für Borg 2 nicht mehr"
+        ],
+        "it": [
+          "I repository Borg 2 esistenti non si possono aprire dopo l'aggiornamento; non esiste una conversione",
+          "Gli URL dei repository rest:// diventano ssh://",
+          "La modalità non cifrata (none) non esiste più per Borg 2"
+        ]
+      },
+      "cta_label": "Upgrade notes",
+      "cta_label_localized": {
+        "es": "Notas de actualización",
+        "de": "Hinweise zum Upgrade",
+        "it": "Note di aggiornamento"
+      },
+      "cta_url": "https://docs.borgui.com/installation#docker-upgrade",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-09-29T00:00:00Z",
+      "ends_at": "2027-09-29T00:00:00Z",
+      "min_app_version": "2.0.0",
+      "max_app_version": "2.3.6",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
+    {
       "id": "update-available-2.3.0",
       "type": "update_available",
       "priority": 170,

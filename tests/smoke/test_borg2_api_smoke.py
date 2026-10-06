@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -14,6 +15,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from tests.smoke.live_helpers import SmokeClient, SmokeFailure
+from tests.utils.borg import BORG2_TEST_ENCRYPTION, BORG2_TEST_PASSPHRASE
 
 
 def _assert_job_start_response(payload: dict, *, expected_message: str) -> int:
@@ -67,7 +69,6 @@ def main() -> int:
                 name="Borg2 Smoke Repo",
                 repo_path=client.temp_dir / "borg2-repo",
                 source_dirs=[source_root],
-                encryption="none",
             )
         )
         client.log(f"Borg 2 backup completed with status {backup_data['status']}")
@@ -115,17 +116,19 @@ def main() -> int:
                 str(imported_repo_path),
                 "repo-create",
                 "--encryption",
-                "none",
+                "authenticated-sha256",
             ],
             check=True,
             capture_output=True,
             text=True,
+            env={**os.environ, "BORG_PASSPHRASE": BORG2_TEST_PASSPHRASE},
         )
 
         imported_repo_id, _ = client.import_repository_v2(
             name="Imported Borg2 Smoke Repo",
             repo_path=imported_repo_path,
-            encryption="none",
+            encryption=BORG2_TEST_ENCRYPTION,
+            passphrase=BORG2_TEST_PASSPHRASE,
             source_dirs=[source_root],
         )
         imported_info = client.request_ok(

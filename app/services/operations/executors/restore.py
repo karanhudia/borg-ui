@@ -63,6 +63,7 @@ async def run_restore(ctx) -> Outcome:
             ),
             restore_layout=params.get("restore_layout") or RESTORE_LAYOUT_PRESERVE_PATH,
             path_metadata=list(params.get("path_metadata") or []),
+            existing_files=params.get("existing_files") or "refuse",
         )
     finally:
         watcher.cancel()

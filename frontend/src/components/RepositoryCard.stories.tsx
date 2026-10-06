@@ -52,7 +52,7 @@ const borg2RepositoryWithStoredSize: Repository = {
   ...sampleRepository,
   id: 44,
   name: 'Borg 2 on a store URL',
-  path: 'rest://backup-host/repos/production',
+  path: 'ssh://borg@backup-host/repos/production',
   repository_type: 'sftp',
   borg_version: 2,
   archive_count: 35,
@@ -231,6 +231,26 @@ export const WithUploadLimit: Story = {
       ...sampleRepository,
       id: 52,
       name: 'Throttled Production Archive',
+      upload_ratelimit_kib: 1536,
+    },
+  },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
+/** A Borg 2 repository with a limit stored from before: Borg 2 has no upload
+ *  limit, so the card leaves it out. */
+export const Borg2WithStoredUploadLimit: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...sampleRepository,
+      id: 53,
+      name: 'Borg 2 Archive',
+      borg_version: 2,
       upload_ratelimit_kib: 1536,
     },
   },
