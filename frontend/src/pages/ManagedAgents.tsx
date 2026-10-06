@@ -905,7 +905,19 @@ export function AgentSetupHelpContent({
     'pip install .',
   ].join('\n')
   const runCommand = 'sudo systemctl status borg-ui-agent'
+  // The service templates start the agent from a fixed virtualenv and config,
+  // not from the clone's .venv, so these blocks install and register it there.
   const linuxStartupCommand = [
+    'sudo useradd --system --user-group --home-dir /var/lib/borg-ui-agent \\',
+    '  --create-home --shell /usr/sbin/nologin borg-ui-agent',
+    'sudo install -d -o borg-ui-agent -g borg-ui-agent -m 0750 /etc/borg-ui-agent',
+    'sudo install -d -m 0755 /opt/borg-ui-agent',
+    'sudo python3.11 -m venv /opt/borg-ui-agent/.venv',
+    'sudo /opt/borg-ui-agent/.venv/bin/pip install .',
+    'sudo -u borg-ui-agent /opt/borg-ui-agent/.venv/bin/borg-ui-agent \\',
+    '  --config /etc/borg-ui-agent/config.toml \\',
+    '  register --server <server-url> --token <enrollment-token> --name <machine-name>',
+    'sudo /opt/borg-ui-agent/.venv/bin/borg-ui-agent service-check --user borg-ui-agent --group borg-ui-agent',
     'sudo cp agent/install/systemd/borg-ui-agent.service /etc/systemd/system/',
     'sudo systemctl daemon-reload',
     'sudo systemctl enable --now borg-ui-agent',
@@ -915,7 +927,12 @@ export function AgentSetupHelpContent({
   // The template names /Users/alex and launchd expands no ~, so it is rendered
   // for the real home directory instead of copied.
   const macosStartupCommand = [
-    'mkdir -p ~/Library/LaunchAgents ~/Library/Logs/borg-ui-agent',
+    'mkdir -p "$HOME/Library/Application Support/borg-ui-agent" ~/Library/LaunchAgents ~/Library/Logs/borg-ui-agent',
+    'python3.11 -m venv "$HOME/Library/Application Support/borg-ui-agent/.venv"',
+    '"$HOME/Library/Application Support/borg-ui-agent/.venv/bin/pip" install .',
+    '"$HOME/Library/Application Support/borg-ui-agent/.venv/bin/borg-ui-agent" \\',
+    '  --config "$HOME/Library/Application Support/borg-ui-agent/config.toml" \\',
+    '  register --server <server-url> --token <enrollment-token> --name <machine-name>',
     'sed "s#/Users/alex/#$HOME/#g" agent/install/launchd/com.borg-ui.agent.plist \\',
     '  > ~/Library/LaunchAgents/com.borg-ui.agent.plist',
     'launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.borg-ui.agent.plist',

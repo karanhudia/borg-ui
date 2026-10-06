@@ -542,8 +542,8 @@
         },
         "service": {
           "title": "4. Service checks",
-          "description": "The installer enables systemd by default so the agent survives reboot. Use these commands only when inspecting or repairing a manual installation.",
-          "descriptionMacos": "On a Mac the agent is a launchd user agent in the signed-in user's domain. Check it with the first command. The second block renders the template for your home directory and loads it; the template expects the agent under ~/Library/Application Support/borg-ui-agent, where the installer puts it."
+          "description": "The installer enables systemd by default so the agent survives reboot. Use these commands only when inspecting or repairing a manual installation. Run the second block from the cloned borg-ui directory: it installs the agent into /opt/borg-ui-agent and registers it at /etc/borg-ui-agent/config.toml, where the systemd unit expects them, then enables the unit.",
+          "descriptionMacos": "On a Mac the agent is a launchd user agent in the signed-in user's domain. Check it with the first command. Run the second block from the cloned borg-ui directory: it installs and registers the agent under ~/Library/Application Support/borg-ui-agent, where the template expects it, then renders the template for your home directory and loads it."
         }
       }
     },

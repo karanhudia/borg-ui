@@ -542,8 +542,8 @@
         },
         "service": {
           "title": "4. Comprobaciones del servicio",
-          "description": "El instalador habilita systemd de forma predeterminada para que el agente sobreviva a los reinicios. Usa estos comandos solo al inspeccionar o reparar una instalación manual.",
-          "descriptionMacos": "En un Mac el agente es un agente de usuario de launchd en el dominio del usuario con sesión iniciada. Compruébalo con el primer comando. El segundo bloque adapta la plantilla a tu directorio de inicio y la carga; la plantilla espera el agente en ~/Library/Application Support/borg-ui-agent, donde lo coloca el instalador."
+          "description": "El instalador habilita systemd de forma predeterminada para que el agente sobreviva a los reinicios. Usa estos comandos solo al inspeccionar o reparar una instalación manual. Ejecuta el segundo bloque desde el directorio borg-ui clonado: instala el agente en /opt/borg-ui-agent y lo registra en /etc/borg-ui-agent/config.toml, donde la unidad de systemd los espera, y luego habilita la unidad.",
+          "descriptionMacos": "En un Mac el agente es un agente de usuario de launchd en el dominio del usuario con sesión iniciada. Compruébalo con el primer comando. Ejecuta el segundo bloque desde el directorio borg-ui clonado: instala y registra el agente en ~/Library/Application Support/borg-ui-agent, donde la plantilla lo espera, y luego adapta la plantilla a tu directorio de inicio y la carga."
         }
       }
     },
