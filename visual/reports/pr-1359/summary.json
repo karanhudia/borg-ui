@@ -1,29 +1,29 @@
 {
-  "generatedAt": "2026-10-06T11:45:02.891Z",
+  "generatedAt": "2026-10-06T16:19:35.755Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1359 visual report",
-    "commitSha": "0a12f3ed71f9",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/37458001865"
+    "commitSha": "cdd5712c9ba7",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/37494379301"
   },
   "totals": {
-    "baseline": 1164,
-    "actual": 1170,
-    "compared": 1164,
+    "baseline": 1168,
+    "actual": 1182,
+    "compared": 1168,
     "changed": 4,
-    "added": 6,
+    "added": 14,
     "removed": 0,
-    "unchanged": 1160
+    "unchanged": 1164
   },
   "changed": [
     {
-      "fileName": "components-advancedrepositoryoptions--borg-2-without-upload-limit--mobile.png",
-      "baselinePath": "images/baseline/components-advancedrepositoryoptions--borg-2-without-upload-limit--mobile.png",
-      "actualPath": "images/actual/components-advancedrepositoryoptions--borg-2-without-upload-limit--mobile.png",
-      "diffPath": "images/diff/components-advancedrepositoryoptions--borg-2-without-upload-limit--mobile.png",
-      "diffPixels": 1381,
+      "fileName": "components-archives-archivestatsheader--borg-2-first-of-series--mobile.png",
+      "baselinePath": "images/baseline/components-archives-archivestatsheader--borg-2-first-of-series--mobile.png",
+      "actualPath": "images/actual/components-archives-archivestatsheader--borg-2-first-of-series--mobile.png",
+      "diffPath": "images/diff/components-archives-archivestatsheader--borg-2-first-of-series--mobile.png",
+      "diffPixels": 600,
       "totalPixels": 329160,
-      "diffRatio": 0.004195528010693887,
+      "diffRatio": 0.0018228217280349982,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -35,13 +35,13 @@
       }
     },
     {
-      "fileName": "components-advancedrepositoryoptions--borg-2-without-upload-limit.png",
-      "baselinePath": "images/baseline/components-advancedrepositoryoptions--borg-2-without-upload-limit.png",
-      "actualPath": "images/actual/components-advancedrepositoryoptions--borg-2-without-upload-limit.png",
-      "diffPath": "images/diff/components-advancedrepositoryoptions--borg-2-without-upload-limit.png",
-      "diffPixels": 57790,
+      "fileName": "components-archives-archivestatsheader--borg-2-first-of-series.png",
+      "baselinePath": "images/baseline/components-archives-archivestatsheader--borg-2-first-of-series.png",
+      "actualPath": "images/actual/components-archives-archivestatsheader--borg-2-first-of-series.png",
+      "diffPath": "images/diff/components-archives-archivestatsheader--borg-2-first-of-series.png",
+      "diffPixels": 2853,
       "totalPixels": 1024000,
-      "diffRatio": 0.056435546875,
+      "diffRatio": 0.0027861328125,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -53,31 +53,31 @@
       }
     },
     {
-      "fileName": "pages-managedagents--agent-reinstall-dialog-macos.png",
-      "baselinePath": "images/baseline/pages-managedagents--agent-reinstall-dialog-macos.png",
-      "actualPath": "images/actual/pages-managedagents--agent-reinstall-dialog-macos.png",
-      "diffPath": "images/diff/pages-managedagents--agent-reinstall-dialog-macos.png",
-      "diffPixels": 387333,
-      "totalPixels": 1024000,
-      "diffRatio": 0.3782548828125,
+      "fileName": "components-commandpreview--borg-2-remote-path--mobile.png",
+      "baselinePath": "images/baseline/components-commandpreview--borg-2-remote-path--mobile.png",
+      "actualPath": "images/actual/components-commandpreview--borg-2-remote-path--mobile.png",
+      "diffPath": "images/diff/components-commandpreview--borg-2-remote-path--mobile.png",
+      "diffPixels": 5077,
+      "totalPixels": 329160,
+      "diffRatio": 0.015424109855389476,
       "dimensionsChanged": false,
       "baseline": {
-        "width": 1280,
-        "height": 800
+        "width": 390,
+        "height": 844
       },
       "actual": {
-        "width": 1280,
-        "height": 800
+        "width": 390,
+        "height": 844
       }
     },
     {
-      "fileName": "pages-managedagents--agent-reinstall-dialog-open.png",
-      "baselinePath": "images/baseline/pages-managedagents--agent-reinstall-dialog-open.png",
-      "actualPath": "images/actual/pages-managedagents--agent-reinstall-dialog-open.png",
-      "diffPath": "images/diff/pages-managedagents--agent-reinstall-dialog-open.png",
-      "diffPixels": 388761,
+      "fileName": "components-commandpreview--borg-2-remote-path.png",
+      "baselinePath": "images/baseline/components-commandpreview--borg-2-remote-path.png",
+      "actualPath": "images/actual/components-commandpreview--borg-2-remote-path.png",
+      "diffPath": "images/diff/components-commandpreview--borg-2-remote-path.png",
+      "diffPixels": 9356,
       "totalPixels": 1024000,
-      "diffRatio": 0.3796494140625,
+      "diffRatio": 0.00913671875,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -91,28 +91,60 @@
   ],
   "added": [
     {
-      "fileName": "components-advancedrepositoryoptions--borg-2-behind-rclone-upload-limit--mobile.png",
-      "actualPath": "images/actual/components-advancedrepositoryoptions--borg-2-behind-rclone-upload-limit--mobile.png"
+      "fileName": "components-archives-archivestatsheader--borg-2-added-not-reported--mobile.png",
+      "actualPath": "images/actual/components-archives-archivestatsheader--borg-2-added-not-reported--mobile.png"
     },
     {
-      "fileName": "components-advancedrepositoryoptions--borg-2-behind-rclone-upload-limit.png",
-      "actualPath": "images/actual/components-advancedrepositoryoptions--borg-2-behind-rclone-upload-limit.png"
+      "fileName": "components-archives-archivestatsheader--borg-2-added-not-reported.png",
+      "actualPath": "images/actual/components-archives-archivestatsheader--borg-2-added-not-reported.png"
     },
     {
-      "fileName": "components-repositorycard--borg-2-behind-rclone-with-upload-limit--mobile.png",
-      "actualPath": "images/actual/components-repositorycard--borg-2-behind-rclone-with-upload-limit--mobile.png"
+      "fileName": "components-wizard-repository-location--borg-2-only-url--mobile.png",
+      "actualPath": "images/actual/components-wizard-repository-location--borg-2-only-url--mobile.png"
     },
     {
-      "fileName": "components-repositorycard--borg-2-behind-rclone-with-upload-limit.png",
-      "actualPath": "images/actual/components-repositorycard--borg-2-behind-rclone-with-upload-limit.png"
+      "fileName": "components-wizard-repository-location--borg-2-only-url.png",
+      "actualPath": "images/actual/components-wizard-repository-location--borg-2-only-url.png"
     },
     {
-      "fileName": "pages-managedagents--agent-reinstall-dialog-moved-to-this-server--mobile.png",
-      "actualPath": "images/actual/pages-managedagents--agent-reinstall-dialog-moved-to-this-server--mobile.png"
+      "fileName": "components-wizard-repository-location--borg-2-ssh-absolute-path--mobile.png",
+      "actualPath": "images/actual/components-wizard-repository-location--borg-2-ssh-absolute-path--mobile.png"
     },
     {
-      "fileName": "pages-managedagents--agent-reinstall-dialog-moved-to-this-server.png",
-      "actualPath": "images/actual/pages-managedagents--agent-reinstall-dialog-moved-to-this-server.png"
+      "fileName": "components-wizard-repository-location--borg-2-ssh-absolute-path.png",
+      "actualPath": "images/actual/components-wizard-repository-location--borg-2-ssh-absolute-path.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--borg-2-ssh-relative-path--mobile.png",
+      "actualPath": "images/actual/components-wizard-repository-location--borg-2-ssh-relative-path--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--borg-2-ssh-relative-path.png",
+      "actualPath": "images/actual/components-wizard-repository-location--borg-2-ssh-relative-path.png"
+    },
+    {
+      "fileName": "components-wizard-repository-review--borg-2-authenticated--mobile.png",
+      "actualPath": "images/actual/components-wizard-repository-review--borg-2-authenticated--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-review--borg-2-authenticated.png",
+      "actualPath": "images/actual/components-wizard-repository-review--borg-2-authenticated.png"
+    },
+    {
+      "fileName": "components-wizard-repository-security--borg-2-authenticated--mobile.png",
+      "actualPath": "images/actual/components-wizard-repository-security--borg-2-authenticated--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-security--borg-2-authenticated.png",
+      "actualPath": "images/actual/components-wizard-repository-security--borg-2-authenticated.png"
+    },
+    {
+      "fileName": "components-wizard-repository-security--borg-2-encrypted--mobile.png",
+      "actualPath": "images/actual/components-wizard-repository-security--borg-2-encrypted--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-security--borg-2-encrypted.png",
+      "actualPath": "images/actual/components-wizard-repository-security--borg-2-encrypted.png"
     }
   ],
   "removed": [],
@@ -832,6 +864,18 @@
       "fileName": "components-activebackupplanruncard--live-hook-activity.png"
     },
     {
+      "fileName": "components-advancedrepositoryoptions--borg-2-behind-rclone-upload-limit--mobile.png"
+    },
+    {
+      "fileName": "components-advancedrepositoryoptions--borg-2-behind-rclone-upload-limit.png"
+    },
+    {
+      "fileName": "components-advancedrepositoryoptions--borg-2-without-upload-limit--mobile.png"
+    },
+    {
+      "fileName": "components-advancedrepositoryoptions--borg-2-without-upload-limit.png"
+    },
+    {
       "fileName": "components-advancedrepositoryoptions--default--mobile.png"
     },
     {
@@ -1136,12 +1180,6 @@
     },
     {
       "fileName": "components-archives-archiveseriesheatmap--with-header.png"
-    },
-    {
-      "fileName": "components-archives-archivestatsheader--borg-2-first-of-series--mobile.png"
-    },
-    {
-      "fileName": "components-archives-archivestatsheader--borg-2-first-of-series.png"
     },
     {
       "fileName": "components-archives-archivestatsheader--never-measured--mobile.png"
@@ -1460,12 +1498,6 @@
     },
     {
       "fileName": "components-checkwarningdialog--conflicting-advanced-flags.png"
-    },
-    {
-      "fileName": "components-commandpreview--borg-2-remote-path--mobile.png"
-    },
-    {
-      "fileName": "components-commandpreview--borg-2-remote-path.png"
     },
     {
       "fileName": "components-commandpreview--local-backup-commands--mobile.png"
@@ -1994,6 +2026,12 @@
     },
     {
       "fileName": "components-repositorycard--borg-1-stored-size.png"
+    },
+    {
+      "fileName": "components-repositorycard--borg-2-behind-rclone-with-upload-limit--mobile.png"
+    },
+    {
+      "fileName": "components-repositorycard--borg-2-behind-rclone-with-upload-limit.png"
     },
     {
       "fileName": "components-repositorycard--borg-2-stored-size--mobile.png"
@@ -3199,7 +3237,19 @@
       "fileName": "pages-managedagents--agent-reinstall-dialog-macos--mobile.png"
     },
     {
+      "fileName": "pages-managedagents--agent-reinstall-dialog-macos.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-reinstall-dialog-moved-to-this-server--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-reinstall-dialog-moved-to-this-server.png"
+    },
+    {
       "fileName": "pages-managedagents--agent-reinstall-dialog-open--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-reinstall-dialog-open.png"
     },
     {
       "fileName": "pages-managedagents--delete-confirmation--mobile.png"
@@ -3212,12 +3262,6 @@
     },
     {
       "fileName": "pages-managedagents--fleet-overview.png"
-    },
-    {
-      "fileName": "pages-managedagents--locked-community--mobile.png"
-    },
-    {
-      "fileName": "pages-managedagents--locked-community.png"
     },
     {
       "fileName": "pages-managedagents--setup-help-details--mobile.png"
@@ -3421,10 +3465,10 @@
       "fileName": "quick-start-steps--what--mobile.png"
     },
     {
-      "fileName": "quick-start-steps--what-agent-pro--mobile.png"
+      "fileName": "quick-start-steps--what-agent--mobile.png"
     },
     {
-      "fileName": "quick-start-steps--what-agent-pro.png"
+      "fileName": "quick-start-steps--what-agent.png"
     },
     {
       "fileName": "quick-start-steps--what-another-computer--mobile.png"
