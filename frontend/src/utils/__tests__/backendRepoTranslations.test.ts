@@ -20,6 +20,7 @@ const repositoryErrorKeys = [
   'backend.errors.repo.remoteBorg2Incompatible',
   'backend.errors.repo.borg2OnlyUrl',
   'backend.errors.repo.borg2OnlyUrlOrSshHost',
+  'backend.errors.repo.borg1OnlySshAddress',
 ] as const
 
 const backupPlanErrorKeys = ['backend.errors.backupPlans.nameExists'] as const
@@ -87,6 +88,19 @@ describe('backend repository translations', () => {
       })
     ).toBe(
       'A s3: repository URL needs Borg 2; Borg 1 reads it as an SSH host named s3. Pick Borg 2 for this repository, or write the SSH host as ssh://s3/path (ssh://s3/./path for a path relative to the login directory).'
+    )
+  })
+
+  it('says how to write a Borg 1 SSH address for Borg 2', async () => {
+    await i18n.changeLanguage('en')
+
+    expect(
+      translateBackendKey({
+        key: 'backend.errors.repo.borg1OnlySshAddress',
+        params: { host: 'borg@backup.example.com' },
+      })
+    ).toBe(
+      'borg@backup.example.com:path is an SSH address only Borg 1 understands; Borg 2 reads it as a local directory. Write it as ssh://borg@backup.example.com/path for a path relative to the login directory or ssh://borg@backup.example.com//path for an absolute path, or pick Borg 1 for this repository.'
     )
   })
 

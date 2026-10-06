@@ -103,7 +103,6 @@ export default function BackupPlans() {
   const quickStart = useQuickStart()
   const canUseMultiRepository = can('backup_plan_multi_repository')
   const canUseMixedSourceTypes = can('backup_plan_mixed_sources')
-  const canUseManagedAgents = can('managed_agents')
   const canUseDatabaseDiscovery = can('database_discovery')
   const canUseContainerBackups = can('container_backups')
   const canUseRclone = can('rclone')
@@ -253,7 +252,6 @@ export default function BackupPlans() {
   const { data: agentMachinesData } = useQuery({
     queryKey: ['managed-agents'],
     queryFn: managedAgentsAPI.listAgents,
-    enabled: canUseManagedAgents,
   })
   const agentMachines: AgentMachineResponse[] = useMemo(
     () => agentMachinesData?.data || [],
@@ -695,8 +693,6 @@ export default function BackupPlans() {
         wizardState.name.trim() &&
         wizardState.sourceDirectories.length > 0 &&
         (wizardState.sourceType !== 'remote' || wizardState.sourceSshConnectionId) &&
-        (canUseManagedAgents ||
-          !sourceLocations.some((location) => location.source_type === 'agent')) &&
         (canUseMixedSourceTypes || sourceTypes.size <= 1)
       )
     }
@@ -761,18 +757,6 @@ export default function BackupPlans() {
     }
     const sourceLocations = wizardState.sourceLocations || []
     if (
-      !canUseManagedAgents &&
-      sourceLocations.some((location) => location.source_type === 'agent')
-    ) {
-      toast.error(t('backupPlans.sourceChooser.managedAgentRequiresPro'))
-      trackFeatureBlocked('managed_agents', {
-        surface: BACKUP_PLANS_ANALYTICS_SECTION,
-        operation: 'submit_plan',
-        usage: 'backup_plan_source',
-      })
-      return
-    }
-    if (
       !canUseMixedSourceTypes &&
       new Set(sourceLocations.map((location) => location.source_type)).size > 1
     ) {
@@ -828,7 +812,6 @@ export default function BackupPlans() {
       loadingScripts={loadingScripts}
       canUseMultiRepository={canUseMultiRepository}
       canUseBorg2={canUseBorg2}
-      canUseManagedAgents={canUseManagedAgents}
       canUseMixedSourceTypes={canUseMixedSourceTypes}
       canUseDatabaseDiscovery={canUseDatabaseDiscovery}
       canUseContainerBackups={canUseContainerBackups}
@@ -910,7 +893,6 @@ export default function BackupPlans() {
         startingPlanId={startingPlanId}
         highlightedPlanId={highlightedPlanId}
         canUseMultiRepository={canUseMultiRepository}
-        canUseManagedAgents={canUseManagedAgents}
         canUseDatabaseDiscovery={canUseDatabaseDiscovery}
         canUseContainerBackups={canUseContainerBackups}
         cancellingRunId={cancellingRunId}
@@ -1000,7 +982,6 @@ export default function BackupPlans() {
         open={repositoryWizardOpen}
         onClose={() => setRepositoryWizardOpen(false)}
         mode="create"
-        canUseManagedAgents={canUseManagedAgents}
         canUseRclone={canUseRclone}
         onSubmit={async (data) => {
           await repositoryCreateMutation.mutateAsync(data)

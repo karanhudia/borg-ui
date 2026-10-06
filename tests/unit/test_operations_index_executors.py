@@ -514,7 +514,7 @@ async def test_run_archive_sync_skips_missing_repository(db, repo):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_run_stats_writes_total_size(db, repo, monkeypatch):
-    """stats persists the measured size with its source and Borg's
+    """stats persists the measured size with its source and Borg 1's
     last_modified (#934)."""
     monkeypatch.setattr(
         index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
@@ -526,7 +526,7 @@ async def test_run_stats_writes_total_size(db, repo, monkeypatch):
             return_value=SizeResult(
                 bytes=2048,
                 objects=3,
-                source="borg2_index",
+                source="borg1_cache_stats",
                 last_modified=datetime(2026, 9, 6, 8, 57, 17),
             )
         ),
@@ -535,14 +535,14 @@ async def test_run_stats_writes_total_size(db, repo, monkeypatch):
     assert outcome.result == {
         "bytes": 2048,
         "objects": 3,
-        "source": "borg2_index",
+        "source": "borg1_cache_stats",
         "last_modified": "2026-09-06T08:57:17",
     }
     db.refresh(repo)
     assert repo.total_size == "2.00 KB"
     assert repo.total_size_bytes == 2048
     assert repo.total_size_measured_at is not None
-    assert repo.total_size_source == "borg2_index"
+    assert repo.total_size_source == "borg1_cache_stats"
     assert repo.borg_last_modified == datetime(2026, 9, 6, 8, 57, 17)
 
 
@@ -1872,7 +1872,6 @@ async def test_agent_listing_reports_the_timeout_when_the_cancel_fails(
 async def test_run_stats_persists_an_empty_borg2_index_but_not_failed_measurement(
     db, repo, monkeypatch, index_result
 ):
-    from app.core.borg2 import borg2
     from app.services import storage_usage
 
     repo.borg_version = 2
@@ -1885,7 +1884,6 @@ async def test_run_stats_persists_an_empty_borg2_index_but_not_failed_measuremen
     monkeypatch.setattr(
         index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
     )
-    monkeypatch.setattr(borg2, "rinfo", AsyncMock(return_value={"success": False}))
     monkeypatch.setattr(
         storage_usage, "borg2_index_size", AsyncMock(return_value=index_result)
     )

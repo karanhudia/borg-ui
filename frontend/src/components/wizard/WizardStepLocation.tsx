@@ -85,7 +85,6 @@ interface WizardStepLocationProps {
   rcloneStatus?: RcloneStatus | null
   dataSource?: 'local' | 'remote'
   sourceSshConnectionId?: number | ''
-  canUseManagedAgents?: boolean
   canUseRclone?: boolean
   directRcloneModeLocked?: boolean
   onChange: (data: Partial<LocationStepData>) => void
@@ -102,7 +101,6 @@ export default function WizardStepLocation({
   rcloneStatus = null,
   dataSource,
   sourceSshConnectionId,
-  canUseManagedAgents = true,
   canUseRclone = true,
   directRcloneModeLocked = false,
   onChange,
@@ -143,17 +141,8 @@ export default function WizardStepLocation({
   const destinations = getDestinations({
     t,
     isRemoteLocationDisabled,
-    isAgentLocationDisabled: isAgentLocationDisabled || !canUseManagedAgents,
-  }).map((destination) =>
-    destination.key === 'agent' && !canUseManagedAgents
-      ? {
-          ...destination,
-          icon: <Lock size={16} />,
-          description: t('wizard.location.managedAgentRequiresPro'),
-          disabled: true,
-        }
-      : destination
-  )
+    isAgentLocationDisabled,
+  })
 
   const selectedDestinationKey: DestinationKey = isAgentExecution
     ? 'agent'
@@ -163,7 +152,7 @@ export default function WizardStepLocation({
 
   const handleDestinationChange = (key: DestinationKey) => {
     if (key === 'ssh' && isRemoteLocationDisabled) return
-    if (key === 'agent' && (isAgentLocationDisabled || !canUseManagedAgents)) return
+    if (key === 'agent' && isAgentLocationDisabled) return
 
     if (key === 'agent') {
       onChange({
@@ -421,7 +410,7 @@ export default function WizardStepLocation({
       )}
 
       {/* Agent sub-form */}
-      {isAgentExecution && !isDirectRclone && canUseManagedAgents && (
+      {isAgentExecution && !isDirectRclone && (
         <Stack spacing={1.25}>
           <ManagedAgentSelect
             value={agentMachineId}
@@ -440,12 +429,6 @@ export default function WizardStepLocation({
             {t('wizard.location.agentStorageNote')}
           </Typography>
         </Stack>
-      )}
-
-      {isAgentExecution && !isDirectRclone && !canUseManagedAgents && (
-        <Alert severity="info" icon={<Lock size={18} />}>
-          {t('wizard.location.managedAgentRequiresPro')}
-        </Alert>
       )}
 
       {/* SSH sub-form */}

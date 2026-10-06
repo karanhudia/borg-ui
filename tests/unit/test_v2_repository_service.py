@@ -80,9 +80,7 @@ async def test_export_keyfile_uses_borg2_key_export_shape():
             "key",
             "export",
             "/tmp/repo.key",
-            "--remote-path",
-            "/usr/bin/borg2",
         ],
         timeout=30,
-        env={"BORG_PASSPHRASE": "secret"},
+        env={"BORG_REMOTE_PATH": "/usr/bin/borg2", "BORG_PASSPHRASE": "secret"},
     )

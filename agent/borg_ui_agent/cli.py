@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import shlex
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
@@ -17,6 +18,7 @@ from agent.borg_ui_agent.config import (
     save_config,
 )
 from agent.borg_ui_agent.runtime import AgentRuntime, get_capabilities
+from agent.borg_ui_agent.self_upgrade import recorded_server
 from agent.borg_ui_agent.service_setup import (
     DEFAULT_SERVICE_CONFIG,
     DEFAULT_SERVICE_EXECUTABLE,
@@ -168,7 +170,23 @@ def _set_server(args: argparse.Namespace) -> int:
     print(f"Server: {server_url}")
     print(f"Config: {config_path}")
     print("Restart the service for this to take effect.")
+    # Only an https server can serve a remote upgrade at all.
+    if server_url.startswith("https://") and _record_names_another_server(server_url):
+        print(
+            "Remote upgrade is off until this endpoint is reinstalled once with "
+            f"--server {shlex.quote(server_url)} --reinstall."
+        )
     return 0
+
+
+def _record_names_another_server(server_url: str) -> bool:
+    try:
+        recorded = recorded_server()
+    except (OSError, ValueError):
+        # The move itself is done; an upgrade record that cannot be read, or
+        # is not text, is not its error.
+        return False
+    return bool(recorded) and recorded.removesuffix("/") != server_url
 
 
 def _run(args: argparse.Namespace) -> int:

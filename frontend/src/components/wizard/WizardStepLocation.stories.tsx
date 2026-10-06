@@ -171,7 +171,6 @@ export const CommunityPlanLockedDestinations: Story = {
       name: 'Community Repository',
       borgVersion: 2,
     },
-    canUseManagedAgents: false,
     canUseRclone: false,
     rcloneStatus: { available: false, error: 'rclone repositories require Pro.' },
     rcloneRemotes,

@@ -7,7 +7,6 @@ All routes accept a `repository` query param (the repo path).
 import json
 import os
 import re
-from typing import Optional
 import tempfile  # noqa: F401 - retained as a patch target in download endpoint tests
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -32,7 +31,11 @@ from app.core.security import (
     get_current_download_user,
 )
 from app.core.features import require_feature
-from app.core.borg2 import borg2, normalize_repo_info_encryption
+from app.core.borg2 import (
+    borg2,
+    borg2_unreadable_repository_detail,
+    normalize_repo_info_encryption,
+)
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
 from app.services.archive_browse_service import (
     build_browse_items,
@@ -60,25 +63,6 @@ logger = structlog.get_logger()
 router = APIRouter(tags=["Archives v2"])
 
 BORG2 = require_feature("borg_v2")
-
-
-_UNSUPPORTED_VERSION = re.compile(
-    r"repository version (\d+) is not supported by this borg version"
-)
-
-
-def _unsupported_repository_version(stderr: str) -> Optional[dict]:
-    """Borg 2 is in beta and its repository format has changed between
-    betas. A repository written by another beta fails with a borgstore
-    trace that ends in this sentence; hand the frontend a key it can
-    translate instead of the trace."""
-    match = _UNSUPPORTED_VERSION.search(stderr or "")
-    if not match:
-        return None
-    return {
-        "key": "backend.errors.archives.unsupportedRepositoryVersion",
-        "params": {"version": int(match.group(1))},
-    }
 
 
 ARCHIVE_ID_RE = re.compile(r"^[0-9a-fA-F]{16,}$")
@@ -319,7 +303,8 @@ async def list_archives(
     if not result.get("success", bool(result.get("stdout"))):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list archives: {result.get('stderr', 'unknown error')}",
+            detail=borg2_unreadable_repository_detail(result.get("stderr"))
+            or f"Failed to list archives: {result.get('stderr', 'unknown error')}",
         )
     return {"archives": result.get("stdout", "")}
 
@@ -364,7 +349,8 @@ async def get_archive_info(
     if not result.get("success", bool(result.get("stdout"))):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get archive info: {result.get('stderr', 'unknown error')}",
+            detail=borg2_unreadable_repository_detail(result.get("stderr"))
+            or f"Failed to get archive info: {result.get('stderr', 'unknown error')}",
         )
 
     try:
@@ -553,7 +539,7 @@ async def get_archive_contents(
             stderr = result.get("stderr", "unknown error")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=_unsupported_repository_version(stderr)
+                detail=borg2_unreadable_repository_detail(stderr)
                 or f"Failed to get archive contents: {stderr}",
             )
 

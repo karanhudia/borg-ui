@@ -368,7 +368,7 @@ class TestCheckV2Service:
             repository_id=borg_v2_repo_for_services.id,
             status="running",
             max_duration=0,
-            extra_flags="--verify-data --save-space",
+            extra_flags="--verify-data --find-lost-archives",
         )
         db_session.commit()
         db_session.refresh(job)
@@ -398,7 +398,7 @@ class TestCheckV2Service:
 
         cmd = mock_exec.call_args.args
         assert "--verify-data" in cmd
-        assert "--save-space" in cmd
+        assert "--find-lost-archives" in cmd
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -639,10 +639,6 @@ class TestCompactV2Service:
                 return_value=None,
             ),
             patch(
-                "app.services.v2.compact_service.compact_stats_supported",
-                return_value=True,
-            ),
-            patch(
                 "app.services.v2.compact_service._get_borg2_binary",
                 return_value="borg2",
             ),
@@ -728,10 +724,6 @@ class TestCompactV2Service:
             patch(
                 "app.services.v2.compact_service.resolve_repo_ssh_key_file",
                 return_value=None,
-            ),
-            patch(
-                "app.services.v2.compact_service.compact_stats_supported",
-                return_value=True,
             ),
             patch(
                 "app.services.v2.compact_service._get_borg2_binary",
@@ -1111,103 +1103,6 @@ def test_compact_log_window_keeps_head_and_tail():
     assert short.last(0) == []
 
 
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_execute_compact_without_stats_on_a_borg_before_b15(
-    db_session, testing_session_local, borg_v2_repo_for_services, tmp_path, monkeypatch
-):
-    """A configured Borg 2 binary may be any build; before 2.0.0b15 the
-    flag fails the whole compact, so it is left out with `--info` and
-    `BORG_UNITS=raw`, and no statistics are expected."""
-    monkeypatch.delenv("BORG_UNITS", raising=False)
-    job = Operation(
-        repository_id=borg_v2_repo_for_services.id,
-        kind="compact",
-        category="maintenance",
-        status="running",
-        trigger="manual",
-        priority=10,
-        run_id="run-compact-old",
-    )
-    db_session.add(job)
-    db_session.commit()
-    db_session.refresh(job)
-    service = CompactV2Service()
-    service.log_dir = tmp_path
-    with (
-        patch("app.services.v2.compact_service.SessionLocal", testing_session_local),
-        patch(
-            "app.services.v2.compact_service.resolve_repo_ssh_key_file",
-            return_value=None,
-        ),
-        patch(
-            "app.services.v2.compact_service._get_borg2_binary", return_value="borg2"
-        ),
-        patch(
-            "app.services.v2.compact_service.compact_stats_supported",
-            return_value=False,
-        ),
-        patch(
-            "app.services.v2.compact_service._get_process_start_time", return_value=1
-        ),
-        patch(
-            "app.services.v2.compact_service.asyncio.create_subprocess_exec",
-            return_value=FakeProcess(returncode=0, stderr_lines=[]),
-        ) as spawn,
-    ):
-        await service.execute_compact(job.id, borg_v2_repo_for_services.id)
-
-    cmd = list(spawn.call_args.args)
-    assert "--stats" not in cmd and "--info" not in cmd
-    assert "BORG_UNITS" not in spawn.call_args.kwargs["env"]
-    verification = testing_session_local()
-    refreshed = verification.get(Operation, job.id)
-    assert refreshed.status == "completed"
-    assert (refreshed.result or {}).get("stats") is None
-    verification.close()
-
-
-@pytest.mark.unit
-def test_server_compact_stats_support_is_probed_per_binary_file(monkeypatch):
-    from app.core import borg2 as borg2_core
-
-    calls = []
-
-    class _Probe:
-        stdout = "borg2 2.0.0b14\n"
-        stderr = ""
-
-    def fake_run(cmd, **kwargs):
-        calls.append(cmd)
-        return _Probe()
-
-    monkeypatch.setattr(borg2_core.subprocess, "run", fake_run)
-    monkeypatch.setattr(borg2_core, "_COMPACT_STATS_SUPPORT", {})
-    assert borg2_core.compact_stats_supported("/opt/borg2") is False
-    assert borg2_core.compact_stats_supported("/opt/borg2") is False
-    assert calls == [["/opt/borg2", "--version"]]
-
-    _Probe.stdout = "borg2 2.0.0b24\n"
-    monkeypatch.setattr(borg2_core, "_binary_key", lambda binary: (binary, 2, 2))
-    assert borg2_core.compact_stats_supported("/opt/borg2") is True
-
-    def failing_run(cmd, **kwargs):
-        raise OSError("no such binary")
-
-    monkeypatch.setattr(borg2_core.subprocess, "run", failing_run)
-    # unreadable: no flag this time (a wrong flag fails the whole compact)
-    assert borg2_core.compact_stats_supported("/opt/other") is False
-
-    # output without a version token: nothing known, no flag, and nothing
-    # is remembered, so the next probe decides afresh
-    _Probe.stdout = "some wrapper banner\n"
-    monkeypatch.setattr(borg2_core.subprocess, "run", fake_run)
-    monkeypatch.setattr(borg2_core, "_binary_key", lambda binary: (binary, 3, 3))
-    assert borg2_core.compact_stats_supported("/opt/borg2") is False
-    _Probe.stdout = "borg2 2.0.0b24\n"
-    assert borg2_core.compact_stats_supported("/opt/borg2") is True
-
-
 class _RunnerContext:
     """The slice of OperationContext the maintenance executor uses, for a row
     the runner has already claimed."""
@@ -1255,10 +1150,6 @@ async def test_runner_claimed_compact_runs_the_borg2_service(
         ),
         patch(
             "app.services.v2.compact_service._get_borg2_binary", return_value="borg2"
-        ),
-        patch(
-            "app.services.v2.compact_service.compact_stats_supported",
-            return_value=False,
         ),
         patch(
             "app.services.v2.compact_service._get_process_start_time", return_value=1

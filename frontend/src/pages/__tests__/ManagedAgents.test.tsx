@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor, within } from '@testing-library/react'
 import { QueryClient } from '@tanstack/react-query'
@@ -219,24 +221,6 @@ describe('ManagedAgents', () => {
     expect(managedAgentsAPI.listAgents).toHaveBeenCalled()
   })
 
-  it('shows the plan gate over a read-only page preview when managed agents are unavailable', async () => {
-    vi.mocked(managedAgentsAPI.listAgents).mockResolvedValue({
-      data: [buildAgent({ name: 'edge-pi', hostname: 'edge-pi.local' })],
-    } as AxiosResponse)
-    mockPlanCan.mockImplementation((feature) => feature !== 'managed_agents')
-
-    renderWithProviders(<ManagedAgents />, { initialRoute: '/managed-agents' })
-
-    expect(await screen.findByText(/managed agents need pro or enterprise/i)).toBeInTheDocument()
-    expect(screen.getByText(/Run this on a remote machine to register it/i)).toBeInTheDocument()
-    expect(await screen.findByText('edge-pi.local')).toBeInTheDocument()
-    expect(screen.queryByText('No agents enrolled.')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /add agent/i })).not.toBeInTheDocument()
-    expect(managedAgentsAPI.listAgents).toHaveBeenCalled()
-    expect(managedAgentsAPI.listEnrollmentTokens).toHaveBeenCalled()
-    expect(managedAgentsAPI.listJobs).toHaveBeenCalled()
-  })
-
   it('manually refreshes managed-agent status with visible feedback', async () => {
     const user = userEvent.setup()
     let resolveRefresh: ((value: AxiosResponse<AgentMachineResponse[]>) => void) | undefined
@@ -389,6 +373,35 @@ describe('ManagedAgents', () => {
     await user.click(screen.getByLabelText('Copy install commands'))
 
     expect(onCopy).toHaveBeenCalledWith(expect.stringContaining('git clone'))
+  })
+
+  it('installs and registers the manual agent where the service templates start it', async () => {
+    const user = userEvent.setup()
+    const onCopy = vi.fn()
+    const template = (path: string) =>
+      readFileSync(resolve(__dirname, '../../../../agent/install', path), 'utf8')
+    const unit = template('systemd/borg-ui-agent.service')
+    // launchd expands no ~, so the guide renders /Users/alex/ as $HOME/.
+    const plist = template('launchd/com.borg-ui.agent.plist').replace(/\/Users\/alex\//g, '$HOME/')
+
+    renderWithProviders(<AgentSetupHelpContent command="install" onCopy={onCopy} />)
+    await user.click(screen.getByLabelText('Copy systemd commands'))
+    await user.click(screen.getByLabelText('Copy launchd commands'))
+    const [systemd, launchd] = onCopy.mock.calls.map(([value]) => value as string)
+
+    const [, linuxBinary, linuxConfig] = unit.match(/^ExecStart=(\S+) --config (\S+) run$/m)!
+    const linuxVenv = linuxBinary.replace(/\/bin\/borg-ui-agent$/, '')
+    expect(systemd).toContain(`-m venv ${linuxVenv}\n`)
+    expect(systemd).toContain(`${linuxVenv}/bin/pip install .`)
+    expect(systemd).toContain(`${linuxBinary} \\\n  --config ${linuxConfig} \\\n  register `)
+
+    const [, macBinary, macConfig] = plist.match(
+      /<key>ProgramArguments<\/key>\s*<array>\s*<string>([^<]+)<\/string>\s*<string>--config<\/string>\s*<string>([^<]+)<\/string>/
+    )!
+    const macVenv = macBinary.replace(/\/bin\/borg-ui-agent$/, '')
+    expect(launchd).toContain(`-m venv "${macVenv}"`)
+    expect(launchd).toContain(`"${macVenv}/bin/pip" install .`)
+    expect(launchd).toContain(`"${macBinary}" \\\n  --config "${macConfig}" \\\n  register `)
   })
 
   it('uses a single waiting indicator in the add-agent install command', () => {
@@ -600,6 +613,64 @@ describe('ManagedAgents', () => {
     expect(screen.getByText(/borg 2 pending/i)).toBeInTheDocument()
   })
 
+  it("marks an agent whose Borg 2 is older than the server's, on the card and in diagnostics", () => {
+    const agent = buildAgent({
+      borg_versions: [
+        { major: 1, version: '1.4.5' },
+        { major: 2, version: '2.0.0b24' },
+      ],
+      borg2_minimum_version: '2.0.0b25',
+      borg2_below_minimum: true,
+    })
+
+    renderWithProviders(
+      <AgentList
+        agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        onRunDiagnostics={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+    expect(screen.getByText('Borg 2 too old')).toBeInTheDocument()
+
+    renderWithProviders(<AgentDiagnosticsDialog open agent={agent} onClose={vi.fn()} />)
+    const alert = screen
+      .getAllByRole('alert')
+      .find((element) => element.textContent?.includes('older than this server'))
+    expect(alert).toBeDefined()
+    expect(alert).toHaveTextContent('2.0.0b24')
+    expect(alert).toHaveTextContent('2.0.0b25')
+    expect(alert).toHaveTextContent('--reinstall --borg-version both --borg-source server')
+  })
+
+  it('shows no Borg 2 marker for an agent at the minimum', () => {
+    const agent = buildAgent({
+      borg_versions: [{ major: 2, version: '2.0.0b25' }],
+      borg2_minimum_version: '2.0.0b25',
+      borg2_below_minimum: false,
+    })
+
+    renderWithProviders(
+      <AgentList
+        agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        onRunDiagnostics={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+    expect(screen.queryByText('Borg 2 too old')).not.toBeInTheDocument()
+  })
+
   it('opens managed-agent diagnostics from an agent card and runs a session check', async () => {
     const user = userEvent.setup()
     const agent = buildAgent({
@@ -802,7 +873,7 @@ describe('ManagedAgents', () => {
         },
         {
           major: 2,
-          version: '2.0.0b23',
+          version: '2.0.0b25',
           path: '/opt/borg-ui-agent/borg2/current/borg',
           install_source: 'borg-ui-installer',
         },
@@ -837,6 +908,51 @@ describe('ManagedAgents', () => {
     expect(onCopy).toHaveBeenLastCalledWith(
       'curl -fsSL https://borg-ui.example.com/agent/install.sh | sudo bash -s -- --reinstall --borg-version both'
     )
+  }, 60000)
+
+  it('names this server in the reinstall only when the operator says the endpoint was moved', async () => {
+    const user = userEvent.setup()
+    const onCopy = vi.fn()
+    const agent = {
+      id: 9,
+      agent_id: 'agent-moved-9',
+      name: 'moved',
+      hostname: 'moved-01',
+      status: 'online',
+      os: 'linux',
+      arch: 'x86_64',
+      agent_version: '0.1.16',
+      borg_versions: [],
+      last_seen_at: '2026-05-18T10:00:00.000Z',
+      created_at: '2026-05-18T09:00:00.000Z',
+      updated_at: '2026-05-18T10:00:00.000Z',
+    } as AgentMachineResponse
+    const props = {
+      open: true,
+      serverUrl: 'https://borg-ui.example.com',
+      onCancel: vi.fn(),
+      onCopy,
+    }
+
+    const { rerender } = renderWithProviders(<AgentReinstallDialog {...props} agent={agent} />)
+    const dialog = screen.getByRole('dialog', { name: /reinstall agent/i })
+    const moved = within(dialog).getByRole('checkbox', { name: /moved to this server/i })
+    // Off by default: the browser's address is not always the one agents use,
+    // and recording it on an endpoint that never moved turns its upgrades off.
+    expect(moved).not.toBeChecked()
+
+    await user.click(moved)
+    await user.click(within(dialog).getByLabelText('Copy reinstall command'))
+    expect(onCopy).toHaveBeenLastCalledWith(
+      'curl -fsSL https://borg-ui.example.com/agent/install.sh | sudo bash -s -- --server https://borg-ui.example.com --reinstall'
+    )
+
+    rerender(<AgentReinstallDialog {...props} agent={{ ...agent, id: 10 }} />)
+    expect(
+      within(screen.getByRole('dialog', { name: /reinstall agent/i })).getByRole('checkbox', {
+        name: /moved to this server/i,
+      })
+    ).not.toBeChecked()
   }, 60000)
 
   it('opens a tokenless reinstall script from an agent card', async () => {

@@ -67,8 +67,6 @@ def test_wipe_delete_commands_are_version_aware_and_never_delete_repository():
         "--dry-run",
         "-a",
         "sh:*",
-        "--remote-path",
-        "/usr/local/bin/borg2",
     ]
     assert borg2_execute == [
         "borg2",
@@ -78,9 +76,9 @@ def test_wipe_delete_commands_are_version_aware_and_never_delete_repository():
         "--list",
         "-a",
         "sh:*",
-        "--remote-path",
-        "/usr/local/bin/borg2",
     ]
+    # Borg 2 has no --remote-path; the wipe runs with the repository's
+    # prepared environment, which carries BORG_REMOTE_PATH.
     assert "repo-delete" not in borg2_execute
     assert "rdelete" not in borg2_execute
 
