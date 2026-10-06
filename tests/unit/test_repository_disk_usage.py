@@ -2,6 +2,7 @@ import pytest
 
 from app.core.security import get_password_hash
 from app.database.models import AgentJob, AgentMachine, Repository
+from agent.borg_ui_agent import paths
 from agent.borg_ui_agent.repository_ops import (
     REPOSITORY_JOB_KINDS,
     RepositoryOperationPayload,
@@ -30,10 +31,11 @@ def _payload(repository_path):
 
 
 @pytest.mark.unit
-def test_disk_usage_measures_the_repository_in_bytes():
+def test_disk_usage_measures_the_repository_in_bytes(monkeypatch):
     # -b so the server formats the number itself rather than parsing a
     # human-readable suffix, and -- so a path starting with a dash cannot be
-    # read as an option.
+    # read as an option. The Darwin form is in agent/test_darwin_platform.py.
+    monkeypatch.setattr(paths.platform, "system", lambda: "Linux")
     cmd = _payload("/srv/borg/repo-example").build_command()
     assert cmd == ["du", "-sb", "--", "/srv/borg/repo-example"]
 

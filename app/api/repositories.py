@@ -64,9 +64,12 @@ from app.core.borg_router import BorgRouter
 from app.core.borg_errors import is_lock_error, is_repository_exists_failure
 from app.core.borg2 import (
     BORG2_ENCRYPTION_MODES,
-    ENCRYPTION_FLAGS_SINCE_BETA,
+    BORG2_ONLY_URL_PREFIXES,  # noqa: F401  (re-export)
+    V2_ONLY_ENCRYPTION_MODES,
+    borg1_ssh_address_host,
+    borg2_only_url_prefix,
+    borg2_repository_url_refusal,
     borg2_unreadable_repository_detail,
-    borg2_speaks_encryption_flags,
     normalize_repo_info_encryption,
 )
 from app.core.features import (
@@ -93,6 +96,7 @@ from app.services.repository_executor import (
     normalize_executor_type,
     queue_agent_repository_operation_job,
     repository_executor_type,
+    require_agent_borg2,
     wait_for_agent_repository_operation_job,
 )
 from app.services.check_flag_validation import (
@@ -109,7 +113,6 @@ from app.services.agent_connection_manager import (
     AgentCommandError,
 )
 from app.core.agent_constants import AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS
-from app.core.agent_versions import agent_borg_version_for_major
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.repository_info_sync import sync_archive_stats_from_info
 from app.services.storage_usage import (
@@ -168,13 +171,6 @@ from app.utils.ssh_utils import (
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["repositories"], dependencies=[Depends(authorize_request)])
-
-V2_ONLY_ENCRYPTION_MODES = {
-    "repokey-aes-ocb",
-    "repokey-chacha20-poly1305",
-    "keyfile-aes-ocb",
-    "keyfile-chacha20-poly1305",
-}
 
 
 def _router_repo_snapshot(repository: Repository) -> SimpleNamespace:
@@ -240,7 +236,7 @@ def _normalize_restore_check_paths(paths: Any) -> list[str]:
 def _validate_borg_flags(text: Optional[str], command: str, borg_version) -> None:
     """422 for flags the allowlist or the repository's Borg major refuses."""
     try:
-        parse_borg_flags(text, command, borg_version or 1)
+        parse_borg_flags(text, command, borg_version or 1, local_paths=False)
     except ValueError as exc:
         raise HTTPException(
             status_code=422,
@@ -1029,9 +1025,9 @@ async def _update_agent_repository_stats(
             rinfo_result = await wait(rinfo_job, timeouts["info_timeout"])
             rinfo = json.loads((rinfo_result or {}).get("stdout") or "{}")
             # Deliberately NOT normalize_repo_info_encryption() here. That fills
-            # `mode` with the bare cipher for Borg 2.0.0b22, which is right for
+            # `mode` with the bare cipher for Borg 2, which is right for
             # display but wrong for this column: the stored value is the combined
-            # name the repository was created with (repokey-aes-ocb), and b22's
+            # name the repository was created with (repokey-aes-ocb), and Borg 2's
             # repo-info does not report the key location, so writing its cipher
             # back would drop that half for good. No mode, no write — the stored
             # name stands.
@@ -1115,7 +1111,8 @@ async def _update_agent_repository_stats(
                 du_result = await wait(du_job, timeouts["info_timeout"])
                 du_meta = du_result or {}
                 if du_meta.get("return_code", 0) == 0:
-                    # `du -sb` prints "<bytes>\t<path>".
+                    # "<bytes>\t<path>": `du -sb`, or on macOS (agent 0.1.15)
+                    # `du -A -sk` scaled to bytes by the agent.
                     stdout = (du_meta.get("stdout") or "").strip()
                     first = stdout.split("\n")[0] if stdout else ""
                     fields = first.split()
@@ -1573,18 +1570,6 @@ def _uses_borg2_payload(data: Union[RepositoryCreate, RepositoryImport]) -> bool
     return requested_version == 2 or data.encryption in V2_ONLY_ENCRYPTION_MODES
 
 
-# Repository URLs only Borg 2 can open.
-BORG2_ONLY_URL_PREFIXES = (
-    "rest://",
-    "sftp://",
-    "http://",
-    "https://",
-    "s3:",
-    "b2:",
-    "rclone:",
-)
-
-
 def _reject_borg2_only_url_for_borg1(
     path: Optional[str],
     *,
@@ -1603,21 +1588,45 @@ def _reject_borg2_only_url_for_borg1(
     """
     if borg2 or connection_id:
         return
-    lowered = (path or "").strip().lower()
-    for prefix in BORG2_ONLY_URL_PREFIXES:
-        if not lowered.startswith(prefix):
-            continue
-        if prefix.endswith("//") or not agent:
-            detail = {
-                "key": "backend.errors.repo.borg2OnlyUrl",
-                "params": {"scheme": prefix},
-            }
-        else:
-            detail = {
-                "key": "backend.errors.repo.borg2OnlyUrlOrSshHost",
-                "params": {"scheme": prefix, "host": prefix[:-1]},
-            }
-        raise HTTPException(status_code=400, detail=detail)
+    prefix = borg2_only_url_prefix(path)
+    if prefix is None:
+        return
+    if prefix.endswith("//") or not agent:
+        detail = {
+            "key": "backend.errors.repo.borg2OnlyUrl",
+            "params": {"scheme": prefix},
+        }
+    else:
+        detail = {
+            "key": "backend.errors.repo.borg2OnlyUrlOrSshHost",
+            "params": {"scheme": prefix, "host": prefix[:-1]},
+        }
+    raise HTTPException(status_code=400, detail=detail)
+
+
+def _reject_borg1_ssh_address_for_borg2(
+    path: Optional[str],
+    *,
+    borg2: bool,
+    connection_id: Optional[int],
+) -> None:
+    """Refuse Borg 1's short SSH form `[user@]host:path` for a Borg 2
+    repository: Borg 2 reads it as a local directory and creates the
+    repository on the machine that runs Borg instead of that host. With an SSH
+    connection the path is a directory on that host and is left alone.
+    """
+    if not borg2 or connection_id:
+        return
+    host = borg1_ssh_address_host(path)
+    if host is None:
+        return
+    raise HTTPException(
+        status_code=400,
+        detail={
+            "key": "backend.errors.repo.borg1OnlySshAddress",
+            "params": {"host": host},
+        },
+    )
 
 
 def _is_rclone_payload(data: Union[RepositoryCreate, RepositoryImport]) -> bool:
@@ -2545,34 +2554,6 @@ def _reject_agent_repository_ssh_target(
         )
 
 
-def _require_agent_borg2(agent: AgentMachine) -> None:
-    """Refuse a Borg 2 repository on an endpoint that cannot run one.
-
-    Both failures are otherwise invisible until the init job reaches the
-    endpoint and dies there: no `borg2` on PATH is "No such file or directory",
-    and a pre-b22 one rejects every encryption mode the server emits. Neither
-    exit code names the real problem, so decide it here, where the answer is
-    already known.
-    """
-    version = agent_borg_version_for_major(agent.borg_versions, 2)
-    if version is None:
-        raise HTTPException(
-            status_code=400,
-            detail={"key": "backend.errors.repo.agentBorg2Unavailable"},
-        )
-    if not borg2_speaks_encryption_flags(version):
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "key": "backend.errors.repo.agentBorg2TooOld",
-                "params": {
-                    "version": version,
-                    "minimum": f"2.0.0b{ENCRYPTION_FLAGS_SINCE_BETA}",
-                },
-            },
-        )
-
-
 async def _validate_agent_repository_payload(
     repo_data: Union[RepositoryCreate, RepositoryImport], db: Session
 ) -> AgentMachine:
@@ -2584,7 +2565,7 @@ async def _validate_agent_repository_payload(
     agent = _require_queueable_agent(repo_data.agent_machine_id, db)
 
     if _uses_borg2_payload(repo_data):
-        _require_agent_borg2(agent)
+        require_agent_borg2(agent)
 
     encrypted = repo_data.encryption in [
         "repokey",
@@ -2639,6 +2620,35 @@ async def _agent_has_passphrase(agent: AgentMachine) -> bool:
     return bool(isinstance(result, dict) and result.get("has_passphrase"))
 
 
+def _reject_agent_borg2_payload(
+    repo_data: Union[RepositoryCreate, RepositoryImport], *, imported: bool
+) -> None:
+    """Refuse what the Borg 2 routes refuse for a server repository: a mode
+    repo-create does not know, and a URL Borg 2 reads as a local directory."""
+    if not imported and repo_data.encryption not in BORG2_ENCRYPTION_MODES:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "key": "backend.errors.repo.invalidEncryption",
+                "params": {
+                    "mode": repo_data.encryption,
+                    "valid": BORG2_ENCRYPTION_MODES,
+                },
+            },
+        )
+    refusal = borg2_repository_url_refusal(repo_data.path)
+    if refusal:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "key": "backend.errors.repo.verificationFailed"
+                if imported
+                else "backend.errors.repo.initFailed",
+                "params": {"error": refusal},
+            },
+        )
+
+
 async def _create_agent_repository_record(
     repo_data: Union[RepositoryCreate, RepositoryImport],
     current_user: User,
@@ -2646,13 +2656,17 @@ async def _create_agent_repository_record(
     *,
     imported: bool,
 ):
-    # Recorded below with the payload's major, whatever the encryption mode says.
+    # Borg 2 by version or by a Borg-2-only encryption, as the server path
+    # decides; the row and the agent's jobs carry this major.
+    borg_version = 2 if _uses_borg2_payload(repo_data) else 1
     _reject_borg2_only_url_for_borg1(
         repo_data.path,
-        borg2=(repo_data.borg_version or 1) == 2,
+        borg2=borg_version == 2,
         connection_id=repo_data.connection_id,
         agent=True,
     )
+    if borg_version == 2:
+        _reject_agent_borg2_payload(repo_data, imported=imported)
     cloud_mirror_remote = _validate_cloud_mirror_payload(repo_data, db)
     await _preflight_cloud_mirror_path(repo_data, cloud_mirror_remote)
     agent = await _validate_agent_repository_payload(repo_data, db)
@@ -2723,7 +2737,7 @@ async def _create_agent_repository_record(
         upload_ratelimit_kib=repo_data.upload_ratelimit_kib,
         source_ssh_connection_id=source_connection_id,
         source_locations=source_locations_json,
-        borg_version=repo_data.borg_version or 1,
+        borg_version=borg_version,
     )
     db.add(repository)
     db.commit()
@@ -3588,6 +3602,11 @@ async def create_repository(
             connection_id=repo_data.connection_id,
             agent=executor_type == "agent",
         )
+        _reject_borg1_ssh_address_for_borg2(
+            repo_data.path,
+            borg2=_uses_borg2_payload(repo_data),
+            connection_id=repo_data.connection_id,
+        )
         if _uses_borg2_payload(repo_data):
             _require_borg2_feature(db)
             if executor_type == "agent":
@@ -3757,6 +3776,23 @@ async def create_repository(
                         detail={
                             "key": "backend.errors.repo.permissionDeniedCreateDirectory",
                             "params": {"path": repo_path},
+                        },
+                    )
+                except OSError as e:
+                    # Read-only filesystem, a file in the path, ...: the path is wrong
+                    logger.error(
+                        "Failed to create repository directory",
+                        path=repo_path,
+                        error=str(e),
+                    )
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "key": "backend.errors.repo.failedToCreateDirectory",
+                            "params": {
+                                "path": repo_path,
+                                "reason": e.strerror or str(e),
+                            },
                         },
                     )
             else:
@@ -4003,6 +4039,11 @@ async def import_repository(
             borg2=_uses_borg2_payload(repo_data),
             connection_id=repo_data.connection_id,
             agent=executor_type == "agent",
+        )
+        _reject_borg1_ssh_address_for_borg2(
+            repo_data.path,
+            borg2=_uses_borg2_payload(repo_data),
+            connection_id=repo_data.connection_id,
         )
         if _uses_borg2_payload(repo_data):
             _require_borg2_feature(db)
@@ -4358,7 +4399,7 @@ async def import_repository(
 
 
 @router.get("/{repo_id}/rclone/status")
-async def get_repository_rclone_status(
+def get_repository_rclone_status(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -4557,7 +4598,7 @@ async def download_keyfile(repo_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{repo_id}/storage")
-async def get_repository_storage(
+def get_repository_storage(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -5309,6 +5350,11 @@ async def update_repository(
                     borg2=(repository.borg_version or 1) == 2,
                     connection_id=target_connection_id,
                     agent=target_executor_type == "agent",
+                )
+                _reject_borg1_ssh_address_for_borg2(
+                    raw_path,
+                    borg2=(repository.borg_version or 1) == 2,
+                    connection_id=target_connection_id,
                 )
 
         target_path = raw_path if raw_path is not None else repository.path
@@ -6319,7 +6365,7 @@ async def execute_repository_wipe(
 
 
 @router.get("/{repo_id}/wipe-jobs/{job_id}")
-async def get_repository_wipe_job(
+def get_repository_wipe_job(
     repo_id: int,
     job_id: int,
     current_user: User = Depends(get_current_user),
@@ -6866,7 +6912,7 @@ async def get_repository_stats(
 
 # Check job endpoints
 @router.get("/check-jobs/{job_id}")
-async def get_check_job_status(
+def get_check_job_status(
     job_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -6896,7 +6942,7 @@ async def get_check_job_status(
 
 
 @router.get("/{repo_id}/check-jobs")
-async def get_repository_check_jobs(
+def get_repository_check_jobs(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -6935,7 +6981,7 @@ async def get_repository_check_jobs(
 
 
 @router.get("/restore-check-jobs/{job_id}")
-async def get_restore_check_job_status(
+def get_restore_check_job_status(
     job_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -6977,7 +7023,7 @@ async def get_restore_check_job_status(
 
 
 @router.get("/{repo_id}/restore-check-jobs")
-async def get_repository_restore_check_jobs(
+def get_repository_restore_check_jobs(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -7025,7 +7071,7 @@ async def get_repository_restore_check_jobs(
 
 # Compact job endpoints
 @router.get("/compact-jobs/{job_id}")
-async def get_compact_job_status(
+def get_compact_job_status(
     job_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -7055,7 +7101,7 @@ async def get_compact_job_status(
 
 
 @router.get("/{repo_id}/compact-jobs")
-async def get_repository_compact_jobs(
+def get_repository_compact_jobs(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -7088,7 +7134,7 @@ async def get_repository_compact_jobs(
 
 
 @router.get("/prune-jobs/{job_id}")
-async def get_prune_job_status(
+def get_prune_job_status(
     job_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -7117,7 +7163,7 @@ async def get_prune_job_status(
 
 
 @router.get("/{repo_id}/prune-jobs")
-async def get_repository_prune_jobs(
+def get_repository_prune_jobs(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -7150,7 +7196,7 @@ async def get_repository_prune_jobs(
 
 # Helper endpoint to check if repository has running maintenance jobs
 @router.get("/{repo_id}/running-jobs")
-async def get_running_jobs(
+def get_running_jobs(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -7602,7 +7648,7 @@ async def update_restore_check_schedule(
 
 
 @router.get("/{repo_id}/check-schedule")
-async def get_check_schedule(
+def get_check_schedule(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -7648,7 +7694,7 @@ async def get_check_schedule(
 
 
 @router.get("/{repo_id}/restore-check-schedule")
-async def get_restore_check_schedule(
+def get_restore_check_schedule(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

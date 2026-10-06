@@ -59,3 +59,36 @@ describe('AppFolderList', () => {
     expect(onSkippedChange).toHaveBeenCalledWith(['thumbs', 'encoded-video', 'upload'])
   })
 })
+
+describe('AppFolderList dumps the template makes itself', () => {
+  it('does not warn about a missing dump Borg UI writes before each backup', () => {
+    const template = {
+      ...immichTemplate,
+      folders: immichTemplate.folders.map((folder) =>
+        folder.role === 'database' ? { ...folder, made_before_backup: true } : folder
+      ),
+    }
+    const dumpPath = template.folders.find((folder) => folder.role === 'database')!.path
+    renderWithProviders(
+      <AppFolderList
+        template={template}
+        appFolderIncluded
+        onAppFolderIncludedChange={() => {}}
+        extras={[]}
+        includedExtras={[]}
+        onIncludedExtrasChange={() => {}}
+        user="backup"
+        stats={immichStats.map((item) =>
+          item.path === dumpPath
+            ? { ...item, exists: false, latest_name: null, latest_modified_at: null }
+            : item
+        )}
+        measuring={false}
+        skipped={[]}
+        onSkippedChange={() => {}}
+      />
+    )
+    expect(screen.getByText('Borg UI takes a fresh copy before each backup.')).toBeInTheDocument()
+    expect(screen.queryByText(/No database dump/)).not.toBeInTheDocument()
+  })
+})

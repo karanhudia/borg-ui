@@ -298,7 +298,7 @@ async def unmount_borg_archive(
 
 
 @router.get("", response_model=List[MountListItem])
-async def list_mounts(
+def list_mounts(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """
@@ -373,7 +373,7 @@ async def list_mounts(
 
 
 @router.get("/{mount_id}")
-async def get_mount_info(
+def get_mount_info(
     mount_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

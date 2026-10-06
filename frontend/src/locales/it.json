@@ -475,6 +475,10 @@
         "pending": "Borg {{version}} in attesa",
         "pendingTooltip": "Fissato a Borg {{version}}, ma questo endpoint non segnala ancora quella versione. Il prossimo aggiornamento la installerà."
       },
+      "borg2Minimum": {
+        "label": "Borg 2 troppo vecchio",
+        "tooltip": "Il Borg 2 di questo endpoint è {{version}}, precedente al {{minimum}} di questo server. I suoi backup, ripristini e interventi di manutenzione Borg 2 vengono rifiutati. Esegui il programma di installazione dell'agente sull'endpoint con {{flags}} per installare il Borg 2 del server. Se sostituisci Borg 2 a mano, riavvia poi l'agente affinché segnali la nuova versione."
+      },
       "setServerDialog": {
         "title": "Cambia URL del server",
         "description": "Punta questo endpoint a un altro indirizzo di Borg UI. Mantiene identità, credenziale e cronologia, quindi non serve un nuovo token di registrazione.",
@@ -542,8 +546,8 @@
         },
         "service": {
           "title": "4. Controlli del servizio",
-          "description": "Il programma di installazione abilita systemd per impostazione predefinita, così l'agente sopravvive al riavvio. Usa questi comandi solo quando controlli o ripari un'installazione manuale.",
-          "descriptionMacos": "Su un Mac l'agente è un agente utente di launchd nel dominio dell'utente connesso. Controllalo con il primo comando. Il secondo blocco adatta il modello alla tua cartella home e lo carica; il modello si aspetta l'agente in ~/Library/Application Support/borg-ui-agent, dove lo colloca il programma di installazione."
+          "description": "Il programma di installazione abilita systemd per impostazione predefinita, così l'agente sopravvive al riavvio. Usa questi comandi solo quando controlli o ripari un'installazione manuale. Esegui il secondo blocco dalla cartella borg-ui clonata: installa l'agente in /opt/borg-ui-agent e lo registra in /etc/borg-ui-agent/config.toml, dove l'unità systemd li cerca, poi abilita l'unità.",
+          "descriptionMacos": "Su un Mac l'agente è un agente utente di launchd nel dominio dell'utente connesso. Controllalo con il primo comando. Esegui il secondo blocco dalla cartella borg-ui clonata: installa e registra l'agente in ~/Library/Application Support/borg-ui-agent, dove il modello lo cerca, poi adatta il modello alla tua cartella home e lo carica."
         }
       }
     },
@@ -5834,7 +5838,7 @@
         "backupArchiveNameRequired": "Il nome archivio è obbligatorio",
         "backupRepositoryPathRequired": "Il percorso del repository è obbligatorio",
         "backupSourcePathRequired": "È richiesto almeno un percorso sorgente",
-        "capabilityMissing": "Questo agente non supporta la funzionalità richiesta",
+        "capabilityMissing": "Questo agente non supporta la funzionalità richiesta ({{capability}})",
         "enrollmentExpiryAmbiguous": "Scegli una sola opzione di scadenza per il token di registrazione",
         "enrollmentExpiryTooShort": "Il token di registrazione deve durare almeno cinque minuti",
         "enrollmentNameRequired": "Il nome del token di registrazione è obbligatorio",
@@ -5865,12 +5869,14 @@
         "notValidBorgRepository": "Non è un repository Borg valido: {{path}}",
         "parentDirectoryNotWritable": "La directory padre non è scrivibile: {{path}}. Assicurati che la directory esista con i permessi corretti.",
         "permissionDeniedCreateDirectory": "Permesso negato: impossibile creare la directory in '{{path}}'. Per archiviare repository sulla tua macchina host, usa percorsi che iniziano con '/local/'.",
+        "failedToCreateDirectory": "Impossibile creare la directory in '{{path}}': {{reason}}",
         "permissionDeniedCreateParentDirectory": "Permesso negato: impossibile creare la directory padre '{{path}}'. Assicurati che la directory esista sulla tua macchina host con i permessi corretti.",
         "encryptedPassphraseRequired": "La passphrase è richiesta per la modalità di crittografia '{{mode}}'",
         "agentBorg2Unavailable": "Questo endpoint non ha Borg 2 installato, quindi non è possibile creare o aprire un repository Borg 2. Installa Borg 2 sull'endpoint oppure scegli Borg 1.",
-        "agentBorg2TooOld": "Il Borg 2 di questo endpoint è {{version}}; borg-ui richiede {{minimum}} o successivo per un repository Borg 2. Aggiorna Borg 2 sull'endpoint oppure scegli Borg 1.",
+        "agentBorg2TooOld": "Il Borg 2 di questo endpoint è {{version}}, precedente al {{minimum}} di questo server, quindi Borg UI non esegue lavori Borg 2 su di esso: le beta di Borg 2 cambiano il formato del repository e la riga di comando tra una versione e l'altra. Esegui il programma di installazione dell'agente sull'endpoint con {{flags}} per installare il Borg 2 del server. Se sostituisci Borg 2 a mano, riavvia poi l'agente affinché segnali la nuova versione.",
         "borg2OnlyUrl": "Un URL di repository {{scheme}} richiede Borg 2; Borg 1 non può aprirlo. Scegli Borg 2 per questo repository.",
         "borg2OnlyUrlOrSshHost": "Un URL di repository {{scheme}} richiede Borg 2; Borg 1 lo legge come un host SSH chiamato {{host}}. Scegli Borg 2 per questo repository oppure scrivi l'host SSH come ssh://{{host}}/percorso (ssh://{{host}}/./percorso per un percorso relativo alla directory di login).",
+        "borg1OnlySshAddress": "{{host}}:percorso è un indirizzo SSH che solo Borg 1 capisce; Borg 2 lo legge come una directory locale. Scrivilo come ssh://{{host}}/percorso per un percorso relativo alla directory di login o ssh://{{host}}//percorso per un percorso assoluto, oppure scegli Borg 1 per questo repository.",
         "agentPassphraseUnavailable": "Questo agent gestito non ha segnalato una BORG_PASSPHRASE, quindi non può aprire un repository crittografato. Imposta BORG_PASSPHRASE nell'ambiente dell'agent oppure inserisci qui una passphrase.",
         "encryptedPassphraseIncorrect": "Il repository è crittografato ma la passphrase non è corretta o mancante. Fornisci la passphrase corretta.",
         "encryptionKeyfileNotRequired": "Il repository usa la crittografia '{{mode}}', che non richiede un file chiave. Il caricamento del file chiave è necessario solo per le modalità di crittografia 'keyfile' o 'keyfile-blake2'.",
@@ -6154,7 +6160,6 @@
         "deleteAlreadyRunning": "L'operazione di eliminazione è già in esecuzione per questo archivio (ID Job: {{jobId}})",
         "deleteJobNotFound": "Job di eliminazione non trovato",
         "failedGetArchiveContents": "Impossibile ottenere il contenuto dell'archivio",
-        "unsupportedRepositoryVersion": "Questo repository usa la versione di formato {{version}}, che la build di Borg 2 su questo server non può leggere. Borg 2 è ancora in beta e il formato del repository è cambiato tra le beta. Ricrea il repository con la build attuale oppure installa la build di Borg 2 che lo ha creato.",
         "failedGetArchiveInfo": "Impossibile ottenere le informazioni dell'archivio",
         "failedListArchives": "Impossibile elencare gli archivi",
         "repositoryNotFound": "Repository non trovato",
@@ -6836,18 +6841,19 @@
       "missing": "Ancora vuoto",
       "unmeasured": "Troppo grande per misurarlo in fretta",
       "latestDump": "Ultimo dump {{when}}",
-      "staleDump": "Ultimo dump {{when}}. Più vecchio di {{hours}} ore: i backup si fermano finché Immich non ne scrive uno nuovo.",
-      "noDump": "Ancora nessun dump del database. Attiva Administration > Settings > Backup in Immich, altrimenti il backup si ferma.",
+      "staleDump": "Ultimo dump {{when}}. Più vecchio di {{hours}} ore: i backup si fermano finché {{app}} non ne scrive uno nuovo.",
+      "noDump": "Ancora nessun dump del database di {{app}}: i backup si fermano finché non ce n'è uno. Le note sotto spiegano come attivarlo.",
+      "madeBeforeBackup": "Borg UI fa una copia nuova prima di ogni backup.",
       "total": "Verranno salvati circa {{size}}.",
       "totalAtLeast": "Verranno salvati almeno {{size}}.",
       "noAccess": "{{user}} non può aprirlo",
       "backUp": "Salva"
     },
-    "missingRoot": "{{path}} non esiste su quella macchina. Scegli la cartella con i file di Immich: {{hint}}.",
+    "missingRoot": "{{path}} non esiste su quella macchina. Scegli la cartella con i file di {{app}}: {{hint}}.",
     "denied": {
       "title": "Borg UI non può aprire {{path}} come {{user}}",
       "why": "Docker rende i volumi con nome leggibili solo da root. Borg si collega con lo stesso utente, quindi anche il backup fallirebbe.",
-      "fixFolder": "Soluzione più semplice: tieni i file di Immich in una cartella normale, come fa il compose ufficiale di Immich. Imposta {{hint}} su una cartella come /srv/immich, sposta lì i file e riavvia Immich.",
+      "fixFolder": "Soluzione più semplice: tieni i file di {{app}} in una cartella normale. Imposta {{hint}} su una cartella come /srv/{{id}}, sposta lì i file e riavvia {{app}}.",
       "fixAcl": "Oppure consenti a {{user}} di leggere questo volume (serve il pacchetto acl su quella macchina):"
     },
     "goodToKnow": "Da sapere",

@@ -18,7 +18,13 @@ from pydantic import BaseModel
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
-from app.app_templates import AppTemplate, load_app_templates, match_app_template
+from app.app_templates import (
+    AppTemplate,
+    image_repository,
+    load_app_templates,
+    match_app_template,
+)
+from app.utils.fs import parse_remote_du, remote_du_command
 from app.utils.local_paths import is_within_local_mount
 from app.utils.ssh_host_validation import ssh_destination
 from app.config import settings
@@ -1077,7 +1083,8 @@ def _run_remote_mount_size_probe(
     path: str,
     timeout_seconds: float,
 ) -> subprocess.CompletedProcess[str]:
-    remote_command = f"du -s -B1 {shlex.quote(path)}"
+    # Allocated size, as the local probe's `du -s -B1`.
+    remote_command = remote_du_command(path, apparent=False)
     ssh_cmd = [
         "ssh",
         *ssh_key_auth_args(key_file_path),
@@ -1101,11 +1108,9 @@ def _run_remote_mount_size_probe(
 def _mount_size_result_status(
     result: subprocess.CompletedProcess[str],
 ) -> tuple[int | None, str]:
-    stdout = (result.stdout or "").strip()
-    if result.returncode == 0 and stdout:
-        first_token = stdout.split()[0]
-        if first_token.isdigit():
-            return int(first_token), "available"
+    size = parse_remote_du(result.stdout)
+    if result.returncode == 0 and size is not None:
+        return size, "available"
 
     stderr = (result.stderr or "").lower()
     if any(
@@ -2024,7 +2029,7 @@ async def _scan_remote_containers(
 @router.get(
     "/filesystem-snapshots", response_model=FilesystemSnapshotCapabilitiesResponse
 )
-async def discover_filesystem_snapshot_capabilities(
+def discover_filesystem_snapshot_capabilities(
     current_user: User = Depends(get_current_user),
 ) -> FilesystemSnapshotCapabilitiesResponse:
     del current_user
@@ -2093,7 +2098,7 @@ async def scan_containers(
 
 
 @router.get("/databases", response_model=DatabaseDiscoveryResponse)
-async def discover_databases(
+def discover_databases(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> DatabaseDiscoveryResponse:
@@ -2160,10 +2165,11 @@ def _is_anonymous_volume(mount: ContainerMount) -> bool:
 
 
 def _is_system_mount(mount: ContainerMount) -> bool:
-    paths = [(mount.source or ""), (mount.destination or "")]
+    # By where it comes from on the host: /etc/localtime is never app data, but
+    # a folder mounted at /etc/letsencrypt (Nginx Proxy Manager) is.
+    path = mount.source or ""
     return any(
         path == prefix.rstrip("/") or path.startswith(prefix)
-        for path in paths
         for prefix in _SYSTEM_MOUNT_PREFIXES
     )
 
@@ -2207,7 +2213,13 @@ def _app_detections(
         mount = _app_root_mount(container, template)
         if mount is None:
             continue
-        path = (mount.backup_source or mount.source or "").strip()
+        subpath = template.detect.root_subpath(image_repository(container.image or ""))
+
+        def _under(base: str | None) -> str:
+            base = (base or "").strip()
+            return f"{base.rstrip('/')}/{subpath}" if base and subpath else base
+
+        path = _under(mount.backup_source or mount.source)
         extras = (
             [
                 AppExtraMount(
@@ -2235,7 +2247,7 @@ def _app_detections(
                 container_name=container.name,
                 state=container.state,
                 path=path,
-                host_path=(mount.source or "").strip(),
+                host_path=_under(mount.source),
                 readable=_mount_readable(path, local=local),
                 extra_mounts=extras,
             )
@@ -2251,7 +2263,7 @@ _APP_SOURCE_ROLES = require_role_dependency(
 
 
 @router.get("/apps", response_model=AppTemplateListResponse)
-async def list_app_templates(
+def list_app_templates(
     current_user: User = Depends(get_current_user),
 ) -> AppTemplateListResponse:
     del current_user

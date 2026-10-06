@@ -45,6 +45,15 @@ describe('app templates', () => {
     )
   })
 
+  it('fills in the detected container, quoted, or empty when picked by hand', () => {
+    const app = {
+      ...immich,
+      pre_backup_script: { ...immich.pre_backup_script!, content: 'C=__CONTAINER__\n' },
+    }
+    expect(renderAppScript(app, '/x', 'vault warden')).toBe("C='vault warden'\n")
+    expect(renderAppScript(app, '/x')).toBe("C=''\n")
+  })
+
   it('returns no script when the template has none', () => {
     expect(renderAppScript({ ...immich, pre_backup_script: null }, '/x')).toBeNull()
   })

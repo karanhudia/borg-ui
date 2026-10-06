@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor, within } from '@testing-library/react'
 import { QueryClient } from '@tanstack/react-query'
@@ -391,6 +393,35 @@ describe('ManagedAgents', () => {
     expect(onCopy).toHaveBeenCalledWith(expect.stringContaining('git clone'))
   })
 
+  it('installs and registers the manual agent where the service templates start it', async () => {
+    const user = userEvent.setup()
+    const onCopy = vi.fn()
+    const template = (path: string) =>
+      readFileSync(resolve(__dirname, '../../../../agent/install', path), 'utf8')
+    const unit = template('systemd/borg-ui-agent.service')
+    // launchd expands no ~, so the guide renders /Users/alex/ as $HOME/.
+    const plist = template('launchd/com.borg-ui.agent.plist').replace(/\/Users\/alex\//g, '$HOME/')
+
+    renderWithProviders(<AgentSetupHelpContent command="install" onCopy={onCopy} />)
+    await user.click(screen.getByLabelText('Copy systemd commands'))
+    await user.click(screen.getByLabelText('Copy launchd commands'))
+    const [systemd, launchd] = onCopy.mock.calls.map(([value]) => value as string)
+
+    const [, linuxBinary, linuxConfig] = unit.match(/^ExecStart=(\S+) --config (\S+) run$/m)!
+    const linuxVenv = linuxBinary.replace(/\/bin\/borg-ui-agent$/, '')
+    expect(systemd).toContain(`-m venv ${linuxVenv}\n`)
+    expect(systemd).toContain(`${linuxVenv}/bin/pip install .`)
+    expect(systemd).toContain(`${linuxBinary} \\\n  --config ${linuxConfig} \\\n  register `)
+
+    const [, macBinary, macConfig] = plist.match(
+      /<key>ProgramArguments<\/key>\s*<array>\s*<string>([^<]+)<\/string>\s*<string>--config<\/string>\s*<string>([^<]+)<\/string>/
+    )!
+    const macVenv = macBinary.replace(/\/bin\/borg-ui-agent$/, '')
+    expect(launchd).toContain(`-m venv "${macVenv}"`)
+    expect(launchd).toContain(`"${macVenv}/bin/pip" install .`)
+    expect(launchd).toContain(`"${macBinary}" \\\n  --config "${macConfig}" \\\n  register `)
+  })
+
   it('uses a single waiting indicator in the add-agent install command', () => {
     const { container } = renderWithProviders(
       <AgentInstallCommand
@@ -600,6 +631,64 @@ describe('ManagedAgents', () => {
     expect(screen.getByText(/borg 2 pending/i)).toBeInTheDocument()
   })
 
+  it("marks an agent whose Borg 2 is older than the server's, on the card and in diagnostics", () => {
+    const agent = buildAgent({
+      borg_versions: [
+        { major: 1, version: '1.4.5' },
+        { major: 2, version: '2.0.0b24' },
+      ],
+      borg2_minimum_version: '2.0.0b25',
+      borg2_below_minimum: true,
+    })
+
+    renderWithProviders(
+      <AgentList
+        agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        onRunDiagnostics={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+    expect(screen.getByText('Borg 2 too old')).toBeInTheDocument()
+
+    renderWithProviders(<AgentDiagnosticsDialog open agent={agent} onClose={vi.fn()} />)
+    const alert = screen
+      .getAllByRole('alert')
+      .find((element) => element.textContent?.includes('older than this server'))
+    expect(alert).toBeDefined()
+    expect(alert).toHaveTextContent('2.0.0b24')
+    expect(alert).toHaveTextContent('2.0.0b25')
+    expect(alert).toHaveTextContent('--reinstall --borg-version both --borg-source server')
+  })
+
+  it('shows no Borg 2 marker for an agent at the minimum', () => {
+    const agent = buildAgent({
+      borg_versions: [{ major: 2, version: '2.0.0b25' }],
+      borg2_minimum_version: '2.0.0b25',
+      borg2_below_minimum: false,
+    })
+
+    renderWithProviders(
+      <AgentList
+        agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        onRunDiagnostics={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+    expect(screen.queryByText('Borg 2 too old')).not.toBeInTheDocument()
+  })
+
   it('opens managed-agent diagnostics from an agent card and runs a session check', async () => {
     const user = userEvent.setup()
     const agent = buildAgent({
@@ -802,7 +891,7 @@ describe('ManagedAgents', () => {
         },
         {
           major: 2,
-          version: '2.0.0b23',
+          version: '2.0.0b25',
           path: '/opt/borg-ui-agent/borg2/current/borg',
           install_source: 'borg-ui-installer',
         },

@@ -88,6 +88,25 @@ Borgmatic YAML does not preserve exact Borg UI schedule timing. If retention set
 
 SSH repositories imported from borgmatic may need their remote machine connection configured manually in Borg UI.
 
+### Borg 1 or Borg 2
+
+A borgmatic config does not say which Borg it runs. The import reads it from each repository entry and records the repository as Borg 2 when the entry has one of:
+
+- a URL only Borg 2 can open: `sftp://`, `http://`, `https://`, `s3:`, `b2:`, `rclone:`
+- a Borg 2 `encryption`: `aes256-ocb`, `chacha20-poly1305`, `authenticated-sha256`, or Borg UI's `repokey-aes-ocb`, `keyfile-aes-ocb`, `repokey-chacha20-poly1305`, `keyfile-chacha20-poly1305`
+- `key_location` or `id_hash`, which borgmatic only supports with Borg 2
+- `borg_ui_borg_version: 2`, which a Borg UI export writes for a Borg 2 repository
+
+Anything else is imported as Borg 1. **Replace** never changes the Borg version of the repository it replaces: an entry that describes the other version is not imported (delete the repository and import it again). An entry whose hints disagree (for example a `b2:` URL with `encryption: repokey`, or `[user@]host:path`, which only Borg 1 reads as an SSH address, with a Borg 2 encryption) is not imported, nor is a `rest://` URL (Borg 2.0.0b25 replaced it by `ssh://`). Neither is an entry with the blake3 id hash (`authenticated-blake3`, `id_hash: blake3`): Borg UI has no encryption mode for it. The import summary names the reason. Borg 2 repositories need a plan that includes Borg 2.
+
+A Borg UI export writes a Borg 2 repository in that form: the entry carries Borg 2's encryption name and, for a keyfile mode, `key_location: keyfile`. To import a Borg 2 repository with a local path or an `ssh://` URL from a borgmatic config of your own, write the entry the same way:
+
+```yaml
+repositories:
+  - path: ssh://borg@backup.example.com/./repo
+    encryption: aes256-ocb
+```
+
 ## Not a Full Backup
 
 Export/import is useful for migration and interoperability. It is not a replacement for backing up `/data`.

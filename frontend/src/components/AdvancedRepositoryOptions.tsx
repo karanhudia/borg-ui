@@ -9,7 +9,7 @@ type OnFailureMode = 'fail' | 'continue' | 'skip'
 interface AdvancedRepositoryOptionsProps {
   repositoryId?: number | null
   mode: 'full' | 'observe'
-  /** Borg 2 has no upload limit (2.0.0b22 removed --upload-ratelimit). */
+  /** Borg 2 has no upload limit (no --upload-ratelimit). */
   borgVersion?: 1 | 2
   remotePath: string
   preBackupScript: string

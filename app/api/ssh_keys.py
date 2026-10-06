@@ -425,7 +425,7 @@ class SSHConnectionDiagnosticsRequest(BaseModel):
 
 
 @router.get("/system-key")
-async def get_system_key(
+def get_system_key(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get the system SSH key (there can be only one)"""
@@ -498,7 +498,7 @@ def _key_type_from_public_key(public_key: str) -> str:
 
 @router.get("")
 @router.get("/")
-async def get_ssh_keys(
+def get_ssh_keys(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get all SSH keys with connection status (deprecated - use /system-key)"""
@@ -1179,7 +1179,7 @@ async def deploy_ssh_key(
 
 
 @router.get("/connections")
-async def get_ssh_connections(
+def get_ssh_connections(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get all SSH connections with storage information"""
@@ -1689,7 +1689,7 @@ def _host_audit_response(entries: list[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 @router.get("/connections/host-audit")
-async def audit_ssh_connection_hosts(
+def audit_ssh_connection_hosts(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Audit saved SSH connection hosts for safe normalization or manual cleanup."""
@@ -1850,7 +1850,7 @@ async def test_ssh_connection(
 
 
 @router.put("/connections/{connection_id}")
-async def update_ssh_connection(
+def update_ssh_connection(
     connection_id: int,
     connection_data: SSHConnectionUpdate,
     current_user: User = Depends(get_current_user),
@@ -2455,7 +2455,7 @@ async def redeploy_key_to_connection(
 
 
 @router.delete("/connections/{connection_id}")
-async def delete_ssh_connection(
+def delete_ssh_connection(
     connection_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -2531,7 +2531,7 @@ async def delete_ssh_connection(
 
 
 @router.get("/{key_id}")
-async def get_ssh_key(
+def get_ssh_key(
     key_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -2584,7 +2584,7 @@ async def get_ssh_key(
 
 
 @router.put("/{key_id}")
-async def update_ssh_key(
+def update_ssh_key(
     key_id: int,
     key_data: SSHKeyUpdate,
     current_user: User = Depends(get_current_user),
@@ -3330,7 +3330,7 @@ async def toggle_backup_source(
 
 
 @router.get("/connections/backup-sources")
-async def list_backup_sources(
+def list_backup_sources(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """List all SSH connections enabled as backup sources"""

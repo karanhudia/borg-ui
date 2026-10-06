@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Box, ThemeProvider, Typography } from '@mui/material'
 import { darkTheme } from '../../theme'
 import AgentBorgVersionChip from './AgentBorgVersionChip'
+import AgentBorg2MinimumChip from './AgentBorg2MinimumChip'
 import AgentManualUpgradeChip from './AgentManualUpgradeChip'
 import AgentUpgradeChip from './AgentUpgradeChip'
 import AgentUpgradeStateChip from './AgentUpgradeStateChip'
@@ -61,6 +62,11 @@ const everything = (
   <>
     <AgentUpgradeChip status="outdated" targetVersion="0.1.3" />
     <AgentBorgVersionChip desiredBorgVersion="2" borgVersions={[{ major: 1 }]} />
+    <AgentBorg2MinimumChip
+      belowMinimum
+      minimumVersion="2.0.0b25"
+      borgVersions={[{ major: 2, version: '2.0.0b24' }]}
+    />
     <AgentManualUpgradeChip />
     <AgentUpgradeStateChip state="requested" targetVersion="0.1.3" />
   </>

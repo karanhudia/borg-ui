@@ -64,6 +64,114 @@ class TestAppTemplates:
             "encoded-video",
         }
 
+    def test_match_by_image_with_or_without_docker_hub_registry(self):
+        templates = load_app_templates()
+        for image in (
+            "vaultwarden/server:latest",
+            "docker.io/vaultwarden/server:1.37.3",
+            "ghcr.io/dani-garcia/vaultwarden@sha256:" + "0" * 64,
+        ):
+            assert match_app_template(image, templates).id == "vaultwarden"
+        assert match_app_template("lscr.io/linuxserver/plex", templates).id == "plex"
+        assert match_app_template("someone/vaultwarden-fork", templates) is None
+
+    def test_folder_paths_may_nest_but_not_leave_the_app_folder(self):
+        from pydantic import ValidationError
+
+        from app.app_templates import AppTemplateFolder
+
+        nested = "Library/Application Support/Plex Media Server/Cache"
+        assert AppTemplateFolder(path=nested, label="", description="", role="data")
+        for bad in ("../etc", "a/../b", "/abs", "a//b", "a/ b"):
+            with pytest.raises(ValidationError):
+                AppTemplateFolder(path=bad, label="", description="", role="data")
+
+    def test_npm_certificates_mounted_under_etc_count_as_extra_mount(
+        self, test_client, admin_headers, monkeypatch
+    ):
+        # Host paths outside the system prefixes (pytest's tmp is /tmp on Linux).
+        data, certs = "/srv/npm/data", "/srv/npm/letsencrypt"
+        container = {
+            "Id": "b" * 64,
+            "Name": "/npm",
+            "Config": {"Image": "jc21/nginx-proxy-manager:latest"},
+            "State": {"Status": "running"},
+            "Mounts": [
+                {
+                    "Type": "bind",
+                    "Source": "/etc/localtime",
+                    "Destination": "/etc/localtime",
+                },
+                {"Type": "bind", "Source": data, "Destination": "/data"},
+                {
+                    "Type": "bind",
+                    "Source": certs,
+                    "Destination": "/etc/letsencrypt",
+                },
+            ],
+        }
+        monkeypatch.setattr(
+            source_discovery,
+            "_run_local_container_scan",
+            _fake_scan(json.dumps(container)),
+        )
+
+        response = test_client.post(
+            "/api/source-discovery/apps/detect",
+            json={"source_type": "local"},
+            headers=admin_headers,
+        )
+
+        [detection] = response.json()["detections"]
+        assert detection["template_id"] == "nginx-proxy-manager"
+        assert detection["container_name"] == "npm"
+        assert [extra["destination"] for extra in detection["extra_mounts"]] == [
+            "/etc/letsencrypt"
+        ]
+
+    def test_plex_root_follows_each_images_layout(
+        self, test_client, admin_headers, monkeypatch, tmp_path
+    ):
+        nested = tmp_path / "lsio/Library/Application Support/Plex Media Server"
+        nested.mkdir(parents=True)
+        (tmp_path / "hotio").mkdir()
+
+        def plex(name, image, source):
+            return {
+                "Id": name * 64,
+                "Name": f"/{name}",
+                "Config": {"Image": image},
+                "State": {"Status": "running"},
+                "Mounts": [
+                    {"Type": "bind", "Source": source, "Destination": "/config"}
+                ],
+            }
+
+        monkeypatch.setattr(
+            source_discovery,
+            "_run_local_container_scan",
+            _fake_scan(
+                json.dumps(
+                    plex("a", "lscr.io/linuxserver/plex:latest", str(tmp_path / "lsio"))
+                )
+                + "\n"
+                + json.dumps(
+                    plex("b", "ghcr.io/hotio/plex:latest", str(tmp_path / "hotio"))
+                )
+            ),
+        )
+
+        response = test_client.post(
+            "/api/source-discovery/apps/detect",
+            json={"source_type": "local"},
+            headers=admin_headers,
+        )
+
+        paths = {d["container_name"]: d for d in response.json()["detections"]}
+        assert paths["a"]["path"] == str(nested)
+        assert paths["a"]["readable"] is True
+        assert paths["b"]["path"] == str(tmp_path / "hotio")
+
     def test_match_by_image_prefix(self):
         templates = load_app_templates()
         assert (
@@ -431,3 +539,138 @@ class TestAppAccessAndMatching:
             match_app_template("ghcr.io/immich-app/immich-server-foo:1", templates)
             is None
         )
+
+
+def _render(template_id: str, root, container: str) -> str:
+    from app.app_templates import CONTAINER_PLACEHOLDER
+
+    template = next(t for t in load_app_templates() if t.id == template_id)
+    return template.pre_backup_script.content.replace(
+        APP_ROOT_PLACEHOLDER, shlex.quote(str(root))
+    ).replace(CONTAINER_PLACEHOLDER, shlex.quote(container))
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("template_id", "dump"),
+    [
+        ("vaultwarden", "db_20261001_030000.sqlite3"),
+        ("paperless-ngx", "manifest.json"),
+    ],
+)
+def test_container_scripts_make_a_dump_or_fail(tmp_path, template_id, dump):
+    import subprocess
+
+    root = tmp_path / "app"
+    root.mkdir()
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    # Stands in for `docker exec`: the app writes its dump into its own folder.
+    fake_docker = bin_dir / "docker"
+    fake_docker.write_text(f"#!/bin/sh\ntouch {shlex.quote(str(root / dump))}\n")
+    fake_docker.chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+    def run(container: str):
+        return subprocess.run(
+            ["bash", "-c", _render(template_id, root, container)],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+
+    # Picked by hand and nothing dumped yet: the backup must not go ahead.
+    assert run("").returncode == 1
+    assert run("app_container").returncode == 0
+    assert (root / dump).exists()
+
+
+@pytest.mark.unit
+def test_plex_check_finds_dated_copies_under_paths_with_spaces(tmp_path):
+    import subprocess
+
+    databases = tmp_path / "Plug-in Support/Databases"
+    databases.mkdir(parents=True)
+    script = _render("plex", tmp_path, "")
+
+    # The live database and its -wal/-shm files are always fresh: not a backup.
+    for live in ("", "-wal", "-shm"):
+        (databases / f"com.plexapp.plugins.library.db{live}").touch()
+    assert subprocess.run(["bash", "-c", script], capture_output=True).returncode == 1
+    (databases / "com.plexapp.plugins.library.db-2026-09-30").touch()
+    assert subprocess.run(["bash", "-c", script], capture_output=True).returncode == 0
+
+
+@pytest.mark.unit
+def test_jellyfin_is_started_again_when_the_copy_fails(tmp_path):
+    import subprocess
+
+    calls = tmp_path / "calls"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    # stop/start succeed; cp fails, as when the database is not where expected.
+    fake_docker = bin_dir / "docker"
+    fake_docker.write_text(
+        f'#!/bin/sh\necho "$1" >> {shlex.quote(str(calls))}\n'
+        '[ "$1" = cp ] && exit 1\nexit 0\n'
+    )
+    fake_docker.chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+    result = subprocess.run(
+        ["bash", "-c", _render("jellyfin", tmp_path, "jellyfin")],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert calls.read_text().split() == ["stop", "cp", "start"]
+
+
+@pytest.mark.unit
+def test_vaultwarden_prunes_only_its_own_dated_copies(tmp_path):
+    import subprocess
+
+    root = tmp_path / "data"
+    root.mkdir()
+    for index, name in enumerate(
+        [
+            "db_manual.sqlite3",
+            "db_20260901_030000.sqlite3",
+            "db_20260902_030000.sqlite3",
+            "db_20260903_030000.sqlite3",
+            "db_20260904_030000.sqlite3",
+        ]
+    ):
+        path = root / name
+        path.touch()
+        os.utime(path, (1_700_000_000 + index, 1_700_000_000 + index))
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    # `docker exec C /vaultwarden backup` writes a new copy; `docker exec C sh
+    # -c CMD` runs CMD here with the container's /data mapped to the folder.
+    fake_docker = bin_dir / "docker"
+    fake_docker.write_text(
+        "#!/bin/sh\n"
+        f"ROOT={shlex.quote(str(root))}\n"
+        'if [ "$3" = /vaultwarden ]; then touch "$ROOT/db_20261001_030000.sqlite3"; exit 0; fi\n'
+        'if [ "$3" = sh ]; then exec sh -c "$(printf %s "$5" | sed "s#/data#$ROOT#g")"; fi\n'
+    )
+    fake_docker.chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+    result = subprocess.run(
+        ["bash", "-c", _render("vaultwarden", root, "vaultwarden")],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert sorted(p.name for p in root.iterdir()) == [
+        "db_20260903_030000.sqlite3",
+        "db_20260904_030000.sqlite3",
+        "db_20261001_030000.sqlite3",
+        "db_manual.sqlite3",
+    ]

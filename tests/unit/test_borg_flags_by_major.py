@@ -1,9 +1,8 @@
 """Custom flags and the upload limit follow the Borg major that runs them (#1263).
 
-Borg 2.0.0b22 removed --upload-ratelimit and --upload-buffer, and Borg 2 has
-no --numeric-owner, --noatime, --nobsdflags, --exclude-nodump or
---checkpoint-interval for create, nor --save-space, --prefix or
---glob-archives for check; Borg 1 has none of check's --find-lost-archives,
+Borg 2 has no --upload-ratelimit, --upload-buffer, --numeric-owner,
+--noatime, --nobsdflags, --exclude-nodump or --checkpoint-interval for
+create, nor --save-space, --prefix or --glob-archives for check; Borg 1 has none of check's --find-lost-archives,
 --match-archives, --oldest, --newest, --older and --newer. Measured on Borg
 1.4.5 and 2.0.0b25: the other major stops at argument parsing ("unrecognized
 arguments", exit 2), so a backup or check carrying one never starts.

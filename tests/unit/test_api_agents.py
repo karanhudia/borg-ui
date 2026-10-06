@@ -288,7 +288,7 @@ class TestAgentRegistrationAndHeartbeat:
                 "hostname": "renamed.local",
                 "agent_version": "0.1.1",
                 "borg_versions": [
-                    {"major": 2, "version": "2.0.0b10", "path": "/usr/local/bin/borg2"}
+                    {"major": 2, "version": "2.0.0b25", "path": "/usr/local/bin/borg2"}
                 ],
                 "capabilities": ["backup.create", "backup.cancel"],
                 "running_job_ids": [],
@@ -432,7 +432,7 @@ class TestAgentJobTransport:
                     "borg_versions": [
                         {
                             "major": 2,
-                            "version": "2.0.0b10",
+                            "version": "2.0.0b25",
                             "path": "/usr/local/bin/borg2",
                         }
                     ],

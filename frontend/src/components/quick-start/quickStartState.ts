@@ -33,6 +33,8 @@ export interface QuickStartAnswers {
    * backup (or reordering) never makes another folder "the app's folder".
    */
   appRoot: string
+  /** The app's container as detected, '' when its folder was picked by hand. */
+  appContainer: string
   sourceKind: QuickStartSourceKind
   /** SSH connection the files are pulled from (sourceKind 'ssh'). */
   sourceConnectionId: number | ''
@@ -67,6 +69,7 @@ export function createInitialQuickStartAnswers(): QuickStartAnswers {
     app: null,
     appExcludes: [],
     appRoot: '',
+    appContainer: '',
     sourceKind: 'server',
     sourceConnectionId: '',
     sourceAgentId: '',
@@ -120,6 +123,7 @@ export function appPatch(
     app,
     appExcludes: app ? defaultAppExcludes(app) : [],
     appRoot: '',
+    appContainer: '',
     sourcePaths: [],
     name: '',
     schedulePreset: app ? 'custom' : 'daily',
@@ -141,6 +145,7 @@ export function sourceKindPatch(
     sourceKind,
     sourcePaths: [],
     appRoot: '',
+    appContainer: '',
     // An agent can only back up to its own disk (route planner).
     destinationKind: sourceKind === 'agent' ? 'agent' : 'server',
     destinationConnectionId: '',

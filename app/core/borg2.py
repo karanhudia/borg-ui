@@ -21,14 +21,14 @@ Key command differences from Borg 1:
     borg2 check    REPO
     borg2 mount    REPO::ARCHIVE  MOUNTPOINT
 
-  --remote-path is Borg 1 only: Borg 2.0.0b22 removed it, the remote Borg
+  --remote-path is Borg 1 only: Borg 2 has no such option, the remote Borg
   command travels in BORG_REMOTE_PATH (`borg2_remote_path_env`).
 
-  --bypass-lock is Borg 1 only. Borg 2 has never had it — it is absent from
-  2.0.0b21 and 2.0.0b22 alike — so the bypass_lock arguments below are accepted
-  (callers and the repository settings speak for both majors) and ignored. A
-  Borg 2 command that carried it failed at argument parsing, which read as an
-  unreachable repository rather than as a flag this Borg does not know.
+  --bypass-lock is Borg 1 only. Borg 2 has no such option either, so the
+  bypass_lock arguments below are accepted (callers and the repository
+  settings speak for both majors) and ignored. A Borg 2 command that carried
+  it would fail at argument parsing, which reads as an unreachable repository
+  rather than as a flag this Borg does not know.
 
   Encryption modes (borg 2 only), translated to repo-create's
   --encryption/--key-location split by BORG2_ENCRYPTION_FLAGS:
@@ -44,7 +44,6 @@ import asyncio
 import os
 import re
 import shlex
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional
@@ -54,7 +53,12 @@ import structlog
 
 from app.config import settings
 from app.core.borg_stream import CommandByteStream, CommandLineStream
-from app.utils.repository_paths import strip_ssh_url_path
+from app.utils.repository_paths import (  # noqa: F401  (URL rules re-exported)
+    BORG2_ONLY_URL_PREFIXES,
+    borg1_ssh_address_host,
+    borg2_only_url_prefix,
+    strip_ssh_url_path,
+)
 from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.ssh_paths import apply_ssh_command_prefix
 from app.utils.ssh_utils import public_key_only_ssh_args
@@ -65,25 +69,23 @@ logger = structlog.get_logger()
 # name the API, the UI and the repository row all speak, mapped to the flags
 # repo-create wants.
 #
-# Borg 2.0.0b22 split repo-create's single --encryption value into three
-# orthogonal options: the cipher (--encryption), where the key is stored
+# Borg 2's repo-create takes three orthogonal options where the combined name
+# is one value: the cipher (--encryption), where the key is stored
 # (--key-location) and the id hash (--id-hash, sha256 by default). Translating
 # here keeps that split where it belongs — one command builder — instead of
 # pushing a schema and vocabulary change through every caller and stored row.
 #
-# --key-location is omitted where borg's default is what the combined name has
-# always meant: `authenticated` keeps its key in the repository. blake2 modes
-# are not offered — b22 replaced BLAKE2b with BLAKE3 for new repositories.
+# --key-location is omitted where borg's default is what the combined name
+# means: `authenticated` keeps its key in the repository. Borg 2 has no
+# BLAKE2b modes; the BLAKE3 ones are not offered.
 #
-# b23 made the id hash part of the mode name (`authenticated-sha256`/
-# `-blake3`), with no alias for the plain b22 name. The combined name borg-ui
-# stores stays stable; the sha256 variant keeps exactly what `authenticated`
-# produced before.
+# Without encryption the id hash is part of the mode name
+# (`authenticated-sha256`/`-blake3`); `authenticated` is the sha256 variant.
 #
-# b25 removed the unencrypted modes (`none-sha256`/`-blake3`): every
-# repository has a key now. `none` is not mapped to another mode — a
-# repository created under that name would be something else than asked for —
-# but refused by name (BORG2_REMOVED_ENCRYPTION_MODES).
+# Borg 2 has no unencrypted modes: every repository has a key. `none` is not
+# mapped to another mode — a repository created under that name would be
+# something else than asked for — but refused by name
+# (BORG2_REMOVED_ENCRYPTION_MODES).
 BORG2_ENCRYPTION_FLAGS: Dict[str, List[str]] = {
     "repokey-aes-ocb": ["--encryption", "aes256-ocb", "--key-location", "repokey"],
     "repokey-chacha20-poly1305": [
@@ -104,6 +106,14 @@ BORG2_ENCRYPTION_FLAGS: Dict[str, List[str]] = {
 
 BORG2_ENCRYPTION_MODES = list(BORG2_ENCRYPTION_FLAGS)
 
+# The stored modes only Borg 2 has (`authenticated` is a Borg 1 mode too).
+V2_ONLY_ENCRYPTION_MODES = {
+    "repokey-aes-ocb",
+    "repokey-chacha20-poly1305",
+    "keyfile-aes-ocb",
+    "keyfile-chacha20-poly1305",
+}
+
 # Modes an earlier Borg 2 had, with what to say to a caller that still asks.
 BORG2_REMOVED_ENCRYPTION_MODES: Dict[str, str] = {
     "none": (
@@ -113,28 +123,60 @@ BORG2_REMOVED_ENCRYPTION_MODES: Dict[str, str] = {
     ),
 }
 
-# The beta that made the split above. Every mode this table emits is rejected
-# outright by an older binary ("invalid choice: 'aes256-ocb'"), so a caller that
-# knows which Borg 2 will run the command can refuse before the command runs.
-ENCRYPTION_FLAGS_SINCE_BETA = 22
+# Borg 2 betas change the repository format and the command line at short
+# intervals, and a repository written by one beta is unreadable to the one
+# before it. An endpoint therefore runs at least the Borg 2 this server ships
+# (its pin, `CURRENT_VERSIONS` in app/api/borg_binaries.json), and nothing
+# older; the minimum moves with the pin.
+_VERSION_KEY = re.compile(
+    r"\b(\d{1,6})\.(\d{1,6})\.(\d{1,6})(?:(a|b|rc)(\d{1,6}))?(\.dev\d{0,6})?"
+)
+# An alpha sorts before a beta, a beta before a release candidate, and that
+# before the release; a development build before the version it leads to,
+# and one of a release (`2.0.0.dev1`) before that release's alphas.
+_STAGE_ORDER = {"a": 0, "b": 1, "rc": 2, None: 3}
 
 
-def borg2_speaks_encryption_flags(version: Optional[str]) -> bool:
-    """Whether this Borg 2 version accepts what `borg2_encryption_flags` emits.
+def _borg2_version_key(version: Optional[str]) -> Optional[tuple]:
+    """A sortable key for the first version in a string ("2.0.0b25",
+    "borg2 2.0.0rc1", "2.0.0b26.dev3"), or None where there is none. A
+    `.devN` build sorts before the version it leads to; what follows it (a
+    local `+g...` part) is not compared."""
+    match = _VERSION_KEY.search(version or "")
+    if not match:
+        return None
+    major, minor, patch, stage, number, dev = match.groups()
+    return (
+        int(major),
+        int(minor),
+        int(patch),
+        -1 if dev and stage is None else _STAGE_ORDER[stage],
+        int(number or 0),
+        0 if dev else 1,
+    )
 
-    Only a version that reads as an older Borg 2 is refused. An absent or
-    unreadable one is accepted: it is not evidence of an old binary, and
-    blocking on it would stop an endpoint whose Borg is fine - and say so with
-    an empty version number in the message. An endpoint that reports a Borg
-    major never omits the version (`detect_borg_binaries` keeps the two
-    together or drops the binary), so this covers a hand-made heartbeat only.
+
+def borg2_minimum_version() -> Optional[str]:
+    """The oldest Borg 2 an endpoint may run: the one this server ships."""
+    from app.api.borg_binaries import CURRENT_VERSIONS
+
+    return CURRENT_VERSIONS.get("2") or None
+
+
+def borg2_below_minimum(version: Optional[str]) -> bool:
+    """Whether a reported Borg 2 version is older than the server's.
+
+    Only a version that reads as an older Borg 2 is below. An absent or
+    unreadable one is not: it is not evidence of an old binary, and an
+    endpoint that reports a Borg major never omits the version
+    (`detect_borg_binaries` keeps the two together or drops the binary), so
+    this covers a hand-made heartbeat only.
     """
-    from app.services.borg2_compact_stats import borg2_beta_at_least, parse_borg_version
-
-    token = parse_borg_version(version or "")
-    if token is None:
-        return True
-    return borg2_beta_at_least(token, ENCRYPTION_FLAGS_SINCE_BETA)
+    reported = _borg2_version_key(version)
+    minimum = _borg2_version_key(borg2_minimum_version())
+    if reported is None or minimum is None:
+        return False
+    return reported < minimum
 
 
 def borg2_removed_encryption_refusal(mode: str) -> Optional[Dict]:
@@ -165,80 +207,24 @@ def borg2_encryption_flags(mode: str) -> List[str]:
 # local path, so `rest://user@host/repo` names the directory
 # `./rest:/user@host/repo` under the working directory. repo-create and
 # create succeed there, and the backup never leaves the machine.
-#
-# A Borg 2 before 2.0.0b25 still speaks rest:// (a configured binary may be
-# any build), so the URL is refused only for a binary that does not read as
-# one of those.
 REMOVED_REPOSITORY_URL_MESSAGE = (
     "rest:// repository URLs were removed in Borg 2.0.0b25, which reads one as "
     "a local directory. Use ssh://[user@]host[:port]/path instead (the path "
     "rules are the same), and create the repository anew: 2.0.0b25 cannot "
     "read a repository written by an earlier Borg 2 beta."
 )
-REST_URLS_REMOVED_IN_BETA = 25
-
-# The version a Borg 2 binary reports, by binary file (path, mtime, size).
-_BINARY_VERSIONS: dict[tuple, str] = {}
 
 
-def borg2_binary_version(binary: str) -> Optional[str]:
-    """The version `binary --version` reports, or None when it cannot be
-    read this time. Probed once per file; only a read version is kept."""
-    from app.services.borg2_compact_stats import parse_borg_version
-
-    key = _binary_key(binary)
-    known = _BINARY_VERSIONS.get(key)
-    if known is not None:
-        return known
-    try:
-        probe = subprocess.run(
-            [binary, "--version"], capture_output=True, text=True, timeout=15
-        )
-        version = parse_borg_version(f"{probe.stdout}\n{probe.stderr}")
-    except (OSError, ValueError, subprocess.TimeoutExpired):
-        version = None
-    if version is not None:
-        _BINARY_VERSIONS[key] = version
-    return version
+def borg2_repository_url_refusal(repository: Optional[str]) -> Optional[str]:
+    """Why Borg 2 must not be run on this repository URL, or None."""
+    if (repository or "").strip().lower().startswith("rest://"):
+        return REMOVED_REPOSITORY_URL_MESSAGE
+    return None
 
 
-def _borg2_before_beta(binary: Optional[str], beta: int) -> bool:
-    """Whether `binary` reads as a Borg 2 before 2.0.0b<beta>. An unreadable
-    version is not evidence of an old binary."""
-    from app.services.borg2_compact_stats import borg2_beta_at_least
-
-    if not binary:
-        return False
-    version = borg2_binary_version(binary)
-    if version is None or not version.startswith("2."):
-        return False
-    return not borg2_beta_at_least(version, beta)
-
-
-def borg2_still_speaks_rest_urls(binary: Optional[str]) -> bool:
-    """Whether `binary` reads as a Borg 2 before 2.0.0b25. An unreadable
-    version is not evidence of an old binary: the URL is then refused, which
-    costs a failed command, where running it could cost the backup."""
-    return _borg2_before_beta(binary, REST_URLS_REMOVED_IN_BETA)
-
-
-def borg2_repository_url_refusal(
-    repository: Optional[str], binary: Optional[str] = None
-) -> Optional[str]:
-    """Why `binary` (default: the configured Borg 2) must not be run on this
-    repository URL, or None. Probes the binary only for a rest:// URL."""
-    if not (repository or "").strip().lower().startswith("rest://"):
-        return None
-    if borg2_still_speaks_rest_urls(binary or _get_borg2_binary()):
-        return None
-    return REMOVED_REPOSITORY_URL_MESSAGE
-
-
-def ensure_borg2_repository_url(
-    repository: Optional[str], binary: Optional[str] = None
-) -> None:
-    """Raise ValueError for a repository URL this Borg 2 would misread."""
-    refusal = borg2_repository_url_refusal(repository, binary)
+def ensure_borg2_repository_url(repository: Optional[str]) -> None:
+    """Raise ValueError for a repository URL Borg 2 would misread."""
+    refusal = borg2_repository_url_refusal(repository)
     if refusal:
         raise ValueError(refusal)
 
@@ -298,8 +284,8 @@ def borg2_restore_target_refusal(
 def borg2_remote_path_env(remote_path: Optional[str]) -> Dict[str, str]:
     """The environment that names the Borg command on the remote side.
 
-    Borg 2.0.0b22 removed --remote-path in favour of BORG_REMOTE_PATH; a
-    command line that still carries the option fails at argument parsing.
+    Borg 2 has no --remote-path, only BORG_REMOTE_PATH; a command line that
+    carries the option fails at argument parsing.
     """
     return {"BORG_REMOTE_PATH": remote_path} if remote_path else {}
 
@@ -416,9 +402,6 @@ def borg2_ssh_repository_url(
     return base + ("/" + path.lstrip("/") if absolute else path)
 
 
-_UNSUPPORTED_REPOSITORY_VERSION = re.compile(
-    r"repository version (\d+) is not supported by this borg version"
-)
 _NOT_A_REPOSITORY = "is not a valid repository"
 
 
@@ -427,20 +410,12 @@ def borg2_unreadable_repository_detail(stderr: Optional[str]) -> Optional[Dict]:
     None for any other failure.
 
     Borg 2 is in beta and its repository format has changed between betas.
-    Up to 2.0.0b24 a repository of another format fails with a sentence that
-    names its version. 2.0.0b25 cannot tell a repository written by an
-    earlier beta from a directory that holds none and answers both with
-    "is not a valid repository", so that answer gets a text that names the
-    format change first and the wrong path second.
+    2.0.0b25 cannot tell a repository written by an earlier beta from a
+    directory that holds none and answers both with "is not a valid
+    repository", so that answer gets a text that names the format change
+    first and the wrong path second.
     """
-    text = stderr or ""
-    match = _UNSUPPORTED_REPOSITORY_VERSION.search(text)
-    if match:
-        return {
-            "key": "backend.errors.archives.unsupportedRepositoryVersion",
-            "params": {"version": int(match.group(1))},
-        }
-    if _NOT_A_REPOSITORY in text.lower():
+    if _NOT_A_REPOSITORY in (stderr or "").lower():
         return {"key": "backend.errors.repo.borg2RepositoryNotReadable"}
     return None
 
@@ -448,16 +423,16 @@ def borg2_unreadable_repository_detail(stderr: Optional[str]) -> Optional[Dict]:
 def normalize_repo_info_encryption(info: Dict) -> Dict:
     """Give repo-info's encryption block a `mode` again, in place.
 
-    Borg 2.0.0b22 replaced repo-info's single ``{"mode": "repokey-aes-ocb"}``
-    with ``{"encryption": "aes256-ocb", "id_hash": "sha256"}`` (#9168), the same
-    split it made on the repo-create side. Everything downstream — the stored
+    Borg 2's repo-info reports ``{"encryption": "aes256-ocb", "id_hash":
+    "sha256"}`` where Borg 1 reports ``{"mode": "repokey-aes-ocb"}`` (#9168),
+    the same split repo-create makes. Everything downstream — the stored
     repository row, the API response, the info dialog — reads ``mode``, and got
     nothing, so the UI showed "N/A" for a repository that is in fact encrypted.
 
     The cipher is what `mode` is filled from. The key location is deliberately
-    NOT reconstructed: b22 does not report it here, so `repokey-` or `keyfile-`
-    would be a guess, and a guess about where the key lives is worse than a
-    field that names only what borg actually said. `id_hash` is left in place
+    NOT reconstructed: Borg 2 does not report it here, so `repokey-` or
+    `keyfile-` would be a guess, and a guess about where the key lives is
+    worse than a field that names only what borg actually said. `id_hash` is left in place
     for callers that want it.
     """
     encryption = info.get("encryption")
@@ -469,53 +444,6 @@ def normalize_repo_info_encryption(info: Dict) -> Dict:
 
 
 DEFAULT_BORG2_BINARY = "borg2"
-
-
-# Whether a Borg 2 binary accepts `compact --stats`, by binary file
-# (path, mtime, size): probed once per file, again when the file changes.
-_COMPACT_STATS_SUPPORT: dict[tuple, bool] = {}
-
-
-def _binary_key(binary: str) -> tuple:
-    path = shutil.which(binary) or binary
-    try:
-        stat = os.stat(path)
-    except OSError:
-        return (path, None, None)
-    return (path, stat.st_mtime_ns, stat.st_size)
-
-
-def compact_stats_supported(binary: str) -> bool:
-    """Whether `binary` accepts `compact --stats` (Borg 2.0.0b15 on, see
-    `borg2_compact_stats.has_compact_stats`); a configured binary may be
-    any build. One whose version cannot be read this time (a probe timeout,
-    a banner without a version) does not get the flag: a wrong flag would
-    fail the whole compact, a missing one only its statistics. It is probed
-    again next time; only a read version is remembered."""
-    from app.services.borg2_compact_stats import has_compact_stats, parse_borg_version
-
-    key = _binary_key(binary)
-    known = _COMPACT_STATS_SUPPORT.get(key)
-    if known is not None:
-        return known
-    try:
-        probe = subprocess.run(
-            [binary, "--version"], capture_output=True, text=True, timeout=15
-        )
-        version = parse_borg_version(f"{probe.stdout}\n{probe.stderr}")
-    except (OSError, ValueError, subprocess.TimeoutExpired):
-        version = None
-    supported = version is not None and has_compact_stats(version)
-    logger.info(
-        "Probed borg2 for compact --stats",
-        binary=binary,
-        version=version,
-        supported=supported,
-    )
-    if version is not None:
-        # a probe that read nothing is not remembered: it is tried again
-        _COMPACT_STATS_SUPPORT[key] = supported
-    return supported
 
 
 def _get_borg2_binary() -> str:
@@ -580,7 +508,7 @@ class Borg2Interface:
         env = os.environ.copy()
         env["BORG_LOCK_WAIT"] = "20"
         env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
-        # Borg 2.0.0b23's pack cache — same defaults and override semantics as
+        # Borg 2's pack cache — same defaults and override semantics as
         # setup_borg_env (app/utils/borg_env.py), see the comment there.
         env.setdefault("BORG_STORE_CACHE", "1")
         env.setdefault("BORG_PACK_CACHE_SIZE", str(2 * 1024**3))
@@ -621,9 +549,7 @@ class Borg2Interface:
         it. A terminated process comes back as an ordinary failure with the
         signal's return code.
         """
-        refusal = await asyncio.to_thread(
-            borg2_repository_url_refusal, _command_repository(cmd), cmd[0]
-        )
+        refusal = borg2_repository_url_refusal(_command_repository(cmd))
         if refusal:
             logger.error("Refused borg2 command", command=" ".join(cmd))
             return {"return_code": 2, "stdout": "", "stderr": refusal, "success": False}
@@ -683,9 +609,7 @@ class Borg2Interface:
         env: Optional[Dict] = None,
     ) -> Dict:
         """Execute a borg2 command with line-by-line streaming (prevents OOM on large outputs)."""
-        refusal = await asyncio.to_thread(
-            borg2_repository_url_refusal, _command_repository(cmd), cmd[0]
-        )
+        refusal = borg2_repository_url_refusal(_command_repository(cmd))
         if refusal:
             logger.error("Refused borg2 command", command=" ".join(cmd))
             return {
@@ -943,7 +867,7 @@ class Borg2Interface:
         env: Optional[Dict] = None,
         timeout: int = 3600,
     ) -> "CommandLineStream":
-        ensure_borg2_repository_url(repository, self.borg_cmd)
+        ensure_borg2_repository_url(repository)
         cmd = [self.borg_cmd, "-r", repository, "diff", "--json-lines"]
         cmd.extend([archive_a, archive_b])
         exec_env = self._command_env(cmd, env)
@@ -964,7 +888,7 @@ class Borg2Interface:
         env: Optional[Dict] = None,
         timeout: int = 3600,
     ) -> "CommandLineStream":
-        ensure_borg2_repository_url(repository, self.borg_cmd)
+        ensure_borg2_repository_url(repository)
         cmd = [self.borg_cmd, "-r", repository, "list", "--json-lines"]
         cmd.append(archive)
         exec_env = self._command_env(cmd, env)
@@ -1060,7 +984,7 @@ class Borg2Interface:
         strip_components: int = 0,
     ) -> "CommandByteStream":
         """Stream one archived directory as an uncompressed tar to stdout."""
-        ensure_borg2_repository_url(repository, self.borg_cmd)
+        ensure_borg2_repository_url(repository)
         cmd = [self.borg_cmd, "-r", repository, "export-tar"]
         if strip_components:
             cmd.extend(["--strip-components", str(strip_components)])
@@ -1127,8 +1051,8 @@ class Borg2Interface:
         if keep_yearly > 0:
             cmd.extend(["--keep-yearly", str(keep_yearly)])
         if keep_within and keep_within.strip():
-            # Borg 2.0.0b22 removed --keep-within (and --keep-last) in favour of
-            # --keep, which takes either form: a count or an interval like "1d".
+            # Borg 2 has no --keep-within (nor --keep-last): --keep takes
+            # either form, a count or an interval like "1d".
             cmd.extend(["--keep", keep_within.strip()])
         cmd.append("--list")
         if dry_run:

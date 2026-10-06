@@ -34,7 +34,7 @@ class RestoreV2Service:
         `borg2_restore_target_refusal`) unless `existing_files` is
         "continue", which writes into what is there. A caller that extracts
         into a directory of its own making leaves both out."""
-        ensure_borg2_repository_url(repository_path, borg2.borg_cmd)
+        ensure_borg2_repository_url(repository_path)
         refusal = borg2_restore_target_refusal(destination, existing_files)
         if refusal:
             raise RestoreRefused(refusal)

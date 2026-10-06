@@ -18,6 +18,7 @@ import AppLogo from './AppLogo'
 import {
   mountHint,
   readAccessCommands,
+  trimRoot,
   useAppDetection,
   useAppInspection,
   type AppScanTarget,
@@ -35,6 +36,8 @@ interface AppTemplateFolderPanelProps {
   /** External folders (libraries) the user keeps in the backup. */
   extraPaths: string[]
   onPathsChange: (root: string, extraPaths: string[]) => void
+  /** The detected container's name ('' when not found), for scripts that run inside it. */
+  onContainerChange: (container: string) => void
   excludes: string[]
   onExcludesChange: (excludes: string[]) => void
 }
@@ -52,6 +55,7 @@ export default function AppTemplateFolderPanel({
   onRootIncludedChange,
   extraPaths,
   onPathsChange,
+  onContainerChange,
   excludes,
   onExcludesChange,
 }: AppTemplateFolderPanelProps) {
@@ -79,6 +83,12 @@ export default function AppTemplateFolderPanel({
   useEffect(() => {
     if (found && !root.trim()) onPathsChange(found, detectedExtraPaths)
   }, [found, root, detectedExtraPaths, onPathsChange])
+
+  // Only for the folder Borg UI found: a script must never stop or exec into
+  // that container on behalf of a folder the user picked elsewhere.
+  const container =
+    detection && trimRoot(root) === trimRoot(detection.path) ? detection.container_name : ''
+  useEffect(() => onContainerChange(container), [container, onContainerChange])
 
   const rescanButton = (
     <Button
@@ -182,7 +192,11 @@ export default function AppTemplateFolderPanel({
             {t('appTemplates.denied.why')}
           </Typography>
           <Typography variant="body2">
-            {t('appTemplates.denied.fixFolder', { hint: template.root_hint })}
+            {t('appTemplates.denied.fixFolder', {
+              hint: template.root_hint,
+              app: template.name,
+              id: template.id,
+            })}
           </Typography>
           <Typography variant="body2" sx={{ mt: 1 }}>
             {t('appTemplates.denied.fixAcl', { user: user ?? '?' })}
@@ -204,7 +218,11 @@ export default function AppTemplateFolderPanel({
       )}
       {rootStatus === 'missing' && (
         <Alert severity="warning" variant="outlined" role="alert">
-          {t('appTemplates.missingRoot', { path: root.trim(), hint: template.root_hint })}
+          {t('appTemplates.missingRoot', {
+            path: root.trim(),
+            hint: template.root_hint,
+            app: template.name,
+          })}
         </Alert>
       )}
       <AppFolderList

@@ -260,9 +260,8 @@ xml_escape() {
   printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
 }
 
-# An ssh:// or rest:// repository's login and host, for an SSH check (a rest://
-# store is reached over SSH as well). A port after the host is honoured; IPv6
-# literals in brackets are not parsed.
+# An ssh:// repository's login and host, for an SSH check. A port after the
+# host is honoured; IPv6 literals in brackets are not parsed.
 ssh_target_of() {
   local authority="${1#*://}"
   authority="${authority%%/*}"
@@ -309,7 +308,7 @@ ask_repository_defaults() {
   if [[ -n "${BORG_REPO_VALUE}" ]]; then
     printf 'Borg executable on that host (BORG_REMOTE_PATH, empty for the default): ' >&3
     IFS= read -r BORG_REMOTE_PATH_VALUE <&3 || BORG_REMOTE_PATH_VALUE=""
-    if [[ "${BORG_REPO_VALUE}" == ssh://* || "${BORG_REPO_VALUE}" == rest://* ]]; then
+    if [[ "${BORG_REPO_VALUE}" == ssh://* ]]; then
       printf 'Open an SSH connection to it now, to confirm the host key and the login? [Y/n] ' >&3
       IFS= read -r answer <&3 || answer="n"
       if [[ -z "${answer}" || "${answer}" =~ ^[Yy] ]]; then
@@ -2329,7 +2328,7 @@ async def get_agent_installer_checksum(
 
 
 @router.get("/agent/uninstall.sh")
-async def get_agent_uninstaller() -> Response:
+def get_agent_uninstaller() -> Response:
     """The uninstaller this server serves, identical for every caller.
 
     Unauthenticated, matching install.sh beside it. Acceptable because the
@@ -2345,7 +2344,7 @@ async def get_agent_uninstaller() -> Response:
 
 
 @router.get("/agent/dist/")
-async def get_agent_dist_index() -> Response:
+def get_agent_dist_index() -> Response:
     """A find-links index of the agent wheelhouse this image serves.
 
     The installer runs `pip install --no-index --find-links <server>/agent/dist/`,
@@ -2365,7 +2364,7 @@ async def get_agent_dist_index() -> Response:
 
 
 @router.get("/agent/dist/{filename}")
-async def get_agent_wheel(filename: str) -> FileResponse:
+def get_agent_wheel(filename: str) -> FileResponse:
     """Serve one wheel from the agent wheelhouse."""
     # A path parameter never spans '/', but reject anything that is not a plain
     # wheel filename sitting directly in the dist dir, so nothing outside it can be

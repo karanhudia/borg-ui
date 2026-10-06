@@ -130,6 +130,13 @@ export default function AppFolderList({
     if (folder.role !== 'database' || measuring || !stats || isSkipped(folder.path)) return null
     const folderStats = statsFor(folder.path)
     const latest = folderStats?.latest_modified_at ?? null
+    if (isStale(latest, folder.stale_after_hours) && folder.made_before_backup) {
+      return (
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+          {t('appTemplates.folders.madeBeforeBackup')}
+        </Typography>
+      )
+    }
     if (!isStale(latest, folder.stale_after_hours)) {
       return (
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
@@ -150,8 +157,9 @@ export default function AppFolderList({
             ? t('appTemplates.folders.staleDump', {
                 when: formatRelativeTime(latest),
                 hours: folder.stale_after_hours,
+                app: template.name,
               })
-            : t('appTemplates.folders.noDump')}
+            : t('appTemplates.folders.noDump', { app: template.name })}
         </Typography>
       </Stack>
     )

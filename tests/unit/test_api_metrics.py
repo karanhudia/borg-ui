@@ -563,6 +563,24 @@ class TestEdgeCases:
         test_db.add(repo)
         test_db.commit()
 
+        # The handler runs in the threadpool, so each request needs its own
+        # session, as in production. The shared fixture session is not
+        # thread-safe.
+        from sqlalchemy.orm import sessionmaker
+
+        from app.database.database import get_db
+
+        session_factory = sessionmaker(bind=test_db.get_bind())
+
+        def per_request_db():
+            db = session_factory()
+            try:
+                yield db
+            finally:
+                db.close()
+
+        test_client.app.dependency_overrides[get_db] = per_request_db
+
         def fetch_metrics():
             response = test_client.get("/metrics")
             return response.status_code

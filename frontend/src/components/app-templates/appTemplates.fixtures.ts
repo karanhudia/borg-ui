@@ -14,7 +14,7 @@ export const immichTemplate: AppTemplate = {
   docs_url: 'https://docs.immich.app/administration/backup-and-restore',
   verified: { app_version: 'v3.2.4', date: '2026-09-30', restore_tested: false },
   detect: {
-    image_prefix: 'ghcr.io/immich-app/immich-server',
+    images: ['ghcr.io/immich-app/immich-server'],
     mount_destinations: ['/data', '/usr/src/app/upload'],
   },
   root_hint: 'UPLOAD_LOCATION in your Immich .env file',

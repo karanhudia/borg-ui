@@ -687,7 +687,7 @@ def get_alerts(db: Session, hours: int = 24) -> List[Dict[str, Any]]:
 
 
 @router.get("/status", response_model=DashboardStatus)
-async def get_dashboard_status(
+def get_dashboard_status(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get comprehensive dashboard status"""
@@ -720,7 +720,7 @@ async def get_dashboard_status(
 
 
 @router.get("/metrics", response_model=MetricsResponse)
-async def get_dashboard_metrics(current_user: User = Depends(get_current_user)):
+def get_dashboard_metrics(current_user: User = Depends(get_current_user)):
     """Get system metrics for dashboard"""
     try:
         # CPU usage, the shared non-blocking reading
@@ -759,7 +759,7 @@ async def get_dashboard_metrics(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/schedule", response_model=ScheduleResponse)
-async def get_dashboard_schedule(
+def get_dashboard_schedule(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get scheduled jobs information"""
