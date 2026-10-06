@@ -25,8 +25,12 @@ ACTIVE_STATUSES = ("queued", "running")
 
 
 def active_maintenance_operation(db: Session, repository_id: int, kind: str) -> Any:
-    """The active `Operation` for this repository and kind, if one exists."""
-    return (
+    """The active `Operation` for this repository and kind, if one exists.
+
+    A prune dry run (the preview, or the retention comparison that follows
+    every backup) is not a prune: counting it answered a real prune with
+    "already running" and showed a prune in progress that was not."""
+    candidates = (
         db.query(Operation)
         .filter(
             Operation.repository_id == repository_id,
@@ -34,8 +38,12 @@ def active_maintenance_operation(db: Session, repository_id: int, kind: str) -> 
             Operation.status.in_(ACTIVE_STATUSES),
         )
         .order_by(Operation.id.desc())
-        .first()
+        .all()
     )
+    for candidate in candidates:
+        if not (candidate.params or {}).get("dry_run"):
+            return candidate
+    return None
 
 
 def start_maintenance(
