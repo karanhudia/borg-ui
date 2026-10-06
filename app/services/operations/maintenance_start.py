@@ -25,18 +25,23 @@ logger = structlog.get_logger()
 ACTIVE_STATUSES = ("queued", "running")
 
 
-def active_maintenance_operation(db: Session, repository_id: int, kind: str) -> Any:
-    """The active `Operation` for this repository and kind, if one exists."""
-    return (
-        db.query(Operation)
-        .filter(
-            Operation.repository_id == repository_id,
-            Operation.kind == kind,
-            Operation.status.in_(ACTIVE_STATUSES),
-        )
-        .order_by(Operation.id.desc())
-        .first()
+def active_maintenance_operation(
+    db: Session, repository_id: int, kind: str, *, previews: bool = True
+) -> Any:
+    """The active `Operation` for this repository and kind, if one exists.
+    `previews=False` skips prune dry runs (the page's preview and the
+    retention comparison a backup chains): they remove nothing, and a real
+    prune started meanwhile waits for the lane they hold."""
+    from app.services.operations.repository_status import _not_dry_run
+
+    q = db.query(Operation).filter(
+        Operation.repository_id == repository_id,
+        Operation.kind == kind,
+        Operation.status.in_(ACTIVE_STATUSES),
     )
+    if not previews:
+        q = q.filter(_not_dry_run())
+    return q.order_by(Operation.id.desc()).first()
 
 
 def start_maintenance(
@@ -53,7 +58,7 @@ def start_maintenance(
 ) -> Operation:
     if kind not in MAINTENANCE_KINDS:
         raise ValueError(f"Not a maintenance kind: {kind!r}")
-    if active_maintenance_operation(db, repository.id, kind) is not None:
+    if active_maintenance_operation(db, repository.id, kind, previews=False):
         raise HTTPException(status_code=409, detail={"key": duplicate_error_key})
     # None means "not supplied"; storing it would shadow a service default.
     stored = {key: value for key, value in params.items() if value is not None}
