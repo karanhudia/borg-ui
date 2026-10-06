@@ -5849,6 +5849,7 @@
         "notValidBorgRepository": "No es un repositorio Borg válido: {{path}}",
         "parentDirectoryNotWritable": "El directorio padre no tiene permisos de escritura: {{path}}. Asegúrese de que el directorio exista con los permisos correctos.",
         "permissionDeniedCreateDirectory": "Permiso denegado: no se puede crear el directorio en '{{path}}'. Para almacenar repositorios en su máquina anfitriona, use rutas que comiencen con '/local/'.",
+        "failedToCreateDirectory": "No se puede crear el directorio en '{{path}}': {{reason}}",
         "permissionDeniedCreateParentDirectory": "Permiso denegado: no se puede crear el directorio padre '{{path}}'. Asegúrese de que el directorio exista en su máquina anfitriona con los permisos correctos.",
         "encryptedPassphraseRequired": "Se requiere contraseña para el modo de cifrado '{{mode}}'",
         "agentBorg2Unavailable": "Este endpoint no tiene Borg 2 instalado, así que no se puede crear ni abrir un repositorio de Borg 2 en él. Instala Borg 2 en el endpoint o elige Borg 1.",
