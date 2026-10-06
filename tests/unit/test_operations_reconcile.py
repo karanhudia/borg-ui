@@ -275,7 +275,9 @@ class FakeClock:
         """One process lifetime: a fresh scheduler, stopped after `minutes`."""
         self._scheduler = reconcile.ReconcileScheduler()
         self._stop_at = self.now + timedelta(minutes=minutes)
-        await asyncio.wait_for(self._scheduler.start(), timeout=5)
+        # Only catches a scheduler that never stops; a week of polls under
+        # coverage on a slow CI runner can take several seconds.
+        await asyncio.wait_for(self._scheduler.start(), timeout=60)
 
 
 def _set_interval(db, minutes):

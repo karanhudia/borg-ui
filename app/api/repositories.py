@@ -1103,7 +1103,8 @@ async def _update_agent_repository_stats(
                 du_result = await wait(du_job, timeouts["info_timeout"])
                 du_meta = du_result or {}
                 if du_meta.get("return_code", 0) == 0:
-                    # `du -sb` prints "<bytes>\t<path>".
+                    # "<bytes>\t<path>": `du -sb`, or on macOS (agent 0.1.15)
+                    # `du -A -sk` scaled to bytes by the agent.
                     stdout = (du_meta.get("stdout") or "").strip()
                     first = stdout.split("\n")[0] if stdout else ""
                     fields = first.split()
