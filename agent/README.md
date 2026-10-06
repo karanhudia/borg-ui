@@ -367,6 +367,9 @@ The first implementation supports:
   the user's Application Support directory, a Homebrew or MacPorts Borg
   reports its install source, and the self-upgrade readiness reads the
   launchd job instead of the systemd units
+- from 0.1.15 the `repository.disk_usage` job runs the same `du` as the
+  storage measurement, so on macOS it runs `-A -sk` and reports the size
+  in bytes (#1291)
 - cancellation through heartbeat; from 0.1.7 (`jobs.cancel`) a running
   backup, check, prune, compact, restore or archive delete stops as well,
   even while Borg prints nothing

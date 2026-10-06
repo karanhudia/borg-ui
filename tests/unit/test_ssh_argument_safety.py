@@ -186,7 +186,8 @@ class TestRemoteCommandQuoting:
             await fs._du_ssh(f"ssh://borg@example.com:22{SUBSHELL_PATH}", [], 5)
 
         remote = mock_exec.call_args.args[-1]
-        assert shlex.split(remote)[:3] == ["du", "-sb", SUBSHELL_PATH]
+        assert remote == fs.remote_du_command(SUBSHELL_PATH) + " 2>/dev/null"
+        assert f"-- {shlex.quote(SUBSHELL_PATH)};" in remote
 
     @pytest.mark.asyncio
     async def test_du_ssh_refuses_option_username(self):
