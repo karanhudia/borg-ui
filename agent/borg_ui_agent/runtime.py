@@ -44,6 +44,8 @@ DEFAULT_CAPABILITIES = [
     "repository.extract_archive_file",
     "repository.export_archive_tar",
     "repository.restore",
+    # reads a restore's target.existing_files (0.1.17)
+    "repository.restore.existing_files",
     "repository.check",
     "repository.prune",
     "repository.compact",

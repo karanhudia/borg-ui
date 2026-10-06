@@ -7,7 +7,7 @@ from pathlib import Path
 import structlog
 
 from app.config import settings
-from app.core.borg2 import _get_borg2_binary, borg2
+from app.core.borg2 import _get_borg2_binary, borg2, ensure_borg2_repository_url
 from app.database.database import SessionLocal
 from app.database.models import Repository
 from app.services.operations.job_facade import (
@@ -148,9 +148,9 @@ class PruneV2Service:
 
             env, temp_key_file = build_repository_borg_env(repo, db, keepalive=True)
             borg_cmd = _get_borg2_binary()
+            ensure_borg2_repository_url(repo.path)
+            # the remote Borg command is in env (BORG_REMOTE_PATH)
             cmd = [borg_cmd, "-r", repo.path, "prune", "--list"]
-            if remote_path := effective_repository_remote_path(repo):
-                cmd.extend(["--remote-path", remote_path])
             if keep_hourly > 0:
                 cmd.extend(["--keep-hourly", str(keep_hourly)])
             if keep_daily > 0:
@@ -164,8 +164,8 @@ class PruneV2Service:
             if keep_yearly > 0:
                 cmd.extend(["--keep-yearly", str(keep_yearly)])
             if keep_within and keep_within.strip():
-                # Borg 2.0.0b22 removed --keep-within (and --keep-last) in favour
-                # of --keep, which takes either form: a count or an interval.
+                # Borg 2 has no --keep-within (nor --keep-last): --keep takes
+                # either form, a count or an interval.
                 cmd.extend(["--keep", keep_within.strip()])
             if dry_run:
                 cmd.append("--dry-run")

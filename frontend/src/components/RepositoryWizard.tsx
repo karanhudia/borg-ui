@@ -33,7 +33,11 @@ import { useAnalytics } from '../hooks/useAnalytics'
 import { useFeatureAnalytics } from '../hooks/useFeatureAnalytics'
 import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
-import { kibToUploadRatelimitMb, uploadRatelimitMbToKib } from '../utils/uploadRatelimit'
+import {
+  kibToUploadRatelimitMb,
+  uploadRatelimitMbToKib,
+  uploadRatelimitSupported,
+} from '../utils/uploadRatelimit'
 import type { SourceLocation } from '../types'
 
 interface Repository extends RepositoryData {
@@ -939,7 +943,11 @@ const RepositoryWizard = ({
       post_hook_timeout: wizardState.postHookTimeout,
       continue_on_hook_failure: wizardState.hookFailureMode === 'continue',
       skip_on_hook_failure: wizardState.hookFailureMode === 'skip',
-      upload_ratelimit_kib: uploadRatelimitMbToKib(wizardState.uploadRatelimitMb),
+      // Borg 2 has no upload limit except behind rclone: elsewhere a
+      // stored one is cleared on save
+      upload_ratelimit_kib: uploadRatelimitSupported(wizardState.borgVersion, wizardState.path)
+        ? uploadRatelimitMbToKib(wizardState.uploadRatelimitMb)
+        : null,
       bypass_lock: wizardState.bypassLock,
       // Spec 6.8 and 6.7: only PUT accepts these, so they ride along
       // when editing and are left to their defaults at creation.
@@ -1339,6 +1347,8 @@ const RepositoryWizard = ({
         return (
           <WizardStepRepositoryAdvanced
             repositoryId={mode === 'edit' ? repository?.id : null}
+            borgVersion={wizardState.borgVersion}
+            repositoryPath={wizardState.path}
             repositoryMode={wizardState.repositoryMode}
             data={{
               compression: wizardState.compression,
@@ -1361,6 +1371,8 @@ const RepositoryWizard = ({
         return (
           <WizardStepBackupConfig
             repositoryId={mode === 'edit' ? repository?.id : null}
+            borgVersion={wizardState.borgVersion}
+            repositoryPath={wizardState.path}
             dataSource={wizardState.dataSource}
             repositoryMode={wizardState.repositoryMode}
             data={{

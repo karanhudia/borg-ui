@@ -1,4 +1,10 @@
 export type RestoreLayout = 'preserve_path' | 'contents_only'
+
+/** What a restore does with a destination that already holds files. Only Borg
+ *  2 asks: from 2.0.0b25 it extracts only into an empty directory ('refuse',
+ *  the exact restore) unless told to write into what is there ('continue',
+ *  Borg's --continue). Borg 1 overwrites files at the same path. */
+export type RestoreExistingFiles = 'refuse' | 'continue'
 export type RestorePathType = 'file' | 'directory'
 
 export interface RestorePathMetadata {

@@ -35,7 +35,7 @@ const agents: AgentMachineResponse[] = [
     os: 'linux',
     arch: 'arm64',
     agent_version: '0.1.0',
-    borg_versions: [{ major: 2, version: '2.0.0b10', path: '/usr/local/bin/borg2' }],
+    borg_versions: [{ major: 2, version: '2.0.0b25', path: '/usr/local/bin/borg2' }],
     capabilities: ['backup.create', 'backup.cancel', 'logs.stream'],
     labels: { site: 'home-lab' },
     status: 'online',
@@ -642,6 +642,17 @@ export const AgentReinstallDialogOpen: Story = {
       />
     </Box>
   ),
+}
+
+export const AgentReinstallDialogMovedToThisServer: Story = {
+  name: 'Reinstall dialog for an endpoint moved to this server',
+  // The option is off by default, so the snapshot ticks it to show the
+  // command with --server. The dialog renders in a portal outside the canvas.
+  play: async () => {
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+    document.querySelector<HTMLInputElement>('[role="dialog"] input[type="checkbox"]')?.click()
+  },
+  render: AgentReinstallDialogOpen.render,
 }
 
 export const AgentReinstallDialogMacos: Story = {

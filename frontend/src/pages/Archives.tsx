@@ -51,7 +51,11 @@ import { Archive, Repository } from '@/types'
 import LockErrorDialog from '../components/LockErrorDialog'
 import { useAnalytics } from '../hooks/useAnalytics'
 import RestoreWizard, { RestoreData } from '../components/RestoreWizard'
-import type { RestoreLayout, RestorePathMetadata } from '../utils/restorePaths'
+import type {
+  RestoreExistingFiles,
+  RestoreLayout,
+  RestorePathMetadata,
+} from '../utils/restorePaths'
 import { getRepoCapabilities, getBorgVersion } from '../utils/repoCapabilities'
 import { usePermissions } from '../hooks/usePermissions'
 import { useLockBreakPermissions } from '../hooks/useLockBreakPermissions'
@@ -398,6 +402,7 @@ const Archives: React.FC = () => {
       destination_connection_id,
       restore_layout,
       path_metadata,
+      existing_files,
     }: {
       repository: string
       archive: string
@@ -408,6 +413,7 @@ const Archives: React.FC = () => {
       destination_connection_id: number | null
       restore_layout: RestoreLayout
       path_metadata: RestorePathMetadata[]
+      existing_files: RestoreExistingFiles
     }) =>
       restoreAPI.startRestore(
         repository,
@@ -418,7 +424,8 @@ const Archives: React.FC = () => {
         destination_type,
         destination_connection_id,
         restore_layout,
-        path_metadata
+        path_metadata,
+        existing_files
       ),
     onSuccess: (_response, variables) => {
       toast.success(t('archives.restoreStarted'), {
@@ -572,6 +579,7 @@ const Archives: React.FC = () => {
       destination_connection_id: data.destination_connection_id,
       restore_layout: data.restore_layout,
       path_metadata: data.path_metadata,
+      existing_files: data.existing_files,
     })
 
     setShowRestoreWizard(false)

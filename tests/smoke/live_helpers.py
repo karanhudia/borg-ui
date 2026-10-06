@@ -19,6 +19,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from tests.integration.helpers import DockerPathHelper, parse_archives_payload
+from tests.utils.borg import BORG2_TEST_ENCRYPTION, BORG2_TEST_PASSPHRASE
 from tests.utils.jobs import wait_for_payload_status
 
 
@@ -172,8 +173,8 @@ class SmokeClient:
         name: str,
         repo_path: Path | str,
         source_dirs: list[Path | str],
-        encryption: str = "none",
-        passphrase: Optional[str] = None,
+        encryption: str = BORG2_TEST_ENCRYPTION,
+        passphrase: Optional[str] = BORG2_TEST_PASSPHRASE,
         extra: Optional[dict] = None,
     ) -> tuple[int, str]:
         payload = {
@@ -409,8 +410,8 @@ class SmokeClient:
         source_dirs: list[Path],
         token: Optional[str] = None,
         timeout: float = 90.0,
-        encryption: str = "none",
-        passphrase: Optional[str] = None,
+        encryption: str = BORG2_TEST_ENCRYPTION,
+        passphrase: Optional[str] = BORG2_TEST_PASSPHRASE,
         extra: Optional[dict] = None,
     ) -> tuple[int, str, int, dict]:
         repo_id, repository_path = self.create_repository_v2(

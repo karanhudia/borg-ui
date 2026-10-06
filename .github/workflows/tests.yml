@@ -233,8 +233,8 @@ jobs:
     # default; the suite finishes in a couple of minutes.
     timeout-minutes: 20
     # Run inside the runtime base image so both Borg 1 and Borg 2 are the exact
-    # builds users get (apt only ships a Borg 1, and b24 cannot be built or run
-    # on the runner's glibc/OpenSSL). A Borg bump PR stays red here until its
+    # builds users get (apt only ships a Borg 1, and Borg 2 cannot be built or
+    # run on the runner's glibc/OpenSSL). A Borg bump PR stays red here until its
     # base image is pushed, same as the Dockerfile base-image guard.
     container:
       image: ${{ needs.runtime-base-image.outputs.image }}

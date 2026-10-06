@@ -163,6 +163,10 @@ async def import_borgmatic_config(
                             "schedules_updated", 0
                         )
                         combined_result["warnings"].extend(result.get("warnings", []))
+                        combined_result["errors"].extend(
+                            f"{yaml_file}: {error}"
+                            for error in result.get("errors", [])
+                        )
 
                         if not result.get("success"):
                             combined_result["errors"].append(

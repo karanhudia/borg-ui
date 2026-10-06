@@ -363,6 +363,8 @@
         "runAsAgentUser": "Run it as the user the agent runs as, without sudo.",
         "borgInstallation": "Borg installation",
         "borgSelectionHint": "Selecting Borg versions upgrades those binaries on the agent to the versions this server provides. Leave this on Skip unless a Borg upgrade is intended.",
+        "movedToThisServer": "This endpoint was moved to this server",
+        "movedToThisServerHint": "Adds --server so the reinstall records this address for remote upgrades. Turn it on after Change server URL moved the endpoint here. Leave it off if agents reach this server through another address, because recording this one would turn their remote upgrades off.",
         "borgOptions": {
           "borg1": {
             "label": "Borg 1.x",
@@ -475,6 +477,10 @@
         "pending": "Borg {{version}} pending",
         "pendingTooltip": "Pinned to Borg {{version}}, which this endpoint does not report yet. The next upgrade installs it."
       },
+      "borg2Minimum": {
+        "label": "Borg 2 too old",
+        "tooltip": "This endpoint's Borg 2 is {{version}}, older than this server's {{minimum}}. Its Borg 2 backups, restores and maintenance are refused. Run the agent installer on the endpoint with {{flags}} to install the server's Borg 2. After replacing Borg 2 by hand, restart the agent so it reports the new version."
+      },
       "setServerDialog": {
         "title": "Change server URL",
         "description": "Point this endpoint at a different Borg UI address. It keeps its identity, its credential and its history, so no new enrollment token is needed.",
@@ -542,8 +548,8 @@
         },
         "service": {
           "title": "4. Service checks",
-          "description": "The installer enables systemd by default so the agent survives reboot. Use these commands only when inspecting or repairing a manual installation.",
-          "descriptionMacos": "On a Mac the agent is a launchd user agent in the signed-in user's domain. Check it with the first command. The second block renders the template for your home directory and loads it; the template expects the agent under ~/Library/Application Support/borg-ui-agent, where the installer puts it."
+          "description": "The installer enables systemd by default so the agent survives reboot. Use these commands only when inspecting or repairing a manual installation. Run the second block from the cloned borg-ui directory: it installs the agent into /opt/borg-ui-agent and registers it at /etc/borg-ui-agent/config.toml, where the systemd unit expects them, then enables the unit.",
+          "descriptionMacos": "On a Mac the agent is a launchd user agent in the signed-in user's domain. Check it with the first command. Run the second block from the cloned borg-ui directory: it installs and registers the agent under ~/Library/Application Support/borg-ui-agent, where the template expects it, then renders the template for your home directory and loads it."
         }
       }
     },
@@ -1856,9 +1862,9 @@
       "settings": {
         "archiveNameHelper": "Supports {plan_name}, {repo_name}, {now}, {date}, {time}, and {timestamp}.",
         "extraBorgFlagsHelper": "Custom command-line flags for borg create (e.g., --stats, --progress, --list). Applied to every repository run in this plan.",
-        "uploadSpeedHelper": "MB/s. Empty means unlimited.",
+        "uploadSpeedHelper": "MB/s. Empty means unlimited. Applies to Borg 1 repositories and to Borg 2 repositories behind rclone; other Borg 2 repositories have no upload limit.",
         "uploadPoliciesTitle": "Scheduled upload limits",
-        "uploadPoliciesHelper": "Time windows override the constant upload limit. Leave a policy limit empty for unlimited.",
+        "uploadPoliciesHelper": "Time windows override the constant upload limit. Leave a policy limit empty for unlimited. Like the constant limit, they apply to Borg 1 repositories and to Borg 2 repositories behind rclone.",
         "addUploadPolicy": "Add upload policy",
         "removeUploadPolicy": "Remove upload policy",
         "daytimePolicyLabel": "Daytime cap",
@@ -4889,7 +4895,18 @@
       "restorePath": "Restore",
       "contentsOnlyMarker": "(contents)",
       "andMoreItems_one": "... and {{count}} more item",
-      "andMoreItems_other": "... and {{count}} more items"
+      "andMoreItems_other": "... and {{count}} more items",
+      "existingFiles": {
+        "title": "Existing files",
+        "exact": "Exact restore (empty directory)",
+        "exactDesc": "Borg 2 restores only into an empty directory. Every file is written from the archive. Choose a new or empty folder.",
+        "exactUnavailable": "The original location always holds files, so an exact restore is not possible there. Choose a custom location for one.",
+        "continue": "Restore into existing files",
+        "continueDesc": "Write into a directory that already holds files.",
+        "continueWarning": "Files that already have the archived type, permissions, size and modification time are skipped, so a file that was damaged without a change in size or time is not repaired. Files that differ are replaced; files the archive does not have are left alone. On a freshly formatted disk (only lost+found) the result is the same as an exact restore.",
+        "originalNeedsChoice": "To restore to the original location, choose “Restore into existing files”.",
+        "borg1": "Files at the same path are overwritten; other files in the destination are left alone."
+      }
     },
     "restoreFiles": {
       "title": "Select files to restore",
@@ -4950,7 +4967,11 @@
       "files_one": "{{count}} file",
       "files_other": "{{count}} files",
       "entireArchiveNote": "The entire archive will be restored with all files and directories.",
-      "everythingLooksGood": "Everything looks good! Click \"Restore Files\" to begin the restore operation."
+      "everythingLooksGood": "Everything looks good! Click \"Restore Files\" to begin the restore operation.",
+      "existingFiles": "Existing files",
+      "existingFilesExact": "Exact restore",
+      "existingFilesContinue": "Restore into existing files",
+      "existingFilesBorg1": "Overwritten at the same path"
     },
     "review": {
       "configurationSummary": "Configuration Summary",
@@ -5199,6 +5220,8 @@
     "customFlagsHint": "Custom command-line flags for borg create (e.g., --stats, --progress, --list)",
     "uploadSpeedLimit": "Upload speed limit",
     "uploadSpeedLimitHint": "MB/s. Empty means unlimited. Backup plan settings can override this default.",
+    "uploadSpeedLimitBorg2": "Borg 2 has no upload limit. This setting applies to Borg 1 repositories and to Borg 2 repositories behind rclone.",
+    "uploadSpeedLimitRclone": "MB/s. Empty means unlimited. Applied as rclone's bandwidth limit during backups, since Borg 2 has no upload limit of its own.",
     "scripts": "Scripts",
     "scriptsOptional": "(Optional)",
     "scriptsHint": "Configure inline scripts or assign reusable scripts from your Script Library.",
@@ -5818,7 +5841,7 @@
         "backupArchiveNameRequired": "Archive name is required",
         "backupRepositoryPathRequired": "Repository path is required",
         "backupSourcePathRequired": "At least one source path is required",
-        "capabilityMissing": "This agent does not support the required capability",
+        "capabilityMissing": "This agent does not support the required capability ({{capability}})",
         "enrollmentExpiryAmbiguous": "Choose only one enrollment token expiry option",
         "enrollmentExpiryTooShort": "Enrollment token expiry must be at least five minutes",
         "enrollmentNameRequired": "Enrollment token name is required",
@@ -5849,12 +5872,14 @@
         "notValidBorgRepository": "Not a valid Borg repository: {{path}}",
         "parentDirectoryNotWritable": "Parent directory is not writable: {{path}}. Please ensure the directory exists with correct permissions.",
         "permissionDeniedCreateDirectory": "Permission denied: cannot create directory at '{{path}}'. To store repositories on your host machine, use paths starting with '/local/'.",
+        "failedToCreateDirectory": "Cannot create directory at '{{path}}': {{reason}}",
         "permissionDeniedCreateParentDirectory": "Permission denied: cannot create parent directory '{{path}}'. Please ensure the directory exists on your host machine with proper permissions.",
         "encryptedPassphraseRequired": "Passphrase is required for encryption mode '{{mode}}'",
         "agentBorg2Unavailable": "This endpoint doesn't have Borg 2 installed, so a Borg 2 repository can't be created or opened on it. Install Borg 2 on the endpoint, or pick Borg 1.",
-        "agentBorg2TooOld": "This endpoint's Borg 2 is {{version}}; borg-ui needs {{minimum}} or newer for a Borg 2 repository. Upgrade Borg 2 on the endpoint, or pick Borg 1.",
+        "agentBorg2TooOld": "This endpoint's Borg 2 is {{version}}, older than this server's {{minimum}}, so Borg UI runs no Borg 2 work on it: Borg 2 betas change the repository format and the command line between releases. Run the agent installer on the endpoint with {{flags}} to install the server's Borg 2. After replacing Borg 2 by hand, restart the agent so it reports the new version.",
         "borg2OnlyUrl": "A {{scheme}} repository URL needs Borg 2; Borg 1 can't open it. Pick Borg 2 for this repository.",
         "borg2OnlyUrlOrSshHost": "A {{scheme}} repository URL needs Borg 2; Borg 1 reads it as an SSH host named {{host}}. Pick Borg 2 for this repository, or write the SSH host as ssh://{{host}}/path (ssh://{{host}}/./path for a path relative to the login directory).",
+        "borg1OnlySshAddress": "{{host}}:path is an SSH address only Borg 1 understands; Borg 2 reads it as a local directory. Write it as ssh://{{host}}/path for a path relative to the login directory or ssh://{{host}}//path for an absolute path, or pick Borg 1 for this repository.",
         "agentPassphraseUnavailable": "This managed agent didn't report a BORG_PASSPHRASE, so an encrypted repository can't be opened by it. Set BORG_PASSPHRASE in the agent's environment, or enter a passphrase here.",
         "encryptedPassphraseIncorrect": "Repository is encrypted but the passphrase is incorrect or missing. Please provide the correct passphrase.",
         "encryptionKeyfileNotRequired": "Repository uses '{{mode}}' encryption, which does not require a keyfile. Keyfile upload is only needed for 'keyfile' or 'keyfile-blake2' encryption modes.",
@@ -5932,7 +5957,10 @@
         "failedParseArchiveList": "Failed to parse archive list",
         "failedParseRepositoryInfo": "Failed to parse repository info",
         "failedParseArchiveInfo": "Failed to parse archive info",
-        "failedExportKeyfile": "Failed to export keyfile"
+        "failedExportKeyfile": "Failed to export keyfile",
+        "borg2RepositoryNotReadable": "Borg 2 does not recognise this as a repository. If it was created before the upgrade to Borg 2.0.0b25, that is the cause: 2.0.0b25 changed the repository format and cannot read repositories written by earlier Borg 2 betas. The repository has to be created anew; the upgrade notes in the installation guide describe the steps. Otherwise, check the repository path.",
+        "invalidEncryption": "Encryption mode '{{mode}}' is not available for Borg 2 repositories.",
+        "invalidEncryptionMode": "Encryption mode '{{mode}}' is not available for this repository."
       },
       "rclone": {
         "invalidRemoteName": "Remote name can only use letters, numbers, dots, dashes, and underscores",
@@ -6008,7 +6036,9 @@
         "failedFetchArchives": "Failed to fetch archives",
         "failedFetchArchiveContents": "Failed to fetch archive contents",
         "destinationNotAllowed": "Restore destination is outside the allowed local mount points: {{path}}",
-        "operatorAccessRequired": "Operator or admin access required to restore to an SSH connection"
+        "operatorAccessRequired": "Operator or admin access required to restore to an SSH connection",
+        "borg2DestinationNotEmpty": "Borg 2 does not restore into a directory that already holds files, and {{path}} is not empty. Choose an empty directory as the destination, or choose “Restore into existing files” in the restore dialog.",
+        "agentCannotRestoreIntoExisting": "The agent of this repository is too old to restore into existing files. Update the agent to 0.1.17 or later, or restore into an empty directory."
       },
       "schedule": {
         "adminAccessRequired": "Admin access required",
@@ -6133,7 +6163,6 @@
         "deleteAlreadyRunning": "Delete operation is already running for this archive (Job ID: {{jobId}})",
         "deleteJobNotFound": "Delete job not found",
         "failedGetArchiveContents": "Failed to get archive contents",
-        "unsupportedRepositoryVersion": "This repository uses format version {{version}}, which the Borg 2 build on this server cannot read. Borg 2 is still in beta and its repository format has changed between betas. Recreate the repository with the current build, or install the Borg 2 build that created it.",
         "failedGetArchiveInfo": "Failed to get archive info",
         "failedListArchives": "Failed to list archives",
         "repositoryNotFound": "Repository not found",
@@ -6233,7 +6262,8 @@
         "restoreFailedZeroFilesNoOutput": "Restore failed: 0 files extracted (exit code {{exitCode}}). No error output from borg. Files may not exist in archive or permission denied.",
         "restoreFailedExitCode": "Restore process exited with code {{exitCode}}",
         "restoreFailed": "Restore failed",
-        "jobCompletedWithWarning": "Completed with warning (exit code {{exitCode}})"
+        "jobCompletedWithWarning": "Completed with warning (exit code {{exitCode}})",
+        "restoreFailedOnAgent": "Restore failed on the agent: {{error}}"
       },
       "dashboard": {
         "failedGetSystemMetrics": "Failed to get system metrics",

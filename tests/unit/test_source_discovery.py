@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.api import source_discovery
+from app.utils.fs import remote_du_command
 from app.core.security import encrypt_secret
 from app.database.models import LicensingState, SSHConnection, SSHKey
 from app.utils.script_params import parse_script_parameters
@@ -516,10 +517,11 @@ class TestSourceDiscovery:
             del kwargs
             assert cmd[0] == "ssh"
             assert "StrictHostKeyChecking=yes" in cmd
-            assert "du -s -B1 /srv/nginx/html" in cmd[-1]
+            assert cmd[-1] == remote_du_command("/srv/nginx/html", apparent=False)
+            # A macOS host: BSD du reports KiB behind a unit line (#1291).
             return SimpleNamespace(
                 returncode=0,
-                stdout="16384\t/srv/nginx/html\n",
+                stdout="KiB\n16\t/srv/nginx/html\n",
                 stderr="",
             )
 

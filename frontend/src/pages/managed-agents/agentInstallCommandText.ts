@@ -79,11 +79,16 @@ export function buildAgentInstallCommand(
 export function buildAgentReinstallCommand(
   serverUrl: string,
   borgInstallMode: BorgInstallMode = 'skip',
-  platform: AgentPlatform = 'linux'
+  platform: AgentPlatform = 'linux',
+  // Without --server a reinstall installs from the server in the upgrade
+  // record, so only this moves the record of an endpoint moved with
+  // set-server. Opt-in: the browser's address is not always the agents' one.
+  movedToThisServer = false
 ) {
   return [
     `curl -fsSL ${shellQuote(`${serverUrl}/agent/install.sh`)}`,
     installerPipe(platform),
+    movedToThisServer ? `--server ${shellQuote(serverUrl)}` : null,
     '--reinstall',
     // Reinstall mode skips Borg by default, so "skip" needs no flag; a Borg
     // selection passes --borg-version to also verify/update those binaries.

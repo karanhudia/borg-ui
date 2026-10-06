@@ -56,10 +56,11 @@ def test_break_repository_lock_uses_v2_command_shape():
         "-r",
         "/repo/path",
         "break-lock",
-        "--remote-path",
-        "/usr/bin/borg2",
     ]
+    # Borg 2.0.0b25 seals the lock with the repository key: break-lock needs
+    # the passphrase, and the remote Borg command travels in the environment.
     assert env["BORG_PASSPHRASE"] == "secret"
+    assert env["BORG_REMOTE_PATH"] == "/usr/bin/borg2"
 
 
 @pytest.mark.unit

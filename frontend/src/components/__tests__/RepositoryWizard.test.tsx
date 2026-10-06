@@ -1636,6 +1636,45 @@ describe('RepositoryWizard', () => {
       )
     })
 
+    it('clears a stored upload speed limit when a Borg 2 repository is saved', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('edit', {
+        id: 14,
+        name: 'Borg 2 Limit Repo',
+        path: '/backups/borg2-limit',
+        mode: 'full',
+        repository_type: 'local',
+        storage_backend: 'local',
+        execution_target: 'local',
+        executor_type: 'server',
+        borg_version: 2,
+        encryption: 'repokey-aes-ocb',
+        compression: 'lz4',
+        connection_id: null,
+        rclone_storage: null,
+        upload_ratelimit_kib: 1536,
+      })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toHaveValue('Borg 2 Limit Repo')
+      })
+
+      const reviewStep = screen.getByText('Review').closest('div')
+      expect(reviewStep).not.toBeNull()
+      fireEvent.click(reviewStep!)
+      await user.click(screen.getByRole('button', { name: /Save Changes/i }))
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalled()
+      })
+      const [submittedPayload] = onSubmit.mock.calls[0]
+      expect(submittedPayload).toEqual(
+        expect.objectContaining({
+          upload_ratelimit_kib: null,
+        })
+      )
+    })
+
     it('allows edit workflow without re-entering the passphrase', async () => {
       const user = userEvent.setup()
       renderWizard('edit', legacyRepository)
