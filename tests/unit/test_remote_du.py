@@ -2,7 +2,8 @@
 
 GNU du takes -b; BSD du (macOS) rejects it, so the command falls back to
 -A -sk and tags the KiB output. Each test runs the real shell command against
-a fake du on PATH.
+a fake du on PATH, which logs each argument in brackets so a path split by
+bad quoting shows.
 """
 
 import subprocess
@@ -13,14 +14,14 @@ import pytest
 from app.utils.fs import parse_remote_du, remote_du_command
 
 GNU_DU = """#!/bin/sh
-echo "$@" >> "$(dirname "$0")/calls"
+{ printf '[%s]' "$@"; echo; } >> "$(dirname "$0")/calls"
 [ "$1" = -sb ] || { echo "du: invalid option -- 'A'" >&2; exit 1; }
 for last; do :; done
 printf '169984\\t%s\\n' "$last"
 """
 
 BSD_DU = """#!/bin/sh
-echo "$@" >> "$(dirname "$0")/calls"
+{ printf '[%s]' "$@"; echo; } >> "$(dirname "$0")/calls"
 [ "$1" = -sb ] && { echo "du: invalid option -- b" >&2; exit 64; }
 for last; do :; done
 printf '166\\t%s\\n' "$last"
@@ -48,7 +49,7 @@ def test_gnu_du_reports_apparent_bytes(tmp_path):
     stdout, calls = _run(tmp_path, GNU_DU, remote_du_command("/srv/a b", ["*.tmp"]))
 
     assert parse_remote_du(stdout) == 169984
-    assert calls[-1] == "-sb --exclude=*.tmp -- /srv/a b"
+    assert calls[-1] == "[-sb][--exclude=*.tmp][--][/srv/a b]"
 
 
 @pytest.mark.unit
@@ -56,7 +57,7 @@ def test_bsd_du_reports_apparent_kib_scaled_to_bytes(tmp_path):
     stdout, calls = _run(tmp_path, BSD_DU, remote_du_command("/srv/a b", ["*.tmp"]))
 
     assert parse_remote_du(stdout) == 166 * 1024
-    assert calls[-1] == "-A -sk -I *.tmp -- /srv/a b"
+    assert calls[-1] == "[-A][-sk][-I][*.tmp][--][/srv/a b]"
 
 
 @pytest.mark.unit
@@ -66,7 +67,7 @@ def test_output_without_a_size_is_unknown(stdout):
 
 
 GNU_DU_ALLOCATED = """#!/bin/sh
-echo "$@" >> "$(dirname "$0")/calls"
+{ printf '[%s]' "$@"; echo; } >> "$(dirname "$0")/calls"
 for last; do :; done
 case "$1 $2" in
   "-s -B1") printf '172032\\t%s\\n' "$last" ;;
@@ -78,7 +79,7 @@ esac
 # Real BSD du accepts -B (a blocksize) and prints 512-byte blocks, so only
 # a rejected -b tells it apart from GNU du.
 BSD_DU_ALLOCATED = """#!/bin/sh
-echo "$@" >> "$(dirname "$0")/calls"
+{ printf '[%s]' "$@"; echo; } >> "$(dirname "$0")/calls"
 for last; do :; done
 case "$1" in
   -sb) echo "du: invalid option -- b" >&2; exit 64 ;;
@@ -89,7 +90,7 @@ esac
 
 # BusyBox du has -b but no -B.
 BUSYBOX_DU = """#!/bin/sh
-echo "$@" >> "$(dirname "$0")/calls"
+{ printf '[%s]' "$@"; echo; } >> "$(dirname "$0")/calls"
 for last; do :; done
 case "$1 $2" in
   "-s -B1") echo "du: invalid option -- 'B'" >&2; exit 1 ;;
@@ -107,7 +108,7 @@ def test_gnu_du_reports_allocated_bytes(tmp_path):
     )
 
     assert parse_remote_du(stdout) == 172032
-    assert calls[-1] == "-s -B1 -- /srv/m"
+    assert calls[-1] == "[-s][-B1][--][/srv/m]"
 
 
 @pytest.mark.unit
@@ -117,7 +118,7 @@ def test_bsd_du_reports_allocated_kib_scaled_to_bytes(tmp_path):
     )
 
     assert parse_remote_du(stdout) == 168 * 1024
-    assert calls[-1] == "-sk -- /srv/m"
+    assert calls[-1] == "[-sk][--][/srv/m]"
 
 
 @pytest.mark.unit
@@ -127,4 +128,4 @@ def test_busybox_du_reports_allocated_kib_scaled_to_bytes(tmp_path):
     )
 
     assert parse_remote_du(stdout) == 168 * 1024
-    assert calls[-1] == "-sk -- /srv/m"
+    assert calls[-1] == "[-sk][--][/srv/m]"
