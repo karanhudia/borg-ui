@@ -40,9 +40,11 @@ type Story = StoryObj<typeof meta>
 const AdvancedRepositoryOptionsPreview = ({
   initialUploadRatelimitMb = '',
   borgVersion = 1,
+  repositoryPath,
 }: {
   initialUploadRatelimitMb?: string
   borgVersion?: 1 | 2
+  repositoryPath?: string
 }) => {
   const [remotePath, setRemotePath] = useState('')
   const [customFlags, setCustomFlags] = useState('--stats')
@@ -54,6 +56,7 @@ const AdvancedRepositoryOptionsPreview = ({
         repositoryId={null}
         mode="full"
         borgVersion={borgVersion}
+        repositoryPath={repositoryPath}
         remotePath={remotePath}
         preBackupScript=""
         postBackupScript=""
@@ -86,4 +89,14 @@ export const WithUploadLimit: Story = {
 /** Borg 2 has no upload limit: the field is disabled and says why. */
 export const Borg2WithoutUploadLimit: Story = {
   render: () => <AdvancedRepositoryOptionsPreview initialUploadRatelimitMb="1.5" borgVersion={2} />,
+}
+
+export const Borg2BehindRcloneUploadLimit: Story = {
+  render: () => (
+    <AdvancedRepositoryOptionsPreview
+      initialUploadRatelimitMb="1.5"
+      borgVersion={2}
+      repositoryPath="rclone:b2-offsite:borg/archive"
+    />
+  ),
 }

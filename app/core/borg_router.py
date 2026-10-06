@@ -202,11 +202,23 @@ class BorgRouter:
         return cmd
 
     def upload_ratelimit(self, kib: Optional[int]) -> Optional[int]:
-        """The upload limit a backup of this repository can apply: none for
-        Borg 2, which has no --upload-ratelimit."""
+        """The upload limit a backup of this repository can apply. Borg 2
+        removed --upload-ratelimit in 2.0.0b22; only a Borg 2 repository
+        behind rclone keeps one, as rclone's bandwidth limit (#1307)."""
         if self.is_v2:
-            return None
+            from app.services.v2.backup_service import backup_v2_service
+
+            return backup_v2_service.upload_ratelimit(self.repo, kib)
         return kib
+
+    def backup_environment(self, kib: Optional[int]) -> dict[str, str]:
+        """Extra environment for this repository's create command. Borg 1
+        takes the limit as --upload-ratelimit on the command instead."""
+        if self.is_v2:
+            from app.services.v2.backup_service import backup_v2_service
+
+            return backup_v2_service.backup_environment(self.repo, kib)
+        return {}
 
     def build_archive_info_command(
         self, repository_path: str, archive_name: str
