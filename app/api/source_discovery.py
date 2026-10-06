@@ -1083,7 +1083,8 @@ def _run_remote_mount_size_probe(
     path: str,
     timeout_seconds: float,
 ) -> subprocess.CompletedProcess[str]:
-    remote_command = remote_du_command(path)
+    # Allocated size, as the local probe's `du -s -B1`.
+    remote_command = remote_du_command(path, apparent=False)
     ssh_cmd = [
         "ssh",
         *ssh_key_auth_args(key_file_path),

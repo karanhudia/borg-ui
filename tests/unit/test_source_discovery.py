@@ -517,7 +517,7 @@ class TestSourceDiscovery:
             del kwargs
             assert cmd[0] == "ssh"
             assert "StrictHostKeyChecking=yes" in cmd
-            assert cmd[-1] == remote_du_command("/srv/nginx/html")
+            assert cmd[-1] == remote_du_command("/srv/nginx/html", apparent=False)
             # A macOS host: BSD du reports KiB behind a unit line (#1291).
             return SimpleNamespace(
                 returncode=0,

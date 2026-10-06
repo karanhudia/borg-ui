@@ -260,20 +260,30 @@ async def _du_local(
     return None
 
 
-def remote_du_command(path: str, exclude_patterns: Iterable[str] = ()) -> str:
-    """Shell command for the apparent size of `path` on a remote host of
-    any kind; `parse_remote_du` reads its output.
+def remote_du_command(
+    path: str, exclude_patterns: Iterable[str] = (), *, apparent: bool = True
+) -> str:
+    """Shell command for the size of `path` on a remote host of any kind;
+    `parse_remote_du` reads its output.
 
-    GNU du reports bytes with -b. BSD du (macOS) has no -b, so there -A -sk
-    reports the same measure in KiB, after a `KiB` line naming the unit.
-    The probe on /dev/null picks the branch; du's exit status is kept.
+    GNU du reports bytes with -b (apparent) or -B1 (allocated). BSD du
+    (macOS) has neither, so there -A -sk or -sk reports the same measure in
+    KiB, after a `KiB` line naming the unit. The probe on /dev/null picks
+    the branch: BSD du accepts -B (a blocksize) but rejects -b, and BusyBox
+    du takes -b but not -B. du's exit status is kept.
     """
     target = shlex.quote(path)
-    gnu = "".join(f" --exclude={shlex.quote(p)}" for p in exclude_patterns)
-    bsd = "".join(f" -I {shlex.quote(p)}" for p in exclude_patterns)
+    gnu = "-sb" if apparent else "-s -B1"
+    bsd = "-A -sk" if apparent else "-sk"
+    gnu_excludes = "".join(f" --exclude={shlex.quote(p)}" for p in exclude_patterns)
+    bsd_excludes = "".join(f" -I {shlex.quote(p)}" for p in exclude_patterns)
+    probe = "du -sb /dev/null >/dev/null 2>&1"
+    if not apparent:
+        probe += " && du -s -B1 /dev/null >/dev/null 2>&1"
     return (
-        f"if du -sb /dev/null >/dev/null 2>&1; then du -sb{gnu} -- {target}; "
-        f"else echo KiB; du -A -sk{bsd} -- {target}; fi"
+        f"if {probe}; "
+        f"then du {gnu}{gnu_excludes} -- {target}; "
+        f"else echo KiB; du {bsd}{bsd_excludes} -- {target}; fi"
     )
 
 

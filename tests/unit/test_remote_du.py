@@ -63,3 +63,68 @@ def test_bsd_du_reports_apparent_kib_scaled_to_bytes(tmp_path):
 @pytest.mark.parametrize("stdout", ["", "KiB\n", "du: oops\n", "KiB\nx\t/p\n"])
 def test_output_without_a_size_is_unknown(stdout):
     assert parse_remote_du(stdout) is None
+
+
+GNU_DU_ALLOCATED = """#!/bin/sh
+echo "$@" >> "$(dirname "$0")/calls"
+for last; do :; done
+case "$1 $2" in
+  "-s -B1") printf '172032\\t%s\\n' "$last" ;;
+  -sb*) printf '169984\\t%s\\n' "$last" ;;
+  *) echo "du: invalid option -- 'A'" >&2; exit 1 ;;
+esac
+"""
+
+# Real BSD du accepts -B (a blocksize) and prints 512-byte blocks, so only
+# a rejected -b tells it apart from GNU du.
+BSD_DU_ALLOCATED = """#!/bin/sh
+echo "$@" >> "$(dirname "$0")/calls"
+for last; do :; done
+case "$1" in
+  -sb) echo "du: invalid option -- b" >&2; exit 64 ;;
+  -s) printf '336\\t%s\\n' "$last" ;;
+  *) printf '168\\t%s\\n' "$last" ;;
+esac
+"""
+
+# BusyBox du has -b but no -B.
+BUSYBOX_DU = """#!/bin/sh
+echo "$@" >> "$(dirname "$0")/calls"
+for last; do :; done
+case "$1 $2" in
+  "-s -B1") echo "du: invalid option -- 'B'" >&2; exit 1 ;;
+  -sb*) printf '169984\\t%s\\n' "$last" ;;
+  *) printf '168\\t%s\\n' "$last" ;;
+esac
+"""
+
+
+@pytest.mark.unit
+def test_gnu_du_reports_allocated_bytes(tmp_path):
+    # The mount size probe reports allocated size, as its local `du -s -B1`.
+    stdout, calls = _run(
+        tmp_path, GNU_DU_ALLOCATED, remote_du_command("/srv/m", apparent=False)
+    )
+
+    assert parse_remote_du(stdout) == 172032
+    assert calls[-1] == "-s -B1 -- /srv/m"
+
+
+@pytest.mark.unit
+def test_bsd_du_reports_allocated_kib_scaled_to_bytes(tmp_path):
+    stdout, calls = _run(
+        tmp_path, BSD_DU_ALLOCATED, remote_du_command("/srv/m", apparent=False)
+    )
+
+    assert parse_remote_du(stdout) == 168 * 1024
+    assert calls[-1] == "-sk -- /srv/m"
+
+
+@pytest.mark.unit
+def test_busybox_du_reports_allocated_kib_scaled_to_bytes(tmp_path):
+    stdout, calls = _run(
+        tmp_path, BUSYBOX_DU, remote_du_command("/srv/m", apparent=False)
+    )
+
+    assert parse_remote_du(stdout) == 168 * 1024
+    assert calls[-1] == "-sk -- /srv/m"
