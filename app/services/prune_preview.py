@@ -11,6 +11,7 @@ from typing import Any, Optional
 import structlog
 from sqlalchemy.orm import Session
 
+from app.core.borg_major import is_borg2
 from app.database.models import Archive, Operation, Repository
 from app.services.prune_service import _log_message
 
@@ -188,6 +189,15 @@ class PreviewArchive:
     stats_measured_at: Optional[datetime]
 
 
+def _sizes_bound_freed_space(repository: Repository) -> bool:
+    """Whether the archives' deduplicated_size bounds what deleting them
+    frees. Borg 1's is measured against the archives that exist and measured
+    again after removals (spec 4.1). Borg 2 reports one only when an archive
+    is created (`create --json`), and archives kept after it can share those
+    chunks."""
+    return not is_borg2(repository)
+
+
 def join_verdicts(
     db: Session, repository: Repository, verdicts: list[Verdict]
 ) -> list[PreviewArchive]:
@@ -195,6 +205,7 @@ def join_verdicts(
     series share a name). A line whose id the index does not hold keeps
     Borg's name and verdict with no row behind it."""
     ids = [v.borg_id for v in verdicts]
+    sized = _sizes_bound_freed_space(repository)
     rows: dict[str, Archive] = {}
     for i in range(0, len(ids), 500):
         for row in (
@@ -218,7 +229,7 @@ def join_verdicts(
                 start=row.start if row else None,
                 verdict=v.verdict,
                 rule=v.rule,
-                deduplicated_size=row.deduplicated_size if row else None,
+                deduplicated_size=row.deduplicated_size if row and sized else None,
                 stats_measured_at=row.stats_measured_at if row else None,
             )
         )
@@ -633,10 +644,11 @@ async def run_candidate(
         partial = await remeasure_candidates(db, repository, candidates)
     else:
         partial = any(a.stats_measured_at is None for a in candidates)
+    sized = _sizes_bound_freed_space(repository)
     for p in joined:
         row = by_id.get(p.id) if p.id is not None else None
         if row is not None:
-            p.deduplicated_size = row.deduplicated_size
+            p.deduplicated_size = row.deduplicated_size if sized else None
             p.stats_measured_at = row.stats_measured_at
     return CandidateResult(
         operation=operation,
@@ -644,7 +656,7 @@ async def run_candidate(
         joined=joined,
         candidates=candidates,
         partial_measure=partial,
-        freed_at_least=freed_at_least(candidates),
+        freed_at_least=freed_at_least(candidates) if sized else 0,
         kept_count=sum(1 for p in joined if p.verdict == "kept"),
         deleted_count=sum(1 for p in joined if p.verdict == "deleted"),
     )
@@ -744,7 +756,9 @@ def preview_from_verdicts(
         joined,
         operation_id=operation_id,
         log="",
-        freed=freed_at_least(candidates),
+        freed=(
+            freed_at_least(candidates) if _sizes_bound_freed_space(repository) else 0
+        ),
         partial=any(a.stats_measured_at is None for a in candidates),
     )
 

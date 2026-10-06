@@ -50,3 +50,19 @@ export const Borg2RemotePath: Story = {
   },
   render: LocalBackupCommands.render,
 }
+
+// Paths with spaces or quotes are shell-quoted in the command
+export const PathsNeedingQuotes: Story = {
+  args: {
+    mode: 'create',
+    repositoryPath: '/mnt/borg/my repo',
+    encryption: 'repokey-blake2',
+    compression: 'zstd,6',
+    sourceDirs: ['/srv/my app', "/home/o'brien"],
+    excludePatterns: ['/srv/my app/cache dir', '*.tmp'],
+    repositoryMode: 'full',
+    dataSource: 'local',
+    borgVersion: 1,
+  },
+  render: LocalBackupCommands.render,
+}

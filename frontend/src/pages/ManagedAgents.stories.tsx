@@ -16,7 +16,6 @@ import {
   AgentDeleteConfirmationDialog,
   AgentJobLogsDialog,
   AgentList,
-  ManagedAgentsPlanGate,
   AgentReinstallDialog,
   AgentSessionLogsDialog,
   AgentSetupGuide,
@@ -24,7 +23,6 @@ import {
   JobsTable,
   TokensTable,
 } from './ManagedAgents'
-import { communitySystemInfo } from '../services/remoteBackends/planStoryFixtures'
 
 const agents: AgentMachineResponse[] = [
   {
@@ -390,22 +388,6 @@ export const FleetOverview: Story = {
   ),
 }
 
-export const LockedCommunity: Story = {
-  parameters: {
-    systemInfo: communitySystemInfo,
-  },
-  render: () => (
-    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
-      <ManagedAgentsPlanGate
-        defaultAgentServerUrl="https://borg-ui.example.com"
-        agents={agents}
-        tokens={tokens}
-        jobs={jobs}
-      />
-    </Box>
-  ),
-}
-
 export const SetupHelpDetails: Story = {
   render: () => (
     <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
@@ -642,6 +624,17 @@ export const AgentReinstallDialogOpen: Story = {
       />
     </Box>
   ),
+}
+
+export const AgentReinstallDialogMovedToThisServer: Story = {
+  name: 'Reinstall dialog for an endpoint moved to this server',
+  // The option is off by default, so the snapshot ticks it to show the
+  // command with --server. The dialog renders in a portal outside the canvas.
+  play: async () => {
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+    document.querySelector<HTMLInputElement>('[role="dialog"] input[type="checkbox"]')?.click()
+  },
+  render: AgentReinstallDialogOpen.render,
 }
 
 export const AgentReinstallDialogMacos: Story = {

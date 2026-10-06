@@ -321,13 +321,9 @@ export const ReviewSshManualUnencrypted: Story = {
   render: (args) => <ReviewHarness initial={args.initial} connections={args.connections} />,
 }
 
-function WhatStepWithAgents(props: QuickStartStepProps) {
-  return <QuickStartWhatStep {...props} canUseAgents />
-}
-
-export const WhatAgentPro: Story = {
+export const WhatAgent: Story = {
   args: {
-    step: WhatStepWithAgents,
+    step: QuickStartWhatStep,
     initial: { ...createInitialQuickStartAnswers(), sourceKind: 'agent', destinationKind: 'agent' },
   },
 }

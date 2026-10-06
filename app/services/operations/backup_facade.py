@@ -778,6 +778,34 @@ def link_archive_to_backup(db: Session, archive: Archive) -> None:
         archive.backup_operation_id = _nearest_start(candidates, archive.start).id
 
 
+def take_added_sizes(db: Session, archives: list[Archive]) -> None:
+    """Give Borg 2 archives that have none what they added to the repository,
+    from the backup each is linked to. Borg 2 reports that figure only in
+    `create --json`, never in `info`. Every created Borg 2 archive adds at
+    least its own metadata, so a backup holding 0 (the column default)
+    reported nothing; a backup that recorded the id of another archive gives
+    none. Borg 1's info measures the figure against the archives that exist,
+    which a figure from the backup would not be once later archives share its
+    chunks: callers pass Borg 2 archives only."""
+    wanting = {
+        a.backup_operation_id: a
+        for a in archives
+        if a.deduplicated_size is None and a.backup_operation_id is not None
+    }
+    ids = list(wanting)
+    for start in range(0, len(ids), IN_CHUNK):
+        for operation_id, archive_id, size in db.query(
+            OperationBackupDetails.operation_id,
+            OperationBackupDetails.archive_id,
+            OperationBackupDetails.deduplicated_size,
+        ).filter(
+            OperationBackupDetails.operation_id.in_(ids[start : start + IN_CHUNK])
+        ):
+            archive = wanting[operation_id]
+            if size and archive_id in (None, archive.borg_id):
+                archive.deduplicated_size = size
+
+
 def archive_borg_id_for(db: Session, job: "BackupJobFacade") -> Optional[str]:
     """The stored archive's borg id for a backup, or None if none is stored.
 

@@ -31,6 +31,68 @@ export function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
 }
 
+/**
+ * Repository URLs only Borg 2 can open. Borg 1 refuses none of them: it reads
+ * the `scheme://` forms as a local directory and the `name:` forms as an ssh
+ * host of that name. The server refuses them for a Borg 1 repository with the
+ * same list (BORG2_ONLY_URL_PREFIXES in app/api/repositories.py).
+ */
+export const BORG2_ONLY_URL_PREFIXES = [
+  'rest://',
+  'sftp://',
+  'http://',
+  'https://',
+  's3:',
+  'b2:',
+  'rclone:',
+] as const
+
+/** Whether a repository path is a URL only Borg 2 can open. */
+export const isBorg2OnlyUrl = (path: string): boolean => {
+  const lowered = path.trim().toLowerCase()
+  return BORG2_ONLY_URL_PREFIXES.some((prefix) => lowered.startsWith(prefix))
+}
+
+/**
+ * Borg 2 reads what follows the host of an ssh:// URL as relative to the login
+ * directory of the SSH user and takes a second slash for an absolute path:
+ * `ssh://host/backups/repo` and `ssh://host//srv/backups/repo`. Borg 1 reads
+ * the first as absolute. The repository form therefore writes a Borg 2 path
+ * the way the server reads a plain one (app/core/borg2.py, `_borg2_path`): a
+ * leading slash is absolute, anything else relative to the login directory,
+ * as is Borg 1's spelling of it, `/./backups/repo`.
+ */
+export const borg2PathIsAbsolute = (path: string): boolean =>
+  path.startsWith('/') && path !== '/.' && !path.startsWith('/./')
+
+/**
+ * The form's spelling (see above) of what follows the host of a Borg 2 URL.
+ * An absolute tail loses its `./` steps, which the form would read as the
+ * login directory: `//./srv/repo` is `/srv/repo`. The login directory itself
+ * (`ssh://host/`) is `.`, which the server reads back the same.
+ */
+export const borg2PathFromUrlTail = (tail: string): string => {
+  if (tail.startsWith('//')) {
+    return `/${tail.replace(/^\/+/, '').replace(/^(\.(\/+|$))+/, '')}`
+  }
+  return tail.replace(/^\//, '') || '.'
+}
+
+/** Whether a Borg 2 ssh:// URL names an absolute path, or null for no ssh:// URL. */
+export const borg2SshUrlIsAbsolute = (url: string): boolean | null => {
+  const match = url.trim().match(/^ssh:\/\/[^/]+(\/.*)?$/i)
+  if (!match) return null
+  return (match[1] || '').startsWith('//')
+}
+
+/** What follows the host of a Borg 2 URL for a path written the form's way. */
+export const borg2UrlTail = (path: string): string =>
+  `${borg2PathIsAbsolute(path) ? '//' : '/'}${path.replace(/^\/+/, '')}`
+
+/** The ssh:// URL of a Borg 2 repository at a path written the form's way. */
+export const borg2SshUrl = (username: string, host: string, port: number, path: string): string =>
+  `ssh://${username}@${host}:${port}${borg2UrlTail(path)}`
+
 const getBorgBinary = (borgVersion: 1 | 2 = 1): string => (borgVersion === 2 ? 'borg2' : 'borg')
 
 /**
@@ -89,10 +151,10 @@ export const generateBorgInitCommand = (options: BorgInitCommandOptions): string
 
   if (borgVersion === 2) {
     const encryptionFlags = BORG2_ENCRYPTION_FLAGS[encryption] ?? `--encryption ${encryption}`
-    return `${getBorgBinary(2)} -r ${repositoryPath} repo-create ${remotePathFlag}${encryptionFlags}`
+    return `${getBorgBinary(2)} -r ${shellQuote(repositoryPath)} repo-create ${remotePathFlag}${encryptionFlags}`
   }
 
-  return `${getBorgBinary(1)} init --encryption ${encryption} ${remotePathFlag}${repositoryPath}`
+  return `${getBorgBinary(1)} init --encryption ${encryption} ${remotePathFlag}${shellQuote(repositoryPath)}`
 }
 
 /**
@@ -112,22 +174,24 @@ export const generateBorgCreateCommand = (options: BorgCommandOptions): string =
   } = options
 
   // Build exclude patterns
-  const excludeArgs = excludePatterns.map((pattern: string) => `--exclude '${pattern}'`).join(' ')
+  const excludeArgs = excludePatterns
+    .map((pattern: string) => `--exclude ${shellQuote(pattern)}`)
+    .join(' ')
   const excludeStr = excludeArgs ? `${excludeArgs} ` : ''
 
   // Build custom flags with proper spacing
   const customFlagsStr = customFlags && customFlags.trim() ? ` ${customFlags.trim()} ` : ''
 
   // Build source directories string
-  const sourceDirsStr = sourceDirs.join(' ')
+  const sourceDirsStr = sourceDirs.map(shellQuote).join(' ')
 
   const commonOptions = `--progress --stats --compression ${compression} ${excludeStr}${customFlagsStr}`
 
   // Borg 2 takes the repository as -r and the archive name on its own;
   // repo::archive is Borg 1 syntax
   if (borgVersion === 2) {
-    return `${getBorgBinary(2)} -r ${repositoryPath} create ${remotePathFlag}${commonOptions}${archiveName} ${sourceDirsStr}`
+    return `${getBorgBinary(2)} -r ${shellQuote(repositoryPath)} create ${remotePathFlag}${commonOptions}${archiveName} ${sourceDirsStr}`
   }
 
-  return `${getBorgBinary(1)} create ${remotePathFlag}${commonOptions}${repositoryPath}::${archiveName} ${sourceDirsStr}`
+  return `${getBorgBinary(1)} create ${remotePathFlag}${commonOptions}${shellQuote(repositoryPath)}::${archiveName} ${sourceDirsStr}`
 }

@@ -395,6 +395,10 @@ The first implementation supports:
   for its version: the server runs no Borg 2 job on an endpoint whose Borg 2
   is older than its own (#1306), so `rest://` is refused and a Borg 2
   compact runs with `--stats` without a probe
+- from 0.1.18 a Borg 2 backup of a repository behind rclone (`rclone:`
+  URL) takes the job's upload limit as rclone's bandwidth limit
+  (`RCLONE_BWLIMIT` in the create command's environment); other Borg 2
+  backups still have none
 - cancellation through heartbeat; from 0.1.7 (`jobs.cancel`) a running
   backup, check, prune, compact, restore or archive delete stops as well,
   even while Borg prints nothing

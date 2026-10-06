@@ -96,6 +96,27 @@ export const ManagedAgentPlanSources: Story = {
   ),
 }
 
+// Borg 2's authenticated mode: data not encrypted, shown as such.
+export const Borg2Authenticated: Story = {
+  args: {
+    mode: 'create',
+    data: {
+      ...rcloneReviewData,
+      name: 'Local Repository',
+      cloudMirrorEnabled: false,
+      borgVersion: 2,
+      encryption: 'authenticated',
+    },
+    sshConnections: [],
+    agentMachines,
+  },
+  render: (args) => (
+    <Box sx={{ width: 760, maxWidth: 'calc(100vw - 32px)' }}>
+      <WizardStepReview {...args} />
+    </Box>
+  ),
+}
+
 export const CloudMirror: Story = {
   args: {
     mode: 'create',

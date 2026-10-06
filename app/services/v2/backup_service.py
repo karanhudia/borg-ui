@@ -42,6 +42,21 @@ class BackupV2Service:
                 )
             )
 
+    def upload_ratelimit(self, repo, kib: Optional[int]) -> Optional[int]:
+        """Borg 2.0.0b22 removed --upload-ratelimit; a repository behind
+        rclone keeps its limit as rclone's (#1307), others have none."""
+        if (getattr(repo, "path", None) or "").startswith("rclone:"):
+            return kib
+        return None
+
+    def backup_environment(self, repo, kib: Optional[int]) -> dict[str, str]:
+        """rclone reads RCLONE_BWLIMIT from the environment; its K is KiB.
+        The single value, as rclone's upload-only form (`1M:off`) did not
+        throttle a Borg 2 create when measured; set on create only, so
+        restores and checks keep full speed."""
+        kib = self.upload_ratelimit(repo, kib)
+        return {"RCLONE_BWLIMIT": f"{kib}K"} if kib else {}
+
     def build_backup_create_command(
         self,
         repository_path: str,
@@ -51,8 +66,9 @@ class BackupV2Service:
         custom_flags: List[str],
         upload_ratelimit_kib: Optional[int] = None,  # noqa: ARG002 - Borg 1 only
     ) -> List[str]:
-        """Borg 2 has no --upload-ratelimit, so a repository's upload
-        limit does not reach the command; the Borg 1 options among the custom
+        """Borg 2.0.0b22 removed --upload-ratelimit, so a repository's upload
+        limit does not reach the command (behind rclone it goes through
+        backup_environment instead); the Borg 1 options among the custom
         flags are refused (ValueError) before Borg runs."""
         ensure_borg2_repository_url(repository_path)
         cmd = [

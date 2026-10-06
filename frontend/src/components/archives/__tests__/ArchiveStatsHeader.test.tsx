@@ -116,3 +116,45 @@ describe('ArchiveStatsHeader', () => {
     expect(screen.getByText('Not reported by this Borg version')).toBeInTheDocument()
   })
 })
+
+describe('ArchiveStatsHeader for Borg 2', () => {
+  // Borg 2 reports what an archive added only in `create --json`; `info`
+  // measures sizes and files, never this figure.
+  const borg2 = { ...base, compressed_size: null, deduplicated_size: 300_743 }
+
+  it('names the figure as added at creation', () => {
+    renderWithProviders(<ArchiveStatsHeader archive={borg2} borgVersion={2} totalsState="ready" />)
+    expect(screen.getByText('Added at creation')).toBeInTheDocument()
+    expect(screen.queryByText('Added to the repository')).not.toBeInTheDocument()
+    expect(screen.getByTestId('archive-stat-added')).toHaveTextContent('293.69 KB')
+  })
+
+  it('shows the figure before the archive info is measured', () => {
+    renderWithProviders(
+      <ArchiveStatsHeader
+        archive={{
+          ...borg2,
+          original_size: null,
+          nfiles: null,
+          stats_measured_at: null,
+        }}
+        borgVersion={2}
+        totalsState="ready"
+      />
+    )
+    const tile = screen.getByTestId('archive-stat-added')
+    expect(tile).toHaveTextContent('293.69 KB')
+    expect(tile).not.toHaveTextContent('Not measured yet')
+  })
+
+  it('shows no figure for an archive whose backup did not report one', () => {
+    renderWithProviders(
+      <ArchiveStatsHeader
+        archive={{ ...borg2, deduplicated_size: null }}
+        borgVersion={2}
+        totalsState="ready"
+      />
+    )
+    expect(screen.getByTestId('archive-stat-added')).toHaveTextContent('−')
+  })
+})

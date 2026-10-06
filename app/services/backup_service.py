@@ -61,6 +61,7 @@ from app.utils.ssh_utils import (
 )  # Backward-compatible patch target for tests
 
 from app.services.process_cancel import (
+    communicate_or_kill,
     terminate_process,
     terminate_tracked_process,
 )
@@ -70,11 +71,11 @@ logger = structlog.get_logger()
 REMOTE_EXECUTION_MODES = {"remote_ssh", "remote_direct"}
 
 
-def _parse_created_archive_id(lines: list[str]) -> str | None:
-    """The id of the archive `borg create --json` reported, read from the
-    tail of its output (`archive.id` of the pretty-printed result document,
-    which is the last top-level `{` ... `}` in the stream; --log-json lines
-    may follow it). None when the output carries no such document."""
+def _parse_created_archive(lines: list[str]) -> dict | None:
+    """The archive `borg create --json` reported, read from the tail of its
+    output (`archive` of the pretty-printed result document, which is the
+    last top-level `{` ... `}` in the stream; --log-json lines may follow
+    it). None when the output carries no such document."""
     starts = [i for i, line in enumerate(lines) if line.strip() == "{"]
     if not starts:
         return None
@@ -87,9 +88,38 @@ def _parse_created_archive_id(lines: list[str]) -> str | None:
         except json.JSONDecodeError:
             continue
         archive = document.get("archive") if isinstance(document, dict) else None
-        archive_id = archive.get("id") if isinstance(archive, dict) else None
-        return archive_id if isinstance(archive_id, str) and archive_id else None
+        return archive if isinstance(archive, dict) else None
     return None
+
+
+def _parse_created_archive_id(lines: list[str]) -> str | None:
+    """The id of the archive `borg create --json` reported, or None."""
+    archive = _parse_created_archive(lines)
+    archive_id = archive.get("id") if archive else None
+    return archive_id if isinstance(archive_id, str) and archive_id else None
+
+
+_CREATED_ARCHIVE_COUNTERS = (
+    "original_size",
+    "compressed_size",
+    "deduplicated_size",
+    "nfiles",
+)
+
+
+def _apply_created_archive_stats(job, lines: list[str]) -> None:
+    """Copy the final counters of the archive `borg create --json` reported
+    onto the backup. Borg 2 reports what the archive added
+    (`deduplicated_size`) only here: its `info` has sizes and files, never
+    that figure. A counter the document lacks keeps the backup's value."""
+    archive = _parse_created_archive(lines)
+    stats = archive.get("stats") if archive else None
+    if not isinstance(stats, dict):
+        return
+    for key in _CREATED_ARCHIVE_COUNTERS:
+        value = stats.get(key)
+        if isinstance(value, int) and not isinstance(value, bool):
+            setattr(job, key, value)
 
 
 def _uses_remote_execution(job) -> bool:
@@ -527,9 +557,18 @@ class BackupService:
             # Get timeouts from DB settings (with fallback to config)
             timeouts = self._get_operation_timeouts(db)
 
+            # A Borg 2 series reuses one name, which from its second archive
+            # on matches more than one and Borg 2 refuses (rc 4): the id the
+            # backup recorded names the one archive (#1327).
+            archive_ref = (
+                f"aid:{job.archive_id}"
+                if router.is_v2 and job.archive_id
+                else archive_name
+            )
+
             async def _operation():
                 info_cmd = router.build_archive_info_command(
-                    repository_path, archive_name
+                    repository_path, archive_ref
                 )
                 info_process = await asyncio.create_subprocess_exec(
                     *with_lock_wait(info_cmd, env),
@@ -537,8 +576,8 @@ class BackupService:
                     stderr=asyncio.subprocess.PIPE,
                     env=env,
                 )
-                info_stdout, info_stderr = await asyncio.wait_for(
-                    info_process.communicate(), timeout=timeouts["info_timeout"]
+                info_stdout, info_stderr = await communicate_or_kill(
+                    info_process, timeout=timeouts["info_timeout"]
                 )
 
                 if info_process.returncode == 0:
@@ -1964,6 +2003,11 @@ class BackupService:
                 custom_flags=custom_flag_list,
                 upload_ratelimit_kib=effective_upload_ratelimit_kib,
             )
+            # Only the create carries it, not the archive info that follows
+            create_env = {
+                **env,
+                **router.backup_environment(effective_upload_ratelimit_kib),
+            }
 
             backup_paths, backup_cwd = self._resolve_backup_command_paths(
                 processed_source_paths,
@@ -2011,10 +2055,10 @@ class BackupService:
 
             # Execute command - NO LOG FILE FOR MAXIMUM PERFORMANCE
             process = await asyncio.create_subprocess_exec(
-                *with_lock_wait(cmd, env),
+                *with_lock_wait(cmd, create_env),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,  # Merge stderr into stdout
-                env=env,
+                env=create_env,
                 cwd=backup_cwd,  # Use cwd for SSH mounts to get cleaner archive paths
             )
             process_wait_task = asyncio.get_running_loop().create_task(process.wait())
@@ -2472,6 +2516,7 @@ class BackupService:
             created_archive_id = _parse_created_archive_id(log_buffer)
             if created_archive_id:
                 job.archive_id = created_archive_id
+            _apply_created_archive_stats(job, log_buffer)
 
             def publish_terminal_state(reason: str):
                 """Persist a terminal state before slow post-processing runs."""
