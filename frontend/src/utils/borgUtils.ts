@@ -52,8 +52,8 @@ export const remotePathParts = (
 }
 
 /**
- * Borg 2.0.0b22 split repo-create's single --encryption value into the cipher
- * and where the key is stored (--key-location). The combined names stay the
+ * Borg 2's repo-create takes the cipher and where the key is stored
+ * (--key-location) as separate options. The combined names stay the
  * vocabulary of the UI and of the stored repository, so a command shown to the
  * user is translated here — the same table the server and the agent keep
  * (app/core/borg2.py, agent/borg_ui_agent/repository_ops.py). Three runtimes,
@@ -67,8 +67,8 @@ const BORG2_ENCRYPTION_FLAGS: Record<string, string> = {
   'repokey-chacha20-poly1305': '--encryption chacha20-poly1305 --key-location repokey',
   'keyfile-aes-ocb': '--encryption aes256-ocb --key-location keyfile',
   'keyfile-chacha20-poly1305': '--encryption chacha20-poly1305 --key-location keyfile',
-  // b23 folded the id hash into the mode name; the sha256 variant keeps
-  // exactly what `authenticated` produced before. b25 removed `none`.
+  // Without encryption the id hash is part of the mode name; `authenticated`
+  // is the sha256 variant. Borg 2 has no `none`.
   authenticated: '--encryption authenticated-sha256',
 }
 

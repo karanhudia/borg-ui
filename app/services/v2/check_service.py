@@ -141,7 +141,7 @@ class CheckV2Service:
             )
 
             borg_cmd = _get_borg2_binary()
-            ensure_borg2_repository_url(repo.path, borg_cmd)
+            ensure_borg2_repository_url(repo.path)
             cmd = [
                 borg_cmd,
                 "--info",

@@ -277,10 +277,10 @@ def test_both_borg_majors_get_forwarders_and_nothing_else_is_linked(mac, tmp_pat
     fixtures = tmp_path / "fixtures"
     _write_executable(
         fixtures / "borg2-macos-15-arm64-gh",
-        "#!/usr/bin/env bash\necho 'borg 2.0.0b24'\n",
+        "#!/usr/bin/env bash\necho 'borg 2.0.0b25'\n",
     )
     script = mac["installer"].read_text(encoding="utf-8")
-    script = _pin(script, "PINNED_BORG2_VERSION", "2.0.0b24")
+    script = _pin(script, "PINNED_BORG2_VERSION", "2.0.0b25")
     script = _pin(
         script,
         "PINNED_BORG_BINARIES",
@@ -972,7 +972,6 @@ def test_an_ssh_url_is_split_into_login_host_and_port(test_client: TestClient):
             "ssh://u@borg.example:23/./repo",
             "ssh://borg.example/srv/repo",
             "ssh://u@borg.example:2222",
-            "rest://borg@store.example/series/repo",
         ],
         capture_output=True,
         text=True,
@@ -983,7 +982,6 @@ def test_an_ssh_url_is_split_into_login_host_and_port(test_client: TestClient):
         "u@borg.example 23",
         "borg.example 22",
         "u@borg.example 2222",
-        "borg@store.example 22",
     ]
 
 
@@ -1112,9 +1110,9 @@ def test_a_first_install_on_a_terminal_asks_for_the_repository_and_checks_the_ho
     assert env["BORG_REMOTE_PATH"] == "borg-1.4"
 
 
-def test_a_rest_store_gets_the_ssh_check_too(mac, tmp_path):
-    """A rest:// store is reached over SSH, so its host key needs the same
-    first contact."""
+def test_a_rest_url_gets_no_ssh_check(mac, tmp_path):
+    """rest:// is no Borg 2 scheme since 2.0.0b25 (its URL is read as a local
+    directory, and Borg UI refuses it): no SSH contact is offered for one."""
     log = tmp_path / "ssh.log"
     _write_executable(
         tmp_path / "stubs" / "ssh",
@@ -1123,17 +1121,15 @@ def test_a_rest_store_gets_the_ssh_check_too(mac, tmp_path):
 
     rc, output = _run_on_a_terminal(
         mac,
-        ["rest://borg@store.example/series/repo", "", "y"],
+        ["rest://borg@store.example/series/repo", ""],
         *ENROL,
         "--borg-version",
         "1",
     )
 
     assert rc == 0, output
-    assert (
-        log.read_text().strip()
-        == "-o ConnectTimeout=15 -p 22 -- borg@store.example exit"
-    )
+    assert "Open an SSH connection" not in output
+    assert not log.exists()
 
 
 def test_a_failed_ssh_check_is_reported_and_the_install_goes_on(mac, tmp_path):

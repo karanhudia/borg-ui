@@ -260,9 +260,8 @@ xml_escape() {
   printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
 }
 
-# An ssh:// or rest:// repository's login and host, for an SSH check (a rest://
-# store is reached over SSH as well). A port after the host is honoured; IPv6
-# literals in brackets are not parsed.
+# An ssh:// repository's login and host, for an SSH check. A port after the
+# host is honoured; IPv6 literals in brackets are not parsed.
 ssh_target_of() {
   local authority="${1#*://}"
   authority="${authority%%/*}"
@@ -309,7 +308,7 @@ ask_repository_defaults() {
   if [[ -n "${BORG_REPO_VALUE}" ]]; then
     printf 'Borg executable on that host (BORG_REMOTE_PATH, empty for the default): ' >&3
     IFS= read -r BORG_REMOTE_PATH_VALUE <&3 || BORG_REMOTE_PATH_VALUE=""
-    if [[ "${BORG_REPO_VALUE}" == ssh://* || "${BORG_REPO_VALUE}" == rest://* ]]; then
+    if [[ "${BORG_REPO_VALUE}" == ssh://* ]]; then
       printf 'Open an SSH connection to it now, to confirm the host key and the login? [Y/n] ' >&3
       IFS= read -r answer <&3 || answer="n"
       if [[ -z "${answer}" || "${answer}" =~ ^[Yy] ]]; then

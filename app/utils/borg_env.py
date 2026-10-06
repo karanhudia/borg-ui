@@ -108,7 +108,7 @@ def setup_borg_env(
     # both schemes, so the messages get better and nothing else changes.
     # setdefault, like the cache flags below: an operator can pin "legacy".
     env.setdefault("BORG_EXIT_CODES", "modern")
-    # Borg 2.0.0b23's pack cache: borgstore serves archive metadata as
+    # Borg 2's pack cache: borgstore serves archive metadata as
     # whole-pack loads, so on remote repositories every listing re-transfers
     # packs. The writethrough cache under borg's own cache directory
     # downloads each pack once. setdefault: the

@@ -475,6 +475,10 @@
         "pending": "Borg {{version}} pendiente",
         "pendingTooltip": "Fijado a Borg {{version}}, pero este endpoint todavía no informa esa versión. La próxima actualización la instalará."
       },
+      "borg2Minimum": {
+        "label": "Borg 2 demasiado antiguo",
+        "tooltip": "El Borg 2 de este endpoint es {{version}}, anterior al {{minimum}} de este servidor. Se rechazan sus copias de seguridad, restauraciones y tareas de mantenimiento de Borg 2. Ejecuta el instalador del agente en el endpoint con {{flags}} para instalar el Borg 2 del servidor. Si sustituyes Borg 2 a mano, reinicia después el agente para que informe de la nueva versión."
+      },
       "setServerDialog": {
         "title": "Cambiar la URL del servidor",
         "description": "Apunta este endpoint a otra dirección de Borg UI. Conserva su identidad, su credencial y su historial, así que no hace falta un nuevo token de inscripción.",
@@ -5868,7 +5872,7 @@
         "permissionDeniedCreateParentDirectory": "Permiso denegado: no se puede crear el directorio padre '{{path}}'. Asegúrese de que el directorio exista en su máquina anfitriona con los permisos correctos.",
         "encryptedPassphraseRequired": "Se requiere contraseña para el modo de cifrado '{{mode}}'",
         "agentBorg2Unavailable": "Este endpoint no tiene Borg 2 instalado, así que no se puede crear ni abrir un repositorio de Borg 2 en él. Instala Borg 2 en el endpoint o elige Borg 1.",
-        "agentBorg2TooOld": "El Borg 2 de este endpoint es {{version}}; borg-ui necesita {{minimum}} o posterior para un repositorio de Borg 2. Actualiza Borg 2 en el endpoint o elige Borg 1.",
+        "agentBorg2TooOld": "El Borg 2 de este endpoint es {{version}}, anterior al {{minimum}} de este servidor, así que Borg UI no ejecuta trabajos de Borg 2 en él: las betas de Borg 2 cambian el formato del repositorio y la línea de comandos entre versiones. Ejecuta el instalador del agente en el endpoint con {{flags}} para instalar el Borg 2 del servidor. Si sustituyes Borg 2 a mano, reinicia después el agente para que informe de la nueva versión.",
         "borg2OnlyUrl": "Una URL de repositorio {{scheme}} necesita Borg 2; Borg 1 no puede abrirla. Elige Borg 2 para este repositorio.",
         "borg2OnlyUrlOrSshHost": "Una URL de repositorio {{scheme}} necesita Borg 2; Borg 1 la lee como un host SSH llamado {{host}}. Elige Borg 2 para este repositorio o escribe el host SSH como ssh://{{host}}/ruta (ssh://{{host}}/./ruta para una ruta relativa al directorio de inicio de sesión).",
         "agentPassphraseUnavailable": "Este agente administrado no proporcionó una BORG_PASSPHRASE, por lo que no puede abrir un repositorio cifrado. Define BORG_PASSPHRASE en el entorno del agente o introduce aquí una contraseña.",
@@ -6154,7 +6158,6 @@
         "deleteAlreadyRunning": "La operación de eliminación ya está en curso para este archivo (ID de trabajo: {{jobId}})",
         "deleteJobNotFound": "Trabajo de eliminación no encontrado",
         "failedGetArchiveContents": "Error al obtener el contenido del archivo",
-        "unsupportedRepositoryVersion": "Este repositorio usa la versión de formato {{version}}, que la versión de Borg 2 de este servidor no puede leer. Borg 2 sigue en beta y su formato de repositorio ha cambiado entre betas. Vuelve a crear el repositorio con la versión actual o instala la versión de Borg 2 que lo creó.",
         "failedGetArchiveInfo": "Error al obtener información del archivo",
         "failedListArchives": "Error al listar los archivos",
         "repositoryNotFound": "Repositorio no encontrado",

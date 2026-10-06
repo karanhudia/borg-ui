@@ -1324,6 +1324,10 @@ export interface AgentMachineResponse {
   desired_borg_version?: string | null
   available_agent_version?: string | null
   upgrade_status?: AgentUpgradeStatus
+  /** The oldest Borg 2 an endpoint may run: the server's own (#1306). */
+  borg2_minimum_version?: string | null
+  /** The reported Borg 2 is older than that; its Borg 2 jobs are refused. */
+  borg2_below_minimum?: boolean
   self_upgrade_supported?: boolean
   upgrade_state?: string | null
   upgrade_requested_at?: string | null
