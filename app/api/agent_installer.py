@@ -260,9 +260,8 @@ xml_escape() {
   printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
 }
 
-# An ssh:// or rest:// repository's login and host, for an SSH check (a rest://
-# store is reached over SSH as well). A port after the host is honoured; IPv6
-# literals in brackets are not parsed.
+# An ssh:// repository's login and host, for an SSH check. A port after the
+# host is honoured; IPv6 literals in brackets are not parsed.
 ssh_target_of() {
   local authority="${1#*://}"
   authority="${authority%%/*}"
@@ -309,7 +308,7 @@ ask_repository_defaults() {
   if [[ -n "${BORG_REPO_VALUE}" ]]; then
     printf 'Borg executable on that host (BORG_REMOTE_PATH, empty for the default): ' >&3
     IFS= read -r BORG_REMOTE_PATH_VALUE <&3 || BORG_REMOTE_PATH_VALUE=""
-    if [[ "${BORG_REPO_VALUE}" == ssh://* || "${BORG_REPO_VALUE}" == rest://* ]]; then
+    if [[ "${BORG_REPO_VALUE}" == ssh://* ]]; then
       printf 'Open an SSH connection to it now, to confirm the host key and the login? [Y/n] ' >&3
       IFS= read -r answer <&3 || answer="n"
       if [[ -z "${answer}" || "${answer}" =~ ^[Yy] ]]; then
@@ -674,6 +673,23 @@ if [[ "${REINSTALL}" == "1" ]]; then
   # from wherever it named, and record that server for every later upgrade.
   if [[ -z "${SERVER}" && -r "${UPGRADE_CONF}" ]]; then
     SERVER="$(sed -nE 's/^SERVER="(.*)"$/\1/p' "${UPGRADE_CONF}" | head -n 1)"
+    # set-server moves config.toml only, so the two can name different
+    # servers. The record still wins, for the reason above; say what it takes
+    # to move it, because no reinstall from the old address ever will. The
+    # config's address is shown only as a plain URL and never as a command to
+    # copy: the agent can write that file.
+    ENROLLED_SERVER="$(sed -nE 's/^server_url[[:space:]]*=[[:space:]]*"(.*)"[[:space:]]*$/\1/p' \
+      "${CONFIG_DIR}/config.toml" | head -n 1)"
+    if [[ -n "${SERVER}" && -n "${ENROLLED_SERVER}" &&
+      "${ENROLLED_SERVER%/}" != "${SERVER%/}" ]]; then
+      if [[ ! "${ENROLLED_SERVER}" =~ ^https?://[A-Za-z0-9._:/-]+$ ]]; then
+        ENROLLED_SERVER="another server"
+      fi
+      echo "The upgrade record names ${SERVER}, but this agent is enrolled" >&2
+      echo "against ${ENROLLED_SERVER}. Reinstalling from ${SERVER}." >&2
+      echo "If this endpoint was moved on purpose, run the reinstall with --server" >&2
+      echo "and the new address to make remote upgrade work again." >&2
+    fi
   fi
   if [[ -z "${SERVER}" ]]; then
     SERVER="$(sed -nE 's/^server_url[[:space:]]*=[[:space:]]*"(.*)"[[:space:]]*$/\1/p' \
@@ -1980,38 +1996,49 @@ remove_service_user() {
   fi
 }
 
+# Removes what is under the agent root except what the options keep. On macOS
+# the configuration lives there, and kept is what Linux keeps in its config
+# directory: the registration, the recorded repository, and the user's own
+# scripts. With --keep-borg the binaries and the forwarders that reach them
+# stay: a symlink kept on PATH resolves into this directory, so keeping the
+# link without them leaves a Borg that cannot start.
+empty_agent_root() {
+  local entry name
+  for entry in "${AGENT_ROOT}"/* "${AGENT_ROOT}"/.[!.]*; do
+    [[ -e "${entry}" || -L "${entry}" ]] || continue
+    name="${entry##*/}"
+    if [[ "${KEEP_CONFIG}" == "1" ]]; then
+      case "${entry}" in
+        "${CONFIG_FILE}" | "${CONFIG_DIR}/agent.env" | "${CONFIG_DIR}/scripts.d") continue ;;
+      esac
+    fi
+    if [[ "${KEEP_BORG}" == "1" ]]; then
+      case "${name}" in
+        borg1 | borg2) continue ;;
+        bin)
+          rm -f "${UPGRADE_HELPER}" || note_failure "could not remove ${UPGRADE_HELPER}"
+          continue
+          ;;
+      esac
+    fi
+    rm -rf "${entry}" || note_failure "could not remove ${entry}"
+  done
+  # Only what is empty goes here, so nothing that was kept is touched. An
+  # install that stopped before its binary arrived leaves such a directory.
+  local kept
+  for kept in "${AGENT_ROOT}"/borg[12]/* "${AGENT_ROOT}/borg1" \
+    "${AGENT_ROOT}/borg2" "${AGENT_ROOT}/bin" "${AGENT_ROOT}"; do
+    if [[ -d "${kept}" && ! -L "${kept}" ]]; then
+      rmdir "${kept}" 2>/dev/null || true
+    fi
+  done
+}
+
 remove_agent_files() {
   if is_darwin; then
-    # The agent root holds the config as well, so a kept config means
-    # emptying the directory around it. Kept is what Linux keeps in its
-    # config directory: the registration, the recorded repository, and the
-    # user's own scripts.
-    local entry name
-    for entry in "${AGENT_ROOT}"/* "${AGENT_ROOT}"/.[!.]*; do
-      [[ -e "${entry}" || -L "${entry}" ]] || continue
-      name="${entry##*/}"
-      if [[ "${KEEP_CONFIG}" == "1" ]]; then
-        case "${entry}" in
-          "${CONFIG_FILE}" | "${CONFIG_DIR}/agent.env" | "${CONFIG_DIR}/scripts.d") continue ;;
-        esac
-      fi
-      # The binaries and the forwarders that reach them, as promised above.
-      if [[ "${KEEP_BORG}" == "1" ]]; then
-        case "${name}" in
-          borg1 | borg2) continue ;;
-          bin)
-            rm -f "${UPGRADE_HELPER}" || note_failure "could not remove ${UPGRADE_HELPER}"
-            continue
-            ;;
-        esac
-      fi
-      rm -rf "${entry}" || note_failure "could not remove ${entry}"
-    done
+    empty_agent_root
     if [[ "${KEEP_CONFIG}" == "1" ]]; then
       echo "Keeping ${CONFIG_FILE}."
-    fi
-    if [[ "${KEEP_CONFIG}" != "1" && "${KEEP_BORG}" != "1" ]]; then
-      rmdir "${AGENT_ROOT}" 2>/dev/null || true
     fi
     if [[ -n "${LOG_DIR}" ]]; then
       rm -rf "${LOG_DIR}" || note_failure "could not remove ${LOG_DIR}"
@@ -2019,7 +2046,11 @@ remove_agent_files() {
     return 0
   fi
 
-  rm -rf "${AGENT_ROOT}" || note_failure "could not remove ${AGENT_ROOT}"
+  if [[ "${KEEP_BORG}" == "1" ]]; then
+    empty_agent_root
+  else
+    rm -rf "${AGENT_ROOT}" || note_failure "could not remove ${AGENT_ROOT}"
+  fi
   rm -f "${NO_REMOTE_UPGRADE_MARKER}" \
     || note_failure "could not remove ${NO_REMOTE_UPGRADE_MARKER}"
 

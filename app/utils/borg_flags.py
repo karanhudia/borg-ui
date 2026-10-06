@@ -15,14 +15,15 @@ import os
 import shlex
 from collections.abc import Sequence
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 
 from app.utils.local_paths import is_within_local_mount
 
 # Options whose value is a file borg reads on the machine it runs on.
 FILE_READ_FLAGS = frozenset({"--patterns-from", "--exclude-from"})
 
-# Option name -> True when it takes a value. Borg 1 and Borg 2 spellings.
+# Option name -> True when it takes a value. Borg 1 and Borg 2 spellings;
+# BORG_MAJOR_ONLY_FLAGS names the ones only one major accepts.
 _COMMON_FLAGS: dict[str, bool] = {
     "--progress": False,
     "-p": False,
@@ -85,7 +86,6 @@ ALLOWED_BORG_FLAGS: dict[str, dict[str, bool]] = {
         "--repair": False,
         "--save-space": False,
         "--find-lost-archives": False,
-        "--undelete-archives": False,
         "--max-duration": True,
         "--first": True,
         "--last": True,
@@ -98,6 +98,41 @@ ALLOWED_BORG_FLAGS: dict[str, dict[str, bool]] = {
         "--glob-archives": True,
         "--match-archives": True,
         "-a": True,
+    },
+}
+
+
+# Options of ALLOWED_BORG_FLAGS that only one Borg major accepts; the other
+# fails at argument parsing ("unrecognized arguments", exit 2). Measured on
+# Borg 1.4.5 and 2.0.0b25. Borg 2 has no --upload-ratelimit and no
+# --upload-buffer: they throttled the Borg 1 remote protocol.
+BORG_MAJOR_ONLY_FLAGS: dict[str, dict[int, frozenset[str]]] = {
+    "create": {
+        1: frozenset(
+            {
+                "--numeric-owner",
+                "--noatime",
+                "--nobsdflags",
+                "--exclude-nodump",
+                "--checkpoint-interval",
+                "--upload-ratelimit",
+                "--upload-buffer",
+            }
+        ),
+        2: frozenset(),
+    },
+    "check": {
+        1: frozenset({"--save-space", "--prefix", "--glob-archives"}),
+        2: frozenset(
+            {
+                "--find-lost-archives",
+                "--match-archives",
+                "--oldest",
+                "--newest",
+                "--older",
+                "--newer",
+            }
+        ),
     },
 }
 
@@ -117,14 +152,19 @@ def _expand_short_flags(token: str, allowed: dict[str, bool]) -> list[str]:
 
 
 def parse_borg_flags(
-    value: str | Sequence[str] | None, command: str, *, local_paths: bool = True
+    value: str | Sequence[str] | None,
+    command: str,
+    borg_version: int | None = None,
+    *,
+    local_paths: bool = True,
 ) -> list[str]:
     """Split and validate user supplied flags for ``borg <command>``.
 
     Accepts the stored text (or an already split list) and returns argv
     tokens. Value options come back as ``--name=value`` (short ones as two
     tokens), so a value can never be read as a separate option or path.
-    Raises ValueError for anything not on the allowlist.
+    Raises ValueError for anything not on the allowlist, and with
+    ``borg_version`` for an option that Borg major does not have.
 
     With ``local_paths`` (borg runs on this server) file options must point
     inside LOCAL_MOUNT_POINTS. Pass False when the file lives on another
@@ -133,6 +173,9 @@ def parse_borg_flags(
     allowed = ALLOWED_BORG_FLAGS.get(command)
     if allowed is None:
         raise ValueError(f"Unsupported borg command for custom flags: {command}")
+    other_only: frozenset[str] = frozenset()
+    if borg_version is not None:
+        other_only = BORG_MAJOR_ONLY_FLAGS[command][1 if borg_version == 2 else 2]
     if value is None:
         return []
     if isinstance(value, str):
@@ -165,6 +208,11 @@ def parse_borg_flags(
         name, sep, flag_value = token.partition("=")
         if name not in allowed:
             raise ValueError(f"Borg {command} flag is not allowed: {name}")
+        if name in other_only:
+            raise ValueError(
+                f"Borg {borg_version} {command} has no option {name}; "
+                f"it is a Borg {1 if borg_version == 2 else 2} option"
+            )
         takes_value = allowed[name]
         if not takes_value:
             if sep:
@@ -195,11 +243,26 @@ def parse_borg_flags(
     return result
 
 
-def borg_flags_validator(field: str, command: str):
+def borg_flags_validator(field: str, command: str, borg_version: int | None = None):
     """Pydantic field validator that rejects what parse_borg_flags rejects."""
 
     def _validate(cls, value):
-        parse_borg_flags(value, command, local_paths=False)
+        parse_borg_flags(value, command, borg_version, local_paths=False)
         return value
 
     return field_validator(field)(_validate)
+
+
+def borg_flags_major_validator(field: str, command: str, major=None):
+    """Pydantic model validator that checks ``field`` against the Borg major
+    the request runs on: ``major(model)`` when given, else the model's own
+    ``borg_version`` field (1 when unset)."""
+
+    def _validate(self):
+        borg_version = (
+            major(self) if major else (getattr(self, "borg_version", None) or 1)
+        )
+        parse_borg_flags(getattr(self, field), command, borg_version, local_paths=False)
+        return self
+
+    return model_validator(mode="after")(_validate)

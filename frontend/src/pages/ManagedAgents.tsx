@@ -14,6 +14,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   Link as MuiLink,
   LinearProgress,
@@ -61,12 +62,10 @@ import {
   managedAgentsAPI,
 } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
-import { usePlan } from '../hooks/usePlan'
 import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import PageTabs from '../components/PageTabs'
 import PageHeader from '../components/PageHeader'
-import PlanGate from '../components/shared/PlanGate'
 import LogViewerDialog, { type LogViewerFetchLogs } from '../components/shared/LogViewerDialog'
 import ResponsiveDialog from '../components/shared/ResponsiveDialog'
 import DiagnosticsTcpTargetFields from '../components/shared/DiagnosticsTcpTargetFields'
@@ -74,6 +73,8 @@ import AddAgentDialog from './managed-agents/AddAgentDialog'
 import AgentBulkUpgradeBar from './managed-agents/AgentBulkUpgradeBar'
 import AgentUpgradeBanner from './managed-agents/AgentUpgradeBanner'
 import AgentBorgVersionChip from './managed-agents/AgentBorgVersionChip'
+import AgentBorg2MinimumChip from './managed-agents/AgentBorg2MinimumChip'
+import { borg2MinimumParams } from './managed-agents/agentBorg2Minimum'
 import AgentManualUpgradeChip from './managed-agents/AgentManualUpgradeChip'
 import AgentUpgradeChip from './managed-agents/AgentUpgradeChip'
 import AgentPinControl from './managed-agents/AgentPinControl'
@@ -234,151 +235,12 @@ function tcpStatusLabel(status: string, labels: Record<string, string>): string 
   return status === 'success' ? labels.reachable : labels.failed
 }
 
-export function ManagedAgentsPreview({
-  defaultAgentServerUrl,
-  activeTab = 'agents',
-  agents = EMPTY_AGENTS,
-  tokens = EMPTY_TOKENS,
-  jobs = EMPTY_JOBS,
-  isLoading = false,
-}: {
-  defaultAgentServerUrl: string
-  activeTab?: PageTab
-  agents?: AgentMachineResponse[]
-  tokens?: AgentEnrollmentTokenSummary[]
-  jobs?: AgentJobResponse[]
-  isLoading?: boolean
-}) {
-  const { t } = useTranslation()
-  const setupCommand = buildAgentInstallCommand(
-    defaultAgentServerUrl,
-    '<enrollment-token>',
-    '<machine-name>'
-  )
-  const macosSetupCommand = buildAgentInstallCommand(
-    defaultAgentServerUrl,
-    '<enrollment-token>',
-    '<machine-name>',
-    'borg1',
-    'current',
-    'macos'
-  )
-  const agentsById = useMemo(() => {
-    return new Map(agents.map((agent) => [agent.id, agent]))
-  }, [agents])
-
-  return (
-    <Box>
-      <PageHeader
-        title={t('managedAgents.page.title')}
-        subtitle={t('managedAgents.page.subtitle')}
-        actions={
-          <>
-            <IconButton
-              aria-label={t('managedAgents.page.refresh')}
-              title={t('managedAgents.page.refresh')}
-            >
-              <RefreshCw size={20} />
-            </IconButton>
-            <Button variant="contained" startIcon={<Plus size={18} />}>
-              {t('managedAgents.page.addAgent')}
-            </Button>
-          </>
-        }
-      />
-
-      <AgentSetupGuide command={setupCommand} macosCommand={macosSetupCommand} onCopy={() => {}} />
-
-      <PageTabs value={activeTab} onChange={() => {}}>
-        <Tab label={t('managedAgents.page.tabs.agents')} value="agents" />
-        <Tab label={t('managedAgents.page.tabs.jobs')} value="jobs" />
-        <Tab label={t('managedAgents.page.tabs.tokens')} value="tokens" />
-      </PageTabs>
-
-      {isLoading ? (
-        <Stack spacing={2}>
-          {[0, 1, 2].map((index) => (
-            <Skeleton key={index} variant="rounded" height={96} sx={{ borderRadius: 2 }} />
-          ))}
-        </Stack>
-      ) : null}
-
-      {!isLoading && activeTab === 'agents' ? (
-        <AgentList
-          agents={agents}
-          serverUrl={defaultAgentServerUrl}
-          onCopy={() => {}}
-          onRevoke={() => {}}
-          onDelete={() => {}}
-          onViewLogs={() => {}}
-          isRevoking={false}
-          isDeleting={false}
-        />
-      ) : null}
-
-      {!isLoading && activeTab === 'jobs' ? (
-        <JobsTable
-          jobs={jobs}
-          agentsById={agentsById}
-          onCancel={() => {}}
-          onViewLogs={() => {}}
-          isCanceling={false}
-        />
-      ) : null}
-
-      {!isLoading && activeTab === 'tokens' ? (
-        <TokensTable tokens={tokens} onRevoke={() => {}} isRevoking={false} />
-      ) : null}
-    </Box>
-  )
-}
-
-export function ManagedAgentsPlanGate({
-  defaultAgentServerUrl,
-  activeTab = 'agents',
-  agents = EMPTY_AGENTS,
-  tokens = EMPTY_TOKENS,
-  jobs = EMPTY_JOBS,
-  isLoading = false,
-}: {
-  defaultAgentServerUrl: string
-  activeTab?: PageTab
-  agents?: AgentMachineResponse[]
-  tokens?: AgentEnrollmentTokenSummary[]
-  jobs?: AgentJobResponse[]
-  isLoading?: boolean
-}) {
-  const { t } = useTranslation()
-
-  return (
-    <PlanGate
-      feature="managed_agents"
-      message={t('managedAgents.planGate.message')}
-      surface={MANAGED_AGENTS_ANALYTICS_SECTION}
-      operation="view_page_gate"
-      preview={
-        <ManagedAgentsPreview
-          defaultAgentServerUrl={defaultAgentServerUrl}
-          activeTab={activeTab}
-          agents={agents}
-          tokens={tokens}
-          jobs={jobs}
-          isLoading={isLoading}
-        />
-      }
-    >
-      <Box />
-    </PlanGate>
-  )
-}
-
 export default function ManagedAgents() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { hasGlobalPermission } = useAuth()
   const { trackSystem, EventAction } = useAnalytics()
   const { trackFeatureUsed } = useFeatureAnalytics()
-  const { can } = usePlan()
   const canManageAgents = hasGlobalPermission('settings.ssh.manage')
   const [activeTab, setActiveTab] = useState<PageTab>('agents')
   const [addAgentDialogOpen, setAddAgentDialogOpen] = useState(false)
@@ -389,7 +251,6 @@ export default function ManagedAgents() {
     []
   )
 
-  const hasManagedAgentsPlan = can('managed_agents')
   const canReadManagedAgents = canManageAgents
 
   const agentsQuery = useQuery({
@@ -581,19 +442,6 @@ export default function ManagedAgents() {
 
   if (!canManageAgents) {
     return <Navigate to="/dashboard" replace />
-  }
-
-  if (!hasManagedAgentsPlan) {
-    return (
-      <ManagedAgentsPlanGate
-        defaultAgentServerUrl={defaultAgentServerUrl}
-        activeTab={activeTab}
-        agents={agents}
-        tokens={tokens}
-        jobs={jobs}
-        isLoading={isLoading}
-      />
-    )
   }
 
   const handleCopy = async (value: string, source = 'unknown') => {
@@ -905,7 +753,19 @@ export function AgentSetupHelpContent({
     'pip install .',
   ].join('\n')
   const runCommand = 'sudo systemctl status borg-ui-agent'
+  // The service templates start the agent from a fixed virtualenv and config,
+  // not from the clone's .venv, so these blocks install and register it there.
   const linuxStartupCommand = [
+    'sudo useradd --system --user-group --home-dir /var/lib/borg-ui-agent \\',
+    '  --create-home --shell /usr/sbin/nologin borg-ui-agent',
+    'sudo install -d -o borg-ui-agent -g borg-ui-agent -m 0750 /etc/borg-ui-agent',
+    'sudo install -d -m 0755 /opt/borg-ui-agent',
+    'sudo python3.11 -m venv /opt/borg-ui-agent/.venv',
+    'sudo /opt/borg-ui-agent/.venv/bin/pip install .',
+    'sudo -u borg-ui-agent /opt/borg-ui-agent/.venv/bin/borg-ui-agent \\',
+    '  --config /etc/borg-ui-agent/config.toml \\',
+    '  register --server <server-url> --token <enrollment-token> --name <machine-name>',
+    'sudo /opt/borg-ui-agent/.venv/bin/borg-ui-agent service-check --user borg-ui-agent --group borg-ui-agent',
     'sudo cp agent/install/systemd/borg-ui-agent.service /etc/systemd/system/',
     'sudo systemctl daemon-reload',
     'sudo systemctl enable --now borg-ui-agent',
@@ -915,7 +775,12 @@ export function AgentSetupHelpContent({
   // The template names /Users/alex and launchd expands no ~, so it is rendered
   // for the real home directory instead of copied.
   const macosStartupCommand = [
-    'mkdir -p ~/Library/LaunchAgents ~/Library/Logs/borg-ui-agent',
+    'mkdir -p "$HOME/Library/Application Support/borg-ui-agent" ~/Library/LaunchAgents ~/Library/Logs/borg-ui-agent',
+    'python3.11 -m venv "$HOME/Library/Application Support/borg-ui-agent/.venv"',
+    '"$HOME/Library/Application Support/borg-ui-agent/.venv/bin/pip" install .',
+    '"$HOME/Library/Application Support/borg-ui-agent/.venv/bin/borg-ui-agent" \\',
+    '  --config "$HOME/Library/Application Support/borg-ui-agent/config.toml" \\',
+    '  register --server <server-url> --token <enrollment-token> --name <machine-name>',
     'sed "s#/Users/alex/#$HOME/#g" agent/install/launchd/com.borg-ui.agent.plist \\',
     '  > ~/Library/LaunchAgents/com.borg-ui.agent.plist',
     'launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.borg-ui.agent.plist',
@@ -1357,6 +1222,15 @@ export function AgentDiagnosticsDialog({
             </Stack>
           </Stack>
 
+          {agent?.borg2_below_minimum && (
+            <Alert severity="error" icon={<AlertTriangle size={16} />} sx={{ borderRadius: 1.5 }}>
+              {t(
+                'managedAgents.page.borg2Minimum.tooltip',
+                borg2MinimumParams(borgVersions, agent.borg2_minimum_version)
+              )}
+            </Alert>
+          )}
+
           {lastError && (
             <Alert severity="warning" icon={<AlertTriangle size={16} />} sx={{ borderRadius: 1.5 }}>
               {lastError}
@@ -1578,11 +1452,20 @@ export function AgentReinstallDialog({
   // still change repository formats). Changing Borg is an explicit choice,
   // reset whenever the dialog targets a different agent.
   const [borgInstallMode, setBorgInstallMode] = useState<BorgInstallMode>('skip')
+  // Off by default for the same reason: naming this server records it for
+  // remote upgrades, which breaks an endpoint that reaches it another way.
+  const [movedToThisServer, setMovedToThisServer] = useState(false)
   useEffect(() => {
     setBorgInstallMode('skip')
+    setMovedToThisServer(false)
   }, [agent])
   const platform = platformFromAgentOs(agent?.os)
-  const command = buildAgentReinstallCommand(serverUrl, borgInstallMode, platform)
+  const command = buildAgentReinstallCommand(
+    serverUrl,
+    borgInstallMode,
+    platform,
+    movedToThisServer
+  )
 
   return (
     <ResponsiveDialog
@@ -1634,6 +1517,28 @@ export function AgentReinstallDialog({
               {t('managedAgents.page.reinstallDialog.borgSelectionHint')}
             </Typography>
           </Box>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={movedToThisServer}
+                onChange={(event) => setMovedToThisServer(event.target.checked)}
+                // Flush the box with the content edge; the 9px padding stays
+                // as the touch target.
+                sx={{ mt: -0.75, ml: -1.125 }}
+              />
+            }
+            label={
+              <Stack spacing={0.35}>
+                <Typography sx={{ fontWeight: 700 }}>
+                  {t('managedAgents.page.reinstallDialog.movedToThisServer')}
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  {t('managedAgents.page.reinstallDialog.movedToThisServerHint')}
+                </Typography>
+              </Stack>
+            }
+            sx={{ m: 0, alignItems: 'flex-start' }}
+          />
           <InsecureCommandWarning serverUrl={serverUrl} />
           <CopyableCodeBlock
             value={command}
@@ -1891,6 +1796,11 @@ export function AgentList({
                       )}
                       <AgentBorgVersionChip
                         desiredBorgVersion={agent.desired_borg_version}
+                        borgVersions={agent.borg_versions}
+                      />
+                      <AgentBorg2MinimumChip
+                        belowMinimum={agent.borg2_below_minimum}
+                        minimumVersion={agent.borg2_minimum_version}
                         borgVersions={agent.borg_versions}
                       />
                       {agent.self_upgrade_supported === false && <AgentManualUpgradeChip />}

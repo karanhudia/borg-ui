@@ -103,8 +103,8 @@ async def test_check_scheduler_snapshot_preserves_agent_routing(db_session):
 
     repo = Repository(
         name="Agent Repo",
-        path="rest://borg@host/repo",
-        encryption="none",
+        path="ssh://borg@host/repo",
+        encryption="repokey-aes-ocb",
         compression="lz4",
         repository_type="local",
         executor_type="agent",

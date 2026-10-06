@@ -91,7 +91,7 @@ def test_legacy_ssh_repository_requires_an_unambiguous_connection(test_db):
 
 @pytest.mark.unit
 def test_setup_borg_env_enables_the_pack_cache_with_a_bounded_size(monkeypatch):
-    """Borg 2.0.0b23's pack cache downloads each pack once instead of
+    """Borg 2's pack cache downloads each pack once instead of
     re-transferring it on every listing; borg puts it under its own cache
     directory. An empty container-level BORG_STORE_CACHE disables it.
     Borg 1 ignores both variables."""

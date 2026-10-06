@@ -3,12 +3,17 @@ import { useTranslation } from 'react-i18next'
 import { TextField, Divider, Typography } from '@mui/material'
 import ScriptEditorDialog from './ScriptEditorDialog'
 import RepositoryScriptsSection from './RepositoryScriptsSection'
+import { uploadRatelimitSupported } from '../utils/uploadRatelimit'
 
 type OnFailureMode = 'fail' | 'continue' | 'skip'
 
 interface AdvancedRepositoryOptionsProps {
   repositoryId?: number | null
   mode: 'full' | 'observe'
+  /** Borg 2 has no upload limit (2.0.0b22 removed --upload-ratelimit),
+   * except behind rclone, which applies it as its bandwidth limit. */
+  borgVersion?: 1 | 2
+  repositoryPath?: string
   remotePath: string
   preBackupScript: string
   postBackupScript: string
@@ -30,6 +35,8 @@ interface AdvancedRepositoryOptionsProps {
 export default function AdvancedRepositoryOptions({
   repositoryId,
   mode,
+  borgVersion = 1,
+  repositoryPath,
   remotePath,
   preBackupScript,
   postBackupScript,
@@ -52,6 +59,7 @@ export default function AdvancedRepositoryOptions({
   const [postScriptDialogOpen, setPostScriptDialogOpen] = useState(false)
   const [hasPreLibraryScripts, setHasPreLibraryScripts] = useState(false)
   const [hasPostLibraryScripts, setHasPostLibraryScripts] = useState(false)
+  const uploadLimitSupported = uploadRatelimitSupported(borgVersion, repositoryPath)
 
   return (
     <>
@@ -100,11 +108,18 @@ export default function AdvancedRepositoryOptions({
 
           <TextField
             label={t('advancedRepositoryOptions.uploadSpeedLimit')}
-            value={uploadRatelimitMb}
+            value={uploadLimitSupported ? uploadRatelimitMb : ''}
             onChange={(e) => onUploadRatelimitMbChange(e.target.value)}
             type="number"
             fullWidth
-            helperText={t('advancedRepositoryOptions.uploadSpeedLimitHint')}
+            disabled={!uploadLimitSupported}
+            helperText={
+              !uploadLimitSupported
+                ? t('advancedRepositoryOptions.uploadSpeedLimitBorg2')
+                : borgVersion === 2
+                  ? t('advancedRepositoryOptions.uploadSpeedLimitRclone')
+                  : t('advancedRepositoryOptions.uploadSpeedLimitHint')
+            }
             slotProps={{
               htmlInput: { min: 0, step: 0.1 },
             }}

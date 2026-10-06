@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next'
 import {
   DEFAULT_RESTORE_LAYOUT,
   getRestorePreviewDestination,
+  type RestoreExistingFiles,
   type RestoreLayout,
   type RestorePathMetadata,
 } from '../../utils/restorePaths'
@@ -45,10 +46,13 @@ export interface RestoreDestinationStepData {
   restoreStrategy: 'original' | 'custom'
   customPath: string
   restoreLayout: RestoreLayout
+  existingFiles: RestoreExistingFiles | null
 }
 
 interface WizardStepRestoreDestinationProps {
   data: RestoreDestinationStepData
+  /** Borg 2 asks what to do with existing files; Borg 1 overwrites them. */
+  borgVersion?: 1 | 2
   selectedItems: RestorePathMetadata[]
   sshConnections: SSHConnection[]
   repositoryType: string
@@ -58,6 +62,7 @@ interface WizardStepRestoreDestinationProps {
 
 export default function WizardStepRestoreDestination({
   data,
+  borgVersion = 1,
   selectedItems,
   sshConnections,
   repositoryType,
@@ -108,6 +113,55 @@ export default function WizardStepRestoreDestination({
       selectedItems,
       sshPrefix,
     })
+
+  const destinationChosen =
+    data.destinationType === 'local' ||
+    (data.destinationType === 'ssh' && Boolean(data.destinationConnectionId))
+  const exactUnavailable = data.restoreStrategy === 'original'
+
+  const existingFilesOption = (
+    value: RestoreExistingFiles,
+    title: string,
+    description: string,
+    disabled = false
+  ) => (
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 1.5,
+        mb: 1,
+        borderColor: data.existingFiles === value ? '#1976d2' : 'divider',
+        bgcolor:
+          data.existingFiles === value
+            ? (theme) => alpha('#1976d2', theme.palette.mode === 'dark' ? 0.12 : 0.06)
+            : 'background.paper',
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.6 : 1,
+        transition: 'border-color 0.2s, background-color 0.2s',
+        '&:hover': disabled ? undefined : { borderColor: '#1976d2' },
+      }}
+      onClick={() => {
+        if (!disabled) onChange({ existingFiles: value })
+      }}
+    >
+      <FormControlLabel
+        value={value}
+        disabled={disabled}
+        control={<Radio size="small" />}
+        label={
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              {title}
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              {description}
+            </Typography>
+          </Box>
+        }
+        sx={{ m: 0, width: '100%' }}
+      />
+    </Paper>
+  )
 
   const isContentsOnlyDirectoryPreview = (item: RestorePathMetadata) =>
     data.restoreStrategy === 'custom' &&
@@ -655,6 +709,48 @@ export default function WizardStepRestoreDestination({
             </Alert>
           )}
         </>
+      )}
+
+      {/* What happens to files already at the destination (#1261) */}
+      {destinationChosen && borgVersion === 2 && (
+        <FormControl component="fieldset">
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+            {t('wizard.restoreDestination.existingFiles.title')}
+          </Typography>
+          <RadioGroup
+            value={data.existingFiles ?? ''}
+            onChange={(e) => onChange({ existingFiles: e.target.value as RestoreExistingFiles })}
+          >
+            {existingFilesOption(
+              'refuse',
+              t('wizard.restoreDestination.existingFiles.exact'),
+              exactUnavailable
+                ? t('wizard.restoreDestination.existingFiles.exactUnavailable')
+                : t('wizard.restoreDestination.existingFiles.exactDesc'),
+              exactUnavailable
+            )}
+            {existingFilesOption(
+              'continue',
+              t('wizard.restoreDestination.existingFiles.continue'),
+              t('wizard.restoreDestination.existingFiles.continueDesc')
+            )}
+          </RadioGroup>
+          {data.existingFiles === 'continue' && (
+            <Alert severity="warning" sx={{ mt: 0.5 }}>
+              {t('wizard.restoreDestination.existingFiles.continueWarning')}
+            </Alert>
+          )}
+          {data.existingFiles === null && (
+            <Alert severity="info" sx={{ mt: 0.5 }}>
+              {t('wizard.restoreDestination.existingFiles.originalNeedsChoice')}
+            </Alert>
+          )}
+        </FormControl>
+      )}
+      {destinationChosen && borgVersion === 1 && (
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+          {t('wizard.restoreDestination.existingFiles.borg1')}
+        </Typography>
       )}
     </Box>
   )

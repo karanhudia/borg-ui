@@ -2002,6 +2002,83 @@ class TestBackupService:
         notifications.send_backup_success.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_execute_backup_limits_borg2_behind_rclone_through_rclone(
+        self, backup_service, test_db, tmp_path
+    ):
+        """#1307: the create of a Borg 2 repository behind rclone runs with
+        RCLONE_BWLIMIT; the archive info after it does not."""
+        source_file = tmp_path / "source.txt"
+        source_file.write_text("borg2 source")
+        repo = Repository(
+            name="Borg 2 rclone",
+            path="rclone:remote:borg/repo",
+            encryption="none",
+            repository_type="local",
+            source_directories=f'["{source_file}"]',
+            compression="lz4",
+            borg_version=2,
+            upload_ratelimit_kib=640,
+        )
+        test_db.add_all([repo, SystemSettings(log_save_policy="all_jobs")])
+        test_db.flush()
+        job = seed_job_operation(
+            test_db, "backup", repository=repo.path, status="pending"
+        )
+        test_db.commit()
+
+        fake_process = FakeProcess(
+            returncode=0, stdout_lines=['{"type":"archive_progress","finished":true}']
+        )
+        update_stats = AsyncMock()
+        with (
+            patch.object(
+                backup_service,
+                "_execute_hooks",
+                AsyncMock(
+                    return_value={
+                        "success": True,
+                        "execution_logs": [],
+                        "scripts_executed": 0,
+                        "scripts_failed": 0,
+                        "using_library": False,
+                    }
+                ),
+            ),
+            patch.object(
+                backup_service,
+                "_prepare_source_paths",
+                AsyncMock(return_value=([str(source_file)], [])),
+            ),
+            patch.object(
+                backup_service, "_calculate_and_update_size_background", AsyncMock()
+            ),
+            patch.object(backup_service, "_update_archive_stats", update_stats),
+            patch(
+                "app.services.backup_service.resolve_repo_ssh_key_file",
+                return_value=None,
+            ),
+            patch(
+                "app.services.backup_service.asyncio.create_subprocess_exec",
+                return_value=fake_process,
+            ) as mock_subprocess,
+            patch(
+                "app.services.backup_service.asyncio.create_task",
+                side_effect=_discard_background_task,
+            ),
+            patch("app.services.backup_service.notification_service", MagicMock()),
+            patch("app.services.backup_service.mqtt_service") as mqtt,
+            patch("app.core.borg2.borg2.borg_cmd", "borg2"),
+        ):
+            mqtt.sync_state_with_db = Mock()
+            await backup_service.execute_backup(job.id, repo.path, db=test_db)
+
+        create_call = mock_subprocess.call_args
+        assert "--upload-ratelimit" not in create_call.args
+        assert create_call.kwargs["env"]["RCLONE_BWLIMIT"] == "640K"
+        info_env = update_stats.call_args.args[-1]
+        assert "RCLONE_BWLIMIT" not in info_env
+
+    @pytest.mark.asyncio
     async def test_execute_backup_parses_v2_json_progress(
         self, backup_service, test_db, tmp_path
     ):

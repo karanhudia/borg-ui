@@ -3072,59 +3072,6 @@ def test_create_agent_repository_cloud_mirror_rejects_soft_deleted_agent(test_db
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_agent_repository_requires_managed_agents_plan_feature(
-    admin_user, test_db, monkeypatch
-):
-    from app.api.repositories import RepositoryCreate, create_repository
-
-    agent = AgentMachine(
-        name="Laptop",
-        agent_id="agt_laptop_borg2_plan",
-        token_hash=get_password_hash("borgui_agent_secret"),
-        token_prefix="borgui_agent_secret"[:20],
-        status="online",
-        capabilities=["repository.info"],
-    )
-    test_db.add(agent)
-    test_db.commit()
-    test_db.refresh(agent)
-    _set_plan(test_db, "community")
-
-    async def unexpected_agent_create(*_args, **_kwargs):
-        return {"success": True}
-
-    monkeypatch.setattr(
-        "app.api.repositories._create_agent_repository_record",
-        unexpected_agent_create,
-    )
-
-    with pytest.raises(HTTPException) as exc_info:
-        await create_repository(
-            RepositoryCreate(
-                name="Agent Borg2 App",
-                path="/agent/repositories/borg2-app",
-                borg_version=2,
-                encryption="none",
-                execution_target="agent",
-                executor_type="agent",
-                agent_machine_id=agent.id,
-                storage_backend="agent_local",
-            ),
-            admin_user,
-            test_db,
-        )
-
-    assert exc_info.value.status_code == 403
-    assert exc_info.value.detail["key"] == "backend.errors.plan.featureNotAvailable"
-    assert exc_info.value.detail["feature"] == "managed_agents"
-    assert (
-        test_db.query(Repository).filter(Repository.name == "Agent Borg2 App").first()
-        is None
-    )
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
 async def test_update_mirrored_agent_repository_requires_new_agent_sync_capability(
     admin_user, test_db, monkeypatch
 ):
@@ -3746,7 +3693,8 @@ def test_create_direct_borg2_rclone_repository_uses_url_without_storage_row(
             "name": "Direct Borg2 Cloud Repo",
             "path": "rclone:prod-s3:borg-ui/direct",
             "borg_version": 2,
-            "encryption": "none",
+            "encryption": "authenticated",
+            "passphrase": "secret",
             "storage_backend": "rclone_direct",
             "upload_ratelimit_kib": 4096,
         },

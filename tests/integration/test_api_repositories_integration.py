@@ -4,6 +4,7 @@ Integration tests for repositories API with real borg operations
 These tests use actual borg repositories to verify end-to-end functionality.
 """
 
+import os
 import pytest
 import shutil
 import subprocess
@@ -13,7 +14,13 @@ from tests.integration.helpers import (
     parse_archives_payload,
     wait_for_job_terminal_status,
 )
-from tests.utils.borg import create_archive, make_borg_test_env
+from tests.utils.borg import (
+    BORG2_TEST_ENCRYPTION,
+    BORG2_TEST_PASSPHRASE,
+    create_archive,
+    init_borg_repo,
+    make_borg_test_env,
+)
 
 
 def _require_borg2_binary() -> str:
@@ -49,20 +56,7 @@ def _create_borg2_repo_with_archives(test_db, tmp_path):
 
     env = make_borg_test_env(str(tmp_path))
 
-    init_result = subprocess.run(
-        [
-            borg2_binary,
-            "-r",
-            str(repo_path),
-            "repo-create",
-            "--encryption",
-            "none-sha256",
-        ],
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-    assert init_result.returncode == 0, init_result.stderr
+    init_borg_repo(borg2_binary, repo_path, env=env)
 
     (source_path / "file1.txt").write_text("borg2 prune file 1\n", encoding="utf-8")
     create_archive(borg2_binary, repo_path, "test-archive", [source_path], env=env)
@@ -77,7 +71,8 @@ def _create_borg2_repo_with_archives(test_db, tmp_path):
         name="Test Borg2 Integration Repo with Archives",
         path=str(repo_path),
         borg_version=2,
-        encryption="none",
+        encryption=BORG2_TEST_ENCRYPTION,
+        passphrase=BORG2_TEST_PASSPHRASE,
         compression="lz4",
         repository_type="local",
         archive_count=2,
@@ -86,7 +81,7 @@ def _create_borg2_repo_with_archives(test_db, tmp_path):
     test_db.commit()
     test_db.refresh(repo)
 
-    # Borg 2 prunes per series (archives sharing a name, b23+), and borg-ui
+    # Borg 2 prunes per series (archives sharing a name), and borg-ui
     # gives Borg 2 archives a stable series name, so both share one here.
     return repo, repo_path, source_path, ["test-archive", "test-archive"]
 
@@ -280,7 +275,8 @@ class TestRepositoryInitializationV2:
                 "name": "Borg2 Create Repo",
                 "path": str(repo_path),
                 "borg_version": 2,
-                "encryption": "none",
+                "encryption": BORG2_TEST_ENCRYPTION,
+                "passphrase": BORG2_TEST_PASSPHRASE,
                 "compression": "lz4",
                 "source_directories": [str(source_path)],
             },
@@ -290,7 +286,9 @@ class TestRepositoryInitializationV2:
         assert response.status_code == 200, response.json()
         repo_data = response.json().get("repository", response.json())
         assert repo_data["borg_version"] == 2
-        assert test_db.get(Repository, repo_data["id"]).encryption == "none"
+        assert (
+            test_db.get(Repository, repo_data["id"]).encryption == BORG2_TEST_ENCRYPTION
+        )
 
         info_response = test_client.get(
             f"/api/v2/repositories/{repo_data['id']}/info",
@@ -325,20 +323,7 @@ class TestRepositoryInitializationV2:
             "borg2 integration import\n", encoding="utf-8"
         )
 
-        create_result = subprocess.run(
-            [
-                borg2_binary,
-                "-r",
-                str(repo_path),
-                "repo-create",
-                "--encryption",
-                "none-sha256",
-            ],
-            capture_output=True,
-            text=True,
-            env=make_borg_test_env(str(tmp_path)),
-        )
-        assert create_result.returncode == 0, create_result.stderr
+        init_borg_repo(borg2_binary, repo_path, env=make_borg_test_env(str(tmp_path)))
 
         response = test_client.post(
             "/api/repositories/import",
@@ -346,7 +331,8 @@ class TestRepositoryInitializationV2:
                 "name": "Borg2 Imported Repo",
                 "path": str(repo_path),
                 "borg_version": 2,
-                "encryption": "none",
+                "encryption": BORG2_TEST_ENCRYPTION,
+                "passphrase": BORG2_TEST_PASSPHRASE,
                 "compression": "lz4",
                 "source_directories": [str(source_path)],
             },
@@ -955,8 +941,9 @@ class TestRepositoryMaintenanceOperations:
 class TestRepositoryValidation:
     """Test repository validation and error handling"""
 
+    @pytest.mark.skipif(os.geteuid() == 0, reason="root ignores directory permissions")
     def test_create_repository_invalid_path(
-        self, test_client: TestClient, admin_headers
+        self, test_client: TestClient, admin_headers, tmp_path
     ):
         """
         Test repository creation with invalid path
@@ -964,11 +951,41 @@ class TestRepositoryValidation:
         WHY: Verifies validation catches bad paths
         PREVENTS: Repositories created in inaccessible locations
         """
+        forbidden = tmp_path / "forbidden"
+        forbidden.mkdir(mode=0o500)
+        try:
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Invalid Path Repo",
+                    "path": str(forbidden / "path"),
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "repository_type": "local",
+                    "source_directories": ["/tmp"],
+                },
+                headers=admin_headers,
+            )
+        finally:
+            forbidden.chmod(0o700)
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.permissionDeniedCreateDirectory"
+        )
+
+    def test_create_repository_path_below_file(
+        self, test_client: TestClient, admin_headers, tmp_path
+    ):
+        """An OSError other than PermissionError is the caller's path, not a 500."""
+        blocker = tmp_path / "blocker"
+        blocker.write_text("")
         response = test_client.post(
             "/api/repositories/",
             json={
-                "name": "Invalid Path Repo",
-                "path": "/root/forbidden/path",  # Likely not accessible
+                "name": "Path Below File Repo",
+                "path": str(blocker / "repo"),
                 "encryption": "none",
                 "compression": "lz4",
                 "repository_type": "local",
@@ -978,6 +995,10 @@ class TestRepositoryValidation:
         )
 
         assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["key"] == "backend.errors.repo.failedToCreateDirectory"
+        assert detail["params"]["path"] == str(blocker / "repo")
+        assert detail["params"]["reason"]
 
     def test_create_repository_duplicate_path(
         self, test_client: TestClient, admin_headers, db_borg_repo

@@ -1,10 +1,12 @@
 # Borg output fixtures
 
-Real `borg`/`borg2` output, captured inside the `borg-web-ui-dev` container
-with the `borg-live-debug` skill on 2026-09-04.
+Real `borg`/`borg2` output. The Borg 1 files were captured inside the
+`borg-web-ui-dev` container with the `borg-live-debug` skill on 2026-09-04,
+the Borg 2 files with the release binary on 2026-10-01 under `TZ=UTC` (the
+owner fields of `borg2_list.jsonl` set to the container's `root`/`borg`).
 
 - `borg --version`: `borg 1.4.5`
-- `borg2 --version`: `borg 2.0.0b21`
+- `borg2 --version`: `borg2 2.0.0b25`
 
 ## Recipe
 
@@ -43,7 +45,7 @@ borg create repo1::second src
 borg diff --json-lines repo1::first second > borg1_diff.jsonl
 
 # reset src to the first state, then repeat for Borg 2 with:
-# borg2 -r repo2 repo-create -e repokey-aes-ocb
+# borg2 -r repo2 repo-create -e aes256-ocb --key-location repokey
 # borg2 -r repo2 create first src
 # borg2 -r repo2 list --json-lines first > borg2_list.jsonl
 # ...same mutations...

@@ -17,7 +17,12 @@ from tests.integration.helpers import (
     parse_archives_payload,
     wait_for_job_terminal_status,
 )
-from tests.utils.borg import make_borg_test_env
+from tests.utils.borg import (
+    BORG2_TEST_ENCRYPTION,
+    BORG2_TEST_PASSPHRASE,
+    init_borg_repo,
+    make_borg_test_env,
+)
 from tests.utils.jobs import wait_for_payload_status
 
 
@@ -266,26 +271,14 @@ def _create_borg2_registered_repo(test_db, tmp_path):
     )
 
     env = make_borg_test_env(str(tmp_path))
-    init_result = subprocess.run(
-        [
-            borg2_binary,
-            "-r",
-            str(repo_path),
-            "repo-create",
-            "--encryption",
-            "none-sha256",
-        ],
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-    assert init_result.returncode == 0, init_result.stderr
+    init_borg_repo(borg2_binary, repo_path, env=env)
 
     repo = Repository(
         name="Borg2 Backup Integration Repo",
         path=str(repo_path),
         borg_version=2,
-        encryption="none",
+        encryption=BORG2_TEST_ENCRYPTION,
+        passphrase=BORG2_TEST_PASSPHRASE,
         compression="lz4",
         repository_type="local",
         source_directories=json.dumps([str(source_path)]),
