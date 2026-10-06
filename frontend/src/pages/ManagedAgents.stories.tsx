@@ -644,6 +644,17 @@ export const AgentReinstallDialogOpen: Story = {
   ),
 }
 
+export const AgentReinstallDialogMovedToThisServer: Story = {
+  name: 'Reinstall dialog for an endpoint moved to this server',
+  // The option is off by default, so the snapshot ticks it to show the
+  // command with --server. The dialog renders in a portal outside the canvas.
+  play: async () => {
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+    document.querySelector<HTMLInputElement>('[role="dialog"] input[type="checkbox"]')?.click()
+  },
+  render: AgentReinstallDialogOpen.render,
+}
+
 export const AgentReinstallDialogMacos: Story = {
   render: () => (
     <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>

@@ -363,6 +363,8 @@
         "runAsAgentUser": "Führen Sie ihn als der Benutzer aus, unter dem der Agent läuft, ohne sudo.",
         "borgInstallation": "Borg-Installation",
         "borgSelectionHint": "Eine Borg-Auswahl aktualisiert diese Binaries auf dem Agenten auf die Versionen dieses Servers. Lassen Sie die Auswahl auf Überspringen, sofern kein Borg-Upgrade beabsichtigt ist.",
+        "movedToThisServer": "Dieser Endpunkt wurde auf diesen Server umgezogen",
+        "movedToThisServerHint": "Ergänzt --server, damit die Neuinstallation diese Adresse für Remote-Upgrades hinterlegt. Aktivieren Sie dies, nachdem Server-URL ändern den Endpunkt hierher umgezogen hat. Lassen Sie es aus, wenn Agenten diesen Server über eine andere Adresse erreichen, denn mit dieser Adresse wären ihre Remote-Upgrades abgeschaltet.",
         "borgOptions": {
           "borg1": {
             "label": "Borg 1.x",
