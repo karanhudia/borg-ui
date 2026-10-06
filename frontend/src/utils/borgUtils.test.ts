@@ -340,3 +340,30 @@ describe('generateBorgInitCommand', () => {
     )
   })
 })
+
+describe('command quoting', () => {
+  it('quotes the repository path, sources and excludes that need it', () => {
+    const base = {
+      repositoryPath: "/mnt/my repo/it's",
+      excludePatterns: ['/tmp/my cache', '*.o'],
+      sourceDirs: ['/data/my files', "/o'brien"],
+      archiveName: 'a-{now}',
+    }
+    const quoted = ["--exclude '/tmp/my cache' --exclude '*.o'", "'/data/my files' '/o'\\''brien'"]
+    const v1 = generateBorgCreateCommand(base)
+    expect(v1).toContain("'/mnt/my repo/it'\\''s'::a-{now}")
+    quoted.forEach((q) => expect(v1).toContain(q))
+    const v2 = generateBorgCreateCommand({ ...base, borgVersion: 2 })
+    expect(v2).toContain("-r '/mnt/my repo/it'\\''s' create")
+    quoted.forEach((q) => expect(v2).toContain(q))
+  })
+
+  it('quotes the repository path in init commands', () => {
+    expect(generateBorgInitCommand({ repositoryPath: '/mnt/my repo' })).toBe(
+      "borg init --encryption repokey '/mnt/my repo'"
+    )
+    expect(generateBorgInitCommand({ repositoryPath: '/mnt/my repo', borgVersion: 2 })).toContain(
+      "-r '/mnt/my repo' repo-create"
+    )
+  })
+})

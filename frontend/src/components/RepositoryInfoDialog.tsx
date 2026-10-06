@@ -126,7 +126,7 @@ function buildRecoveryCommands(
       command:
         envPrefix +
         generateBorgInitCommand({
-          repositoryPath: shellQuote(repository.path),
+          repositoryPath: repository.path,
           borgVersion,
           encryption,
           remotePathFlag,
