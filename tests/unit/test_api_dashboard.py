@@ -24,6 +24,7 @@ from app.database.models import (
     Operation,
     BackupPlan,
     BackupPlanRepository,
+    BackupPlanRun,
     Repository,
     ScheduledJob,
     SSHConnection,
@@ -1582,6 +1583,85 @@ class TestDashboardOverviewAggregates:
         }
         assert sum(total for _, total, _ in backups) == 3
         assert sum(failed for _, _, failed in backups) == 2
+
+    def test_unresolved_dispatch_failures_join_recent_failures(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        now = datetime.now(timezone.utc)
+        other = _repository(test_db, "Other")
+        settled = BackupPlan(
+            name="Settled plan",
+            enabled=True,
+            source_directories='["/srv/settled"]',
+        )
+        open_plan = BackupPlan(
+            name="Open plan",
+            enabled=True,
+            source_directories='["/srv/open"]',
+        )
+        test_db.add_all([settled, open_plan])
+        test_db.commit()
+
+        def failed_dispatch(plan, hours_ago):
+            started = now - timedelta(hours=hours_ago)
+            test_db.add(
+                BackupPlanRun(
+                    backup_plan_id=plan.id,
+                    trigger="schedule",
+                    status="failed",
+                    error_message="Backup plan has no enabled repositories",
+                    started_at=started,
+                    completed_at=started,
+                    created_at=started,
+                )
+            )
+
+        failed_dispatch(settled, 5)
+        test_db.add(
+            BackupPlanRun(
+                backup_plan_id=settled.id,
+                trigger="schedule",
+                status="completed",
+                started_at=now - timedelta(hours=4),
+                completed_at=now - timedelta(hours=4),
+                created_at=now - timedelta(hours=4),
+            )
+        )
+        failed_dispatch(open_plan, 3)
+        failed_dispatch(open_plan, 2)
+        seed_job_operation(
+            test_db,
+            "backup",
+            repository_id=other.id,
+            repository_path=other.path,
+            status="failed",
+            started_at=now - timedelta(hours=1),
+            completed_at=now - timedelta(minutes=50),
+            error_message="backup failed",
+        )
+        test_db.commit()
+
+        data = _overview(test_client, admin_headers)
+
+        assert [
+            (item["type"], item["repository"], item["error"], item["message"])
+            for item in data["current_failures"]
+        ] == [
+            ("backup", "Other", "backup failed", "Backup failed"),
+            (
+                "backup_plan_run",
+                "Open plan",
+                "Backup plan has no enabled repositories",
+                "Backup plan failed",
+            ),
+            (
+                "backup_plan_run",
+                "Open plan",
+                "Backup plan has no enabled repositories",
+                "Backup plan failed",
+            ),
+        ]
+        assert data["activity_feed"] == data["current_failures"]
 
     def test_a_run_dated_after_now_is_in_neither_panel(
         self, test_client: TestClient, admin_headers, test_db

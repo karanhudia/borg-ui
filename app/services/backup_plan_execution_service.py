@@ -712,12 +712,28 @@ class BackupPlanExecutionService:
                 plan.next_run = self._next_plan_run(plan, now)
                 db.commit()
                 continue
+            prior_run_id = self._latest_run_id(db, plan.id)
             try:
                 self.start_run(db, plan, trigger="schedule")
                 plan.last_run = now
                 plan.next_run = self._next_plan_run(plan, now)
                 db.commit()
                 dispatched += 1
+            except ValueError as exc:
+                logger.error(
+                    "Failed to dispatch scheduled backup plan",
+                    backup_plan_id=plan.id,
+                    error=str(exc),
+                )
+                db.rollback()
+                # start_run raises this before inserting a run. A ValueError
+                # after a committed run leaves next_run due, so a blip retries
+                # on the next minute instead of consuming the slot.
+                if self._latest_run_id(db, plan.id) != prior_run_id:
+                    continue
+                self._record_dispatch_refusal(db, plan, now, str(exc))
+                db.commit()
+                await self._notify_dispatch_refusal(db, plan, str(exc))
             except Exception as exc:
                 logger.error(
                     "Failed to dispatch scheduled backup plan",
@@ -726,6 +742,72 @@ class BackupPlanExecutionService:
                 )
                 db.rollback()
         return dispatched
+
+    @staticmethod
+    def _latest_run_id(db: Session, plan_id: int) -> Optional[int]:
+        return (
+            db.query(BackupPlanRun.id)
+            .filter(BackupPlanRun.backup_plan_id == plan_id)
+            .order_by(BackupPlanRun.id.desc())
+            .limit(1)
+            .scalar()
+        )
+
+    def _record_dispatch_refusal(
+        self, db: Session, plan: BackupPlan, now: datetime, error_message: str
+    ) -> None:
+        """Store the refusal start_run raised before any run existed.
+
+        Activity already lists a failed plan run with no child rows. Advance
+        the schedule in the same commit so the minute loop does not insert
+        another row until the next fire.
+        """
+        db.add(
+            BackupPlanRun(
+                backup_plan_id=plan.id,
+                trigger="schedule",
+                status="failed",
+                error_message=error_message,
+                started_at=now,
+                completed_at=now,
+                created_at=now,
+            )
+        )
+        plan.last_run = now
+        plan.next_run = self._next_plan_run(plan, now)
+
+    async def _notify_dispatch_refusal(
+        self, db: Session, plan: BackupPlan, error_message: str
+    ) -> None:
+        """Tell each linked repository this plan failed before a run existed.
+
+        Disabled links are included: they are the channels a backup of this
+        plan would have used. A plan with no repository still notifies once,
+        under the plan name, so monitor-all settings fire. A notification
+        error rolls back on its own and leaves the failed run committed.
+        """
+        repositories = [
+            link.repository.path
+            for link in plan.repositories
+            if link.repository is not None
+        ]
+        if not repositories:
+            repositories = [plan.name]
+        for repository in repositories:
+            try:
+                await notification_service.send_backup_failure(
+                    db,
+                    repository,
+                    error_message,
+                    job_name=plan.name,
+                )
+            except Exception as exc:
+                db.rollback()
+                logger.warning(
+                    "Failed to send backup failure notification",
+                    backup_plan_id=plan.id,
+                    error=str(exc),
+                )
 
     @staticmethod
     def _record_availability_skip(

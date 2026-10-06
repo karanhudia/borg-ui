@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import case, exists, func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 from pydantic import BaseModel
 import psutil
 import structlog
@@ -16,6 +16,7 @@ from app.database.models import (
     User,
     BackupPlan,
     BackupPlanRepository,
+    BackupPlanRun,
     Operation,
     Repository,
     ScheduledJob,
@@ -1011,6 +1012,54 @@ def current_failures(
     return entries
 
 
+def unresolved_dispatch_failures(db: Session, since: datetime, until: datetime) -> list:
+    """Failed plan runs in the window that never produced a failed operation.
+
+    A scheduled plan refused before its backups exist has no Operation for
+    `current_failures` to see. A later completed run of the same plan settles
+    it, the same way `RESOLVING_STATUSES` settles an operation. A newer failed
+    dispatch does not.
+    """
+    later_run = aliased(BackupPlanRun)
+    has_failed_operation = exists().where(
+        Operation.backup_plan_run_id == BackupPlanRun.id,
+        Operation.status == "failed",
+    )
+    later_success = exists().where(
+        later_run.backup_plan_id == BackupPlanRun.backup_plan_id,
+        later_run.status.in_(tuple(RESOLVING_STATUSES)),
+        later_run.started_at.isnot(None),
+        later_run.started_at >= BackupPlanRun.started_at,
+        later_run.started_at >= since,
+        later_run.started_at <= until,
+    )
+    runs = (
+        db.query(BackupPlanRun, BackupPlan.name)
+        .join(BackupPlan, BackupPlan.id == BackupPlanRun.backup_plan_id)
+        .filter(
+            BackupPlanRun.status == "failed",
+            BackupPlanRun.started_at.isnot(None),
+            BackupPlanRun.started_at >= since,
+            BackupPlanRun.started_at <= until,
+            ~has_failed_operation,
+            ~later_success,
+        )
+        .all()
+    )
+    return [
+        {
+            "id": run.id,
+            "type": "backup_plan_run",
+            "status": "failed",
+            "repository": plan_name,
+            "timestamp": serialize_datetime(run.started_at),
+            "message": "Backup plan failed",
+            "error": run.error_message,
+        }
+        for run, plan_name in runs
+    ]
+
+
 @router.get("/overview")
 def get_dashboard_overview(
     current_user: User = Depends(get_current_user),
@@ -1360,6 +1409,11 @@ def get_dashboard_overview(
             repo_id_map,
             repo_name_map,
             repo_path_map,
+        )
+        failures.extend(unresolved_dispatch_failures(db, fourteen_days_ago, now))
+        failures.sort(
+            key=lambda entry: (entry["timestamp"] or "", entry["id"]),
+            reverse=True,
         )
 
         # Count SSH connections (active = status is "connected")
