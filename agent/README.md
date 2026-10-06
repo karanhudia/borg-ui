@@ -399,6 +399,10 @@ The first implementation supports:
   URL) takes the job's upload limit as rclone's bandwidth limit
   (`RCLONE_BWLIMIT` in the create command's environment); other Borg 2
   backups still have none
+- from 0.1.19 `set-server` moves the upgrade record along with the config
+  when it may write the record (root on Linux, the agent's user on macOS),
+  so a moved endpoint keeps remote upgrade without a reinstall; without
+  those rights it still names the reinstall
 - cancellation through heartbeat; from 0.1.7 (`jobs.cancel`) a running
   backup, check, prune, compact, restore or archive delete stops as well,
   even while Borg prints nothing
