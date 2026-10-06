@@ -271,9 +271,6 @@
     }
   },
   "managedAgents": {
-    "planGate": {
-      "message": "Managed Agents need Pro or Enterprise. Upgrade to enroll remote machines and run agent-backed jobs."
-    },
     "agent": "Agent",
     "page": {
       "title": "Managed Agents",
@@ -1471,7 +1468,6 @@
     "runTooltipProFeatures": "This plan uses Pro-only features: {{features}}. Edit it or upgrade to Pro to run it.",
     "proFeatureLabels": {
       "multiRepository": "multiple repositories or parallel execution",
-      "managedAgent": "managed-agent backups",
       "database": "database backups",
       "container": "container backups"
     },
@@ -1611,7 +1607,6 @@
       "sshSourceDescription": "Remote machine",
       "managedAgent": "Managed agent",
       "managedAgentDescription": "Read paths from an enrolled managed agent",
-      "managedAgentRequiresPro": "Managed-agent sources require Pro.",
       "mixedSourceTypesRequiresPro": "Mixed source types require Pro. Multiple paths from the same source type are still available.",
       "agentRepoConstraintBanner": "This repository runs on {{agent}}. Backup sources must come from the same agent.",
       "agentRepoLockedLocal": "Borg UI server sources can't be pushed into an agent repository.",
@@ -4693,7 +4688,6 @@
       "executionTargetLocalDesc": "Use this server or existing SSH remote execution",
       "managedAgent": "Managed Agent",
       "managedAgentDesc": "Run Borg on an enrolled machine",
-      "managedAgentRequiresPro": "Managed-agent repositories require Pro.",
       "managedAgentSelectLabel": "Managed Agent",
       "noActiveManagedAgents": "No active managed agents are enrolled.",
       "managedAgentFilesystem": "Managed Agent Filesystem",
@@ -6658,8 +6652,7 @@
       "sshDesc": "A server, NAS or PC that this server can reach over SSH. Borg UI pulls the files from it.",
       "notSure": "Not sure? Pick \"Files on this server\" if the data lives where Borg UI runs. Pick \"another computer\" if it lives elsewhere and you can log in to it with a username and password.",
       "agent": "Another computer with the Borg UI agent",
-      "agentDesc": "Install a small agent on a laptop, desktop or server. It connects out to Borg UI, so it works behind a firewall, and backs up to its own disk.",
-      "agentPro": "Requires a Pro or Enterprise plan."
+      "agentDesc": "Install a small agent on a laptop, desktop or server. It connects out to Borg UI, so it works behind a firewall, and backs up to its own disk."
     },
     "folders": {
       "title": "Pick the folders to back up",

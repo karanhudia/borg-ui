@@ -483,25 +483,13 @@ describe('RepositoryWizard', () => {
       expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled()
     })
 
-    it('disables paid repository destinations when plan features are unavailable', async () => {
+    it('disables direct rclone when the plan cannot use rclone', async () => {
       const user = userEvent.setup()
       renderWizard('create', undefined, vi.fn(), vi.fn(), {
-        canUseManagedAgents: false,
         canUseRclone: false,
       })
 
       await waitForLocationStep()
-      const destinationSelect = screen.getByRole('combobox', {
-        name: /Where should backups be stored/i,
-      })
-      await user.click(destinationSelect)
-      const listbox = await screen.findByRole('listbox')
-      expect(within(listbox).getByRole('option', { name: /Managed Agent/i })).toHaveAttribute(
-        'aria-disabled',
-        'true'
-      )
-
-      await user.keyboard('{Escape}')
       await user.click(screen.getByRole('button', { name: /v2/i }))
       const directRcloneToggle = await screen.findByRole('checkbox', {
         name: /Use direct Borg 2 rclone repository/i,
