@@ -21,6 +21,7 @@ from app.core.borg_errors import (
 from app.database.models import AgentJob, AgentJobLog, AgentMachine, Repository
 from app.services.agent_job_dispatcher import dispatch_agent_cancel_if_connected
 from app.services.job_admission import (
+    ACTIVE_AGENT_STATUSES,
     BACKUP_AGENT_JOB_TYPE,
     OPERATION_BACKUP,
     ensure_repository_admission,
@@ -889,6 +890,12 @@ def queue_agent_backup_job(
     custom_flags: Optional[str] = None,
     upload_ratelimit_kib: Optional[int] = None,
 ) -> AgentJob:
+    # A backup run again while its job is live (a requeued job after a
+    # restart) waits on that job instead of starting a second `borg create`.
+    live_job = get_agent_job_for_backup(db, backup_job)
+    if live_job is not None and live_job.status in ACTIVE_AGENT_STATUSES:
+        return live_job
+
     source_paths = _agent_source_paths(
         source_directories=source_directories,
         source_locations=source_locations,
