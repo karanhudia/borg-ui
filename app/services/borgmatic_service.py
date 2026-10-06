@@ -16,6 +16,11 @@ import yaml
 from typing import List, Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
 
+# app.core.borg2 is imported where it is used: importing it probes the Borg 2
+# binary and logs the result, which would land in the export CLI's stdout.
+from app.core.borg_major import borg_major, is_borg2
+from app.utils.repository_paths import borg1_ssh_address_host, borg2_only_url_prefix
+from app.core.features import has_feature
 from app.database.models import Repository, ScheduledJob, ScheduledJobRepository
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
@@ -23,6 +28,29 @@ from app.utils.schedule_time import (
     calculate_next_cron_run,
     normalize_schedule_timezone,
 )
+
+
+# Borg 1 encryption modes Borg UI creates repositories with.
+BORG1_ENCRYPTION_MODES = {
+    "repokey",
+    "keyfile",
+    "repokey-blake2",
+    "keyfile-blake2",
+    "none",
+}
+# Borg 1 modes Borg 2 does not have (`authenticated` is in both).
+BORG1_ONLY_ENCRYPTION_MODES = BORG1_ENCRYPTION_MODES | {"authenticated-blake2"}
+# Borg 2's own `--encryption` names, which a borgmatic configuration for Borg 2
+# carries, by the key location (borgmatic's `key_location`, default repokey).
+BORG2_NATIVE_ENCRYPTION_MODES = {
+    ("aes256-ocb", "repokey"): "repokey-aes-ocb",
+    ("aes256-ocb", "keyfile"): "keyfile-aes-ocb",
+    ("chacha20-poly1305", "repokey"): "repokey-chacha20-poly1305",
+    ("chacha20-poly1305", "keyfile"): "keyfile-chacha20-poly1305",
+}
+# Borg UI stores either authenticated mode as `authenticated`, as it leaves
+# the id hash out of the encrypted modes' names.
+BORG2_NATIVE_AUTHENTICATED_MODES = {"authenticated-sha256", "authenticated-blake3"}
 
 
 @dataclass(frozen=True)
@@ -130,7 +158,7 @@ class BorgmaticExportService:
         # Repositories (top-level in new format)
         repo_path = self._build_repository_path(repository)
         if repo_path:
-            config["repositories"] = [repo_path]
+            config["repositories"] = [self._repository_entry(repository, repo_path)]
 
         # Exclude patterns (top-level in new format)
         if repository.exclude_patterns:
@@ -171,6 +199,12 @@ class BorgmaticExportService:
         # borg_ui_type: preserves observability-only mode (omit for 'full' which is the default)
         if repository.mode == "observe":
             config["borg_ui_type"] = "observability"
+        # borg_ui_borg_version: the Borg major (omitted for 1, the default)
+        # (also for Borg 1 where the path reads as a Borg 2 URL: an ssh host
+        # named s3, b2 or rclone)
+        borg_version = borg_major(repository)
+        if borg_version == 2 or borg2_only_url_prefix(repo_path):
+            config["borg_ui_borg_version"] = borg_version
 
         return config
 
@@ -323,6 +357,22 @@ class BorgmaticExportService:
 
         return hooks if hooks else None
 
+    def _repository_entry(self, repository: Repository, repo_path: str) -> Any:
+        """A Borg 2 repository is written in the object form with Borg 2's
+        own encryption name and key location, as a borgmatic configuration
+        for Borg 2 states them; everything else as its path."""
+        if not is_borg2(repository):
+            return repo_path
+        if repository.encryption == "authenticated":
+            return {"path": repo_path, "encryption": "authenticated-sha256"}
+        for (encryption, key_location), mode in BORG2_NATIVE_ENCRYPTION_MODES.items():
+            if mode == repository.encryption:
+                entry = {"path": repo_path, "encryption": encryption}
+                if key_location != "repokey":
+                    entry["key_location"] = key_location
+                return entry
+        return repo_path
+
     def _build_repository_path(self, repository: Repository) -> str:
         """Build borgmatic-style repository path."""
         # For SSH repositories, path is already stored as full SSH URL (ssh://user@host:port/path)
@@ -470,6 +520,7 @@ class BorgmaticImportService:
 
     def __init__(self, db: Session):
         self.db = db
+        self._borg2_allowed: Optional[bool] = None
 
     def import_from_yaml(
         self,
@@ -495,6 +546,10 @@ class BorgmaticImportService:
             data = yaml.safe_load(yaml_content)
         except yaml.YAMLError as e:
             return {"success": False, "error": f"Invalid YAML: {str(e)}"}
+
+        # Asked before any row changes: the plan lookup may commit, which would
+        # save a dry run's replacements.
+        self._borg2_plan_allowed()
 
         # Check if this is a Borg UI export (old format with borg_ui_export wrapper)
         is_old_borg_ui_export = "borg_ui_export" in data and "configurations" in data
@@ -560,15 +615,10 @@ class BorgmaticImportService:
         if has_toplevel_repos:
             # NEW FORMAT (v1.8.0+): flat structure
             repos_raw = data.get("repositories", [])
-            # Handle both simple list format and object format
-            repo_paths = []
-            for repo in repos_raw:
-                if isinstance(repo, dict):
-                    # Object format: {'path': '...', 'label': '...'}
-                    repo_paths.append(repo.get("path", ""))
-                else:
-                    # Simple string format
-                    repo_paths.append(repo)
+            # Both the simple list format and the object format
+            # ({'path': '...', 'label': '...', 'encryption': '...'}); an
+            # object is passed on whole for its Borg options.
+            repo_paths = list(repos_raw)
             source_directories = data.get("source_directories", [])
             exclude_patterns = data.get("exclude_patterns", [])
         else:
@@ -585,6 +635,8 @@ class BorgmaticImportService:
         # (ambiguous when multiple repositories share one config file)
         borg_ui_name = data.get("borg_ui_name") if len(repo_paths) == 1 else None
         borg_ui_type = data.get("borg_ui_type") if len(repo_paths) == 1 else None
+        # The major is no name: it holds for every repository of the file.
+        borg_ui_borg_version = data.get("borg_ui_borg_version")
 
         # Import each repository
         for repo_path in repo_paths:
@@ -703,6 +755,8 @@ class BorgmaticImportService:
                     single_config["borg_ui_name"] = borg_ui_name
                 if borg_ui_type:
                     single_config["borg_ui_type"] = borg_ui_type
+                if borg_ui_borg_version is not None:
+                    single_config["borg_ui_borg_version"] = borg_ui_borg_version
 
                 result = self._import_single_repository(
                     single_config, merge_strategy, dry_run
@@ -713,8 +767,13 @@ class BorgmaticImportService:
                 summary["schedules_updated"] += result.get("schedule_updated", 0)
                 summary["warnings"].extend(result.get("warnings", []))
             except Exception as e:
+                label = (
+                    repo_path.get("path", "")
+                    if isinstance(repo_path, dict)
+                    else repo_path
+                )
                 summary["errors"].append(
-                    f"Failed to import repository {repo_path}: {str(e)}"
+                    f"Failed to import repository {label}: {str(e)}"
                 )
 
         if (
@@ -748,7 +807,16 @@ class BorgmaticImportService:
         if not repo_paths:
             raise ValueError("No repository path found in configuration")
 
-        repo_path_str = repo_paths[0]
+        repo_entry = repo_paths[0]
+        repo_options = repo_entry if isinstance(repo_entry, dict) else {}
+        repo_path_str = (
+            repo_entry.get("path") if isinstance(repo_entry, dict) else repo_entry
+        )
+        if not isinstance(repo_path_str, str) or not repo_path_str.strip():
+            raise ValueError("Repository entry has no path")
+        stated_borg_version = self._repository_borg_version(
+            repo_path_str, repo_options, config.get("borg_ui_borg_version")
+        )
 
         # Build metadata: borg_ui_name overrides the name derived from the path
         path_metadata = {}
@@ -778,6 +846,45 @@ class BorgmaticImportService:
                 repository = existing_repo
                 result["repository_updated"] = 1
 
+        replaced = existing_repo if result["repository_updated"] else None
+        if replaced is not None:
+            # A repository does not change its Borg major: its format, its
+            # flags and its plans' flags belong to the one it was made with.
+            borg_version = borg_major(replaced)
+            if stated_borg_version not in (None, borg_version):
+                raise ValueError(
+                    f"it is recorded as a Borg {borg_version} repository and "
+                    f"the configuration describes Borg {stated_borg_version}; "
+                    "delete it and import it again to change its Borg version"
+                )
+        else:
+            borg_version = stated_borg_version or 1
+            if borg_version == 2 and not self._borg2_plan_allowed():
+                raise ValueError(
+                    "Borg 2 repositories are not included in the current plan"
+                )
+        if replaced is not None and not repo_options.get("encryption"):
+            encryption = self._with_key_location(
+                replaced.encryption, repo_options.get("key_location")
+            )
+        else:
+            encryption = self._repository_encryption(
+                repo_options.get("encryption"),
+                repo_options.get("key_location"),
+                borg_version,
+            )
+        id_hash = (
+            "blake3"
+            if repo_options.get("encryption") == "authenticated-blake3"
+            else repo_options.get("id_hash")
+        )
+        if id_hash not in (None, "sha256"):
+            # Borg UI's mode names leave the id hash out; storing one would
+            # turn the repository into a sha256 one on export and re-create.
+            raise ValueError(
+                f"Borg UI has no encryption mode for the {id_hash} id hash"
+            )
+
         if not existing_repo or merge_strategy != "replace":
             # Create new repository
             repository = Repository()
@@ -786,7 +893,8 @@ class BorgmaticImportService:
         # Set repository fields
         repository.name = repo_name
         repository.path = repo_path
-        repository.encryption = "repokey"  # Default encryption
+        repository.encryption = encryption
+        repository.borg_version = borg_version
         repository.compression = storage.get("compression", "lz4")
         # borg_ui_type: 'observability' → observe mode; anything else (or absent) → full
         repository.mode = "observe" if borg_ui_type == "observability" else "full"
@@ -936,6 +1044,120 @@ class BorgmaticImportService:
 
         return result
 
+    @staticmethod
+    def _with_key_location(mode: str, key_location: Optional[str]) -> str:
+        """A stored Borg 2 mode with its key moved to `key_location`."""
+        if not key_location:
+            return mode
+        if key_location not in ("repokey", "keyfile"):
+            raise ValueError(f"unknown key_location {key_location!r}")
+        location, separator, cipher = mode.partition("-")
+        if separator and location in ("repokey", "keyfile"):
+            return f"{key_location}-{cipher}"
+        return mode
+
+    def _borg2_plan_allowed(self) -> bool:
+        if self._borg2_allowed is None:
+            self._borg2_allowed = has_feature(self.db, "borg_v2")
+        return self._borg2_allowed
+
+    def _repository_borg_version(
+        self,
+        repo_path: str,
+        repo_options: Dict[str, Any],
+        declared: Any,
+    ) -> Optional[int]:
+        """The Borg major a repository entry is for, from what the
+        configuration says about it; None when it says nothing.
+
+        Raises ValueError when the entry contradicts itself or names a URL no
+        Borg can use.
+        """
+        from app.core.borg2 import (
+            BORG2_REMOVED_ENCRYPTION_MODES,
+            V2_ONLY_ENCRYPTION_MODES,
+            borg2_repository_url_refusal,
+        )
+
+        refusal = borg2_repository_url_refusal(repo_path)
+        if refusal:
+            raise ValueError(refusal)
+
+        hints: List[Tuple[int, str]] = []
+        prefix = borg2_only_url_prefix(repo_path)
+        if prefix:
+            hints.append((2, f"the {prefix} URL"))
+        elif self._is_scp_style(repo_path):
+            hints.append((1, "the [user@]host:path address"))
+        if declared is not None:
+            if declared not in (1, 2):
+                raise ValueError(
+                    f"borg_ui_borg_version must be 1 or 2, not {declared!r}"
+                )
+            hints.append((declared, f"borg_ui_borg_version {declared}"))
+        encryption = repo_options.get("encryption")
+        if encryption in V2_ONLY_ENCRYPTION_MODES or self._is_borg2_native(encryption):
+            hints.append((2, f"encryption {encryption}"))
+        elif encryption in BORG1_ONLY_ENCRYPTION_MODES:
+            hints.append((1, f"encryption {encryption}"))
+        for option in ("key_location", "id_hash"):
+            if repo_options.get(option):
+                hints.append((2, f"{option} (Borg 2 only)"))
+
+        majors = {major for major, _ in hints}
+        if len(majors) > 1:
+            borg2 = ", ".join(reason for major, reason in hints if major == 2)
+            borg1 = [reason for major, reason in hints if major == 1]
+            if borg1 == [f"encryption {encryption}"] and (
+                encryption in BORG2_REMOVED_ENCRYPTION_MODES
+            ):
+                raise ValueError(BORG2_REMOVED_ENCRYPTION_MODES[encryption])
+            raise ValueError(
+                f"{borg2} needs Borg 2, but {', '.join(borg1)} needs Borg 1"
+            )
+        return majors.pop() if majors else None
+
+    @staticmethod
+    def _is_borg2_native(encryption: Optional[str]) -> bool:
+        return encryption in BORG2_NATIVE_AUTHENTICATED_MODES or any(
+            encryption == name for name, _ in BORG2_NATIVE_ENCRYPTION_MODES
+        )
+
+    def _repository_encryption(
+        self,
+        encryption: Optional[str],
+        key_location: Optional[str],
+        borg_version: int,
+    ) -> str:
+        """The encryption mode to store, by the name Borg UI uses for it."""
+        from app.core.borg2 import (
+            BORG2_ENCRYPTION_MODES,
+            BORG2_REMOVED_ENCRYPTION_MODES,
+        )
+
+        if borg_version == 1:
+            # The default where the configuration names none Borg UI offers.
+            return encryption if encryption in BORG1_ENCRYPTION_MODES else "repokey"
+        if not encryption:
+            return "keyfile-aes-ocb" if key_location == "keyfile" else "repokey-aes-ocb"
+        if encryption in BORG2_ENCRYPTION_MODES:
+            return encryption
+        if encryption in BORG2_NATIVE_AUTHENTICATED_MODES:
+            return "authenticated"
+        mode = BORG2_NATIVE_ENCRYPTION_MODES.get(
+            (encryption, key_location or "repokey")
+        )
+        if mode:
+            return mode
+        if encryption in BORG2_REMOVED_ENCRYPTION_MODES:
+            raise ValueError(BORG2_REMOVED_ENCRYPTION_MODES[encryption])
+        raise ValueError(f"unknown Borg 2 encryption mode {encryption!r}")
+
+    @staticmethod
+    def _is_scp_style(repo_path: str) -> bool:
+        """Borg 1's short ssh form `[user@]host:path`."""
+        return borg1_ssh_address_host(repo_path) is not None
+
     def _parse_repository_path(
         self, repo_path: str, metadata: Dict[str, Any]
     ) -> Tuple[str, str, str, Optional[Dict[str, Any]]]:
@@ -973,10 +1195,10 @@ class BorgmaticImportService:
 
             return name, repo_path, "ssh", ssh_info
 
-        elif "@" in repo_path and ":" in repo_path:
+        elif self._is_scp_style(repo_path):
             # Short SSH format: user@host:path
             user_host, path = repo_path.split(":", 1)
-            username, host = user_host.split("@", 1)
+            username, _, host = user_host.rpartition("@")
 
             # Prefer name from metadata, fallback to extracting from path
             name = metadata.get("name") or path.rstrip("/").split("/")[-1].replace(

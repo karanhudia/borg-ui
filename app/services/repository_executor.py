@@ -14,7 +14,10 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import SingletonThreadPool, StaticPool
 
-from app.core.borg_major import borg_major
+from app.core.borg_major import borg_major, is_borg2
+from app.core.agent_versions import agent_borg2_version, agent_borg_version_for_major
+from app.core.borg2 import borg2_below_minimum, borg2_minimum_version
+from app.core.borg_router import BorgRouter
 from app.core.borg_errors import (
     LOCK_CONTENTION_DETAIL_KEY,
     is_lock_contention_exit_code,
@@ -22,6 +25,7 @@ from app.core.borg_errors import (
 from app.database.models import AgentJob, AgentJobLog, AgentMachine, Repository
 from app.services.agent_job_dispatcher import dispatch_agent_cancel_if_connected
 from app.services.job_admission import (
+    ACTIVE_AGENT_STATUSES,
     BACKUP_AGENT_JOB_TYPE,
     OPERATION_BACKUP,
     ensure_repository_admission,
@@ -64,6 +68,11 @@ REPOSITORY_OPERATION_CAPABILITIES = {
     "repository.storage_usage",
     "repository.diff",
 }
+# Repository jobs that run no Borg on the endpoint (an rclone copy, a `du`),
+# so the endpoint's Borg 2 is no condition for them.
+BORGLESS_REPOSITORY_JOB_KINDS = frozenset(
+    {"repository.rclone_sync", "repository.disk_usage"}
+)
 # Kinds whose output the server parses. The agent reports the raw JSON as
 # `stdout` and its own parse of it as `data` (its MACHINE_PARSED_JOB_KINDS;
 # the two packages share no imports, so the set is stated twice). The reader
@@ -261,11 +270,12 @@ def build_agent_backup_payload(
             parse_borg_flags(
                 custom_flags if custom_flags is not None else repository.custom_flags,
                 "create",
+                borg_major(repository),
                 local_paths=False,
             )
         ),
     }
-    effective_upload_ratelimit_kib = (
+    effective_upload_ratelimit_kib = BorgRouter(repository).upload_ratelimit(
         upload_ratelimit_kib
         if upload_ratelimit_kib is not None
         else getattr(repository, "upload_ratelimit_kib", None)
@@ -330,6 +340,56 @@ def build_agent_repository_operation_payload(
     }
 
 
+def agent_borg2_reinstall_flags(agent: AgentMachine) -> str:
+    """The installer flags that put this server's Borg 2 on the endpoint,
+    keeping a Borg 1 it reports."""
+    borg_version = (
+        "both"
+        if agent_borg_version_for_major(agent.borg_versions, 1) is not None
+        else "2"
+    )
+    return f"--reinstall --borg-version {borg_version} --borg-source server"
+
+
+def require_agent_borg2(agent: AgentMachine, binary: Optional[str] = None) -> None:
+    """Refuse Borg 2 work on an endpoint whose Borg 2 cannot do it (#1306).
+
+    The endpoint must run at least the Borg 2 this server ships: Borg 2
+    betas change the repository format and the command line at short
+    intervals, so an older one fails on the endpoint with an exit code that
+    does not name the problem, or misreads a repository. No `borg2` at all
+    is "No such file or directory" there. The agent reports its binaries
+    when it registers and at every session start, so the answer is known
+    here, before anything is queued; a Borg 2 replaced by hand counts from
+    the agent's next start. `binary` is the one a job names instead of
+    `borg2` (the raw backup route); the agent reports only `borg` and
+    `borg2`, so a named binary it did not report is not checked: an unknown
+    version is not evidence of an old one.
+    """
+    if binary == "borg2":
+        binary = None  # the default, named
+    version = agent_borg2_version(agent.borg_versions, binary)
+    if version is None and binary:
+        return
+    if version is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.repo.agentBorg2Unavailable"},
+        )
+    if borg2_below_minimum(version):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "key": "backend.errors.repo.agentBorg2TooOld",
+                "params": {
+                    "version": version,
+                    "minimum": borg2_minimum_version(),
+                    "flags": agent_borg2_reinstall_flags(agent),
+                },
+            },
+        )
+
+
 def validate_agent_backup_repository(
     db: Session, repository: Repository, *, source_paths: Optional[list[str]] = None
 ) -> AgentMachine:
@@ -363,6 +423,8 @@ def validate_agent_backup_repository(
             status_code=status.HTTP_409_CONFLICT,
             detail={"key": "backend.errors.agents.agentNotQueueable"},
         )
+    if is_borg2(repository):
+        require_agent_borg2(agent)
     using_repository_sources = source_paths is None
     if using_repository_sources:
         source_paths = decode_json_list(repository.source_directories)
@@ -426,6 +488,8 @@ def validate_agent_repository_operation(
                 "params": {"capability": job_kind},
             },
         )
+    if (borg_major(repository)) == 2 and job_kind not in BORGLESS_REPOSITORY_JOB_KINDS:
+        require_agent_borg2(agent)
     return agent
 
 
@@ -890,6 +954,12 @@ def queue_agent_backup_job(
     custom_flags: Optional[str] = None,
     upload_ratelimit_kib: Optional[int] = None,
 ) -> AgentJob:
+    # A backup run again while its job is live (a requeued job after a
+    # restart) waits on that job instead of starting a second `borg create`.
+    live_job = get_agent_job_for_backup(db, backup_job)
+    if live_job is not None and live_job.status in ACTIVE_AGENT_STATUSES:
+        return live_job
+
     source_paths = _agent_source_paths(
         source_directories=source_directories,
         source_locations=source_locations,

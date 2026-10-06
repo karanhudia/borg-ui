@@ -17,7 +17,7 @@ def test_borg2_venv_installs_all_backend_dependencies():
 
     # borgstore version is parameterized as a build ARG, consistent with the
     # borg1/borg2 pins, so CI can override it without editing the install line.
-    # blake3 is not a backend but Borg 2.0.0b23's id-hash dependency.
+    # blake3 is not a backend but Borg 2's id-hash dependency.
     assert '"borgstore[rclone,sftp,rest,s3,blake3]==${BORGSTORE_VERSION}"' in content
     assert re.search(r"^ARG BORGSTORE_VERSION=\S+", content, re.M)
 
@@ -26,7 +26,8 @@ def test_runtime_base_env_agrees_with_the_dockerfile_borgstore_version():
     """borgstore is single-sourced in runtime-base.env, like rclone, and the ARG
     default must state the same version or a local build (no build-arg) resolves
     a different one than CI. The version itself is not asserted: Borg 2 constrains
-    it (2.0.0b22 requires ~=0.5.5), so the pin moves with the Borg 2 pin."""
+    it (each Borg 2 beta requires its own borgstore range), so the pin moves
+    with the Borg 2 pin."""
     repo_root = Path(__file__).resolve().parents[2]
     dockerfile = (repo_root / "Dockerfile.runtime-base").read_text()
     env = _runtime_base_env(repo_root)

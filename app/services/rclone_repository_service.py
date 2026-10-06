@@ -9,11 +9,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.core.borg_router import BorgRouter
 from app.services.operations.enqueue import enqueue
 from app.services.operations.rclone_facade import (
     LEGACY_TO_TRIGGER,
@@ -285,8 +285,8 @@ class RcloneRepositoryService:
         if not source:
             raise ValueError("SSH repository path is required for cloud mirror")
         if source.startswith("ssh://"):
-            parsed = urlparse(source)
-            return parsed.path or "/"
+            # raises for a URL that names no directory to mount
+            return BorgRouter(repository).ssh_repository_directory()
         return source
 
     async def _mount_ssh_repository_source(

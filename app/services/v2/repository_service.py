@@ -2,7 +2,12 @@
 
 from typing import Any, Dict, Optional
 
-from app.core.borg2 import borg2, borg2_encryption_flags
+from app.core.borg2 import (
+    borg2,
+    borg2_encryption_flags,
+    borg2_remote_path_env,
+    borg2_removed_encryption_refusal,
+)
 from app.database.database import SessionLocal  # noqa: F401
 from app.utils.fs import calculate_path_size_bytes
 from app.utils.borg_env import effective_repository_remote_path, ssh_key_borg_env
@@ -18,6 +23,9 @@ class RepositoryV2Service:
         remote_path: Optional[str] = None,
         init_timeout: int = 300,
     ) -> Dict[str, Any]:
+        refusal = borg2_removed_encryption_refusal(encryption)
+        if refusal:
+            return refusal
         needs_custom_ssh_env = bool(ssh_key_id and path.startswith("ssh://"))
         with ssh_key_borg_env(
             path=path, passphrase=passphrase, ssh_key_id=ssh_key_id
@@ -37,10 +45,13 @@ class RepositoryV2Service:
                         path,
                         "repo-create",
                         *borg2_encryption_flags(encryption),
-                    ]
-                    + (["--remote-path", remote_path] if remote_path else []),
+                    ],
                     timeout=init_timeout,
-                    env={"BORG_PASSPHRASE": passphrase, **env} if passphrase else env,
+                    env={
+                        **({"BORG_PASSPHRASE": passphrase} if passphrase else {}),
+                        **env,
+                        **borg2_remote_path_env(remote_path),
+                    },
                 )
             )
 
@@ -51,7 +62,7 @@ class RepositoryV2Service:
         ssh_key_id: Optional[int] = None,
         remote_path: Optional[str] = None,
         timeout: int = 60,
-        bypass_lock: bool = False,
+        bypass_lock: bool = False,  # Borg 1 only, see app/core/borg2.py
     ) -> Dict[str, Any]:
         needs_custom_ssh_env = bool(ssh_key_id and path.startswith("ssh://"))
         with ssh_key_borg_env(
@@ -67,24 +78,22 @@ class RepositoryV2Service:
                 )
                 if not needs_custom_ssh_env
                 else await borg2._run(
-                    [borg2.borg_cmd, "-r", path, "info", "--json"]
-                    + (["--remote-path", remote_path] if remote_path else [])
-                    + (["--bypass-lock"] if bypass_lock else []),
+                    [borg2.borg_cmd, "-r", path, "info", "--json"],
                     timeout=timeout,
-                    env={"BORG_PASSPHRASE": passphrase, **env} if passphrase else env,
+                    env={
+                        **({"BORG_PASSPHRASE": passphrase} if passphrase else {}),
+                        **env,
+                        **borg2_remote_path_env(remote_path),
+                    },
                 )
             )
 
     async def export_keyfile(self, repository, output_path: str) -> Dict[str, Any]:
         cmd = [borg2.borg_cmd, "-r", repository.path, "key", "export", output_path]
-        if remote_path := effective_repository_remote_path(repository):
-            cmd.extend(["--remote-path", remote_path])
-        env = (
-            {"BORG_PASSPHRASE": repository.passphrase}
-            if repository.passphrase
-            else None
-        )
-        return await borg2._run(cmd, timeout=30, env=env)
+        env = borg2_remote_path_env(effective_repository_remote_path(repository))
+        if repository.passphrase:
+            env["BORG_PASSPHRASE"] = repository.passphrase
+        return await borg2._run(cmd, timeout=30, env=env or None)
 
     async def calculate_total_size_bytes(
         self,

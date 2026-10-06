@@ -14,6 +14,16 @@ from agent.borg_ui_agent.runtime import get_capabilities
 from agent.borg_ui_agent.self_upgrade import check_self_upgrade
 
 
+def _enrol(config_path: Path, server_url: str) -> None:
+    config_path.write_text(
+        f'server_url = "{server_url}"\n'
+        'agent_id = "agent-1"\n'
+        'agent_token = "secret"\n'
+        'name = "db-01"\n',
+        encoding="utf-8",
+    )
+
+
 @pytest.fixture
 def ready(tmp_path: Path):
     """A complete, correct install. Each test breaks exactly one thing."""
@@ -41,6 +51,7 @@ def ready(tmp_path: Path):
     path_unit.write_text("[Path]\nPathExists=/etc/borg-ui-agent\n", encoding="utf-8")
     trigger_dir = tmp_path / "etc"
     trigger_dir.mkdir()
+    _enrol(trigger_dir / "config.toml", "https://borg.example")
 
     return {
         "conf_path": conf_path,
@@ -116,6 +127,48 @@ def test_an_http_endpoint_cannot_upgrade_itself(ready):
     # The helper refuses a non-https server, so reporting the capability here
     # would promise an upgrade that aborts as soon as it is asked for.
     assert check_self_upgrade(**ready).reason == "server_not_https"
+
+
+def test_an_endpoint_moved_to_another_server_cannot_upgrade_itself(ready):
+    # set-server rewrites config.toml only. The helper compares the two records
+    # and refuses, so the capability has to go as soon as they differ.
+    _enrol(ready["trigger_path"].parent / "config.toml", "https://new.example")
+
+    readiness = check_self_upgrade(**ready)
+
+    assert readiness.supported is False
+    assert readiness.reason == "server_mismatch"
+
+
+def test_a_trailing_slash_is_not_another_server(ready):
+    _enrol(ready["trigger_path"].parent / "config.toml", "https://borg.example/")
+
+    assert check_self_upgrade(**ready).supported is True
+
+
+def test_an_endpoint_without_a_readable_enrolment_cannot_upgrade_itself(ready):
+    (ready["trigger_path"].parent / "config.toml").unlink()
+
+    assert check_self_upgrade(**ready).reason == "server_mismatch"
+
+
+def test_a_config_the_helper_cannot_read_is_not_the_same_server(ready):
+    # Valid TOML, and the same address, but the helper takes the server from a
+    # double-quoted line and nothing else. It would read no server and refuse.
+    (ready["trigger_path"].parent / "config.toml").write_text(
+        "server_url = 'https://borg.example'\n", encoding="utf-8"
+    )
+
+    assert check_self_upgrade(**ready).reason == "server_mismatch"
+
+
+def test_the_enrolment_to_compare_can_be_named(ready, tmp_path: Path):
+    elsewhere = tmp_path / "elsewhere.toml"
+    _enrol(elsewhere, "https://new.example")
+
+    readiness = check_self_upgrade(**ready, config_path=elsewhere)
+
+    assert readiness.reason == "server_mismatch"
 
 
 def test_an_unwatched_trigger_reports_no_capability(ready):

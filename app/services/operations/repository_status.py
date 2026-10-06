@@ -635,8 +635,12 @@ def last_runs(db: Session, repositories: Iterable[Repository]) -> dict[int, Last
 @dataclass
 class StorageSummary:
     """What is stored about a repository's size, in one place (#981): the
-    measured size with its provenance and time, Borg's last manifest write,
-    the sums over the archive index, and the newest compact statistics.
+    measured size with its provenance and time, the repository's last
+    write, the sums over the archive index, and the newest compact
+    statistics. The last write is Borg's own `last_modified` (the manifest
+    write) for Borg 1; Borg 2 reports none, so the detail derives it for
+    Borg 2 (`_borg2_last_write`), while the list carries the stored
+    column.
     Every field can be None: not measured yet, or not reported by this Borg
     version. A reader shows that state rather than a zero. Two more states
     are named explicitly: a size whose `measured_at` is None comes from the
@@ -721,19 +725,56 @@ def _archive_sums(db: Session, current) -> dict[int, tuple]:
     return {row[0]: row[1:] for row in rows}
 
 
-def _archive_span(db: Session, current) -> dict[int, tuple[datetime, datetime]]:
+def _archive_span(
+    db: Session, current
+) -> dict[int, tuple[datetime, datetime, datetime]]:
     """The oldest and the newest `start` among each repository's current
-    archive rows: the span the backups cover."""
+    archive rows (the span the backups cover), and the newest archive
+    write: the latest `end`, or `start` for a row without one."""
     newest_seen, current = current
     rows = (
         db.query(
-            Archive.repository_id, func.min(Archive.start), func.max(Archive.start)
+            Archive.repository_id,
+            func.min(Archive.start),
+            func.max(Archive.start),
+            func.max(func.coalesce(Archive.end, Archive.start)),
         )
         .join(newest_seen, current)
         .group_by(Archive.repository_id)
         .all()
     )
-    return {row[0]: (row[1], row[2]) for row in rows}
+    return {row[0]: (row[1], row[2], row[3]) for row in rows}
+
+
+def _deletes():
+    """Operations that remove archives: deletions, wipes, and prunes that
+    were not a preview."""
+    return or_(
+        Operation.kind.in_(DELETION_KINDS),
+        and_(Operation.kind == "prune", _not_dry_run()),
+    )
+
+
+def _borg2_last_write(
+    repository: Repository,
+    newest_archive_write: Optional[datetime],
+    newest_deletion: Optional[datetime],
+    listed: bool,
+) -> Optional[datetime]:
+    """Borg 2 reports no `last_modified` (it keeps no manifest
+    timestamp). The newest write Borg UI knows of stands in: the
+    newest archive's (a row an emptying listing left behind still was
+    one), or a later successful deletion through Borg UI (`_deletes`).
+    With neither, a repository a listing found empty, and still counted
+    empty, was last written when it was created; one no listing has reached
+    yet is unknown, and so is one whose count moved past the rows (an
+    agent's own listing writes the count without them)."""
+    writes = [t for t in (newest_archive_write, newest_deletion) if t]
+    if writes:
+        return max(writes)
+    if listed and not repository.archive_count:
+        return repository.created_at
+    return None
 
 
 def _latest_archive_files(db: Session, current) -> dict[int, int]:
@@ -951,6 +992,11 @@ def storage_summaries(
         by_version: dict[bool, list[int]] = {}
         for repository in repos:
             by_version.setdefault(is_borg2(repository), []).append(repository.id)
+        deletions = (
+            _latest_success_by_repository(db, by_version[True], _deletes())
+            if True in by_version
+            else {}
+        )
         reported_original = {}
         for borg2, version_ids in by_version.items():
             reported_original.update(
@@ -963,7 +1009,7 @@ def storage_summaries(
                 )
             )
     else:
-        sums, files, spans, compacts = {}, {}, {}, {}
+        sums, files, spans, compacts, deletions = {}, {}, {}, {}, {}
         reported_original = {}
     # on every route: the card reads it to tell a settled, empty repository
     # (listed, 0 archives) from one no listing has reached yet
@@ -1081,6 +1127,12 @@ def storage_summaries(
         if borg2:
             summary.deduplicated_size = (
                 compact[0].get("deduplicated_size") if compact else None
+            )
+            summary.last_modified = _borg2_last_write(
+                repository,
+                spans[repository.id][2] if repository.id in spans else None,
+                deletions.get(repository.id),
+                repository.id in listed,
             )
         else:
             summary.compressed_size = (

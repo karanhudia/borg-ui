@@ -81,31 +81,34 @@ export default function QuickStartCustomize({
             t('quickStart.customize.schedule'),
             t('quickStart.customize.scheduleHint')
           )}
-          <FormControlLabel
-            control={
-              <Switch
-                checked={encrypted}
-                onChange={(event) =>
-                  update({
-                    encryption: event.target.checked
-                      ? getDefaultRepositoryEncryption(settings.borgVersion)
-                      : 'none',
-                  })
-                }
-              />
-            }
-            label={
-              <span>
-                <Typography variant="body2" component="span" sx={{ display: 'block' }}>
-                  {t('quickStart.customize.encrypt')}
-                </Typography>
-                <Typography variant="caption" component="span" sx={{ color: 'text.secondary' }}>
-                  {t('quickStart.customize.encryptHint')}
-                </Typography>
-              </span>
-            }
-            sx={{ alignItems: 'flex-start', '& .MuiSwitch-root': { mt: -0.5 } }}
-          />
+          {/* Borg 2 has no unencrypted repositories since 2.0.0b25 */}
+          {settings.borgVersion !== 2 && (
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={encrypted}
+                  onChange={(event) =>
+                    update({
+                      encryption: event.target.checked
+                        ? getDefaultRepositoryEncryption(settings.borgVersion)
+                        : 'none',
+                    })
+                  }
+                />
+              }
+              label={
+                <span>
+                  <Typography variant="body2" component="span" sx={{ display: 'block' }}>
+                    {t('quickStart.customize.encrypt')}
+                  </Typography>
+                  <Typography variant="caption" component="span" sx={{ color: 'text.secondary' }}>
+                    {t('quickStart.customize.encryptHint')}
+                  </Typography>
+                </span>
+              }
+              sx={{ alignItems: 'flex-start', '& .MuiSwitch-root': { mt: -0.5 } }}
+            />
+          )}
           {toggle(
             'runPruneAfter',
             t('quickStart.customize.prune'),
@@ -138,7 +141,8 @@ export default function QuickStartCustomize({
                   if (!value) return
                   update({
                     borgVersion: value,
-                    encryption: encrypted ? getDefaultRepositoryEncryption(value) : 'none',
+                    encryption:
+                      encrypted || value === 2 ? getDefaultRepositoryEncryption(value) : 'none',
                   })
                 }}
               >

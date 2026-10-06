@@ -77,7 +77,7 @@ vi.mock('../../hooks/usePlanContent', () => ({
 const fullSystemInfo = {
   app_version: '1.2.3',
   borg_version: 'borg 1.4.0',
-  borg2_version: 'borg2 2.0.0b12',
+  borg2_version: 'borg2 2.0.0b25',
 }
 
 describe('SidebarVersionInfo', () => {
@@ -128,7 +128,7 @@ describe('SidebarVersionInfo', () => {
   it('renders B2 chip with stripped borg2 prefix', () => {
     renderWithProviders(<SidebarVersionInfo systemInfo={fullSystemInfo} />)
     expect(screen.getByText('B2')).toBeInTheDocument()
-    expect(screen.getByText('2.0.0b12')).toBeInTheDocument()
+    expect(screen.getByText('2.0.0b25')).toBeInTheDocument()
   })
 
   it('does not render B1 chip when borg_version is null', () => {
