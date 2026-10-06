@@ -48,6 +48,7 @@ def _make_repo(connection_id=None, ssh_key_id=None, repository_type="ssh"):
     repo.path = "ssh://user@host:23/./borg-repo"
     repo.passphrase = None
     repo.remote_path = None
+    repo.borg_version = 1
     repo.repository_type = repository_type
     repo.connection_id = connection_id
     repo.ssh_key_id = ssh_key_id

@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 import structlog
 
+from app.core.borg_major import is_borg2
 from app.core.agent_auth import (
     AGENT_AUTH_HEADER,
     AGENT_TOKEN_PREFIX_LENGTH,
@@ -646,7 +647,7 @@ def _compact_stats(
     `--stats` but reported nothing: its last lines and its completion travel
     on different paths, so the tail may still be in flight, and then this
     compact records no statistics, which is logged."""
-    if repository.borg_version != 2:
+    if not is_borg2(repository):
         return None
     result = agent_job.result if isinstance(agent_job.result, dict) else {}
     stats = _reported_compact_stats(result.get("stats"))

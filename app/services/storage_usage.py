@@ -42,6 +42,7 @@ from urllib.parse import unquote, urlsplit
 
 import structlog
 
+from app.core.borg_major import is_borg2
 from app.utils.datetime_utils import parse_borg_archive_time, utc_now
 
 logger = structlog.get_logger()
@@ -584,7 +585,7 @@ async def measure_repository_size(
     from app.utils.borg_env import effective_repository_remote_path
 
     remote_path = effective_repository_remote_path(repository)
-    if (repository.borg_version or 1) != 2:
+    if not is_borg2(repository):
         from app.core.borg import borg
         from app.core.borg_router import BorgRouter
 

@@ -17,6 +17,7 @@ from typing import Iterable, Optional
 import structlog
 from sqlalchemy.orm import Session
 
+from app.core.borg_major import is_borg2
 from app.api.repositories import _prepare_repository_borg_env
 from app.config import settings
 from app.core.borg_diff import ChangeRecord, parse_diff_line, parse_list_line
@@ -246,11 +247,7 @@ def successor_of(db: Session, archive: Archive) -> Optional[Archive]:
 
 
 def archive_ref(repository: Repository, archive: Archive) -> str:
-    return (
-        f"aid:{archive.borg_id}"
-        if (repository.borg_version or 1) == 2
-        else archive.name
-    )
+    return f"aid:{archive.borg_id}" if is_borg2(repository) else archive.name
 
 
 # -- collecting one archive -----------------------------------------------------

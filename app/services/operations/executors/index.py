@@ -12,6 +12,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
+from app.core.borg_major import borg_major, is_borg2
 from app.api.repositories import (
     _agent_result_archives,
     _parse_borg_archive_time,
@@ -117,7 +118,7 @@ def apply_listing(
     for entry in entries:
         fields = archive_fields_from_listing(
             entry,
-            repository.borg_version or 1,
+            borg_major(repository),
             timezone_name=timezone_name,
             series_prefixes=prefixes,
         )
@@ -400,11 +401,7 @@ async def _agent_archive_info(
         wait_for_agent_repository_operation_job,
     )
 
-    ref = (
-        f"aid:{archive.borg_id}"
-        if (repository.borg_version or 1) == 2
-        else archive.name
-    )
+    ref = f"aid:{archive.borg_id}" if is_borg2(repository) else archive.name
     job = queue_agent_repository_operation_job(
         db, repository, job_kind="repository.archive_info", operation={"archive": ref}
     )
@@ -438,7 +435,7 @@ async def _server_archive_info(
     remote_path = effective_repository_remote_path(repository)
     # TZ=UTC so borg renders the archive end time in UTC (see stats env).
     info_env = _repository_stats_borg_env(env or {})
-    if (repository.borg_version or 1) == 2:
+    if is_borg2(repository):
         from app.core.borg2 import borg2
 
         return await run_serialized_repository_command(
@@ -651,9 +648,7 @@ async def run_archive_sync(ctx) -> Outcome:
     if repository is None:
         return Outcome(status="skipped", skip_reason="repository_missing")
     db = ctx.db
-    if (repository.borg_version or 1) != 2 and not archive_end_resolvable(
-        db, repository
-    ):
+    if not is_borg2(repository) and not archive_end_resolvable(db, repository):
         # A Borg 1 listing is naive wall clock in the zone the agent ran it
         # in. Without that zone the times would be stored in the server's
         # zone, and `start` is NOT NULL, so there is no row to withhold it
@@ -680,7 +675,7 @@ async def run_archive_sync(ctx) -> Outcome:
         new_rows, removed_ids = apply_listing(
             db, repository, entries, timezone_name=timezone_name
         )
-        if removed_ids and (repository.borg_version or 1) != 2:
+        if removed_ids and not is_borg2(repository):
             # deduplicated_size is relative to the archives that exist (spec
             # 4.1), so a removal stales the survivors it shared chunks with.
             # Clearing the date hands them to archives_needing_info below,

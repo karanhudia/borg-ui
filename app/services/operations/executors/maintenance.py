@@ -15,6 +15,7 @@ from typing import Awaitable, Callable, Optional
 import structlog
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.core.borg_major import is_borg2
 from app.core.borg_router import BorgRouter
 from app.database.models import AgentJob, AgentMachine, Operation, Repository, utc_now
 from app.services.operations import executors
@@ -298,7 +299,7 @@ def _borg2_server_service(repository: Repository) -> bool:
     managed agent."""
     from app.services.repository_executor import is_agent_executor
 
-    return (repository.borg_version or 1) == 2 and not is_agent_executor(repository)
+    return is_borg2(repository) and not is_agent_executor(repository)
 
 
 def _agent_executed(repository: Repository) -> bool:

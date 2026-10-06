@@ -14,6 +14,7 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import SingletonThreadPool, StaticPool
 
+from app.core.borg_major import borg_major
 from app.core.borg_errors import (
     LOCK_CONTENTION_DETAIL_KEY,
     is_lock_contention_exit_code,
@@ -244,7 +245,7 @@ def build_agent_backup_payload(
     repository_payload = {
         "id": repository.id,
         "path": repository.path,
-        "borg_version": repository.borg_version or 1,
+        "borg_version": borg_major(repository),
     }
     if repository.remote_path:
         repository_payload["remote_path"] = repository.remote_path
@@ -299,7 +300,7 @@ def build_agent_repository_operation_payload(
     repository_payload = {
         "id": repository.id,
         "path": repository.path,
-        "borg_version": repository.borg_version or 1,
+        "borg_version": borg_major(repository),
     }
     if repository.remote_path:
         repository_payload["remote_path"] = repository.remote_path

@@ -26,6 +26,7 @@ import structlog
 import base64
 from cryptography.fernet import Fernet
 
+from app.core.borg_major import borg_major, is_borg2
 from app.utils.ssh_host_validation import ssh_destination
 from app.config import settings
 from app.core.borg_router import BorgRouter
@@ -1139,7 +1140,7 @@ class MountService:
                 # repository. The human-readable name stays on mount point,
                 # source label and logs.
                 archive_selector = archive_name
-                if archive_id and (repository.borg_version or 1) == 2:
+                if archive_id and is_borg2(repository):
                     archive_selector = f"aid:{archive_id}"
 
                 cmd = BorgRouter(repository).build_mount_command(
@@ -1268,7 +1269,7 @@ class MountService:
                     created_at=datetime.now(timezone.utc),
                     temp_key_file=temp_key_file,
                     repository_id=repository_id,
-                    borg_version=repository.borg_version or 1,
+                    borg_version=borg_major(repository),
                     process_pid=process.pid,  # Store PID for cleanup
                 )
 
@@ -1372,7 +1373,7 @@ class MountService:
             elif mount_info.mount_type == MountType.BORG_ARCHIVE:
                 success = await self._unmount_borg(
                     mount_info.mount_point,
-                    borg_version=mount_info.borg_version or 1,
+                    borg_version=borg_major(mount_info),
                     force=force,
                 )
             else:

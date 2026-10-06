@@ -16,6 +16,7 @@ import re
 import shutil
 import uuid
 
+from app.core.borg_major import borg_major, is_borg2
 from app.database.database import get_db, SessionLocal
 from app.database.models import (
     AgentMachine,
@@ -1090,9 +1091,7 @@ async def _update_agent_repository_stats(
         # rinfo carried no cache stats (storage_usage answers Borg 1 with
         # borg1_uses_rinfo). For Borg 2 it adds nothing: storage_usage runs
         # du itself for local paths and du fails on store URLs.
-        if total_size is None and (
-            not storage_usage_tried or (repository.borg_version or 1) != 2
-        ):
+        if total_size is None and (not storage_usage_tried or not is_borg2(repository)):
             try:
                 du_job = queue_agent_repository_operation_job(
                     db, repository, job_kind="repository.disk_usage"
@@ -1359,7 +1358,7 @@ def _single_line_passphrase(value: Optional[str]) -> Optional[str]:
 
 class RepositoryCreate(BaseModel):
     name: str
-    borg_version: Optional[int] = 1
+    borg_version: Optional[Literal[1, 2]] = 1
     path: str
     encryption: str = "repokey"  # repokey, keyfile, none
     compression: str = "lz4"  # lz4, zstd, zlib, none
@@ -1421,7 +1420,7 @@ class RepositoryCreate(BaseModel):
 
 class RepositoryImport(BaseModel):
     name: str
-    borg_version: Optional[int] = 1
+    borg_version: Optional[Literal[1, 2]] = 1
     path: str
     encryption: str = "none"
     passphrase: Optional[str] = None  # Required if repository is encrypted
@@ -1550,7 +1549,7 @@ class RepositoryInfo(BaseModel):
 
 
 def _uses_borg2_payload(data: Union[RepositoryCreate, RepositoryImport]) -> bool:
-    requested_version = getattr(data, "borg_version", 1) or 1
+    requested_version = borg_major(data)
     return requested_version == 2 or data.encryption in V2_ONLY_ENCRYPTION_MODES
 
 
@@ -1651,9 +1650,7 @@ def _is_cloud_mirror_payload(
 
 def _primary_storage_backend(repository: Repository) -> str:
     if repository.repository_type == "rclone":
-        if (repository.borg_version or 1) == 2 and _is_direct_rclone_url(
-            repository.path
-        ):
+        if is_borg2(repository) and _is_direct_rclone_url(repository.path):
             return DIRECT_RCLONE_STORAGE_BACKEND
         return "rclone"
     if repository_executor_type(repository) == "agent":
@@ -1721,7 +1718,7 @@ def _is_direct_rclone_repository(
 ) -> bool:
     return bool(
         repository.repository_type == "rclone"
-        and (repository.borg_version or 1) == 2
+        and is_borg2(repository)
         and _is_direct_rclone_url(repository.path)
         and storage is None
     )
@@ -1765,7 +1762,7 @@ def _validate_direct_rclone_payload(
     data: Union[RepositoryCreate, RepositoryImport],
     db: Session,
 ) -> str:
-    if (data.borg_version or 1) != 2:
+    if not is_borg2(data):
         raise HTTPException(
             status_code=400,
             detail={"key": "backend.errors.rclone.directBorg2Required"},
@@ -2630,7 +2627,7 @@ async def _create_agent_repository_record(
     # Recorded below with the payload's major, whatever the encryption mode says.
     _reject_borg2_only_url_for_borg1(
         repo_data.path,
-        borg2=(repo_data.borg_version or 1) == 2,
+        borg2=is_borg2(repo_data),
         connection_id=repo_data.connection_id,
         agent=True,
     )
@@ -2704,7 +2701,7 @@ async def _create_agent_repository_record(
         upload_ratelimit_kib=repo_data.upload_ratelimit_kib,
         source_ssh_connection_id=source_connection_id,
         source_locations=source_locations_json,
-        borg_version=repo_data.borg_version or 1,
+        borg_version=borg_major(repo_data),
     )
     db.add(repository)
     db.commit()
@@ -2854,7 +2851,7 @@ def _repository_common_values(
         "executor_type": "server",
         "agent_machine_id": None,
         "repository_type": "rclone",
-        "borg_version": repo_data.borg_version or 1,
+        "borg_version": borg_major(repo_data),
     }
 
 
@@ -3513,7 +3510,7 @@ def get_repositories(
                 "next_run": schedule_summary["next_run"],
                 "has_keyfile": repo.has_keyfile or False,
                 "source_ssh_connection_id": repo.source_ssh_connection_id,
-                "borg_version": repo.borg_version or 1,
+                "borg_version": borg_major(repo),
             }
             rclone_storage = _serialize_rclone_storage(
                 repo,
@@ -5275,7 +5272,7 @@ async def update_repository(
             if raw_path != repository.path:
                 _reject_borg2_only_url_for_borg1(
                     raw_path,
-                    borg2=(repository.borg_version or 1) == 2,
+                    borg2=is_borg2(repository),
                     connection_id=target_connection_id,
                     agent=target_executor_type == "agent",
                 )
@@ -5419,7 +5416,7 @@ async def update_repository(
                             "New path is not a valid borg repository - initializing",
                             new_path=repository.path,
                             old_path=old_path,
-                            borg_version=repository.borg_version or 1,
+                            borg_version=borg_major(repository),
                         )
 
                         init_result = await router.initialize_repository(
@@ -5436,14 +5433,14 @@ async def update_repository(
                         logger.info(
                             "Successfully initialized borg repository at new path",
                             new_path=repository.path,
-                            borg_version=repository.borg_version or 1,
+                            borg_version=borg_major(repository),
                         )
                 except Exception as e:
                     logger.info(
                         "Could not verify borg repository - attempting initialization",
                         new_path=repository.path,
                         error=str(e),
-                        borg_version=repository.borg_version or 1,
+                        borg_version=borg_major(repository),
                     )
 
                     init_result = await BorgRouter(repository).initialize_repository(
@@ -5460,7 +5457,7 @@ async def update_repository(
                     logger.info(
                         "Successfully initialized borg repository at new path after verification failure",
                         new_path=repository.path,
-                        borg_version=repository.borg_version or 1,
+                        borg_version=borg_major(repository),
                     )
 
         if passphrase_changed and not path_changed:
