@@ -421,7 +421,12 @@ darwin_service_path() {
   done
   IFS=: read -ra entries <<<"${PATH}"
   for dir in "${entries[@]}"; do
-    [[ "${dir}" == /* && "${found}" == *":${dir}:"* ]] || continue
+    [[ -n "${dir}" && "${found}" == *":${dir}:"* ]] || continue
+    # launchd runs the job from /, so a relative entry goes in absolute.
+    if [[ "${dir}" != /* ]]; then
+      dir="$(CDPATH='' cd -- "${dir}" 2>/dev/null && pwd -P)" || continue
+      [[ "${dir}" != *:* ]] || continue
+    fi
     case ":${path}:" in *":${dir}:"*) ;; *) path+=":${dir}" ;; esac
   done
   for dir in /opt/homebrew/bin /usr/local/bin /opt/local/bin /usr/bin /bin /usr/sbin /sbin; do

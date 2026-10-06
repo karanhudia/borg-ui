@@ -379,6 +379,28 @@ def test_the_job_resolves_every_name_from_the_directory_this_run_did(mac, tmp_pa
     assert _resolve("rclone", path) == str(first / "rclone")
 
 
+def test_a_borg_found_through_a_relative_path_entry_is_named_absolutely(mac, tmp_path):
+    """launchd runs the job from /, so a relative entry such as tools would
+    reach nothing there; the directory goes in by its absolute path."""
+    workdir = tmp_path / "work"
+    (workdir / "tools").mkdir(parents=True)
+    _write_executable(workdir / "tools" / "borg", BORG_STUB)
+
+    result = subprocess.run(
+        ["bash", str(mac["installer"]), *ENROL, "--skip-borg-install"],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=workdir,
+        env={**mac["env"], "PATH": f"tools:{mac['env']['PATH']}"},
+        start_new_session=True,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    path = _job_path(mac, "com.borg-ui.agent")
+    assert _resolve("borg", path) == str((workdir / "tools").resolve() / "borg")
+
+
 def test_a_reinstall_from_the_upgrade_job_keeps_the_users_borg(mac, tmp_path):
     """The upgrade job reinstalls under its own PATH, so the directory has to
     survive that run, not only the one started from the user's shell."""
