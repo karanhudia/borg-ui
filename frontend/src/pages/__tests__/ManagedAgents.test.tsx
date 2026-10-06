@@ -221,24 +221,6 @@ describe('ManagedAgents', () => {
     expect(managedAgentsAPI.listAgents).toHaveBeenCalled()
   })
 
-  it('shows the plan gate over a read-only page preview when managed agents are unavailable', async () => {
-    vi.mocked(managedAgentsAPI.listAgents).mockResolvedValue({
-      data: [buildAgent({ name: 'edge-pi', hostname: 'edge-pi.local' })],
-    } as AxiosResponse)
-    mockPlanCan.mockImplementation((feature) => feature !== 'managed_agents')
-
-    renderWithProviders(<ManagedAgents />, { initialRoute: '/managed-agents' })
-
-    expect(await screen.findByText(/managed agents need pro or enterprise/i)).toBeInTheDocument()
-    expect(screen.getByText(/Run this on a remote machine to register it/i)).toBeInTheDocument()
-    expect(await screen.findByText('edge-pi.local')).toBeInTheDocument()
-    expect(screen.queryByText('No agents enrolled.')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /add agent/i })).not.toBeInTheDocument()
-    expect(managedAgentsAPI.listAgents).toHaveBeenCalled()
-    expect(managedAgentsAPI.listEnrollmentTokens).toHaveBeenCalled()
-    expect(managedAgentsAPI.listJobs).toHaveBeenCalled()
-  })
-
   it('manually refreshes managed-agent status with visible feedback', async () => {
     const user = userEvent.setup()
     let resolveRefresh: ((value: AxiosResponse<AgentMachineResponse[]>) => void) | undefined

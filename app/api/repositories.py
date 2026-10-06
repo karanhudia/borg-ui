@@ -80,6 +80,7 @@ from app.core.features import (
 )
 from app.config import settings
 from app.services.mqtt_service import mqtt_service
+from app.services.process_cancel import communicate_or_kill
 from app.services.operations.wipe_facade import (
     WipeJobFacade,
     active_wipe_operation,
@@ -189,7 +190,6 @@ AGENT_RCLONE_SYNC_CAPABILITY = "repository.rclone_sync"
 AGENT_REPOSITORY_INIT_CAPABILITY = "repository.init"
 DIRECT_RCLONE_STORAGE_BACKEND = "rclone_direct"
 RCLONE_FEATURE = "rclone"
-MANAGED_AGENTS_FEATURE = "managed_agents"
 ACTIVE_MAINTENANCE_JOB_STATUSES = ("pending", "running")
 
 # Initialize Borg interface
@@ -696,7 +696,7 @@ async def _run_repository_command(
             stderr=asyncio.subprocess.PIPE,
             env=env,
         )
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+        stdout, stderr = await communicate_or_kill(process, timeout=timeout)
         return process.returncode, stdout, stderr
     finally:
         try:
@@ -1646,10 +1646,6 @@ def _payload_uses_rclone(data: Union[RepositoryCreate, RepositoryImport]) -> boo
 
 def _require_rclone_feature(db: Session) -> None:
     require_feature_access(db, RCLONE_FEATURE)
-
-
-def _require_managed_agents_feature(db: Session) -> None:
-    require_feature_access(db, MANAGED_AGENTS_FEATURE)
 
 
 def _is_direct_rclone_payload(
@@ -3590,8 +3586,6 @@ async def create_repository(
         _validate_upload_ratelimit_kib(repo_data.upload_ratelimit_kib)
         if _payload_uses_rclone(repo_data):
             _require_rclone_feature(db)
-        if executor_type == "agent":
-            _require_managed_agents_feature(db)
         if _is_direct_rclone_payload(repo_data):
             return await _create_direct_rclone_repository_record(
                 repo_data, current_user, db
@@ -4028,8 +4022,6 @@ async def import_repository(
         _validate_upload_ratelimit_kib(repo_data.upload_ratelimit_kib)
         if _payload_uses_rclone(repo_data):
             _require_rclone_feature(db)
-        if executor_type == "agent":
-            _require_managed_agents_feature(db)
         if _is_direct_rclone_payload(repo_data):
             return await _import_direct_rclone_repository_record(
                 repo_data, current_user, db
@@ -4980,8 +4972,6 @@ async def update_repository(
             existing_direct_rclone_repository and bool(update_data)
         ):
             _require_rclone_feature(db)
-        if target_executor_type == "agent":
-            _require_managed_agents_feature(db)
 
         # The plan checks above commit the session (licensing state), so no
         # field goes on the row before them: a refused update stores nothing.

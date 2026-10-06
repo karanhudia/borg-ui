@@ -24,7 +24,10 @@ from app.config import settings
 from app.core.borg_router import BorgRouter
 from app.database.models import Archive, Repository, SystemSettings, utc_now
 from app.services.operations import executors
-from app.services.operations.backup_facade import link_archive_to_backup
+from app.services.operations.backup_facade import (
+    link_archive_to_backup,
+    take_added_sizes,
+)
 from app.services.operations.followups import (
     HISTORY_AVAILABLE,
     history_capability,
@@ -151,6 +154,11 @@ def apply_listing(
             else now
         )
     removed = [a.id for borg_id, a in existing.items() if borg_id not in seen]
+    if (repository.borg_version or 1) == 2:
+        # also rows listed before their backup's figure was taken over
+        take_added_sizes(
+            db, new_rows + [a for borg_id, a in existing.items() if borg_id in seen]
+        )
     db.commit()
     for row in new_rows:
         db.refresh(row)
@@ -523,7 +531,10 @@ async def fill_archive_info(
         archive.nfiles = info["nfiles"]
         archive.original_size = info["original_size"]
         archive.compressed_size = info["compressed_size"]
-        archive.deduplicated_size = info["deduplicated_size"]
+        if (repository.borg_version or 1) != 2 or info["deduplicated_size"] is not None:
+            # Borg 2's info has none: the figure the archive got from its
+            # backup's `create --json` stays (take_added_sizes).
+            archive.deduplicated_size = info["deduplicated_size"]
         archive.stats_measured_at = utc_now()
         if info["end"] and (timezone_name or _carries_utc_offset(info["end"])):
             # A naive end time from an agent that never reported its zone
@@ -684,8 +695,9 @@ async def run_archive_sync(ctx) -> Outcome:
             # deduplicated_size is relative to the archives that exist (spec
             # 4.1), so a removal stales the survivors it shared chunks with.
             # Clearing the date hands them to archives_needing_info below,
-            # under the same per-run cap as a first fill. Borg 2 reports no
-            # deduplicated_size, so there is nothing to re-measure (#1137).
+            # under the same per-run cap as a first fill. Borg 2 reports a
+            # deduplicated_size only when an archive is created, so there is
+            # nothing to re-measure (#1137).
             # Before the fold: the neighbours are found from the removed rows.
             stale_ids = _neighbours_of_removed(db, repository, set(removed_ids))
             if stale_ids:

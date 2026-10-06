@@ -11,7 +11,8 @@ and a path unit watching the trigger. On macOS they are the per-user conf and
 one launchd job that both names the helper and watches the trigger.
 
 The conf also has to name the server this endpoint is enrolled against. The
-helper refuses when the two differ, which is what `set-server` leaves behind.
+helper refuses when the two differ, which is what `set-server` leaves behind
+when it runs without the rights to rewrite the conf.
 """
 
 from __future__ import annotations
@@ -19,6 +20,8 @@ from __future__ import annotations
 import os
 import plistlib
 import re
+import stat
+import tempfile
 from xml.parsers.expat import ExpatError
 from dataclasses import dataclass
 from pathlib import Path
@@ -47,6 +50,10 @@ _CONF_LINE = re.compile(r'^\s*([A-Z_]+)\s*=\s*"(.*)"\s*$')
 # The helper's own expression for the config's server, so that the two cannot
 # disagree about a line one of them reads and the other does not.
 _SERVER_URL_LINE = re.compile(r'^server_url\s*=\s*"(.*)"\s*$', re.ASCII)
+# The installer's own test for a server it writes into the record, and the
+# line it writes it on.
+_PLAIN_SERVER = re.compile(r"https?://[A-Za-z0-9._:/-]+", re.ASCII)
+_RECORD_SERVER_LINE = re.compile(r'^SERVER=".*"$', re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -98,6 +105,39 @@ def recorded_server(conf_path: Optional[Path] = None) -> str:
     if not conf_path.is_file():
         return ""
     return _parse_conf(conf_path).get("SERVER", "")
+
+
+def move_recorded_server(server_url: str, conf_path: Optional[Path] = None) -> bool:
+    """Point the upgrade record at `server_url`, if this process may write it.
+
+    Root sources the record, so it takes only an address the installer would
+    write itself, and the rewritten file keeps the owner and mode it had. False
+    leaves the record as it was: no record, no SERVER line, another address,
+    or no rights to replace it (the agent's own user on Linux).
+    """
+    conf_path = conf_path or default_upgrade_paths().conf_path
+    if not _PLAIN_SERVER.fullmatch(server_url):
+        return False
+    tmp_path: Optional[Path] = None
+    try:
+        original = conf_path.stat()
+        text, count = _RECORD_SERVER_LINE.subn(
+            lambda _: f'SERVER="{server_url}"', conf_path.read_text(encoding="utf-8")
+        )
+        if not count:
+            return False
+        fd, name = tempfile.mkstemp(dir=conf_path.parent, prefix=f".{conf_path.name}.")
+        tmp_path = Path(name)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        os.chown(tmp_path, original.st_uid, original.st_gid)
+        os.chmod(tmp_path, stat.S_IMODE(original.st_mode))
+        os.replace(tmp_path, conf_path)
+    except (OSError, ValueError):
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
+        return False
+    return True
 
 
 def _enrolled_server(config_path: Path) -> str:
@@ -195,8 +235,9 @@ def check_self_upgrade(
         return UpgradeReadiness(supported=False, reason="server_not_https")
 
     # The helper also refuses a conf that names another server than the one
-    # this endpoint is enrolled against. `set-server` moves only the config,
-    # so a moved endpoint needs one reinstall before it can upgrade itself.
+    # this endpoint is enrolled against. `set-server` without the rights to
+    # write the conf moves only the config, so that endpoint needs one
+    # reinstall before it can upgrade itself.
     enrolled = _enrolled_server(config_path)
     if enrolled.removesuffix("/") != conf["SERVER"].removesuffix("/"):
         return UpgradeReadiness(supported=False, reason="server_mismatch")

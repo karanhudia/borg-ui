@@ -10,6 +10,11 @@ import {
   generateBorgInitCommand,
   remotePathParts,
   borg2CanCreateWith,
+  isBorg2OnlyUrl,
+  borg2PathIsAbsolute,
+  borg2PathFromUrlTail,
+  borg2SshUrlIsAbsolute,
+  borg2SshUrl,
   BorgCommandOptions,
 } from './borgUtils'
 
@@ -365,5 +370,49 @@ describe('command quoting', () => {
     expect(generateBorgInitCommand({ repositoryPath: '/mnt/my repo', borgVersion: 2 })).toContain(
       "-r '/mnt/my repo' repo-create"
     )
+  })
+})
+
+describe('isBorg2OnlyUrl', () => {
+  it('matches the schemes only Borg 2 can open, at the start, in any case', () => {
+    for (const url of ['sftp://h/r', ' HTTPS://h/r', 'rest://h/r', 's3:x', 'b2:x', 'rclone:r:x']) {
+      expect(isBorg2OnlyUrl(url)).toBe(true)
+    }
+    for (const url of ['/backups/s3:x', 'ssh://h/r', 'file:///r', 'user@host:repo', '']) {
+      expect(isBorg2OnlyUrl(url)).toBe(false)
+    }
+  })
+})
+
+describe('Borg 2 ssh:// paths', () => {
+  it('reads a leading slash as absolute, Borg 1 spelling of the login directory as relative', () => {
+    expect(borg2PathIsAbsolute('/srv/repo')).toBe(true)
+    expect(borg2PathIsAbsolute('backups/repo')).toBe(false)
+    expect(borg2PathIsAbsolute('/./backups/repo')).toBe(false)
+    expect(borg2PathIsAbsolute('/.')).toBe(false)
+  })
+
+  it('writes a URL tail the way the form reads a path', () => {
+    expect(borg2PathFromUrlTail('/backups/repo')).toBe('backups/repo')
+    expect(borg2PathFromUrlTail('//srv/repo')).toBe('/srv/repo')
+    expect(borg2PathFromUrlTail('/./backups/repo')).toBe('./backups/repo')
+    // absolute stays absolute: Borg 2 reads //./srv/repo as /srv/repo
+    expect(borg2PathFromUrlTail('//./srv/repo')).toBe('/srv/repo')
+    // the login directory itself
+    expect(borg2PathFromUrlTail('/')).toBe('.')
+    expect(borg2PathFromUrlTail('')).toBe('.')
+    expect(borg2PathIsAbsolute(borg2PathFromUrlTail('//.'))).toBe(true)
+  })
+
+  it('tells an absolute URL from a relative one', () => {
+    expect(borg2SshUrlIsAbsolute('ssh://u@h:22//srv/repo')).toBe(true)
+    expect(borg2SshUrlIsAbsolute('ssh://u@h/backups/repo')).toBe(false)
+    expect(borg2SshUrlIsAbsolute('/srv/repo')).toBeNull()
+  })
+
+  it('builds the URL back from the form spelling', () => {
+    expect(borg2SshUrl('u', 'h', 22, '/srv/repo')).toBe('ssh://u@h:22//srv/repo')
+    expect(borg2SshUrl('u', 'h', 22, 'backups/repo')).toBe('ssh://u@h:22/backups/repo')
+    expect(borg2SshUrl('u', 'h', 22, '/./backups/repo')).toBe('ssh://u@h:22/./backups/repo')
   })
 })
