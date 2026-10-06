@@ -595,7 +595,7 @@ applies here too.
 
 Borg 2 is a beta with no distribution package. Where the host's glibc is new
 enough, the installer uses the same static binary the image uses. Otherwise it
-builds Borg 2 from source, which needs OpenSSL 3.2 or newer because 2.0.0b24
+builds Borg 2 from source, which needs OpenSSL 3.2 or newer because Borg 2
 takes argon2 from OpenSSL.
 
 Debian 12 (bookworm) ships OpenSSL 3.0, so Borg 2 cannot be installed there. The
@@ -651,23 +651,80 @@ Removing Borg UI never touches your repositories.
 
 ## Docker upgrade
 
-> **Borg 2 repositories written before 2.0.0b22 do not survive this upgrade.**
-> 2.0.0b22 changed the repository format (packs) and cannot read a repository
-> written by any earlier Borg 2 beta — opening one fails with
-> `repository version 3 is not supported by this borg version`. There is no
-> in-place conversion. 2.0.0b23 and 2.0.0b24 kept that format, so repositories
-> created with 2.0.0b22 or later stay readable. Coming from a pre-b22 image:
+> **Existing Borg 2 repositories do not survive this upgrade.** This image
+> carries Borg 2.0.0b25, which changed the repository format (repository
+> version 5) and cannot read a repository written by any earlier Borg 2 beta,
+> 2.0.0b22 to 2.0.0b24 included. Opening one fails with
+> `... is not a valid repository. Check the repository config.` There is no
+> in-place conversion and `borg transfer` does not read the old format
+> either. It is the second such break (2.0.0b22 was the first, with
+> `repository version 3 is not supported by this borg version`), and Borg 2
+> may break its format again before 2.0.0. Borg UI follows each Borg 2 beta,
+> so **any upgrade of Borg UI can make existing Borg 2 repositories
+> unreadable. A Borg 2 repository is a test bed, not a backup to rely on.**
 >
-> 1. Keep the image you are upgrading from available — it is the only thing
+> Before you upgrade:
+>
+> 1. Restore whatever you still need from your Borg 2 repositories. After the
+>    upgrade nothing in this image can read them.
+> 2. Keep the image you are upgrading from available. It is the only thing
 >    that can still read the old repositories.
-> 2. Move the old Borg 2 repositories aside (rename the directory, or point
+> 3. Move the old Borg 2 repositories aside (rename the directory, or point
 >    the repository at a fresh path) rather than deleting them.
-> 3. After the new image is running, let Borg UI create new repositories —
->    the old image cannot create packs-format repositories — and delete the
->    old ones only once the new ones hold backups you have verified.
 >
-> Borg 1 repositories are unaffected. Borg 2 is a beta line with no stable
-> release yet, and upstream reserves exactly this kind of break between betas.
+> After the upgrade:
+>
+> 1. Create new repositories. A repository written by an earlier beta can
+>    still be deleted with the new Borg: it cannot read that repository, so
+>    `repo-delete --force` removes it without asking for its key or
+>    passphrase. Do it only once the new repository holds backups you have
+>    verified.
+> 2. Change repository paths that start with `rest://` to `ssh://`, keeping
+>    the rest of the URL: `ssh://user@host:port/relative/path`, or
+>    `ssh://user@host:port//absolute/path`. 2.0.0b25 dropped `rest://` and
+>    would read such a URL as a local directory, so Borg UI refuses to run
+>    Borg on one. The host must run Borg 2.0.0b25 as well (`borg serve
+>    --rest`); if its Borg 2 is not called `borg`, set the repository's
+>    remote path. An absolute path takes a second slash in Borg 2; with
+>    one slash the path is relative to the login directory.
+> 3. Choose an encrypted mode for repositories that were unencrypted
+>    (`none`): 2.0.0b25 has no unencrypted mode. The API also accepts
+>    `authenticated`, which stores the data unencrypted but protects it with
+>    a key and its passphrase.
+> 4. Restore Borg 2 archives into an empty directory, or choose to write
+>    into existing files. 2.0.0b25 refuses to extract into a directory that
+>    holds anything, the original location included. The restore dialog
+>    therefore starts a Borg 2 restore on a custom path with an exact
+>    restore, which Borg UI refuses with a message before Borg runs when the
+>    directory is not empty. "Restore into existing files" (Borg's
+>    `--continue`) writes into such a directory, the original location
+>    included, but has to be chosen: it skips a file that has the archived
+>    type, mode, size and modification time, so a file damaged in place
+>    is not replaced. A managed agent does this from 0.1.17.
+> 5. Upgrade the managed agents. An agent upgrade installs the server's
+>    Borg 2 along with the agent, and from then on that machine cannot read
+>    its old Borg 2 repositories either. Borg UI runs no Borg 2 job on an
+>    endpoint whose Borg 2 is older than the server's: the agent list marks
+>    such an endpoint, and each Borg 2 backup, restore or maintenance run
+>    on it is refused with both versions named. A machine that manages its
+>    own Borg (`--skip-borg-install`) keeps its binary across an upgrade;
+>    replace its Borg 2 yourself and restart the agent, or run the installer
+>    on it with `--reinstall --borg-version both --borg-source server` (`2`
+>    instead of `both` where it has no Borg 1).
+>
+> On a repository created with 2.0.0b25, every command needs the passphrase,
+> `break-lock` and deleting the repository included, because the lock is
+> protected by the repository key. A `keyfile` repository of this format
+> whose key file is lost can no longer be unlocked or deleted through Borg.
+>
+> Borg 2 has no upload limit of its own (2.0.0b22 removed
+> `--upload-ratelimit`). A Borg 2 repository behind rclone (an `rclone:`
+> URL) takes the repository's, the plan's or the scheduled upload limit as
+> rclone's bandwidth limit (`RCLONE_BWLIMIT`) for the backup; restores and
+> checks run at full speed. Other Borg 2 repositories have no upload limit.
+> A managed agent does this from 0.1.18.
+>
+> Borg 1 repositories are unaffected.
 
 Then pull and start the new image:
 

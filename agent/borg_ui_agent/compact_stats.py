@@ -46,47 +46,6 @@ _MAX_DIGITS = 24
 # A Borg 2 compact prints its statistics as the last lines of the run; this
 # many lines from the end of the output hold all of them.
 TAIL_LINES = 64
-# The Borg 2 beta that added `compact --stats`; an older beta rejects the
-# whole command for the flag.
-COMPACT_STATS_SINCE_BETA = 15
-
-
-# Bounded components: `int` on an unbounded digit run can refuse it.
-_VERSION_TOKEN = (
-    r"(?P<major>\d{1,6})\.(?P<minor>\d{1,6})\.(?P<patch>\d{1,6})(?:b(?P<beta>\d{1,6}))?"
-)
-_VERSION = re.compile(r"\b" + _VERSION_TOKEN)
-_BORG_VERSION = re.compile(r"\bborg\S*\s+" + _VERSION_TOKEN)
-
-
-def parse_borg_version(output: str) -> Optional[str]:
-    """The version token in `borg --version` output ("borg2 2.0.0b24"):
-    the one after the program name where there is one (a wrapper may print
-    its own banner first), else the first version-shaped token, else None;
-    the caller then knows nothing about the binary rather than something
-    wrong."""
-    match = _BORG_VERSION.search(output) or _VERSION.search(output)
-    if not match:
-        return None
-    return match.group(0)[match.start("major") - match.start(0) :]
-
-
-def borg2_beta_at_least(version: str, minimum_beta: int) -> bool:
-    """Whether `version` (a token from `parse_borg_version`) is a Borg 2 at or
-    past `minimum_beta`. A released 2.x carries no beta number and is past every
-    one of them; anything that is not a 2.x is not."""
-    match = _VERSION.search(version)
-    if not match or int(match.group("major")) != 2:
-        return False
-    beta = match.group("beta")
-    return beta is None or int(beta) >= minimum_beta
-
-
-def has_compact_stats(version: str) -> bool:
-    """Whether Borg `version` (a token from `parse_borg_version`) accepts
-    `compact --stats`: any 2.x that is not a beta before b15."""
-    return borg2_beta_at_least(version, COMPACT_STATS_SINCE_BETA)
-
 
 _UNITS = {
     "B": 1,

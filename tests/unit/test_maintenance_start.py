@@ -11,7 +11,6 @@ from app.database.models import Base, Operation, Repository, utc_now
 from tests.utils.agent_jobs import agent_maintenance_job
 from app.services.operations.maintenance_start import (
     active_maintenance_operation,
-    start_inline_maintenance,
     start_maintenance,
 )
 
@@ -85,6 +84,44 @@ def test_start_rejects_a_second_check_on_the_same_repository(db, repository):
     assert excinfo.value.detail["key"] == "backend.errors.repo.checkAlreadyRunning"
 
 
+def test_a_running_prune_preview_does_not_refuse_a_real_prune(db, repository):
+    """The retention comparison a backup chains runs dry-run prunes inline; a
+    user's prune started meanwhile queues behind them (the lane holds it)
+    instead of being refused as "prune already running"."""
+    from app.services.operations.maintenance_start import start_inline_maintenance
+
+    start_inline_maintenance(
+        db, repository, "prune", params={"dry_run": True}, user_id=None
+    )
+
+    op = start_maintenance(
+        db,
+        repository,
+        "prune",
+        trigger="manual",
+        params={"dry_run": False},
+        user_id=None,
+        duplicate_error_key="backend.errors.repo.pruneAlreadyRunning",
+    )
+
+    assert op.status == "queued"
+
+
+def test_a_queued_real_prune_still_refuses_a_second_one(db, repository):
+    kwargs = dict(
+        trigger="manual",
+        params={"dry_run": False},
+        user_id=None,
+        duplicate_error_key="backend.errors.repo.pruneAlreadyRunning",
+    )
+    start_maintenance(db, repository, "prune", **kwargs)
+
+    with pytest.raises(HTTPException) as excinfo:
+        start_maintenance(db, repository, "prune", **kwargs)
+
+    assert excinfo.value.status_code == 409
+
+
 def test_start_allows_a_different_kind_to_queue_alongside(db, repository):
     start_maintenance(
         db,
@@ -155,31 +192,6 @@ def test_active_maintenance_operation_finds_queued_and_running(db, repository):
     op.status = "failed"
     db.commit()
     assert active_maintenance_operation(db, repository.id, "check") is None
-
-
-def test_a_running_dry_run_does_not_block_a_real_prune(db, repository):
-    # The retention comparison runs prune dry runs after every backup; they
-    # are previews, not a prune the user could be duplicating.
-    start_inline_maintenance(
-        db,
-        repository,
-        "prune",
-        params={"dry_run": True},
-        user_id=None,
-        trigger="preview",
-    )
-
-    assert active_maintenance_operation(db, repository.id, "prune") is None
-    prune = start_maintenance(
-        db,
-        repository,
-        "prune",
-        trigger="manual",
-        params={},
-        user_id=None,
-        duplicate_error_key="backend.errors.repo.pruneAlreadyRunning",
-    )
-    assert prune.status == "queued"
 
 
 def test_params_drop_none_values(db, repository):

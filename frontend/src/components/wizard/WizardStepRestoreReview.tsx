@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import {
   DEFAULT_RESTORE_LAYOUT,
   getRestorePreviewDestination,
+  type RestoreExistingFiles,
   type RestoreLayout,
 } from '../../utils/restorePaths'
 
@@ -36,10 +37,12 @@ export interface RestoreReviewData {
   restoreStrategy: 'original' | 'custom'
   customPath: string
   restoreLayout: RestoreLayout
+  existingFiles?: RestoreExistingFiles | null
 }
 
 interface WizardStepRestoreReviewProps {
   data: RestoreReviewData
+  borgVersion?: 1 | 2
   selectedFiles: ArchiveFile[]
   sshConnections: SSHConnection[]
   archiveName: string
@@ -75,6 +78,7 @@ function SummaryRow({ label, children }: { label: string; children: React.ReactN
 
 export default function WizardStepRestoreReview({
   data,
+  borgVersion = 1,
   selectedFiles,
   sshConnections,
   archiveName,
@@ -230,6 +234,21 @@ export default function WizardStepRestoreReview({
               </SummaryRow>
             </>
           )}
+
+          <Divider sx={{ my: 1 }} />
+          <SummaryRow label={t('wizard.restoreReview.existingFiles')}>
+            <Chip
+              label={
+                borgVersion === 1
+                  ? t('wizard.restoreReview.existingFilesBorg1')
+                  : data.existingFiles === 'continue'
+                    ? t('wizard.restoreReview.existingFilesContinue')
+                    : t('wizard.restoreReview.existingFilesExact')
+              }
+              size="small"
+              color={borgVersion === 2 && data.existingFiles === 'continue' ? 'warning' : 'default'}
+            />
+          </SummaryRow>
         </Box>
       </Paper>
 

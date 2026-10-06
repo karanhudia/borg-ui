@@ -29,12 +29,12 @@ interface RepositoryEncryptionFieldsProps {
 }
 
 const BORG1_ENCRYPTION_OPTIONS = ['repokey', 'repokey-blake2', 'keyfile', 'keyfile-blake2', 'none']
+// Borg 2 has no unencrypted repositories since 2.0.0b25.
 const BORG2_ENCRYPTION_OPTIONS = [
   'repokey-aes-ocb',
   'repokey-chacha20-poly1305',
   'keyfile-aes-ocb',
   'keyfile-chacha20-poly1305',
-  'none',
 ]
 
 export default function RepositoryEncryptionFields({

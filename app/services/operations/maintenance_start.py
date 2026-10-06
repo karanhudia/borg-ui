@@ -18,32 +18,30 @@ from sqlalchemy.orm import Session
 from app.database.models import Operation, Repository
 from app.services.operations.enqueue import enqueue
 from app.services.operations.job_facade import MAINTENANCE_KINDS
+from app.utils.http_detail import detail_text
 
 logger = structlog.get_logger()
 
 ACTIVE_STATUSES = ("queued", "running")
 
 
-def active_maintenance_operation(db: Session, repository_id: int, kind: str) -> Any:
+def active_maintenance_operation(
+    db: Session, repository_id: int, kind: str, *, previews: bool = True
+) -> Any:
     """The active `Operation` for this repository and kind, if one exists.
+    `previews=False` skips prune dry runs (the page's preview and the
+    retention comparison a backup chains): they remove nothing, and a real
+    prune started meanwhile waits for the lane they hold."""
+    from app.services.operations.repository_status import _not_dry_run
 
-    A prune dry run (the preview, or the retention comparison that follows
-    every backup) is not a prune: counting it answered a real prune with
-    "already running" and showed a prune in progress that was not."""
-    candidates = (
-        db.query(Operation)
-        .filter(
-            Operation.repository_id == repository_id,
-            Operation.kind == kind,
-            Operation.status.in_(ACTIVE_STATUSES),
-        )
-        .order_by(Operation.id.desc())
-        .all()
+    q = db.query(Operation).filter(
+        Operation.repository_id == repository_id,
+        Operation.kind == kind,
+        Operation.status.in_(ACTIVE_STATUSES),
     )
-    for candidate in candidates:
-        if not (candidate.params or {}).get("dry_run"):
-            return candidate
-    return None
+    if not previews:
+        q = q.filter(_not_dry_run())
+    return q.order_by(Operation.id.desc()).first()
 
 
 def start_maintenance(
@@ -60,7 +58,7 @@ def start_maintenance(
 ) -> Operation:
     if kind not in MAINTENANCE_KINDS:
         raise ValueError(f"Not a maintenance kind: {kind!r}")
-    if active_maintenance_operation(db, repository.id, kind) is not None:
+    if active_maintenance_operation(db, repository.id, kind, previews=False):
         raise HTTPException(status_code=409, detail={"key": duplicate_error_key})
     # None means "not supplied"; storing it would shadow a service default.
     stored = {key: value for key, value in params.items() if value is not None}
@@ -147,26 +145,6 @@ def start_inline_maintenance(
     db.commit()
     db.refresh(operation)
     return operation
-
-
-def detail_text(detail: Any) -> str:
-    """An HTTPException detail as one line: its message or key, as the other
-    detail flatteners do, except that the admission's generic "repository
-    busy" key says which operation holds the repository instead."""
-    from app.services.job_admission import REPOSITORY_OPERATION_ACTIVE_KEY
-
-    if isinstance(detail, dict):
-        message = detail.get("message")
-        if message:
-            return str(message)
-        key = detail.get("key")
-        params = detail.get("params")
-        active = params.get("active_operation") if isinstance(params, dict) else None
-        if key == REPOSITORY_OPERATION_ACTIVE_KEY and active:
-            return f"{active} is active on the repository"
-        if key:
-            return str(key)
-    return str(detail)
 
 
 def failure_text(error: BaseException) -> str:

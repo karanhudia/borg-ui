@@ -122,6 +122,33 @@ def agent_reports_borg_major(reported: Optional[list], major: Any) -> bool:
     return agent_borg_version_for_major(reported, major) is not None
 
 
+def agent_borg2_version(
+    reported: Optional[list], binary: Optional[str] = None
+) -> Optional[str]:
+    """The version of the Borg 2 an endpoint runs a Borg 2 job with, in the
+    shape of `agent_borg_version_for_major`.
+
+    The agent runs `borg2` unless the job names another binary (`binary`),
+    and it reports every Borg it finds: a `borg` on PATH may be a Borg 2 as
+    well, which a job does not run. So only the reported entry of that
+    binary counts, by path or by name; an entry without a path (a report
+    that names none) counts for any. The list arrives from the agent, so a
+    malformed entry simply does not match.
+    """
+    wanted = (binary or "borg2").rstrip("/")
+    for entry in reported or []:
+        if not isinstance(entry, dict) or str(entry.get("major")) != "2":
+            continue
+        path = entry.get("path")
+        if isinstance(path, str) and path:
+            path = path.rstrip("/")
+            if path != wanted and path.rsplit("/", 1)[-1] != wanted:
+                continue
+        version = entry.get("version")
+        return version if isinstance(version, str) else ""
+    return None
+
+
 def agent_borg_version_for_major(reported: Optional[list], major: Any) -> Optional[str]:
     """The version string an endpoint reports for this Borg major: "" when it
     reports the major without a readable version, None when it does not report

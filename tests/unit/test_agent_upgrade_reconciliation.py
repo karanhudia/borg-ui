@@ -166,7 +166,7 @@ def test_a_satisfied_borg_pin_clears_the_upgrade(test_db):
         desired_borg="2",
         borg_versions=[
             {"major": 1, "version": "1.4.0", "path": "/usr/local/bin/borg"},
-            {"major": 2, "version": "2.0.0b14", "path": "/usr/local/bin/borg2"},
+            {"major": 2, "version": "2.0.0b25", "path": "/usr/local/bin/borg2"},
         ],
     )
 
@@ -215,7 +215,7 @@ def test_the_agent_version_still_has_to_match_a_satisfied_borg_pin(test_db):
         requested_at=datetime.now(timezone.utc),
         desired_borg="2",
         borg_versions=[
-            {"major": 2, "version": "2.0.0b14", "path": "/usr/local/bin/borg2"}
+            {"major": 2, "version": "2.0.0b25", "path": "/usr/local/bin/borg2"}
         ],
     )
 

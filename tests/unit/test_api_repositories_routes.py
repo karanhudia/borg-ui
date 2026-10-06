@@ -566,7 +566,7 @@ class TestRepositoryHelperContracts:
         repo = _create_repo(
             test_db,
             "Agent Repo",
-            "rest://borg@h/store/repo",
+            "ssh://borg@h/store/repo",
             borg_version=2,
             agent_machine_id=agent.id,
         )

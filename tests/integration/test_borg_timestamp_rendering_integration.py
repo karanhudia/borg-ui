@@ -3,7 +3,7 @@ against real binaries.
 
 borg 1 renders archive times in the local zone of the listing process with no
 UTC offset - the reason parse_borg_archive_time needs to know the render zone.
-borg 2 (measured on 2.0.0b22 and 2.0.0b23) renders them WITH an explicit UTC
+borg 2 (measured on 2.0.0b25) renders them WITH an explicit UTC
 offset, both in the bare ``repo-list --json`` and in the key-restricted
 ``--json --format`` fast path the agent uses - those values are
 self-describing and take the parser's offset branch regardless of any zone
@@ -96,12 +96,7 @@ def test_borg2_listing_times_carry_their_utc_offset(tmp_path):
     source = tmp_path / "src2"
     source.mkdir()
     (source / "f.txt").write_text("data\n", encoding="utf-8")
-    try:
-        init_borg_repo(borg2, repo_path, env=env, encryption="none")
-    except AssertionError:
-        # 2.0.0b23 renamed the unencrypted modes with no alias for the plain
-        # b22 names; the rendering contract under test is the same either way.
-        init_borg_repo(borg2, repo_path, env=env, encryption="none-sha256")
+    init_borg_repo(borg2, repo_path, env=env)
     create_archive(borg2, repo_path, "tz-test", [source], env=env)
 
     utc_str = _listing_time(borg2, repo_path, env, "UTC")
