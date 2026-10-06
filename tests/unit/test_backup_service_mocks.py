@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock, Mock
 from app.services.backup_service import BackupService
+from app.utils.fs import remote_du_command
 
 
 # Where a mocked job's log file goes. pytest owns the directory and cleans it
@@ -605,7 +606,7 @@ async def test_calculate_source_size_ssh(backup_service_fixture):
         args = mock_exec.call_args[0]
         assert args[0] == "ssh"
         assert "user@host" in args
-        assert "du -sb" in args[len(args) - 1]  # Command is last arg
+        assert args[-1].startswith("if du -sb /dev/null")  # Command is last arg
 
 
 @pytest.mark.asyncio
@@ -668,8 +669,8 @@ async def test_calculate_source_size_ssh_retries_login_relative_du(
     assert size == 2048
     first_cmd = mock_exec.call_args_list[0].args
     second_cmd = mock_exec.call_args_list[1].args
-    assert first_cmd[-1] == "du -sb /remote/path 2>/dev/null | cut -f1"
-    assert second_cmd[-1] == "du -sb remote/path 2>/dev/null | cut -f1"
+    assert first_cmd[-1] == remote_du_command("/remote/path") + " 2>/dev/null"
+    assert second_cmd[-1] == remote_du_command("remote/path") + " 2>/dev/null"
 
 
 @pytest.mark.asyncio
@@ -694,7 +695,10 @@ async def test_calculate_source_size_ssh_does_not_retry_du_without_login_relativ
 
     assert size == 0
     assert mock_exec.call_count == 1
-    assert mock_exec.call_args.args[-1] == "du -sb /remote/path 2>/dev/null | cut -f1"
+    assert (
+        mock_exec.call_args.args[-1]
+        == remote_du_command("/remote/path") + " 2>/dev/null"
+    )
 
 
 def test_resolve_source_size_ssh_key_files_matches_each_remote_source(

@@ -78,7 +78,7 @@ const storyFetch: typeof fetch = async (input, init) => {
         checkedAt: new Date().toISOString(),
         appVersion: '2.2.2',
         borgVersion: '1.4.1',
-        borg2Version: '2.0.0b19',
+        borg2Version: '2.0.0b25',
         error: null,
         compatibility: 'compatible',
         compatibilityMessage: 'Borg UI 2.2.2 is compatible with this frontend.',
@@ -141,7 +141,7 @@ const storyFetch: typeof fetch = async (input, init) => {
       JSON.stringify({
         app_version: '2.2.2',
         borg_version: '1.4.1',
-        borg2_version: '2.0.0b19',
+        borg2_version: '2.0.0b25',
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     )
@@ -163,7 +163,7 @@ function seedRemoteBackends(state: RemoteBackendStoryState): void {
     checkedAt: '2026-06-05T06:30:00.000Z',
     appVersion: '2.2.2',
     borgVersion: '1.4.1',
-    borg2Version: '2.0.0b19',
+    borg2Version: '2.0.0b25',
     compatibility: 'compatible',
     compatibilityMessage: 'Compatible with this frontend.',
   })

@@ -9,6 +9,9 @@ endpoint can upgrade itself.
 On Linux the pieces are a root-owned conf, a oneshot unit naming the helper
 and a path unit watching the trigger. On macOS they are the per-user conf and
 one launchd job that both names the helper and watches the trigger.
+
+The conf also has to name the server this endpoint is enrolled against. The
+helper refuses when the two differ, which is what `set-server` leaves behind.
 """
 
 from __future__ import annotations
@@ -41,6 +44,9 @@ REQUIRED_CONF_KEYS = (
 )
 
 _CONF_LINE = re.compile(r'^\s*([A-Z_]+)\s*=\s*"(.*)"\s*$')
+# The helper's own expression for the config's server, so that the two cannot
+# disagree about a line one of them reads and the other does not.
+_SERVER_URL_LINE = re.compile(r'^server_url\s*=\s*"(.*)"\s*$', re.ASCII)
 
 
 @dataclass(frozen=True)
@@ -84,6 +90,32 @@ def _parse_conf(path: Path) -> dict[str, str]:
         if match:
             values[match.group(1)] = match.group(2)
     return values
+
+
+def recorded_server(conf_path: Optional[Path] = None) -> str:
+    """The server the upgrade record names, or nothing without a record."""
+    conf_path = conf_path or default_upgrade_paths().conf_path
+    if not conf_path.is_file():
+        return ""
+    return _parse_conf(conf_path).get("SERVER", "")
+
+
+def _enrolled_server(config_path: Path) -> str:
+    """The server in the agent's config, as the helper reads it.
+
+    The helper takes the first line of that form and reads a config without
+    one, or one it cannot open, as no server at all. It then refuses, so none
+    of that is an error here either.
+    """
+    try:
+        lines = config_path.read_text(encoding="utf-8").split("\n")
+    except (OSError, ValueError):
+        return ""
+    for line in lines:
+        match = _SERVER_URL_LINE.match(line)
+        if match:
+            return match.group(1)
+    return ""
 
 
 def _read_plist(path: Path) -> dict:
@@ -133,12 +165,15 @@ def check_self_upgrade(
     unit_path: Optional[Path] = None,
     path_unit_path: Optional[Path] = None,
     trigger_path: Optional[Path] = None,
+    config_path: Optional[Path] = None,
 ) -> UpgradeReadiness:
     defaults = default_upgrade_paths()
     conf_path = conf_path or defaults.conf_path
     unit_path = unit_path or defaults.unit_path
     path_unit_path = path_unit_path or defaults.path_unit_path
     trigger_path = trigger_path or defaults.trigger_path
+    # The helper reads the config that sits beside the trigger.
+    config_path = config_path or trigger_path.parent / "config.toml"
 
     if not unit_path.is_file():
         return UpgradeReadiness(supported=False, reason="unit_missing")
@@ -159,6 +194,13 @@ def check_self_upgrade(
     if not conf["SERVER"].startswith("https://"):
         return UpgradeReadiness(supported=False, reason="server_not_https")
 
+    # The helper also refuses a conf that names another server than the one
+    # this endpoint is enrolled against. `set-server` moves only the config,
+    # so a moved endpoint needs one reinstall before it can upgrade itself.
+    enrolled = _enrolled_server(config_path)
+    if enrolled.removesuffix("/") != conf["SERVER"].removesuffix("/"):
+        return UpgradeReadiness(supported=False, reason="server_mismatch")
+
     # Nothing starts the helper without the watcher armed on the trigger.
     if not _watches_trigger(path_unit_path, trigger_path):
         return UpgradeReadiness(supported=False, reason="path_unit_missing")
@@ -175,7 +217,8 @@ def check_self_upgrade(
 def can_self_upgrade() -> bool:
     try:
         return check_self_upgrade().supported
-    except OSError:
-        # An unreadable /etc or a vanished file means the endpoint cannot
-        # upgrade itself. It must not mean the agent stops reporting at all.
+    except (OSError, ValueError):
+        # An unreadable /etc, a vanished file or one that is not text means
+        # the endpoint cannot upgrade itself. It must not mean the agent stops
+        # reporting at all.
         return False

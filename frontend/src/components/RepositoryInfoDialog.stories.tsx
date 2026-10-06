@@ -30,7 +30,7 @@ const borg2Repository: Repository = {
   ...borg1Repository,
   id: 44,
   name: 'Borg 2 on a store URL',
-  path: 'rest://backup-host/repos/production',
+  path: 'ssh://borg@backup-host/repos/production',
   borg_version: 2,
   encryption: 'repokey-aes-ocb',
   archive_count: 35,
@@ -108,5 +108,16 @@ export const FailedInfoWithAgentReason: Story = {
     refreshFailed: true,
     errorMessage:
       "repository.info exited with code 2: Failed to create/acquire the lock /mnt/borg/broken/lock.exclusive ([Errno 13] Permission denied: '/mnt/borg/broken/lock.exclusive.5ic2kcji.tmp').",
+  },
+}
+
+export const FailedInfoRecoveryBorg2RemotePath: Story = {
+  args: {
+    refreshFailed: true,
+    repository: {
+      ...borg2Repository,
+      path: 'ssh://borg@backup-host//srv/borg/production',
+      remote_path: '/usr/local/bin/borg2',
+    },
   },
 }

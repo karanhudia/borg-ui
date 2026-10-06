@@ -512,13 +512,16 @@ def break_repository_lock(repository: Repository) -> bool:
         except Exception:
             db = None
         connection = resolve_repository_ssh_connection(repository, db) if db else None
-        cmd = BorgRouter(repository).build_break_lock_command(
+        router = BorgRouter(repository)
+        remote_path = effective_repository_remote_path(repository, db)
+        cmd = router.build_break_lock_command(
             repository_path=repository.path,
-            remote_path=effective_repository_remote_path(repository, db),
+            remote_path=remote_path,
         )
 
         # Set environment variables
         env = os.environ.copy()
+        env.update(router.remote_path_env(remote_path))
         if repository.passphrase:
             env["BORG_PASSPHRASE"] = repository.passphrase
 
@@ -537,6 +540,8 @@ def break_repository_lock(repository: Repository) -> bool:
             # to a pinned host with verification turned down.
             ssh_opts = get_standard_ssh_opts(connection_id=repository.connection_id)
             env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
+
+        router.prepare_env(env)
 
         # Execute break-lock command
         result = subprocess.run(

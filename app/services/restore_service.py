@@ -8,9 +8,9 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from types import SimpleNamespace
 
-from app.database.models import Repository, SSHConnection
+from app.database.models import AgentMachine, Repository, SSHConnection
 from app.database.database import SessionLocal
-from app.core.borg_errors import is_borg_warning_exit_code
+from app.core.borg_errors import RestoreRefused, is_borg_warning_exit_code
 from app.core.borg_router import BorgRouter
 from app.services.operations.restore_facade import resolve_restore_job
 from app.services.notification_service import notification_service
@@ -27,6 +27,7 @@ from app.utils.restore_layout import (
 )
 
 from app.services.process_cancel import terminate_tracked_process
+from app.utils.http_detail import detail_text, structured_detail
 from app.utils.local_paths import is_restore_destination_allowed
 
 logger = structlog.get_logger()
@@ -52,13 +53,24 @@ _AGENT_RESTORE_STALL_TIMEOUT_SECONDS = 600
 _AGENT_RESTORE_NO_PROGRESS_MAX_SECONDS = 6 * 3600
 # How often a cancel re-reads an agent job whose status moved under it.
 _AGENT_CANCEL_TRANSITION_ATTEMPTS = 3
+# An agent that reads `target.existing_files` of a restore (0.1.17, #1261);
+# an older one refuses an occupied Borg 2 destination whatever was chosen.
+AGENT_RESTORE_EXISTING_FILES_CAPABILITY = "repository.restore.existing_files"
 
 
-def _http_detail_text(exc) -> str:
+def refusal_error_message(exc) -> str:
+    """The job error for a refused start: the validator's own `{key, params}`
+    when it has one, so the UI translates it with its params."""
     detail = getattr(exc, "detail", None)
-    if isinstance(detail, dict):
-        return detail.get("message") or detail.get("key") or str(detail)
-    return str(detail)
+    structured = structured_detail(detail)
+    if structured:
+        return json.dumps(structured)
+    return json.dumps(
+        {
+            "key": "backend.errors.restore.failedStartRestore",
+            "params": {"error": detail_text(detail)},
+        }
+    )
 
 
 def _agent_result_return_code(agent_job) -> Optional[int]:
@@ -120,6 +132,7 @@ class RestoreService:
         ssh_connection_id: Optional[int] = None,
         restore_layout: str = RESTORE_LAYOUT_PRESERVE_PATH,
         path_metadata: Optional[list] = None,
+        existing_files: str = "refuse",
     ):
         """
         Execute a restore operation with progress tracking
@@ -137,6 +150,8 @@ class RestoreService:
             ssh_connection_id: SSH connection ID for SSH repositories
             restore_layout: How selected archive paths should be laid out at destination
             path_metadata: Selected path type metadata from the archive browser
+            existing_files: "refuse" (exact restore, an occupied Borg 2
+                destination is refused) or "continue" (write into it, #1261)
         """
         # Agent-executor repositories must run the extract on their managed
         # agent: the server can't reach the node's filesystem (or, for
@@ -150,6 +165,7 @@ class RestoreService:
                 paths,
                 restore_layout=restore_layout,
                 path_metadata=path_metadata,
+                existing_files=existing_files,
             )
             return
 
@@ -173,6 +189,7 @@ class RestoreService:
                 paths,
                 restore_layout=restore_layout,
                 path_metadata=path_metadata,
+                existing_files=existing_files,
             )
         elif execution_mode == "ssh_to_local":
             await self._execute_ssh_to_local(
@@ -183,6 +200,7 @@ class RestoreService:
                 paths,
                 restore_layout=restore_layout,
                 path_metadata=path_metadata,
+                existing_files=existing_files,
             )
         elif execution_mode == "local_to_ssh":
             await self._execute_local_to_ssh(
@@ -194,6 +212,7 @@ class RestoreService:
                 destination_connection_id,
                 restore_layout=restore_layout,
                 path_metadata=path_metadata,
+                existing_files=existing_files,
             )
         else:
             # This should never happen due to API validation, but handle it gracefully
@@ -218,6 +237,16 @@ class RestoreService:
                 job_id=job_id,
             )
 
+    @staticmethod
+    def _agent_restores_into_existing(db, repository: Repository) -> bool:
+        agent = (
+            db.get(AgentMachine, repository.agent_machine_id)
+            if repository.agent_machine_id is not None
+            else None
+        )
+        capabilities = (agent.capabilities if agent is not None else None) or []
+        return AGENT_RESTORE_EXISTING_FILES_CAPABILITY in capabilities
+
     def _is_agent_restore(self, repository_path: str) -> bool:
         from app.services.repository_executor import is_agent_executor
 
@@ -240,6 +269,7 @@ class RestoreService:
         *,
         restore_layout: str = RESTORE_LAYOUT_PRESERVE_PATH,
         path_metadata: Optional[list] = None,
+        existing_files: str = "refuse",
     ):
         """Delegate a restore to the repository's managed agent.
 
@@ -271,6 +301,20 @@ class RestoreService:
                 db.commit()
                 await self._notify_agent_restore(db, job)
                 return
+            # Borg 1 writes into such a directory and ignores the choice
+            if (
+                existing_files == "continue"
+                and BorgRouter(repository).is_v2
+                and not self._agent_restores_into_existing(db, repository)
+            ):
+                job.status = "failed"
+                job.error_message = json.dumps(
+                    {"key": "backend.errors.restore.agentCannotRestoreIntoExisting"}
+                )
+                job.completed_at = datetime.now(timezone.utc)
+                db.commit()
+                await self._notify_agent_restore(db, job)
+                return
 
             job.status = "running"
             job.started_at = datetime.now(timezone.utc)
@@ -286,6 +330,10 @@ class RestoreService:
                 "paths": list(paths or []),
                 "target": {"type": "path", "path": destination},
             }
+            if existing_files == "continue":
+                # an agent before 0.1.17 does not read it and refuses an
+                # occupied Borg 2 destination (see the capability check below)
+                operation["target"]["existing_files"] = "continue"
             if strip_components:
                 operation["strip_components"] = strip_components
 
@@ -298,12 +346,7 @@ class RestoreService:
                 )
             except HTTPException as exc:
                 job.status = "failed"
-                job.error_message = json.dumps(
-                    {
-                        "key": "backend.errors.restore.failedStartRestore",
-                        "params": {"error": _http_detail_text(exc)},
-                    }
-                )
+                job.error_message = refusal_error_message(exc)
                 job.completed_at = datetime.now(timezone.utc)
                 db.commit()
                 await self._notify_agent_restore(db, job)
@@ -543,6 +586,16 @@ class RestoreService:
         if agent_job.status == "failed":
             job.status = "failed"
             return_code = _agent_result_return_code(agent_job)
+            agent_message = getattr(agent_job, "error_message", None)
+            if return_code is None and agent_message:
+                # the agent gave up before Borg ran; its reason is the error
+                job.error_message = json.dumps(
+                    {
+                        "key": "backend.errors.service.restoreFailedOnAgent",
+                        "params": {"error": agent_message},
+                    }
+                )
+                return
             job.error_message = json.dumps(
                 {
                     "key": "backend.errors.service.restoreFailedExitCode",
@@ -591,6 +644,7 @@ class RestoreService:
         paths: list = None,
         restore_layout: str = RESTORE_LAYOUT_PRESERVE_PATH,
         path_metadata: Optional[list] = None,
+        existing_files: str = "refuse",
     ):
         """
         Execute restore from local repository to local destination
@@ -697,6 +751,8 @@ class RestoreService:
                     ),
                     bypass_lock=repository.bypass_lock if repository else False,
                     strip_components=strip_components,
+                    destination=destination,
+                    existing_files=existing_files,
                 )
 
                 # Set up environment
@@ -1108,6 +1164,27 @@ class RestoreService:
 
                 db_session.commit()
 
+            except RestoreRefused as refused:
+                logger.warning(
+                    "Restore refused", job_id=job_id, reason=refused.detail.get("key")
+                )
+                job.status = "failed"
+                job.error_message = json.dumps(refused.detail)
+                job.completed_at = datetime.now(timezone.utc)
+                db_session.commit()
+                try:
+                    await notification_service.send_restore_failure(
+                        db_session,
+                        repository_path,
+                        archive_name,
+                        job.error_message,
+                        None,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Failed to send restore failure notification", error=str(e)
+                    )
+
             except Exception as e:
                 # Handle any unexpected errors during extraction
                 logger.error(
@@ -1276,6 +1353,7 @@ class RestoreService:
         paths: list = None,
         restore_layout: str = RESTORE_LAYOUT_PRESERVE_PATH,
         path_metadata: Optional[list] = None,
+        existing_files: str = "refuse",
     ):
         """
         Execute restore from SSH repository to local destination
@@ -1292,6 +1370,7 @@ class RestoreService:
             paths,
             restore_layout=restore_layout,
             path_metadata=path_metadata,
+            existing_files=existing_files,
         )
 
     async def _execute_local_to_ssh(
@@ -1304,6 +1383,7 @@ class RestoreService:
         destination_connection_id: int = None,
         restore_layout: str = RESTORE_LAYOUT_PRESERVE_PATH,
         path_metadata: Optional[list] = None,
+        existing_files: str = "refuse",
     ):
         """
         Execute restore from local repository to SSH destination using SSHFS.
@@ -1420,6 +1500,8 @@ class RestoreService:
                 ),
                 bypass_lock=repository.bypass_lock if repository else False,
                 strip_components=strip_components,
+                destination=mount_path,
+                existing_files=existing_files,
             )
 
             # Set up environment
@@ -1692,7 +1774,9 @@ class RestoreService:
                 if job:
                     job.status = "failed"
                     job.error_message = json.dumps(
-                        {"key": "backend.errors.service.restoreFailed"}
+                        e.detail
+                        if isinstance(e, RestoreRefused)
+                        else {"key": "backend.errors.service.restoreFailed"}
                     )
                     job.completed_at = datetime.now(timezone.utc)
                     db_session.commit()
@@ -1700,7 +1784,13 @@ class RestoreService:
                     # Send failure notification
                     try:
                         await notification_service.send_restore_failure(
-                            db_session, repository_path, archive_name, str(e), None
+                            db_session,
+                            repository_path,
+                            archive_name,
+                            job.error_message
+                            if isinstance(e, RestoreRefused)
+                            else str(e),
+                            None,
                         )
                     except Exception as notif_error:
                         logger.warning(

@@ -163,7 +163,7 @@ def test_detect_borg_binaries(monkeypatch):
 
     def fake_run(command, check, capture_output, text, timeout):
         if command[0].endswith("borg2"):
-            return SimpleNamespace(stdout="borg 2.0.0b10", stderr="")
+            return SimpleNamespace(stdout="borg 2.0.0b25", stderr="")
         return SimpleNamespace(stdout="borg 1.2.8", stderr="")
 
     monkeypatch.setattr("agent.borg_ui_agent.borg.shutil.which", fake_which)
@@ -180,7 +180,7 @@ def test_detect_borg_binaries(monkeypatch):
         },
         {
             "major": 2,
-            "version": "2.0.0b10",
+            "version": "2.0.0b25",
             "path": "/custom/bin/borg2",
             "install_source": "custom-path",
         },
@@ -323,8 +323,7 @@ def test_backup_create_payload_builds_borg2_command_from_flat_payload():
         "--json",
         "--compression",
         "none",
-        "--upload-ratelimit",
-        "1536",
+        # no --upload-ratelimit: Borg 2 has none (#1263)
         "--list",
         "laptop",
         "/src",
@@ -614,9 +613,7 @@ def test_borg2_compact_reports_its_statistics_in_the_completion(monkeypatch):
     parses the statistics from the tail of its own output and sends them
     with the completion report, so the server does not depend on the log
     lines that queue behind it."""
-    from agent.borg_ui_agent import repository_ops
 
-    monkeypatch.setattr(repository_ops, "compact_stats_supported", lambda binary: True)
     captured = {}
 
     class _FakePopen:
@@ -688,99 +685,6 @@ def test_borg2_compact_reports_its_statistics_in_the_completion(monkeypatch):
 
 
 @pytest.mark.unit
-def test_borg2_compact_without_the_flag_on_an_old_beta(monkeypatch):
-    """Borg 2.0.0b15 added `compact --stats`; on an older beta the flag
-    would fail the whole compact, so it is left out and nothing is parsed
-    or reported."""
-    from agent.borg_ui_agent import repository_ops
-
-    monkeypatch.delenv("BORG_UNITS", raising=False)
-    monkeypatch.setattr(repository_ops, "compact_stats_supported", lambda binary: False)
-    captured = {}
-
-    class _FakePopen:
-        def __init__(self, cmd, **kwargs):
-            captured["cmd"] = cmd
-            captured["env"] = kwargs.get("env")
-            self.returncode = 0
-            self.stdout = iter(["Repository size is 502000 B in 6 objects.\n"])
-
-        def wait(self):
-            return 0
-
-    monkeypatch.setattr(
-        "agent.borg_ui_agent.repository_ops.subprocess.Popen", _FakePopen
-    )
-
-    class _Client:
-        def send_log(self, job_id, *, sequence, message, stream="stdout"):
-            pass
-
-        def send_progress(self, job_id, progress):
-            pass
-
-        def complete_job(self, job_id, *, result):
-            captured["result"] = result
-
-        def fail_job(self, job_id, *, error_message, return_code=None, **report):
-            raise AssertionError(error_message)
-
-    job = {
-        "id": 9,
-        "payload": {
-            "schema_version": 1,
-            "job_kind": "repository.compact",
-            "repository": {"path": "/agent/repo2", "borg_version": 2},
-        },
-    }
-
-    result = execute_repository_operation_job(job, _Client(), should_cancel=None)
-
-    assert result.status == "completed"
-    assert "--stats" not in captured["cmd"]
-    assert "BORG_UNITS" not in captured["env"]
-    assert "stats" not in captured["result"]
-
-
-@pytest.mark.unit
-def test_compact_stats_support_is_probed_once_per_binary(monkeypatch):
-    from agent.borg_ui_agent import repository_ops
-
-    calls = []
-
-    class _Probe:
-        stdout = "borg2 2.0.0b14\n"
-        stderr = ""
-
-    def fake_run(cmd, **kwargs):
-        calls.append(cmd)
-        return _Probe()
-
-    monkeypatch.setattr(repository_ops.subprocess, "run", fake_run)
-    monkeypatch.setattr(repository_ops, "_COMPACT_STATS_SUPPORT", {})
-    assert repository_ops.compact_stats_supported("/opt/borg2") is False
-    assert repository_ops.compact_stats_supported("/opt/borg2") is False
-    assert calls == [["/opt/borg2", "--version"]]
-
-    # the file changed under the running agent (an in-place upgrade): probed again
-    _Probe.stdout = "borg2 2.0.0b24\n"
-    monkeypatch.setattr(repository_ops, "_binary_key", lambda binary: (binary, 2, 2))
-    assert repository_ops.compact_stats_supported("/opt/borg2") is True
-    assert len(calls) == 2
-
-    def failing_run(cmd, **kwargs):
-        raise OSError("no such binary")
-
-    monkeypatch.setattr(repository_ops.subprocess, "run", failing_run)
-    # unreadable: no flag this time (a wrong flag fails the whole compact),
-    # and nothing is remembered
-    assert repository_ops.compact_stats_supported("/opt/other") is False
-    _Probe.stdout = "borg2 2.0.0b24\n"
-    monkeypatch.setattr(repository_ops.subprocess, "run", fake_run)
-    assert repository_ops.compact_stats_supported("/opt/other") is True
-
-
-@pytest.mark.unit
 def test_borg_warning_exit_completes_a_streamed_operation_with_warnings(monkeypatch):
     """A Borg warning code on a compact means the run went through: it
     completes with warnings like the short and backup paths, the server
@@ -788,7 +692,6 @@ def test_borg_warning_exit_completes_a_streamed_operation_with_warnings(monkeypa
     kind keeps failing on a non-zero exit."""
     from agent.borg_ui_agent import repository_ops
 
-    monkeypatch.setattr(repository_ops, "compact_stats_supported", lambda binary: True)
     captured = {}
 
     class _FakePopen:
@@ -863,9 +766,7 @@ def test_compact_completion_carries_no_stats_key_without_them(
     """Borg 1 compact has no statistics; a Borg 2 run that printed none
     (a build that no longer does) reports none rather than an empty block,
     so the server falls back to its log parse for that one."""
-    from agent.borg_ui_agent import repository_ops
 
-    monkeypatch.setattr(repository_ops, "compact_stats_supported", lambda binary: True)
     monkeypatch.delenv("BORG_UNITS", raising=False)
     captured = {}
 
@@ -1048,7 +949,7 @@ def test_repository_init_payload_builds_borg2_command():
 
     command = payload.build_command()
 
-    # Borg 2.0.0b22 takes the cipher and the key location separately; the server
+    # Borg 2 takes the cipher and the key location separately; the server
     # still sends the combined mode name it stores.
     assert command == [
         "borg2",
@@ -1084,8 +985,8 @@ def test_repository_init_payload_rejects_unknown_borg2_encryption_mode():
 
 @pytest.mark.unit
 def test_borg1_prune_keeps_the_old_keep_within_spelling():
-    """--keep-within was removed in Borg 2.0.0b22 only; Borg 1 never gained
-    --keep, so the two majors part ways on this flag."""
+    """Borg 2 has no --keep-within and Borg 1 no --keep, so the two majors
+    part ways on this flag."""
     payload = RepositoryOperationPayload.from_job_payload(
         {
             "job_kind": "repository.prune",
@@ -3252,7 +3153,7 @@ def test_build_borg_env_asks_for_modern_exit_codes(monkeypatch):
 
 @pytest.mark.unit
 def test_build_borg_env_enables_the_pack_cache_with_a_bounded_size(monkeypatch):
-    """Borg 2.0.0b23's pack cache downloads each pack once instead of
+    """Borg 2's pack cache downloads each pack once instead of
     re-transferring it on every listing; borg puts it under its own cache
     directory. An empty container-level BORG_STORE_CACHE disables it."""
     monkeypatch.delenv("BORG_STORE_CACHE", raising=False)

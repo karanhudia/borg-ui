@@ -86,6 +86,7 @@ vi.mock('../../components/RestoreWizard', () => ({
       destination_connection_id: number | null
       restore_layout: string
       path_metadata: Array<{ path: string; type: 'file' | 'directory' }>
+      existing_files: 'refuse' | 'continue'
     }) => void
   }) =>
     open ? (
@@ -99,6 +100,7 @@ vi.mock('../../components/RestoreWizard', () => ({
             destination_connection_id: null,
             restore_layout: 'contents_only',
             path_metadata: [{ path: '/var/lib/app', type: 'directory' }],
+            existing_files: 'continue',
           })
         }
       >
@@ -321,7 +323,8 @@ describe('Archives page actions', () => {
         'local',
         null,
         'contents_only',
-        [{ path: '/var/lib/app', type: 'directory' }]
+        [{ path: '/var/lib/app', type: 'directory' }],
+        'continue'
       )
     })
     expect(trackArchive).toHaveBeenCalledWith('View', repository, {

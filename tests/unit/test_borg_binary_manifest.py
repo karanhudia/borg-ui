@@ -3,9 +3,9 @@ one narrows which machines a server-source install can reach.
 
 borgbackup announces neither in its changelog. 1.4.5 quietly stopped publishing
 the glibc 2.31 x86_64 build, so a version bump is measured against the manifest
-it replaces and any regression is surfaced in the PR. 2.0.0b22 quietly renamed
-the Linux pair from glibc235 to glibc239, so which assets count as installable
-is derived from the name rather than listed.
+it replaces and any regression is surfaced in the PR. A Borg 2 release quietly
+renamed the Linux pair from glibc235 to glibc239, so which assets count as
+installable is derived from the name rather than listed.
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ def test_assets_the_installer_cannot_use_are_ignored():
                 "borg-freebsd-15-x86_64-gh",
                 "borg-linux-glibc239-x86_64-gh.tgz",
                 "borg-linux-glibc231-x86_64.asc",
-                "borgbackup-2.0.0b22.tar.gz",
+                "borgbackup-2.0.0b25.tar.gz",
                 "00_README.txt",
             )
         )
@@ -110,7 +110,7 @@ def test_a_dropped_macos_pair_is_a_regression_not_a_stall():
 
 
 def test_a_renamed_linux_pair_still_counts_as_adoptable():
-    """The 2.0.0b22 regression: recognised by a fixed list of names, this release
+    """The glibc239 rename: recognised by a fixed list of names, that release
     read as one that publishes nothing installable, and was passed over without
     a word — which is how a Borg 2 release went unnoticed for a month."""
     assert _covers_both_arches(
@@ -161,27 +161,27 @@ def test_no_regression_when_coverage_holds_or_widens():
 
 def test_a_newer_release_without_both_arches_is_named_not_just_skipped():
     """Passing one over is right — it may still be uploading — but saying
-    nothing is how the b22 rename went unnoticed for a month."""
+    nothing is how the glibc239 rename went unnoticed for a month."""
     releases = [
-        _release("borg-linux-glibc239-x86_64-gh", tag="2.0.0b23"),  # no arm64 yet
-        _release(*BOTH_ARCHES, tag="2.0.0b22"),
+        _release("borg-linux-glibc239-x86_64-gh", tag="2.0.0b26"),  # no arm64 yet
+        _release(*BOTH_ARCHES, tag="2.0.0b25"),
         _release(*BOTH_ARCHES, tag="1.4.5"),
     ]
 
     latest, unadoptable = _with_releases(releases, refresh.latest_adoptable)
 
-    assert latest == {"1": "1.4.5", "2": "2.0.0b22"}
+    assert latest == {"1": "1.4.5", "2": "2.0.0b25"}
     assert len(unadoptable) == 1
-    assert "2.0.0b23" in unadoptable[0]
-    assert "2.0.0b22" in unadoptable[0]
+    assert "2.0.0b26" in unadoptable[0]
+    assert "2.0.0b25" in unadoptable[0]
 
 
 def test_nothing_is_reported_when_the_newest_release_is_the_one_picked():
-    releases = [_release(*BOTH_ARCHES, tag=tag) for tag in ("2.0.0b22", "1.4.5")]
+    releases = [_release(*BOTH_ARCHES, tag=tag) for tag in ("2.0.0b25", "1.4.5")]
 
     latest, unadoptable = _with_releases(releases, refresh.latest_adoptable)
 
-    assert latest == {"1": "1.4.5", "2": "2.0.0b22"}
+    assert latest == {"1": "1.4.5", "2": "2.0.0b25"}
     assert unadoptable == []
 
 
@@ -192,21 +192,21 @@ def test_a_passed_over_release_reaches_the_workflow_with_nothing_to_bump(
     release, so no PR is opened and the job output is the only place the
     skipped one can surface — the workflow fails the run on it."""
     releases = [
-        _release("borg-linux-glibc239-x86_64-gh", tag="2.0.0b23"),
-        _release(*BOTH_ARCHES, tag="2.0.0b22"),
+        _release("borg-linux-glibc239-x86_64-gh", tag="2.0.0b26"),
+        _release(*BOTH_ARCHES, tag="2.0.0b25"),
         _release(*BOTH_ARCHES, tag="1.4.5"),
     ]
     output = tmp_path / "github_output"
     monkeypatch.setenv("GITHUB_OUTPUT", str(output))
     monkeypatch.setattr(
-        refresh, "versions_from_env", lambda: {"1": "1.4.5", "2": "2.0.0b22"}
+        refresh, "versions_from_env", lambda: {"1": "1.4.5", "2": "2.0.0b25"}
     )
 
     assert _with_releases(releases, refresh.adopt_latest) == 0
 
     written = output.read_text(encoding="utf-8")
     assert "changed=false" in written
-    assert "unadoptable=Borg 2.0.0b23 " in written
+    assert "unadoptable=Borg 2.0.0b26 " in written
 
 
 def _with_releases(releases, call):

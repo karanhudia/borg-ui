@@ -363,6 +363,8 @@
         "runAsAgentUser": "Ejecútalo como el usuario con el que se ejecuta el agente, sin sudo.",
         "borgInstallation": "Instalación de Borg",
         "borgSelectionHint": "Seleccionar versiones de Borg actualiza esos binarios en el agente a las versiones que ofrece este servidor. Deje la opción en Omitir salvo que desee un upgrade de Borg.",
+        "movedToThisServer": "Este endpoint se movió a este servidor",
+        "movedToThisServerHint": "Añade --server para que la reinstalación registre esta dirección para los upgrades remotos. Actívalo después de que Cambiar la URL del servidor haya movido el endpoint aquí. Déjalo desactivado si los agentes llegan a este servidor por otra dirección, porque registrar esta desactivaría sus upgrades remotos.",
         "borgOptions": {
           "borg1": {
             "label": "Borg 1.x",
@@ -475,6 +477,10 @@
         "pending": "Borg {{version}} pendiente",
         "pendingTooltip": "Fijado a Borg {{version}}, pero este endpoint todavía no informa esa versión. La próxima actualización la instalará."
       },
+      "borg2Minimum": {
+        "label": "Borg 2 demasiado antiguo",
+        "tooltip": "El Borg 2 de este endpoint es {{version}}, anterior al {{minimum}} de este servidor. Se rechazan sus copias de seguridad, restauraciones y tareas de mantenimiento de Borg 2. Ejecuta el instalador del agente en el endpoint con {{flags}} para instalar el Borg 2 del servidor. Si sustituyes Borg 2 a mano, reinicia después el agente para que informe de la nueva versión."
+      },
       "setServerDialog": {
         "title": "Cambiar la URL del servidor",
         "description": "Apunta este endpoint a otra dirección de Borg UI. Conserva su identidad, su credencial y su historial, así que no hace falta un nuevo token de inscripción.",
@@ -542,8 +548,8 @@
         },
         "service": {
           "title": "4. Comprobaciones del servicio",
-          "description": "El instalador habilita systemd de forma predeterminada para que el agente sobreviva a los reinicios. Usa estos comandos solo al inspeccionar o reparar una instalación manual.",
-          "descriptionMacos": "En un Mac el agente es un agente de usuario de launchd en el dominio del usuario con sesión iniciada. Compruébalo con el primer comando. El segundo bloque adapta la plantilla a tu directorio de inicio y la carga; la plantilla espera el agente en ~/Library/Application Support/borg-ui-agent, donde lo coloca el instalador."
+          "description": "El instalador habilita systemd de forma predeterminada para que el agente sobreviva a los reinicios. Usa estos comandos solo al inspeccionar o reparar una instalación manual. Ejecuta el segundo bloque desde el directorio borg-ui clonado: instala el agente en /opt/borg-ui-agent y lo registra en /etc/borg-ui-agent/config.toml, donde la unidad de systemd los espera, y luego habilita la unidad.",
+          "descriptionMacos": "En un Mac el agente es un agente de usuario de launchd en el dominio del usuario con sesión iniciada. Compruébalo con el primer comando. Ejecuta el segundo bloque desde el directorio borg-ui clonado: instala y registra el agente en ~/Library/Application Support/borg-ui-agent, donde la plantilla lo espera, y luego adapta la plantilla a tu directorio de inicio y la carga."
         }
       }
     },
@@ -1856,9 +1862,9 @@
       "settings": {
         "archiveNameHelper": "Admite {plan_name}, {repo_name}, {now}, {date}, {time} y {timestamp}.",
         "extraBorgFlagsHelper": "Indicadores de línea de comandos personalizados para borg create (ej., --stats, --progress, --list). Se aplica a cada ejecución de repositorio en este plan.",
-        "uploadSpeedHelper": "MB/s. Vacío significa sin límite.",
+        "uploadSpeedHelper": "MB/s. Vacío significa sin límite. Se aplica a repositorios Borg 1 y a repositorios Borg 2 detrás de rclone; los demás repositorios Borg 2 no tienen límite de subida.",
         "uploadPoliciesTitle": "Límites de subida programados",
-        "uploadPoliciesHelper": "Las ventanas horarias sustituyen el límite de subida constante. Deja el límite vacío para no limitar.",
+        "uploadPoliciesHelper": "Las ventanas horarias sustituyen el límite de subida constante. Deja el límite vacío para no limitar. Como el límite constante, se aplican a repositorios Borg 1 y a repositorios Borg 2 detrás de rclone.",
         "addUploadPolicy": "Añadir política de subida",
         "removeUploadPolicy": "Eliminar política de subida",
         "daytimePolicyLabel": "Límite diurno",
@@ -4889,7 +4895,18 @@
       "restorePath": "Destino",
       "contentsOnlyMarker": "(contenido)",
       "andMoreItems_one": "... y {{count}} elemento más",
-      "andMoreItems_other": "... y {{count}} elementos más"
+      "andMoreItems_other": "... y {{count}} elementos más",
+      "existingFiles": {
+        "title": "Archivos existentes",
+        "exact": "Restauración exacta (directorio vacío)",
+        "exactDesc": "Borg 2 solo restaura en un directorio vacío. Cada archivo se escribe desde el archivo de copia. Elige una carpeta nueva o vacía.",
+        "exactUnavailable": "La ubicación original siempre contiene archivos, así que allí no es posible una restauración exacta. Elige una ubicación personalizada para ello.",
+        "continue": "Restaurar sobre archivos existentes",
+        "continueDesc": "Escribir en un directorio que ya contiene archivos.",
+        "continueWarning": "Se omiten los archivos que ya tienen el tipo, los permisos, el tamaño y la fecha de modificación archivados, de modo que un archivo dañado sin cambio de tamaño ni de fecha no se repara. Los archivos que difieren se reemplazan; los que el archivo de copia no contiene se dejan como están. En un disco recién formateado (solo lost+found) el resultado es el mismo que con una restauración exacta.",
+        "originalNeedsChoice": "Para restaurar en la ubicación original, elige «Restaurar sobre archivos existentes».",
+        "borg1": "Los archivos con la misma ruta se sobrescriben; los demás archivos del destino se dejan como están."
+      }
     },
     "restoreFiles": {
       "title": "Seleccionar archivos a restaurar",
@@ -4950,7 +4967,11 @@
       "files_one": "{{count}} archivo",
       "files_other": "{{count}} archivos",
       "entireArchiveNote": "El archivo completo se restaurará con todos los archivos y directorios.",
-      "everythingLooksGood": "¡Todo parece correcto! Haz clic en \"Restaurar archivos\" para comenzar la operación de restauración."
+      "everythingLooksGood": "¡Todo parece correcto! Haz clic en \"Restaurar archivos\" para comenzar la operación de restauración.",
+      "existingFiles": "Archivos existentes",
+      "existingFilesExact": "Restauración exacta",
+      "existingFilesContinue": "Restaurar sobre archivos existentes",
+      "existingFilesBorg1": "Sobrescritos en la misma ruta"
     },
     "review": {
       "configurationSummary": "Resumen de configuración",
@@ -5199,6 +5220,8 @@
     "customFlagsHint": "Indicadores de línea de comandos personalizados para borg create (ej., --stats, --progress, --list)",
     "uploadSpeedLimit": "Límite de velocidad de subida",
     "uploadSpeedLimitHint": "MB/s. Vacío significa sin límite. La configuración del plan de copia puede sobrescribir este valor predeterminado.",
+    "uploadSpeedLimitBorg2": "Borg 2 no tiene límite de subida. Este ajuste se aplica a repositorios Borg 1 y a repositorios Borg 2 detrás de rclone.",
+    "uploadSpeedLimitRclone": "MB/s. Vacío significa sin límite. Se aplica como límite de ancho de banda de rclone durante las copias, ya que Borg 2 no tiene límite de subida propio.",
     "scripts": "Scripts",
     "scriptsOptional": "(Opcional)",
     "scriptsHint": "Configura scripts en línea o asigna scripts reutilizables de tu Biblioteca de Scripts.",
@@ -5818,7 +5841,7 @@
         "backupArchiveNameRequired": "El nombre del archivo es obligatorio",
         "backupRepositoryPathRequired": "La ruta del repositorio es obligatoria",
         "backupSourcePathRequired": "Se requiere al menos una ruta de origen",
-        "capabilityMissing": "Este agente no admite la función requerida",
+        "capabilityMissing": "Este agente no admite la función requerida ({{capability}})",
         "enrollmentExpiryAmbiguous": "Elige solo una opción de caducidad para el token de inscripción",
         "enrollmentExpiryTooShort": "El token de inscripción debe durar al menos cinco minutos",
         "enrollmentNameRequired": "El nombre del token de inscripción es obligatorio",
@@ -5849,12 +5872,14 @@
         "notValidBorgRepository": "No es un repositorio Borg válido: {{path}}",
         "parentDirectoryNotWritable": "El directorio padre no tiene permisos de escritura: {{path}}. Asegúrese de que el directorio exista con los permisos correctos.",
         "permissionDeniedCreateDirectory": "Permiso denegado: no se puede crear el directorio en '{{path}}'. Para almacenar repositorios en su máquina anfitriona, use rutas que comiencen con '/local/'.",
+        "failedToCreateDirectory": "No se puede crear el directorio en '{{path}}': {{reason}}",
         "permissionDeniedCreateParentDirectory": "Permiso denegado: no se puede crear el directorio padre '{{path}}'. Asegúrese de que el directorio exista en su máquina anfitriona con los permisos correctos.",
         "encryptedPassphraseRequired": "Se requiere contraseña para el modo de cifrado '{{mode}}'",
         "agentBorg2Unavailable": "Este endpoint no tiene Borg 2 instalado, así que no se puede crear ni abrir un repositorio de Borg 2 en él. Instala Borg 2 en el endpoint o elige Borg 1.",
-        "agentBorg2TooOld": "El Borg 2 de este endpoint es {{version}}; borg-ui necesita {{minimum}} o posterior para un repositorio de Borg 2. Actualiza Borg 2 en el endpoint o elige Borg 1.",
+        "agentBorg2TooOld": "El Borg 2 de este endpoint es {{version}}, anterior al {{minimum}} de este servidor, así que Borg UI no ejecuta trabajos de Borg 2 en él: las betas de Borg 2 cambian el formato del repositorio y la línea de comandos entre versiones. Ejecuta el instalador del agente en el endpoint con {{flags}} para instalar el Borg 2 del servidor. Si sustituyes Borg 2 a mano, reinicia después el agente para que informe de la nueva versión.",
         "borg2OnlyUrl": "Una URL de repositorio {{scheme}} necesita Borg 2; Borg 1 no puede abrirla. Elige Borg 2 para este repositorio.",
         "borg2OnlyUrlOrSshHost": "Una URL de repositorio {{scheme}} necesita Borg 2; Borg 1 la lee como un host SSH llamado {{host}}. Elige Borg 2 para este repositorio o escribe el host SSH como ssh://{{host}}/ruta (ssh://{{host}}/./ruta para una ruta relativa al directorio de inicio de sesión).",
+        "borg1OnlySshAddress": "{{host}}:ruta es una dirección SSH que solo entiende Borg 1; Borg 2 la lee como un directorio local. Escríbela como ssh://{{host}}/ruta para una ruta relativa al directorio de inicio de sesión o ssh://{{host}}//ruta para una ruta absoluta, o elige Borg 1 para este repositorio.",
         "agentPassphraseUnavailable": "Este agente administrado no proporcionó una BORG_PASSPHRASE, por lo que no puede abrir un repositorio cifrado. Define BORG_PASSPHRASE en el entorno del agente o introduce aquí una contraseña.",
         "encryptedPassphraseIncorrect": "El repositorio está cifrado pero la contraseña es incorrecta o falta. Proporcione la contraseña correcta.",
         "encryptionKeyfileNotRequired": "El repositorio usa cifrado '{{mode}}', que no requiere un archivo de clave. La carga del archivo de clave solo es necesaria para los modos de cifrado 'keyfile' o 'keyfile-blake2'.",
@@ -5932,7 +5957,10 @@
         "failedParseArchiveList": "Error al analizar la lista de archivos",
         "failedParseRepositoryInfo": "Error al analizar la información del repositorio",
         "failedParseArchiveInfo": "Error al analizar la información del archivo",
-        "failedExportKeyfile": "Error al exportar el archivo de claves"
+        "failedExportKeyfile": "Error al exportar el archivo de claves",
+        "borg2RepositoryNotReadable": "Borg 2 no reconoce esto como un repositorio. Si se creó antes de la actualización a Borg 2.0.0b25, esa es la causa: 2.0.0b25 cambió el formato de repositorio y no puede leer los repositorios escritos por betas anteriores de Borg 2. Hay que crear el repositorio de nuevo; las notas de actualización de la guía de instalación describen los pasos. En caso contrario, compruebe la ruta del repositorio.",
+        "invalidEncryption": "El modo de cifrado '{{mode}}' no está disponible para repositorios Borg 2.",
+        "invalidEncryptionMode": "El modo de cifrado '{{mode}}' no está disponible para este repositorio."
       },
       "rclone": {
         "invalidRemoteName": "El nombre del remoto solo puede usar letras, números, puntos, guiones y guiones bajos",
@@ -6008,7 +6036,9 @@
         "failedFetchArchives": "Error al obtener los archivos",
         "failedFetchArchiveContents": "Error al obtener el contenido del archivo",
         "destinationNotAllowed": "El destino de restauración está fuera de los puntos de montaje locales permitidos: {{path}}",
-        "operatorAccessRequired": "Se requiere acceso de operador o administrador para restaurar en una conexión SSH"
+        "operatorAccessRequired": "Se requiere acceso de operador o administrador para restaurar en una conexión SSH",
+        "borg2DestinationNotEmpty": "Borg 2 no restaura en un directorio que ya contiene archivos, y {{path}} no está vacío. Elija un directorio vacío como destino, o elija «Restaurar sobre archivos existentes» en el diálogo de restauración.",
+        "agentCannotRestoreIntoExisting": "El agente de este repositorio es demasiado antiguo para restaurar sobre archivos existentes. Actualice el agente a 0.1.17 o posterior, o restaure en un directorio vacío."
       },
       "schedule": {
         "adminAccessRequired": "Se requiere acceso de administrador",
@@ -6133,7 +6163,6 @@
         "deleteAlreadyRunning": "La operación de eliminación ya está en curso para este archivo (ID de trabajo: {{jobId}})",
         "deleteJobNotFound": "Trabajo de eliminación no encontrado",
         "failedGetArchiveContents": "Error al obtener el contenido del archivo",
-        "unsupportedRepositoryVersion": "Este repositorio usa la versión de formato {{version}}, que la versión de Borg 2 de este servidor no puede leer. Borg 2 sigue en beta y su formato de repositorio ha cambiado entre betas. Vuelve a crear el repositorio con la versión actual o instala la versión de Borg 2 que lo creó.",
         "failedGetArchiveInfo": "Error al obtener información del archivo",
         "failedListArchives": "Error al listar los archivos",
         "repositoryNotFound": "Repositorio no encontrado",
@@ -6233,7 +6262,8 @@
         "restoreFailedZeroFilesNoOutput": "Restauración fallida: 0 archivos extraídos (código de salida {{exitCode}}). Sin salida de error de Borg. Es posible que los archivos no existan en el archivo o que el acceso esté denegado.",
         "restoreFailedExitCode": "El proceso de restauración terminó con el código {{exitCode}}",
         "restoreFailed": "La restauración falló",
-        "jobCompletedWithWarning": "Completado con advertencia (código de salida {{exitCode}})"
+        "jobCompletedWithWarning": "Completado con advertencia (código de salida {{exitCode}})",
+        "restoreFailedOnAgent": "La restauración falló en el agente: {{error}}"
       },
       "dashboard": {
         "failedGetSystemMetrics": "Error al obtener las métricas del sistema",

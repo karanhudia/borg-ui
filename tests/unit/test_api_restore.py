@@ -398,6 +398,7 @@ class TestRestoreStart:
             "archive_name": "test-archive",
             "paths": ["docs/"],
             "restore_layout": "contents_only",
+            "existing_files": "refuse",
             "path_metadata": [{"path": "docs/", "type": "directory"}],
         }
         details = test_db.get(OperationRestoreDetails, operation.id)
