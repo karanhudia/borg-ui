@@ -165,6 +165,13 @@ export default function BackupPlans() {
         source_type: data.source_type,
       })
     }
+    if (data.source_locations?.some((location) => location.source_type === 'agent')) {
+      trackFeatureUsed('managed_agents', {
+        surface: BACKUP_PLANS_ANALYTICS_SECTION,
+        operation,
+        usage: 'backup_plan_source',
+      })
+    }
   }
   const selectedRepositoryFilterId = useMemo(
     () => parseRepositoryFilterId(searchParams.get('repositoryId')),

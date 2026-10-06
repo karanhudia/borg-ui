@@ -1058,6 +1058,10 @@ const RepositoryWizard = ({
         trackFeatureUsed('borg_v2', featureContext)
       }
 
+      if (data.agent_machine_id) {
+        trackFeatureUsed('managed_agents', featureContext)
+      }
+
       if (
         data.storage_backend === 'rclone' ||
         data.storage_backend === 'rclone_direct' ||

@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { Feature, FEATURES } from '../core/features'
+import { Feature, FEATURES, TrackedFeature } from '../core/features'
 import { EventAction, EventCategory, trackEvent } from '../utils/analytics'
 import { usePlan } from './usePlan'
 
@@ -13,11 +13,16 @@ export function useFeatureAnalytics() {
   const { plan } = usePlan()
 
   const trackFeatureEvent = useCallback(
-    (action: string, feature: Feature, allowed: boolean, context: FeatureAnalyticsContext) => {
+    (
+      action: string,
+      feature: TrackedFeature,
+      allowed: boolean,
+      context: FeatureAnalyticsContext
+    ) => {
       trackEvent(EventCategory.PLAN, action, {
         feature,
         current_plan: plan,
-        required_plan: FEATURES[feature],
+        required_plan: feature in FEATURES ? FEATURES[feature as Feature] : 'community',
         allowed,
         ...context,
       })
@@ -26,7 +31,7 @@ export function useFeatureAnalytics() {
   )
 
   const trackFeatureUsed = useCallback(
-    (feature: Feature, context: FeatureAnalyticsContext) => {
+    (feature: TrackedFeature, context: FeatureAnalyticsContext) => {
       trackFeatureEvent(EventAction.FEATURE_USED, feature, true, context)
     },
     [trackFeatureEvent]

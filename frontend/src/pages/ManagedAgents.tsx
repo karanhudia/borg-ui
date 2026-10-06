@@ -95,6 +95,7 @@ import {
   agentSessionLogsToViewerResult,
 } from './managed-agents/logViewerAdapters'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { useFeatureAnalytics } from '../hooks/useFeatureAnalytics'
 import { copyText } from '../utils/clipboard'
 
 type PageTab = 'agents' | 'jobs' | 'tokens'
@@ -236,6 +237,7 @@ export default function ManagedAgents() {
   const queryClient = useQueryClient()
   const { hasGlobalPermission } = useAuth()
   const { trackSystem, EventAction } = useAnalytics()
+  const { trackFeatureUsed } = useFeatureAnalytics()
   const canManageAgents = hasGlobalPermission('settings.ssh.manage')
   const [activeTab, setActiveTab] = useState<PageTab>('agents')
   const [addAgentDialogOpen, setAddAgentDialogOpen] = useState(false)
@@ -309,6 +311,12 @@ export default function ManagedAgents() {
         has_default_path: Boolean(payload.default_path),
         expires_never: Boolean(payload.expires_never),
       })
+      trackFeatureUsed('managed_agents', {
+        surface: MANAGED_AGENTS_ANALYTICS_SECTION,
+        operation: 'create_enrollment_token',
+        has_default_path: Boolean(payload.default_path),
+        expires_never: Boolean(payload.expires_never),
+      })
       toast.success(t('managedAgents.page.toasts.tokenCreated'))
     },
     onError: (error: unknown) => {
@@ -324,6 +332,10 @@ export default function ManagedAgents() {
         section: MANAGED_AGENTS_ANALYTICS_SECTION,
         operation: 'revoke_enrollment_token',
       })
+      trackFeatureUsed('managed_agents', {
+        surface: MANAGED_AGENTS_ANALYTICS_SECTION,
+        operation: 'revoke_enrollment_token',
+      })
       toast.success(t('managedAgents.page.toasts.tokenRevoked'))
     },
     onError: (error: unknown) => {
@@ -337,6 +349,10 @@ export default function ManagedAgents() {
       queryClient.invalidateQueries({ queryKey: ['managed-agents'] })
       trackSystem(EventAction.DELETE, {
         section: MANAGED_AGENTS_ANALYTICS_SECTION,
+        operation: 'revoke_agent',
+      })
+      trackFeatureUsed('managed_agents', {
+        surface: MANAGED_AGENTS_ANALYTICS_SECTION,
         operation: 'revoke_agent',
       })
       toast.success(t('managedAgents.page.toasts.agentRevoked'))
@@ -356,6 +372,10 @@ export default function ManagedAgents() {
         section: MANAGED_AGENTS_ANALYTICS_SECTION,
         operation: 'delete_agent',
       })
+      trackFeatureUsed('managed_agents', {
+        surface: MANAGED_AGENTS_ANALYTICS_SECTION,
+        operation: 'delete_agent',
+      })
       toast.success(t('managedAgents.page.toasts.agentDeleted'))
     },
     onError: (error: unknown) => {
@@ -369,6 +389,10 @@ export default function ManagedAgents() {
       queryClient.invalidateQueries({ queryKey: ['managed-agents'] })
       trackSystem(EventAction.START, {
         section: MANAGED_AGENTS_ANALYTICS_SECTION,
+        operation: 'upgrade_agent',
+      })
+      trackFeatureUsed('managed_agents', {
+        surface: MANAGED_AGENTS_ANALYTICS_SECTION,
         operation: 'upgrade_agent',
       })
       toast.success(
@@ -401,6 +425,11 @@ export default function ManagedAgents() {
         operation: 'cancel_job',
         job_id_present: Boolean(jobId),
       })
+      trackFeatureUsed('managed_agents', {
+        surface: MANAGED_AGENTS_ANALYTICS_SECTION,
+        operation: 'cancel_job',
+        job_id_present: Boolean(jobId),
+      })
       toast.success(t('managedAgents.page.toasts.cancellationRequested'))
     },
     onError: (error: unknown) => {
@@ -419,6 +448,11 @@ export default function ManagedAgents() {
     }
     trackSystem(EventAction.VIEW, {
       section: MANAGED_AGENTS_ANALYTICS_SECTION,
+      operation: 'copy_command',
+      source,
+    })
+    trackFeatureUsed('managed_agents', {
+      surface: MANAGED_AGENTS_ANALYTICS_SECTION,
       operation: 'copy_command',
       source,
     })
@@ -468,6 +502,10 @@ export default function ManagedAgents() {
               onClick={() => {
                 trackSystem(EventAction.VIEW, {
                   section: MANAGED_AGENTS_ANALYTICS_SECTION,
+                  operation: 'open_add_agent_dialog',
+                })
+                trackFeatureUsed('managed_agents', {
+                  surface: MANAGED_AGENTS_ANALYTICS_SECTION,
                   operation: 'open_add_agent_dialog',
                 })
                 setAddAgentDialogOpen(true)
@@ -527,11 +565,22 @@ export default function ManagedAgents() {
               operation: 'view_agent_logs',
               status: agent.status,
             })
+            trackFeatureUsed('managed_agents', {
+              surface: MANAGED_AGENTS_ANALYTICS_SECTION,
+              operation: 'view_agent_logs',
+              status: agent.status,
+            })
             setLogsAgent(agent)
           }}
           onRunDiagnostics={async (agent, payload) => {
             trackSystem(EventAction.START, {
               section: MANAGED_AGENTS_ANALYTICS_SECTION,
+              operation: 'run_agent_diagnostics',
+              status: agent.status,
+              has_target: Boolean(payload.target),
+            })
+            trackFeatureUsed('managed_agents', {
+              surface: MANAGED_AGENTS_ANALYTICS_SECTION,
               operation: 'run_agent_diagnostics',
               status: agent.status,
               has_target: Boolean(payload.target),
@@ -554,6 +603,12 @@ export default function ManagedAgents() {
           onViewLogs={(job) => {
             trackSystem(EventAction.VIEW, {
               section: MANAGED_AGENTS_ANALYTICS_SECTION,
+              operation: 'view_job_logs',
+              job_type: getJobKind(job),
+              status: job.status,
+            })
+            trackFeatureUsed('managed_agents', {
+              surface: MANAGED_AGENTS_ANALYTICS_SECTION,
               operation: 'view_job_logs',
               job_type: getJobKind(job),
               status: job.status,
