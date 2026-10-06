@@ -52,7 +52,7 @@ _CONF_LINE = re.compile(r'^\s*([A-Z_]+)\s*=\s*"(.*)"\s*$')
 _SERVER_URL_LINE = re.compile(r'^server_url\s*=\s*"(.*)"\s*$', re.ASCII)
 # The installer's own test for a server it writes into the record, and the
 # line it writes it on.
-_PLAIN_SERVER = re.compile(r"^https?://[A-Za-z0-9._:/-]+$", re.ASCII)
+_PLAIN_SERVER = re.compile(r"https?://[A-Za-z0-9._:/-]+", re.ASCII)
 _RECORD_SERVER_LINE = re.compile(r'^SERVER=".*"$', re.MULTILINE)
 
 
@@ -116,7 +116,7 @@ def move_recorded_server(server_url: str, conf_path: Optional[Path] = None) -> b
     or no rights to replace it (the agent's own user on Linux).
     """
     conf_path = conf_path or default_upgrade_paths().conf_path
-    if not _PLAIN_SERVER.match(server_url):
+    if not _PLAIN_SERVER.fullmatch(server_url):
         return False
     tmp_path: Optional[Path] = None
     try:

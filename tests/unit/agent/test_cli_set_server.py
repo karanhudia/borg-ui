@@ -227,6 +227,7 @@ def test_set_server_names_the_reinstall_without_the_rights_to_write_the_record(
     [
         "http://192.168.1.82:8083",  # the helper would refuse it anyway
         "https://new.example/$(id)",  # root sources the record
+        "https://new.example\n",  # `$` alone would let the newline in
     ],
 )
 def test_set_server_leaves_the_record_for_an_address_it_may_not_hold(
