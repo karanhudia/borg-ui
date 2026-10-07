@@ -1,4 +1,5 @@
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -567,14 +568,17 @@ _SEAMS = frozenset(
         "BORG1_LINK",
         "BORG2_LINK",
         "LOG_DIR",
-        "DEDICATED_USER",
         "UNREGISTER_TIMEOUT",
     }
 )
 
 
 def _run_whole_script(
-    script: str, *, env: dict[str, str], args: tuple[str, ...] = ()
+    script: str,
+    *,
+    env: dict[str, str],
+    args: tuple[str, ...] = (),
+    cwd: Path | None = None,
 ) -> subprocess.CompletedProcess:
     """Runs the script's own main sequence, not a sequence the test invented.
 
@@ -594,6 +598,7 @@ def _run_whole_script(
         text=True,
         check=False,
         env={"PATH": "/usr/bin:/bin", **seamed},
+        cwd=cwd,
     )
 
 
@@ -625,16 +630,15 @@ def _installed_machine(tmp_path: Path, *, unit_user: str) -> dict[str, str]:
         "CONFIG_FILE": str(config_dir / "config.toml"),
         "UPGRADE_TRIGGER": str(config_dir / "upgrade-requested"),
         "SERVICE_UNIT": str(unit),
-        "UPGRADE_UNIT": str(tmp_path / "upgrade.service"),
-        "UPGRADE_PATH_UNIT": str(tmp_path / "upgrade.path"),
-        "UPGRADE_CONF": str(tmp_path / "upgrade.conf"),
+        "UPGRADE_UNIT": str(tmp_path / "borg-ui-agent-upgrade.service"),
+        "UPGRADE_PATH_UNIT": str(tmp_path / "borg-ui-agent-upgrade.path"),
+        "UPGRADE_CONF": str(tmp_path / "borg-ui-agent-upgrade.conf"),
         "UPGRADE_HELPER": str(agent_root / "bin" / "borg-ui-agent-upgrade"),
-        "LEGACY_SUDOERS": str(tmp_path / "sudoers"),
-        "NO_REMOTE_UPGRADE_MARKER": str(tmp_path / "marker"),
+        "LEGACY_SUDOERS": str(tmp_path / "sudoers.d" / "borg-ui-agent-upgrade"),
+        "NO_REMOTE_UPGRADE_MARKER": str(tmp_path / "borg-ui-agent-no-remote-upgrade"),
         "STATE_DIR": str(state),
         "BORG1_LINK": str(tmp_path / "borg"),
         "BORG2_LINK": str(tmp_path / "borg2"),
-        "DEDICATED_USER": "borg-ui-agent",
     }
 
 
@@ -805,3 +809,385 @@ def test_without_keep_borg_the_binaries_and_their_symlinks_go(
     assert result.returncode == 0, result.stderr + result.stdout
     assert not Path(env["AGENT_ROOT"]).exists()
     assert not link.is_symlink()
+
+
+# --- overrides that name something other than the agent's own directories ---
+#
+# These tests never hand the script "/" or a real system directory: on a script
+# without the guard that would delete it. The guard is exercised on such values
+# through the function alone, and the whole script only ever sees a bystander
+# directory under tmp_path.
+
+_REMOVED_DIRS = ("AGENT_ROOT", "CONFIG_DIR", "STATE_DIR", "LOG_DIR")
+_MAC_ROOT = "/Users/alex/Library/Application Support/borg-ui-agent"
+
+
+def _enrolled_machine(tmp_path: Path) -> dict[str, str]:
+    """An installed machine whose config carries a token, so an unregister
+    call that ran before the refusal would show up in the call log."""
+    env = _installed_machine(tmp_path, unit_user="borg-ui-agent")
+    Path(env["CONFIG_FILE"]).write_text(
+        'server_url = "http://x"\nagent_token = "secret-token"\n'
+    )
+    return env
+
+
+def _bystander(tmp_path: Path, name: str) -> Path:
+    bystander = tmp_path / "bystander" / name
+    bystander.mkdir(parents=True)
+    (bystander / "keep").write_text("")
+    return bystander
+
+
+@pytest.mark.parametrize("name", _REMOVED_DIRS)
+def test_refuses_a_directory_override_not_ending_in_borg_ui_agent(
+    script: str, tmp_path: Path, call_log: Path, name: str
+):
+    """A stray BORG_UI_UNINSTALL_AGENT_ROOT=/ in a root shell would otherwise
+    be removed with rm -rf. Refused before anything is touched, the unregister
+    call included."""
+    env = _enrolled_machine(tmp_path)
+    bystander = _bystander(tmp_path, name)
+    env[name] = str(bystander)
+
+    result = _run_whole_script(script, env={"CALL_LOG": str(call_log), **env})
+
+    assert result.returncode != 0
+    assert f"BORG_UI_UNINSTALL_{name}" in result.stderr
+    assert (bystander / "keep").exists()
+    assert Path(env["AGENT_ROOT"]).exists() or name == "AGENT_ROOT"
+    assert Path(env["CONFIG_DIR"]).exists() or name == "CONFIG_DIR"
+    assert call_log.read_text() == ""
+
+
+@pytest.mark.parametrize("platform", ["Linux", "Darwin"])
+def test_refuses_a_relative_directory_override(
+    script: str, tmp_path: Path, call_log: Path, platform: str
+):
+    env = _enrolled_machine(tmp_path)
+    env["BORG_UI_AGENT_PLATFORM"] = platform
+    env["HOME"] = str(tmp_path / "home")
+    relative = tmp_path / "borg-ui-agent"
+    relative.mkdir()
+    (relative / "keep").write_text("")
+    env["AGENT_ROOT"] = "borg-ui-agent"
+
+    result = _run_whole_script(
+        script, env={"CALL_LOG": str(call_log), **env}, cwd=tmp_path
+    )
+
+    assert result.returncode != 0
+    assert "BORG_UI_UNINSTALL_AGENT_ROOT" in result.stderr
+    assert (relative / "keep").exists()
+    assert call_log.read_text() == ""
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "",
+        "/",
+        "//",
+        "/usr",
+        "/etc",
+        "/var",
+        "/opt",
+        "/home",
+        "/Users",
+        "/root",
+        "/Users/alex",
+        "/Users/alex/Library/Application Support",
+        "/opt/borg-ui-agent/",
+        "/opt/borg-ui-agent/..",
+        "/opt/borg-ui-agent/.",
+        "/opt/borg-ui-agent-old",
+        "/opt/not-borg-ui-agent",
+        "borg-ui-agent",
+        "./borg-ui-agent",
+    ],
+)
+def test_the_directory_guard_refuses(script: str, path: str):
+    result = _run(
+        script,
+        functions=("is_agent_dir",),
+        body='is_agent_dir "${CANDIDATE}"',
+        env={"CALL_LOG": "/dev/null", "CANDIDATE": path},
+    )
+
+    assert result.returncode != 0
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/opt/borg-ui-agent",
+        "/etc/borg-ui-agent",
+        "/var/lib/borg-ui-agent",
+        _MAC_ROOT,
+        "/Users/alex/Library/Logs/borg-ui-agent",
+    ],
+)
+def test_the_directory_guard_accepts_the_real_layouts(script: str, path: str):
+    result = _run(
+        script,
+        functions=("is_agent_dir",),
+        body='is_agent_dir "${CANDIDATE}"',
+        env={"CALL_LOG": "/dev/null", "CANDIDATE": path},
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_an_empty_log_dir_is_not_an_override(
+    script: str, tmp_path: Path, call_log: Path
+):
+    """Linux has no log directory of its own: LOG_DIR is empty there and names
+    nothing to remove, so it is not refused."""
+    env = _installed_machine(tmp_path, unit_user="borg-ui-agent")
+
+    result = _run_whole_script(script, env={"CALL_LOG": str(call_log), **env})
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert not Path(env["AGENT_ROOT"]).exists()
+
+
+_REMOVED_FILES = (
+    "SERVICE_UNIT",
+    "UPGRADE_UNIT",
+    "UPGRADE_PATH_UNIT",
+    "UPGRADE_CONF",
+    "UPGRADE_HELPER",
+    "UPGRADE_TRIGGER",
+    "LEGACY_SUDOERS",
+    "NO_REMOTE_UPGRADE_MARKER",
+    "CONFIG_FILE",
+    "BORG1_LINK",
+    "BORG2_LINK",
+)
+
+
+@pytest.mark.parametrize("name", _REMOVED_FILES)
+def test_refuses_a_file_override_that_is_not_the_agents(
+    script: str, tmp_path: Path, call_log: Path, name: str
+):
+    """A stray BORG_UI_UNINSTALL_SERVICE_UNIT=/etc/passwd would otherwise be
+    removed with rm -f."""
+    env = _enrolled_machine(tmp_path)
+    bystander = tmp_path / "bystander" / "passwd"
+    bystander.parent.mkdir()
+    bystander.write_text("")
+    env[name] = str(bystander)
+
+    result = _run_whole_script(script, env={"CALL_LOG": str(call_log), **env})
+
+    assert result.returncode != 0
+    assert f"BORG_UI_UNINSTALL_{name}" in result.stderr
+    assert bystander.exists()
+    assert Path(env["AGENT_ROOT"]).exists()
+    assert call_log.read_text() == ""
+
+
+def test_the_dedicated_user_is_not_overridable(
+    script: str, tmp_path: Path, call_log: Path
+):
+    """An install run with --service-user current binds the unit to the
+    operator's own account. Naming that account as the dedicated one must not
+    turn the uninstall into a userdel --remove of it and its home."""
+    env = _installed_machine(tmp_path, unit_user="someoperator")
+
+    result = _run_whole_script(
+        script,
+        env={
+            "CALL_LOG": str(call_log),
+            "BORG_UI_UNINSTALL_DEDICATED_USER": "someoperator",
+            **env,
+        },
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "userdel" not in call_log.read_text()
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "",
+        "/",
+        "/etc/passwd",
+        "/etc/systemd/system/borg-ui.service",
+        "/backups/borg-ui-agent.service.tar.gz",
+        "/backups/old-borg-ui-agent.service",
+        "/etc/systemd/system/borg-ui-agent.service/",
+        "borg-ui-agent.service",
+        "./borg-ui-agent.service",
+    ],
+)
+def test_the_file_guard_refuses(script: str, path: str):
+    """A file override may move the file, not rename it."""
+    result = _run(
+        script,
+        functions=("is_agent_file",),
+        body='is_agent_file "${CANDIDATE}" borg-ui-agent.service',
+        env={"CALL_LOG": "/dev/null", "CANDIDATE": path},
+    )
+
+    assert result.returncode != 0
+
+
+def _defaults(script: str) -> str:
+    """The script's own inventory block: the defaults for each platform and
+    the overrides on top of them. Assignments only, nothing that acts."""
+    start = script.index('PLATFORM="${BORG_UI_AGENT_PLATFORM')
+    end = script.index("\n", script.index('UNREGISTER_TIMEOUT="'))
+    return script[start:end]
+
+
+@pytest.mark.parametrize("platform", ["Linux", "Darwin"])
+def test_the_defaults_pass_the_guard(script: str, tmp_path: Path, platform: str):
+    """A real run sets no override. If a default ever stops passing, every
+    uninstall on that platform refuses to start. What is checked are the
+    defaults themselves: cd is stubbed so that the agent directories of the
+    host running the test are not resolved."""
+    result = _run(
+        script,
+        functions=("is_darwin", "is_agent_dir", "is_agent_file", "refuse_unsafe_paths"),
+        body=f"{_defaults(script)}\ncd() {{ return 1; }}\n"
+        "refuse_unsafe_paths && echo passed",
+        env={
+            "CALL_LOG": "/dev/null",
+            "HOME": str(tmp_path / "home"),
+            "BORG_UI_AGENT_PLATFORM": platform,
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "passed"
+
+
+def test_without_a_bad_override_the_enrolled_machine_unregisters(
+    script: str, tmp_path: Path, call_log: Path
+):
+    """The refusal tests assert an empty call log. That means something only
+    if the same machine, without the bad override, does call the server."""
+    env = _enrolled_machine(tmp_path)
+
+    result = _run_whole_script(script, env={"CALL_LOG": str(call_log), **env})
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "curl" in call_log.read_text()
+
+
+def test_refuses_an_agent_root_link_into_another_directory(
+    script: str, tmp_path: Path, call_log: Path
+):
+    """A link named borg-ui-agent passes on its name alone. Emptying the agent
+    root entry by entry, as --keep-borg does, would follow it."""
+    env = _enrolled_machine(tmp_path)
+    bystander = _bystander(tmp_path, "home")
+    link = tmp_path / "elsewhere" / "borg-ui-agent"
+    link.parent.mkdir()
+    link.symlink_to(bystander)
+    env["AGENT_ROOT"] = str(link)
+    env["UPGRADE_HELPER"] = str(link / "bin" / "borg-ui-agent-upgrade")
+
+    result = _run_whole_script(
+        script, env={"CALL_LOG": str(call_log), **env}, args=("--keep-borg",)
+    )
+
+    assert result.returncode != 0
+    assert "BORG_UI_UNINSTALL_AGENT_ROOT" in result.stderr
+    assert (bystander / "keep").exists()
+    assert call_log.read_text() == ""
+
+
+def test_removes_only_the_link_where_the_state_dir_is_one(
+    script: str, tmp_path: Path, call_log: Path
+):
+    """rm -rf removes a link, not its target, and the script never reaches
+    into the state directory. One moved elsewhere and linked back loses the
+    link and keeps the target, as it did before the guard, whatever the target
+    is called."""
+    env = _installed_machine(tmp_path, unit_user="borg-ui-agent")
+    target = _bystander(tmp_path, "srv")
+    link = Path(env["STATE_DIR"])
+    shutil.rmtree(link)
+    link.symlink_to(target)
+
+    result = _run_whole_script(script, env={"CALL_LOG": str(call_log), **env})
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert not link.is_symlink()
+    assert (target / "keep").exists()
+
+
+@pytest.mark.parametrize("args", [(), ("--keep-config",)])
+def test_refuses_a_config_dir_link_into_another_directory(
+    script: str, tmp_path: Path, call_log: Path, args: tuple[str, ...]
+):
+    """The upgrade trigger is removed from inside the config directory, through
+    a link if it is one, before the directory itself goes."""
+    env = _enrolled_machine(tmp_path)
+    foreign = _bystander(tmp_path, "other-app")
+    (foreign / "upgrade-requested").write_text("")
+    (foreign / "config.toml").write_text(Path(env["CONFIG_FILE"]).read_text())
+    link = Path(env["CONFIG_DIR"])
+    shutil.rmtree(link)
+    link.symlink_to(foreign)
+
+    result = _run_whole_script(
+        script, env={"CALL_LOG": str(call_log), **env}, args=args
+    )
+
+    assert result.returncode != 0
+    assert "BORG_UI_UNINSTALL_CONFIG_DIR" in result.stderr
+    assert (foreign / "upgrade-requested").exists()
+    assert (foreign / "keep").exists()
+    assert call_log.read_text() == ""
+
+
+def test_refuses_an_agent_root_link_that_would_claim_a_foreign_borg(
+    script: str, tmp_path: Path, call_log: Path
+):
+    """remove_borg_links takes a link resolving into the agent root as ours.
+    An agent root linked to another directory would make a distribution Borg
+    linked from there look like the agent's."""
+    env = _enrolled_machine(tmp_path)
+    usr = tmp_path / "usr"
+    (usr / "bin").mkdir(parents=True)
+    (usr / "bin" / "borg").write_text("#!/bin/sh\n")
+    link = Path(env["BORG1_LINK"])
+    link.symlink_to(usr / "bin" / "borg")
+    root = tmp_path / "elsewhere" / "borg-ui-agent"
+    root.parent.mkdir()
+    root.symlink_to(usr)
+    env["AGENT_ROOT"] = str(root)
+    env["UPGRADE_HELPER"] = str(root / "bin" / "borg-ui-agent-upgrade")
+
+    result = _run_whole_script(script, env={"CALL_LOG": str(call_log), **env})
+
+    assert result.returncode != 0
+    assert "BORG_UI_UNINSTALL_AGENT_ROOT" in result.stderr
+    assert link.is_symlink()
+    assert (usr / "bin" / "borg").exists()
+    assert call_log.read_text() == ""
+
+
+def test_empties_an_agent_root_moved_behind_a_link_of_the_same_name(
+    script: str, tmp_path: Path, call_log: Path
+):
+    """An operator who moved the agent to another disk and linked it back has
+    a borg-ui-agent directory at both ends of the link, so it is still the
+    agent's to empty."""
+    env = _installed_machine(tmp_path, unit_user="borg-ui-agent")
+    moved = tmp_path / "data" / "borg-ui-agent"
+    moved.parent.mkdir()
+    shutil.move(env["AGENT_ROOT"], moved)
+    Path(env["AGENT_ROOT"]).symlink_to(moved)
+    (moved / ".venv").mkdir()
+
+    result = _run_whole_script(
+        script, env={"CALL_LOG": str(call_log), **env}, args=("--keep-borg",)
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert not (moved / ".venv").exists()
