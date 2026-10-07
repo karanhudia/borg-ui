@@ -2396,6 +2396,7 @@ class TestPruneComparison:
             "archive_count_at": None,
             "stale": True,
             "auto": True,
+            "sizes_available": True,
             "candidates": [],
         }
 
