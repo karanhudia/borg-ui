@@ -83,7 +83,7 @@ describe('GitHub Pages visual regression workflow', () => {
     expect(captureWorkflow).toContain('types: [opened, synchronize, reopened]')
     expect(captureWorkflow).toContain('contents: read')
     // Default pull_request checkout is the merge ref, so snapshots show the PR on current main.
-    expect(captureWorkflow).not.toContain('ref: ${{ github.event.pull_request.head.sha }}')
+    expect(captureWorkflow).not.toMatch(/^\s+ref:/m)
     expect(captureWorkflow).toContain('npm run visual:screenshots')
     expect(captureWorkflow).toContain('actions/upload-artifact@v7')
     expect(captureWorkflow).toContain('name: visual-actual')
