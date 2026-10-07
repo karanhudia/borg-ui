@@ -528,28 +528,34 @@ def queue_agent_repository_operation_job(
     maintenance_job_kind: Optional[str] = None,
     maintenance_job_id: Optional[int] = None,
     ignore_queued_operations: bool = False,
+    check_admission: bool = True,
 ) -> AgentJob:
     """`ignore_queued_operations` (see `list_active_repository_work`) is only
     valid from the runner's repository lane, and is refused anywhere else:
-    see `_require_repository_lane`."""
+    see `_require_repository_lane`.
+
+    `check_admission=False` queues without asking admission, for a job that
+    opens a location the repository's active work does not use: the check
+    of a changed path. The job still counts as active work for others."""
     if ignore_queued_operations:
         _require_repository_lane(db, repository, maintenance_job_id)
     agent = validate_agent_repository_operation(db, repository, job_kind=job_kind)
     operation_payload = operation
-    admission_operation = operation_for_agent_job_kind(job_kind)
-    # Phase 5 moved every maintenance kind to `operations`. The value is the
-    # table admission should ignore, so the row this caller just created
-    # cannot block its own admission.
-    ensure_repository_admission(
-        db,
-        repository,
-        admission_operation,
-        ignore=ignore_active_job(
-            "operations" if maintenance_job_kind else None,
-            maintenance_job_id,
-        ),
-        ignore_queued_operations=ignore_queued_operations,
-    )
+    if check_admission:
+        admission_operation = operation_for_agent_job_kind(job_kind)
+        # Phase 5 moved every maintenance kind to `operations`. The value is
+        # the table admission should ignore, so the row this caller just
+        # created cannot block its own admission.
+        ensure_repository_admission(
+            db,
+            repository,
+            admission_operation,
+            ignore=ignore_active_job(
+                "operations" if maintenance_job_kind else None,
+                maintenance_job_id,
+            ),
+            ignore_queued_operations=ignore_queued_operations,
+        )
     now = datetime.utcnow()
     payload = build_agent_repository_operation_payload(
         repository,

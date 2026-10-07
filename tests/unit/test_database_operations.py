@@ -2,6 +2,8 @@
 Unit tests for database CRUD operations
 """
 
+import os
+
 import pytest
 from sqlalchemy.orm import Session
 
@@ -135,3 +137,78 @@ class TestUserCRUD:
 
         with pytest.raises(Exception):  # Will raise IntegrityError
             db_session.commit()
+
+
+@pytest.mark.unit
+def test_a_failed_statement_keeps_its_values_out_of_the_error():
+    """The error text of a failed statement is logged as it is."""
+    from sqlalchemy.exc import IntegrityError
+
+    from app.database.database import engine
+    from app.database.models import AgentJob
+
+    with Session(bind=engine) as session:
+        session.add(
+            AgentJob(
+                agent_machine_id=None,
+                job_type="repository",
+                status="queued",
+                payload={"secrets": {"BORG_PASSPHRASE": {"value": "kept-out"}}},
+            )
+        )
+        with pytest.raises(IntegrityError) as raised:
+            session.commit()
+
+    assert "kept-out" not in str(raised.value)
+
+
+@pytest.mark.unit
+@pytest.mark.skipif(
+    not os.getenv("BORG_TEST_POSTGRES_URL"),
+    reason="BORG_TEST_POSTGRES_URL is not set",
+)
+def test_a_row_postgresql_refuses_keeps_its_values_out_of_the_error():
+    """PostgreSQL repeats a refused row in its message; the parameters
+    alone being hidden is not enough there."""
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.exc import IntegrityError
+
+    from app.database.database import register_failing_row_withholding
+
+    engine = create_engine(os.environ["BORG_TEST_POSTGRES_URL"], hide_parameters=True)
+    register_failing_row_withholding(engine)
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("CREATE TEMP TABLE refused (a int NOT NULL, b text)"))
+            with pytest.raises(IntegrityError) as raised:
+                conn.execute(
+                    text("INSERT INTO refused VALUES (NULL, :b)"), {"b": "kept-out"}
+                )
+    finally:
+        engine.dispose()
+
+    assert "not-null" in str(raised.value)
+    assert "kept-out" not in str(raised.value)
+    assert "kept-out" not in str(raised.value.orig)
+
+
+@pytest.mark.unit
+def test_a_refused_row_is_withheld_in_any_message_language():
+    from types import SimpleNamespace
+
+    from app.database.database import _withhold_failing_row
+
+    detail = "Fehlgeschlagene Zeile enthält (null, kept-out)."
+    message = f"NULL-Wert in Spalte »a« verletzt Not-Null-Constraint\nDETAIL:  {detail}"
+    orig = Exception(message)
+    orig.sqlstate = "23502"
+    orig.diag = SimpleNamespace(message_detail=detail)
+    wrapped = Exception(f"(psycopg.errors.NotNullViolation) {message}")
+
+    _withhold_failing_row(
+        SimpleNamespace(original_exception=orig, sqlalchemy_exception=wrapped)
+    )
+
+    assert "kept-out" not in str(orig)
+    assert "kept-out" not in str(wrapped)
+    assert "Not-Null-Constraint" in str(wrapped)

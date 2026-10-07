@@ -4805,6 +4805,19 @@ def _relink_over_cancelled(
     db.commit()
 
 
+class _RepositoryWithExecutor:
+    """A repository read through the executor an update gives it, before the
+    update stores that executor."""
+
+    def __init__(self, repository: Repository, *, executor_type: str, agent_machine_id):
+        self._repository = repository
+        self.executor_type = executor_type
+        self.agent_machine_id = agent_machine_id if executor_type == "agent" else None
+
+    def __getattr__(self, name):
+        return getattr(self._repository, name)
+
+
 async def _verify_updated_passphrase(
     repository: Repository, db: Session, passphrase: str
 ) -> None:
@@ -5334,6 +5347,13 @@ async def update_repository(
 
         if "path" in update_data and repo_data.path is not None:
             raw_path = repo_data.path.strip()
+            # An agent that is not connected takes a new path unchecked, so
+            # an empty one is refused here, as when one is created.
+            if not raw_path and target_executor_type == "agent":
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.repo.pathRequired"},
+                )
             # The form sends the path with every edit; only a new one is checked.
             if raw_path != repository.path:
                 _reject_borg2_only_url_for_borg1(
@@ -5477,13 +5497,38 @@ async def update_repository(
                     )
                     ssh_key_id_for_init = connection_details["ssh_key_id"]
 
-                router = BorgRouter(repository)
+                # Opened by the executor this update leaves the repository
+                # with: an agent repository's path is a location on the agent,
+                # not on this server. The executor fields are stored below.
+                router_repository = repository
+                if "agent" in (
+                    target_executor_type,
+                    repository_executor_type(repository),
+                ):
+                    router_repository = _RepositoryWithExecutor(
+                        repository,
+                        executor_type=target_executor_type,
+                        agent_machine_id=(
+                            repo_data.agent_machine_id
+                            if "agent_machine_id" in update_data
+                            else repository.agent_machine_id
+                        ),
+                    )
+                router = BorgRouter(router_repository)
                 info_result = await router.verify_repository(
                     ssh_key_id=ssh_key_id_for_init,
                     timeout=get_operation_timeouts(db)["info_timeout"],
                 )
 
-                if info_result.get("success"):
+                if info_result.get("agent_offline"):
+                    # An agent without a session cannot be asked; the path is
+                    # taken as given, like an agent import.
+                    logger.warning(
+                        "New path not checked: the repository's agent is not connected",
+                        repo_id=repo_id,
+                        new_path=repository.path,
+                    )
+                elif info_result.get("success"):
                     logger.info(
                         "New path is already a valid borg repository - no initialization needed",
                         new_path=repository.path,

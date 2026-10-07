@@ -1,3 +1,4 @@
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 import json
@@ -1275,3 +1276,312 @@ def test_build_backup_create_command_rejects_disallowed_custom_flags(
             exclude_patterns=[],
             custom_flags=custom_flags,
         )
+
+
+def _agent_probe_repo():
+    return SimpleNamespace(
+        id=7,
+        borg_version=2,
+        executor_type="agent",
+        agent_machine_id=3,
+        path="/agent/repo",
+        encryption="repokey-aes-ocb",
+        passphrase="secret",
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_agent_verify_without_a_session_queues_nothing():
+    """#1361: an agent that is not connected gets no job a caller would wait
+    for until the timeout."""
+    queue = MagicMock()
+    with (
+        patch(
+            "app.services.agent_connection_manager.agent_connection_manager.is_connected",
+            return_value=False,
+        ),
+        patch(
+            "app.services.repository_executor.queue_agent_repository_operation_job",
+            new=queue,
+        ),
+        patch("app.services.v2.repository_service.repository_v2_service") as server,
+    ):
+        result = await BorgRouter(_agent_probe_repo()).verify_repository(timeout=60)
+
+    assert result == {"success": False, "agent_offline": True}
+    queue.assert_not_called()
+    server.verify_repository.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "method, kwargs, job_kind, operation",
+    [
+        ("verify_repository", {"timeout": 60}, "repository.info", None),
+        (
+            "initialize_repository",
+            {"init_timeout": 300},
+            "repository.init",
+            {"encryption": "repokey-aes-ocb"},
+        ),
+    ],
+)
+async def test_agent_verify_and_init_run_on_the_agent(
+    method, kwargs, job_kind, operation
+):
+    repo = _agent_probe_repo()
+    own_db = MagicMock()
+    queue = MagicMock(return_value=SimpleNamespace(id=11))
+    wait = AsyncMock(return_value={"return_code": 0})
+    with (
+        patch("app.database.database.SessionLocal", return_value=own_db),
+        patch(
+            "app.services.agent_connection_manager.agent_connection_manager.is_connected",
+            return_value=True,
+        ),
+        patch(
+            "app.services.repository_executor.queue_agent_repository_operation_job",
+            new=queue,
+        ),
+        patch(
+            "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+            new=AsyncMock(return_value=True),
+        ),
+        patch(
+            "app.services.repository_executor.wait_for_agent_repository_operation_job",
+            new=wait,
+        ),
+    ):
+        result = await getattr(BorgRouter(repo), method)(**kwargs)
+
+    assert result == {"success": True}
+    queue.assert_called_once_with(
+        own_db,
+        repo,
+        job_kind=job_kind,
+        operation=operation,
+        check_admission=False,
+    )
+    wait.assert_awaited_once_with(
+        own_db, 11, timeout_seconds=next(iter(kwargs.values()))
+    )
+    own_db.close.assert_called_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_agent_verify_failure_answers_with_borgs_reason():
+    failed = HTTPException(
+        status_code=502,
+        detail={
+            "key": "backend.errors.agents.repositoryOperationFailedWithReason",
+            "params": {"reason": "Repository /agent/repo does not exist."},
+        },
+    )
+    with (
+        patch("app.database.database.SessionLocal", return_value=MagicMock()),
+        patch(
+            "app.services.agent_connection_manager.agent_connection_manager.is_connected",
+            return_value=True,
+        ),
+        patch(
+            "app.services.repository_executor.queue_agent_repository_operation_job",
+            return_value=SimpleNamespace(id=11),
+        ),
+        patch(
+            "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+            new=AsyncMock(return_value=True),
+        ),
+        patch(
+            "app.services.repository_executor.wait_for_agent_repository_operation_job",
+            new=AsyncMock(side_effect=failed),
+        ),
+    ):
+        result = await BorgRouter(_agent_probe_repo()).verify_repository()
+
+    assert result == {
+        "success": False,
+        "error": "Repository /agent/repo does not exist.",
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_agent_verify_job_the_dispatch_could_not_send_is_abandoned():
+    """Also when a report of the agent moved it past `queued` meanwhile."""
+    own_db = MagicMock()
+    running = SimpleNamespace(id=11, status="cancel_requested", agent_machine_id=3)
+    abandon = MagicMock(return_value=running)
+    send_cancel = AsyncMock(return_value=True)
+    wait = AsyncMock()
+    with (
+        patch("app.database.database.SessionLocal", return_value=own_db),
+        patch(
+            "app.services.agent_connection_manager.agent_connection_manager.is_connected",
+            return_value=True,
+        ),
+        patch(
+            "app.services.repository_executor.queue_agent_repository_operation_job",
+            return_value=SimpleNamespace(id=11),
+        ),
+        patch(
+            "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+            new=AsyncMock(return_value=False),
+        ),
+        patch(
+            "app.services.repository_executor.abandon_agent_repository_operation_job",
+            new=abandon,
+        ),
+        patch(
+            "app.services.agent_job_dispatcher.dispatch_agent_cancel_if_connected",
+            new=send_cancel,
+        ),
+        patch(
+            "app.services.repository_executor.wait_for_agent_repository_operation_job",
+            new=wait,
+        ),
+    ):
+        result = await BorgRouter(_agent_probe_repo()).verify_repository()
+
+    assert result == {"success": False, "agent_offline": True}
+    abandon.assert_called_once_with(own_db, 11)
+    send_cancel.assert_awaited_once_with(running)
+    wait.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_agent_verify_timeout_cancels_an_unclaimed_job_and_raises():
+    own_db = MagicMock()
+    cancel = MagicMock()
+    timed_out = HTTPException(
+        status_code=504,
+        detail={"key": "backend.errors.agents.repositoryOperationTimeout"},
+    )
+    with (
+        patch("app.database.database.SessionLocal", return_value=own_db),
+        patch(
+            "app.services.agent_connection_manager.agent_connection_manager.is_connected",
+            return_value=True,
+        ),
+        patch(
+            "app.services.repository_executor.queue_agent_repository_operation_job",
+            return_value=SimpleNamespace(id=11),
+        ),
+        patch(
+            "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+            new=AsyncMock(return_value=True),
+        ),
+        patch(
+            "app.services.repository_executor.cancel_unclaimed_agent_repository_job",
+            new=cancel,
+        ),
+        patch(
+            "app.services.repository_executor.wait_for_agent_repository_operation_job",
+            new=AsyncMock(side_effect=timed_out),
+        ),
+        pytest.raises(HTTPException) as raised,
+    ):
+        await BorgRouter(_agent_probe_repo()).verify_repository()
+
+    assert raised.value.status_code == 504
+    cancel.assert_called_once_with(own_db, 11)
+    own_db.close.assert_called_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "interruption",
+    [
+        HTTPException(
+            status_code=504,
+            detail={"key": "backend.errors.agents.repositoryOperationTimeout"},
+        ),
+        asyncio.CancelledError(),
+    ],
+    ids=["timeout", "cancelled"],
+)
+async def test_agent_init_the_caller_stops_waiting_for_is_abandoned(interruption):
+    """Even a running init: the update it was for is rolled back."""
+    own_db = MagicMock()
+    running = SimpleNamespace(id=11, status="cancel_requested", agent_machine_id=3)
+    abandon = MagicMock(return_value=running)
+    cancel = MagicMock()
+    send_cancel = AsyncMock(return_value=True)
+    with (
+        patch("app.database.database.SessionLocal", return_value=own_db),
+        patch(
+            "app.services.agent_connection_manager.agent_connection_manager.is_connected",
+            return_value=True,
+        ),
+        patch(
+            "app.services.repository_executor.queue_agent_repository_operation_job",
+            return_value=SimpleNamespace(id=11),
+        ),
+        patch(
+            "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+            new=AsyncMock(return_value=True),
+        ),
+        patch(
+            "app.services.repository_executor.abandon_agent_repository_operation_job",
+            new=abandon,
+        ),
+        patch(
+            "app.services.agent_job_dispatcher.dispatch_agent_cancel_if_connected",
+            new=send_cancel,
+        ),
+        patch(
+            "app.services.repository_executor.cancel_unclaimed_agent_repository_job",
+            new=cancel,
+        ),
+        patch(
+            "app.services.repository_executor.wait_for_agent_repository_operation_job",
+            new=AsyncMock(side_effect=interruption),
+        ),
+        pytest.raises(type(interruption)),
+    ):
+        await BorgRouter(_agent_probe_repo()).initialize_repository()
+
+    abandon.assert_called_once_with(own_db, 11)
+    send_cancel.assert_awaited_once_with(running)
+    cancel.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_agent_init_cancelled_while_it_is_sent_is_abandoned():
+    own_db = MagicMock()
+    sent = SimpleNamespace(id=11, status="cancel_requested", agent_machine_id=3)
+    abandon = MagicMock(return_value=sent)
+    send_cancel = AsyncMock(return_value=True)
+    with (
+        patch("app.database.database.SessionLocal", return_value=own_db),
+        patch(
+            "app.services.agent_connection_manager.agent_connection_manager.is_connected",
+            return_value=True,
+        ),
+        patch(
+            "app.services.repository_executor.queue_agent_repository_operation_job",
+            return_value=SimpleNamespace(id=11),
+        ),
+        patch(
+            "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+            new=AsyncMock(side_effect=asyncio.CancelledError()),
+        ),
+        patch(
+            "app.services.repository_executor.abandon_agent_repository_operation_job",
+            new=abandon,
+        ),
+        patch(
+            "app.services.agent_job_dispatcher.dispatch_agent_cancel_if_connected",
+            new=send_cancel,
+        ),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await BorgRouter(_agent_probe_repo()).initialize_repository()
+
+    abandon.assert_called_once_with(own_db, 11)
+    send_cancel.assert_awaited_once_with(sent)
