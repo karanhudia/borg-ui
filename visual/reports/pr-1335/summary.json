@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-10-06T16:21:25.463Z",
+  "generatedAt": "2026-10-07T06:34:37.072Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1335 visual report",
     "commitSha": "cdd5712c9ba7",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/37494709438"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/37582129502"
   },
   "totals": {
     "baseline": 1168,
     "actual": 1182,
     "compared": 1168,
-    "changed": 5,
+    "changed": 4,
     "added": 14,
     "removed": 0,
-    "unchanged": 1163
+    "unchanged": 1164
   },
   "changed": [
     {
@@ -78,24 +78,6 @@
       "diffPixels": 9356,
       "totalPixels": 1024000,
       "diffRatio": 0.00913671875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-destinationselect--remote-unavailable.png",
-      "baselinePath": "images/baseline/components-destinationselect--remote-unavailable.png",
-      "actualPath": "images/actual/components-destinationselect--remote-unavailable.png",
-      "diffPath": "images/diff/components-destinationselect--remote-unavailable.png",
-      "diffPixels": 1024000,
-      "totalPixels": 1024000,
-      "diffRatio": 1,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -1549,6 +1531,9 @@
     },
     {
       "fileName": "components-destinationselect--remote-unavailable--mobile.png"
+    },
+    {
+      "fileName": "components-destinationselect--remote-unavailable.png"
     },
     {
       "fileName": "components-destinationselect--repository-destinations--mobile.png"
