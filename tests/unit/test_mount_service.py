@@ -578,6 +578,7 @@ class TestMountService:
             mock_repo.connection_id = None
             mock_repo.bypass_lock = False
             mock_repo.remote_path = "borg14"
+            mock_repo.borg_version = 1
 
             # First query (Repository) returns mock_repo, second (SystemSettings) returns None
             mock_db.query.return_value.filter.return_value.first.side_effect = [
@@ -811,6 +812,7 @@ class TestMountService:
             mock_repo.connection_id = None
             mock_repo.bypass_lock = False
             mock_repo.remote_path = None
+            mock_repo.borg_version = 1
 
             mock_db.query.return_value.filter.return_value.first.side_effect = [
                 mock_repo,

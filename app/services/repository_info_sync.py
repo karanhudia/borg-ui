@@ -22,6 +22,7 @@ from typing import Any, Dict, Optional
 
 import structlog
 
+from app.core.borg_major import is_borg2
 from app.database.models import Repository
 from app.utils.datetime_utils import parse_borg_archive_time
 
@@ -59,7 +60,7 @@ def sync_archive_stats_from_info(
 ) -> None:
     """Best-effort by design: the info response has already been served either
     way, so a failed write is logged, never raised."""
-    if repository.borg_version != 2:
+    if not is_borg2(repository):
         return
     archives = info_data.get("archives")
     if not isinstance(archives, list):

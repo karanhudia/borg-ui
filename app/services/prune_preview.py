@@ -11,6 +11,7 @@ from typing import Any, Optional
 import structlog
 from sqlalchemy.orm import Session
 
+from app.core.borg_major import is_borg2
 from app.database.models import Archive, Operation, Repository
 from app.services.prune_service import _log_message
 
@@ -195,7 +196,7 @@ def sizes_bound_freed_space(repository: Repository) -> bool:
     is created (`create --json`), and archives kept after it can share those
     chunks. The payloads carry it as `sizes_available`, so the page asks
     this, not the Borg version."""
-    return (repository.borg_version or 1) != 2
+    return not is_borg2(repository)
 
 
 def join_verdicts(

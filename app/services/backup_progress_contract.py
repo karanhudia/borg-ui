@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+from app.core.borg_major import borg_major
 from app.database.models import Repository
 
 BACKUP_PROGRESS_FIELDS_BY_VERSION: dict[int, tuple[str, ...]] = {
@@ -48,7 +49,7 @@ BACKUP_PROGRESS_FIELDS_BY_VERSION: dict[int, tuple[str, ...]] = {
 
 
 def get_backup_progress_fields(repo: Optional[Repository]) -> tuple[str, ...]:
-    borg_version = (repo.borg_version or 1) if repo else 1
+    borg_version = borg_major(repo)
     return BACKUP_PROGRESS_FIELDS_BY_VERSION.get(
         borg_version, BACKUP_PROGRESS_FIELDS_BY_VERSION[1]
     )

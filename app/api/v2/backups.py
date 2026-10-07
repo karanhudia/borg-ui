@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 import structlog
 
+from app.core.borg_major import is_borg2
 from app.database.database import get_db
 from app.database.models import (
     User,
@@ -90,7 +91,7 @@ def _get_v2_repo_by_id(repo_id: int, db: Session, current_user: User) -> Reposit
     repo = get_repository_with_access(
         db, current_user, repo_id, required_role="operator"
     )
-    if repo.borg_version != 2:
+    if not is_borg2(repo):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"key": "backend.errors.restore.repositoryNotFound"},

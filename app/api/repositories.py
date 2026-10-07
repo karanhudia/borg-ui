@@ -16,6 +16,7 @@ import re
 import shutil
 import uuid
 
+from app.core.borg_major import borg_major, is_borg2
 from app.database.database import get_db, SessionLocal
 from app.database.models import (
     AgentMachine,
@@ -236,7 +237,7 @@ def _normalize_restore_check_paths(paths: Any) -> list[str]:
 def _validate_borg_flags(text: Optional[str], command: str, borg_version) -> None:
     """422 for flags the allowlist or the repository's Borg major refuses."""
     try:
-        parse_borg_flags(text, command, borg_version or 1, local_paths=False)
+        parse_borg_flags(text, command, borg_version, local_paths=False)
     except ValueError as exc:
         raise HTTPException(
             status_code=422,
@@ -1098,9 +1099,7 @@ async def _update_agent_repository_stats(
         # rinfo carried no cache stats (storage_usage answers Borg 1 with
         # borg1_uses_rinfo). For Borg 2 it adds nothing: storage_usage runs
         # du itself for local paths and du fails on store URLs.
-        if total_size is None and (
-            not storage_usage_tried or (repository.borg_version or 1) != 2
-        ):
+        if total_size is None and (not storage_usage_tried or not is_borg2(repository)):
             try:
                 du_job = queue_agent_repository_operation_job(
                     db, repository, job_kind="repository.disk_usage"
@@ -1367,7 +1366,7 @@ def _single_line_passphrase(value: Optional[str]) -> Optional[str]:
 
 class RepositoryCreate(BaseModel):
     name: str
-    borg_version: Optional[int] = 1
+    borg_version: Optional[Literal[1, 2]] = 1
     path: str
     encryption: str = "repokey"  # repokey, keyfile, none
     compression: str = "lz4"  # lz4, zstd, zlib, none
@@ -1433,7 +1432,7 @@ class RepositoryCreate(BaseModel):
 
 class RepositoryImport(BaseModel):
     name: str
-    borg_version: Optional[int] = 1
+    borg_version: Optional[Literal[1, 2]] = 1
     path: str
     encryption: str = "none"
     passphrase: Optional[str] = None  # Required if repository is encrypted
@@ -1569,7 +1568,7 @@ class RepositoryInfo(BaseModel):
 
 
 def _uses_borg2_payload(data: Union[RepositoryCreate, RepositoryImport]) -> bool:
-    requested_version = getattr(data, "borg_version", 1) or 1
+    requested_version = borg_major(data)
     return requested_version == 2 or data.encryption in V2_ONLY_ENCRYPTION_MODES
 
 
@@ -1678,9 +1677,7 @@ def _is_cloud_mirror_payload(
 
 def _primary_storage_backend(repository: Repository) -> str:
     if repository.repository_type == "rclone":
-        if (repository.borg_version or 1) == 2 and _is_direct_rclone_url(
-            repository.path
-        ):
+        if is_borg2(repository) and _is_direct_rclone_url(repository.path):
             return DIRECT_RCLONE_STORAGE_BACKEND
         return "rclone"
     if repository_executor_type(repository) == "agent":
@@ -1748,7 +1745,7 @@ def _is_direct_rclone_repository(
 ) -> bool:
     return bool(
         repository.repository_type == "rclone"
-        and (repository.borg_version or 1) == 2
+        and is_borg2(repository)
         and _is_direct_rclone_url(repository.path)
         and storage is None
     )
@@ -1792,7 +1789,7 @@ def _validate_direct_rclone_payload(
     data: Union[RepositoryCreate, RepositoryImport],
     db: Session,
 ) -> str:
-    if (data.borg_version or 1) != 2:
+    if not is_borg2(data):
         raise HTTPException(
             status_code=400,
             detail={"key": "backend.errors.rclone.directBorg2Required"},
@@ -2886,7 +2883,7 @@ def _repository_common_values(
         "executor_type": "server",
         "agent_machine_id": None,
         "repository_type": "rclone",
-        "borg_version": repo_data.borg_version or 1,
+        "borg_version": borg_major(repo_data),
     }
 
 
@@ -3547,7 +3544,7 @@ def get_repositories(
                 "next_run": schedule_summary["next_run"],
                 "has_keyfile": repo.has_keyfile or False,
                 "source_ssh_connection_id": repo.source_ssh_connection_id,
-                "borg_version": repo.borg_version or 1,
+                "borg_version": borg_major(repo),
             }
             rclone_storage = _serialize_rclone_storage(
                 repo,
@@ -4887,7 +4884,7 @@ async def update_repository(
         # initialized further down)
         if repo_data.custom_flags is not None:
             _validate_borg_flags(
-                repo_data.custom_flags, "create", repository.borg_version
+                repo_data.custom_flags, "create", borg_major(repository)
             )
 
         # No response returns the passphrase, so the edit form submits a blank
@@ -5341,13 +5338,13 @@ async def update_repository(
             if raw_path != repository.path:
                 _reject_borg2_only_url_for_borg1(
                     raw_path,
-                    borg2=(repository.borg_version or 1) == 2,
+                    borg2=is_borg2(repository),
                     connection_id=target_connection_id,
                     agent=target_executor_type == "agent",
                 )
                 _reject_borg1_ssh_address_for_borg2(
                     raw_path,
-                    borg2=(repository.borg_version or 1) == 2,
+                    borg2=is_borg2(repository),
                     connection_id=target_connection_id,
                 )
 
@@ -5520,7 +5517,7 @@ async def update_repository(
                         "New path holds no borg repository - initializing",
                         new_path=repository.path,
                         old_path=old_path,
-                        borg_version=repository.borg_version or 1,
+                        borg_version=borg_major(repository),
                     )
                     init_result = await router.initialize_repository(
                         ssh_key_id=ssh_key_id_for_init,
@@ -5535,7 +5532,7 @@ async def update_repository(
                     logger.info(
                         "Successfully initialized borg repository at new path",
                         new_path=repository.path,
-                        borg_version=repository.borg_version or 1,
+                        borg_version=borg_major(repository),
                     )
 
         if passphrase_changed and not path_changed:
@@ -6031,7 +6028,7 @@ async def check_repository(
         max_duration = request.get("max_duration", 3600) if request else 3600
         check_extra_flags = (
             _normalize_check_flags(
-                request.get("check_extra_flags"), repository.borg_version
+                request.get("check_extra_flags"), borg_major(repository)
             )
             if request
             else None
@@ -6808,7 +6805,7 @@ def _stats_last_modified(
     """Borg 1's `last_modified` as the info call just reported it, else the
     stored column; for Borg 2, which reports none, the last write the
     storage summary derives (#1262)."""
-    if (repository.borg_version or 1) == 2:
+    if is_borg2(repository):
         summary = _storage_summary_or_none(db, repository)
         return summary.last_modified if summary else None
     return reported or repository.borg_last_modified
@@ -7368,7 +7365,7 @@ async def update_check_schedule(
 
         if "check_extra_flags" in request:
             repo.check_extra_flags = _normalize_check_flags(
-                request.get("check_extra_flags"), repo.borg_version
+                request.get("check_extra_flags"), borg_major(repo)
             )
 
         if repo.check_cron_expression and repo.check_schedule_enabled:

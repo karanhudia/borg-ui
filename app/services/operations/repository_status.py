@@ -25,6 +25,7 @@ from typing import Iterable, Optional
 from sqlalchemy import String, and_, case, cast, func, or_
 from sqlalchemy.orm import Session, aliased
 
+from app.core.borg_major import is_borg2
 from app.database.models import (
     Archive,
     BackupPlan,
@@ -990,23 +991,21 @@ def storage_summaries(
         # hide the last one that reported one.
         by_version: dict[bool, list[int]] = {}
         for repository in repos:
-            by_version.setdefault((repository.borg_version or 1) == 2, []).append(
-                repository.id
-            )
+            by_version.setdefault(is_borg2(repository), []).append(repository.id)
         deletions = (
             _latest_success_by_repository(db, by_version[True], _deletes())
             if True in by_version
             else {}
         )
         reported_original = {}
-        for is_borg2, version_ids in by_version.items():
+        for borg2, version_ids in by_version.items():
             reported_original.update(
                 _latest_reported_original_size(
                     db,
                     version_ids,
-                    kind="compact" if is_borg2 else "stats",
-                    key='"source_size"' if is_borg2 else '"original_size"',
-                    read=_borg2_reported_size if is_borg2 else _borg1_reported_size,
+                    kind="compact" if borg2 else "stats",
+                    key='"source_size"' if borg2 else '"original_size"',
+                    read=_borg2_reported_size if borg2 else _borg1_reported_size,
                 )
             )
     else:
@@ -1045,7 +1044,7 @@ def storage_summaries(
             else None
         )
         compact = compacts.get(repository.id)
-        borg2 = (repository.borg_version or 1) == 2
+        borg2 = is_borg2(repository)
         # An archive count of 0 answers on its own: no archives, no source
         # data. The rows it disagrees with may not be deleted yet (the info
         # dialog's listing leaves them for the next archive_sync), which

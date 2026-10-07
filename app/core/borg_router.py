@@ -17,6 +17,7 @@ from typing import Any, Callable, List, Mapping, Optional
 import structlog
 from sqlalchemy.orm import Session
 
+from app.core.borg_major import is_borg2
 from app.utils.borg_env import effective_repository_remote_path
 from app.utils.borg_flags import parse_borg_flags
 
@@ -116,7 +117,7 @@ def _cancel_unqueued_maintenance_job(
 class BorgRouter:
     def __init__(self, repo):
         self.repo = repo
-        self.is_v2 = (getattr(repo, "borg_version", None) or 1) == 2
+        self.is_v2 = is_borg2(repo)
 
     def validate_local_repository_access(self) -> None:
         """Fail fast for clearly invalid local repository paths.

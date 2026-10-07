@@ -14,6 +14,7 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import SingletonThreadPool, StaticPool
 
+from app.core.borg_major import borg_major, is_borg2
 from app.core.agent_versions import agent_borg2_version, agent_borg_version_for_major
 from app.core.borg2 import borg2_below_minimum, borg2_minimum_version
 from app.core.borg_router import BorgRouter
@@ -253,7 +254,7 @@ def build_agent_backup_payload(
     repository_payload = {
         "id": repository.id,
         "path": repository.path,
-        "borg_version": repository.borg_version or 1,
+        "borg_version": borg_major(repository),
     }
     if repository.remote_path:
         repository_payload["remote_path"] = repository.remote_path
@@ -269,7 +270,7 @@ def build_agent_backup_payload(
             parse_borg_flags(
                 custom_flags if custom_flags is not None else repository.custom_flags,
                 "create",
-                repository.borg_version or 1,
+                borg_major(repository),
                 local_paths=False,
             )
         ),
@@ -309,7 +310,7 @@ def build_agent_repository_operation_payload(
     repository_payload = {
         "id": repository.id,
         "path": repository.path,
-        "borg_version": repository.borg_version or 1,
+        "borg_version": borg_major(repository),
     }
     if repository.remote_path:
         repository_payload["remote_path"] = repository.remote_path
@@ -422,7 +423,7 @@ def validate_agent_backup_repository(
             status_code=status.HTTP_409_CONFLICT,
             detail={"key": "backend.errors.agents.agentNotQueueable"},
         )
-    if (repository.borg_version or 1) == 2:
+    if is_borg2(repository):
         require_agent_borg2(agent)
     using_repository_sources = source_paths is None
     if using_repository_sources:
@@ -487,9 +488,7 @@ def validate_agent_repository_operation(
                 "params": {"capability": job_kind},
             },
         )
-    if (
-        repository.borg_version or 1
-    ) == 2 and job_kind not in BORGLESS_REPOSITORY_JOB_KINDS:
+    if (borg_major(repository)) == 2 and job_kind not in BORGLESS_REPOSITORY_JOB_KINDS:
         require_agent_borg2(agent)
     return agent
 
