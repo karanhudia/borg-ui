@@ -91,7 +91,7 @@ async def test_a_job_completed_with_warnings_keeps_its_backup_after_a_hello(test
         agent,
         now=agents._now_utc(),
         running_job_ids=[],
-        ignore_age_for_undelivered=True,
+        at_hello=True,
     )
     test_db.commit()
     test_db.expire_all()

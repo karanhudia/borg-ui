@@ -3,6 +3,7 @@ import pytest
 from app.core.agent_versions import (
     UPGRADE_STATUSES,
     compute_agent_upgrade_status,
+    hello_lists_running_jobs,
     parse_agent_version,
 )
 
@@ -89,3 +90,21 @@ def test_pin_to_the_served_version_still_reads_as_pinned():
         )
         == "pinned"
     )
+
+
+@pytest.mark.parametrize(
+    "reported,expected",
+    [
+        ("0.1.4", True),
+        ("0.1.20", True),
+        ("0.2", True),
+        ("1.0.0", True),
+        ("0.1.3", False),
+        ("0.1", False),
+        ("0.1.4a1", False),
+        ("", False),
+        (None, False),
+    ],
+)
+def test_hello_lists_running_jobs(reported, expected):
+    assert hello_lists_running_jobs(reported) is expected

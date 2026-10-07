@@ -91,6 +91,25 @@ def compute_agent_upgrade_status(
     return OUTDATED
 
 
+# The first agent release whose session hello lists the jobs it runs. Before
+# it, the hello always sent an empty running_job_ids; 0.1.3 shipped both ways.
+HELLO_LISTS_RUNNING_JOBS_SINCE = (0, 1, 4)
+
+
+def hello_lists_running_jobs(reported: Optional[str]) -> bool:
+    """Whether an agent's session hello can be trusted to list every job it
+    runs, so a job missing from it is running nowhere.
+
+    A version that does not parse is treated as too old: taking an empty list
+    from such an agent at its word would restart a job it is still running.
+    """
+    reported_parts = parse_agent_version(reported)
+    if reported_parts is None:
+        return False
+    left, right = _padded(reported_parts, HELLO_LISTS_RUNNING_JOBS_SINCE)
+    return left >= right
+
+
 def borg_pin_satisfied(
     *, desired: Optional[str], reported: Optional[list] = None
 ) -> bool:

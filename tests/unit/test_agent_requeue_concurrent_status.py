@@ -61,7 +61,7 @@ def _requeue_while_another_session_commits(
     """Run the requeue; between its read and its write, a second session
     commits `concurrent_status` for the job. The hook sits on the job-kind
     check, which every requeue and request-scoped failure passes after the
-    read (the activity check is skipped for an undelivered job at hello)."""
+    read (the activity check is skipped for every job at hello)."""
     real_is_request_scoped = agents._is_request_scoped_repository_job
 
     def read_then_commit(job):
@@ -158,7 +158,7 @@ def test_a_cancel_that_wins_against_the_requeue_keeps_the_backup_off_the_queue(
         agent,
         job.id,
         "cancel_requested",
-        ignore_age_for_undelivered=at_hello,
+        at_hello=at_hello,
     )
 
     assert test_db.get(AgentJob, job.id).status == job_status
@@ -194,7 +194,7 @@ def test_a_cancel_request_wins_on_the_hello_path_too(test_db):
         agent,
         job.id,
         "cancel_requested",
-        ignore_age_for_undelivered=True,
+        at_hello=True,
     )
 
     assert test_db.get(AgentJob, job.id).status == "canceled"

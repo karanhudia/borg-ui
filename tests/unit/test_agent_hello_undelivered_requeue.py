@@ -1,4 +1,4 @@
-"""An undelivered claimed job must recover on the very next hello.
+"""A job the agent no longer runs must recover on the very next hello.
 
 _requeue_stale_agent_jobs only requeued a "claimed" job once it had sat idle
 past STALE_AGENT_JOB_REQUEUE_AFTER. For a polling agent that is right — its
@@ -10,10 +10,11 @@ window found the stranded job "too fresh" and had no further chance to
 recover it until the next disconnect or the reaper, because session
 heartbeats are WS messages that never call this function.
 
-ignore_age_for_undelivered=True (passed only from the WS hello call site)
-lets an undelivered claimed job (started_at NULL) absent from
-running_job_ids requeue regardless of age. Every other job — one the agent
-still reports running, or one already started — keeps the age check.
+at_hello=True (passed only from the WS hello call site) drops the age check
+for every job absent from running_job_ids: an undelivered claimed job
+(started_at NULL), and a started one whose agent process restarted while it
+ran. A job the agent still reports running is left alone, and the /heartbeat
+path keeps the window.
 """
 
 from datetime import timedelta
@@ -101,7 +102,7 @@ def test_hello_requeues_young_undelivered_job_absent_from_running_ids(db_session
         agent,
         now=_now_utc(),
         running_job_ids=[],
-        ignore_age_for_undelivered=True,
+        at_hello=True,
     )
     db_session.commit()
     db_session.refresh(job)
@@ -129,7 +130,7 @@ def test_hello_does_not_requeue_a_job_the_agent_reports_running(db_session):
         agent,
         now=_now_utc(),
         running_job_ids=[job.id],
-        ignore_age_for_undelivered=True,
+        at_hello=True,
     )
     db_session.commit()
     db_session.refresh(job)
@@ -169,7 +170,7 @@ def test_heartbeat_path_keeps_the_age_window_for_undelivered_jobs(db_session):
 def test_hello_still_fails_request_scoped_repository_job_terminally(db_session):
     # A request-scoped repository job (e.g. repository.info) has no durable
     # record and no receiver left once the session drops. Even on the hello
-    # path with ignore_age_for_undelivered=True, it must be failed terminally
+    # path with at_hello=True, it must be failed terminally
     # rather than requeued.
     agent = _create_agent(db_session)
     job = _create_request_scoped_job(db_session, agent, age=timedelta(seconds=5))
@@ -179,7 +180,7 @@ def test_hello_still_fails_request_scoped_repository_job_terminally(db_session):
         agent,
         now=_now_utc(),
         running_job_ids=[],
-        ignore_age_for_undelivered=True,
+        at_hello=True,
     )
     db_session.commit()
     db_session.refresh(job)
@@ -238,7 +239,7 @@ def test_a_fresh_cancel_requested_job_is_cancelled_on_hello(test_db):
         agent,
         now=_now_utc(),
         running_job_ids=[],
-        ignore_age_for_undelivered=True,
+        at_hello=True,
     )
     test_db.commit()
     test_db.refresh(job)
@@ -312,10 +313,170 @@ def test_a_settled_cancel_closes_the_backup_it_carries(test_db):
         agent,
         now=_now_utc(),
         running_job_ids=[],
-        ignore_age_for_undelivered=True,
+        at_hello=True,
     )
     test_db.commit()
     test_db.expire_all()
 
     assert test_db.get(AgentJob, job.id).status == "canceled"
     assert test_db.get(Operation, backup.id).status == "cancelled"
+
+
+def _create_started_job(db_session, agent, *, status, job_kind, age):
+    started_at = _now_utc() - age
+    job = AgentJob(
+        agent_machine_id=agent.id,
+        job_type="repository",
+        status=status,
+        payload={
+            "job_kind": job_kind,
+            "operation": {
+                "maintenance_job": {"kind": "prune", "id": 1, "table": "operations"}
+            },
+        },
+        claimed_at=started_at,
+        started_at=started_at,
+        created_at=started_at,
+        updated_at=started_at,
+    )
+    db_session.add(job)
+    db_session.commit()
+    db_session.refresh(job)
+    return job
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("status", ["claimed", "running"])
+def test_hello_requeues_a_young_started_job_absent_from_running_ids(db_session, status):
+    """An agent process that restarted while the job ran says hello without
+    it: the work is gone with the old process, whatever its age. Left to the
+    window, the job held its repository until the reaper failed it."""
+    agent = _create_agent(db_session)
+    job = _create_started_job(
+        db_session,
+        agent,
+        status=status,
+        job_kind="repository.prune",
+        age=timedelta(seconds=5),
+    )
+
+    _requeue_stale_agent_jobs(
+        db_session,
+        agent,
+        now=_now_utc(),
+        running_job_ids=[],
+        at_hello=True,
+        running_job_ids_complete=True,
+    )
+    db_session.commit()
+    db_session.refresh(job)
+
+    assert job.status == "queued"
+    assert job.claimed_at is None
+    assert job.started_at is None
+
+
+@pytest.mark.unit
+def test_hello_fails_a_young_started_request_scoped_job(db_session):
+    agent = _create_agent(db_session)
+    job = _create_started_job(
+        db_session,
+        agent,
+        status="running",
+        job_kind="repository.info",
+        age=timedelta(seconds=5),
+    )
+
+    _requeue_stale_agent_jobs(
+        db_session,
+        agent,
+        now=_now_utc(),
+        running_job_ids=[],
+        at_hello=True,
+        running_job_ids_complete=True,
+    )
+    db_session.commit()
+    db_session.refresh(job)
+
+    assert job.status == "failed"
+    assert "no client is waiting" in (job.error_message or "")
+
+
+@pytest.mark.unit
+def test_hello_leaves_a_started_job_the_agent_reports_running(db_session):
+    agent = _create_agent(db_session)
+    job = _create_started_job(
+        db_session,
+        agent,
+        status="running",
+        job_kind="repository.prune",
+        age=timedelta(seconds=5),
+    )
+
+    _requeue_stale_agent_jobs(
+        db_session,
+        agent,
+        now=_now_utc(),
+        running_job_ids=[job.id],
+        at_hello=True,
+        running_job_ids_complete=True,
+    )
+    db_session.commit()
+    db_session.refresh(job)
+
+    assert job.status == "running"
+    assert job.started_at is not None
+
+
+@pytest.mark.unit
+def test_heartbeat_path_keeps_the_age_window_for_started_jobs(db_session):
+    agent = _create_agent(db_session)
+    job = _create_started_job(
+        db_session,
+        agent,
+        status="running",
+        job_kind="repository.prune",
+        age=timedelta(seconds=5),
+    )
+
+    _requeue_stale_agent_jobs(
+        db_session,
+        agent,
+        now=_now_utc(),
+        running_job_ids=[],
+    )
+    db_session.commit()
+    db_session.refresh(job)
+
+    assert job.status == "running"
+
+
+@pytest.mark.unit
+def test_hello_keeps_the_window_for_a_started_job_when_its_list_is_not_complete(
+    db_session,
+):
+    """An agent before 0.1.4 always sent an empty running_job_ids, so its
+    silence about a started job says nothing: the job may still run on the
+    same process after a dropped socket. Requeueing it would start it twice."""
+    agent = _create_agent(db_session)
+    job = _create_started_job(
+        db_session,
+        agent,
+        status="running",
+        job_kind="repository.prune",
+        age=timedelta(seconds=5),
+    )
+
+    _requeue_stale_agent_jobs(
+        db_session,
+        agent,
+        now=_now_utc(),
+        running_job_ids=[],
+        at_hello=True,
+        running_job_ids_complete=False,
+    )
+    db_session.commit()
+    db_session.refresh(job)
+
+    assert job.status == "running"
+    assert job.started_at is not None
