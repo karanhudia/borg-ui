@@ -1031,6 +1031,10 @@ class BackupService:
                     )
                     # Skip all paths from this connection
 
+            # Store mount_ids for cleanup before staging below can fail.
+            if mount_ids:
+                self.ssh_mounts[job_id] = mount_ids
+
             # Add local paths at the end. Borg UI's managed restore canary is a
             # local path, but when the backup cwd is an SSHFS root we stage that
             # tiny generated payload under the same cwd so it still archives as
@@ -1044,11 +1048,11 @@ class BackupService:
                     source = Path(local_path)
                     target = Path(shared_ssh_temp_root) / canary_archive_path
                     target.parent.mkdir(parents=True, exist_ok=True)
-                    if target.exists():
-                        if target.is_dir():
-                            shutil.rmtree(target)
-                        else:
-                            target.unlink()
+                    # The SSHFS mounts live under the same root.
+                    if not remove_tree_without_crossing_mounts(str(target)):
+                        raise RuntimeError(
+                            f"Could not replace staged restore canary: {target}"
+                        )
                     if source.is_dir():
                         shutil.copytree(source, target)
                     else:
@@ -1065,10 +1069,6 @@ class BackupService:
                     prepared_local_paths.append(local_path)
 
             processed_paths.extend(prepared_local_paths)
-
-            # Store mount_ids for cleanup
-            if mount_ids:
-                self.ssh_mounts[job_id] = mount_ids
 
             logger.info(
                 "Source paths prepared",
