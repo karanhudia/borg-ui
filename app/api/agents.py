@@ -518,6 +518,83 @@ def _cancel_if_requested_meanwhile(
     _cancel_agent_job(job, db, completed_at=completed_at)
 
 
+# The agent numbers every run's log lines from 0, and a known
+# (agent_job_id, sequence) is a duplicate on both log paths. The rows that
+# stand in for a requeued job's earlier output sit before the next run's.
+REQUEUED_JOB_LOG_SEQUENCE = -1
+REQUEUED_JOB_LOG_MESSAGE = (
+    "The agent stopped running this job before it finished, so it was "
+    "queued again. The lines below are from the new attempt."
+)
+
+
+def _kept_prune_lines(job: AgentJob, db: Session) -> list[tuple[Any, ...]]:
+    """The lines in which a prune reported an archive removed, as
+    (stream, message, created_at, received_at) per row that has any.
+
+    Borg 1 commits a prune at checkpoints too, so archives a stopped run
+    named may be gone, and the next run will not name them again. The
+    completion marks the backup jobs of the archives the stored log names."""
+    payload = job.payload if isinstance(job.payload, dict) else {}
+    if payload.get("job_kind") != "repository.prune":
+        return []
+    from app.services.job_history_retention import archive_names_from_prune_output
+
+    kept = []
+    for row in (
+        db.query(AgentJobLog)
+        .filter(AgentJobLog.agent_job_id == job.id)
+        .order_by(AgentJobLog.sequence.asc(), AgentJobLog.id.asc())
+    ):
+        lines = [
+            line
+            for line in row.message.splitlines()
+            if archive_names_from_prune_output(line)
+        ]
+        if lines:
+            kept.append((row.stream, "\n".join(lines), row.created_at, row.received_at))
+    return kept
+
+
+def _reset_requeued_agent_job_log(job: AgentJob, db: Session, *, now: datetime) -> None:
+    """Drop the stored lines of a run that will not report, so the next run's
+    lines are not taken for duplicates of them (#1378).
+
+    Its transcript would also be read as the next run's: the operation log is
+    collected from these rows at completion, and compact takes statistics
+    from it. A prune's lines naming removed archives stay, ahead of a note
+    that the job was queued again. A job that logged nothing gets no note."""
+    kept = _kept_prune_lines(job, db)
+    removed = (
+        db.query(AgentJobLog)
+        .filter(AgentJobLog.agent_job_id == job.id)
+        .delete(synchronize_session=False)
+    )
+    if not removed:
+        return
+    for offset, (stream, message, created_at, received_at) in enumerate(kept):
+        db.add(
+            AgentJobLog(
+                agent_job_id=job.id,
+                sequence=REQUEUED_JOB_LOG_SEQUENCE - len(kept) + offset,
+                stream=stream,
+                message=message,
+                created_at=created_at,
+                received_at=received_at,
+            )
+        )
+    db.add(
+        AgentJobLog(
+            agent_job_id=job.id,
+            sequence=REQUEUED_JOB_LOG_SEQUENCE,
+            stream="stdout",
+            message=REQUEUED_JOB_LOG_MESSAGE,
+            created_at=now,
+            received_at=now,
+        )
+    )
+
+
 def _requeue_stale_agent_jobs(
     db: Session,
     current_agent: AgentMachine,
@@ -607,6 +684,7 @@ def _requeue_stale_agent_jobs(
             )
             continue
 
+        _reset_requeued_agent_job_log(job, db, now=now)
         backup_job = _get_linked_backup_job(job, db)
         if backup_job and not _is_terminal_backup_status(backup_job.status):
             backup_job.status = "pending"
