@@ -262,9 +262,8 @@ jobs:
         if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         run: |
           # The other concurrency group may have pushed state since we checked it out.
-          if git -C visual-state fetch --depth=1 origin visual-regression-state; then
-            git -C visual-state checkout -B visual-regression-state FETCH_HEAD
-          fi
+          git -C visual-state fetch --depth=1 origin visual-regression-state
+          git -C visual-state checkout -B visual-regression-state FETCH_HEAD
 
           rm -rf docs-source/docs/.vitepress/dist/visual
           mkdir -p docs-source/docs/.vitepress/dist
