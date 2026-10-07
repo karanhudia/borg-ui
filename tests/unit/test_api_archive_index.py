@@ -1146,7 +1146,7 @@ class TestRebuild:
         assert a.original_size is None
 
     def test_resync_enqueues_the_reconcile_chain_once(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """Deleting, pruning, or wiping leaves the stored archive list ahead
         of the repository, and the list is what the Archives page reads, so
@@ -1160,6 +1160,9 @@ class TestRebuild:
         assert kinds == ["archive_sync", "history_index", "stats"]
         ops = test_db.query(Operation).all()
         assert all(o.trigger == "reconcile" and o.priority == 20 for o in ops)
+
+        held_runner.turn()
+        assert {o.status for o in test_db.query(Operation)} == {"queued"}
 
         # A second call while the first run is still queued adds nothing, so
         # a burst of deletes does not build a queue of identical runs.
@@ -1178,7 +1181,7 @@ class TestRebuild:
         assert r.status_code == 403
 
     def test_rebuild_from_history_is_pro_and_resets_archives(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         repo = _repo(test_db)
         a = _archive(test_db, repo, "a1", 1)
@@ -1201,6 +1204,7 @@ class TestRebuild:
         assert r.status_code == 200
         kinds = [test_db.get(Operation, i).kind for i in r.json()["operations"]]
         assert kinds == ["history_index", "stats"]
+        held_runner.turn()
         test_db.refresh(a)
         assert (
             a.history_state == "pending" and test_db.query(ArchiveChange).count() == 0
