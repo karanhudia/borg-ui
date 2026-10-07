@@ -23,8 +23,10 @@ on:
         required: false
         type: string
 
+# Baseline and PR report runs queue separately: a group keeps only one pending
+# run, so sharing one let PR reports cancel the main baseline update.
 concurrency:
-  group: ${{ github.workflow }}-visual-state
+  group: ${{ github.workflow }}-visual-state-${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.pr_number)) && 'baseline' || 'reports' }}
   cancel-in-progress: false
 
 env:
@@ -259,6 +261,10 @@ jobs:
       - name: Overlay visual reports
         if: ${{ steps.visual_mode.outputs.mode != 'skip' }}
         run: |
+          # The other concurrency group may have pushed state since we checked it out.
+          git -C visual-state fetch --depth=1 origin visual-regression-state
+          git -C visual-state checkout -B visual-regression-state FETCH_HEAD
+
           rm -rf docs-source/docs/.vitepress/dist/visual
           mkdir -p docs-source/docs/.vitepress/dist
 

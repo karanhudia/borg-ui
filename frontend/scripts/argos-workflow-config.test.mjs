@@ -40,7 +40,8 @@ describe('GitHub Pages visual regression workflow', () => {
     expect(workflow).toContain('types: [closed]')
     expect(workflow).toContain("github.event.workflow_run.conclusion == 'success'")
     expect(workflow).not.toContain('run-visuals')
-    expect(workflow).toContain('group: ${{ github.workflow }}-visual-state')
+    expect(workflow).toContain('group: ${{ github.workflow }}-visual-state-')
+    expect(workflow).toContain("&& 'baseline' || 'reports' }}")
     expect(workflow).toContain('cancel-in-progress: false')
     expect(workflow).toContain('push:')
     expect(workflow).toContain('frontend/src/**')
@@ -65,7 +66,9 @@ describe('GitHub Pages visual regression workflow', () => {
     expect(workflow).toContain('pull-requests: write')
     expect(workflow).toContain('actions: read')
     expect(workflow).toContain('ref: main')
-    expect(workflow).toContain('gh run download "$SOURCE_RUN_ID" -R "$GITHUB_REPOSITORY" --name visual-actual')
+    expect(workflow).toContain(
+      'gh run download "$SOURCE_RUN_ID" -R "$GITHUB_REPOSITORY" --name visual-actual'
+    )
     expect(workflow).toContain('Refusing unexpected visual artifact files.')
     expect(workflow).toContain(
       'pr_details="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
@@ -81,7 +84,8 @@ describe('GitHub Pages visual regression workflow', () => {
     expect(captureWorkflow).toContain('pull_request:')
     expect(captureWorkflow).toContain('types: [opened, synchronize, reopened]')
     expect(captureWorkflow).toContain('contents: read')
-    expect(captureWorkflow).toContain('ref: ${{ github.event.pull_request.head.sha }}')
+    // Default pull_request checkout is the merge ref, so snapshots show the PR on current main.
+    expect(captureWorkflow).not.toMatch(/^\s+ref:/m)
     expect(captureWorkflow).toContain('npm run visual:screenshots')
     expect(captureWorkflow).toContain('actions/upload-artifact@v7')
     expect(captureWorkflow).toContain('name: visual-actual')
