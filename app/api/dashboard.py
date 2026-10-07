@@ -1024,6 +1024,9 @@ def unresolved_dispatch_failures(db: Session, since: datetime, until: datetime) 
     has_failed_operation = exists().where(
         Operation.backup_plan_run_id == BackupPlanRun.id,
         Operation.status == "failed",
+        Operation.kind.in_(ACTIVITY_KINDS),
+        Operation.started_at >= since,
+        Operation.started_at <= until,
     )
     later_success = exists().where(
         later_run.backup_plan_id == BackupPlanRun.backup_plan_id,

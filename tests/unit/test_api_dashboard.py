@@ -1663,6 +1663,79 @@ class TestDashboardOverviewAggregates:
         ]
         assert data["activity_feed"] == data["current_failures"]
 
+    def test_unresolved_dispatch_failure_ignores_operations_the_feed_hides(
+        self, test_db
+    ):
+        from app.api.dashboard import unresolved_dispatch_failures
+
+        now = datetime.utcnow().replace(microsecond=0)
+        since = now - timedelta(days=14)
+        repo = _repository(test_db, "Linked")
+
+        def plan(name):
+            row = BackupPlan(
+                name=name,
+                enabled=True,
+                source_directories='["/srv/data"]',
+            )
+            test_db.add(row)
+            test_db.flush()
+            return row
+
+        def failed_run(owner, hours_ago):
+            started = now - timedelta(hours=hours_ago)
+            run = BackupPlanRun(
+                backup_plan_id=owner.id,
+                trigger="schedule",
+                status="failed",
+                error_message="Backup plan has no enabled repositories",
+                started_at=started,
+                completed_at=started,
+                created_at=started,
+            )
+            test_db.add(run)
+            test_db.flush()
+            return run
+
+        def failed_operation(kind, run, started):
+            test_db.add(
+                Operation(
+                    repository_id=repo.id,
+                    kind=kind,
+                    category="index" if kind == "archive_sync" else "backup",
+                    status="failed",
+                    trigger="plan",
+                    priority=0,
+                    run_id=f"{kind}-{run.id}",
+                    backup_plan_run_id=run.id,
+                    created_at=started,
+                    started_at=started,
+                    completed_at=started,
+                    error_message=f"{kind} failed",
+                )
+            )
+
+        follow_up = failed_run(plan("Follow-up only"), 3)
+        failed_operation("archive_sync", follow_up, follow_up.started_at)
+        stale = failed_run(plan("Stale operation"), 2)
+        failed_operation("backup", stale, now - timedelta(days=20))
+        covered = failed_run(plan("Covered by the feed"), 1)
+        failed_operation("backup", covered, covered.started_at)
+        test_db.commit()
+
+        failures = unresolved_dispatch_failures(test_db, since, now)
+
+        assert {item["repository"] for item in failures} == {
+            "Follow-up only",
+            "Stale operation",
+        }
+        assert all(item["type"] == "backup_plan_run" for item in failures)
+        assert all(item["status"] == "failed" for item in failures)
+        assert all(
+            item["error"] == "Backup plan has no enabled repositories"
+            for item in failures
+        )
+
     def test_a_run_dated_after_now_is_in_neither_panel(
         self, test_client: TestClient, admin_headers, test_db
     ):

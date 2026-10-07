@@ -2841,6 +2841,66 @@ class TestBackupPlanRoutes:
         assert body["activity_feed"] == body["current_failures"]
 
     @pytest.mark.asyncio
+    async def test_dispatch_due_runs_continues_when_recording_a_refusal_fails(
+        self, test_db
+    ):
+        repo_a = _create_repo(test_db, "Primary", "/repos/primary")
+        repo_b = _create_repo(test_db, "Secondary", "/repos/secondary")
+        now = datetime(2026, 1, 1, 2, 0)
+        due_at = now - timedelta(minutes=1)
+        first = _create_scheduled_plan(
+            test_db,
+            [repo_a],
+            name="First plan",
+            next_run=due_at,
+        )
+        second = _create_scheduled_plan(
+            test_db,
+            [repo_b],
+            name="Second plan",
+            next_run=due_at,
+        )
+        first.repositories[0].enabled = False
+        second.repositories[0].enabled = False
+        test_db.commit()
+
+        original = backup_plan_execution_service._record_dispatch_refusal
+
+        def fail_first(db, plan, when, error_message):
+            if plan.id == first.id:
+                raise _locked_database()
+            return original(db, plan, when, error_message)
+
+        with (
+            patch.object(
+                backup_plan_execution_service,
+                "_record_dispatch_refusal",
+                side_effect=fail_first,
+            ),
+            patch.object(
+                backup_plan_execution_service,
+                "_notify_dispatch_refusal",
+                new=AsyncMock(),
+            ) as notify,
+        ):
+            dispatched = await backup_plan_execution_service.dispatch_due_runs(
+                test_db, now
+            )
+
+        assert dispatched == 0
+        assert [call.args[1].id for call in notify.await_args_list] == [second.id]
+        assert (
+            test_db.query(BackupPlanRun).filter_by(backup_plan_id=first.id).count() == 0
+        )
+        test_db.refresh(first)
+        assert first.next_run == due_at
+        test_db.refresh(second)
+        assert second.next_run > now
+        run = test_db.query(BackupPlanRun).filter_by(backup_plan_id=second.id).one()
+        assert run.status == "failed"
+        assert run.error_message == "Backup plan has no enabled repositories"
+
+    @pytest.mark.asyncio
     async def test_dispatch_due_runs_records_refusal_when_plan_has_no_repositories(
         self, test_client: TestClient, admin_headers, test_db
     ):

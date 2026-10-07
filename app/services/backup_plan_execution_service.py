@@ -731,8 +731,17 @@ class BackupPlanExecutionService:
                 # on the next minute instead of consuming the slot.
                 if self._latest_run_id(db, plan.id) != prior_run_id:
                     continue
-                self._record_dispatch_refusal(db, plan, now, str(exc))
-                db.commit()
+                try:
+                    self._record_dispatch_refusal(db, plan, now, str(exc))
+                    db.commit()
+                except Exception as record_error:
+                    db.rollback()
+                    logger.error(
+                        "Failed to record dispatch refusal",
+                        backup_plan_id=plan.id,
+                        error=str(record_error),
+                    )
+                    continue
                 await self._notify_dispatch_refusal(db, plan, str(exc))
             except Exception as exc:
                 logger.error(
