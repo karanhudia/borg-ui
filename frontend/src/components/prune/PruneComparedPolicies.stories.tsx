@@ -17,6 +17,7 @@ const comparison: PruneComparison = {
   archive_count_at: 12,
   stale: false,
   auto: true,
+  sizes_available: true,
   candidates: [
     {
       key: 'current',
@@ -102,6 +103,7 @@ export const Empty: Story = {
       archive_count_at: null,
       stale: true,
       auto: true,
+      sizes_available: true,
       candidates: [],
     },
     editing: null,
@@ -123,6 +125,25 @@ export const AutomaticPreviewsOff: Story = {
     pending: false,
     refreshDisabled: false,
     canManageSettings: true,
+    onSelect: () => {},
+    onRefresh: () => {},
+  },
+}
+
+// Borg 2 reports no per-archive size a deletion would free: every row frees
+// "at least 0" by construction, so the column is left out.
+export const Borg2NoSizes: Story = {
+  args: {
+    comparison: {
+      ...comparison,
+      sizes_available: false,
+      candidates: comparison.candidates.map((c) => ({ ...c, freed_at_least: 0 })),
+    },
+    editing: null,
+    selectedKey: 'standard',
+    pending: false,
+    refreshDisabled: false,
+    sizesAvailable: false,
     onSelect: () => {},
     onRefresh: () => {},
   },

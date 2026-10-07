@@ -265,7 +265,7 @@ export default function DashboardV3() {
                     ? formatDistanceToNow(lastBackupDate, { addSuffix: true })
                     : t('common.never'),
                   color:
-                    lastBackupDate && differenceInDays(new Date(), lastBackupDate) > 1
+                    lastBackupDate && differenceInDays(nowMs, lastBackupDate) > 1
                       ? T.amber
                       : T.green,
                 },

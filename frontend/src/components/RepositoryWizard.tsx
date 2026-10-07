@@ -1084,6 +1084,12 @@ const RepositoryWizard = ({
           : null,
     }
 
+    if (mode === 'edit') {
+      // An update cannot change either; the backend refuses keys it does not apply.
+      delete data.borg_version
+      delete data.encryption
+    }
+
     if (mode === 'edit' && !rcloneFieldsEnabled) {
       const shouldSubmitCloudMirrorDisable = Boolean(
         repository?.rclone_storage && !isDirectRcloneRepositoryRecord(repository)

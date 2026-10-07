@@ -189,12 +189,13 @@ class PreviewArchive:
     stats_measured_at: Optional[datetime]
 
 
-def _sizes_bound_freed_space(repository: Repository) -> bool:
+def sizes_bound_freed_space(repository: Repository) -> bool:
     """Whether the archives' deduplicated_size bounds what deleting them
     frees. Borg 1's is measured against the archives that exist and measured
     again after removals (spec 4.1). Borg 2 reports one only when an archive
     is created (`create --json`), and archives kept after it can share those
-    chunks."""
+    chunks. The payloads carry it as `sizes_available`, so the page asks
+    this, not the Borg version."""
     return not is_borg2(repository)
 
 
@@ -205,7 +206,7 @@ def join_verdicts(
     series share a name). A line whose id the index does not hold keeps
     Borg's name and verdict with no row behind it."""
     ids = [v.borg_id for v in verdicts]
-    sized = _sizes_bound_freed_space(repository)
+    sized = sizes_bound_freed_space(repository)
     rows: dict[str, Archive] = {}
     for i in range(0, len(ids), 500):
         for row in (
@@ -640,11 +641,14 @@ async def run_candidate(
     candidates = [
         by_id[p.id] for p in joined if p.verdict == "deleted" and p.id in by_id
     ]
-    if remeasure:
+    sized = sizes_bound_freed_space(repository)
+    if not sized:
+        # no candidate size is used, so none is fetched or missing
+        partial = False
+    elif remeasure:
         partial = await remeasure_candidates(db, repository, candidates)
     else:
         partial = any(a.stats_measured_at is None for a in candidates)
-    sized = _sizes_bound_freed_space(repository)
     for p in joined:
         row = by_id.get(p.id) if p.id is not None else None
         if row is not None:
@@ -676,6 +680,7 @@ def assemble_preview(
     list. Shared by the dry run and by a stored comparison candidate, so a
     row read back reads exactly as the run that produced it."""
     pro = history_enabled(db)  # commits; before the archive rows load
+    sized = sizes_bound_freed_space(repository)
     before = footprint(db, repository)
     deleted_ids = {p.id for p in joined if p.verdict == "deleted" and p.id is not None}
     # The index is built on every plan, so the capability here is about the
@@ -714,10 +719,12 @@ def assemble_preview(
                 "rule": p.rule,
                 "deduplicated_size": p.deduplicated_size,
                 "stats_measured_at": p.stats_measured_at,
-                "stale": p.id is not None and p.stats_measured_at is None,
+                # nothing is re-measured where no size is used
+                "stale": sized and p.id is not None and p.stats_measured_at is None,
             }
             for p in joined
         ],
+        "sizes_available": sized,
         "deleted_count": sum(1 for p in joined if p.verdict == "deleted"),
         "kept_count": sum(1 for p in joined if p.verdict == "kept"),
         "freed_at_least": freed,
@@ -750,16 +757,15 @@ def preview_from_verdicts(
     candidates = [
         by_id[p.id] for p in joined if p.verdict == "deleted" and p.id in by_id
     ]
+    sized = sizes_bound_freed_space(repository)
     return assemble_preview(
         db,
         repository,
         joined,
         operation_id=operation_id,
         log="",
-        freed=(
-            freed_at_least(candidates) if _sizes_bound_freed_space(repository) else 0
-        ),
-        partial=any(a.stats_measured_at is None for a in candidates),
+        freed=freed_at_least(candidates) if sized else 0,
+        partial=sized and any(a.stats_measured_at is None for a in candidates),
     )
 
 

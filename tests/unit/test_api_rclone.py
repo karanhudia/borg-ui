@@ -3300,7 +3300,6 @@ def test_update_agent_repository_cloud_mirror_preflight_failure_rolls_back_stora
         json={
             "name": "Agent Mirror App",
             "path": "/agent/repositories/app",
-            "encryption": "none",
             "compression": "lz4",
             "execution_target": "agent",
             "executor_type": "agent",

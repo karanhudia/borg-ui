@@ -3,6 +3,7 @@ import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../../../test/test-utils'
 import PruneCandidatesRanked from '../PruneCandidatesRanked'
+import { formatDate } from '../../../utils/dateUtils'
 import type { PrunePreviewArchive } from '../../../types/archives'
 
 const archive = (id: number | null, name: string): PrunePreviewArchive => ({
@@ -44,5 +45,34 @@ describe('PruneCandidatesRanked', () => {
     expect(screen.getAllByRole('button', { name: /\ba\d+\b/ })).toHaveLength(5)
     await userEvent.click(screen.getByRole('button', { name: /show all 8/i }))
     expect(screen.getAllByRole('button', { name: /\ba\d+\b/ })).toHaveLength(8)
+  })
+
+  it('lists Borg 2 candidates in payload order without ranks, sizes or re-measure', () => {
+    // #1351: no per-archive size a deletion would free, so nothing to rank by
+    const sized = (id: number, start: string, size: number) => ({
+      ...archive(id, 'daily'),
+      borg_id: `${id}`,
+      start,
+      deduplicated_size: size,
+      stats_measured_at: null,
+      stale: true,
+    })
+    renderWithProviders(
+      <PruneCandidatesRanked
+        archives={[sized(1, '2026-08-30T02:00:00', 1), sized(2, '2026-08-31T02:00:00', 9)]}
+        partialMeasure={false}
+        sizesAvailable={false}
+        onOpen={() => {}}
+      />
+    )
+    expect(screen.getByText('Deleted archives')).toBeInTheDocument()
+    expect(screen.getByText(/Borg 2 reports no per-archive size/)).toBeInTheDocument()
+    expect(screen.queryByText(/re-measur/i)).not.toBeInTheDocument()
+    // a series shares its name, so each row carries its time (in the
+    // reader's zone), in payload order
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual([
+      `daily${formatDate('2026-08-30T02:00:00')}`,
+      `daily${formatDate('2026-08-31T02:00:00')}`,
+    ])
   })
 })

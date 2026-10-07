@@ -143,3 +143,29 @@ def test_an_agent_from_before_the_rclone_upload_limit_is_offered_an_upgrade():
         )
         == "outdated"
     )
+
+
+def test_an_agent_from_before_set_server_moves_the_record_is_offered_an_upgrade():
+    """From 0.1.19 `set-server` moves the upgrade record along with the config
+    when it may write it (#1253), so a server built from this tree must offer
+    0.1.18 agents the upgrade.
+    """
+    assert (
+        compute_agent_upgrade_status(
+            reported="0.1.18", desired=None, available=_pyproject_version()
+        )
+        == "outdated"
+    )
+
+
+def test_an_agent_from_before_the_macos_service_path_fix_is_offered_an_upgrade():
+    """From 0.1.20 a macOS install names the directories it found Borg in on
+    the launchd jobs' PATH (#1290), so a server built from this tree must offer
+    0.1.19 agents the upgrade.
+    """
+    assert (
+        compute_agent_upgrade_status(
+            reported="0.1.19", desired=None, available=_pyproject_version()
+        )
+        == "outdated"
+    )

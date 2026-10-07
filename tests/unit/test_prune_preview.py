@@ -313,6 +313,60 @@ class TestRunCandidate:
             )
         ] == [None]
 
+    @pytest.mark.asyncio
+    async def test_borg2_preview_measures_no_candidate(self, test_db):
+        """#1351: the Borg 2 preview uses no candidate size, so it fetches
+        none (up to MEASURE_CAP `info` calls on a remote repository) and has
+        nothing measured partially; a never-measured candidate does not make
+        it partial or stale either, and the payload says that no size is
+        available."""
+        from app.services.prune_preview import (
+            Retention,
+            preview_from_verdicts,
+            run_candidate,
+        )
+
+        repo = _repo(test_db)
+        repo.borg_version = 2
+        a = _archive(test_db, repo, "daily", 1)
+        a.borg_id = HEX(1)
+        a.deduplicated_size = None
+        a.stats_measured_at = None
+        test_db.commit()
+        verdicts = _verdicts((1, "daily", "deleted", None))
+        op = type("Op", (), {"status": "completed", "id": 1})()
+        with (
+            patch.object(
+                prune_preview, "run_prune_dry_run", new=AsyncMock(return_value=(op, ""))
+            ),
+            patch.object(prune_preview, "parse_prune_verdicts", return_value=verdicts),
+            patch.object(prune_preview, "remeasure_candidates", new=AsyncMock()) as rm,
+        ):
+            r = await run_candidate(test_db, repo, Retention(), user_id=None)
+
+        rm.assert_not_awaited()
+        assert (r.freed_at_least, r.partial_measure) == (0, False)
+        preview = preview_from_verdicts(test_db, repo, verdicts, operation_id=None)
+        assert preview["partial_measure"] is False
+        assert preview["sizes_available"] is False
+        assert [a["stale"] for a in preview["archives"]] == [False]
+
+    def test_borg1_preview_says_sizes_are_available(self, test_db):
+        """Borg 1 is unchanged: a never-measured candidate is stale and makes
+        the preview partial, and its sizes rank the candidates."""
+        from app.services.prune_preview import preview_from_verdicts
+
+        repo = _repo(test_db)
+        a = _archive(test_db, repo, "daily", 1)
+        a.borg_id = HEX(1)
+        a.stats_measured_at = None
+        test_db.commit()
+        preview = preview_from_verdicts(
+            test_db, repo, _verdicts((1, "daily", "deleted", None)), operation_id=None
+        )
+        assert (preview["sizes_available"], preview["partial_measure"]) == (True, True)
+        assert [a["stale"] for a in preview["archives"]] == [True]
+
 
 from app.database.models import ArchiveChange
 from app.services.prune_preview import lost_files

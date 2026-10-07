@@ -407,6 +407,34 @@ ensure_launch_agent() {
   launchctl bootstrap "${domain}" "${plist}"
 }
 
+# The PATH both jobs run with. launchd sources no shell profile, so a Borg or
+# rclone this run found on the user's PATH (a pipx ~/.local/bin, say) is out of
+# the job's reach unless its directory is named here (#1290). Those directories
+# follow the forwarders, in this run's PATH order, and precede the fixed ones,
+# so the job resolves each name the way this run did. The upgrade job carries
+# the same PATH, which is what lets a remote reinstall find them again.
+darwin_service_path() {
+  local path="${AGENT_ROOT}/bin" found=":" name dir entries
+  for name in borg borg2 rclone; do
+    dir="$(type -P "${name}" || true)"
+    found+="${dir%/*}:"
+  done
+  IFS=: read -ra entries <<<"${PATH}"
+  for dir in "${entries[@]}"; do
+    [[ -n "${dir}" && "${found}" == *":${dir}:"* ]] || continue
+    # launchd runs the job from /, so a relative entry goes in absolute.
+    if [[ "${dir}" != /* ]]; then
+      dir="$(CDPATH='' cd -- "${dir}" 2>/dev/null && pwd -P)" || continue
+      [[ "${dir}" != *:* ]] || continue
+    fi
+    case ":${path}:" in *":${dir}:"*) ;; *) path+=":${dir}" ;; esac
+  done
+  for dir in /opt/homebrew/bin /usr/local/bin /opt/local/bin /usr/bin /bin /usr/sbin /sbin; do
+    case ":${path}:" in *":${dir}:"*) ;; *) path+=":${dir}" ;; esac
+  done
+  printf '%s' "${path}"
+}
+
 # The agent job. KeepAlive with a throttle is Restart=always / RestartSec=10.
 # launchd expands no ~ and sources no shell profile, so every path is absolute
 # and the PATH the agent resolves Borg through is stated here, forwarders
@@ -448,7 +476,7 @@ write_agent_launch_agent() {
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>${root}/bin:/opt/homebrew/bin:/usr/local/bin:/opt/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <string>$(xml_escape "$(darwin_service_path)")</string>
 ${repo_env}  </dict>
   <key>StandardOutPath</key>
   <string>${logs}/agent.log</string>
@@ -491,7 +519,7 @@ write_upgrade_launch_agent() {
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>${root}/bin:/opt/homebrew/bin:/usr/local/bin:/opt/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <string>$(xml_escape "$(darwin_service_path)")</string>
     <key>BORG_UI_UPGRADE_ETC</key>
     <string>${root}</string>
     <key>BORG_UI_UPGRADE_CONF</key>

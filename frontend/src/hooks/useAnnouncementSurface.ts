@@ -47,6 +47,7 @@ export function useAnnouncementSurface(): UseAnnouncementSurfaceResult {
     retry: false,
   })
 
+  const [now] = useState(() => new Date())
   const announcement = useMemo(() => {
     if (!systemInfo || !manifest) return null
 
@@ -57,14 +58,14 @@ export function useAnnouncementSurface(): UseAnnouncementSurfaceResult {
       {
         appVersion: systemInfo.app_version,
         plan: systemInfo.plan,
-        now: new Date(),
+        now,
       }
     )
 
     return selectedAnnouncement
       ? resolveAnnouncementLocale(selectedAnnouncement, i18n.resolvedLanguage)
       : null
-  }, [hiddenAnnouncementIds, i18n.resolvedLanguage, manifest, systemInfo])
+  }, [hiddenAnnouncementIds, i18n.resolvedLanguage, manifest, now, systemInfo])
 
   const hideAnnouncement = useCallback((id: string) => {
     setHiddenAnnouncementIds((current) => [...current, id])
