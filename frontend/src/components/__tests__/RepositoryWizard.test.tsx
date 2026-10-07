@@ -1947,11 +1947,15 @@ describe('RepositoryWizard', () => {
       await user.click(screen.getByRole('button', { name: /Save Changes/i }))
 
       await waitFor(() => {
-        expect(onSubmit).toHaveBeenCalledWith(
-          expect.objectContaining({ borg_version: 1, encryption: 'repokey' }),
-          null
-        )
+        expect(onSubmit).toHaveBeenCalled()
       })
+      // An edit never sends the Borg major, so the recorded one stays.
+      const [submittedPayload] = onSubmit.mock.calls[0]
+      expect(submittedPayload).toEqual(
+        expect.objectContaining({ path: 'sftp://user@storage.example.com/repo' })
+      )
+      expect(submittedPayload).not.toHaveProperty('borg_version')
+      expect(submittedPayload).not.toHaveProperty('encryption')
     })
   })
 
