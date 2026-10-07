@@ -142,7 +142,7 @@ function MonthAxis({ window }: { window: Window }) {
 }
 
 function WeekdayColumn({ cell }: { cell: number }) {
-  const monday = startOfWeek(new Date(), { weekStartsOn: 1 })
+  const [monday] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }))
   return (
     // The same geometry as a grid column, so the letters line up with the
     // rows they name: gaps between the seven cells, none after the last.
@@ -346,7 +346,7 @@ export default function ArchiveSeriesHeatmap({
   const [chooser, setChooser] = useState<Chooser | null>(null)
   const missedTotal = data.repository.missed_days.length
   const [scrollRef, containerWidth] = useContainerWidth()
-  const today = useMemo(() => new Date(), [])
+  const [today] = useState(() => new Date())
   const weeks = useMemo(
     () => buildWindow(data.repository, today, MIN_CELL).weeks,
     [data.repository, today]

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TextField, Alert, Box } from '@mui/material'
 
@@ -23,8 +23,8 @@ const ArchiveNameTemplateInput: React.FC<ArchiveNameTemplateInputProps> = ({
   // the backend and borg's own expansion); {utcnow} renders in UTC. The
   // formats mirror the backend expansion exactly, millisecond precision
   // included, so the preview matches the generated archive name.
+  const [now] = useState(() => new Date())
   const previewName = useMemo(() => {
-    const now = new Date()
     const pad = (n: number) => String(n).padStart(2, '0')
     const pad3 = (n: number) => String(n).padStart(3, '0')
     const timestamp = Math.floor(now.getTime() / 1000)
@@ -40,7 +40,7 @@ const ArchiveNameTemplateInput: React.FC<ArchiveNameTemplateInputProps> = ({
       .replace(/{date}/g, date)
       .replace(/{time}/g, time)
       .replace(/{timestamp}/g, String(timestamp))
-  }, [value, jobName])
+  }, [value, jobName, now])
 
   return (
     <Box>
