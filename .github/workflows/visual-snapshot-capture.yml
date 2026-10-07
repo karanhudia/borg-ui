@@ -27,10 +27,11 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - name: Checkout pull request source
+      # No ref: pull_request checks out refs/pull/N/merge, so the snapshots show
+      # the PR applied to the current base, not whatever branch it was cut from.
+      - name: Checkout pull request merged with base
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
       - name: Set up Node.js ${{ env.NODE_VERSION }}
