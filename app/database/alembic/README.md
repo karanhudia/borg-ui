@@ -46,9 +46,26 @@ only `batch_alter_table` needs the reminder.)
    carries `sqlite_autoincrement`. These two — AUTOINCREMENT on a batch rebuild and
    a frozen `server_default` — are the things `autogenerate` gets wrong, because it
    is blind to both.
-4. Run the test suite. It applies the migration to SQLite and to Postgres; a
+4. **Add an upgrade test.** A module under `tests/migrations/` declaring
+   `REVISION = "<id>"` that uses the `upgraded_from` fixture: it builds a
+   database with each release's own code, adds the rows your revision touches,
+   upgrades it the way a container starts and hands you the result to check.
+   Test from every release that does not have the revision yet
+   (`upgrade_paths.releases_before(REVISION)`), not from the parent revision on
+   an empty database. A revision without such a module fails CI.
+5. Run the test suite. It applies the migration to SQLite and to Postgres; a
    dialect violation fails the Postgres leg.
 
 Rule of thumb: **anything the framework can enforce, it does; the two it cannot
 see — AUTOINCREMENT on a batch rebuild, and a frozen `server_default` — are the two
 you review by hand.**
+
+## Upgrade paths
+
+`tests/migrations/test_upgrade_paths.py` builds a database with every release
+since 2.3.0, and the last release of each line before Alembic, using that
+release's own code from its git tag. It seeds one row per table (plus one
+orphan per foreign key in a pre-Alembic database), upgrades it with
+`python -m app.database.db_upgrade` into SQLite and Postgres, and checks that
+every row survived, that orphans were handled, and that every table reads back
+through the models. It needs the release tags: `git fetch --tags <upstream>`.

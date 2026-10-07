@@ -212,6 +212,53 @@ jobs:
           MINIMUM_GREEN: 70
           MINIMUM_ORANGE: 50
 
+  backend-migration-paths:
+    name: Backend / Migration Upgrade Paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: borg_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          # Each release's database is built by that release's own code,
+          # taken from its tag.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run migration upgrade path tests
+        run: pytest tests/migrations -v
+        env:
+          BORG_TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@localhost:5432/borg_test
+          BORG_TEST_REQUIRE_RELEASE_TAGS: "1"
+
   runtime-base-image:
     name: Backend / Resolve runtime base image
     runs-on: ubuntu-latest
@@ -869,7 +916,7 @@ jobs:
   test-results:
     name: CI / Summary
     runs-on: ubuntu-latest
-    needs: [backend-lint, backend-unit-coverage, backend-unit-coverage-combine, backend-api-integration, typecheck-lint-format, frontend-vitest, coverage-backend, coverage-frontend, frontend-build, smoke-borg-core, smoke-borg-extended, smoke-borg-ssh-localhost]
+    needs: [backend-lint, backend-unit-coverage, backend-unit-coverage-combine, backend-migration-paths, backend-api-integration, typecheck-lint-format, frontend-vitest, coverage-backend, coverage-frontend, frontend-build, smoke-borg-core, smoke-borg-extended, smoke-borg-ssh-localhost]
     if: always()
 
     steps:
@@ -878,6 +925,7 @@ jobs:
           echo "Backend / Lint & Format: ${{ needs.backend-lint.result }}"
           echo "Backend / Unit Test Shards: ${{ needs.backend-unit-coverage.result }}"
           echo "Backend / Unit Coverage Report: ${{ needs.backend-unit-coverage-combine.result }}"
+          echo "Backend / Migration Upgrade Paths: ${{ needs.backend-migration-paths.result }}"
           echo "Backend / Integration Tests: ${{ needs.backend-api-integration.result }}"
           echo "Frontend / Code Quality: ${{ needs.typecheck-lint-format.result }}"
           echo "Frontend / Unit Tests: ${{ needs.frontend-vitest.result }}"
@@ -900,6 +948,11 @@ jobs:
 
           if [ "${{ needs.backend-unit-coverage-combine.result }}" != "success" ]; then
             echo "Backend / Unit Coverage Report failed"
+            exit 1
+          fi
+
+          if [ "${{ needs.backend-migration-paths.result }}" != "success" ]; then
+            echo "Backend / Migration Upgrade Paths failed"
             exit 1
           fi
 
