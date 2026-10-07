@@ -1,93 +1,21 @@
 {
-  "generatedAt": "2026-10-07T07:27:54.170Z",
+  "generatedAt": "2026-10-07T07:49:41.796Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1364 visual report",
     "commitSha": "936a8d126f1c",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/37586072346"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/37589574176"
   },
   "totals": {
     "baseline": 1188,
-    "actual": 1182,
-    "compared": 1182,
-    "changed": 6,
+    "actual": 1188,
+    "compared": 1188,
+    "changed": 2,
     "added": 0,
-    "removed": 6,
-    "unchanged": 1176
+    "removed": 0,
+    "unchanged": 1186
   },
   "changed": [
-    {
-      "fileName": "backup-plans-reviewstep--docker-container-source-to-server-repo.png",
-      "baselinePath": "images/baseline/backup-plans-reviewstep--docker-container-source-to-server-repo.png",
-      "actualPath": "images/actual/backup-plans-reviewstep--docker-container-source-to-server-repo.png",
-      "diffPath": "images/diff/backup-plans-reviewstep--docker-container-source-to-server-repo.png",
-      "diffPixels": 999089,
-      "totalPixels": 1024000,
-      "diffRatio": 0.9756728515625,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-advancedrepositoryoptions--borg-2-behind-rclone-upload-limit.png",
-      "baselinePath": "images/baseline/components-advancedrepositoryoptions--borg-2-behind-rclone-upload-limit.png",
-      "actualPath": "images/actual/components-advancedrepositoryoptions--borg-2-behind-rclone-upload-limit.png",
-      "diffPath": "images/diff/components-advancedrepositoryoptions--borg-2-behind-rclone-upload-limit.png",
-      "diffPixels": 1024000,
-      "totalPixels": 1024000,
-      "diffRatio": 1,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-planbadge--pro-lite.png",
-      "baselinePath": "images/baseline/components-planbadge--pro-lite.png",
-      "actualPath": "images/actual/components-planbadge--pro-lite.png",
-      "diffPath": "images/diff/components-planbadge--pro-lite.png",
-      "diffPixels": 1024000,
-      "totalPixels": 1024000,
-      "diffRatio": 1,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-repositorycard--deleting--mobile.png",
-      "baselinePath": "images/baseline/components-repositorycard--deleting--mobile.png",
-      "actualPath": "images/actual/components-repositorycard--deleting--mobile.png",
-      "diffPath": "images/diff/components-repositorycard--deleting--mobile.png",
-      "diffPixels": 227385,
-      "totalPixels": 329160,
-      "diffRatio": 0.6908038643820634,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
     {
       "fileName": "quick-start-steps--destination-ssh-no-default-path--mobile.png",
       "baselinePath": "images/baseline/quick-start-steps--destination-ssh-no-default-path--mobile.png",
@@ -126,32 +54,7 @@
     }
   ],
   "added": [],
-  "removed": [
-    {
-      "fileName": "components-prune-prunecandidatesranked--borg-2-no-sizes--mobile.png",
-      "baselinePath": "images/baseline/components-prune-prunecandidatesranked--borg-2-no-sizes--mobile.png"
-    },
-    {
-      "fileName": "components-prune-prunecandidatesranked--borg-2-no-sizes.png",
-      "baselinePath": "images/baseline/components-prune-prunecandidatesranked--borg-2-no-sizes.png"
-    },
-    {
-      "fileName": "components-prune-prunecomparedpolicies--borg-2-no-sizes--mobile.png",
-      "baselinePath": "images/baseline/components-prune-prunecomparedpolicies--borg-2-no-sizes--mobile.png"
-    },
-    {
-      "fileName": "components-prune-prunecomparedpolicies--borg-2-no-sizes.png",
-      "baselinePath": "images/baseline/components-prune-prunecomparedpolicies--borg-2-no-sizes.png"
-    },
-    {
-      "fileName": "components-prune-prunepreviewnumbers--borg-2-no-sizes--mobile.png",
-      "baselinePath": "images/baseline/components-prune-prunepreviewnumbers--borg-2-no-sizes--mobile.png"
-    },
-    {
-      "fileName": "components-prune-prunepreviewnumbers--borg-2-no-sizes.png",
-      "baselinePath": "images/baseline/components-prune-prunepreviewnumbers--borg-2-no-sizes.png"
-    }
-  ],
+  "removed": [],
   "unchanged": [
     {
       "fileName": "activity-activitytimeline--dark--mobile.png"
@@ -583,6 +486,9 @@
       "fileName": "backup-plans-reviewstep--docker-container-source-to-server-repo--mobile.png"
     },
     {
+      "fileName": "backup-plans-reviewstep--docker-container-source-to-server-repo.png"
+    },
+    {
       "fileName": "backup-plans-reviewstep--remote-direct-execution--mobile.png"
     },
     {
@@ -866,6 +772,9 @@
     },
     {
       "fileName": "components-advancedrepositoryoptions--borg-2-behind-rclone-upload-limit--mobile.png"
+    },
+    {
+      "fileName": "components-advancedrepositoryoptions--borg-2-behind-rclone-upload-limit.png"
     },
     {
       "fileName": "components-advancedrepositoryoptions--borg-2-without-upload-limit--mobile.png"
@@ -1804,6 +1713,9 @@
       "fileName": "components-planbadge--pro-lite--mobile.png"
     },
     {
+      "fileName": "components-planbadge--pro-lite.png"
+    },
+    {
       "fileName": "components-planbadge--pro-preview--mobile.png"
     },
     {
@@ -1873,6 +1785,12 @@
       "fileName": "components-planinfodrawer--pro-preview-drawer.png"
     },
     {
+      "fileName": "components-prune-prunecandidatesranked--borg-2-no-sizes--mobile.png"
+    },
+    {
+      "fileName": "components-prune-prunecandidatesranked--borg-2-no-sizes.png"
+    },
+    {
       "fileName": "components-prune-prunecandidatesranked--default--mobile.png"
     },
     {
@@ -1895,6 +1813,12 @@
     },
     {
       "fileName": "components-prune-prunecomparedpolicies--automatic-previews-off.png"
+    },
+    {
+      "fileName": "components-prune-prunecomparedpolicies--borg-2-no-sizes--mobile.png"
+    },
+    {
+      "fileName": "components-prune-prunecomparedpolicies--borg-2-no-sizes.png"
     },
     {
       "fileName": "components-prune-prunecomparedpolicies--empty--mobile.png"
@@ -1943,6 +1867,12 @@
     },
     {
       "fileName": "components-prune-prunelostfilespanel--locked.png"
+    },
+    {
+      "fileName": "components-prune-prunepreviewnumbers--borg-2-no-sizes--mobile.png"
+    },
+    {
+      "fileName": "components-prune-prunepreviewnumbers--borg-2-no-sizes.png"
     },
     {
       "fileName": "components-prune-prunepreviewnumbers--default--mobile.png"
@@ -2063,6 +1993,9 @@
     },
     {
       "fileName": "components-repositorycard--default.png"
+    },
+    {
+      "fileName": "components-repositorycard--deleting--mobile.png"
     },
     {
       "fileName": "components-repositorycard--deleting.png"
