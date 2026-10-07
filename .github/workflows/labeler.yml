@@ -1,0 +1,23 @@
+name: Pull Request Labeler
+
+# pull_request_target gives the token write access, so pull requests from forks
+# are labeled too. In exchange this workflow must never check out or execute
+# pull request code: actions/labeler reads .github/labeler.yml from the default
+# branch (GITHUB_SHA) through the API and only compares changed file names.
+# tests/unit/test_labeler_config.py keeps it that way.
+# `edited` covers a changed base branch, which changes the diff without a push.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    name: Label pull request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply labels from .github/labeler.yml
+        uses: actions/labeler@v7
