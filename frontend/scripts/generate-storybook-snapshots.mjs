@@ -4,7 +4,7 @@ import { createServer } from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { waitForStoryRoot } from './snapshot-capture-config.mjs'
+import { waitForStoryRoot, waitForStoryToSettle } from './snapshot-capture-config.mjs'
 import { writeSnapshotIfChanged } from './snapshot-file-writer.mjs'
 import { resolveSnapshotOutputDir } from './snapshot-output-config.mjs'
 import { snapshotFileName, snapshotViewports } from './snapshot-viewport-config.mjs'
@@ -217,6 +217,7 @@ async function captureStorySnapshotsForViewport(stories, baseUrl, browser, viewp
               }
             `,
           })
+          await waitForStoryToSettle(page)
           const snapshotBuffer = await page.screenshot({ fullPage: false })
           const result = await writeSnapshotIfChanged(outputPath, snapshotBuffer)
           console.log(
