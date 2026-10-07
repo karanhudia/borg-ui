@@ -3640,7 +3640,12 @@ class TestRepositoriesUpdate:
         with (
             patch(
                 "app.api.repositories.BorgRouter.verify_repository",
-                new=AsyncMock(return_value={"success": False}),
+                new=AsyncMock(
+                    return_value={
+                        "success": False,
+                        "error": "Repository does not exist.",
+                    }
+                ),
             ),
             patch(
                 "app.api.repositories.BorgRouter.initialize_repository",
@@ -3751,7 +3756,12 @@ class TestRepositoriesUpdate:
             with (
                 patch(
                     "app.api.repositories.BorgRouter.verify_repository",
-                    new=AsyncMock(side_effect=RuntimeError("missing repo")),
+                    new=AsyncMock(
+                        return_value={
+                            "success": False,
+                            "error": "Repository does not exist.",
+                        }
+                    ),
                 ),
                 patch(
                     "app.api.repositories.BorgRouter.initialize_repository",
@@ -3889,7 +3899,12 @@ class TestRepositoriesUpdate:
         with (
             patch(
                 "app.api.repositories.BorgRouter.verify_repository",
-                new=AsyncMock(return_value={"success": False, "stderr": "missing"}),
+                new=AsyncMock(
+                    return_value={
+                        "success": False,
+                        "stderr": "Repository does not exist.",
+                    }
+                ),
             ) as mock_verify,
             patch(
                 "app.api.repositories.BorgRouter.initialize_repository",
@@ -3911,6 +3926,167 @@ class TestRepositoriesUpdate:
         mock_verify.assert_awaited_once()
         mock_init.assert_awaited_once()
         mock_v1_init.assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        "verify_result,status_code,key",
+        [
+            (
+                {
+                    "success": False,
+                    "error": "passphrase supplied in BORG_PASSPHRASE is incorrect.",
+                },
+                400,
+                "backend.errors.repo.encryptedPassphraseIncorrect",
+            ),
+            (
+                {"success": False, "error": "Failed to create/acquire the lock"},
+                400,
+                "backend.errors.repo.failedToVerifyRepository",
+            ),
+        ],
+    )
+    def test_update_repository_path_change_does_not_init_over_unverified_repo(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        verify_result,
+        status_code,
+        key,
+    ):
+        repo = Repository(
+            name="Unverified Path Repo",
+            path="/tmp/unverified-initial",
+            encryption="repokey",
+            compression="lz4",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with (
+            patch(
+                "app.api.repositories.BorgRouter.verify_repository",
+                new=AsyncMock(return_value=verify_result),
+            ),
+            patch(
+                "app.api.repositories.BorgRouter.initialize_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as mock_init,
+        ):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"path": "/tmp/unverified-new"},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == status_code
+        assert response.json()["detail"]["key"] == key
+        mock_init.assert_not_awaited()
+        test_db.refresh(repo)
+        assert repo.path == "/tmp/unverified-initial"
+
+    def test_update_repository_path_change_inits_once_when_init_fails(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Init Once Repo",
+            path="/tmp/init-once-initial",
+            encryption="repokey",
+            compression="lz4",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with (
+            patch(
+                "app.api.repositories.BorgRouter.verify_repository",
+                new=AsyncMock(
+                    return_value={
+                        "success": False,
+                        "error": "Repository /tmp/init-once-new does not exist.",
+                    }
+                ),
+            ),
+            patch(
+                "app.api.repositories.BorgRouter.initialize_repository",
+                new=AsyncMock(return_value={"success": False, "error": "disk full"}),
+            ) as mock_init,
+        ):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"path": "/tmp/init-once-new"},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 500
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.failedToInitializeRepository"
+        )
+        mock_init.assert_awaited_once()
+        test_db.refresh(repo)
+        assert repo.path == "/tmp/init-once-initial"
+
+    @pytest.mark.parametrize(
+        "payload",
+        [{"encryption": "none"}, {"borg_version": 2}, {"no_such_field": 1}],
+    )
+    def test_update_repository_refuses_keys_it_does_not_apply(
+        self, test_client: TestClient, admin_headers, test_db, payload
+    ):
+        repo = Repository(
+            name="Strict Keys Repo",
+            path="/tmp/strict-keys",
+            encryption="repokey",
+            compression="lz4",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={"name": "Strict Keys Renamed", **payload},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+        test_db.refresh(repo)
+        assert repo.name == "Strict Keys Repo"
+
+    def test_update_repository_refused_by_plan_keeps_old_name(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "community")
+        repo = Repository(
+            name="Plan Refused Repo",
+            path="/tmp/plan-refused",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={"name": "Plan Refused Renamed", "rclone_remote_id": 1},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 403
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.plan.featureNotAvailable"
+        )
+        test_db.refresh(repo)
+        assert repo.name == "Plan Refused Repo"
 
     def test_download_keyfile_uses_router_export_for_borg2_repository(
         self, test_client: TestClient, admin_headers, test_db

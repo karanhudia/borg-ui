@@ -1499,6 +1499,9 @@ describe('RepositoryWizard', () => {
       expect(submittedPayload).not.toHaveProperty('execution_target')
       expect(submittedPayload).not.toHaveProperty('executor_type')
       expect(submittedPayload).not.toHaveProperty('agent_machine_id')
+      // An update cannot change either; the backend refuses keys it does not apply.
+      expect(submittedPayload).not.toHaveProperty('borg_version')
+      expect(submittedPayload).not.toHaveProperty('encryption')
     })
 
     it('hydrates upload speed limits when editing a repository', async () => {
@@ -1944,11 +1947,15 @@ describe('RepositoryWizard', () => {
       await user.click(screen.getByRole('button', { name: /Save Changes/i }))
 
       await waitFor(() => {
-        expect(onSubmit).toHaveBeenCalledWith(
-          expect.objectContaining({ borg_version: 1, encryption: 'repokey' }),
-          null
-        )
+        expect(onSubmit).toHaveBeenCalled()
       })
+      // An edit never sends the Borg major, so the recorded one stays.
+      const [submittedPayload] = onSubmit.mock.calls[0]
+      expect(submittedPayload).toEqual(
+        expect.objectContaining({ path: 'sftp://user@storage.example.com/repo' })
+      )
+      expect(submittedPayload).not.toHaveProperty('borg_version')
+      expect(submittedPayload).not.toHaveProperty('encryption')
     })
   })
 

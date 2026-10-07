@@ -1350,7 +1350,7 @@ def _repository_init_failure_detail(result: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # Pydantic models
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 def _single_line_passphrase(value: Optional[str]) -> Optional[str]:
@@ -1497,6 +1497,9 @@ class RepositoryImport(BaseModel):
 
 
 class RepositoryUpdate(BaseModel):
+    # A key the route does not apply is refused, not dropped behind a 200.
+    model_config = ConfigDict(extra="forbid")
+
     name: Optional[str] = None
     path: Optional[str] = None
     compression: Optional[str] = None
@@ -4894,21 +4897,6 @@ async def update_repository(
             and repo_data.passphrase != repository.passphrase
         )
 
-        # Update fields
-        if repo_data.name is not None:
-            # Check if name already exists
-            existing_repo = (
-                db.query(Repository)
-                .filter(Repository.name == repo_data.name, Repository.id != repo_id)
-                .first()
-            )
-            if existing_repo:
-                raise HTTPException(
-                    status_code=400,
-                    detail={"key": "backend.errors.repo.repositoryNameExists"},
-                )
-            repository.name = repo_data.name
-
         # Store raw path first (will be reconstructed for SSH below)
         raw_path = None
         target_executor_type = (
@@ -4984,6 +4972,22 @@ async def update_repository(
             existing_direct_rclone_repository and bool(update_data)
         ):
             _require_rclone_feature(db)
+
+        # The plan checks above commit the session (licensing state), so no
+        # field goes on the row before them: a refused update stores nothing.
+        if repo_data.name is not None:
+            existing_repo = (
+                db.query(Repository)
+                .filter(Repository.name == repo_data.name, Repository.id != repo_id)
+                .first()
+            )
+            if existing_repo:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.repo.repositoryNameExists"},
+                )
+            repository.name = repo_data.name
+
         sync_cloud_mirror_after_update = False
         index_mode_changed = False
         if requested_rclone_updates:
@@ -5476,55 +5480,52 @@ async def update_repository(
                     )
                     ssh_key_id_for_init = connection_details["ssh_key_id"]
 
-                try:
-                    router = BorgRouter(repository)
-                    info_result = await router.verify_repository(
-                        ssh_key_id=ssh_key_id_for_init,
-                        timeout=get_operation_timeouts(db)["info_timeout"],
-                    )
+                router = BorgRouter(repository)
+                info_result = await router.verify_repository(
+                    ssh_key_id=ssh_key_id_for_init,
+                    timeout=get_operation_timeouts(db)["info_timeout"],
+                )
 
-                    if info_result.get("success"):
-                        logger.info(
-                            "New path is already a valid borg repository - no initialization needed",
-                            new_path=repository.path,
-                        )
-                    else:
-                        logger.warning(
-                            "New path is not a valid borg repository - initializing",
-                            new_path=repository.path,
-                            old_path=old_path,
-                            borg_version=repository.borg_version or 1,
-                        )
-
-                        init_result = await router.initialize_repository(
-                            ssh_key_id=ssh_key_id_for_init,
-                            init_timeout=get_operation_timeouts(db)["init_timeout"],
-                        )
-
-                        if not init_result["success"]:
-                            raise HTTPException(
-                                status_code=500,
-                                detail=_repository_init_failure_detail(init_result),
-                            )
-
-                        logger.info(
-                            "Successfully initialized borg repository at new path",
-                            new_path=repository.path,
-                            borg_version=repository.borg_version or 1,
-                        )
-                except Exception as e:
+                if info_result.get("success"):
                     logger.info(
-                        "Could not verify borg repository - attempting initialization",
+                        "New path is already a valid borg repository - no initialization needed",
                         new_path=repository.path,
-                        error=str(e),
+                    )
+                else:
+                    # Borg 1 answers with "error", Borg 2 with "stderr".
+                    error_msg = (
+                        info_result.get("error") or info_result.get("stderr") or ""
+                    ).lower()
+                    if "passphrase" in error_msg or "encrypted" in error_msg:
+                        raise HTTPException(
+                            status_code=400,
+                            detail={
+                                "key": "backend.errors.repo.encryptedPassphraseIncorrect"
+                            },
+                        )
+                    # Only a location that holds no repository is initialized;
+                    # a locked or unreachable one is not an empty directory.
+                    if (
+                        "does not exist" not in error_msg
+                        and "not a valid repository" not in error_msg
+                    ):
+                        raise HTTPException(
+                            status_code=400,
+                            detail={
+                                "key": "backend.errors.repo.failedToVerifyRepository"
+                            },
+                        )
+
+                    logger.warning(
+                        "New path holds no borg repository - initializing",
+                        new_path=repository.path,
+                        old_path=old_path,
                         borg_version=repository.borg_version or 1,
                     )
-
-                    init_result = await BorgRouter(repository).initialize_repository(
+                    init_result = await router.initialize_repository(
                         ssh_key_id=ssh_key_id_for_init,
                         init_timeout=get_operation_timeouts(db)["init_timeout"],
                     )
-
                     if not init_result["success"]:
                         raise HTTPException(
                             status_code=500,
@@ -5532,7 +5533,7 @@ async def update_repository(
                         )
 
                     logger.info(
-                        "Successfully initialized borg repository at new path after verification failure",
+                        "Successfully initialized borg repository at new path",
                         new_path=repository.path,
                         borg_version=repository.borg_version or 1,
                     )
