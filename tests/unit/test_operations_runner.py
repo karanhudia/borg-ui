@@ -2606,3 +2606,39 @@ async def test_startup_sweeps_run_behind_the_lease(session_factory, registry):
     runner.stop()
     runner.wake()
     await asyncio.wait_for(task, timeout=2)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_an_exclusive_task_holds_its_lane_after_its_row_reads_terminal(
+    db, repo, runner, registry
+):
+    """An agent backup's row is ended by the agent transport while the
+    executor still runs its post-backup hooks (#1386): no other backup of
+    the repository starts under them."""
+    gate = asyncio.Event()
+    started = []
+
+    async def backup(ctx):
+        started.append(ctx.operation_id)
+        if len(started) == 1:
+            row = ctx.db.get(Operation, ctx.operation_id)
+            row.status = "completed"
+            ctx.db.commit()
+            await gate.wait()
+        return Outcome(status="completed")
+
+    registry["backup"] = backup
+    first = enqueue(db, "backup", repository_id=repo.id)
+    second = enqueue(db, "backup", repository_id=repo.id)
+    assert await runner.tick() == 1
+    await asyncio.sleep(0)
+
+    assert await runner.tick() == 0
+    assert started == [first.id]
+
+    gate.set()
+    await asyncio.gather(*runner.running_tasks.values())
+    assert await runner.tick() == 1
+    await asyncio.gather(*runner.running_tasks.values())
+    assert started == [first.id, second.id]

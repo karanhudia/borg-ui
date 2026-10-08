@@ -72,6 +72,10 @@ You can also use a custom image that includes the Docker CLI.
 3. Set execution order if multiple scripts run.
 4. Test the script before relying on a scheduled backup.
 
+A repository backed up by a managed agent runs its hooks on the agent's machine,
+from the scripts that agent publishes, not from the script library: see
+[Managed Agents](managed-agents.md#backup-hooks-on-an-agent).
+
 Backup Plan hooks use saved scripts from the script library. Add one or more
 scripts to the pre-backup or post-backup chain, then choose the pre-backup
 failure behavior or the post-backup run condition for each script.

@@ -1427,6 +1427,13 @@ const RepositoryWizard = ({
               historyIndexExcludes: wizardState.historyIndexExcludes,
             }}
             onChange={handleStateChange}
+            // A hook is assigned to the saved repository at once, so an edit
+            // offers what its saved executor runs, whatever the form now says.
+            agentRepository={
+              mode === 'edit' && repository
+                ? repository.executor_type === 'agent' || repository.execution_target === 'agent'
+                : wizardState.executionTarget === 'agent'
+            }
           />
         )
 

@@ -20,6 +20,7 @@ import {
   Radio,
   RadioGroup,
   Select,
+  TextField,
   Typography,
   Tooltip,
 } from '@mui/material'
@@ -37,6 +38,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import api from '../services/api'
+import type { AgentScript, AgentScriptsResponse } from '../services/api'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import ScriptParameterInputs, { ScriptParameter } from './ScriptParameterInputs'
 import { useAnalytics } from '../hooks/useAnalytics'
@@ -54,7 +56,10 @@ interface Script {
 
 interface RepositoryScript {
   id: number
-  script_id: number
+  script_id: number | null
+  // a script the agent publishes, the hooks of an agent repository
+  agent_script_name?: string | null
+  is_agent_script?: boolean
   script_name: string
   script_description: string | null
   execution_order: number
@@ -76,7 +81,11 @@ interface RepositoryScriptsTabProps {
   onScriptsChange?: (hasScripts: boolean) => void
   hasInlineScript?: boolean
   onClearInlineScript?: () => void
+  // An agent repository runs only scripts its agent publishes (#1386).
+  agentRepository?: boolean
 }
+
+type AgentScriptsState = 'loading' | 'ready' | 'offline' | 'error'
 
 export default function RepositoryScriptsTab({
   repositoryId,
@@ -85,6 +94,7 @@ export default function RepositoryScriptsTab({
   onScriptsChange,
   hasInlineScript,
   onClearInlineScript,
+  agentRepository = false,
 }: RepositoryScriptsTabProps) {
   const { t } = useTranslation()
   const { trackScripts, EventAction } = useAnalytics()
@@ -94,6 +104,9 @@ export default function RepositoryScriptsTab({
   const [loading, setLoading] = useState(true)
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [selectedScriptId, setSelectedScriptId] = useState<number | ''>('')
+  const [agentScripts, setAgentScripts] = useState<AgentScript[]>([])
+  const [agentScriptsState, setAgentScriptsState] = useState<AgentScriptsState>('loading')
+  const [selectedAgentScript, setSelectedAgentScript] = useState('')
   const [editParametersDialog, setEditParametersDialog] = useState<{
     open: boolean
     script: RepositoryScript | null
@@ -136,32 +149,61 @@ export default function RepositoryScriptsTab({
   }, [repositoryId, hookType, onScriptsChange, t])
 
   const fetchAvailableScripts = React.useCallback(async () => {
+    if (agentRepository) {
+      try {
+        // the saved repository's agent, asked for its operators
+        const response = await api.get<AgentScriptsResponse>(
+          `/repositories/${repositoryId}/agent-scripts`
+        )
+        setAgentScripts(response.data.scripts || [])
+        setAgentScriptsState(response.data.agent_online ? 'ready' : 'offline')
+      } catch (error) {
+        console.error('Failed to fetch agent scripts:', error)
+        setAgentScripts([])
+        setAgentScriptsState('error')
+      }
+      return
+    }
     try {
       const response = await api.get('/scripts')
       setAvailableScripts(response.data)
     } catch (error) {
       console.error('Failed to fetch available scripts:', error)
     }
-  }, [])
+  }, [agentRepository, repositoryId])
 
   useEffect(() => {
     fetchAssignedScripts()
     fetchAvailableScripts()
   }, [fetchAssignedScripts, fetchAvailableScripts])
 
+  // An agent that was offline may have connected since: ask it again
+  // whenever the dialog opens.
+  useEffect(() => {
+    if (agentRepository && addDialogOpen) {
+      setAgentScriptsState('loading')
+      fetchAvailableScripts()
+    }
+  }, [agentRepository, addDialogOpen, fetchAvailableScripts])
+
   const handleAddScript = async (assignmentData: AssignmentData) => {
-    if (!selectedScriptId) return
+    if (agentRepository ? !selectedAgentScript : !selectedScriptId) return
 
     try {
       const nextOrder = Math.max(0, ...scripts.map((s) => s.execution_order)) + 1
 
       // Clear inline script if this is the first library script being added
-      if (scripts.length === 0 && hasInlineScript && onClearInlineScript) {
+      if (!agentRepository && scripts.length === 0 && hasInlineScript && onClearInlineScript) {
         onClearInlineScript()
       }
 
       await api.post(`/repositories/${repositoryId}/scripts`, {
-        script_id: selectedScriptId,
+        ...(agentRepository
+          ? {
+              agent_script_name: selectedAgentScript,
+              custom_timeout: assignmentData.custom_timeout ?? null,
+            }
+          : { script_id: selectedScriptId }),
         hook_type: hookType,
         execution_order: nextOrder,
         enabled: true,
@@ -174,9 +216,12 @@ export default function RepositoryScriptsTab({
       fetchAssignedScripts()
       setAddDialogOpen(false)
       setSelectedScriptId('')
+      setSelectedAgentScript('')
       if (onUpdate) onUpdate()
       if (onUpdate) onUpdate()
-      const addedScript = availableScripts.find((s) => s.id === selectedScriptId)
+      const addedScript = agentRepository
+        ? { name: selectedAgentScript }
+        : availableScripts.find((s) => s.id === selectedScriptId)
       trackScripts(EventAction.CREATE, addedScript?.name, {
         source: 'repository_assignment',
         hook_type: hookType,
@@ -377,6 +422,26 @@ export default function RepositoryScriptsTab({
                 size="small"
                 sx={{ height: 20, fontSize: '0.7rem' }}
               />
+              {script.is_agent_script && (
+                <Chip
+                  label={t('repositoryScripts.chips.agentScript')}
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                  sx={{ height: 20, fontSize: '0.7rem' }}
+                />
+              )}
+              {agentRepository && !script.is_agent_script && (
+                <Tooltip title={t('repositoryScripts.tooltips.notRunOnAgent')}>
+                  <Chip
+                    icon={<AlertTriangle size={12} />}
+                    label={t('repositoryScripts.chips.notRunOnAgent')}
+                    size="small"
+                    color="warning"
+                    sx={{ height: 20, fontSize: '0.7rem' }}
+                  />
+                </Tooltip>
+              )}
               {script.parameters && script.parameters.length > 0 && (
                 <Tooltip
                   title={t('repositoryScripts.parametersConfigured', {
@@ -450,16 +515,18 @@ export default function RepositoryScriptsTab({
 
               {/* Actions */}
               <Box sx={{ display: 'flex', gap: 0.25, ml: 'auto' }}>
-                <Tooltip title={t('repositoryScripts.tooltips.testScript')}>
-                  <IconButton
-                    size="small"
-                    onClick={() => handleTestScript(script)}
-                    color="success"
-                    sx={{ p: 0.5 }}
-                  >
-                    <Play size={16} />
-                  </IconButton>
-                </Tooltip>
+                {!script.is_agent_script && (
+                  <Tooltip title={t('repositoryScripts.tooltips.testScript')}>
+                    <IconButton
+                      size="small"
+                      onClick={() => handleTestScript(script)}
+                      color="success"
+                      sx={{ p: 0.5 }}
+                    >
+                      <Play size={16} />
+                    </IconButton>
+                  </Tooltip>
+                )}
                 {script.parameters && script.parameters.length > 0 && (
                   <Tooltip title={t('repositoryScripts.tooltips.configureParameters')}>
                     <IconButton
@@ -517,6 +584,7 @@ export default function RepositoryScriptsTab({
         onClose={() => {
           setAddDialogOpen(false)
           setSelectedScriptId('')
+          setSelectedAgentScript('')
         }}
         availableScripts={availableScripts}
         selectedScriptId={selectedScriptId}
@@ -525,6 +593,18 @@ export default function RepositoryScriptsTab({
         hookType={hookType}
         scriptsCount={scripts.length}
         hasInlineScript={hasInlineScript}
+        agentScripts={
+          agentRepository
+            ? {
+                scripts: agentScripts.filter(
+                  (script) => !scripts.some((s) => s.agent_script_name === script.name)
+                ),
+                state: agentScriptsState,
+                selected: selectedAgentScript,
+                onSelect: setSelectedAgentScript,
+              }
+            : null
+        }
       />
 
       {/* Edit Parameters Dialog */}
@@ -556,6 +636,7 @@ interface AssignmentData {
   script_id: number | ''
   on_failure_mode: OnFailureMode
   parameter_values?: Record<string, string>
+  custom_timeout?: number | null
 }
 
 interface RepositoryScriptDialogProps {
@@ -568,6 +649,13 @@ interface RepositoryScriptDialogProps {
   hookType: 'pre-backup' | 'post-backup'
   scriptsCount: number
   hasInlineScript?: boolean
+  // set for an agent repository: offer the scripts its agent publishes
+  agentScripts?: {
+    scripts: AgentScript[]
+    state: AgentScriptsState
+    selected: string
+    onSelect: (name: string) => void
+  } | null
 }
 
 function RepositoryScriptDialog({
@@ -580,10 +668,12 @@ function RepositoryScriptDialog({
   hookType,
   scriptsCount,
   hasInlineScript,
+  agentScripts = null,
 }: RepositoryScriptDialogProps) {
   const { t } = useTranslation()
   const [onFailureMode, setOnFailureMode] = useState<OnFailureMode>('fail')
   const [parameterValues, setParameterValues] = useState<Record<string, string>>({})
+  const [agentTimeout, setAgentTimeout] = useState('')
   const isPreBackup = hookType === 'pre-backup'
 
   // Get selected script details
@@ -600,6 +690,7 @@ function RepositoryScriptDialog({
     if (open) {
       setOnFailureMode('fail')
       setParameterValues({})
+      setAgentTimeout('')
     }
   }, [open])
 
@@ -615,6 +706,8 @@ function RepositoryScriptDialog({
       script_id: selectedScriptId,
       on_failure_mode: onFailureMode,
       parameter_values: parameterValues,
+      // empty: the repository's hook timeout
+      custom_timeout: agentScripts && Number(agentTimeout) > 0 ? Number(agentTimeout) : null,
     })
   }
 
@@ -623,54 +716,112 @@ function RepositoryScriptDialog({
       <DialogTitle>{t('repositoryScripts.dialog.assignTitle')}</DialogTitle>
       <DialogContent>
         <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {isPreBackup && hasInlineScript && scriptsCount === 0 && (
+          {!agentScripts && isPreBackup && hasInlineScript && scriptsCount === 0 && (
             <Alert severity="warning">
               {t('repositoryScripts.dialog.inlineScriptReplacementWarning')}
             </Alert>
           )}
-          <FormControl fullWidth>
-            <InputLabel>{t('repositoryScripts.dialog.selectScriptLabel')}</InputLabel>
-            <Select
-              value={selectedScriptId}
-              label={t('repositoryScripts.dialog.selectScriptLabel')}
-              onChange={(e) => onScriptSelect(e.target.value as number)}
-              renderValue={(value) => {
-                const s = availableScripts.find((sc) => sc.id === value)
-                return s ? s.name : ''
-              }}
-              MenuProps={{
-                slotProps: {
-                  paper: {
-                    style: {
-                      maxHeight: 400,
+          {agentScripts && (
+            <>
+              <FormControl
+                fullWidth
+                disabled={agentScripts.state === 'loading' || agentScripts.scripts.length === 0}
+              >
+                <InputLabel id="repository-agent-script-select-label">
+                  {t('repositoryScripts.dialog.selectAgentScriptLabel')}
+                </InputLabel>
+                <Select
+                  labelId="repository-agent-script-select-label"
+                  value={agentScripts.selected}
+                  label={t('repositoryScripts.dialog.selectAgentScriptLabel')}
+                  onChange={(e) => agentScripts.onSelect(String(e.target.value))}
+                >
+                  {agentScripts.scripts.map((script) => (
+                    <MenuItem key={script.name} value={script.name}>
+                      <Box>
+                        <Typography variant="body2">{script.name}</Typography>
+                        {script.description && (
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              color: 'text.secondary',
+                              display: 'block',
+                            }}
+                          >
+                            {script.description}
+                          </Typography>
+                        )}
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              {agentScripts.state !== 'loading' && agentScripts.scripts.length === 0 && (
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  {agentScripts.state === 'error'
+                    ? t('repositoryScripts.dialog.agentScriptsError')
+                    : agentScripts.state === 'offline'
+                      ? t('repositoryScripts.dialog.agentOffline')
+                      : t('repositoryScripts.dialog.agentNoScripts')}
+                </Typography>
+              )}
+              <TextField
+                type="number"
+                size="small"
+                label={t('scripts.fields.timeout')}
+                placeholder={t('repositoryScripts.dialog.agentTimeoutDefault')}
+                helperText={t('repositoryScripts.dialog.agentTimeoutHint')}
+                value={agentTimeout}
+                onChange={(e) => setAgentTimeout(e.target.value)}
+                slotProps={{ htmlInput: { min: 1 } }}
+              />
+            </>
+          )}
+          {!agentScripts && (
+            <FormControl fullWidth>
+              <InputLabel>{t('repositoryScripts.dialog.selectScriptLabel')}</InputLabel>
+              <Select
+                value={selectedScriptId}
+                label={t('repositoryScripts.dialog.selectScriptLabel')}
+                onChange={(e) => onScriptSelect(e.target.value as number)}
+                renderValue={(value) => {
+                  const s = availableScripts.find((sc) => sc.id === value)
+                  return s ? s.name : ''
+                }}
+                MenuProps={{
+                  slotProps: {
+                    paper: {
+                      style: {
+                        maxHeight: 400,
+                      },
                     },
                   },
-                },
-              }}
-            >
-              {availableScripts.map((script) => (
-                <MenuItem key={script.id} value={script.id}>
-                  <Box>
-                    <Typography variant="body2">{script.name}</Typography>
-                    {script.description && (
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          color: 'text.secondary',
-                          display: 'block',
-                        }}
-                      >
-                        {script.description}
-                      </Typography>
-                    )}
-                  </Box>
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+                }}
+              >
+                {availableScripts.map((script) => (
+                  <MenuItem key={script.id} value={script.id}>
+                    <Box>
+                      <Typography variant="body2">{script.name}</Typography>
+                      {script.description && (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: 'text.secondary',
+                            display: 'block',
+                          }}
+                        >
+                          {script.description}
+                        </Typography>
+                      )}
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
 
           {/* Show parameters if selected script has them */}
-          {hasParameters && (
+          {!agentScripts && hasParameters && (
             <Box sx={{ pt: 1 }}>
               <ScriptParameterInputs
                 parameters={selectedScript.parameters!}
@@ -711,7 +862,11 @@ function RepositoryScriptDialog({
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>{t('repositoryScripts.dialog.cancel')}</Button>
-        <Button onClick={handleSubmit} variant="contained" disabled={!selectedScriptId}>
+        <Button
+          onClick={handleSubmit}
+          variant="contained"
+          disabled={agentScripts ? !agentScripts.selected : !selectedScriptId}
+        >
           {t('repositoryScripts.dialog.assignScript')}
         </Button>
       </DialogActions>

@@ -5226,7 +5226,8 @@
     "scriptsOptional": "(Opcional)",
     "scriptsHint": "Configura scripts en línea o asigna scripts reutilizables de tu Biblioteca de Scripts.",
     "preBackupScript": "Script previo a la copia de seguridad",
-    "postBackupScript": "Script posterior a la copia de seguridad"
+    "postBackupScript": "Script posterior a la copia de seguridad",
+    "agentScriptsHint": "Un repositorio de agente ejecuta los scripts que publica su agente, en la máquina del agente. Los scripts en línea y de la biblioteca se ejecutarían en el servidor, por eso no se ofrecen."
   },
   "archiveBrowser": {
     "title": "Explorar archivo",
@@ -5415,7 +5416,11 @@
     "addFromLibrary": "Agregar script de la biblioteca",
     "add": "Agregar",
     "inlineScript": "Script en línea",
-    "configured": "Configurado"
+    "configured": "Configurado",
+    "createFirstAgent": "Crea el repositorio primero para agregar scripts del agente",
+    "addAgentScript": "Agregar un script que publica el agente",
+    "inlineNotRun": "Este script en línea nunca se ejecuta: un repositorio de agente solo ejecuta los scripts que publica su agente.",
+    "removeInline": "Eliminar"
   },
   "scriptEditor": {
     "testRun": "Ejecución de prueba",
@@ -5701,12 +5706,15 @@
       "testScript": "Probar este script",
       "parametersOutOfSync": "Los parámetros necesitan atención - la definición del script ha cambiado",
       "configureParameters": "Configurar parámetros",
-      "remove": "Eliminar"
+      "remove": "Eliminar",
+      "notRunOnAgent": "Un script de la biblioteca se ejecuta en el servidor; un repositorio de agente solo ejecuta los scripts que publica su agente. Elimínalo y agrega un script del agente."
     },
     "chips": {
       "outOfSync": "Desincronizado",
       "continuesOnError": "Continúa en caso de error",
-      "skipsGracefully": "Salta correctamente"
+      "skipsGracefully": "Salta correctamente",
+      "agentScript": "Agente",
+      "notRunOnAgent": "Nunca se ejecuta"
     },
     "dialog": {
       "assignTitle": "Asignar script al repositorio",
@@ -5716,7 +5724,13 @@
       "cancel": "Cancelar",
       "assignScript": "Asignar script",
       "onFailureLabel": "Si este script falla:",
-      "inlineScriptReplacementWarning": "Añadir un script de la biblioteca sustituirá el script integrado actual de este hook."
+      "inlineScriptReplacementWarning": "Añadir un script de la biblioteca sustituirá el script integrado actual de este hook.",
+      "selectAgentScriptLabel": "Script del agente",
+      "agentNoScripts": "El agente no publica ningún script",
+      "agentOffline": "El agente está desconectado: conéctalo para listar sus scripts",
+      "agentScriptsError": "No se pudieron cargar los scripts del agente: inténtalo de nuevo",
+      "agentTimeoutDefault": "Tiempo límite de hooks del repositorio",
+      "agentTimeoutHint": "Déjalo vacío para usar el tiempo límite de hooks del repositorio (300 segundos por defecto)"
     },
     "testDialog": {
       "title": "Prueba: {{scriptName}}",
@@ -6237,7 +6251,9 @@
         "hookScriptRequired": "Un hook debe referenciar un script de biblioteca o un script del agente, pero no ambos",
         "invalidAgentScriptName": "Nombre de script del agente no válido (sin separadores de ruta ni '..', máx. 255 caracteres)",
         "scriptAlreadyAssigned": "El script '{{name}}' ya está asignado a este repositorio como {{hookType}}",
-        "scriptAssignmentNotFound": "Asignación de script no encontrada"
+        "scriptAssignmentNotFound": "Asignación de script no encontrada",
+        "agentRepositoryRunsAgentScripts": "Un repositorio de agente solo ejecuta los scripts que publica su agente; un script en línea o de la biblioteca se ejecutaría en el servidor",
+        "agentScriptNeedsAgentRepository": "Los scripts del agente solo se ejecutan para un repositorio de agente; elimínalos primero"
       },
       "service": {
         "backupCompletedWithWarning": "Copia de seguridad completada con advertencia (código de salida {{exitCode}})",
@@ -6261,7 +6277,9 @@
         "restoreFailedExitCode": "El proceso de restauración terminó con el código {{exitCode}}",
         "restoreFailed": "La restauración falló",
         "jobCompletedWithWarning": "Completado con advertencia (código de salida {{exitCode}})",
-        "restoreFailedOnAgent": "La restauración falló en el agente: {{error}}"
+        "restoreFailedOnAgent": "La restauración falló en el agente: {{error}}",
+        "agentRepositoryScriptsNotRun": "Copia completada, pero estos scripts no se ejecutaron porque un repositorio de agente solo ejecuta scripts del agente: {{scripts}}",
+        "repositoryHookWarnings": "Copia completada con advertencias de hooks: {{warnings}}"
       },
       "dashboard": {
         "failedGetSystemMetrics": "Error al obtener las métricas del sistema",

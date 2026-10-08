@@ -5226,7 +5226,8 @@
     "scriptsOptional": "(Opzionale)",
     "scriptsHint": "Configura script inline o assegna script riutilizzabili dalla tua Libreria Script.",
     "preBackupScript": "Script Pre-Backup",
-    "postBackupScript": "Script Post-Backup"
+    "postBackupScript": "Script Post-Backup",
+    "agentScriptsHint": "Un repository agente esegue gli script pubblicati dal suo agente, sulla macchina dell'agente. Gli script inline e della libreria verrebbero eseguiti sul server, quindi non sono proposti."
   },
   "archiveBrowser": {
     "title": "Sfoglia Archivio",
@@ -5415,7 +5416,11 @@
     "addFromLibrary": "Aggiungi script dalla libreria",
     "add": "Aggiungi",
     "inlineScript": "Script Inline",
-    "configured": "Configurato"
+    "configured": "Configurato",
+    "createFirstAgent": "Crea prima il repository per aggiungere script dell'agente",
+    "addAgentScript": "Aggiungi uno script pubblicato dall'agente",
+    "inlineNotRun": "Questo script inline non viene mai eseguito: un repository agente esegue solo gli script pubblicati dal suo agente.",
+    "removeInline": "Rimuovi"
   },
   "scriptEditor": {
     "testRun": "Esecuzione Test",
@@ -5701,12 +5706,15 @@
       "testScript": "Esegui il test di questo script",
       "parametersOutOfSync": "I parametri necessitano attenzione - la definizione dello script è cambiata",
       "configureParameters": "Configura Parametri",
-      "remove": "Rimuovi"
+      "remove": "Rimuovi",
+      "notRunOnAgent": "Uno script della libreria viene eseguito sul server; un repository agente esegue solo gli script pubblicati dal suo agente. Rimuovilo e aggiungi uno script dell'agente."
     },
     "chips": {
       "outOfSync": "Non Sincronizzato",
       "continuesOnError": "Continua su Errore",
-      "skipsGracefully": "Salta"
+      "skipsGracefully": "Salta",
+      "agentScript": "Agente",
+      "notRunOnAgent": "Mai eseguito"
     },
     "dialog": {
       "assignTitle": "Assegna Script al Repository",
@@ -5716,7 +5724,13 @@
       "onFailureLabel": "Se questo script fallisce:",
       "cancel": "Annulla",
       "assignScript": "Assegna Script",
-      "inlineScriptReplacementWarning": "L'aggiunta di uno script dalla libreria sostituirà lo script inline corrente per questo hook."
+      "inlineScriptReplacementWarning": "L'aggiunta di uno script dalla libreria sostituirà lo script inline corrente per questo hook.",
+      "selectAgentScriptLabel": "Script dell'agente",
+      "agentNoScripts": "L'agente non pubblica alcuno script",
+      "agentOffline": "L'agente è offline: collegalo per elencarne gli script",
+      "agentScriptsError": "Impossibile caricare gli script dell'agente: riprova",
+      "agentTimeoutDefault": "Timeout degli hook del repository",
+      "agentTimeoutHint": "Lascia vuoto per usare il timeout degli hook del repository (300 secondi per impostazione predefinita)"
     },
     "testDialog": {
       "title": "Test: {{scriptName}}",
@@ -6237,7 +6251,9 @@
         "hookScriptRequired": "Un hook deve fare riferimento a uno script di libreria o a uno script dell'agente, ma non a entrambi",
         "invalidAgentScriptName": "Nome dello script dell'agente non valido (nessun separatore di percorso o '..', max 255 caratteri)",
         "scriptAlreadyAssigned": "Lo script '{{name}}' è già assegnato a questo repository come {{hookType}}",
-        "scriptAssignmentNotFound": "Assegnazione script non trovata"
+        "scriptAssignmentNotFound": "Assegnazione script non trovata",
+        "agentRepositoryRunsAgentScripts": "Un repository agente esegue solo gli script pubblicati dal suo agente; uno script inline o della libreria verrebbe eseguito sul server",
+        "agentScriptNeedsAgentRepository": "Gli script dell'agente vengono eseguiti solo per un repository agente; rimuovili prima"
       },
       "service": {
         "backupCompletedWithWarning": "Backup completato con avviso (codice uscita {{exitCode}})",
@@ -6261,7 +6277,9 @@
         "restoreFailedExitCode": "Il processo di ripristino è uscito con codice {{exitCode}}",
         "restoreFailed": "Ripristino fallito",
         "jobCompletedWithWarning": "Completato con avviso (codice di uscita {{exitCode}})",
-        "restoreFailedOnAgent": "Ripristino non riuscito sull'agente: {{error}}"
+        "restoreFailedOnAgent": "Ripristino non riuscito sull'agente: {{error}}",
+        "agentRepositoryScriptsNotRun": "Backup completato, ma questi script non sono stati eseguiti perché un repository agente esegue solo script dell'agente: {{scripts}}",
+        "repositoryHookWarnings": "Backup completato con avvisi degli hook: {{warnings}}"
       },
       "dashboard": {
         "failedGetSystemMetrics": "Impossibile ottenere le metriche di sistema",

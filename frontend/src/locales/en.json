@@ -5226,7 +5226,8 @@
     "scriptsOptional": "(Optional)",
     "scriptsHint": "Configure inline scripts or assign reusable scripts from your Script Library.",
     "preBackupScript": "Pre-Backup Script",
-    "postBackupScript": "Post-Backup Script"
+    "postBackupScript": "Post-Backup Script",
+    "agentScriptsHint": "An agent repository runs scripts its agent publishes, on the agent's machine. Inline and library scripts would run on the server, so they are not offered."
   },
   "archiveBrowser": {
     "title": "Browse Archive",
@@ -5415,7 +5416,11 @@
     "addFromLibrary": "Add script from library",
     "add": "Add",
     "inlineScript": "Inline Script",
-    "configured": "Configured"
+    "configured": "Configured",
+    "createFirstAgent": "Create the repository first to add agent scripts",
+    "addAgentScript": "Add a script the agent publishes",
+    "inlineNotRun": "This inline script never runs: an agent repository runs only scripts its agent publishes.",
+    "removeInline": "Remove"
   },
   "scriptEditor": {
     "testRun": "Test Run",
@@ -5701,12 +5706,15 @@
       "testScript": "Test run this script",
       "parametersOutOfSync": "Parameters need attention - script definition has changed",
       "configureParameters": "Configure Parameters",
-      "remove": "Remove"
+      "remove": "Remove",
+      "notRunOnAgent": "A library script runs on the server; an agent repository runs only scripts its agent publishes. Remove it and add an agent script instead."
     },
     "chips": {
       "outOfSync": "Out of Sync",
       "continuesOnError": "Continues on Error",
-      "skipsGracefully": "Skips Gracefully"
+      "skipsGracefully": "Skips Gracefully",
+      "agentScript": "Agent",
+      "notRunOnAgent": "Never runs"
     },
     "dialog": {
       "assignTitle": "Assign Script to Repository",
@@ -5716,7 +5724,13 @@
       "onFailureLabel": "If this script fails:",
       "cancel": "Cancel",
       "assignScript": "Assign Script",
-      "inlineScriptReplacementWarning": "Adding a library script will replace the current inline script for this hook."
+      "inlineScriptReplacementWarning": "Adding a library script will replace the current inline script for this hook.",
+      "selectAgentScriptLabel": "Agent script",
+      "agentNoScripts": "The agent publishes no scripts",
+      "agentOffline": "The agent is offline — connect it to list its scripts",
+      "agentScriptsError": "Couldn't load the agent's scripts — try again",
+      "agentTimeoutDefault": "Repository hook timeout",
+      "agentTimeoutHint": "Leave empty to use the repository's hook timeout (300 seconds by default)"
     },
     "testDialog": {
       "title": "Test: {{scriptName}}",
@@ -6237,7 +6251,9 @@
         "hookScriptRequired": "A hook must reference either a library script or an agent script, but not both",
         "invalidAgentScriptName": "Invalid agent script name (no path separators or '..', max 255 characters)",
         "scriptAlreadyAssigned": "Script '{{name}}' is already assigned to this repository as {{hookType}}",
-        "scriptAssignmentNotFound": "Script assignment not found"
+        "scriptAssignmentNotFound": "Script assignment not found",
+        "agentRepositoryRunsAgentScripts": "An agent repository runs only scripts its agent publishes; an inline or library script would run on the server",
+        "agentScriptNeedsAgentRepository": "Agent scripts run only for an agent repository; remove them first"
       },
       "service": {
         "backupCompletedWithWarning": "Backup completed with warning (exit code {{exitCode}})",
@@ -6261,7 +6277,9 @@
         "restoreFailedExitCode": "Restore process exited with code {{exitCode}}",
         "restoreFailed": "Restore failed",
         "jobCompletedWithWarning": "Completed with warning (exit code {{exitCode}})",
-        "restoreFailedOnAgent": "Restore failed on the agent: {{error}}"
+        "restoreFailedOnAgent": "Restore failed on the agent: {{error}}",
+        "agentRepositoryScriptsNotRun": "Backup completed, but these scripts did not run because an agent repository runs only agent scripts: {{scripts}}",
+        "repositoryHookWarnings": "Backup completed with hook warnings: {{warnings}}"
       },
       "dashboard": {
         "failedGetSystemMetrics": "Failed to get system metrics",
