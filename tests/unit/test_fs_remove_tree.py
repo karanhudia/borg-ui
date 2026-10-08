@@ -4,7 +4,11 @@ from unittest.mock import patch
 import pytest
 
 from app.utils import fs
-from app.utils.fs import active_mount_points, remove_tree_without_crossing_mounts
+from app.utils.fs import (
+    active_mount_points,
+    mount_points_covering,
+    remove_tree_without_crossing_mounts,
+)
 
 
 @pytest.mark.unit
@@ -72,3 +76,33 @@ class TestRemoveTreeWithoutCrossingMounts:
     def test_active_mount_points_includes_root(self):
         points = active_mount_points()
         assert points is not None and "/" in points
+
+
+@pytest.mark.unit
+class TestMountPointsCovering:
+    def _covering(self, mounts, path, root):
+        with patch("app.utils.fs.active_mount_points", return_value=mounts):
+            return mount_points_covering(path, root)
+
+    def test_mount_at_root_covers_everything_under_it(self, tmp_path):
+        root = str(tmp_path / "root")
+        assert self._covering({root}, f"{root}/.borg-ui/x", root) == [root]
+
+    def test_mount_above_target_under_root_covers_it(self, tmp_path):
+        root = str(tmp_path / "root")
+        mount = f"{root}/.borg-ui"
+        assert self._covering({mount}, f"{mount}/x", root) == [mount]
+        assert self._covering({mount}, mount, root) == [mount]
+
+    def test_ignores_sibling_and_nested_mounts(self, tmp_path):
+        root = str(tmp_path / "root")
+        mounts = {f"{root}/etc", f"{root}/.borg-ui/x/inner", f"{root}/.borg-uix"}
+        assert self._covering(mounts, f"{root}/.borg-ui/x", root) == []
+
+    def test_ignores_mounts_above_root(self, tmp_path):
+        root = str(tmp_path / "root")
+        assert self._covering({"/", str(tmp_path)}, f"{root}/x", root) == []
+
+    def test_unreadable_mount_table(self, tmp_path):
+        root = str(tmp_path / "root")
+        assert self._covering(None, f"{root}/x", root) is None
