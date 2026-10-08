@@ -102,6 +102,26 @@ def test_facade_maps_status_words_and_progress(db, repository):
     assert op.execution_mode == "server"
 
 
+def test_facade_keeps_an_unknown_percentage_unknown(db, repository):
+    """No proportion known is not 0 % (#1154): a backup reads None until a
+    percentage is set, and setting None clears one."""
+    op = _backup_operation(db, repository, status="running")
+    job = BackupJobFacade(db, op)
+
+    assert job.progress is None
+    assert job.progress_percent is None
+
+    job.progress_percent = 0
+    db.commit()
+    assert op.progress_percent == 0.0
+    assert job.progress == 0
+
+    job.progress_percent = None
+    db.commit()
+    assert op.progress_percent is None
+    assert job.progress is None
+
+
 def test_detail_columns_land_on_the_details_row(db, repository):
     op = _backup_operation(db, repository)
     job = BackupJobFacade(db, op)

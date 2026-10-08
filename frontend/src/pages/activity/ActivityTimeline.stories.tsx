@@ -323,3 +323,33 @@ export const Loading: Story = {
     </Box>
   ),
 }
+
+// An agent backup reports no percentage while it runs (borg create has no
+// total): the bar runs indeterminate and the caption shows only the file.
+export const RunningAgentBackupWithoutPercentage: Story = {
+  render: () => (
+    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
+      <ActivityTimeline
+        items={[
+          base({
+            id: 11800,
+            repository: 'Workstation',
+            repository_path: '/srv/borg/workstation',
+            status: 'running',
+            execution_mode: 'agent',
+            started_at: at(0, 14, 5),
+            completed_at: null,
+            progress_percent: null,
+            progress_message: '/home/k/projects/report.pdf',
+            archive_name: 'workstation-2026-09-11T14:05',
+            followups: [],
+          }),
+        ]}
+        loading={false}
+        actions={actions}
+        showRepository
+        getKey={(item) => String(item.id)}
+      />
+    </Box>
+  ),
+}

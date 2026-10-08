@@ -287,7 +287,8 @@ class AgentJobStartRequest(BaseModel):
 
 
 class AgentJobProgressRequest(BaseModel):
-    progress_percent: Optional[float] = None
+    # infinity or NaN cannot be stored or served as a percentage
+    progress_percent: Optional[float] = Field(default=None, allow_inf_nan=False)
     current_file: Optional[str] = None
     original_size: Optional[int] = None
     compressed_size: Optional[int] = None
@@ -745,9 +746,16 @@ def _is_factor(value) -> bool:
     )
 
 
+def _is_finite_number(value) -> bool:
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+    )
+
+
 def _sync_backup_progress(agent_job: AgentJob, backup_job) -> None:
     for field_name in (
-        "progress_percent",
         "current_file",
         "original_size",
         "compressed_size",
@@ -758,7 +766,12 @@ def _sync_backup_progress(agent_job: AgentJob, backup_job) -> None:
         "estimated_time_remaining",
     ):
         setattr(backup_job, field_name, getattr(agent_job, field_name))
-    backup_job.progress = int(agent_job.progress_percent or 0)
+    # borg create reports no proportion, so a backup has a percentage only
+    # against a source total; without one, a percentage the agent reported
+    # belongs to a step inside create (the cache sync), not to the backup.
+    backup_job.progress_percent = (
+        agent_job.progress_percent if agent_job.total_expected_size else None
+    )
 
 
 def _finish_linked_backup_job(
@@ -1089,6 +1102,10 @@ def _apply_agent_job_progress(
 ) -> None:
     if job.status in FINAL_AGENT_JOB_STATUSES:
         return
+    percent = progress.get("progress_percent")
+    if percent is not None and not _is_finite_number(percent):
+        # infinity or NaN cannot be stored or served as a percentage
+        progress = {k: v for k, v in progress.items() if k != "progress_percent"}
     for field_name, value in progress.items():
         if hasattr(job, field_name):
             setattr(job, field_name, value)
