@@ -45,8 +45,13 @@ def ensure_borg2_repository_url(repository: Optional[str]) -> None:
 def job_borg_major(repository: dict[str, Any], payload: dict[str, Any]) -> int:
     """The Borg major a job runs on, 1 when the job names none. Every job
     decoder reads it here: anything but 1 or 2 is refused, so no later
-    `== 2` check can take an unknown major for Borg 1."""
-    value = repository.get("borg_version") or payload.get("borg_version") or 1
+    `== 2` check can take an unknown major for Borg 1. Only a missing value
+    means 1; a present 0 or "" is refused like any other, as on the server."""
+    value = repository.get("borg_version")
+    if value is None:
+        value = payload.get("borg_version")
+    if value is None:
+        return 1
     try:
         major = int(value)
     except (TypeError, ValueError):
