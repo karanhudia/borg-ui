@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-10-08T10:37:00.149Z",
+  "generatedAt": "2026-10-08T11:01:54.628Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1391 visual report",
     "commitSha": "196a74aaf745",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/37764467989"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/37767180130"
   },
   "totals": {
     "baseline": 1194,
     "actual": 1206,
     "compared": 1194,
-    "changed": 3,
+    "changed": 4,
     "added": 12,
     "removed": 0,
-    "unchanged": 1191
+    "unchanged": 1190
   },
   "changed": [
     {
@@ -24,6 +24,24 @@
       "diffPixels": 1097,
       "totalPixels": 329160,
       "diffRatio": 0.003332725726090655,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
+      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
+      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
+      "diffPixels": 362,
+      "totalPixels": 329160,
+      "diffRatio": 0.0010997691092477823,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -57,9 +75,9 @@
       "baselinePath": "images/baseline/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
       "actualPath": "images/actual/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
       "diffPath": "images/diff/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
-      "diffPixels": 362,
+      "diffPixels": 629,
       "totalPixels": 329160,
-      "diffRatio": 0.0010997691092477823,
+      "diffRatio": 0.0019109247782233565,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -2561,9 +2579,6 @@
     },
     {
       "fileName": "components-wizard-rclone-remote-dialog--create-error.png"
-    },
-    {
-      "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png"
     },
     {
       "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote.png"
