@@ -915,11 +915,20 @@ class BorgmaticImportService:
         if location.get("exclude_patterns"):
             repository.exclude_patterns = json.dumps(location["exclude_patterns"])
 
-        # Hooks
-        if hooks.get("before_backup"):
-            repository.pre_backup_script = "\n".join(hooks["before_backup"])
-        if hooks.get("after_backup"):
-            repository.post_backup_script = "\n".join(hooks["after_backup"])
+        # Hooks. An agent repository replaced in place keeps its own: a shell
+        # hook would run on the server, not on the agent's machine.
+        if repository.executor_type == "agent" and (
+            hooks.get("before_backup") or hooks.get("after_backup")
+        ):
+            result["warnings"].append(
+                f"Hooks not imported for agent repository: {repo_name} - "
+                "assign agent scripts instead"
+            )
+        else:
+            if hooks.get("before_backup"):
+                repository.pre_backup_script = "\n".join(hooks["before_backup"])
+            if hooks.get("after_backup"):
+                repository.post_backup_script = "\n".join(hooks["after_backup"])
 
         repository.hook_timeout = 300  # Default timeout
         repository.continue_on_hook_failure = False  # Default: fail on hook failure

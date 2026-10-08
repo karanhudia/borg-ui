@@ -121,6 +121,29 @@ async def test_run_backup_passes_params_to_the_service(db, repository, monkeypat
 
 
 @pytest.mark.asyncio
+async def test_run_backup_hands_a_warning_its_message(db, repository, monkeypatch):
+    """The runner writes the outcome's message onto the row; a warning
+    without it would lose the one that says what it was."""
+    load_default_executors()
+    op = _operation(db, repository)
+    warning = json.dumps({"key": "backend.errors.rclone.syncFailedAfterBackup"})
+
+    async def _execute_backup(job_id, repository_path, session, **kw):
+        job = BackupJobFacade(db, db.get(Operation, job_id))
+        job.status = "completed_with_warnings"
+        job.error_message = warning
+        db.commit()
+
+    monkeypatch.setattr(
+        "app.services.backup_service.backup_service.execute_backup", _execute_backup
+    )
+    outcome = await get_executor("backup")(FakeContext(db, op))
+
+    assert outcome.status == "completed_with_warnings"
+    assert outcome.error_message == warning
+
+
+@pytest.mark.asyncio
 async def test_run_backup_keeps_the_cancelled_verdict(db, repository, monkeypatch):
     load_default_executors()
     op = _operation(db, repository)

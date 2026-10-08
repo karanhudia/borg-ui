@@ -30,6 +30,8 @@ interface AdvancedRepositoryOptionsProps {
   onHookFailureModeChange: (value: OnFailureMode) => void
   onCustomFlagsChange: (value: string) => void
   onUploadRatelimitMbChange: (value: string) => void
+  /** An agent repository runs only scripts its agent publishes. */
+  agentRepository?: boolean
 }
 
 export default function AdvancedRepositoryOptions({
@@ -53,6 +55,7 @@ export default function AdvancedRepositoryOptions({
   onHookFailureModeChange,
   onCustomFlagsChange,
   onUploadRatelimitMbChange,
+  agentRepository = false,
 }: AdvancedRepositoryOptionsProps) {
   const { t } = useTranslation()
   const [preScriptDialogOpen, setPreScriptDialogOpen] = useState(false)
@@ -148,7 +151,11 @@ export default function AdvancedRepositoryOptions({
               mb: 1,
             }}
           >
-            {t('advancedRepositoryOptions.scriptsHint')}
+            {t(
+              agentRepository
+                ? 'advancedRepositoryOptions.agentScriptsHint'
+                : 'advancedRepositoryOptions.scriptsHint'
+            )}
           </Typography>
 
           <RepositoryScriptsSection
@@ -163,6 +170,7 @@ export default function AdvancedRepositoryOptions({
             hasPostLibraryScripts={hasPostLibraryScripts}
             onPreLibraryScriptsChange={setHasPreLibraryScripts}
             onPostLibraryScriptsChange={setHasPostLibraryScripts}
+            agentRepository={agentRepository}
           />
         </>
       )}

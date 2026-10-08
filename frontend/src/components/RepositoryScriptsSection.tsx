@@ -1,4 +1,4 @@
-import { Box, Button, Typography, Chip, Tooltip } from '@mui/material'
+import { Alert, Box, Button, Typography, Chip, Tooltip } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { FileCode } from 'lucide-react'
 import RepositoryScriptsTab from './RepositoryScriptsTab'
@@ -18,6 +18,9 @@ interface RepositoryScriptsSectionProps {
   hasPostLibraryScripts?: boolean
   onPreLibraryScriptsChange?: (hasScripts: boolean) => void
   onPostLibraryScriptsChange?: (hasScripts: boolean) => void
+  // An agent repository runs only scripts its agent publishes: no inline
+  // script is offered, and one stored from before is shown as never run.
+  agentRepository?: boolean
 }
 
 export default function RepositoryScriptsSection({
@@ -32,8 +35,35 @@ export default function RepositoryScriptsSection({
   hasPostLibraryScripts = false,
   onPreLibraryScriptsChange,
   onPostLibraryScriptsChange,
+  agentRepository = false,
 }: RepositoryScriptsSectionProps) {
   const { t } = useTranslation()
+
+  const addTooltip = !repositoryId
+    ? t(
+        agentRepository
+          ? 'repositoryScriptsSection.createFirstAgent'
+          : 'repositoryScriptsSection.createFirst'
+      )
+    : t(
+        agentRepository
+          ? 'repositoryScriptsSection.addAgentScript'
+          : 'repositoryScriptsSection.addFromLibrary'
+      )
+
+  const inlineNotRun = (onRemove: () => void) => (
+    <Alert
+      severity="warning"
+      sx={{ mb: repositoryId ? 1 : 0 }}
+      action={
+        <Button color="inherit" size="small" onClick={onRemove}>
+          {t('repositoryScriptsSection.removeInline')}
+        </Button>
+      }
+    >
+      {t('repositoryScriptsSection.inlineNotRun')}
+    </Alert>
+  )
 
   return (
     <>
@@ -57,14 +87,7 @@ export default function RepositoryScriptsSection({
           >
             {t('repositoryScriptsSection.preBackup')}
           </Typography>
-          <Tooltip
-            title={
-              !repositoryId
-                ? t('repositoryScriptsSection.createFirst')
-                : t('repositoryScriptsSection.addFromLibrary')
-            }
-            arrow
-          >
+          <Tooltip title={addTooltip} arrow>
             <span>
               <Button
                 variant="outlined"
@@ -92,8 +115,10 @@ export default function RepositoryScriptsSection({
           </Tooltip>
         </Box>
 
+        {agentRepository && preBackupScript && inlineNotRun(() => onPreBackupScriptChange(''))}
+
         {/* Inline Pre-Backup Script - hidden when library scripts exist */}
-        {!hasPreLibraryScripts && (
+        {!agentRepository && !hasPreLibraryScripts && (
           <Box sx={{ mb: repositoryId ? 1 : 0 }}>
             <Button
               variant="outlined"
@@ -125,6 +150,7 @@ export default function RepositoryScriptsSection({
             onScriptsChange={onPreLibraryScriptsChange}
             hasInlineScript={!!preBackupScript}
             onClearInlineScript={() => onPreBackupScriptChange('')}
+            agentRepository={agentRepository}
           />
         )}
       </Box>
@@ -149,14 +175,7 @@ export default function RepositoryScriptsSection({
           >
             {t('repositoryScriptsSection.postBackup')}
           </Typography>
-          <Tooltip
-            title={
-              !repositoryId
-                ? t('repositoryScriptsSection.createFirst')
-                : t('repositoryScriptsSection.addFromLibrary')
-            }
-            arrow
-          >
+          <Tooltip title={addTooltip} arrow>
             <span>
               <Button
                 variant="outlined"
@@ -184,8 +203,10 @@ export default function RepositoryScriptsSection({
           </Tooltip>
         </Box>
 
+        {agentRepository && postBackupScript && inlineNotRun(() => onPostBackupScriptChange(''))}
+
         {/* Inline Post-Backup Script - hidden when library scripts exist */}
-        {!hasPostLibraryScripts && (
+        {!agentRepository && !hasPostLibraryScripts && (
           <Box sx={{ mb: repositoryId ? 1 : 0 }}>
             <Button
               variant="outlined"
@@ -217,6 +238,7 @@ export default function RepositoryScriptsSection({
             onScriptsChange={onPostLibraryScriptsChange}
             hasInlineScript={!!postBackupScript}
             onClearInlineScript={() => onPostBackupScriptChange('')}
+            agentRepository={agentRepository}
           />
         )}
       </Box>
