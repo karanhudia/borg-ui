@@ -46,8 +46,20 @@ class AgentConnection:
         timeout_seconds: float,
         job_id: Optional[int] = None,
         wait_for_result: bool = True,
+        attempt: Optional[int] = None,
     ) -> dict[str, Any]:
         command_id = str(uuid4())
+        frame: dict[str, Any] = {
+            "type": "command",
+            "command_id": command_id,
+            "command": command,
+            "job_id": job_id,
+            "payload": payload,
+        }
+        if attempt is not None:
+            # The run of the job this command starts; the agent echoes it
+            # with every log line (see agent_job_attempt).
+            frame["attempt"] = attempt
         future: Optional[asyncio.Future] = None
         if wait_for_result:
             future = asyncio.get_running_loop().create_future()
@@ -55,15 +67,7 @@ class AgentConnection:
 
         try:
             async with self.send_lock:
-                await self.websocket.send_json(
-                    {
-                        "type": "command",
-                        "command_id": command_id,
-                        "command": command,
-                        "job_id": job_id,
-                        "payload": payload,
-                    }
-                )
+                await self.websocket.send_json(frame)
         except Exception:
             if future is not None:
                 self.pending_commands.pop(command_id, None)
@@ -176,6 +180,7 @@ class AgentConnectionManager:
         timeout_seconds: float,
         job_id: Optional[int] = None,
         wait_for_result: bool = True,
+        attempt: Optional[int] = None,
     ) -> dict[str, Any]:
         connection = self.get(agent_machine_id)
         if connection is None:
@@ -186,6 +191,7 @@ class AgentConnectionManager:
             timeout_seconds=timeout_seconds,
             job_id=job_id,
             wait_for_result=wait_for_result,
+            attempt=attempt,
         )
 
     def resolve_command(

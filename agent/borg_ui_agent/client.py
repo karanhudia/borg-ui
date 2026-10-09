@@ -17,7 +17,42 @@ ARTIFACT_UPLOAD_READ_TIMEOUT_SECONDS = 120
 
 
 class AgentClientError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, status_code: Optional[int] = None):
+        super().__init__(message)
+        # The server's HTTP status when it answered, None when it did not.
+        self.status_code = status_code
+
+
+# How the server answered a job report that raised (see report_answer).
+UNANSWERED = "unanswered"
+RETRY = "retry"
+SETTLED = "settled"
+REFUSED = "refused"
+
+# The job is gone or already final: the report has nothing left to do.
+_SETTLED_STATUS_CODES = frozenset({404, 409})
+# Answers that may turn into an acceptance later.
+_RETRYABLE_STATUS_CODES = frozenset({401, 403, 408, 429})
+
+
+def report_answer(exc: BaseException) -> str:
+    """What a failed job report means for the outcome it carried.
+
+    - UNANSWERED: no answer at all; the server is away, try again later.
+    - RETRY: a 5xx, or an answer that may change (auth, rate limit).
+    - SETTLED: the job is gone or already final (404, 409).
+    - REFUSED: any other 4xx; the server or a proxy will never take this
+      report (a body too large, one it cannot read), so sending it again
+      cannot help.
+    """
+    status_code = getattr(exc, "status_code", None)
+    if not isinstance(exc, AgentClientError) or not isinstance(status_code, int):
+        return UNANSWERED
+    if status_code >= 500 or status_code in _RETRYABLE_STATUS_CODES:
+        return RETRY
+    if status_code in _SETTLED_STATUS_CODES or status_code < 400:
+        return SETTLED
+    return REFUSED
 
 
 class AgentClient:
@@ -146,12 +181,18 @@ class AgentClient:
         sequence: int,
         message: str,
         stream: str = "stdout",
+        attempt: Optional[int] = None,
     ) -> dict[str, Any]:
-        return self._request(
-            "POST",
-            f"/api/agents/jobs/{job_id}/logs",
-            json={"sequence": sequence, "stream": stream, "message": message},
-        )
+        """`attempt` names the run the line belongs to (the server hands it
+        out with the job); a server before it ignores the field."""
+        body: dict[str, Any] = {
+            "sequence": sequence,
+            "stream": stream,
+            "message": message,
+        }
+        if attempt is not None:
+            body["attempt"] = attempt
+        return self._request("POST", f"/api/agents/jobs/{job_id}/logs", json=body)
 
     def send_progress(self, job_id: int, progress: dict[str, Any]) -> dict[str, Any]:
         return self._request(
@@ -259,7 +300,8 @@ class AgentClient:
             raise AgentClientError(f"{method} {path} failed: {last_error}")
         if response.status_code >= 400:
             raise AgentClientError(
-                f"{method} {path} failed with HTTP {response.status_code}: {response.text}"
+                f"{method} {path} failed with HTTP {response.status_code}: {response.text}",
+                status_code=response.status_code,
             )
         if not response.content:
             return {}
