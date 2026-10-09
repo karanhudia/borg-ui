@@ -506,6 +506,28 @@ Flags, if you want to keep something:
 Running the script twice, or on a machine that was never fully installed, is
 safe: every removal tolerates a missing target.
 
+## Backup Hooks on an Agent
+
+A repository backed up by an agent runs its pre-backup and post-backup hooks on
+the agent's machine. Borg UI does not send a shell script there: the agent runs
+only scripts it publishes, executable files in its scripts directory
+(`/etc/borg-ui-agent/scripts.d` on Linux, `scripts.d` next to `config.toml` on
+macOS, or `BORG_UI_AGENT_SCRIPTS_DIR`).
+
+In the repository's scripts section, **Add** lists the scripts the agent
+publishes. Each hook has the usual failure choice (fail, continue or skip the
+backup) and an optional timeout; without one, the repository's hook timeout
+(300 seconds by default) applies. Exit code 0 is success, 1 a warning, and
+anything higher a failure. Once a pre-backup hook ran, the post-backup hooks
+also run after a failed, skipped or cancelled backup, so a service a pre-backup
+hook stopped is started again.
+
+Inline scripts and script library scripts run on the Borg UI server, so an
+agent repository does not take them. One saved before is shown as never
+running, and each backup ends with a warning naming it until it is removed.
+
+Backup Plans attach agent scripts the same way, for the whole plan.
+
 ## Enrollment Tokens and Agent Credentials
 
 Enrollment tokens are temporary setup credentials. They can expire after 1 hour,

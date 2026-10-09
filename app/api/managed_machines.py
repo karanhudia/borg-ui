@@ -932,6 +932,11 @@ async def list_agent_machine_scripts(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"key": "backend.errors.agents.agentNotFound"},
         )
+    return await probe_agent_scripts(agent)
+
+
+async def probe_agent_scripts(agent: AgentMachine) -> dict[str, Any]:
+    """`{scripts, agent_online}` from the agent's `agent.list_scripts`."""
     try:
         result = await agent_connection_manager.send_command(
             agent.id,

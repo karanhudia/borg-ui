@@ -729,6 +729,30 @@ class OperationRunner:
         op.progress_total = None
         op.progress_message = None
 
+    def _lanes_held(self, db: Session) -> set[int]:
+        """The repositories whose exclusive operation still has its task
+        here, whatever its row says: an executor can work on after its row
+        reads terminal (an agent backup's post-backup hooks, which the agent
+        transport ends the row before, #1386), and no other exclusive
+        operation starts under it."""
+        ids = [
+            operation_id
+            for operation_id, task in self.running_tasks.items()
+            if not (asyncio.isfuture(task) and task.done())
+        ]
+        if not ids:
+            return set()
+        rows = (
+            db.query(Operation.repository_id, Operation.kind)
+            .filter(Operation.id.in_(ids))
+            .all()
+        )
+        return {
+            repository_id
+            for repository_id, kind in rows
+            if repository_id is not None and is_exclusive(kind)
+        }
+
     async def tick(self) -> int:
         dispatched = 0
         db: Session = self._session()
@@ -760,6 +784,7 @@ class OperationRunner:
                 .all()
             )
             now = time.time()
+            lanes_held = self._lanes_held(db) if queued else set()
             for op in queued:
                 if self._stopped:
                     # a stop during this tick's awaits; the drain after it
@@ -786,6 +811,8 @@ class OperationRunner:
                         continue
                 if self._get_executor(op.kind) is None:
                     await self._skip(db, op, "executor_unavailable")
+                    continue
+                if is_exclusive(op.kind) and op.repository_id in lanes_held:
                     continue
                 if not can_start(db, op, system_settings):
                     continue
@@ -816,6 +843,8 @@ class OperationRunner:
                         claimed_at=op.started_at,
                     )
                 )
+                if is_exclusive(op.kind) and op.repository_id is not None:
+                    lanes_held.add(op.repository_id)
                 dispatched += 1
         finally:
             db.close()

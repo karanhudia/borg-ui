@@ -18,6 +18,7 @@ import hashlib
 
 from app.database.database import get_db
 from app.database.models import (
+    AgentMachine,
     Script,
     RepositoryScript,
     ScriptExecution,
@@ -34,6 +35,7 @@ from app.core.security import (
     encrypt_secret,
 )
 from app.config import settings
+from app.services.repository_executor import is_agent_executor
 from app.services.script_executor import execute_script
 from app.utils.script_params import (
     parse_script_parameters,
@@ -94,7 +96,10 @@ class ScriptDetailResponse(ScriptResponse):
 
 
 class RepositoryScriptAssignment(BaseModel):
-    script_id: int
+    # A library script (server repositories) OR a script the agent publishes
+    # (agent repositories). Exactly one must be set.
+    script_id: Optional[int] = None
+    agent_script_name: Optional[str] = None
     hook_type: str  # 'pre-backup' or 'post-backup'
     execution_order: int = 1
     enabled: bool = True
@@ -956,6 +961,30 @@ def get_repository_scripts(
     )
 
     def format_script(rs):
+        if rs.agent_script_name:
+            # Agent-published script: no server-side Script row, no parameters.
+            return {
+                "id": rs.id,
+                "script_id": None,
+                "agent_script_name": rs.agent_script_name,
+                "is_agent_script": True,
+                "script_name": rs.agent_script_name,
+                "script_description": None,
+                "execution_order": rs.execution_order,
+                "enabled": rs.enabled,
+                "custom_timeout": rs.custom_timeout,
+                "custom_run_on": rs.custom_run_on,
+                "continue_on_error": rs.continue_on_error,
+                "skip_on_failure": rs.skip_on_failure,
+                "default_timeout": (
+                    repository.pre_hook_timeout
+                    if rs.hook_type == "pre-backup"
+                    else repository.post_hook_timeout
+                ),
+                "default_run_on": "always",
+                "parameters": [],
+                "parameter_values": None,
+            }
         # Get script parameters and filter out system variables
         raw_params = json.loads(rs.script.parameters) if rs.script.parameters else []
         script_params = filter_system_variables_from_params(raw_params)
@@ -969,6 +998,8 @@ def get_repository_scripts(
         return {
             "id": rs.id,
             "script_id": rs.script_id,
+            "agent_script_name": None,
+            "is_agent_script": False,
             "script_name": rs.script.name,
             "script_description": rs.script.description,
             "execution_order": rs.execution_order,
@@ -989,6 +1020,37 @@ def get_repository_scripts(
     }
 
 
+@router.get("/repositories/{repository_id}/agent-scripts")
+async def list_repository_agent_scripts(
+    repository_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The scripts the agent of an agent repository publishes, for whoever
+    may assign its hooks: the repository's operators, not only admins."""
+    from app.api.managed_machines import probe_agent_scripts
+
+    repository = db.query(Repository).filter(Repository.id == repository_id).first()
+    if not repository:
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"}
+        )
+    check_repo_access(db, current_user, repository, "operator")
+    if not is_agent_executor(repository):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.scripts.agentScriptNeedsAgentRepository"},
+        )
+    agent = (
+        db.get(AgentMachine, repository.agent_machine_id)
+        if repository.agent_machine_id
+        else None
+    )
+    if agent is None or agent.status == "deleted":
+        return {"scripts": [], "agent_online": False}
+    return await probe_agent_scripts(agent)
+
+
 @router.post("/repositories/{repository_id}/scripts")
 async def assign_script_to_repository(
     repository_id: int,
@@ -1005,6 +1067,28 @@ async def assign_script_to_repository(
         )
     # Attaching a hook runs it on this repo's next backup: operator-gated.
     check_repo_access(db, current_user, repository, "operator")
+
+    # Exactly one of script_id / agent_script_name identifies the script, and
+    # it has to be one the repository's executor can run: a server shell
+    # script would run on the wrong machine for an agent repository, and an
+    # agent script has no agent to run on for a server repository.
+    agent_script_name = (assignment.agent_script_name or "").strip()
+    if (assignment.script_id is None) == (not agent_script_name):
+        raise HTTPException(
+            status_code=400, detail={"key": "backend.errors.scripts.hookScriptRequired"}
+        )
+    if is_agent_executor(repository) and not agent_script_name:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.scripts.agentRepositoryRunsAgentScripts"},
+        )
+    if agent_script_name and not is_agent_executor(repository):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.scripts.agentScriptNeedsAgentRepository"},
+        )
+    if agent_script_name:
+        return _assign_agent_script(db, repository, assignment, agent_script_name)
 
     # Validate script exists
     script = db.query(Script).filter(Script.id == assignment.script_id).first()
@@ -1132,6 +1216,74 @@ async def assign_script_to_repository(
     return {"success": True, "id": repo_script.id}
 
 
+def _assign_agent_script(
+    db: Session,
+    repository: Repository,
+    assignment: RepositoryScriptAssignment,
+    agent_script_name: str,
+) -> dict:
+    if assignment.hook_type not in ["pre-backup", "post-backup"]:
+        raise HTTPException(
+            status_code=400, detail={"key": "backend.errors.scripts.hookTypeMustBe"}
+        )
+    # The agent is the allow-list boundary; this only refuses names that
+    # cannot be one (the plan hooks' rule).
+    if (
+        len(agent_script_name) > 255
+        or "/" in agent_script_name
+        or "\\" in agent_script_name
+        or ".." in agent_script_name
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.scripts.invalidAgentScriptName"},
+        )
+    existing = (
+        db.query(RepositoryScript)
+        .filter(
+            RepositoryScript.repository_id == repository.id,
+            RepositoryScript.agent_script_name == agent_script_name,
+            RepositoryScript.hook_type == assignment.hook_type,
+        )
+        .first()
+    )
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "key": "backend.errors.scripts.scriptAlreadyAssigned",
+                "params": {"name": agent_script_name, "hookType": assignment.hook_type},
+            },
+        )
+    repo_script = RepositoryScript(
+        repository_id=repository.id,
+        script_id=None,
+        agent_script_name=agent_script_name,
+        hook_type=assignment.hook_type,
+        execution_order=assignment.execution_order,
+        enabled=assignment.enabled,
+        custom_timeout=assignment.custom_timeout,
+        custom_run_on=assignment.custom_run_on,
+        continue_on_error=assignment.continue_on_error
+        if assignment.continue_on_error is not None
+        else True,
+        skip_on_failure=assignment.skip_on_failure
+        if assignment.skip_on_failure is not None
+        else False,
+        created_at=datetime.utcnow(),
+    )
+    db.add(repo_script)
+    db.commit()
+    db.refresh(repo_script)
+    logger.info(
+        "Agent script assigned to repository",
+        agent_script_name=agent_script_name,
+        repository_id=repository.id,
+        hook_type=assignment.hook_type,
+    )
+    return {"success": True, "id": repo_script.id}
+
+
 @router.put("/repositories/{repository_id}/scripts/{repo_script_id}")
 async def update_repository_script_assignment(
     repository_id: int,
@@ -1168,6 +1320,17 @@ async def update_repository_script_assignment(
         repo_script.execution_order = update_data.execution_order
 
     if update_data.enabled is not None:
+        if (
+            update_data.enabled
+            and repo_script.script_id is not None
+            and is_agent_executor(repository)
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.scripts.agentRepositoryRunsAgentScripts"
+                },
+            )
         repo_script.enabled = update_data.enabled
 
     if update_data.custom_timeout is not None:
@@ -1188,8 +1351,9 @@ async def update_repository_script_assignment(
     if update_data.skip_on_failure is not None:
         repo_script.skip_on_failure = update_data.skip_on_failure
 
-    # Update parameter values with validation and encryption
-    if update_data.parameter_values is not None:
+    # Update parameter values with validation and encryption (an agent
+    # script has none)
+    if update_data.parameter_values is not None and repo_script.script is not None:
         from app.utils.script_params import validate_parameter_value
 
         # Get script parameter definitions

@@ -5226,7 +5226,8 @@
     "scriptsOptional": "(Optional)",
     "scriptsHint": "Inline-Skripte konfigurieren oder wiederverwendbare Skripte aus der Skriptbibliothek zuweisen.",
     "preBackupScript": "Pre-Backup-Skript",
-    "postBackupScript": "Post-Backup-Skript"
+    "postBackupScript": "Post-Backup-Skript",
+    "agentScriptsHint": "Ein Agent-Repository führt Skripte aus, die sein Agent bereitstellt, auf dem Rechner des Agents. Inline- und Bibliotheksskripte würden auf dem Server laufen und werden daher nicht angeboten."
   },
   "archiveBrowser": {
     "title": "Archiv durchsuchen",
@@ -5415,7 +5416,11 @@
     "addFromLibrary": "Skript aus Bibliothek hinzufügen",
     "add": "Hinzufügen",
     "inlineScript": "Inline-Skript",
-    "configured": "Konfiguriert"
+    "configured": "Konfiguriert",
+    "createFirstAgent": "Erstelle das Repository zuerst, um Agent-Skripte hinzuzufügen",
+    "addAgentScript": "Ein Skript hinzufügen, das der Agent bereitstellt",
+    "inlineNotRun": "Dieses Inline-Skript läuft nie: Ein Agent-Repository führt nur Skripte aus, die sein Agent bereitstellt.",
+    "removeInline": "Entfernen"
   },
   "scriptEditor": {
     "testRun": "Testausführung",
@@ -5701,12 +5706,15 @@
       "testScript": "Dieses Skript testweise ausführen",
       "parametersOutOfSync": "Parameter benötigen Aufmerksamkeit - Skriptdefinition hat sich geändert",
       "configureParameters": "Parameter konfigurieren",
-      "remove": "Entfernen"
+      "remove": "Entfernen",
+      "notRunOnAgent": "Ein Bibliotheksskript läuft auf dem Server; ein Agent-Repository führt nur Skripte aus, die sein Agent bereitstellt. Entferne es und füge stattdessen ein Agent-Skript hinzu."
     },
     "chips": {
       "outOfSync": "Nicht synchronisiert",
       "continuesOnError": "Weiter bei Fehler",
-      "skipsGracefully": "Wird übersprungen"
+      "skipsGracefully": "Wird übersprungen",
+      "agentScript": "Agent",
+      "notRunOnAgent": "Läuft nie"
     },
     "dialog": {
       "assignTitle": "Skript dem Repository zuweisen",
@@ -5716,7 +5724,13 @@
       "cancel": "Abbrechen",
       "assignScript": "Skript zuweisen",
       "onFailureLabel": "Wenn dieses Skript fehlschlägt:",
-      "inlineScriptReplacementWarning": "Das Hinzufügen eines Bibliotheksskripts ersetzt das aktuelle Inline-Skript für diesen Hook."
+      "inlineScriptReplacementWarning": "Das Hinzufügen eines Bibliotheksskripts ersetzt das aktuelle Inline-Skript für diesen Hook.",
+      "selectAgentScriptLabel": "Agent-Skript",
+      "agentNoScripts": "Der Agent stellt keine Skripte bereit",
+      "agentOffline": "Der Agent ist offline – verbinde ihn, um seine Skripte aufzulisten",
+      "agentScriptsError": "Die Skripte des Agents konnten nicht geladen werden – versuche es erneut",
+      "agentTimeoutDefault": "Hook-Timeout des Repositorys",
+      "agentTimeoutHint": "Leer lassen, um den Hook-Timeout des Repositorys zu verwenden (standardmäßig 300 Sekunden)"
     },
     "testDialog": {
       "title": "Test: {{scriptName}}",
@@ -6237,7 +6251,9 @@
         "hookScriptRequired": "Ein Hook muss entweder ein Bibliotheksskript oder ein Agent-Skript referenzieren, aber nicht beides",
         "invalidAgentScriptName": "Ungültiger Agent-Skript-Name (keine Pfadtrenner oder '..', max. 255 Zeichen)",
         "scriptAlreadyAssigned": "Skript '{{name}}' ist diesem Repository bereits als {{hookType}} zugewiesen",
-        "scriptAssignmentNotFound": "Skriptzuweisung nicht gefunden"
+        "scriptAssignmentNotFound": "Skriptzuweisung nicht gefunden",
+        "agentRepositoryRunsAgentScripts": "Ein Agent-Repository führt nur Skripte aus, die sein Agent bereitstellt; ein Inline- oder Bibliotheksskript würde auf dem Server laufen",
+        "agentScriptNeedsAgentRepository": "Agent-Skripte laufen nur für ein Agent-Repository; entferne sie zuerst"
       },
       "service": {
         "backupCompletedWithWarning": "Sicherung mit Warnung abgeschlossen (Exitcode {{exitCode}})",
@@ -6261,7 +6277,9 @@
         "restoreFailedExitCode": "Der Wiederherstellungsprozess wurde mit Code {{exitCode}} beendet",
         "restoreFailed": "Wiederherstellung fehlgeschlagen",
         "jobCompletedWithWarning": "Mit Warnung abgeschlossen (Exitcode {{exitCode}})",
-        "restoreFailedOnAgent": "Wiederherstellung auf dem Agent fehlgeschlagen: {{error}}"
+        "restoreFailedOnAgent": "Wiederherstellung auf dem Agent fehlgeschlagen: {{error}}",
+        "agentRepositoryScriptsNotRun": "Sicherung abgeschlossen, aber diese Skripte liefen nicht, weil ein Agent-Repository nur Agent-Skripte ausführt: {{scripts}}",
+        "repositoryHookWarnings": "Sicherung mit Hook-Warnungen abgeschlossen: {{warnings}}"
       },
       "dashboard": {
         "failedGetSystemMetrics": "Fehler beim Abrufen der Systemmetriken",

@@ -2022,12 +2022,16 @@ class RepositoryScript(Base):
         nullable=False,
         index=True,
     )
+    # A hook references EITHER a server-side library script (script_id) OR,
+    # on an agent repository, a named script published by the agent
+    # (agent_script_name). Exactly one is set.
     script_id = Column(
         Integer,
         ForeignKey("scripts.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
+    agent_script_name = Column(String(255), nullable=True)
 
     # Hook configuration
     hook_type = Column(String(50), nullable=False)  # 'pre-backup', 'post-backup'

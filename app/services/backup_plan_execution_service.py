@@ -501,12 +501,13 @@ def _plan_script_hooks(plan: BackupPlan) -> list[dict[str, Any]]:
 
 
 def _classify_agent_script_outcome(
-    outcome: dict[str, Any], *, hook_type: str, script_name: str
+    outcome: dict[str, Any], *, hook_type: str, script_name: str, scope: str = "Plan"
 ) -> tuple[bool, str, Optional[str]]:
     """Map an agent ``script.run`` outcome to (hook_ok, execution_status, message)
     per the agent-script contract: return code 0 = success, 1 = warning
     (non-fatal — the backup proceeds), >1 = failure. A job that did not complete
-    (offline/timeout/crash) is a failure with the reported reason."""
+    (offline/timeout/crash) is a failure with the reported reason. `scope`
+    names the hook's owner in the message: a plan or a repository."""
     result = outcome.get("result") or {}
     rc = result.get("return_code")
     if outcome.get("status") == "completed" and isinstance(rc, int):
@@ -517,13 +518,13 @@ def _classify_agent_script_outcome(
         return (
             False,
             "failed",
-            f"Plan {hook_type} agent script '{script_name}' failed with exit code {rc}",
+            f"{scope} {hook_type} agent script '{script_name}' failed with exit code {rc}",
         )
     message = outcome.get("error_message") or outcome.get("status") or "failed"
     return (
         False,
         "failed",
-        f"Plan {hook_type} agent script '{script_name}': {message}",
+        f"{scope} {hook_type} agent script '{script_name}': {message}",
     )
 
 
