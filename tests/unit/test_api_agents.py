@@ -451,6 +451,123 @@ class TestAgentJobTransport:
         test_db.refresh(agent)
         assert agent.status == "offline"
 
+    def _agent_with_a_young_running_job(self, test_client, test_db, admin_headers):
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+            capabilities=["session.commands", "backup.create"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        job = _create_agent_job(test_db, agent, status="running")
+        started_at = datetime.now(timezone.utc) - timedelta(seconds=5)
+        job.claimed_at = started_at
+        job.started_at = started_at
+        job.updated_at = started_at
+        test_db.commit()
+        return registered, agent, job
+
+    @staticmethod
+    def _hello(registered, **fields):
+        hello = {
+            "type": "hello",
+            "agent_id": registered["agent_id"],
+            "hostname": "session-host.local",
+            "agent_version": "0.2.0",
+            "borg_versions": [],
+            "capabilities": ["session.commands", "backup.create"],
+            "running_job_ids": [],
+        }
+        hello.update(fields)
+        return {key: value for key, value in hello.items() if value is not None}
+
+    def test_websocket_hello_redelivers_a_job_its_restarted_process_lost(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        # The agent process restarted seconds after starting the job; its
+        # new session's hello does not list it. The job goes back to the
+        # agent at once instead of holding its repository until the reaper.
+        registered, _, job = self._agent_with_a_young_running_job(
+            test_client, test_db, admin_headers
+        )
+
+        with test_client.websocket_connect(
+            "/api/agents/session",
+            headers=_agent_headers(registered["agent_token"]),
+        ) as websocket:
+            websocket.send_json(self._hello(registered))
+            assert websocket.receive_json()["type"] == "hello_ack"
+            # The hello commits its recovery before the ack; checked before
+            # the receive below so a job left running fails instead of
+            # waiting on a command that never comes.
+            test_db.refresh(job)
+            assert job.status in ("queued", "claimed")
+            assert job.started_at is None
+
+            command = websocket.receive_json()
+            assert command["type"] == "command"
+            assert command["job_id"] == job.id
+
+    @pytest.mark.parametrize(
+        "stored_version,hello_fields",
+        [
+            # Before 0.1.4 the hello always sent an empty list.
+            (None, {"agent_version": "0.1.3"}),
+            # A list the hello left out is not an empty one.
+            (None, {"running_job_ids": None}),
+            # The version on record may belong to another process.
+            ("0.2.0", {"agent_version": None}),
+        ],
+    )
+    def test_websocket_hello_keeps_a_young_job_it_cannot_vouch_for(
+        self,
+        test_client: TestClient,
+        test_db,
+        admin_headers,
+        stored_version,
+        hello_fields,
+    ):
+        registered, agent, job = self._agent_with_a_young_running_job(
+            test_client, test_db, admin_headers
+        )
+        agent.agent_version = stored_version
+        test_db.commit()
+
+        with test_client.websocket_connect(
+            "/api/agents/session",
+            headers=_agent_headers(registered["agent_token"]),
+        ) as websocket:
+            websocket.send_json(self._hello(registered, **hello_fields))
+            assert websocket.receive_json()["type"] == "hello_ack"
+            test_db.refresh(job)
+            assert job.status == "running"
+            assert job.started_at is not None
+
+    def test_websocket_hello_keeps_a_young_job_while_another_session_is_open(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        # A rollout that starts the new process before stopping the old one:
+        # the old process still runs the job, and its session is still open
+        # when the new one says hello with an empty list.
+        registered, _, job = self._agent_with_a_young_running_job(
+            test_client, test_db, admin_headers
+        )
+        headers = _agent_headers(registered["agent_token"])
+
+        with test_client.websocket_connect(
+            "/api/agents/session", headers=headers
+        ) as old_process:
+            old_process.send_json(self._hello(registered, running_job_ids=[job.id]))
+            assert old_process.receive_json()["type"] == "hello_ack"
+
+            with test_client.websocket_connect(
+                "/api/agents/session", headers=headers
+            ) as new_process:
+                new_process.send_json(self._hello(registered))
+                assert new_process.receive_json()["type"] == "hello_ack"
+                test_db.refresh(job)
+                assert job.status == "running"
+                assert job.started_at is not None
+
     def test_websocket_session_dispatches_durable_job_without_polling(
         self, test_client: TestClient, test_db, admin_headers
     ):

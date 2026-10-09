@@ -31,7 +31,7 @@ from app.core.agent_auth import (
     resolve_agent_from_token,
 )
 from app.core.agent_constants import DEFAULT_AGENT_POLL_INTERVAL_SECONDS
-from app.core.agent_versions import borg_pin_satisfied
+from app.core.agent_versions import borg_pin_satisfied, hello_lists_running_jobs
 from app.core.borg_errors import is_borg_warning_exit_code
 from app.core.security import get_password_hash, verify_password
 from app.database.database import get_db
@@ -104,16 +104,19 @@ FINAL_AGENT_JOB_STATUSES = {
 # claim→start gap is real work in progress, not a dropped delivery, so a job
 # only requeues once it has sat idle longer than this.
 #
-# At hello it is not needed for the case it was originally sized for. A
-# session agent that just said hello cannot have a delivery in flight that
-# predates its own hello — so an undelivered claimed job (started_at NULL)
-# the agent does not list in running_job_ids is requeued regardless of age
-# on that path. This window still applies to every other job seen at hello
-# (running jobs, and claimed jobs still reported as running). Without this
-# split, a reconnect inside the window found the stranded job "too fresh"
-# and had no further chance to recover it until the next disconnect or the
-# reaper — session heartbeats are WS messages that never call this function,
-# so hello was the only opportunity.
+# At hello the window does not apply. A session agent that just said hello
+# cannot have a delivery in flight that predates its own hello, and its
+# running_job_ids lists every job its process still runs — so a job it does
+# not list is running nowhere: undelivered (started_at NULL), started by a
+# process that has since restarted, or asked to cancel. Each is recovered
+# regardless of age on that path. Without this, a reconnect inside the
+# window found the stranded job "too fresh" and had no further chance to
+# recover it until the next disconnect or the reaper — session heartbeats
+# are WS messages that never call this function, so hello was the only
+# opportunity. An agent older than HELLO_LISTS_RUNNING_JOBS_SINCE always
+# sends an empty list, so for it only undelivered and cancel-requested jobs
+# skip the window, as they did before. The same holds while another session
+# of the agent is still connected: its process may run the job.
 #
 # Two minutes gives a polling agent room to reclaim its own work well before
 # the reaper acts. It is safe to be this short because the requeue already
@@ -511,7 +514,8 @@ def _requeue_stale_agent_jobs(
     *,
     now: datetime,
     running_job_ids: list[int],
-    ignore_age_for_undelivered: bool = False,
+    at_hello: bool = False,
+    running_job_ids_complete: bool = False,
 ) -> None:
     running_ids = set(running_job_ids)
     stale_cutoff = now - STALE_AGENT_JOB_REQUEUE_AFTER
@@ -528,11 +532,14 @@ def _requeue_stale_agent_jobs(
             continue
 
         undelivered = job.status == "claimed" and job.started_at is None
-        # A hello's running_job_ids is authoritative for a job the agent was
-        # asked to cancel too: absent from it, the cancel is done, and the
-        # row must not hold the repository until the reaper.
-        skip_age_check = ignore_age_for_undelivered and (
-            undelivered or job.status == "cancel_requested"
+        # A complete hello's running_job_ids is authoritative: a job absent
+        # from it is running nowhere, however recently it was claimed or
+        # started, and must not hold the repository until the reaper. A hello
+        # from an agent too old to list its jobs always carries an empty
+        # list, so there only an undelivered job and a cancel request skip
+        # the window, as before.
+        skip_age_check = at_hello and (
+            running_job_ids_complete or undelivered or job.status == "cancel_requested"
         )
         if not skip_age_check and _job_activity_at(job) > stale_cutoff:
             continue
@@ -567,7 +574,7 @@ def _requeue_stale_agent_jobs(
                     db,
                     completed_at=now,
                     stale_cutoff=stale_cutoff,
-                    ignore_age=ignore_age_for_undelivered,
+                    ignore_age=at_hello,
                 )
             continue
 
@@ -586,7 +593,7 @@ def _requeue_stale_agent_jobs(
                 db,
                 completed_at=now,
                 stale_cutoff=stale_cutoff,
-                ignore_age=ignore_age_for_undelivered,
+                ignore_age=at_hello,
             )
             continue
 
@@ -1805,7 +1812,17 @@ async def session(websocket: WebSocket, db: Session = Depends(get_db)):
             current_agent,
             now=now,
             running_job_ids=hello.running_job_ids,
-            ignore_age_for_undelivered=True,
+            at_hello=True,
+            # Judged on this hello alone: a version kept from an earlier
+            # report, or a list the hello left out, proves nothing about
+            # what this process runs. Nor does the list speak for another
+            # process while that one still holds a session for this agent,
+            # as during a rollout that starts the new one first.
+            running_job_ids_complete=(
+                "running_job_ids" in hello.model_fields_set
+                and hello_lists_running_jobs(hello.agent_version)
+                and not agent_connection_manager.is_connected(current_agent.id)
+            ),
         )
         db.commit()
 
