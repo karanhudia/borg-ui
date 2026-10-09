@@ -78,6 +78,7 @@ from app.services.maintenance_state import apply_compact_stats
 from app.services.operations.followups import (
     enqueue_backup_followups,
 )
+from app.services.operations.vocab import TERMINAL_STATUSES
 from app.utils.datetime_utils import serialize_datetime, utc_now
 
 logger = structlog.get_logger()
@@ -848,6 +849,13 @@ def _maintenance_kind(operation_job: Any) -> Optional[str]:
 def _sync_repository_operation_progress(agent_job: AgentJob, db: Session) -> None:
     operation_job = _get_repository_operation_job(agent_job, db)
     if not operation_job:
+        return
+    # The completion is recorded in a worker thread with its own session
+    # (`_record_job_completion`), and the agent's last frames often arrive
+    # while it runs. A report that read the job as active before that commit
+    # can read the operation after it: the operation already carries the
+    # verdict, and `running` would reopen it (#1366).
+    if operation_job.operation.status in TERMINAL_STATUSES:
         return
     if getattr(operation_job, "started_at", None) is None:
         operation_job.started_at = agent_job.started_at or _now_utc()
