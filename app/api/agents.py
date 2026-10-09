@@ -48,7 +48,10 @@ from app.services.operations.backup_facade import (
     is_backup_operation,
 )
 from app.services.operations.job_facade import resolve_agent_maintenance_job
-from app.services.repository_executor import lock_failure_was_deferred
+from app.services.repository_executor import (
+    SCRIPT_AGENT_JOB_TYPE,
+    lock_failure_was_deferred,
+)
 from app.services.agent_artifact_relay import (
     CLOSE_ACK_TIMEOUT_SECONDS,
     agent_artifact_relay,
@@ -1197,8 +1200,17 @@ def _complete_agent_job(
             error_message=f"agent reported a malformed return code: {return_code!r}",
             completed_at=completed_at,
         )
-    warning = is_borg_warning_exit_code(return_code)
-    if isinstance(return_code, int) and return_code != 0 and not warning:
+    # A script's return code is the hook's, not Borg's: the job completes
+    # with the report intact (stdout/stderr included) and the hook caller
+    # reads the code by the agent-script contract (0 / 1 warning / >1).
+    borg_exit_code = job.job_type != SCRIPT_AGENT_JOB_TYPE
+    warning = borg_exit_code and is_borg_warning_exit_code(return_code)
+    if (
+        borg_exit_code
+        and isinstance(return_code, int)
+        and return_code != 0
+        and not warning
+    ):
         # A completion report carrying an explicit borg *error* code is a
         # failure, no matter which transport delivered it - the server is
         # authoritative over the classification.

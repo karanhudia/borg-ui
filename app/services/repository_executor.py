@@ -1004,6 +1004,7 @@ def queue_agent_backup_job(
 
 
 SCRIPT_RUN_CAPABILITY = "script.run"
+SCRIPT_AGENT_JOB_TYPE = "script"
 
 
 def build_agent_script_payload(
@@ -1068,7 +1069,7 @@ def queue_agent_script_job(
     now = datetime.utcnow()
     agent_job = AgentJob(
         agent_machine_id=agent.id,
-        job_type="script",
+        job_type=SCRIPT_AGENT_JOB_TYPE,
         status="queued",
         payload=build_agent_script_payload(script_name, env),
         created_at=now,
