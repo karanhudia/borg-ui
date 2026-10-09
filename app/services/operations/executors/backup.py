@@ -13,8 +13,6 @@ failure that still changed the repository, a post-backup hook failing after
 """
 
 import asyncio
-import json
-from typing import Optional
 
 import structlog
 
@@ -28,9 +26,9 @@ from app.services.operations.backup_facade import (
     AGENT_PARAMS,
     CANCEL_MESSAGES,
     CANCELLED_BY_USER,
-    POST_CREATE_FAILURE_KEYS,
     SERVICE_PARAMS,
     BackupJobFacade,
+    failed_after_create,
     resolve_backup_job,
 )
 from app.services.operations.executors.maintenance import cancel_watcher
@@ -49,14 +47,6 @@ logger = structlog.get_logger()
 # stand the backup down gracefully, and `backup_service` writes that word and
 # returns. Reading it as unfinished would record a failure instead.
 _TERMINAL = TERMINAL_STATUSES
-
-
-def _error_key(message: Optional[str]) -> Optional[str]:
-    try:
-        parsed = json.loads(message or "")
-    except (TypeError, ValueError):
-        return None
-    return parsed.get("key") if isinstance(parsed, dict) else None
 
 
 async def _cancel_server_backup(operation_id: int) -> bool:
@@ -188,7 +178,7 @@ async def run_backup(ctx) -> Outcome:
                 "nfiles": job.nfiles or 0,
             },
         )
-    if status == "failed" and _error_key(job.error_message) in POST_CREATE_FAILURE_KEYS:
+    if failed_after_create(status, job.error_message):
         _enqueue_post_create_chain(ctx, operation)
     return Outcome(status="failed", error_message=job.error_message)
 
