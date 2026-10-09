@@ -126,6 +126,51 @@ const runWithKnownTotal: BackupPlanRun = {
   ],
 }
 
+// One repository with a total next to an agent repository without one: only
+// the first counts toward the percentage (50.0 %), the agent's bytes do not.
+const runWithMixedTotals: BackupPlanRun = {
+  ...runWithKnownTotal,
+  id: 355,
+  repositories: [
+    {
+      ...runWithKnownTotal.repositories[0],
+      backup_job: {
+        ...runWithKnownTotal.repositories[0].backup_job!,
+        execution_mode: 'local',
+        progress_details: {
+          original_size: 116_000_000_000,
+          total_expected_size: 232_000_000_000,
+          nfiles: 12_004,
+          current_file: '/srv/accounting/ledgers/2026/invoices-2026-05.sqlite',
+        },
+      },
+    },
+    {
+      ...runWithKnownTotal.repositories[0],
+      id: 423,
+      repository_id: 32,
+      repository: {
+        id: 32,
+        name: 'Offsite repository',
+        path: '/backups/offsite',
+        borg_version: 2,
+      },
+      backup_job: {
+        ...runWithKnownTotal.repositories[0].backup_job!,
+        id: 913,
+        repository_id: 32,
+        repository: '/backups/offsite',
+        progress: null,
+        progress_details: {
+          original_size: 90_000_000_000,
+          nfiles: 9_310,
+          current_file: '/srv/accounting/archive/2025.tar',
+        },
+      },
+    },
+  ],
+}
+
 const meta = {
   title: 'Components/ActiveBackupPlanRunCard',
   component: ActiveBackupPlanRunCard,
@@ -166,5 +211,12 @@ export const BackupInProgress: Story = {
 export const BackupInProgressWithKnownTotal: Story = {
   args: {
     run: runWithKnownTotal,
+  },
+}
+
+// Mixed: a repository without a total stays out of the percentage.
+export const BackupInProgressWithMixedTotals: Story = {
+  args: {
+    run: runWithMixedTotals,
   },
 }

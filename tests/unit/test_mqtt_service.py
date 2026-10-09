@@ -729,6 +729,46 @@ class TestRepositoryStatePublisher:
 
         assert result is True
 
+    @pytest.mark.parametrize(
+        ("original_size", "expected"),
+        [(0, "initializing"), (846_634_729_941, "processing files")],
+    )
+    def test_a_backup_without_a_percentage_is_processing_once_it_reads(
+        self, db_session, original_size, expected
+    ):
+        """An agent backup has no percentage (#1154): its phase follows the
+        bytes it has read, not the missing percentage."""
+        repo = Repository(name="Test", path="/repo")
+        db_session.add(repo)
+        db_session.commit()
+        db_session.refresh(repo)
+
+        running_job = seed_job_operation(
+            db_session,
+            "backup",
+            repository=repo.path,
+            status="running",
+            original_size=original_size,
+        )
+        db_session.commit()
+
+        mqtt_service = _create_mqtt_service_configured()
+        publisher = RepositoryStatePublisher(mqtt_service)
+
+        assert publisher.publish_repository_data(
+            repo,
+            failed_repository_ids=set(),
+            latest_jobs_by_repository={},
+            running_jobs_by_repository={
+                repo.path: resolve_backup_job(db_session, running_job.id)
+            },
+        )
+
+        status = _payload_for_topic(
+            mqtt_service.publish, f"repositories/{repo.id}/backup/status"
+        )
+        assert status["status"] == expected
+
 
 # =============================================================================
 # ServerStatePublisher Tests

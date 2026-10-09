@@ -2250,6 +2250,100 @@ class TestBackupService:
         assert job.progress_percent > 0
         notifications.send_backup_success.assert_awaited_once()
 
+    @pytest.mark.asyncio
+    async def test_execute_backup_without_a_total_keeps_the_running_marker(
+        self, backup_service, test_db, tmp_path
+    ):
+        """Without a source total the server path marks a running backup that
+        has read data with 1 %; an unknown percentage, which the backup reads
+        as None (#1154), must still get it."""
+        repo_path = tmp_path / "no-total-repo"
+        repo_path.mkdir()
+        (repo_path / "data").mkdir()
+        (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        source_file = tmp_path / "source.txt"
+        source_file.write_text("source")
+
+        repo = Repository(
+            name="No Total Repo",
+            path=str(repo_path),
+            encryption="none",
+            repository_type="local",
+            source_directories=f'["{source_file}"]',
+            compression="none",
+        )
+        test_db.add(repo)
+        test_db.flush()
+        job = seed_job_operation(
+            test_db, "backup", repository=repo.path, status="pending"
+        )
+        test_db.commit()
+        operation_id = job.id
+
+        seen = []
+
+        class RecordingStream(AsyncLineStream):
+            async def __anext__(self):
+                seen.append(test_db.get(Operation, operation_id).progress_percent)
+                return await super().__anext__()
+
+        fake_process = FakeProcess(returncode=0)
+        fake_process.stdout = RecordingStream(
+            [
+                '{"type":"archive_progress","original_size":1024,"compressed_size":512,'
+                '"deduplicated_size":256,"nfiles":3,"path":"source.txt","finished":false}',
+            ]
+        )
+        notifications = MagicMock()
+        notifications.send_backup_start = AsyncMock()
+        notifications.send_backup_success = AsyncMock()
+        notifications.send_backup_warning = AsyncMock()
+        notifications.send_backup_failure = AsyncMock()
+
+        with (
+            patch.object(
+                backup_service,
+                "_execute_hooks",
+                AsyncMock(
+                    return_value={
+                        "success": True,
+                        "execution_logs": [],
+                        "scripts_executed": 0,
+                        "scripts_failed": 0,
+                        "using_library": False,
+                    }
+                ),
+            ),
+            patch.object(
+                backup_service,
+                "_prepare_source_paths",
+                AsyncMock(return_value=([str(source_file)], [])),
+            ),
+            patch.object(
+                backup_service, "_calculate_and_update_size_background", AsyncMock()
+            ),
+            patch.object(backup_service, "_update_archive_stats", AsyncMock()),
+            patch(
+                "app.services.backup_service.resolve_repo_ssh_key_file",
+                return_value=None,
+            ),
+            patch(
+                "app.services.backup_service.asyncio.create_subprocess_exec",
+                return_value=fake_process,
+            ),
+            patch(
+                "app.services.backup_service.asyncio.create_task",
+                side_effect=_discard_background_task,
+            ),
+            patch("app.services.backup_service.notification_service", notifications),
+            patch("app.services.backup_service.mqtt_service") as mqtt,
+        ):
+            mqtt.sync_state_with_db = Mock()
+            await backup_service.execute_backup(job.id, repo.path, db=test_db)
+
+        # read before the progress line, then after it
+        assert seen == [None, 1.0]
+
     def test_running_processes_tracking(self, backup_service):
         """Test that running_processes dict is managed correctly"""
         assert backup_service.running_processes == {}

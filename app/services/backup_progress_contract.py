@@ -59,7 +59,8 @@ def serialize_backup_progress_details(job, repo: Optional[Repository]) -> dict:
     supported_fields = set(get_backup_progress_fields(repo))
     progress_details = {
         "current_file": job.current_file or "",
-        "progress_percent": job.progress_percent or 0,
+        # None while no proportion is known: borg create reports none
+        "progress_percent": job.progress_percent,
         "backup_speed": job.backup_speed or 0.0,
         "total_expected_size": job.total_expected_size or 0,
         "estimated_time_remaining": job.estimated_time_remaining or 0,

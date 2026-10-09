@@ -618,8 +618,9 @@ async def test_update_progress_from_json_only_sets_percent_with_known_total(test
     assert without_total.compressed_size == 250
     assert without_total.deduplicated_size == 125
     assert without_total.nfiles == 7
-    assert without_total.progress == 0
-    assert without_total.progress_percent == 0.0
+    # no total, no proportion: unknown, not 0 % (#1154)
+    assert without_total.progress is None
+    assert without_total.progress_percent is None
     assert with_total.progress == 50
     assert with_total.progress_percent == 50.0
 

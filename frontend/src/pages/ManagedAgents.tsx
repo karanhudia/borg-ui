@@ -2396,6 +2396,13 @@ export function JobsTable({
           {jobs.map((job) => {
             const agent = agentsById.get(job.agent_machine_id)
             const canCancel = !FINAL_JOB_STATUSES.has(job.status)
+            const percent = job.progress_percent ?? 0
+            // borg create reports no proportion: a percentage a running backup
+            // carries belongs to a step inside it (the cache sync), so it is
+            // unknown, as it is for any running job that reported none.
+            const inFlight = job.status === 'running' || job.status === 'cancel_requested'
+            const percentUnknown =
+              inFlight && (getJobKind(job) === 'backup.create' || job.progress_percent == null)
             return (
               <TableRow key={job.id} hover>
                 <TableCell>
@@ -2421,18 +2428,20 @@ export function JobsTable({
                 </TableCell>
                 <TableCell sx={{ minWidth: 160 }}>
                   <LinearProgress
-                    variant="determinate"
-                    value={Math.max(0, Math.min(100, job.progress_percent ?? 0))}
+                    variant={percentUnknown ? 'indeterminate' : 'determinate'}
+                    value={percentUnknown ? undefined : Math.max(0, Math.min(100, percent))}
                     sx={{ borderRadius: 1, height: 7 }}
                   />
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: 'text.secondary',
-                    }}
-                  >
-                    {Math.round(job.progress_percent ?? 0)}%
-                  </Typography>
+                  {!percentUnknown && (
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: 'text.secondary',
+                      }}
+                    >
+                      {Math.round(percent)}%
+                    </Typography>
+                  )}
                 </TableCell>
                 <TableCell>{formatDate(job.updated_at, t('managedAgents.page.never'))}</TableCell>
                 <TableCell align="right">

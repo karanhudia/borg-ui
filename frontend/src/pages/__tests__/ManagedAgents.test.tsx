@@ -1106,6 +1106,62 @@ describe('ManagedAgents', () => {
     expect(jobLogButton.querySelector('svg.lucide-terminal')).not.toBeInTheDocument()
   })
 
+  it('shows a running job without a backup percentage as unknown, not 0%', () => {
+    const agent = {
+      id: 7,
+      agent_id: 'agent-client-7',
+      name: 'client',
+      hostname: 'client-01',
+      status: 'online',
+      created_at: '2026-05-18T09:00:00.000Z',
+      updated_at: '2026-05-18T10:00:00.000Z',
+    } as AgentMachineResponse
+    const job = (
+      id: number,
+      progress_percent: number | null,
+      job_kind = 'repository.check',
+      status = 'running'
+    ) =>
+      ({
+        id,
+        agent_machine_id: 7,
+        job_type: 'repository',
+        status,
+        payload: { job_kind },
+        progress_percent,
+        created_at: '2026-05-18T09:00:00.000Z',
+        updated_at: '2026-05-18T10:00:00.000Z',
+      }) as AgentJobResponse
+
+    renderWithProviders(
+      <JobsTable
+        jobs={[
+          job(601, 0),
+          job(602, null),
+          job(603, 100, 'backup.create'),
+          job(605, 100, 'backup.create', 'cancel_requested'),
+          job(604, 42),
+        ]}
+        agentsById={new Map([[agent.id, agent]])}
+        onCancel={vi.fn()}
+        onViewLogs={vi.fn()}
+        isCanceling={false}
+      />
+    )
+
+    // a running backup's 100 % is the cache sync's, not the backup's
+    const [zero, none, backup, cancelling, known] = screen.getAllByRole('progressbar')
+    // a reported 0 % is a figure, not an unknown one
+    expect(zero).toHaveAttribute('aria-valuenow', '0')
+    expect(none).not.toHaveAttribute('aria-valuenow')
+    expect(backup).not.toHaveAttribute('aria-valuenow')
+    expect(cancelling).not.toHaveAttribute('aria-valuenow')
+    expect(known).toHaveAttribute('aria-valuenow', '42')
+    expect(screen.getByText('0%')).toBeInTheDocument()
+    expect(screen.queryByText('100%')).not.toBeInTheDocument()
+    expect(screen.getByText('42%')).toBeInTheDocument()
+  })
+
   it('opens managed-agent job logs in the shared log viewer', async () => {
     const user = userEvent.setup()
     const agent = {

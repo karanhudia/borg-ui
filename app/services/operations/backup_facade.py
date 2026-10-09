@@ -10,7 +10,7 @@ Translations, all in one place:
 - `status`: the legacy word `pending` is the operations word `queued`.
 - `execution_mode`: the legacy word `local` is the spec 6.1 word `server`.
 - `progress` (an int) and `progress_percent` are both
-  `operations.progress_percent`.
+  `operations.progress_percent`; None, no proportion known, stays None.
 - `logs`, which the services assign once at the end, is the operation's log
   file (spec 6.1); the marker text "Logs saved to: ..." the local service
   writes when it kept its own file is dropped, since the row already names
@@ -220,21 +220,26 @@ class BackupJobFacade:
 
     # -- progress ----------------------------------------------------------
 
+    # None is "no proportion known", which is not 0 %: borg create reports
+    # none, so a backup has one only against a source total.
+
     @property
-    def progress(self) -> int:
-        return int(self.operation.progress_percent or 0)
+    def progress(self) -> Optional[int]:
+        percent = self.operation.progress_percent
+        return None if percent is None else int(percent)
 
     @progress.setter
     def progress(self, value) -> None:
-        self.operation.progress_percent = float(value or 0)
+        self.operation.progress_percent = None if value is None else float(value)
 
     @property
-    def progress_percent(self) -> float:
-        return float(self.operation.progress_percent or 0.0)
+    def progress_percent(self) -> Optional[float]:
+        percent = self.operation.progress_percent
+        return None if percent is None else float(percent)
 
     @progress_percent.setter
     def progress_percent(self, value) -> None:
-        self.operation.progress_percent = float(value or 0.0)
+        self.operation.progress_percent = None if value is None else float(value)
 
     @property
     def current_file(self) -> Optional[str]:

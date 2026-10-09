@@ -388,6 +388,34 @@ export const FleetOverview: Story = {
   ),
 }
 
+// A running agent backup has no percentage (borg create reports none; the
+// 100 here is a cache sync's): its bar runs indeterminate without a figure,
+// next to a running check that reports one.
+export const AgentJobsWithoutPercentage: Story = {
+  render: () => (
+    <Box sx={{ p: 3, maxWidth: 1100 }}>
+      <JobsTable
+        jobs={[
+          { ...jobs[0], id: 503, progress_percent: 100 },
+          {
+            ...jobs[0],
+            id: 502,
+            backup_job_id: null,
+            job_type: 'repository',
+            payload: { job_kind: 'repository.check' },
+            current_file: null,
+          },
+          jobs[1],
+        ]}
+        agentsById={agentsById}
+        onCancel={() => {}}
+        onViewLogs={() => {}}
+        isCanceling={false}
+      />
+    </Box>
+  ),
+}
+
 export const SetupHelpDetails: Story = {
   render: () => (
     <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>

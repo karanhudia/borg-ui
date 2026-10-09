@@ -2330,7 +2330,7 @@ class BackupService:
                                         )
                                     else:
                                         # Show indeterminate progress (1%) while backup is running
-                                        if job.progress == 0 and job.original_size > 0:
+                                        if not job.progress and job.original_size > 0:
                                             job.progress = 1
                                             job.progress_percent = 1.0
 
