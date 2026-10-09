@@ -2710,6 +2710,86 @@ class TestBackupServicePeriodicSync:
             encoding="utf-8"
         ) == "{}"
 
+    async def _stage_canary_over_existing_target(
+        self, backup_service, db_session, monkeypatch, temp_root, mount_points
+    ):
+        connection = SSHConnection(
+            host="example.com",
+            username="borg",
+            port=22,
+            default_path="/etc/komodo",
+        )
+        db_session.add(connection)
+        db_session.commit()
+        db_session.refresh(connection)
+
+        canary_dir = (
+            backup_service.log_dir.parent
+            / ".borg-ui/restore-canaries/repository-1/.borgui-canary"
+        )
+        canary_dir.mkdir(parents=True)
+        (canary_dir / "manifest.json").write_text("{}", encoding="utf-8")
+
+        async def mock_mount_ssh_paths_shared(
+            connection_id, remote_paths, job_id, preserve_symlinks=False
+        ):
+            return str(temp_root), [("mount-1", "etc/komodo")]
+
+        monkeypatch.setattr(
+            "app.services.backup_service.SessionLocal", lambda: db_session
+        )
+        monkeypatch.setattr(
+            "app.services.mount_service.mount_service.mount_ssh_paths_shared",
+            mock_mount_ssh_paths_shared,
+        )
+        monkeypatch.setattr("app.utils.fs.active_mount_points", lambda: mount_points)
+
+        return await backup_service._prepare_source_paths(
+            [
+                f"ssh://{connection.username}@{connection.host}:{connection.port}/etc/komodo",
+                str(canary_dir),
+            ],
+            job_id=42,
+            source_connection_id=connection.id,
+        )
+
+    @pytest.mark.asyncio
+    async def test_prepare_source_paths_replaces_stale_staged_canary(
+        self, backup_service, db_session, monkeypatch, tmp_path
+    ):
+        staged_archive_path = ".borg-ui/restore-canaries/repository-1/.borgui-canary"
+        temp_root = tmp_path / "sshfs_mount_test"
+        stale = temp_root / staged_archive_path
+        stale.mkdir(parents=True)
+        (stale / "stale.json").write_text("old", encoding="utf-8")
+
+        processed_paths, _ = await self._stage_canary_over_existing_target(
+            backup_service, db_session, monkeypatch, temp_root, set()
+        )
+
+        assert processed_paths == ["etc/komodo", staged_archive_path]
+        assert sorted(p.name for p in stale.iterdir()) == ["manifest.json"]
+
+    @pytest.mark.asyncio
+    async def test_prepare_source_paths_refuses_to_replace_canary_with_mount_inside(
+        self, backup_service, db_session, monkeypatch, tmp_path
+    ):
+        temp_root = tmp_path / "sshfs_mount_test"
+        mounted = (
+            temp_root / ".borg-ui/restore-canaries/repository-1/.borgui-canary/mnt"
+        )
+        mounted.mkdir(parents=True)
+        (mounted / "remote-file").write_text("remote", encoding="utf-8")
+
+        with pytest.raises(RuntimeError, match="restore canary"):
+            await self._stage_canary_over_existing_target(
+                backup_service, db_session, monkeypatch, temp_root, {str(mounted)}
+            )
+
+        assert (mounted / "remote-file").read_text(encoding="utf-8") == "remote"
+        # Registered before staging, so the job's cleanup still unmounts them.
+        assert backup_service.ssh_mounts[42] == ["mount-1"]
+
     def test_resolve_backup_command_paths_mixes_remote_source_and_local_canary(
         self, backup_service
     ):
