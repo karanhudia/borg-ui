@@ -969,6 +969,92 @@ class BorgRouter:
         finally:
             db.close()
 
+    async def _run_agent_repository_probe(
+        self, *, job_kind: str, timeout: int, operation: Optional[dict] = None
+    ) -> dict:
+        """Run a repository job on the managed agent and answer like the
+        server's verify and init: ``success``, and borg's reason as ``error``.
+
+        Queued through a session of its own: queueing commits, and a caller
+        in the middle of an update must not have its pending changes stored
+        with it. An agent without a session gets no job (a queued one would
+        hold the caller until the timeout); one the dispatch could not hand
+        over is cancelled again, and so is an init the caller stopped waiting
+        for.
+        """
+        from fastapi import HTTPException
+
+        from app.database.database import SessionLocal
+        from app.services.agent_connection_manager import agent_connection_manager
+        from app.services.agent_job_dispatcher import (
+            dispatch_agent_cancel_if_connected,
+            dispatch_agent_job_best_effort,
+        )
+        from app.services.repository_executor import (
+            abandon_agent_repository_operation_job,
+            cancel_unclaimed_agent_repository_job,
+            queue_agent_repository_operation_job,
+            wait_for_agent_repository_operation_job,
+        )
+
+        offline = {"success": False, "agent_offline": True}
+        agent_machine_id = getattr(self.repo, "agent_machine_id", None)
+        if agent_machine_id is None or not agent_connection_manager.is_connected(
+            agent_machine_id
+        ):
+            return offline
+
+        db = SessionLocal()
+        try:
+            # The location is the new path, not the one the repository's
+            # active work holds, so no admission: the server's check of a
+            # changed path had none either.
+            agent_job = queue_agent_repository_operation_job(
+                db,
+                self.repo,
+                job_kind=job_kind,
+                operation=operation,
+                check_admission=False,
+            )
+
+            async def _abandon():
+                # Also a job the agent already runs: the caller no longer
+                # waits for it, and an init would create a repository at a
+                # location nothing names.
+                abandoned = abandon_agent_repository_operation_job(db, agent_job.id)
+                if abandoned is not None and abandoned.status == "cancel_requested":
+                    await dispatch_agent_cancel_if_connected(abandoned)
+
+            try:
+                if not await dispatch_agent_job_best_effort(
+                    db, agent_job, repository_id=self.repo.id
+                ):
+                    # A report of the agent may have moved it past `queued`
+                    # before the send failed.
+                    await _abandon()
+                    return offline
+                await wait_for_agent_repository_operation_job(
+                    db, agent_job.id, timeout_seconds=timeout
+                )
+            except asyncio.CancelledError:
+                # not an Exception: a cancelled request ends the send or the wait
+                if job_kind == "repository.init":
+                    await _abandon()
+                raise
+            except HTTPException as exc:
+                if exc.status_code == 504 and job_kind == "repository.init":
+                    await _abandon()
+                elif exc.status_code == 504:
+                    cancel_unclaimed_agent_repository_job(db, agent_job.id)
+                if exc.status_code != 502:
+                    raise
+                detail = exc.detail if isinstance(exc.detail, dict) else {}
+                reason = (detail.get("params") or {}).get("reason") or ""
+                return {"success": False, "error": reason}
+            return {"success": True}
+        finally:
+            db.close()
+
     async def check(self, job_id: int, *, raise_busy: bool = False) -> None:
         """Run a repository integrity check.
 
@@ -1198,7 +1284,17 @@ class BorgRouter:
     async def verify_repository(
         self, ssh_key_id: int = None, timeout: int = 60
     ) -> dict:
-        """Verify repository accessibility through the version-aware service layer."""
+        """Verify repository accessibility through the version-aware service layer.
+
+        agent: runs `repository.info` on the managed agent, the machine that
+        reaches the repository; ``ssh_key_id`` is server-side only. An agent
+        without a session answers ``{"success": False, "agent_offline": True}``
+        at once instead of leaving the caller waiting for it.
+        """
+        if self._is_agent():
+            return await self._run_agent_repository_probe(
+                job_kind="repository.info", timeout=timeout
+            )
         if self.is_v2:
             from app.services.v2.repository_service import repository_v2_service
 
@@ -1225,7 +1321,17 @@ class BorgRouter:
     async def initialize_repository(
         self, ssh_key_id: int = None, init_timeout: int = 300
     ) -> dict:
-        """Initialize repository through the version-aware service layer."""
+        """Initialize repository through the version-aware service layer.
+
+        agent: runs `repository.init` on the managed agent, answering like
+        ``verify_repository`` when the agent has no session.
+        """
+        if self._is_agent():
+            return await self._run_agent_repository_probe(
+                job_kind="repository.init",
+                operation={"encryption": self.repo.encryption},
+                timeout=init_timeout,
+            )
         if self.is_v2:
             from app.services.v2.repository_service import repository_v2_service
 

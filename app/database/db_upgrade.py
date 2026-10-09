@@ -31,7 +31,11 @@ from sqlalchemy import MetaData, create_engine, event, inspect, select, text
 from sqlalchemy.engine import Engine, make_url
 
 from app.config import settings
-from app.database.database import Base, register_utc_session_timezone
+from app.database.database import (
+    Base,
+    register_failing_row_withholding,
+    register_utc_session_timezone,
+)
 import app.database.models  # noqa: F401  (registers every table on Base)
 
 BACKUP_SUFFIX = "_bak"
@@ -140,7 +144,7 @@ def _engine(url: str, *, disposable: bool = False) -> Engine:
     Set from the connect event, never mid-transaction: the pragma is a silent
     no-op inside a transaction.
     """
-    engine = create_engine(url)
+    engine = create_engine(url, hide_parameters=True)
     if engine.dialect.name == "sqlite":
 
         @event.listens_for(engine, "connect")
@@ -155,6 +159,7 @@ def _engine(url: str, *, disposable: bool = False) -> Engine:
     # as the application; alembic reuses this engine's connection, so the
     # session-zone pin has to be here too (no-op on sqlite).
     register_utc_session_timezone(engine)
+    register_failing_row_withholding(engine)
     return engine
 
 
@@ -380,7 +385,7 @@ def _catch_up_source(source_path: Path, catch_up_path: Path) -> None:
     # A plain engine, matching how these migrations ran at startup: several rebuild
     # a table with foreign keys switched off, and enforcing them here would break
     # the ladder on exactly the databases it exists to rescue.
-    ladder_engine = create_engine(_sqlite_url(catch_up_path))
+    ladder_engine = create_engine(_sqlite_url(catch_up_path), hide_parameters=True)
     try:
         with ladder_engine.connect() as conn:
             if inspect(conn).has_table("alembic_version"):
@@ -466,7 +471,7 @@ def alembic_init(
         f"{source_path.stem}_catchup{source_path.suffix}"
     )
     _catch_up_source(source_path, catch_up_path)
-    source_engine = create_engine(_sqlite_url(catch_up_path))
+    source_engine = create_engine(_sqlite_url(catch_up_path), hide_parameters=True)
     target_engine = _engine(target_url, disposable=not to_postgres)
     try:
         # Not head: the transfer can only copy a table the target has, and head

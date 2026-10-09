@@ -28,6 +28,9 @@ engine = create_engine(
     max_overflow=20,
     pool_pre_ping=True,
     echo=False,  # Always disable SQL logging for performance (creates massive log spam)
+    # A failed statement's error text is logged; it must not carry the values,
+    # secrets among them.
+    hide_parameters=True,
 )
 
 # Enable foreign key constraints for SQLite
@@ -82,7 +85,39 @@ def register_utc_session_timezone(target_engine) -> None:
     event.listen(target_engine, "connect", _set_utc_session_timezone)
 
 
+# not_null_violation and check_violation: the refusals whose detail repeats
+# the row ("Failing row contains (...)", in the server's message language)
+_ROW_REPEATING_SQLSTATES = frozenset({"23502", "23514"})
+
+
+def _withhold_failing_row(context) -> None:
+    # PostgreSQL repeats a refused row in its message, values included, and
+    # the message is logged.
+    orig = context.original_exception
+    if getattr(orig, "sqlstate", None) not in _ROW_REPEATING_SQLSTATES:
+        return
+    detail = getattr(getattr(orig, "diag", None), "message_detail", None)
+    if not detail:
+        return
+    for exc in (orig, context.sqlalchemy_exception):
+        if exc is not None and exc.args and isinstance(exc.args[0], str):
+            exc.args = (
+                exc.args[0].replace(detail, "Failing row withheld."),
+                *exc.args[1:],
+            )
+
+
+def register_failing_row_withholding(target_engine) -> None:
+    """Keep the values of a row PostgreSQL refuses out of the error text, as
+    `hide_parameters` keeps a statement's parameters out. No-op on SQLite,
+    whose messages name the constraint only."""
+    if target_engine.dialect.name != "postgresql":
+        return
+    event.listen(target_engine, "handle_error", _withhold_failing_row)
+
+
 register_utc_session_timezone(engine)
+register_failing_row_withholding(engine)
 
 
 # Create session factory
