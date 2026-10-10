@@ -427,15 +427,15 @@ async def startup_event():
     # This runs asynchronously via /app/app/scripts/startup_packages.py
     # Package installation jobs will start in the background after API is ready
 
-    # Start scheduled backup checker (background task)
-    from app.api.schedule import check_scheduled_jobs
-
     # Track background tasks for cleanup
     app.state.background_tasks = []
 
-    task1 = _spawn_background_task(check_scheduled_jobs())
+    # Start scheduled backup checker (background task). It waits for the
+    # startup sweeps: they fail every active plan run, and the ones it
+    # dispatches are this process's own (#1398).
+    sweeps_done = asyncio.Event()
+    task1 = _spawn_background_task(_check_scheduled_jobs_after(sweeps_done))
     app.state.background_tasks.append(task1)
-    logger.info("Scheduled job checker started")
 
     # Operations runner: register executors, start the loop (which recovers
     # interrupted rows), then start the reconcile scheduler that replaces the old
@@ -446,11 +446,29 @@ async def startup_event():
     from app.services.operations.runner import operation_runner
 
     load_default_executors()
+
+    # Set before the runner's own recovery, which is safe because `_recover`
+    # is synchronous: the scheduler resumes only after both have run.
+    def recover_then_schedule() -> None:
+        try:
+            _recover_interrupted_work()
+        finally:
+            sweeps_done.set()
+
+    def schedule_after_runner_failure(task: asyncio.Task) -> None:
+        # a runner that died before its recovery runs no sweep either; a
+        # stopped one is shutting down, and the scheduler with it
+        if task.cancelled() or task.exception() is None:
+            return
+        logger.error("Operations runner failed", error=str(task.exception()))
+        sweeps_done.set()
+
     # `start()` recovers interrupted rows once it holds the runner lease,
     # not before: a process being replaced may still be running them.
     task2 = asyncio.create_task(
-        operation_runner.start(before_recovery=_recover_interrupted_work)
+        operation_runner.start(before_recovery=recover_then_schedule)
     )
+    task2.add_done_callback(schedule_after_runner_failure)
     app.state.background_tasks.append(task2)
     task2b = asyncio.create_task(reconcile_scheduler.start())
     app.state.background_tasks.append(task2b)
@@ -529,17 +547,31 @@ async def startup_event():
     logger.info("Borg UI started successfully")
 
 
+async def _check_scheduled_jobs_after(sweeps_done: asyncio.Event) -> None:
+    from app.api.schedule import check_scheduled_jobs
+
+    logger.info("Scheduled job checker waits for the startup sweeps")
+    await sweeps_done.wait()
+    logger.info("Scheduled job checker running")
+    await check_scheduled_jobs()
+
+
 def _recover_interrupted_work() -> None:
     """Startup sweeps of rows a restart left behind that the runner's own
     recovery does not cover. Called by the runner once it holds its lease, so
     a process being replaced keeps its work."""
     from app.database.database import SessionLocal
+    from app.services.backup_plan_execution_service import (
+        backup_plan_execution_service,
+    )
     from app.utils.process_utils import cleanup_orphaned_jobs
 
     try:
         db = SessionLocal()
         try:
-            cleanup_orphaned_jobs(db)
+            # A plan run started by hand while the runner waited for the
+            # lease is this process's own, not one the restart interrupted.
+            cleanup_orphaned_jobs(db, backup_plan_execution_service.live_run_ids)
         finally:
             db.close()
         logger.info("Orphaned job cleanup completed")
