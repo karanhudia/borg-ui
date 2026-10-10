@@ -31,6 +31,7 @@ from agent.borg_ui_agent.backup import (
 )
 from agent.borg_ui_agent.borg import is_warning_return_code
 from agent.borg_ui_agent.borg_flags import parse_borg_flags
+from agent.borg_ui_agent.children import track_child
 from agent.borg_ui_agent.cancel import (
     KILL_GROUP_AFTER_SECONDS,
     SELF_CANCELLING_JOB_KINDS,
@@ -1038,6 +1039,7 @@ def _run_cancellable(
     if os.name == "posix":
         popen_kwargs["start_new_session"] = True
     process = subprocess.Popen(cmd, **popen_kwargs)
+    track_child(process)
     done = threading.Event()
     cancelled = _start_cancel_poller(process, should_cancel, done)
     try:
@@ -1093,6 +1095,7 @@ def _execute_limited_output_repository_operation(
             env=env,
             start_new_session=os.name == "posix",
         )
+        track_child(process)
     except OSError as exc:
         error_message = f"Failed to start {payload.job_kind}: {exc}"
         client.send_log(job_id, sequence=1, stream="stderr", message=error_message)
@@ -1328,6 +1331,7 @@ def _execute_streaming_artifact_operation(
             # Own session so the watchdog's process-group SIGTERM hits only borg.
             popen_kwargs["start_new_session"] = True
         process = subprocess.Popen(cmd, **popen_kwargs)
+        track_child(process)
     except OSError as exc:
         error_message = f"Failed to start {payload.job_kind}: {exc}"
         client.send_log(job_id, sequence=1, stream="stderr", message=error_message)
@@ -1662,6 +1666,7 @@ def _execute_streaming_repository_operation(
         if os.name == "posix":
             popen_kwargs["start_new_session"] = True
         process = subprocess.Popen(cmd, **popen_kwargs)
+        track_child(process)
     except OSError as exc:
         error_message = f"Failed to start {payload.job_kind}: {exc}"
         client.send_log(
@@ -1899,6 +1904,7 @@ def _execute_restore_operation(
             if os.name == "posix":
                 popen_kwargs["start_new_session"] = True
             process = subprocess.Popen(cmd, **popen_kwargs)
+            track_child(process)
         except OSError as exc:
             error_message = f"Failed to start {payload.job_kind}: {exc}"
             client.send_log(

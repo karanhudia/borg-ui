@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from agent.borg_ui_agent.backup import _terminate_process
+from agent.borg_ui_agent.children import track_child
 from agent.borg_ui_agent.cancel import cancel_requested
 from agent.borg_ui_agent.paths import default_config_dir, is_darwin
 
@@ -292,6 +293,7 @@ def execute_script_run_job(
         if os.name == "posix":
             popen_kwargs["start_new_session"] = True
         process = subprocess.Popen([str(resolved)], **popen_kwargs)
+        track_child(process)
     except (OSError, ValueError) as exc:
         # ValueError: an invalid env entry that slipped through (belt-and-suspenders
         # with _build_env's filtering) — report it, don't drop the job silently.

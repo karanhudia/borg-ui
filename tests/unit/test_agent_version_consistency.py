@@ -169,3 +169,16 @@ def test_an_agent_from_before_the_macos_service_path_fix_is_offered_an_upgrade()
         )
         == "outdated"
     )
+
+
+def test_an_agent_that_drops_an_undelivered_outcome_is_offered_an_upgrade():
+    """From 0.1.21 the agent keeps a job's outcome until the server has it
+    (#1377) and names the run its log lines belong to (#1383), so a server
+    built from this tree must offer 0.1.20 agents the upgrade.
+    """
+    assert (
+        compute_agent_upgrade_status(
+            reported="0.1.20", desired=None, available=_pyproject_version()
+        )
+        == "outdated"
+    )
