@@ -4,13 +4,14 @@ Unit tests for BackupService
 
 import pytest
 import asyncio
+import json
 import tempfile
 from pathlib import Path
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import ANY, Mock, patch, AsyncMock, MagicMock
 from sqlalchemy.orm import sessionmaker
-from app.services.backup_service import BackupService
+from app.services.backup_service import BackupService, _restore_canary_error
 from app.services.filesystem_snapshot_service import PreparedFilesystemSnapshot
 from app.services.operations.backup_facade import resolve_backup_job
 from tests.utils.operations import seed_job_operation
@@ -1049,6 +1050,79 @@ class TestBackupService:
         calculate_size.assert_not_called()
         notifications.send_backup_start.assert_not_awaited()
         notifications.send_backup_failure.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_execute_backup_reports_restore_canary_staging_error_key(
+        self, backup_service, test_db, tmp_path
+    ):
+        repo_path = tmp_path / "repo"
+        repo_path.mkdir()
+        (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        source = tmp_path / "source"
+        source.mkdir()
+        repo = Repository(
+            name="Repo",
+            path=str(repo_path),
+            encryption="none",
+            repository_type="local",
+            source_directories=f'["{source}"]',
+            compression="lz4",
+        )
+        test_db.add(repo)
+        test_db.flush()
+        job = seed_job_operation(
+            test_db, "backup", repository=repo.path, status="pending"
+        )
+        test_db.commit()
+        job = resolve_backup_job(test_db, job.id)
+
+        with (
+            patch.object(
+                backup_service,
+                "_execute_hooks",
+                AsyncMock(
+                    return_value={
+                        "success": True,
+                        "execution_logs": [],
+                        "scripts_executed": 0,
+                        "scripts_failed": 0,
+                        "using_library": False,
+                    }
+                ),
+            ),
+            patch.object(
+                backup_service,
+                "_prepare_source_paths",
+                AsyncMock(
+                    side_effect=_restore_canary_error(
+                        "restoreCanaryInsideSshMount", remotePath="/"
+                    )
+                ),
+            ),
+            patch(
+                "app.services.backup_service.resolve_repo_ssh_key_file",
+                return_value=None,
+            ),
+            patch(
+                "app.services.backup_service.asyncio.create_subprocess_exec"
+            ) as create_subprocess,
+            patch(
+                "app.services.backup_service.asyncio.create_task",
+                side_effect=_discard_background_task,
+            ),
+            patch("app.services.backup_service.notification_service", MagicMock()),
+            patch("app.services.backup_service.mqtt_service") as mqtt,
+        ):
+            mqtt.sync_state_with_db = Mock()
+            await backup_service.execute_backup(job.id, repo.path, db=test_db)
+
+        job = resolve_backup_job(test_db, job.id)
+        assert job.status == "failed"
+        assert json.loads(job.error_message) == {
+            "key": "backend.errors.service.restoreCanaryInsideSshMount",
+            "params": {"remotePath": "/"},
+        }
+        create_subprocess.assert_not_called()
 
     def test_validate_local_source_paths_allows_dangling_symlink_source(
         self, backup_service, tmp_path
@@ -2875,7 +2949,7 @@ class TestBackupServicePeriodicSync:
         mounted.mkdir(parents=True)
         (mounted / "remote-file").write_text("remote", encoding="utf-8")
 
-        with pytest.raises(RuntimeError, match="restore canary"):
+        with pytest.raises(RuntimeError, match="restoreCanaryReplaceFailed"):
             await self._stage_canary_over_existing_target(
                 backup_service, db_session, monkeypatch, temp_root, {str(mounted)}
             )
@@ -2883,6 +2957,104 @@ class TestBackupServicePeriodicSync:
         assert (mounted / "remote-file").read_text(encoding="utf-8") == "remote"
         # Registered before staging, so the job's cleanup still unmounts them.
         assert backup_service.ssh_mounts[42] == ["mount-1"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("remote_path", "relative_path", "mount_subdir", "mounted_remote_path"),
+        [
+            ("/", ".", "", "/"),
+            ("/hostname", "hostname", "", "/"),
+            ("/.borg-ui", ".borg-ui", ".borg-ui", "/.borg-ui"),
+            (
+                "/.borg-ui/restore-canaries",
+                ".borg-ui/restore-canaries",
+                ".borg-ui/restore-canaries",
+                "/.borg-ui/restore-canaries",
+            ),
+        ],
+    )
+    async def test_prepare_source_paths_never_stages_canary_inside_ssh_mount(
+        self,
+        backup_service,
+        db_session,
+        monkeypatch,
+        tmp_path,
+        remote_path,
+        relative_path,
+        mount_subdir,
+        mounted_remote_path,
+    ):
+        connection = SSHConnection(
+            host="example.com", username="borg", port=22, default_path="/"
+        )
+        db_session.add(connection)
+        db_session.commit()
+        db_session.refresh(connection)
+
+        canary_dir = (
+            backup_service.log_dir.parent
+            / ".borg-ui/restore-canaries/repository-1/.borgui-canary"
+        )
+        canary_dir.mkdir(parents=True)
+        (canary_dir / "manifest.json").write_text("{}", encoding="utf-8")
+
+        temp_root = tmp_path / "sshfs_mount_test"
+        # Stands in for the SSHFS mount of the remote path: everything below
+        # it lives on the source host.
+        mount_point = temp_root / mount_subdir if mount_subdir else temp_root
+        mount_point.mkdir(parents=True)
+        (mount_point / "remote-file").write_text("remote", encoding="utf-8")
+
+        async def mock_mount_ssh_paths_shared(
+            connection_id, remote_paths, job_id, preserve_symlinks=False
+        ):
+            return str(temp_root), [("mount-1", relative_path)]
+
+        monkeypatch.setattr(
+            "app.services.backup_service.SessionLocal", lambda: db_session
+        )
+        monkeypatch.setattr(
+            "app.services.mount_service.mount_service.mount_ssh_paths_shared",
+            mock_mount_ssh_paths_shared,
+        )
+        monkeypatch.setattr(
+            "app.utils.fs.active_mount_points", lambda: {str(mount_point)}
+        )
+
+        with pytest.raises(RuntimeError) as raised:
+            await backup_service._prepare_source_paths(
+                [
+                    f"ssh://{connection.username}@{connection.host}:{connection.port}{remote_path}",
+                    str(canary_dir),
+                ],
+                job_id=42,
+                source_connection_id=connection.id,
+            )
+
+        assert json.loads(str(raised.value)) == {
+            "key": "backend.errors.service.restoreCanaryInsideSshMount",
+            "params": {"remotePath": mounted_remote_path},
+        }
+
+        remote_entries = sorted(
+            str(p.relative_to(mount_point)) for p in mount_point.rglob("*")
+        )
+        assert remote_entries == ["remote-file"]
+        # Registered before staging, so the job's cleanup still unmounts them.
+        assert backup_service.ssh_mounts[42] == ["mount-1"]
+
+    @pytest.mark.asyncio
+    async def test_prepare_source_paths_refuses_canary_staging_without_mount_table(
+        self, backup_service, db_session, monkeypatch, tmp_path
+    ):
+        temp_root = tmp_path / "sshfs_mount_test"
+
+        with pytest.raises(RuntimeError, match="restoreCanaryMountTableUnavailable"):
+            await self._stage_canary_over_existing_target(
+                backup_service, db_session, monkeypatch, temp_root, None
+            )
+
+        assert not (temp_root / ".borg-ui").exists()
 
     def test_resolve_backup_command_paths_mixes_remote_source_and_local_canary(
         self, backup_service

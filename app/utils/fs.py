@@ -47,6 +47,26 @@ def active_mount_points() -> Optional[set[str]]:
     return points
 
 
+def mount_points_covering(path: str, root: str) -> Optional[list[str]]:
+    """Mount points at or under ``root`` that ``path`` lies on.
+
+    Writing to ``path`` writes into such a mount: with an SSHFS source mounted
+    at ``root`` itself, every path under ``root`` is on the remote host.
+    Returns None when the mount table cannot be read.
+    """
+    mount_points = active_mount_points()
+    if mount_points is None:
+        return None
+    roots = {os.path.abspath(root), os.path.realpath(root)}
+    paths = {os.path.abspath(path), os.path.realpath(path)}
+    return sorted(
+        point
+        for point in mount_points
+        if any(point == r or point.startswith(r.rstrip("/") + "/") for r in roots)
+        and any(p == point or p.startswith(point.rstrip("/") + "/") for p in paths)
+    )
+
+
 def remove_tree_without_crossing_mounts(path: str) -> bool:
     """Delete a directory tree, never deleting through a mounted filesystem.
 
