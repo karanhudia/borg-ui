@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 # app.core.borg2 is imported where it is used: importing it probes the Borg 2
 # binary and logs the result, which would land in the export CLI's stdout.
+from app.core.borg_major import borg_major, is_borg2
 from app.utils.repository_paths import borg1_ssh_address_host, borg2_only_url_prefix
 from app.core.features import has_feature
 from app.database.models import Repository, ScheduledJob, ScheduledJobRepository
@@ -201,7 +202,7 @@ class BorgmaticExportService:
         # borg_ui_borg_version: the Borg major (omitted for 1, the default)
         # (also for Borg 1 where the path reads as a Borg 2 URL: an ssh host
         # named s3, b2 or rclone)
-        borg_version = repository.borg_version or 1
+        borg_version = borg_major(repository)
         if borg_version == 2 or borg2_only_url_prefix(repo_path):
             config["borg_ui_borg_version"] = borg_version
 
@@ -360,7 +361,7 @@ class BorgmaticExportService:
         """A Borg 2 repository is written in the object form with Borg 2's
         own encryption name and key location, as a borgmatic configuration
         for Borg 2 states them; everything else as its path."""
-        if (repository.borg_version or 1) != 2:
+        if not is_borg2(repository):
             return repo_path
         if repository.encryption == "authenticated":
             return {"path": repo_path, "encryption": "authenticated-sha256"}
@@ -849,7 +850,7 @@ class BorgmaticImportService:
         if replaced is not None:
             # A repository does not change its Borg major: its format, its
             # flags and its plans' flags belong to the one it was made with.
-            borg_version = replaced.borg_version or 1
+            borg_version = borg_major(replaced)
             if stated_borg_version not in (None, borg_version):
                 raise ValueError(
                     f"it is recorded as a Borg {borg_version} repository and "

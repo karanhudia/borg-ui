@@ -12,6 +12,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
+from app.core.borg_major import borg_major, is_borg2
 from app.api.repositories import (
     _agent_result_archives,
     _parse_borg_archive_time,
@@ -24,7 +25,10 @@ from app.config import settings
 from app.core.borg_router import BorgRouter
 from app.database.models import Archive, Repository, SystemSettings, utc_now
 from app.services.operations import executors
-from app.services.operations.backup_facade import link_archive_to_backup
+from app.services.operations.backup_facade import (
+    link_archives_to_backups,
+    take_added_sizes,
+)
 from app.services.operations.followups import (
     HISTORY_AVAILABLE,
     history_capability,
@@ -112,12 +116,13 @@ def apply_listing(
     }
     seen: set[str] = set()
     new_rows: list[Archive] = []
+    listed: list[Archive] = []
     now = utc_now()
     prefixes = series_prefixes_for_repository(db, repository)
     for entry in entries:
         fields = archive_fields_from_listing(
             entry,
-            repository.borg_version or 1,
+            borg_major(repository),
             timezone_name=timezone_name,
             series_prefixes=prefixes,
         )
@@ -127,7 +132,6 @@ def apply_listing(
         row = existing.get(fields["borg_id"])
         if row is None:
             row = Archive(repository_id=repository.id, first_seen_at=now, **fields)
-            link_archive_to_backup(db, row)
             db.add(row)
             new_rows.append(row)
         else:
@@ -142,6 +146,7 @@ def apply_listing(
                 if key == "series" and value != row.series:
                     row.history_state = "pending"
                 setattr(row, key, value)
+        listed.append(row)
         # Every row one listing saw shares its newest stamp, which is how
         # readers tell them from rows it did not see: always advance it,
         # including when the wall clock moves backward.
@@ -151,6 +156,11 @@ def apply_listing(
             else now
         )
     removed = [a.id for borg_id, a in existing.items() if borg_id not in seen]
+    # also rows stored before their backup ended, or before it could be linked
+    link_archives_to_backups(db, repository.id, listed, borg2=is_borg2(repository))
+    if is_borg2(repository):
+        # also rows listed before their backup's figure was taken over
+        take_added_sizes(db, listed)
     db.commit()
     for row in new_rows:
         db.refresh(row)
@@ -400,11 +410,7 @@ async def _agent_archive_info(
         wait_for_agent_repository_operation_job,
     )
 
-    ref = (
-        f"aid:{archive.borg_id}"
-        if (repository.borg_version or 1) == 2
-        else archive.name
-    )
+    ref = f"aid:{archive.borg_id}" if is_borg2(repository) else archive.name
     job = queue_agent_repository_operation_job(
         db, repository, job_kind="repository.archive_info", operation={"archive": ref}
     )
@@ -438,7 +444,7 @@ async def _server_archive_info(
     remote_path = effective_repository_remote_path(repository)
     # TZ=UTC so borg renders the archive end time in UTC (see stats env).
     info_env = _repository_stats_borg_env(env or {})
-    if (repository.borg_version or 1) == 2:
+    if is_borg2(repository):
         from app.core.borg2 import borg2
 
         return await run_serialized_repository_command(
@@ -523,7 +529,10 @@ async def fill_archive_info(
         archive.nfiles = info["nfiles"]
         archive.original_size = info["original_size"]
         archive.compressed_size = info["compressed_size"]
-        archive.deduplicated_size = info["deduplicated_size"]
+        if not is_borg2(repository) or info["deduplicated_size"] is not None:
+            # Borg 2's info has none: the figure the archive got from its
+            # backup's `create --json` stays (take_added_sizes).
+            archive.deduplicated_size = info["deduplicated_size"]
         archive.stats_measured_at = utc_now()
         if info["end"] and (timezone_name or _carries_utc_offset(info["end"])):
             # A naive end time from an agent that never reported its zone
@@ -651,9 +660,7 @@ async def run_archive_sync(ctx) -> Outcome:
     if repository is None:
         return Outcome(status="skipped", skip_reason="repository_missing")
     db = ctx.db
-    if (repository.borg_version or 1) != 2 and not archive_end_resolvable(
-        db, repository
-    ):
+    if not is_borg2(repository) and not archive_end_resolvable(db, repository):
         # A Borg 1 listing is naive wall clock in the zone the agent ran it
         # in. Without that zone the times would be stored in the server's
         # zone, and `start` is NOT NULL, so there is no row to withhold it
@@ -680,12 +687,13 @@ async def run_archive_sync(ctx) -> Outcome:
         new_rows, removed_ids = apply_listing(
             db, repository, entries, timezone_name=timezone_name
         )
-        if removed_ids and (repository.borg_version or 1) != 2:
+        if removed_ids and not is_borg2(repository):
             # deduplicated_size is relative to the archives that exist (spec
             # 4.1), so a removal stales the survivors it shared chunks with.
             # Clearing the date hands them to archives_needing_info below,
-            # under the same per-run cap as a first fill. Borg 2 reports no
-            # deduplicated_size, so there is nothing to re-measure (#1137).
+            # under the same per-run cap as a first fill. Borg 2 reports a
+            # deduplicated_size only when an archive is created, so there is
+            # nothing to re-measure (#1137).
             # Before the fold: the neighbours are found from the removed rows.
             stale_ids = _neighbours_of_removed(db, repository, set(removed_ids))
             if stale_ids:

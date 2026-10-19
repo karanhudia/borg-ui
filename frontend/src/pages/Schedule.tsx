@@ -268,11 +268,15 @@ const Schedule: React.FC = () => {
   // Create job mutation
   const createJobMutation = useMutation({
     mutationFn: scheduleAPI.createScheduledJob,
-    onSuccess: () => {
+    onSuccess: (_data, variables: ScheduleData) => {
       toast.success(t('schedule.toasts.jobCreated'))
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
-      track(EventCategory.BACKUP, EventAction.CREATE, { entity: 'schedule' })
+      track(EventCategory.BACKUP, EventAction.CREATE, {
+        entity: 'schedule',
+        source: 'wizard',
+        repository_count: variables.repository_ids?.length ?? 0,
+      })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -287,11 +291,15 @@ const Schedule: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: ({ id, data }: { id: number; data: any }) =>
       scheduleAPI.updateScheduledJob(id, data),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       toast.success(t('schedule.toasts.jobUpdated'))
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-jobs'] })
-      track(EventCategory.BACKUP, EventAction.EDIT, { entity: 'schedule' })
+      track(EventCategory.BACKUP, EventAction.EDIT, {
+        entity: 'schedule',
+        source: 'wizard',
+        repository_count: variables.data.repository_ids?.length ?? 0,
+      })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {

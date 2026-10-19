@@ -184,7 +184,7 @@ def test_agent_jobs_list_omits_result_blob_and_honors_limit(
     assert [job["id"] for job in limited.json()] == [newer.id]
 
 
-def test_managed_machine_admin_write_api_requires_pro_plan(
+def test_managed_machine_admin_write_api_available_on_community_plan(
     test_client: TestClient, admin_headers, test_db
 ):
     _set_plan(test_db, "community")
@@ -195,8 +195,7 @@ def test_managed_machine_admin_write_api_requires_pro_plan(
         headers=admin_headers,
     )
 
-    assert response.status_code == 403
-    assert response.json()["detail"]["feature"] == "managed_agents"
+    assert response.status_code == 201
 
 
 def test_create_enrollment_token_accepts_days(test_client: TestClient, admin_headers):

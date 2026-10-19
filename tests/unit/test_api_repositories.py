@@ -636,6 +636,7 @@ class TestRepositoriesCreate:
     def test_create_agent_repository_queues_init_and_waits_before_success(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        _set_plan(test_db, "community")
         agent = AgentMachine(
             name="Laptop",
             agent_id="agt_laptop",
@@ -672,6 +673,7 @@ class TestRepositoriesCreate:
                     "path": "/agent/repo",
                     "encryption": "none",
                     "compression": "lz4",
+                    "borg_version": 1,
                     "source_directories": ["/home/user/docs"],
                     "execution_target": "agent",
                     "agent_machine_id": agent.id,
@@ -861,56 +863,6 @@ class TestRepositoriesCreate:
         agent_job = test_db.query(AgentJob).one()
         assert agent_job.payload["repository"]["borg_version"] == 2
         assert agent_job.payload["operation"]["encryption"] == "repokey-aes-ocb"
-
-    def test_create_agent_repository_requires_pro_plan(
-        self, test_client: TestClient, admin_headers, test_db
-    ):
-        _set_plan(test_db, "community")
-        agent = AgentMachine(
-            name="Laptop",
-            agent_id="agt_laptop_community",
-            token_hash=get_password_hash("borgui_agent_secret"),
-            token_prefix="borgui_agent_secret"[:20],
-            status="online",
-            capabilities=["repository.init"],
-        )
-        test_db.add(agent)
-        test_db.commit()
-        test_db.refresh(agent)
-
-        with (
-            patch(
-                "app.api.repositories.initialize_borg_repository",
-                new=AsyncMock(return_value={"success": True}),
-            ) as initialize,
-            patch(
-                "app.api.repositories.wait_for_agent_repository_operation_job",
-                new=AsyncMock(return_value={"status": "completed"}),
-            ),
-            patch(
-                "app.api.repositories.dispatch_agent_job_best_effort",
-                new=AsyncMock(return_value=True),
-            ),
-            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
-        ):
-            response = test_client.post(
-                "/api/repositories/",
-                json={
-                    "name": "Agent Repo",
-                    "path": "/agent/repo",
-                    "encryption": "none",
-                    "compression": "lz4",
-                    "source_directories": ["/home/user/docs"],
-                    "execution_target": "agent",
-                    "agent_machine_id": agent.id,
-                },
-                headers=admin_headers,
-            )
-
-        assert response.status_code == 403
-        assert response.json()["detail"]["feature"] == "managed_agents"
-        initialize.assert_not_awaited()
-        assert test_db.query(Repository).filter_by(name="Agent Repo").first() is None
 
     def test_create_agent_repository_init_failure_deletes_record(
         self, test_client: TestClient, admin_headers, test_db
@@ -3688,7 +3640,12 @@ class TestRepositoriesUpdate:
         with (
             patch(
                 "app.api.repositories.BorgRouter.verify_repository",
-                new=AsyncMock(return_value={"success": False}),
+                new=AsyncMock(
+                    return_value={
+                        "success": False,
+                        "error": "Repository does not exist.",
+                    }
+                ),
             ),
             patch(
                 "app.api.repositories.BorgRouter.initialize_repository",
@@ -3799,7 +3756,12 @@ class TestRepositoriesUpdate:
             with (
                 patch(
                     "app.api.repositories.BorgRouter.verify_repository",
-                    new=AsyncMock(side_effect=RuntimeError("missing repo")),
+                    new=AsyncMock(
+                        return_value={
+                            "success": False,
+                            "error": "Repository does not exist.",
+                        }
+                    ),
                 ),
                 patch(
                     "app.api.repositories.BorgRouter.initialize_repository",
@@ -3937,7 +3899,12 @@ class TestRepositoriesUpdate:
         with (
             patch(
                 "app.api.repositories.BorgRouter.verify_repository",
-                new=AsyncMock(return_value={"success": False, "stderr": "missing"}),
+                new=AsyncMock(
+                    return_value={
+                        "success": False,
+                        "stderr": "Repository does not exist.",
+                    }
+                ),
             ) as mock_verify,
             patch(
                 "app.api.repositories.BorgRouter.initialize_repository",
@@ -3959,6 +3926,167 @@ class TestRepositoriesUpdate:
         mock_verify.assert_awaited_once()
         mock_init.assert_awaited_once()
         mock_v1_init.assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        "verify_result,status_code,key",
+        [
+            (
+                {
+                    "success": False,
+                    "error": "passphrase supplied in BORG_PASSPHRASE is incorrect.",
+                },
+                400,
+                "backend.errors.repo.encryptedPassphraseIncorrect",
+            ),
+            (
+                {"success": False, "error": "Failed to create/acquire the lock"},
+                400,
+                "backend.errors.repo.failedToVerifyRepository",
+            ),
+        ],
+    )
+    def test_update_repository_path_change_does_not_init_over_unverified_repo(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        verify_result,
+        status_code,
+        key,
+    ):
+        repo = Repository(
+            name="Unverified Path Repo",
+            path="/tmp/unverified-initial",
+            encryption="repokey",
+            compression="lz4",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with (
+            patch(
+                "app.api.repositories.BorgRouter.verify_repository",
+                new=AsyncMock(return_value=verify_result),
+            ),
+            patch(
+                "app.api.repositories.BorgRouter.initialize_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as mock_init,
+        ):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"path": "/tmp/unverified-new"},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == status_code
+        assert response.json()["detail"]["key"] == key
+        mock_init.assert_not_awaited()
+        test_db.refresh(repo)
+        assert repo.path == "/tmp/unverified-initial"
+
+    def test_update_repository_path_change_inits_once_when_init_fails(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Init Once Repo",
+            path="/tmp/init-once-initial",
+            encryption="repokey",
+            compression="lz4",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with (
+            patch(
+                "app.api.repositories.BorgRouter.verify_repository",
+                new=AsyncMock(
+                    return_value={
+                        "success": False,
+                        "error": "Repository /tmp/init-once-new does not exist.",
+                    }
+                ),
+            ),
+            patch(
+                "app.api.repositories.BorgRouter.initialize_repository",
+                new=AsyncMock(return_value={"success": False, "error": "disk full"}),
+            ) as mock_init,
+        ):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"path": "/tmp/init-once-new"},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 500
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.failedToInitializeRepository"
+        )
+        mock_init.assert_awaited_once()
+        test_db.refresh(repo)
+        assert repo.path == "/tmp/init-once-initial"
+
+    @pytest.mark.parametrize(
+        "payload",
+        [{"encryption": "none"}, {"borg_version": 2}, {"no_such_field": 1}],
+    )
+    def test_update_repository_refuses_keys_it_does_not_apply(
+        self, test_client: TestClient, admin_headers, test_db, payload
+    ):
+        repo = Repository(
+            name="Strict Keys Repo",
+            path="/tmp/strict-keys",
+            encryption="repokey",
+            compression="lz4",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={"name": "Strict Keys Renamed", **payload},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+        test_db.refresh(repo)
+        assert repo.name == "Strict Keys Repo"
+
+    def test_update_repository_refused_by_plan_keeps_old_name(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "community")
+        repo = Repository(
+            name="Plan Refused Repo",
+            path="/tmp/plan-refused",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={"name": "Plan Refused Renamed", "rclone_remote_id": 1},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 403
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.plan.featureNotAvailable"
+        )
+        test_db.refresh(repo)
+        assert repo.name == "Plan Refused Repo"
 
     def test_download_keyfile_uses_router_export_for_borg2_repository(
         self, test_client: TestClient, admin_headers, test_db
@@ -3993,6 +4121,311 @@ class TestRepositoriesUpdate:
         assert response.status_code == 200
         assert response.content == b"KEYDATA"
         mock_export.assert_awaited_once()
+
+    @staticmethod
+    def _agent_path_repo(test_db, *, borg_version=2, executor_type="agent"):
+        agent = _agent_machine_with_capabilities("repository.info", "repository.init")
+        test_db.add(agent)
+        test_db.commit()
+        repo = Repository(
+            name="Agent Path Repo",
+            path="/agent/old",
+            encryption="repokey-aes-ocb" if borg_version == 2 else "repokey",
+            compression="lz4",
+            repository_type="local",
+            executor_type=executor_type,
+            execution_target="agent" if executor_type == "agent" else "local",
+            agent_machine_id=agent.id if executor_type == "agent" else None,
+            borg_version=borg_version,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        return agent, repo
+
+    @staticmethod
+    def _agent_path_change(test_client, admin_headers, repo, payload, *, agent_says):
+        """PUT `payload` with the repository's agent connected; `agent_says`
+        maps a job kind to None (the job succeeds) or borg's reason for
+        failing it. Returns the response and the job kinds run, in order."""
+        from app.services.agent_connection_manager import agent_connection_manager
+
+        kinds = []
+
+        async def _wait(db, agent_job_id, **kwargs):
+            job = db.get(AgentJob, agent_job_id)
+            kinds.append(job.payload["job_kind"])
+            reason = agent_says[job.payload["job_kind"]]
+            # the agent's report ends the job, as admission sees it
+            job.status = "completed" if reason is None else "failed"
+            db.commit()
+            if reason is not None:
+                raise HTTPException(
+                    status_code=502,
+                    detail={
+                        "key": "backend.errors.agents.repositoryOperationFailedWithReason",
+                        "params": {"reason": reason},
+                    },
+                )
+            return {"return_code": 0}
+
+        server_verify = AsyncMock()
+        server_init = AsyncMock()
+        with (
+            patch.object(agent_connection_manager, "is_connected", return_value=True),
+            patch(
+                "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+                new=AsyncMock(return_value=True),
+            ),
+            patch(
+                "app.services.repository_executor.wait_for_agent_repository_operation_job",
+                new=_wait,
+            ),
+            patch(
+                "app.services.v2.repository_service.repository_v2_service.verify_repository",
+                new=server_verify,
+            ),
+            patch(
+                "app.services.v2.repository_service.repository_v2_service.initialize_repository",
+                new=server_init,
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}", json=payload, headers=admin_headers
+            )
+        server_verify.assert_not_awaited()
+        server_init.assert_not_awaited()
+        return response, kinds
+
+    @pytest.mark.parametrize("borg_version", [1, 2])
+    def test_agent_repository_path_change_runs_no_borg_on_the_server(
+        self, test_client: TestClient, admin_headers, test_db, borg_version
+    ):
+        """#1361: a new path of an agent repository is the agent's location;
+        the server neither opens nor creates a repository there. An agent
+        without a session cannot be asked, so the path is taken as given."""
+        _agent, repo = self._agent_path_repo(test_db, borg_version=borg_version)
+
+        server_verify = AsyncMock(
+            return_value={"success": False, "error": "Repository does not exist."}
+        )
+        server_init = AsyncMock(return_value={"success": True})
+        service = (
+            "app.services.v2.repository_service.repository_v2_service"
+            if borg_version == 2
+            else "app.services.repository_service.repository_service"
+        )
+        with (
+            patch(f"{service}.verify_repository", new=server_verify),
+            patch(f"{service}.initialize_repository", new=server_init),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"path": "/agent/new"},
+                headers=admin_headers,
+            )
+
+        server_verify.assert_not_awaited()
+        server_init.assert_not_awaited()
+        assert response.status_code == 200
+        test_db.refresh(repo)
+        assert repo.path == "/agent/new"
+        assert test_db.query(AgentJob).count() == 0
+
+    def test_agent_repository_path_cannot_be_emptied(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _agent, repo = self._agent_path_repo(test_db)
+
+        with patch("app.api.repositories.mqtt_service.sync_state_with_db"):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"path": "  "},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["key"] == "backend.errors.repo.pathRequired"
+        test_db.refresh(repo)
+        assert repo.path == "/agent/old"
+
+    def test_agent_repository_new_path_is_checked_on_the_agent(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _agent, repo = self._agent_path_repo(test_db)
+
+        response, kinds = self._agent_path_change(
+            test_client,
+            admin_headers,
+            repo,
+            {"path": "/agent/new"},
+            agent_says={"repository.info": None},
+        )
+
+        assert response.status_code == 200
+        assert kinds == ["repository.info"]
+        job = test_db.query(AgentJob).one()
+        assert job.payload["repository"]["path"] == "/agent/new"
+        test_db.refresh(repo)
+        assert repo.path == "/agent/new"
+
+    def test_agent_repository_new_empty_path_is_initialized_on_the_agent(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _agent, repo = self._agent_path_repo(test_db)
+
+        response, kinds = self._agent_path_change(
+            test_client,
+            admin_headers,
+            repo,
+            {"path": "/agent/new"},
+            agent_says={
+                "repository.info": "Repository /agent/new does not exist.",
+                "repository.init": None,
+            },
+        )
+
+        assert response.status_code == 200
+        assert kinds == ["repository.info", "repository.init"]
+        init_job = test_db.query(AgentJob).order_by(AgentJob.id.desc()).first()
+        assert init_job.payload["repository"]["path"] == "/agent/new"
+        assert init_job.payload["operation"] == {"encryption": "repokey-aes-ocb"}
+        test_db.refresh(repo)
+        assert repo.path == "/agent/new"
+
+    @pytest.mark.parametrize(
+        "job_type, job_kind",
+        [("repository", "repository.rinfo"), ("backup", None)],
+        ids=["stats-refresh", "backup"],
+    )
+    def test_agent_repository_new_path_is_not_held_up_by_work_on_the_repository(
+        self, test_client: TestClient, admin_headers, test_db, job_type, job_kind
+    ):
+        """The new location is not the one the active work holds: the check
+        and the init there are not refused for it."""
+        agent, repo = self._agent_path_repo(test_db)
+        payload = {"repository": {"id": repo.id, "path": repo.path}}
+        if job_kind:
+            payload["job_kind"] = job_kind
+        test_db.add(
+            AgentJob(
+                agent_machine_id=agent.id,
+                job_type=job_type,
+                status="running",
+                payload=payload,
+            )
+        )
+        test_db.commit()
+
+        response, kinds = self._agent_path_change(
+            test_client,
+            admin_headers,
+            repo,
+            {"path": "/agent/new"},
+            agent_says={
+                "repository.info": "Repository /agent/new does not exist.",
+                "repository.init": None,
+            },
+        )
+
+        assert response.status_code == 200
+        assert kinds == ["repository.info", "repository.init"]
+        test_db.refresh(repo)
+        assert repo.path == "/agent/new"
+
+    @pytest.mark.parametrize(
+        "reason, key",
+        [
+            (
+                "Failed to create/acquire the lock /agent/new/lock (timeout).",
+                "backend.errors.repo.failedToVerifyRepository",
+            ),
+            (
+                "passphrase supplied in BORG_PASSPHRASE is incorrect.",
+                "backend.errors.repo.encryptedPassphraseIncorrect",
+            ),
+        ],
+    )
+    def test_agent_repository_new_path_refused_by_the_agent_is_not_stored(
+        self, test_client: TestClient, admin_headers, test_db, reason, key
+    ):
+        """The agent jobs are queued through a session of their own: the
+        update they check is not stored with them."""
+        _agent, repo = self._agent_path_repo(test_db)
+
+        response, kinds = self._agent_path_change(
+            test_client,
+            admin_headers,
+            repo,
+            {"path": "/agent/new", "name": "Renamed Agent Repo"},
+            agent_says={"repository.info": reason},
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["key"] == key
+        assert kinds == ["repository.info"]
+        test_db.expire_all()
+        stored = test_db.get(Repository, repo.id)
+        assert stored.path == "/agent/old"
+        assert stored.name == "Agent Path Repo"
+
+    def test_path_change_with_a_switch_to_an_agent_is_checked_on_that_agent(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """The executor the update gives the repository decides where its
+        new path is opened, though it is stored only after the check."""
+        agent, repo = self._agent_path_repo(test_db, executor_type="server")
+
+        response, kinds = self._agent_path_change(
+            test_client,
+            admin_headers,
+            repo,
+            {
+                "path": "/agent/new",
+                "executor_type": "agent",
+                "execution_target": "agent",
+                "agent_machine_id": agent.id,
+            },
+            agent_says={"repository.info": None},
+        )
+
+        assert response.status_code == 200
+        assert kinds == ["repository.info"]
+        job = test_db.query(AgentJob).one()
+        assert job.agent_machine_id == agent.id
+        test_db.refresh(repo)
+        assert repo.executor_type == "agent"
+        assert repo.path == "/agent/new"
+
+    def test_path_change_with_a_switch_to_the_server_is_checked_on_the_server(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _agent, repo = self._agent_path_repo(test_db)
+
+        server_verify = AsyncMock(return_value={"success": True})
+        with (
+            patch(
+                "app.services.v2.repository_service.repository_v2_service.verify_repository",
+                new=server_verify,
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={
+                    "path": "/server/new",
+                    "executor_type": "server",
+                    "execution_target": "local",
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        server_verify.assert_awaited_once()
+        assert server_verify.await_args.kwargs["path"] == "/server/new"
+        assert test_db.query(AgentJob).count() == 0
 
 
 @pytest.mark.unit

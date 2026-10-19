@@ -2,6 +2,8 @@
 API fixtures for testing
 """
 
+import asyncio
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -154,6 +156,43 @@ def test_client(test_db):
     # Use context manager to trigger startup/shutdown events
     with TestClient(app) as client:
         yield client
+
+
+class HeldRunner:
+    def __init__(self, client, db):
+        self._client = client
+        self._db = db
+
+    def turn(self):
+        """Give the runner the turn an enqueue would wake it for, here
+        rather than whenever the event loop schedules it, then expire the
+        test session so reads see what the runner committed."""
+        self._client.portal.call(self._turn)
+        self._db.expire_all()
+
+    @staticmethod
+    async def _turn():
+        from app.services.operations.runner import operation_runner
+
+        for _ in range(5):
+            await operation_runner.tick()
+            tasks = list(operation_runner.running_tasks.values())
+            if not tasks:
+                return
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+
+@pytest.fixture
+def held_runner(test_client, test_db, monkeypatch):
+    """`test_client` runs the app lifespan, which starts the operations
+    runner, and every enqueue wakes it. A test that asserts on work still
+    queued (a refusal while it waits, its status) races that runner: a
+    command on a made-up repository fails in milliseconds. This keeps the
+    runner ticking but starting nothing."""
+    monkeypatch.setattr(
+        "app.services.operations.runner.can_start", lambda *_args: False
+    )
+    return HeldRunner(test_client, test_db)
 
 
 @pytest.fixture

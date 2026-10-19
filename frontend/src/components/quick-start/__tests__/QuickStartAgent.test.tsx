@@ -79,11 +79,10 @@ describe('QuickStartAgentConnect', () => {
 })
 
 describe('QuickStartWhatStep', () => {
-  it('locks the agent option without the plan feature', () => {
+  it('offers the agent option on every plan', () => {
     renderWithProviders(
       <QuickStartWhatStep answers={createInitialQuickStartAnswers()} onChange={() => {}} />
     )
-    expect(screen.getByRole('radio', { name: /Borg UI agent/ })).toBeDisabled()
-    expect(screen.getByText('Requires a Pro or Enterprise plan.')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /Borg UI agent/ })).toBeEnabled()
   })
 })

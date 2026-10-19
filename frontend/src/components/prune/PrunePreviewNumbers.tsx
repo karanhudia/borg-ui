@@ -12,6 +12,9 @@ export interface PrunePreviewNumbersProps {
    *  file data, not disk space, and pairing the two read as a range from
    *  one to the other. It has its own panel, which says what it means. */
   freedAtLeast: number
+  /** False on Borg 2: no archive size bounds what the deletion frees, so
+   *  `freedAtLeast` is no figure and the tile says so instead. */
+  sizesAvailable?: boolean
   footprintBefore: number | null
   footprintAfterAtMost: number | null
 }
@@ -22,6 +25,7 @@ export default function PrunePreviewNumbers({
   deletedCount,
   keptCount,
   freedAtLeast,
+  sizesAvailable = true,
   footprintBefore,
   footprintAfterAtMost,
 }: PrunePreviewNumbersProps) {
@@ -94,10 +98,15 @@ export default function PrunePreviewNumbers({
         <TintedTile
           testId="prune-preview-freed"
           label={t('prunePreview.freed')}
-          value={t('prunePreview.atLeast', { size: formatBytes(freedAtLeast) })}
+          value={
+            sizesAvailable
+              ? t('prunePreview.atLeast', { size: formatBytes(freedAtLeast) })
+              : t('prunePreview.notAvailable')
+          }
           sub={t('prunePreview.freedSub')}
           tone="success"
           icon={Shrink}
+          muted={!sizesAvailable}
         />
         <TintedTile
           testId="prune-preview-before"

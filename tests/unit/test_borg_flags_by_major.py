@@ -76,7 +76,7 @@ def test_undelete_archives_is_refused_everywhere(borg_version):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("borg_version", [3, -1, "x", 2.5])
+@pytest.mark.parametrize("borg_version", [0, False, "", 3, -1, "x", 2.5, True])
 def test_an_agent_job_with_an_unknown_major_is_refused(borg_version):
     """The two job decoders read the major through one gate; an unknown one
     must not be built as a Borg 1 command, with or without custom flags."""
@@ -173,7 +173,7 @@ def _repository(borg_version, **fields):
 
 
 @pytest.mark.unit
-def test_agent_payload_carries_the_upload_limit_for_borg1_only():
+def test_agent_payload_leaves_the_upload_limit_out_of_a_local_borg2_repository():
     from app.services.repository_executor import build_agent_backup_payload
 
     borg1 = build_agent_backup_payload(_repository(1), "a", source_directories=["/s"])

@@ -108,10 +108,13 @@ function aggregateProgress(run: BackupPlanRun): { processed: number; total: numb
   for (const repoRun of run.repositories) {
     const details = repoRun.backup_job?.progress_details
     if (!details) continue
-    if (typeof details.original_size === 'number') processed += details.original_size
-    if (typeof details.total_expected_size === 'number' && details.total_expected_size > 0) {
-      total += details.total_expected_size
+    // Only a repository with a known total counts toward the proportion:
+    // the bytes of one without a total would inflate it.
+    if (typeof details.total_expected_size !== 'number' || details.total_expected_size <= 0) {
+      continue
     }
+    total += details.total_expected_size
+    if (typeof details.original_size === 'number') processed += details.original_size
   }
   const pct = total > 0 ? Math.min(100, (processed / total) * 100) : 0
   return { processed, total, pct }

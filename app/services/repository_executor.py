@@ -14,6 +14,7 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import SingletonThreadPool, StaticPool
 
+from app.core.borg_major import borg_major, is_borg2
 from app.core.agent_versions import agent_borg2_version, agent_borg_version_for_major
 from app.core.borg2 import borg2_below_minimum, borg2_minimum_version
 from app.core.borg_router import BorgRouter
@@ -253,7 +254,7 @@ def build_agent_backup_payload(
     repository_payload = {
         "id": repository.id,
         "path": repository.path,
-        "borg_version": repository.borg_version or 1,
+        "borg_version": borg_major(repository),
     }
     if repository.remote_path:
         repository_payload["remote_path"] = repository.remote_path
@@ -269,7 +270,7 @@ def build_agent_backup_payload(
             parse_borg_flags(
                 custom_flags if custom_flags is not None else repository.custom_flags,
                 "create",
-                repository.borg_version or 1,
+                borg_major(repository),
                 local_paths=False,
             )
         ),
@@ -309,7 +310,7 @@ def build_agent_repository_operation_payload(
     repository_payload = {
         "id": repository.id,
         "path": repository.path,
-        "borg_version": repository.borg_version or 1,
+        "borg_version": borg_major(repository),
     }
     if repository.remote_path:
         repository_payload["remote_path"] = repository.remote_path
@@ -422,7 +423,7 @@ def validate_agent_backup_repository(
             status_code=status.HTTP_409_CONFLICT,
             detail={"key": "backend.errors.agents.agentNotQueueable"},
         )
-    if (repository.borg_version or 1) == 2:
+    if is_borg2(repository):
         require_agent_borg2(agent)
     using_repository_sources = source_paths is None
     if using_repository_sources:
@@ -487,9 +488,7 @@ def validate_agent_repository_operation(
                 "params": {"capability": job_kind},
             },
         )
-    if (
-        repository.borg_version or 1
-    ) == 2 and job_kind not in BORGLESS_REPOSITORY_JOB_KINDS:
+    if (borg_major(repository)) == 2 and job_kind not in BORGLESS_REPOSITORY_JOB_KINDS:
         require_agent_borg2(agent)
     return agent
 
@@ -529,28 +528,34 @@ def queue_agent_repository_operation_job(
     maintenance_job_kind: Optional[str] = None,
     maintenance_job_id: Optional[int] = None,
     ignore_queued_operations: bool = False,
+    check_admission: bool = True,
 ) -> AgentJob:
     """`ignore_queued_operations` (see `list_active_repository_work`) is only
     valid from the runner's repository lane, and is refused anywhere else:
-    see `_require_repository_lane`."""
+    see `_require_repository_lane`.
+
+    `check_admission=False` queues without asking admission, for a job that
+    opens a location the repository's active work does not use: the check
+    of a changed path. The job still counts as active work for others."""
     if ignore_queued_operations:
         _require_repository_lane(db, repository, maintenance_job_id)
     agent = validate_agent_repository_operation(db, repository, job_kind=job_kind)
     operation_payload = operation
-    admission_operation = operation_for_agent_job_kind(job_kind)
-    # Phase 5 moved every maintenance kind to `operations`. The value is the
-    # table admission should ignore, so the row this caller just created
-    # cannot block its own admission.
-    ensure_repository_admission(
-        db,
-        repository,
-        admission_operation,
-        ignore=ignore_active_job(
-            "operations" if maintenance_job_kind else None,
-            maintenance_job_id,
-        ),
-        ignore_queued_operations=ignore_queued_operations,
-    )
+    if check_admission:
+        admission_operation = operation_for_agent_job_kind(job_kind)
+        # Phase 5 moved every maintenance kind to `operations`. The value is
+        # the table admission should ignore, so the row this caller just
+        # created cannot block its own admission.
+        ensure_repository_admission(
+            db,
+            repository,
+            admission_operation,
+            ignore=ignore_active_job(
+                "operations" if maintenance_job_kind else None,
+                maintenance_job_id,
+            ),
+            ignore_queued_operations=ignore_queued_operations,
+        )
     now = datetime.utcnow()
     payload = build_agent_repository_operation_payload(
         repository,
@@ -1005,6 +1010,7 @@ def queue_agent_backup_job(
 
 
 SCRIPT_RUN_CAPABILITY = "script.run"
+SCRIPT_AGENT_JOB_TYPE = "script"
 
 
 def build_agent_script_payload(
@@ -1069,7 +1075,7 @@ def queue_agent_script_job(
     now = datetime.utcnow()
     agent_job = AgentJob(
         agent_machine_id=agent.id,
-        job_type="script",
+        job_type=SCRIPT_AGENT_JOB_TYPE,
         status="queued",
         payload=build_agent_script_payload(script_name, env),
         created_at=now,

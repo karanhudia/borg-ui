@@ -5,6 +5,7 @@ import CheckIcon from '@mui/icons-material/Check'
 import {
   generateBorgCreateCommand,
   generateBorgInitCommand,
+  borg2SshUrl,
   remotePathParts,
 } from '../utils/borgUtils'
 import { useTranslation } from 'react-i18next'
@@ -140,8 +141,13 @@ export default function CommandPreview({
 
   // Build full repository path
   let fullRepoPath = repositoryPath || '/path/to/repository'
-  if (repositoryLocation === 'ssh' && host && username) {
-    fullRepoPath = `ssh://${username}@${host}:${port}${repositoryPath.startsWith('/') ? '' : '/'}${repositoryPath}`
+  // A Borg 2 URL the wizard still holds whole is the repository as it is
+  if (repositoryLocation === 'ssh' && host && username && !repositoryPath.startsWith('ssh://')) {
+    // Borg 2 tells an absolute path from a relative one by a second slash
+    fullRepoPath =
+      borgVersion === 2
+        ? borg2SshUrl(username, host, port, repositoryPath)
+        : `ssh://${username}@${host}:${port}${repositoryPath.startsWith('/') ? '' : '/'}${repositoryPath}`
   } else if (repositoryLocation === 'rclone') {
     fullRepoPath = '/data/rclone-cache/repositories/<repository-id>'
   }

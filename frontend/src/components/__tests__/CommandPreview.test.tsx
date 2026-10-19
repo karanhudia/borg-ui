@@ -182,6 +182,60 @@ describe('CommandPreview', () => {
       expect(matches.length).toBeGreaterThanOrEqual(1)
     })
 
+    it.each([
+      ['/srv/backups/repo', 'ssh://backup@backup-server.com:2222//srv/backups/repo'],
+      ['backups/repo', 'ssh://backup@backup-server.com:2222/backups/repo'],
+    ])('writes the Borg 2 URL of %s with its relative or absolute path', (path, url) => {
+      // Borg 2 reads ssh://host/path relative to the login directory and
+      // takes a second slash for an absolute path (#1264)
+      render(
+        <CommandPreview
+          mode="create"
+          borgVersion={2}
+          repositoryPath={path}
+          repositoryLocation="ssh"
+          host="backup-server.com"
+          username="backup"
+          port={2222}
+          encryption="repokey-aes-ocb"
+          sourceDirs={['/data']}
+          repositoryMode="full"
+          dataSource="local"
+        />
+      )
+
+      expect(
+        screen.getByText(
+          `borg2 -r ${url} repo-create --encryption aes256-ocb --key-location repokey`
+        )
+      ).toBeInTheDocument()
+    })
+
+    it('takes a whole Borg 2 URL as the repository', () => {
+      // the wizard holds a typed Borg 2 URL whole until the field is left
+      render(
+        <CommandPreview
+          mode="create"
+          borgVersion={2}
+          repositoryPath="ssh://backup@backup-server.com:2222//srv/repo"
+          repositoryLocation="ssh"
+          host="backup-server.com"
+          username="backup"
+          port={2222}
+          encryption="repokey-aes-ocb"
+          sourceDirs={['/data']}
+          repositoryMode="full"
+          dataSource="local"
+        />
+      )
+
+      expect(
+        screen.getByText(
+          'borg2 -r ssh://backup@backup-server.com:2222//srv/repo repo-create --encryption aes256-ocb --key-location repokey'
+        )
+      ).toBeInTheDocument()
+    })
+
     it('includes remote-path flag when specified', () => {
       render(
         <CommandPreview

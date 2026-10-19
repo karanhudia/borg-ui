@@ -187,9 +187,11 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
         <Stack spacing={2}>
           {runningBackupJobs.map((job: BackupJob) => {
             const visibleStats = getVisibleStats(job)
-            const progress = job.progress || 0
+            const progress = job.progress ?? 0
+            // An agent backup has no percentage (null) while it reads data
+            const hasRead = (job.progress_details?.original_size ?? 0) > 0
             const stageLabel =
-              progress === 0
+              progress === 0 && !hasRead
                 ? t('backup.runningJobs.progress.initializing')
                 : progress >= 100
                   ? t('backup.runningJobs.progress.finalizing')

@@ -60,3 +60,18 @@ export const LongList: Story = {
     onOpen: () => {},
   },
 }
+
+// Borg 2: no per-archive size a deletion would free, so no ranking, no bars,
+// the archives oldest first.
+export const Borg2NoSizes: Story = {
+  args: {
+    // a Borg 2 series shares one name; the time tells the archives apart
+    archives: ['2026-08-30', '2026-08-31', '2026-09-01'].map((day, i) => ({
+      ...archive(i + 1, 'nas', null),
+      start: `${day}T02:00:00`,
+    })),
+    partialMeasure: false,
+    sizesAvailable: false,
+    onOpen: () => {},
+  },
+}

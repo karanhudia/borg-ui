@@ -75,7 +75,18 @@ export const NeverMeasured: Story = {
 export const Borg2FirstOfSeries: Story = {
   args: {
     archive: { ...archive, compressed_size: null, predecessor_stats: null, predecessor_id: null },
+    borgVersion: 2,
     totalsState: 'ready',
     totals: { added: 12000, removed: 0, modified: 0 },
+  },
+}
+// A Borg 2 archive whose backup reported no added size (created before the
+// figure was recorded).
+export const Borg2AddedNotReported: Story = {
+  args: {
+    archive: { ...archive, compressed_size: null, deduplicated_size: null },
+    borgVersion: 2,
+    totalsState: 'ready',
+    totals: { added: 5, removed: 2, modified: 9 },
   },
 }

@@ -278,6 +278,10 @@ export interface PrunePreviewResponse {
   kept_count: number
   freed_at_least: number
   partial_measure: boolean
+  /** Whether the archives' sizes bound what deleting them frees. False on
+   * Borg 2, which reports no per-archive deduplicated size: nothing is
+   * ranked or re-measured, and `freed_at_least` is no figure to show. */
+  sizes_available: boolean
   footprint_before: number | null
   footprint_after_at_most: number | null
   lost_files: PruneLostFiles
@@ -319,5 +323,7 @@ export interface PruneComparison {
   /** The `auto_prune_preview` setting: off, nothing refreshes a stale
    * comparison on its own. */
   auto: boolean
+  /** As on the preview: false, and the rows' `freed_at_least` means nothing. */
+  sizes_available: boolean
   candidates: PruneComparisonRow[]
 }

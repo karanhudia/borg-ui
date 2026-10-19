@@ -90,4 +90,40 @@ describe('ActiveBackupPlanRunCard progress row', () => {
 
     expect(screen.queryByText(/Total Source Size/)).not.toBeInTheDocument()
   })
+
+  it('leaves a repository without a total out of the proportion', () => {
+    // A server repository with a total next to an agent repository without one:
+    // the agent's bytes read must not count against the other's total.
+    const run = runWithProgress({
+      original_size: 50_000_000_000,
+      total_expected_size: 100_000_000_000,
+      nfiles: 10,
+      current_file: '/srv/a',
+    })
+    const [known] = run.repositories
+    run.repositories.push({
+      ...known,
+      id: 21,
+      repository_id: 31,
+      repository: { id: 31, name: 'Agent repo', path: '/backups/agent', borg_version: 2 },
+      backup_job: {
+        ...known.backup_job!,
+        id: 41,
+        repository_id: 31,
+        repository: '/backups/agent',
+        execution_mode: 'agent',
+        progress: null,
+        progress_details: {
+          original_size: 40_000_000_000,
+          total_expected_size: 0,
+          nfiles: 5,
+          current_file: '/srv/b',
+        },
+      },
+    })
+
+    render(<ActiveBackupPlanRunCard run={run} plan={plan} onCancel={noop} onViewLogs={noop} />)
+
+    expect(screen.getByText('50.0%')).toBeInTheDocument()
+  })
 })

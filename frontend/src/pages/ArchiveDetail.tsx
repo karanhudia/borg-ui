@@ -441,7 +441,12 @@ export default function ArchiveDetail() {
           </Button>
         </Stack>
         <Box sx={{ flexBasis: '100%' }}>
-          <ArchiveStatsHeader archive={archive} totals={totals} totalsState={totalsState} />
+          <ArchiveStatsHeader
+            archive={archive}
+            totals={totals}
+            totalsState={totalsState}
+            borgVersion={getBorgVersion(repository)}
+          />
         </Box>
       </Box>
 

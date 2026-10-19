@@ -20,7 +20,7 @@ def _repo(test_db, name="nas"):
 @pytest.mark.unit
 class TestCheckMigration:
     def test_starting_a_check_creates_an_operation_and_no_check_job(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         repo = _repo(test_db)
 
@@ -34,24 +34,24 @@ class TestCheckMigration:
         body = response.json()
         assert body["status"] == "pending"
 
+        held_runner.turn()
         op = test_db.get(Operation, body["job_id"])
         assert op is not None
         assert op.kind == "check"
         assert op.category == "maintenance"
         assert op.trigger == "manual"
         assert op.params["max_duration"] == 3600
-        # The runner may already have picked the row up in this process, so
-        # assert it is not terminal rather than racing it for "queued".
-        assert op.status in ("queued", "running")
+        assert op.status == "queued"
 
     def test_a_second_check_is_rejected_with_409(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         repo = _repo(test_db)
         first = test_client.post(
             f"/api/repositories/{repo.id}/check", json={}, headers=admin_headers
         )
         assert first.status_code == 200
+        held_runner.turn()
 
         second = test_client.post(
             f"/api/repositories/{repo.id}/check", json={}, headers=admin_headers
@@ -90,12 +90,13 @@ class TestCheckMigration:
 @pytest.mark.unit
 class TestCheckReadRoutes:
     def test_status_route_serves_the_operation(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         repo = _repo(test_db)
         started = test_client.post(
             f"/api/repositories/{repo.id}/check", json={}, headers=admin_headers
         ).json()
+        held_runner.turn()
 
         response = test_client.get(
             f"/api/repositories/check-jobs/{started['job_id']}", headers=admin_headers
@@ -105,10 +106,7 @@ class TestCheckReadRoutes:
         body = response.json()
         assert body["id"] == started["job_id"]
         # The contract keeps the legacy vocabulary the frontend polls for.
-        # The runner may already have picked the row up in this process (it
-        # wakes on enqueue rather than waiting for its poll interval), so
-        # assert it is not terminal rather than racing it for "pending".
-        assert body["status"] in ("pending", "running")
+        assert body["status"] == "pending"
         assert "progress" in body
 
     def test_status_route_still_serves_a_pre_phase_5_row(
@@ -220,7 +218,7 @@ class TestPruneMigration:
 @pytest.mark.unit
 class TestCompactMigration:
     def test_starting_a_compact_creates_an_operation(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         repo = _repo(test_db)
 
@@ -229,12 +227,10 @@ class TestCompactMigration:
         )
 
         assert response.status_code == 200
+        held_runner.turn()
         op = test_db.get(Operation, response.json()["job_id"])
         assert op.kind == "compact"
-        # The runner may already have picked the row up in this process (it
-        # wakes on enqueue rather than waiting for its poll interval), so
-        # assert it is not terminal rather than racing it for "queued".
-        assert op.status in ("queued", "running")
+        assert op.status == "queued"
 
 
 @pytest.mark.unit
@@ -255,7 +251,7 @@ class TestDeleteArchiveMigration:
         assert op.params["archive_name"] == "nightly-2026-09-01"
 
     def test_a_second_delete_of_the_same_archive_is_rejected(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         repo = _repo(test_db)
 
@@ -263,6 +259,7 @@ class TestDeleteArchiveMigration:
             f"/api/archives/nightly-2026-09-01?repository={repo.path}",
             headers=admin_headers,
         )
+        held_runner.turn()
         second = test_client.delete(
             f"/api/archives/nightly-2026-09-01?repository={repo.path}",
             headers=admin_headers,

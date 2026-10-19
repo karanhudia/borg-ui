@@ -271,9 +271,6 @@
     }
   },
   "managedAgents": {
-    "planGate": {
-      "message": "Managed Agents benötigen Pro oder Enterprise. Führe ein Upgrade durch, um entfernte Maschinen zu registrieren und Agent-Jobs auszuführen."
-    },
     "agent": "Agent",
     "page": {
       "title": "Verwaltete Agenten",
@@ -1159,6 +1156,8 @@
       "stats": {
         "addedToRepository": "Zum Repository hinzugefügt",
         "addedHint": "Daten, die nur dieses Archiv enthält. Beim Löschen wird mindestens so viel frei.",
+        "addedAtCreation": "Beim Erstellen hinzugefügt",
+        "addedAtCreationHint": "Daten, die dieses Archiv beim Erstellen hinzugefügt hat. Spätere Archive können sie mitnutzen, daher kann das Löschen dieses Archivs weniger freigeben.",
         "filesChanged": "Geänderte Dateien",
         "filesChangedNotIndexed": "Noch nicht indiziert",
         "filesChangedUnavailable": "Für dieses Repository nicht verfügbar",
@@ -1471,7 +1470,6 @@
     "runTooltipProFeatures": "Dieser Plan verwendet reine Pro-Funktionen: {{features}}. Bearbeite ihn oder upgrade auf Pro, um ihn auszuführen.",
     "proFeatureLabels": {
       "multiRepository": "mehrere Repositories oder parallele Ausführung",
-      "managedAgent": "Managed-Agent-Backups",
       "database": "Datenbank-Backups",
       "container": "Container-Backups"
     },
@@ -1611,7 +1609,6 @@
       "sshSourceDescription": "Remote-Maschine",
       "managedAgent": "Managed Agent",
       "managedAgentDescription": "Pfade von einem registrierten Managed Agent lesen",
-      "managedAgentRequiresPro": "Managed-Agent-Quellen erfordern Pro.",
       "mixedSourceTypesRequiresPro": "Gemischte Quelltypen erfordern Pro. Mehrere Pfade desselben Quelltyps bleiben verfügbar.",
       "agentRepoConstraintBanner": "Dieses Repository läuft auf {{agent}}. Sicherungsquellen müssen vom selben Agent stammen.",
       "agentRepoLockedLocal": "Quellen vom Borg UI-Server können nicht in ein Agent-Repository geschrieben werden.",
@@ -1862,9 +1859,9 @@
       "settings": {
         "archiveNameHelper": "Unterstützt {plan_name}, {repo_name}, {now}, {date}, {time} und {timestamp}.",
         "extraBorgFlagsHelper": "Benutzerdefinierte Befehlszeilen-Flags für borg create (z.B. --stats, --progress, --list). Wird auf jeden Repository-Lauf in diesem Plan angewendet.",
-        "uploadSpeedHelper": "MB/s. Leer bedeutet unbegrenzt. Gilt nur für Borg-1-Repositories; Borg 2 kennt kein Upload-Limit.",
+        "uploadSpeedHelper": "MB/s. Leer bedeutet unbegrenzt. Gilt für Borg-1-Repositories und für Borg-2-Repositories hinter rclone; andere Borg-2-Repositories haben kein Upload-Limit.",
         "uploadPoliciesTitle": "Geplante Upload-Limits",
-        "uploadPoliciesHelper": "Zeitfenster überschreiben das konstante Upload-Limit. Ein leeres Limit bedeutet unbegrenzt. Wie das konstante Limit gelten sie nur für Borg-1-Repositories.",
+        "uploadPoliciesHelper": "Zeitfenster überschreiben das konstante Upload-Limit. Ein leeres Limit bedeutet unbegrenzt. Wie das konstante Limit gelten sie für Borg-1-Repositories und für Borg-2-Repositories hinter rclone.",
         "addUploadPolicy": "Upload-Regel hinzufügen",
         "removeUploadPolicy": "Upload-Regel entfernen",
         "daytimePolicyLabel": "Tageslimit",
@@ -4056,10 +4053,7 @@
     "languageDescription": "Wähle die Sprache der Benutzeroberfläche",
     "languageLabel": "Oberflächensprache",
     "languageSaved": "Sprache erfolgreich aktualisiert",
-    "updateFailed": "Einstellungen konnten nicht aktualisiert werden",
-    "analyticsTransparencyBold": "Volle Transparenz:",
-    "analyticsTransparencyLink": "Unser Analyse-Dashboard öffentlich einsehen",
-    "analyticsTransparencyAfterLink": "um genau zu sehen, was wir erfassen. Anonym und datenschutzorientiert."
+    "updateFailed": "Einstellungen konnten nicht aktualisiert werden"
   },
   "betaFeatures": {
     "title": "Beta-Funktionen",
@@ -4375,8 +4369,6 @@
     "accept": "Akzeptieren",
     "decline": "Ablehnen",
     "learnMore": "Mehr erfahren",
-    "viewDashboard": "Unser öffentliches Analyse-Dashboard ansehen",
-    "viewDashboardSuffix": "um genau zu sehen, was wir erfassen.",
     "enableToggle": "Anonyme Analysen aktivieren",
     "continue": "Weiter",
     "saving": "Speichert...",
@@ -4693,7 +4685,6 @@
       "executionTargetLocalDesc": "Diesen Server oder vorhandene SSH-Remote-Ausführung verwenden",
       "managedAgent": "Verwalteter Agent",
       "managedAgentDesc": "Borg auf einer registrierten Maschine ausführen",
-      "managedAgentRequiresPro": "Managed-Agent-Repositories erfordern Pro.",
       "managedAgentSelectLabel": "Verwalteter Agent",
       "noActiveManagedAgents": "Keine aktiven verwalteten Agenten registriert.",
       "managedAgentFilesystem": "Dateisystem des verwalteten Agenten",
@@ -4822,6 +4813,10 @@
       "repositoryPathLabel": "Repository-Pfad",
       "repositoryPathHelper": "Pfad, unter dem das Repository gespeichert wird",
       "borgV2Warning": "Die Borg-2-Unterstützung ist noch in der Beta. Verwende sie noch nicht für Produktionsdaten. Sie ist derzeit für Enthusiasten und Tests gedacht und erfordert das borg2-Binary auf allen Remote-Hosts.",
+      "borg2OnlyUrl": "Nur Borg 2 kann diese Repository-URL öffnen.",
+      "borg2PathAbsolute": "Absoluter Pfad auf dem Host.",
+      "borg2PathRelative": "Relativ zum Login-Verzeichnis von {{login}}. Für einen absoluten Pfad mit / beginnen.",
+      "borg2UrlRelative": "Relativ zum Login-Verzeichnis des SSH-Benutzers. Für einen absoluten Pfad ssh://host//pfad schreiben.",
       "connected": "Verbunden",
       "browseFilesystem": "Dateisystem durchsuchen"
     },
@@ -5011,6 +5006,7 @@
       "encryption": "Verschlüsselung",
       "encryptionRepokey": "Repokey",
       "encryptionKeyfile": "Schlüsseldatei",
+      "encryptionAuthenticated": "Authentifiziert",
       "encryptionNone": "Keine",
       "passphrase": "Passphrase",
       "passphraseSet": "••••••••",
@@ -5074,6 +5070,10 @@
         "keyfile-chacha20-poly1305": {
           "label": "Schlüsseldatei (ChaCha20)",
           "description": "Schlüsseldatei mit ChaCha20"
+        },
+        "authenticated": {
+          "label": "Authentifiziert (ohne Verschlüsselung)",
+          "description": "Daten werden nicht verschlüsselt; Schlüssel und Passphrase schützen sie vor Manipulation"
         },
         "none": {
           "label": "Keine",
@@ -5220,7 +5220,8 @@
     "customFlagsHint": "Benutzerdefinierte Befehlszeilen-Flags für borg create (z.B. --stats, --progress, --list)",
     "uploadSpeedLimit": "Upload-Geschwindigkeitslimit",
     "uploadSpeedLimitHint": "MB/s. Leer bedeutet unbegrenzt. Backup-Plan-Einstellungen können diesen Standard überschreiben.",
-    "uploadSpeedLimitBorg2": "Borg 2 kennt kein Upload-Limit. Diese Einstellung gilt nur für Borg-1-Repositories.",
+    "uploadSpeedLimitBorg2": "Borg 2 kennt kein Upload-Limit. Diese Einstellung gilt für Borg-1-Repositories und für Borg-2-Repositories hinter rclone.",
+    "uploadSpeedLimitRclone": "MB/s. Leer bedeutet unbegrenzt. Wird bei Backups als Bandbreitenlimit von rclone angewendet, da Borg 2 selbst kein Upload-Limit kennt.",
     "scripts": "Skripte",
     "scriptsOptional": "(Optional)",
     "scriptsHint": "Inline-Skripte konfigurieren oder wiederverwendbare Skripte aus der Skriptbibliothek zuweisen.",
@@ -5684,8 +5685,6 @@
     }
   },
   "analyticsBanner": {
-    "viewDashboardLink": "Unser öffentliches Analyse-Dashboard anzeigen",
-    "viewDashboardSuffix": "um genau zu sehen, was wir erfassen.",
     "changeAnytimeNote": "Du kannst dies jederzeit in Einstellungen → Präferenzen ändern"
   },
   "repositoryScripts": {
@@ -6569,6 +6568,7 @@
     "after": "Footprint nachher",
     "atMost": "höchstens",
     "notMeasured": "nicht gemessen",
+    "notAvailable": "nicht verfügbar",
     "heatmapTitle": "Was bleibt, was geht",
     "legendKept": "Behalten",
     "legendDeleted": "Gelöscht",
@@ -6576,8 +6576,10 @@
     "cellKept": "{{name}}: behalten, Regel {{rule}}",
     "cellDeleted": "{{name}}: würde gelöscht",
     "rankedTitle": "Gelöschte Archive nach freigegebenem Speicher sortiert",
+    "listedTitle": "Gelöschte Archive",
     "remeasured": "Gerade neu gemessen für {{count}} Kandidaten",
     "remeasuredPartial": "Die ältesten {{cap}} von {{count}} neu gemessen; der Rest verwendet den gespeicherten Wert",
+    "noSizesNote": "Borg 2 meldet pro Archiv keine Größe, die sein Löschen freigeben würde; die Archive stehen daher in zeitlicher Reihenfolge, das älteste zuerst.",
     "remeasuring": "wird neu gemessen",
     "showAll": "Alle {{count}} anzeigen",
     "lostTitle": "Für immer verlorene Dateien",
@@ -6657,8 +6659,7 @@
       "sshDesc": "Ein Server, NAS oder PC, den dieser Server per SSH erreicht. Borg UI holt die Dateien von dort.",
       "notSure": "Unsicher? Wähle \"Dateien auf diesem Server\", wenn die Daten dort liegen, wo Borg UI läuft. Wähle \"anderen Rechner\", wenn sie woanders liegen und du dich dort mit Benutzername und Passwort anmelden kannst.",
       "agent": "Anderer Rechner mit dem Borg-UI-Agenten",
-      "agentDesc": "Installiere einen kleinen Agenten auf einem Laptop, Desktop oder Server. Er verbindet sich von sich aus mit Borg UI, funktioniert also auch hinter einer Firewall, und sichert auf seine eigene Festplatte.",
-      "agentPro": "Erfordert einen Pro- oder Enterprise-Plan."
+      "agentDesc": "Installiere einen kleinen Agenten auf einem Laptop, Desktop oder Server. Er verbindet sich von sich aus mit Borg UI, funktioniert also auch hinter einer Firewall, und sichert auf seine eigene Festplatte."
     },
     "folders": {
       "title": "Wähle die Ordner zum Sichern",

@@ -426,6 +426,10 @@ export default function PrunePreview() {
   const intensityOf = useMemo(() => sizeIntensity(archives), [archives])
   const byId = useMemo(() => new Map(archives.map((a) => [a.id, a])), [archives])
 
+  // Whether the archives' sizes say anything about what a deletion frees
+  // (not on Borg 2). A payload from a server without the field is Borg 1's.
+  const sizesAvailable = (preview?.sizes_available ?? comparison?.sizes_available) !== false
+
   const deletedCount = preview?.deleted_count ?? 0
   const keptCount = preview?.kept_count ?? 0
 
@@ -570,6 +574,7 @@ export default function PrunePreview() {
             pending={pendingOpId !== null}
             refreshDisabled={!ready || previewMutation.isPending || refreshMutation.isPending}
             canManageSettings={hasGlobalPermission('settings.system.manage')}
+            sizesAvailable={sizesAvailable}
             onSelect={showCandidate}
             onRefresh={() => refreshMutation.mutate({ id: repositoryId, auto: false })}
           />
@@ -585,6 +590,7 @@ export default function PrunePreview() {
                 deletedCount={deletedCount}
                 keptCount={keptCount}
                 freedAtLeast={preview.freed_at_least}
+                sizesAvailable={sizesAvailable}
                 footprintBefore={preview.footprint_before}
                 footprintAfterAtMost={preview.footprint_after_at_most}
               />
@@ -646,6 +652,7 @@ export default function PrunePreview() {
                 <PruneCandidatesRanked
                   archives={archives}
                   partialMeasure={preview.partial_measure}
+                  sizesAvailable={sizesAvailable}
                   onOpen={(id) => navigate(`/archives/${repositoryId}/${id}`)}
                 />
               </Paper>
@@ -665,7 +672,9 @@ export default function PrunePreview() {
                     })}
                   </Alert>
                 )}
-                <Alert severity="info">{t('prunePreview.warnLowerBound')}</Alert>
+                {sizesAvailable && (
+                  <Alert severity="info">{t('prunePreview.warnLowerBound')}</Alert>
+                )}
                 {preview.partial_measure && (
                   <Alert severity="warning">
                     {t('prunePreview.remeasuredPartial', { cap: 50, count: deletedCount })}

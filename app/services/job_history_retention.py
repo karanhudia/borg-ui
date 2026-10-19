@@ -47,6 +47,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from app.core.borg_major import is_borg2
 from app.config import settings as app_config
 from typing import Any, Dict, Iterable, Optional
 
@@ -571,7 +572,7 @@ def mark_jobs_of_pruned_archives(
     if not names or repository_id is None:
         return 0
     repository = db.get(Repository, repository_id)
-    if repository is None or int(getattr(repository, "borg_version", 1) or 1) == 2:
+    if repository is None or is_borg2(repository):
         return 0
 
     pruned_at = pruned_at or utc_now()

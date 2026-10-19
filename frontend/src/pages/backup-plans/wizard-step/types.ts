@@ -22,7 +22,6 @@ export interface BackupPlanWizardStepProps {
   loadingScripts: boolean
   canUseMultiRepository: boolean
   canUseBorg2: boolean
-  canUseManagedAgents: boolean
   canUseMixedSourceTypes: boolean
   canUseDatabaseDiscovery: boolean
   canUseContainerBackups: boolean

@@ -24,6 +24,7 @@ Fixes #
 - [ ] I have tested this locally
 - [ ] I have added tests that prove my fix is effective or that my feature works
 - [ ] All existing tests pass
+- [ ] A new database migration comes with an upgrade test (`tests/migrations`, `upgraded_from`)
 
 
 ## Checklist

@@ -148,7 +148,6 @@ export default function Repositories() {
   const { can } = usePlan()
   const canManageRepositoriesGlobally = hasGlobalPermission('repositories.manage_all')
   const quickStart = useQuickStart()
-  const canUseManagedAgents = can('managed_agents')
   const canUseRclone = can('rclone')
   const permissions = usePermissions()
   const queryClient = useQueryClient()
@@ -1260,7 +1259,6 @@ export default function Repositories() {
         onClose={closeWizard}
         mode={wizardMode}
         repository={wizardRepository || undefined}
-        canUseManagedAgents={canUseManagedAgents}
         canUseRclone={canUseRclone}
         onSubmit={handleWizardSubmit}
       />

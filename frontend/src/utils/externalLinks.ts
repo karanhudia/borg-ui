@@ -1,3 +1,5 @@
+import { getAnalyticsInstanceKey } from './analytics'
+
 export const BUY_URL = 'https://borgui.com/buy'
 
 export type BuyLinkContext = {
@@ -12,5 +14,8 @@ export function buildBuyUrl({ plan, src, offer }: BuyLinkContext): string {
   if (plan) params.set('plan', plan)
   params.set('src', src)
   if (offer) params.set('offer', offer)
+  // Joins the storefront visit to this install's usage; absent when analytics is off.
+  const ik = getAnalyticsInstanceKey()
+  if (ik) params.set('ik', ik)
   return `${BUY_URL}?${params.toString()}`
 }

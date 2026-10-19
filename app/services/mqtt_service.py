@@ -646,8 +646,9 @@ class RepositoryStatePublisher:
                 if progress_value is None:
                     progress_value = float(running_job.progress or 0)
 
-                # Map progress to backup status phases (matching UI logic)
-                if progress_value == 0:
+                # Map progress to backup status phases (matching UI logic):
+                # a backup without a percentage that reads data is processing
+                if progress_value == 0 and not (running_job.original_size or 0) > 0:
                     backup_status = "initializing"
                 elif progress_value >= 100:
                     backup_status = "finalizing"

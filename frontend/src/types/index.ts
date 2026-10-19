@@ -243,7 +243,8 @@ export interface BackupJob {
   status: 'running' | 'completed' | 'completed_with_warnings' | 'failed' | 'cancelled' | string
   started_at?: string
   completed_at?: string
-  progress?: number
+  // null while no proportion is known (borg create reports none)
+  progress?: number | null
   total_files?: number
   processed_files?: number
   total_size?: string

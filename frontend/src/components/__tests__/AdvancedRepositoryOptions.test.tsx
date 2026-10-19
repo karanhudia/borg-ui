@@ -63,4 +63,17 @@ describe('AdvancedRepositoryOptions', () => {
     expect(field).toHaveValue(null)
     expect(screen.getByText(/Borg 2 has no upload limit/i)).toBeInTheDocument()
   })
+
+  it('keeps the upload speed limit for Borg 2 behind rclone, applied by rclone', () => {
+    renderOptions({
+      borgVersion: 2,
+      repositoryPath: 'rclone:b2-offsite:borg/archive',
+      uploadRatelimitMb: '1.5',
+    })
+
+    const field = screen.getByLabelText(/Upload speed limit/i)
+    expect(field).toBeEnabled()
+    expect(field).toHaveValue(1.5)
+    expect(screen.getByText(/rclone's bandwidth limit/i)).toBeInTheDocument()
+  })
 })

@@ -1,4 +1,5 @@
 import json
+import math
 import os
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
@@ -3501,3 +3502,175 @@ class TestLockContentionDeferral:
         )
         assert operation.status == "running"
         notifier.send_check_completion.assert_not_awaited()
+
+
+@pytest.mark.unit
+class TestAgentBackupProgressWithoutTotal:
+    """borg create reports no proportion and nothing computes a source total
+    for an agent backup, so its percentage is unknown, not zero (#1154)."""
+
+    def _running_backup(self, test_client, test_db, admin_headers):
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        job = _create_agent_job(test_db, agent, status="running")
+        backup_job = seed_job_operation(
+            test_db, "backup", repository="/repo", status="running"
+        )
+        test_db.commit()
+        job.operation_id = backup_job.id
+        test_db.commit()
+        return job, backup_job.id, _agent_headers(registered["agent_token"])
+
+    def _report(self, test_client, job, headers, **fields):
+        response = test_client.post(
+            f"/api/agents/jobs/{job.id}/progress", json=fields, headers=headers
+        )
+        assert response.status_code == 200
+
+    def test_the_routes_send_no_percentage_while_no_total_exists(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        job, backup_id, headers = self._running_backup(
+            test_client, test_db, admin_headers
+        )
+        self._report(
+            test_client,
+            job,
+            headers,
+            original_size=846_634_729_941,
+            nfiles=584_280,
+            current_file="/srv/data/file",
+        )
+
+        status = test_client.get(
+            f"/api/backup/status/{backup_id}", headers=admin_headers
+        )
+        assert status.status_code == 200
+        body = status.json()
+        assert body["status"] == "running"
+        assert body["progress"] is None
+        assert body["progress_details"]["progress_percent"] is None
+        assert body["progress_details"]["original_size"] == 846_634_729_941
+        assert body["progress_details"]["nfiles"] == 584_280
+
+        listed = test_client.get("/api/backup/jobs", headers=admin_headers)
+        assert listed.status_code == 200
+        [row] = [row for row in listed.json()["jobs"] if row["id"] == backup_id]
+        assert row["progress"] is None
+
+        activity = test_client.get("/api/activity/recent", headers=admin_headers)
+        assert activity.status_code == 200
+        [item] = [
+            item
+            for item in activity.json()
+            if item["type"] == "backup" and item["id"] == backup_id
+        ]
+        assert item["progress_percent"] is None
+
+    def test_a_step_percentage_is_not_the_backups_proportion(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        """A progress indicator borg runs inside create (the cache sync)
+        reports its own percentage; without a total it says nothing about
+        how much of the backup is done."""
+        job, backup_id, headers = self._running_backup(
+            test_client, test_db, admin_headers
+        )
+        self._report(test_client, job, headers, progress_percent=37.0)
+        self._report(test_client, job, headers, original_size=1024, nfiles=3)
+
+        test_db.expire_all()
+        backup_job = resolve_backup_job(test_db, backup_id)
+        assert backup_job.progress is None
+        assert backup_job.progress_percent is None
+
+    def test_a_reported_total_still_gives_a_percentage(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        job, backup_id, headers = self._running_backup(
+            test_client, test_db, admin_headers
+        )
+        self._report(
+            test_client,
+            job,
+            headers,
+            progress_percent=42.5,
+            original_size=1024,
+            total_expected_size=4096,
+        )
+
+        test_db.expire_all()
+        backup_job = resolve_backup_job(test_db, backup_id)
+        assert backup_job.progress == 42
+        assert backup_job.progress_percent == 42.5
+
+    def test_completion_still_reports_one_hundred(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        job, backup_id, headers = self._running_backup(
+            test_client, test_db, admin_headers
+        )
+        self._report(test_client, job, headers, original_size=1024, nfiles=3)
+        complete = test_client.post(
+            f"/api/agents/jobs/{job.id}/complete",
+            json={"result": {"archive_name": "a", "return_code": 0}},
+            headers=headers,
+        )
+        assert complete.status_code == 200
+
+        status = test_client.get(
+            f"/api/backup/status/{backup_id}", headers=admin_headers
+        )
+        assert status.json()["progress"] == 100
+        assert status.json()["progress_details"]["progress_percent"] == 100
+
+    def test_a_non_finite_percentage_is_not_stored(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        """A percentage that is not a finite number would break every reader
+        of the backup: the report is refused and nothing is stored."""
+        job, backup_id, headers = self._running_backup(
+            test_client, test_db, admin_headers
+        )
+        response = test_client.post(
+            f"/api/agents/jobs/{job.id}/progress",
+            content=b'{"progress_percent": Infinity, "total_expected_size": 1,'
+            b' "original_size": 1024}',
+            headers={**headers, "Content-Type": "application/json"},
+        )
+        assert response.status_code == 422
+
+        listed = test_client.get("/api/backup/jobs", headers=admin_headers)
+        assert listed.status_code == 200
+        [row] = [row for row in listed.json()["jobs"] if row["id"] == backup_id]
+        assert row["progress"] is None
+
+        test_db.expire_all()
+        assert math.isfinite(test_db.get(AgentJob, job.id).progress_percent)
+
+    @pytest.mark.asyncio
+    async def test_a_non_finite_percentage_over_the_session_is_not_stored(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        job, backup_id, _ = self._running_backup(test_client, test_db, admin_headers)
+
+        await _handle_agent_session_message(
+            test_db,
+            job.agent_machine_id,
+            {
+                "type": "progress",
+                "job_id": job.id,
+                "progress_percent": float("nan"),
+                "total_expected_size": 1,
+                "original_size": 1024,
+            },
+        )
+
+        test_db.expire_all()
+        assert math.isfinite(test_db.get(AgentJob, job.id).progress_percent)
+        backup_job = resolve_backup_job(test_db, backup_id)
+        assert backup_job.original_size == 1024
+        assert backup_job.progress == 0

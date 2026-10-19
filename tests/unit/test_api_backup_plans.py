@@ -1687,7 +1687,7 @@ class TestBackupPlanRoutes:
         assert response.status_code == 201
         assert response.json()["source_locations"] == source_locations
 
-    def test_community_plan_rejects_agent_source(
+    def test_community_plan_allows_agent_source(
         self, test_client: TestClient, admin_headers, test_db
     ):
         _set_plan(test_db, "community")
@@ -1730,8 +1730,7 @@ class TestBackupPlanRoutes:
             headers=admin_headers,
         )
 
-        assert response.status_code == 403
-        assert response.json()["detail"]["feature"] == "managed_agents"
+        assert response.status_code == 201
 
     def test_create_plan_rejects_server_source_to_agent_repo(
         self, test_client: TestClient, admin_headers, test_db

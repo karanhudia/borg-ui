@@ -38,3 +38,15 @@ export const FreedKnown: Story = {
     footprintAfterAtMost: 22_898_600_000,
   },
 }
+
+// Borg 2: no archive size bounds what the deletion frees.
+export const Borg2NoSizes: Story = {
+  args: {
+    deletedCount: 4,
+    keptCount: 12,
+    freedAtLeast: 0,
+    sizesAvailable: false,
+    footprintBefore: 900_000_000_000,
+    footprintAfterAtMost: 900_000_000_000,
+  },
+}

@@ -63,6 +63,30 @@ describe('useFeatureAnalytics', () => {
     )
   })
 
+  it('keeps tracking adoption of a Community feature that has no gate', () => {
+    const { result } = renderHook(() => useFeatureAnalytics())
+
+    act(() => {
+      result.current.trackFeatureUsed('managed_agents', {
+        surface: 'managed_agents',
+        operation: 'create_enrollment_token',
+      })
+    })
+
+    expect(trackEventMock).toHaveBeenCalledWith(
+      'Plan',
+      'FeatureUsed',
+      expect.objectContaining({
+        feature: 'managed_agents',
+        current_plan: 'community',
+        required_plan: 'community',
+        allowed: true,
+        surface: 'managed_agents',
+        operation: 'create_enrollment_token',
+      })
+    )
+  })
+
   it('tracks blocked feature attempts with plan metadata', () => {
     const { result } = renderHook(() => useFeatureAnalytics())
 

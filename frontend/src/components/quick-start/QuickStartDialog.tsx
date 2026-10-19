@@ -121,13 +121,7 @@ export default function QuickStartDialog({
       case 'app':
         return <QuickStartAppStep answers={answers} onChange={update} />
       case 'what':
-        return (
-          <QuickStartWhatStep
-            answers={answers}
-            onChange={update}
-            canUseAgents={can('managed_agents')}
-          />
-        )
+        return <QuickStartWhatStep answers={answers} onChange={update} />
       case 'connect':
         return (
           <QuickStartConnectStep

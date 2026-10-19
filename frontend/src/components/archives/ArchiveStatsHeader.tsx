@@ -16,6 +16,9 @@ export interface ArchiveStatsHeaderProps {
   totals?: { added: number; removed: number; modified: number }
   // Why the totals are absent, so the tile can say so instead of showing 0.
   totalsState: 'ready' | 'loading' | 'not_indexed' | 'unavailable'
+  // Borg 2 reports what an archive added only when it is created (`create
+  // --json`); nothing measures it again, so it keeps that meaning.
+  borgVersion?: 1 | 2
 }
 
 const MINUS = '−'
@@ -49,12 +52,16 @@ export default function ArchiveStatsHeader({
   archive,
   totals,
   totalsState,
+  borgVersion = 1,
 }: ArchiveStatsHeaderProps) {
   const { t } = useTranslation()
   const theme = useTheme()
   const prev = archive.predecessor_stats
   const measured = archive.original_size != null
   const stale = measured && archive.stats_measured_at == null
+  const addedAtCreation = borgVersion === 2
+  const added = archive.deduplicated_size
+  const addedKnown = added != null && (addedAtCreation || measured)
 
   // Only the exceptions are news: a figure measured at creation says nothing
   // the archive's own date does not.
@@ -114,16 +121,15 @@ export default function ArchiveStatsHeader({
   const tiles: Tile[] = [
     {
       key: 'added',
-      label: t('archives.detail.stats.addedToRepository'),
-      value:
-        measured && archive.deduplicated_size != null
-          ? formatBytes(archive.deduplicated_size)
-          : MINUS,
-      sub: measuredLine,
+      label: addedAtCreation
+        ? t('archives.detail.stats.addedAtCreation')
+        : t('archives.detail.stats.addedToRepository'),
+      value: addedKnown ? formatBytes(added) : MINUS,
+      sub: addedAtCreation ? undefined : measuredLine,
       headline: true,
       tone: 'info',
       icon: Layers,
-      muted: !measured,
+      muted: addedAtCreation ? !addedKnown : !measured,
     },
     {
       key: 'changed',
@@ -216,7 +222,14 @@ export default function ArchiveStatsHeader({
             </Box>
           )
         return (
-          <Tooltip key={tile.key} title={t('archives.detail.stats.addedHint')}>
+          <Tooltip
+            key={tile.key}
+            title={
+              addedAtCreation
+                ? t('archives.detail.stats.addedAtCreationHint')
+                : t('archives.detail.stats.addedHint')
+            }
+          >
             {node}
           </Tooltip>
         )

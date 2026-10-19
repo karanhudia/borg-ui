@@ -8,6 +8,7 @@ import structlog
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.borg_major import borg_major
 from app.config import settings
 from app.core.borg_router import BorgRouter
 from app.database.database import SessionLocal
@@ -219,7 +220,7 @@ class RepositoryWipeService:
                 router = BorgRouter(repository)
                 archives = await router.list_archives(env=env)
                 manifest = normalize_archive_manifest(
-                    borg_version=repository.borg_version or 1,
+                    borg_version=borg_major(repository),
                     archives=archives,
                 )
                 fingerprint = compute_archive_fingerprint(manifest)
@@ -240,7 +241,7 @@ class RepositoryWipeService:
                     repository_id=repository.id,
                     repository_path=repository.path,
                     repository_name=repository.name,
-                    borg_version=repository.borg_version or 1,
+                    borg_version=borg_major(repository),
                     status="previewed",
                     phase="preview",
                     archive_count=len(manifest),
@@ -324,7 +325,7 @@ class RepositoryWipeService:
                 )
                 current_archives = await BorgRouter(repository).list_archives(env=env)
                 current_manifest = normalize_archive_manifest(
-                    borg_version=repository.borg_version or 1,
+                    borg_version=borg_major(repository),
                     archives=current_archives,
                 )
                 current_fingerprint = compute_archive_fingerprint(current_manifest)

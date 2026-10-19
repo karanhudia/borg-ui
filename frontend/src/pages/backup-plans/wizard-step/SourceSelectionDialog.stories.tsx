@@ -841,7 +841,6 @@ interface DialogStoryArgs {
   initialCaptureModeExpanded?: boolean
   initialSelectedDatabase?: SourceDiscoveryDatabase
   initialScanDialogOpen?: boolean
-  canUseManagedAgents?: boolean
   canUseMixedSourceTypes?: boolean
   canUseDatabaseDiscovery?: boolean
   canUseContainerBackups?: boolean
@@ -857,7 +856,6 @@ function DialogStory({
   initialCaptureModeExpanded,
   initialSelectedDatabase,
   initialScanDialogOpen,
-  canUseManagedAgents = true,
   canUseMixedSourceTypes = true,
   canUseDatabaseDiscovery = true,
   canUseContainerBackups = true,
@@ -944,7 +942,6 @@ function DialogStory({
         initialCaptureModeExpanded={initialCaptureModeExpanded}
         initialSelectedDatabase={initialSelectedDatabase}
         initialScanDialogOpen={initialScanDialogOpen}
-        canUseManagedAgents={canUseManagedAgents}
         canUseMixedSourceTypes={canUseMixedSourceTypes}
         canUseDatabaseDiscovery={canUseDatabaseDiscovery}
         canUseContainerBackups={canUseContainerBackups}
@@ -1101,7 +1098,6 @@ export const CommunityMixedSourcesLocked: Story = {
     <DialogStory
       wizardState={mixedSinglePathState}
       mockOptions={{ scanStatus: 'detected' }}
-      canUseManagedAgents={false}
       canUseMixedSourceTypes={false}
     />
   ),

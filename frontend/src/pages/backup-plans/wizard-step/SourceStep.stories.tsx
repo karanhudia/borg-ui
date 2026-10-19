@@ -225,15 +225,10 @@ const t = (key: string, options?: Record<string, unknown>) => {
 
 interface RenderArgs {
   wizardState: WizardState
-  canUseManagedAgents?: boolean
   canUseMixedSourceTypes?: boolean
 }
 
-function renderStep({
-  wizardState,
-  canUseManagedAgents = true,
-  canUseMixedSourceTypes = true,
-}: RenderArgs) {
+function renderStep({ wizardState, canUseMixedSourceTypes = true }: RenderArgs) {
   return (
     <Box sx={{ width: 680, maxWidth: 'calc(100vw - 32px)' }}>
       <SourceStep
@@ -243,7 +238,6 @@ function renderStep({
         fullRepositories={[]}
         scripts={[]}
         loadingScripts={false}
-        canUseManagedAgents={canUseManagedAgents}
         canUseMixedSourceTypes={canUseMixedSourceTypes}
         updateState={() => {}}
         openExcludeExplorer={() => {}}
@@ -281,7 +275,6 @@ export const CommunityMixedSourcesLocked: Story = {
   render: () =>
     renderStep({
       wizardState: mixedSourceState,
-      canUseManagedAgents: false,
       canUseMixedSourceTypes: false,
     }),
 }

@@ -313,4 +313,48 @@ describe('RunningBackupsSection', () => {
     fireEvent.click(viewLogsButton)
     expect(onViewLogs).toHaveBeenCalledWith(mockRunningJob)
   })
+
+  it('shows an agent backup that reads data without a percentage as processing', () => {
+    const agentJob: BackupJob = {
+      ...mockRunningJob,
+      execution_mode: 'agent',
+      progress: null,
+      progress_details: {
+        ...mockRunningJob.progress_details!,
+        total_expected_size: 0,
+        estimated_time_remaining: 0,
+      },
+    }
+    render(
+      <RunningBackupsSection
+        runningBackupJobs={[agentJob]}
+        onCancelBackup={mockOnCancelBackup}
+        isCancelling={false}
+      />
+    )
+    expect(screen.getByText('Processing')).toBeInTheDocument()
+    expect(screen.queryByText('Initializing')).not.toBeInTheDocument()
+    expect(screen.queryByText(/%$/)).not.toBeInTheDocument()
+  })
+
+  it('shows a backup that has read nothing yet as initializing', () => {
+    const startingJob: BackupJob = {
+      ...mockRunningJob,
+      progress: null,
+      progress_details: {
+        ...mockRunningJob.progress_details!,
+        original_size: 0,
+        nfiles: 0,
+        total_expected_size: 0,
+      },
+    }
+    render(
+      <RunningBackupsSection
+        runningBackupJobs={[startingJob]}
+        onCancelBackup={mockOnCancelBackup}
+        isCancelling={false}
+      />
+    )
+    expect(screen.getByText('Initializing')).toBeInTheDocument()
+  })
 })

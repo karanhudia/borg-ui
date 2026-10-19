@@ -261,6 +261,25 @@ export const Borg2WithStoredUploadLimit: Story = {
   ),
 }
 
+export const Borg2BehindRcloneWithUploadLimit: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...sampleRepository,
+      id: 54,
+      name: 'Borg 2 Offsite',
+      path: 'rclone:b2-offsite:borg/archive',
+      borg_version: 2,
+      upload_ratelimit_kib: 1536,
+    },
+  },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
 export const WithoutRunHistory: Story = {
   args: {
     ...defaultArgs,

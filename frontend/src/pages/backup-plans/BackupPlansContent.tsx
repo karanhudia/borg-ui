@@ -38,7 +38,6 @@ interface BackupPlansContentProps {
   startingPlanId: number | null
   highlightedPlanId: number | null
   canUseMultiRepository: boolean
-  canUseManagedAgents: boolean
   canUseDatabaseDiscovery: boolean
   canUseContainerBackups: boolean
   cancellingRunId: number | null
@@ -75,17 +74,6 @@ function planUsesContainerFeature(plan: BackupPlan) {
   return Boolean(plan.source_locations?.some((location) => Boolean(location.container)))
 }
 
-function planUsesManagedAgentFeature(plan: BackupPlan) {
-  return (
-    plan.source_type === 'agent' ||
-    Boolean(
-      plan.source_locations?.some(
-        (location) => location.source_type === 'agent' || location.agent_machine_id != null
-      )
-    )
-  )
-}
-
 function getBackupPlanSourceTypeLabel(
   plan: BackupPlan,
   usesDatabaseFeature: boolean,
@@ -102,21 +90,17 @@ function getBackupPlanSourceTypeLabel(
 
 function getPlanRunProTooltip({
   usesMultiRepositoryFeature,
-  usesManagedAgentFeature,
   usesDatabaseFeature,
   usesContainerFeature,
   canUseMultiRepository,
-  canUseManagedAgents,
   canUseDatabaseDiscovery,
   canUseContainerBackups,
   t,
 }: {
   usesMultiRepositoryFeature: boolean
-  usesManagedAgentFeature: boolean
   usesDatabaseFeature: boolean
   usesContainerFeature: boolean
   canUseMultiRepository: boolean
-  canUseManagedAgents: boolean
   canUseDatabaseDiscovery: boolean
   canUseContainerBackups: boolean
   t: TFunction
@@ -125,9 +109,6 @@ function getPlanRunProTooltip({
 
   if (usesMultiRepositoryFeature && !canUseMultiRepository) {
     blockedFeatures.push(t('backupPlans.proFeatureLabels.multiRepository'))
-  }
-  if (usesManagedAgentFeature && !canUseManagedAgents) {
-    blockedFeatures.push(t('backupPlans.proFeatureLabels.managedAgent'))
   }
   if (usesDatabaseFeature && !canUseDatabaseDiscovery) {
     blockedFeatures.push(t('backupPlans.proFeatureLabels.database'))
@@ -161,7 +142,6 @@ function BackupPlansContentImpl({
   startingPlanId,
   highlightedPlanId,
   canUseMultiRepository,
-  canUseManagedAgents,
   canUseDatabaseDiscovery,
   canUseContainerBackups,
   cancellingRunId,
@@ -565,17 +545,12 @@ function BackupPlansContentImpl({
                   const isHighlighted = highlightedPlanId === plan.id
                   const usesMultiRepositoryFeature =
                     plan.repository_count > 1 || plan.repository_run_mode === 'parallel'
-                  const usesManagedAgentFeature = planUsesManagedAgentFeature(plan)
                   const usesDatabaseFeature = planUsesDatabaseFeature(plan)
                   const usesContainerFeature = planUsesContainerFeature(plan)
                   const planUsesProFeatures =
-                    usesMultiRepositoryFeature ||
-                    usesManagedAgentFeature ||
-                    usesDatabaseFeature ||
-                    usesContainerFeature
+                    usesMultiRepositoryFeature || usesDatabaseFeature || usesContainerFeature
                   const planBlockedByLicense =
                     (usesMultiRepositoryFeature && !canUseMultiRepository) ||
-                    (usesManagedAgentFeature && !canUseManagedAgents) ||
                     (usesDatabaseFeature && !canUseDatabaseDiscovery) ||
                     (usesContainerFeature && !canUseContainerBackups)
                   const runDisabled =
@@ -583,11 +558,9 @@ function BackupPlansContentImpl({
                   const runTooltip = planBlockedByLicense
                     ? getPlanRunProTooltip({
                         usesMultiRepositoryFeature,
-                        usesManagedAgentFeature,
                         usesDatabaseFeature,
                         usesContainerFeature,
                         canUseMultiRepository,
-                        canUseManagedAgents,
                         canUseDatabaseDiscovery,
                         canUseContainerBackups,
                         t,

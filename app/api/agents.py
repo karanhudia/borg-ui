@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 import structlog
 
+from app.core.borg_major import is_borg2
 from app.core.agent_auth import (
     AGENT_AUTH_HEADER,
     AGENT_TOKEN_PREFIX_LENGTH,
@@ -47,7 +48,10 @@ from app.services.operations.backup_facade import (
     is_backup_operation,
 )
 from app.services.operations.job_facade import resolve_agent_maintenance_job
-from app.services.repository_executor import lock_failure_was_deferred
+from app.services.repository_executor import (
+    SCRIPT_AGENT_JOB_TYPE,
+    lock_failure_was_deferred,
+)
 from app.services.agent_artifact_relay import (
     CLOSE_ACK_TIMEOUT_SECONDS,
     agent_artifact_relay,
@@ -77,6 +81,7 @@ from app.services.maintenance_state import apply_compact_stats
 from app.services.operations.followups import (
     enqueue_backup_followups,
 )
+from app.services.operations.vocab import TERMINAL_STATUSES
 from app.utils.datetime_utils import serialize_datetime, utc_now
 
 logger = structlog.get_logger()
@@ -286,7 +291,8 @@ class AgentJobStartRequest(BaseModel):
 
 
 class AgentJobProgressRequest(BaseModel):
-    progress_percent: Optional[float] = None
+    # infinity or NaN cannot be stored or served as a percentage
+    progress_percent: Optional[float] = Field(default=None, allow_inf_nan=False)
     current_file: Optional[str] = None
     original_size: Optional[int] = None
     compressed_size: Optional[int] = None
@@ -646,7 +652,7 @@ def _compact_stats(
     `--stats` but reported nothing: its last lines and its completion travel
     on different paths, so the tail may still be in flight, and then this
     compact records no statistics, which is logged."""
-    if repository.borg_version != 2:
+    if not is_borg2(repository):
         return None
     result = agent_job.result if isinstance(agent_job.result, dict) else {}
     stats = _reported_compact_stats(result.get("stats"))
@@ -744,9 +750,16 @@ def _is_factor(value) -> bool:
     )
 
 
+def _is_finite_number(value) -> bool:
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+    )
+
+
 def _sync_backup_progress(agent_job: AgentJob, backup_job) -> None:
     for field_name in (
-        "progress_percent",
         "current_file",
         "original_size",
         "compressed_size",
@@ -757,7 +770,12 @@ def _sync_backup_progress(agent_job: AgentJob, backup_job) -> None:
         "estimated_time_remaining",
     ):
         setattr(backup_job, field_name, getattr(agent_job, field_name))
-    backup_job.progress = int(agent_job.progress_percent or 0)
+    # borg create reports no proportion, so a backup has a percentage only
+    # against a source total; without one, a percentage the agent reported
+    # belongs to a step inside create (the cache sync), not to the backup.
+    backup_job.progress_percent = (
+        agent_job.progress_percent if agent_job.total_expected_size else None
+    )
 
 
 def _finish_linked_backup_job(
@@ -847,6 +865,13 @@ def _maintenance_kind(operation_job: Any) -> Optional[str]:
 def _sync_repository_operation_progress(agent_job: AgentJob, db: Session) -> None:
     operation_job = _get_repository_operation_job(agent_job, db)
     if not operation_job:
+        return
+    # The completion is recorded in a worker thread with its own session
+    # (`_record_job_completion`), and the agent's last frames often arrive
+    # while it runs. A report that read the job as active before that commit
+    # can read the operation after it: the operation already carries the
+    # verdict, and `running` would reopen it (#1366).
+    if operation_job.operation.status in TERMINAL_STATUSES:
         return
     if getattr(operation_job, "started_at", None) is None:
         operation_job.started_at = agent_job.started_at or _now_utc()
@@ -1088,6 +1113,10 @@ def _apply_agent_job_progress(
 ) -> None:
     if job.status in FINAL_AGENT_JOB_STATUSES:
         return
+    percent = progress.get("progress_percent")
+    if percent is not None and not _is_finite_number(percent):
+        # infinity or NaN cannot be stored or served as a percentage
+        progress = {k: v for k, v in progress.items() if k != "progress_percent"}
     for field_name, value in progress.items():
         if hasattr(job, field_name):
             setattr(job, field_name, value)
@@ -1188,8 +1217,17 @@ def _complete_agent_job(
             error_message=f"agent reported a malformed return code: {return_code!r}",
             completed_at=completed_at,
         )
-    warning = is_borg_warning_exit_code(return_code)
-    if isinstance(return_code, int) and return_code != 0 and not warning:
+    # A script's return code is the hook's, not Borg's: the job completes
+    # with the report intact (stdout/stderr included) and the hook caller
+    # reads the code by the agent-script contract (0 / 1 warning / >1).
+    borg_exit_code = job.job_type != SCRIPT_AGENT_JOB_TYPE
+    warning = borg_exit_code and is_borg_warning_exit_code(return_code)
+    if (
+        borg_exit_code
+        and isinstance(return_code, int)
+        and return_code != 0
+        and not warning
+    ):
         # A completion report carrying an explicit borg *error* code is a
         # failure, no matter which transport delivered it - the server is
         # authoritative over the classification.

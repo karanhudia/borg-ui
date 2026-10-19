@@ -7,6 +7,7 @@ import asyncio
 import tempfile
 from pathlib import Path
 from datetime import datetime
+from types import SimpleNamespace
 from unittest.mock import ANY, Mock, patch, AsyncMock, MagicMock
 from sqlalchemy.orm import sessionmaker
 from app.services.backup_service import BackupService
@@ -349,6 +350,83 @@ class TestBackupService:
         assert job.compressed_size == 4096
         assert job.deduplicated_size == 2048
         assert job.nfiles == 12
+
+    async def _borg2_series_stats(self, backup_service, test_db, *, archive_id):
+        """#1327: a Borg 2 series reuses one archive name, so from its second
+        archive on `info <name>` matches two and Borg 2.0.0b25 refuses with
+        rc 4; `aid:<id>` names the one archive."""
+        repo = Repository(
+            name="Series",
+            path="/repos/series",
+            encryption="repokey-aes-ocb",
+            repository_type="local",
+            compression="lz4",
+            borg_version=2,
+        )
+        test_db.add(repo)
+        test_db.flush()
+        job = seed_job_operation(
+            test_db,
+            "backup",
+            repository="/repos/series",
+            status="running",
+            started_at=datetime.now(),
+            archive_name="series",
+            archive_id=archive_id,
+        )
+        test_db.commit()
+        calls = []
+
+        async def fake_exec(*argv, **kwargs):
+            calls.append(argv)
+            process = AsyncMock()
+            if argv[-1] == "series":
+                process.communicate = AsyncMock(
+                    return_value=(
+                        b"",
+                        b"Command error: ['series'] needed to match precisely "
+                        b"one archive, but matched 2.",
+                    )
+                )
+                process.returncode = 4
+            else:
+                process.communicate = AsyncMock(
+                    return_value=(
+                        b'{"archives": [{"stats": {"original_size": 500035, "nfiles": 2}}]}',
+                        b"",
+                    )
+                )
+                process.returncode = 0
+            return process
+
+        with patch("asyncio.create_subprocess_exec", side_effect=fake_exec):
+            await backup_service._update_archive_stats(
+                test_db, job.id, "/repos/series", "series", {}
+            )
+        return resolve_backup_job(test_db, job.id), calls
+
+    @pytest.mark.asyncio
+    async def test_update_archive_stats_reads_a_borg2_archive_by_id(
+        self, backup_service, test_db
+    ):
+        archive_id = "fb4384459a3c" * 5 + "abcd"
+        job, calls = await self._borg2_series_stats(
+            backup_service, test_db, archive_id=archive_id
+        )
+
+        assert calls[-1][-1] == f"aid:{archive_id}"
+        assert job.original_size == 500035 and job.nfiles == 2
+
+    @pytest.mark.asyncio
+    async def test_update_archive_stats_without_a_borg2_archive_id_uses_the_name(
+        self, backup_service, test_db
+    ):
+        """No id recorded (no --json document): the name, as before."""
+        _job, calls = await self._borg2_series_stats(
+            backup_service, test_db, archive_id=None
+        )
+
+        assert calls[-1][-1] == "series"
 
     @pytest.mark.asyncio
     async def test_update_archive_stats_waits_for_repository_command_lock(
@@ -2002,6 +2080,83 @@ class TestBackupService:
         notifications.send_backup_success.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_execute_backup_limits_borg2_behind_rclone_through_rclone(
+        self, backup_service, test_db, tmp_path
+    ):
+        """#1307: the create of a Borg 2 repository behind rclone runs with
+        RCLONE_BWLIMIT; the archive info after it does not."""
+        source_file = tmp_path / "source.txt"
+        source_file.write_text("borg2 source")
+        repo = Repository(
+            name="Borg 2 rclone",
+            path="rclone:remote:borg/repo",
+            encryption="none",
+            repository_type="local",
+            source_directories=f'["{source_file}"]',
+            compression="lz4",
+            borg_version=2,
+            upload_ratelimit_kib=640,
+        )
+        test_db.add_all([repo, SystemSettings(log_save_policy="all_jobs")])
+        test_db.flush()
+        job = seed_job_operation(
+            test_db, "backup", repository=repo.path, status="pending"
+        )
+        test_db.commit()
+
+        fake_process = FakeProcess(
+            returncode=0, stdout_lines=['{"type":"archive_progress","finished":true}']
+        )
+        update_stats = AsyncMock()
+        with (
+            patch.object(
+                backup_service,
+                "_execute_hooks",
+                AsyncMock(
+                    return_value={
+                        "success": True,
+                        "execution_logs": [],
+                        "scripts_executed": 0,
+                        "scripts_failed": 0,
+                        "using_library": False,
+                    }
+                ),
+            ),
+            patch.object(
+                backup_service,
+                "_prepare_source_paths",
+                AsyncMock(return_value=([str(source_file)], [])),
+            ),
+            patch.object(
+                backup_service, "_calculate_and_update_size_background", AsyncMock()
+            ),
+            patch.object(backup_service, "_update_archive_stats", update_stats),
+            patch(
+                "app.services.backup_service.resolve_repo_ssh_key_file",
+                return_value=None,
+            ),
+            patch(
+                "app.services.backup_service.asyncio.create_subprocess_exec",
+                return_value=fake_process,
+            ) as mock_subprocess,
+            patch(
+                "app.services.backup_service.asyncio.create_task",
+                side_effect=_discard_background_task,
+            ),
+            patch("app.services.backup_service.notification_service", MagicMock()),
+            patch("app.services.backup_service.mqtt_service") as mqtt,
+            patch("app.core.borg2.borg2.borg_cmd", "borg2"),
+        ):
+            mqtt.sync_state_with_db = Mock()
+            await backup_service.execute_backup(job.id, repo.path, db=test_db)
+
+        create_call = mock_subprocess.call_args
+        assert "--upload-ratelimit" not in create_call.args
+        assert create_call.kwargs["env"]["RCLONE_BWLIMIT"] == "640K"
+        info_env = update_stats.call_args.args[-1]
+        assert "RCLONE_BWLIMIT" not in info_env
+
+    @pytest.mark.asyncio
     async def test_execute_backup_parses_v2_json_progress(
         self, backup_service, test_db, tmp_path
     ):
@@ -2094,6 +2249,100 @@ class TestBackupService:
         assert job.nfiles == 18
         assert job.progress_percent > 0
         notifications.send_backup_success.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_execute_backup_without_a_total_keeps_the_running_marker(
+        self, backup_service, test_db, tmp_path
+    ):
+        """Without a source total the server path marks a running backup that
+        has read data with 1 %; an unknown percentage, which the backup reads
+        as None (#1154), must still get it."""
+        repo_path = tmp_path / "no-total-repo"
+        repo_path.mkdir()
+        (repo_path / "data").mkdir()
+        (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        source_file = tmp_path / "source.txt"
+        source_file.write_text("source")
+
+        repo = Repository(
+            name="No Total Repo",
+            path=str(repo_path),
+            encryption="none",
+            repository_type="local",
+            source_directories=f'["{source_file}"]',
+            compression="none",
+        )
+        test_db.add(repo)
+        test_db.flush()
+        job = seed_job_operation(
+            test_db, "backup", repository=repo.path, status="pending"
+        )
+        test_db.commit()
+        operation_id = job.id
+
+        seen = []
+
+        class RecordingStream(AsyncLineStream):
+            async def __anext__(self):
+                seen.append(test_db.get(Operation, operation_id).progress_percent)
+                return await super().__anext__()
+
+        fake_process = FakeProcess(returncode=0)
+        fake_process.stdout = RecordingStream(
+            [
+                '{"type":"archive_progress","original_size":1024,"compressed_size":512,'
+                '"deduplicated_size":256,"nfiles":3,"path":"source.txt","finished":false}',
+            ]
+        )
+        notifications = MagicMock()
+        notifications.send_backup_start = AsyncMock()
+        notifications.send_backup_success = AsyncMock()
+        notifications.send_backup_warning = AsyncMock()
+        notifications.send_backup_failure = AsyncMock()
+
+        with (
+            patch.object(
+                backup_service,
+                "_execute_hooks",
+                AsyncMock(
+                    return_value={
+                        "success": True,
+                        "execution_logs": [],
+                        "scripts_executed": 0,
+                        "scripts_failed": 0,
+                        "using_library": False,
+                    }
+                ),
+            ),
+            patch.object(
+                backup_service,
+                "_prepare_source_paths",
+                AsyncMock(return_value=([str(source_file)], [])),
+            ),
+            patch.object(
+                backup_service, "_calculate_and_update_size_background", AsyncMock()
+            ),
+            patch.object(backup_service, "_update_archive_stats", AsyncMock()),
+            patch(
+                "app.services.backup_service.resolve_repo_ssh_key_file",
+                return_value=None,
+            ),
+            patch(
+                "app.services.backup_service.asyncio.create_subprocess_exec",
+                return_value=fake_process,
+            ),
+            patch(
+                "app.services.backup_service.asyncio.create_task",
+                side_effect=_discard_background_task,
+            ),
+            patch("app.services.backup_service.notification_service", notifications),
+            patch("app.services.backup_service.mqtt_service") as mqtt,
+        ):
+            mqtt.sync_state_with_db = Mock()
+            await backup_service.execute_backup(job.id, repo.path, db=test_db)
+
+        # read before the progress line, then after it
+        assert seen == [None, 1.0]
 
     def test_running_processes_tracking(self, backup_service):
         """Test that running_processes dict is managed correctly"""
@@ -2555,6 +2804,86 @@ class TestBackupServicePeriodicSync:
             encoding="utf-8"
         ) == "{}"
 
+    async def _stage_canary_over_existing_target(
+        self, backup_service, db_session, monkeypatch, temp_root, mount_points
+    ):
+        connection = SSHConnection(
+            host="example.com",
+            username="borg",
+            port=22,
+            default_path="/etc/komodo",
+        )
+        db_session.add(connection)
+        db_session.commit()
+        db_session.refresh(connection)
+
+        canary_dir = (
+            backup_service.log_dir.parent
+            / ".borg-ui/restore-canaries/repository-1/.borgui-canary"
+        )
+        canary_dir.mkdir(parents=True)
+        (canary_dir / "manifest.json").write_text("{}", encoding="utf-8")
+
+        async def mock_mount_ssh_paths_shared(
+            connection_id, remote_paths, job_id, preserve_symlinks=False
+        ):
+            return str(temp_root), [("mount-1", "etc/komodo")]
+
+        monkeypatch.setattr(
+            "app.services.backup_service.SessionLocal", lambda: db_session
+        )
+        monkeypatch.setattr(
+            "app.services.mount_service.mount_service.mount_ssh_paths_shared",
+            mock_mount_ssh_paths_shared,
+        )
+        monkeypatch.setattr("app.utils.fs.active_mount_points", lambda: mount_points)
+
+        return await backup_service._prepare_source_paths(
+            [
+                f"ssh://{connection.username}@{connection.host}:{connection.port}/etc/komodo",
+                str(canary_dir),
+            ],
+            job_id=42,
+            source_connection_id=connection.id,
+        )
+
+    @pytest.mark.asyncio
+    async def test_prepare_source_paths_replaces_stale_staged_canary(
+        self, backup_service, db_session, monkeypatch, tmp_path
+    ):
+        staged_archive_path = ".borg-ui/restore-canaries/repository-1/.borgui-canary"
+        temp_root = tmp_path / "sshfs_mount_test"
+        stale = temp_root / staged_archive_path
+        stale.mkdir(parents=True)
+        (stale / "stale.json").write_text("old", encoding="utf-8")
+
+        processed_paths, _ = await self._stage_canary_over_existing_target(
+            backup_service, db_session, monkeypatch, temp_root, set()
+        )
+
+        assert processed_paths == ["etc/komodo", staged_archive_path]
+        assert sorted(p.name for p in stale.iterdir()) == ["manifest.json"]
+
+    @pytest.mark.asyncio
+    async def test_prepare_source_paths_refuses_to_replace_canary_with_mount_inside(
+        self, backup_service, db_session, monkeypatch, tmp_path
+    ):
+        temp_root = tmp_path / "sshfs_mount_test"
+        mounted = (
+            temp_root / ".borg-ui/restore-canaries/repository-1/.borgui-canary/mnt"
+        )
+        mounted.mkdir(parents=True)
+        (mounted / "remote-file").write_text("remote", encoding="utf-8")
+
+        with pytest.raises(RuntimeError, match="restore canary"):
+            await self._stage_canary_over_existing_target(
+                backup_service, db_session, monkeypatch, temp_root, {str(mounted)}
+            )
+
+        assert (mounted / "remote-file").read_text(encoding="utf-8") == "remote"
+        # Registered before staging, so the job's cleanup still unmounts them.
+        assert backup_service.ssh_mounts[42] == ["mount-1"]
+
     def test_resolve_backup_command_paths_mixes_remote_source_and_local_canary(
         self, backup_service
     ):
@@ -2607,3 +2936,64 @@ class TestParseCreatedArchiveId:
         assert _parse_created_archive_id([]) is None
         assert _parse_created_archive_id(["Archive name: x", "{", "broken"]) is None
         assert _parse_created_archive_id(["{", '    "archive": {}', "}"]) is None
+
+
+class TestApplyCreatedArchiveStats:
+    """The final counters of `borg create --json` reach the backup: Borg 2
+    reports what the archive added (`deduplicated_size`) only there (#1264)."""
+
+    # Shape measured with Borg 2.0.0b25: no compressed_size, plus timing and
+    # store counters that are not archive figures.
+    LINES = [
+        '{"type": "archive_progress", "finished": true}',
+        "{",
+        '    "archive": {',
+        '        "id": "fb4384459a3c",',
+        '        "stats": {',
+        '            "chunking_time": 5.5e-05,',
+        '            "deduplicated_size": 300743,',
+        '            "files_stats": {"A": 2, "d": 1},',
+        '            "nfiles": 2,',
+        '            "original_size": 500743,',
+        '            "store_stats": {"store_calls": 5}',
+        "        }",
+        "    }",
+        "}",
+    ]
+
+    def _job(self):
+        return SimpleNamespace(
+            original_size=11, compressed_size=7, deduplicated_size=0, nfiles=1
+        )
+
+    def test_copies_the_reported_counters(self):
+        from app.services.backup_service import _apply_created_archive_stats
+
+        job = self._job()
+        _apply_created_archive_stats(job, self.LINES)
+
+        assert job.deduplicated_size == 300743
+        assert job.original_size == 500743
+        assert job.nfiles == 2
+        # not reported by Borg 2: the job keeps its value
+        assert job.compressed_size == 7
+
+    def test_output_without_a_document_changes_nothing(self):
+        from app.services.backup_service import _apply_created_archive_stats
+
+        for lines in ([], ["{", "broken"], ["{", '    "archive": {"id": "x"}', "}"]):
+            job = self._job()
+            _apply_created_archive_stats(job, lines)
+            assert vars(job) == vars(self._job())
+
+    def test_ignores_values_that_are_not_counts(self):
+        from app.services.backup_service import _apply_created_archive_stats
+
+        lines = [
+            "{",
+            '    "archive": {"stats": {"deduplicated_size": true, "nfiles": "2"}}',
+            "}",
+        ]
+        job = self._job()
+        _apply_created_archive_stats(job, lines)
+        assert vars(job) == vars(self._job())

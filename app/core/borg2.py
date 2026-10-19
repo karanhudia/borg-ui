@@ -53,6 +53,7 @@ import structlog
 
 from app.config import settings
 from app.core.borg_stream import CommandByteStream, CommandLineStream
+from app.services.process_cancel import communicate_or_kill
 from app.utils.repository_paths import (  # noqa: F401  (URL rules re-exported)
     BORG2_ONLY_URL_PREFIXES,
     borg1_ssh_address_host,
@@ -565,9 +566,7 @@ class Borg2Interface:
             )
             if on_process is not None:
                 on_process(process)
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(), timeout=timeout
-            )
+            stdout, stderr = await communicate_or_kill(process, timeout=timeout)
             result = {
                 "return_code": process.returncode,
                 "stdout": stdout.decode() if stdout else "",

@@ -309,6 +309,23 @@ describe('WizardStepReview', () => {
       expect(screen.getByText('None')).toBeInTheDocument()
     })
 
+    it('shows authenticated as not encrypted', () => {
+      // Borg 2's authenticated mode stores the data unencrypted (#1264)
+      render(
+        <WizardStepReview
+          mode="create"
+          data={{ ...defaultData, borgVersion: 2, encryption: 'authenticated' }}
+          sshConnections={mockSshConnections}
+        />
+      )
+
+      expect(screen.getByText('Authenticated')).toBeInTheDocument()
+      expect(screen.queryByText('None')).not.toBeInTheDocument()
+      expect(screen.getByText('Authenticated').closest('.MuiChip-root')).toHaveClass(
+        'MuiChip-colorWarning'
+      )
+    })
+
     it('hides encryption row for import mode', () => {
       render(
         <WizardStepReview mode="import" data={defaultData} sshConnections={mockSshConnections} />

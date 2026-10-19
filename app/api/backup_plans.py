@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, joinedload, object_session
 
+from app.core.borg_major import borg_major
 from app.core.security import (
     check_repo_access,
     encrypt_secret,
@@ -1139,14 +1140,12 @@ def _validate_flags_for_repository(
         None,
     )
     try:
-        parse_borg_flags(
-            create_flags, "create", repo.borg_version or 1, local_paths=False
-        )
+        parse_borg_flags(create_flags, "create", borg_major(repo), local_paths=False)
         if run_check_after:
             parse_borg_flags(
                 check_extra_flags,
                 "check",
-                repo.borg_version or 1,
+                borg_major(repo),
                 local_paths=False,
             )
     except ValueError as exc:
@@ -1680,7 +1679,7 @@ async def create_backup_plan_from_repository(
         parse_borg_flags(
             repository.custom_flags,
             "create",
-            repository.borg_version or 1,
+            borg_major(repository),
             local_paths=False,
         )
     except ValueError as exc:

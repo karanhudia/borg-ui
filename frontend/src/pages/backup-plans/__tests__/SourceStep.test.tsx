@@ -511,7 +511,6 @@ function StatefulSourceStep({
   initialState = createInitialState(),
   sshConnections = [],
   agentMachines = [],
-  canUseManagedAgents = true,
   canUseMixedSourceTypes = true,
 }: {
   initialState?: ReturnType<typeof createInitialState>
@@ -535,7 +534,6 @@ function StatefulSourceStep({
     created_at: string
     updated_at: string
   }>
-  canUseManagedAgents?: boolean
   canUseMixedSourceTypes?: boolean
 }) {
   const [wizardState, setWizardState] = useState(initialState)
@@ -548,7 +546,6 @@ function StatefulSourceStep({
       fullRepositories={[]}
       scripts={[]}
       loadingScripts={false}
-      canUseManagedAgents={canUseManagedAgents}
       canUseMixedSourceTypes={canUseMixedSourceTypes}
       updateState={(updates) => setWizardState((current) => ({ ...current, ...updates }))}
       openExcludeExplorer={vi.fn()}
@@ -1028,39 +1025,6 @@ describe('SourceStep', () => {
     expect(screen.getByText('backup-b@server-b.example')).toBeInTheDocument()
     expect(screen.getAllByText('1 path')).toHaveLength(3)
   }, 45000)
-
-  it('locks managed-agent sources when the plan cannot use managed agents', async () => {
-    const user = userEvent.setup()
-    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
-    const agentMachines = [
-      {
-        id: 77,
-        name: 'pi',
-        agent_id: 'agt_pi',
-        hostname: 'pi.local',
-        default_path: '/home/pi',
-        status: 'online',
-        created_at: '2026-05-21T00:00:00.000Z',
-        updated_at: '2026-05-21T00:00:00.000Z',
-      },
-    ]
-    render(<StatefulSourceStep agentMachines={agentMachines} canUseManagedAgents={false} />)
-
-    await user.click(screen.getByRole('button', { name: /choose source/i }))
-    await screen.findByRole('tab', { name: /^database$/i })
-
-    await user.click(screen.getByRole('combobox', { name: /where are the files/i }))
-    const listbox = await screen.findByRole('listbox')
-    const agentOption = within(listbox).getByRole('option', { name: /managed agent/i })
-
-    expect(agentOption).toHaveAttribute('aria-disabled', 'true')
-    expect(agentOption).toHaveTextContent('Managed-agent sources require Pro.')
-
-    await user.keyboard('{Escape}')
-    await waitFor(() => {
-      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
-    })
-  })
 
   it('blocks applying mixed source types when the plan cannot use mixed sources', async () => {
     apiMocks.databases.mockResolvedValue({ data: discoveryResponse })

@@ -10,7 +10,11 @@ from sqlalchemy import create_engine, pool
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from app.config import settings  # noqa: E402
-from app.database.database import Base, register_utc_session_timezone  # noqa: E402
+from app.database.database import (  # noqa: E402
+    Base,
+    register_failing_row_withholding,
+    register_utc_session_timezone,
+)
 import app.database.models  # noqa: E402,F401  (registers every table on Base)
 
 config = context.config
@@ -47,10 +51,13 @@ def run_migrations_online() -> None:
     connectable = config.attributes.get("connection", None)
 
     if connectable is None:
-        engine = create_engine(_database_url(), poolclass=pool.NullPool)
+        engine = create_engine(
+            _database_url(), poolclass=pool.NullPool, hide_parameters=True
+        )
         # Data backfills in migrations write under the same naive-UTC
         # convention as the application - same session-zone pin.
         register_utc_session_timezone(engine)
+        register_failing_row_withholding(engine)
         with engine.connect() as connection:
             _run(connection)
     else:

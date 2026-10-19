@@ -45,8 +45,13 @@ def ensure_borg2_repository_url(repository: Optional[str]) -> None:
 def job_borg_major(repository: dict[str, Any], payload: dict[str, Any]) -> int:
     """The Borg major a job runs on, 1 when the job names none. Every job
     decoder reads it here: anything but 1 or 2 is refused, so no later
-    `== 2` check can take an unknown major for Borg 1."""
-    value = repository.get("borg_version") or payload.get("borg_version") or 1
+    `== 2` check can take an unknown major for Borg 1. Only a missing value
+    means 1; a present 0 or "" is refused like any other, as on the server."""
+    value = repository.get("borg_version")
+    if value is None:
+        value = payload.get("borg_version")
+    if value is None:
+        return 1
     try:
         major = int(value)
     except (TypeError, ValueError):
@@ -120,6 +125,14 @@ class BackupCreatePayload:
             if upload_ratelimit_kib <= 0:
                 raise ValueError("backup.create upload_ratelimit_kib must be positive")
         environment = _extract_environment(payload, repository)
+        if (
+            borg_version == 2
+            and upload_ratelimit_kib
+            and repository_path.strip().startswith("rclone:")
+        ):
+            # Borg 2 has no --upload-ratelimit; its rclone backend runs
+            # rclone, which reads this (K is KiB) (#1307)
+            environment["RCLONE_BWLIMIT"] = f"{upload_ratelimit_kib}K"
 
         return cls(
             repository_path=repository_path.strip(),
@@ -153,8 +166,9 @@ class BackupCreatePayload:
                 "--compression",
                 self.compression,
             ]
-            # No upload_ratelimit_kib: Borg 2 has no --upload-ratelimit,
-            # and a server before agent 0.1.17 still sends a repository's limit.
+            # No --upload-ratelimit: Borg 2.0.0b22 removed it (behind rclone the
+            # limit is RCLONE_BWLIMIT in the environment instead, #1307). A
+            # server before agent 0.1.17 still sends a repository's limit.
             for pattern in self.exclude_patterns:
                 cmd.extend(["--exclude", pattern])
             cmd.extend(self.custom_flags)

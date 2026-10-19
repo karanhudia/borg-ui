@@ -1,12 +1,15 @@
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Box, Button, ButtonBase, Chip, Stack, Typography, alpha, useTheme } from '@mui/material'
-import { formatBytes } from '../../utils/dateUtils'
+import { formatBytes, formatDate } from '../../utils/dateUtils'
 import type { PrunePreviewArchive } from '../../types/archives'
 
 export interface PruneCandidatesRankedProps {
   archives: PrunePreviewArchive[]
   partialMeasure: boolean
+  /** False when the archives' sizes bound nothing a deletion frees (Borg 2):
+   *  no ranking, no bars, no re-measure line, the archives in payload order. */
+  sizesAvailable?: boolean
   onOpen: (archiveId: number) => void
 }
 
@@ -45,27 +48,32 @@ function Row({
 export default function PruneCandidatesRanked({
   archives,
   partialMeasure,
+  sizesAvailable = true,
   onOpen,
 }: PruneCandidatesRankedProps) {
   const { t } = useTranslation()
   const theme = useTheme()
   const [showAll, setShowAll] = useState(false)
 
-  const deleted = archives
-    .filter((a) => a.verdict === 'deleted')
-    .sort((a, b) => (b.deduplicated_size ?? -1) - (a.deduplicated_size ?? -1))
+  const deleted = archives.filter((a) => a.verdict === 'deleted')
+  // the payload comes oldest first; only a size reorders it
+  if (sizesAvailable) {
+    deleted.sort((a, b) => (b.deduplicated_size ?? -1) - (a.deduplicated_size ?? -1))
+  }
   const max = Math.max(0, ...deleted.map((a) => a.deduplicated_size ?? 0))
   const visible = showAll ? deleted : deleted.slice(0, VISIBLE_CAP)
 
   return (
     <Box>
       <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-        {t('prunePreview.rankedTitle')}
+        {sizesAvailable ? t('prunePreview.rankedTitle') : t('prunePreview.listedTitle')}
       </Typography>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-        {partialMeasure
-          ? t('prunePreview.remeasuredPartial', { cap: 50, count: deleted.length })
-          : t('prunePreview.remeasured', { count: deleted.length })}
+        {!sizesAvailable
+          ? t('prunePreview.noSizesNote')
+          : partialMeasure
+            ? t('prunePreview.remeasuredPartial', { cap: 50, count: deleted.length })
+            : t('prunePreview.remeasured', { count: deleted.length })}
       </Typography>
       {/* Same scroll box as the lost-files table: the page scrolls, the
           list scrolls inside it, and the button stays reachable. */}
@@ -73,6 +81,37 @@ export default function PruneCandidatesRanked({
         {visible.map((a, i) => {
           const size = a.deduplicated_size
           const width = size != null && max > 0 ? Math.max(2, (size / max) * 100) : 0
+          if (!sizesAvailable) {
+            return (
+              <Row key={a.borg_id} archiveId={a.id} onOpen={onOpen}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    // the button centres its content; the name takes the row
+                    flex: 1,
+                    minWidth: 0,
+                    fontFamily: 'monospace',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={a.name}
+                >
+                  {a.name}
+                </Typography>
+                {/* Borg 2 series share a name; the time tells them apart */}
+                {a.start && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+                  >
+                    {formatDate(a.start)}
+                  </Typography>
+                )}
+              </Row>
+            )
+          }
           return (
             <Row key={a.borg_id} archiveId={a.id} onOpen={onOpen}>
               <Typography

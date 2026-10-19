@@ -199,7 +199,6 @@ function SkippedRepositoryBackupPlans({
         startingPlanId={null}
         highlightedPlanId={null}
         canUseMultiRepository
-        canUseManagedAgents
         canUseDatabaseDiscovery
         canUseContainerBackups
         cancellingRunId={null}
@@ -249,7 +248,6 @@ function CommunityLockedBackupPlans() {
         startingPlanId={null}
         highlightedPlanId={null}
         canUseMultiRepository={false}
-        canUseManagedAgents={false}
         canUseDatabaseDiscovery={false}
         canUseContainerBackups={false}
         cancellingRunId={null}
@@ -298,7 +296,6 @@ function EmptyBackupPlansWithQuickStart() {
         startingPlanId={null}
         highlightedPlanId={null}
         canUseMultiRepository={false}
-        canUseManagedAgents={false}
         canUseDatabaseDiscovery={false}
         canUseContainerBackups={false}
         cancellingRunId={null}

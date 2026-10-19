@@ -7,24 +7,18 @@ import {
   Switch,
   FormControlLabel,
   Stack,
-  Alert,
   CircularProgress,
   Select,
   MenuItem,
   FormControl,
   InputLabel,
 } from '@mui/material'
-import { BarChart3, Info, Globe } from 'lucide-react'
+import { BarChart3, Globe } from 'lucide-react'
 import SettingsCard from './SettingsCard'
 import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
-import {
-  PUBLIC_ANALYTICS_DASHBOARD_URL,
-  resetOptOutCache,
-  trackOptOut,
-  trackLanguageChange,
-} from '../utils/analytics'
+import { resetOptOutCache, trackOptOut, trackLanguageChange } from '../utils/analytics'
 import i18n from '../i18n'
 
 const LANGUAGES = [
@@ -221,21 +215,6 @@ export default function PreferencesTab() {
                 }
                 label={t('preferences.enableAnalytics')}
               />
-
-              <Alert severity="info" icon={<Info size={20} />} sx={{ mt: 2 }}>
-                <Typography variant="body2">
-                  <strong>{t('preferences.analyticsTransparencyBold')}</strong>{' '}
-                  <a
-                    href={PUBLIC_ANALYTICS_DASHBOARD_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: 'inherit', textDecoration: 'underline' }}
-                  >
-                    {t('preferences.analyticsTransparencyLink')}
-                  </a>{' '}
-                  {t('preferences.analyticsTransparencyAfterLink')}
-                </Typography>
-              </Alert>
             </>
           </Box>
         </Stack>

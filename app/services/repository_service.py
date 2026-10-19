@@ -14,6 +14,7 @@ from app.core.borg import borg
 from app.database.database import SessionLocal
 from app.database.models import SystemSettings
 from app.config import settings
+from app.services.process_cancel import communicate_or_kill
 from app.utils.borg_env import (
     setup_borg_env,
     ssh_key_borg_env,
@@ -135,9 +136,8 @@ class RepositoryService:
                     stderr=asyncio.subprocess.PIPE,
                     env=env,
                 )
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=_get_operation_timeouts()["init_timeout"],
+                stdout, stderr = await communicate_or_kill(
+                    process, timeout=_get_operation_timeouts()["init_timeout"]
                 )
                 return {
                     "success": process.returncode == 0,
@@ -169,7 +169,7 @@ class RepositoryService:
             stderr=asyncio.subprocess.PIPE,
             env=env,
         )
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+        stdout, stderr = await communicate_or_kill(process, timeout=30)
         return {
             "success": process.returncode == 0,
             "return_code": process.returncode,

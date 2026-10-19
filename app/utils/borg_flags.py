@@ -17,6 +17,7 @@ from collections.abc import Sequence
 
 from pydantic import field_validator, model_validator
 
+from app.core.borg_major import borg_major
 from app.utils.local_paths import is_within_local_mount
 
 # Options whose value is a file borg reads on the machine it runs on.
@@ -259,9 +260,7 @@ def borg_flags_major_validator(field: str, command: str, major=None):
     ``borg_version`` field (1 when unset)."""
 
     def _validate(self):
-        borg_version = (
-            major(self) if major else (getattr(self, "borg_version", None) or 1)
-        )
+        borg_version = major(self) if major else (borg_major(self))
         parse_borg_flags(getattr(self, field), command, borg_version, local_paths=False)
         return self
 

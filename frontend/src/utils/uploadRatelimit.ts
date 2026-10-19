@@ -14,3 +14,9 @@ export function formatUploadRatelimit(value?: number | null): string | null {
   const mb = kibToUploadRatelimitMb(value)
   return mb ? `${mb} MB/s` : null
 }
+
+/** Borg 2 has no --upload-ratelimit (removed in 2.0.0b22); a Borg 2
+ * repository behind rclone takes the limit as rclone's bandwidth limit. */
+export function uploadRatelimitSupported(borgVersion?: number | null, path?: string | null) {
+  return borgVersion !== 2 || (path ?? '').startsWith('rclone:')
+}

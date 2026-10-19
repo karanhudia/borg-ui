@@ -179,7 +179,6 @@ function renderContent(overrides: Partial<React.ComponentProps<typeof BackupPlan
     startingPlanId: null,
     highlightedPlanId: null,
     canUseMultiRepository: true,
-    canUseManagedAgents: true,
     canUseDatabaseDiscovery: true,
     canUseContainerBackups: true,
     cancellingRunId: null,
@@ -380,36 +379,6 @@ describe('BackupPlansContent', () => {
     })
 
     expect(screen.getByText('Managed agent')).toBeInTheDocument()
-  })
-
-  it('disables managed-agent backup plan runs behind the Pro chip when unavailable', () => {
-    const agentPlan: BackupPlan = {
-      ...basePlan,
-      source_type: 'agent',
-      source_locations: [
-        {
-          source_type: 'agent',
-          agent_machine_id: 42,
-          paths: ['/home/borg/app-data'],
-        },
-      ],
-    }
-    const onRunPlan = vi.fn()
-
-    renderContent({
-      backupPlans: [agentPlan],
-      processedPlans: { groups: [{ name: null, plans: [agentPlan] }] },
-      canUseManagedAgents: false,
-      onRunPlan,
-    })
-
-    expect(screen.getByText('Pro required')).toBeInTheDocument()
-    expect(screen.getByText('Managed agent')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Run' }))
-
-    expect(onRunPlan).not.toHaveBeenCalled()
   })
 
   it('disables database backup plan runs behind the Pro chip when unavailable', () => {

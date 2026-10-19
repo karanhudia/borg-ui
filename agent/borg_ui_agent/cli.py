@@ -18,7 +18,7 @@ from agent.borg_ui_agent.config import (
     save_config,
 )
 from agent.borg_ui_agent.runtime import AgentRuntime, get_capabilities
-from agent.borg_ui_agent.self_upgrade import recorded_server
+from agent.borg_ui_agent.self_upgrade import move_recorded_server, recorded_server
 from agent.borg_ui_agent.service_setup import (
     DEFAULT_SERVICE_CONFIG,
     DEFAULT_SERVICE_EXECUTABLE,
@@ -172,6 +172,11 @@ def _set_server(args: argparse.Namespace) -> int:
     print("Restart the service for this to take effect.")
     # Only an https server can serve a remote upgrade at all.
     if server_url.startswith("https://") and _record_names_another_server(server_url):
+        # As the record's owner (root on Linux, the user on macOS) the move
+        # takes the record along; otherwise only a reinstall can.
+        if move_recorded_server(server_url):
+            print("Upgrade record: moved to the new server.")
+            return 0
         print(
             "Remote upgrade is off until this endpoint is reinstalled once with "
             f"--server {shlex.quote(server_url)} --reinstall."
