@@ -5,6 +5,7 @@ Utility functions for process management and orphan detection
 import json
 import os
 import subprocess
+from collections.abc import Collection
 from pathlib import Path
 from typing import Optional
 import structlog
@@ -585,19 +586,21 @@ def _is_remote_repository(repository: Repository, db: Session) -> bool:
     )
 
 
-def cleanup_orphaned_jobs(db: Session):
+def cleanup_orphaned_jobs(db: Session, live_plan_run_ids: Collection[int] = ()):
     """Normalise what a restart leaves behind that the operations runner's
     own recovery (spec 7.6) does not cover: backup rows still in a running
-    maintenance state, and backup plan runs left active."""
+    maintenance state, and backup plan runs left active. `live_plan_run_ids`
+    are plan runs this process is executing; they are not left behind."""
     logger.info("Checking for orphaned jobs...")
 
     now = datetime.utcnow()
     stale_backup_jobs = _mark_stale_backup_maintenance_failed(db, now)
-    active_backup_plan_runs = (
-        db.query(BackupPlanRun)
-        .filter(BackupPlanRun.status.in_(ACTIVE_PLAN_RUN_STATUSES))
-        .all()
+    active_query = db.query(BackupPlanRun).filter(
+        BackupPlanRun.status.in_(ACTIVE_PLAN_RUN_STATUSES)
     )
+    if live_plan_run_ids:
+        active_query = active_query.filter(BackupPlanRun.id.notin_(live_plan_run_ids))
+    active_backup_plan_runs = active_query.all()
     logger.info(
         "Found interrupted work",
         stale_backup_maintenance_jobs=stale_backup_jobs,
